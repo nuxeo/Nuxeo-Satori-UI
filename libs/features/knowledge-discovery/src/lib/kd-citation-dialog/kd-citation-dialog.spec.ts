@@ -1,11 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { DomSanitizer } from '@angular/platform-browser';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { vi } from 'vitest';
 
-import { DocumentDetailService, NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { KdCitationDialogComponent } from './kd-citation-dialog';
 
@@ -31,7 +32,7 @@ describe('KdCitationDialogComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [KdCitationDialogComponent, HttpClientTestingModule],
+      imports: [KdCitationDialogComponent, HttpClientTestingModule, MatIconTestingModule],
       providers: [
         provideZonelessChangeDetection(),
         {

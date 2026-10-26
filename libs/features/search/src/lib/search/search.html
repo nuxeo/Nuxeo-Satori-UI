@@ -9,7 +9,7 @@
           [class.active]="aiSearchMode()"
           (click)="toggleAiSearch()"
         >
-          <mat-icon class="ai-sparkle-icon">auto_awesome</mat-icon>
+          <mat-icon class="ai-sparkle-icon" svgIcon="ai" />
           {{
             aiSearchMode()
               ? ('search.ai-search-active' | translate)
@@ -22,7 +22,7 @@
             class="nxql-toggle-btn"
             (click)="showNxqlPanel.set(!showNxqlPanel())"
           >
-            <mat-icon>code</mat-icon>
+            <mat-icon svgIcon="code" />
             {{
               showNxqlPanel()
                 ? ('search.hide-query' | translate)
@@ -34,7 +34,7 @@
 
       @if (aiSearchMode()) {
         <div class="ai-search-bar">
-          <mat-icon class="ai-search-icon">auto_awesome</mat-icon>
+          <mat-icon class="ai-search-icon" svgIcon="ai" />
           <input
             class="ai-search-input"
             type="text"
@@ -58,7 +58,7 @@
               (click)="executeAiSearch()"
               [disabled]="!aiQuery().trim()"
             >
-              <mat-icon>send</mat-icon>
+              <mat-icon svgIcon="send" />
             </button>
           }
           <mat-autocomplete
@@ -67,7 +67,7 @@
           >
             @for (suggestion of aiSuggestions(); track suggestion) {
               <mat-option [value]="suggestion">
-                <mat-icon class="suggestion-icon">auto_awesome</mat-icon>
+                <mat-icon class="suggestion-icon" svgIcon="ai" />
                 {{ suggestion }}
               </mat-option>
             }
@@ -76,7 +76,7 @@
 
         @if (aiError()) {
           <div class="ai-error">
-            <mat-icon>error_outline</mat-icon>
+            <mat-icon svgIcon="error" />
             {{ aiError() }}
           </div>
         }
@@ -84,7 +84,7 @@
         @if (showNxqlPanel() && aiGeneratedNxql()) {
           <div class="ai-nxql-panel">
             <div class="ai-nxql-explanation">
-              <mat-icon>info_outline</mat-icon>
+              <mat-icon svgIcon="info" />
               <span>{{ aiExplanation() }}</span>
             </div>
             <pre class="ai-nxql-code">{{ aiGeneratedNxql() }}</pre>
@@ -95,57 +95,24 @@
   }
 
   <div class="results-top-actions">
-    @if (hasSavableFilters()) {
-      <button
-        mat-flat-button
-        color="primary"
-        class="top-action-btn save-as-btn"
-        type="button"
-        (click)="openSaveAsDialog()"
-      >
-        <mat-icon>bookmark_add</mat-icon>
-        {{ 'search.search.save-as' | translate }}
-      </button>
-    }
-    @if (hasSelectedSavedSearch()) {
-      <button
-        mat-flat-button
-        class="top-action-btn save-btn"
-        type="button"
-        (click)="onSaveSelectedSavedSearch()"
-      >
-        {{ 'search.search.save' | translate }}
-      </button>
-    }
-    @if (hasSelectedSavedSearch()) {
-      <button
-        mat-icon-button
-        type="button"
-        [matMenuTriggerFor]="resultsActionsMenu"
-        [attr.aria-label]="'search.search.results-actions' | translate"
-      >
-        <mat-icon>more_vert</mat-icon>
-      </button>
-      <mat-menu #resultsActionsMenu="matMenu">
-        <button mat-menu-item type="button" (click)="onEditSelectedSavedSearch()">
-          {{ 'search.search.edit' | translate }}
-        </button>
-        <button mat-menu-item type="button" (click)="onShareSelectedSavedSearch()">
-          {{ 'search.search.share' | translate }}
-        </button>
-        <button mat-menu-item type="button" (click)="onDeleteSelectedSavedSearch()">
-          {{ 'search.search.delete' | translate }}
-        </button>
-      </mat-menu>
-    }
+    <nxs-saved-search-actions
+      [savedSearchId]="selectedSavedSearchId()"
+      [dirty]="savedSearchDirty()"
+      [hasFilters]="hasFilters()"
+      (saveAs)="onSaveAs()"
+      (save)="onSave()"
+      (rename)="onRename()"
+      (share)="onShare()"
+      (remove)="onDelete()"
+    />
   </div>
 
   <div class="results-toolbar">
     <div class="results-summary">
-      @if (resultCount() > 0) {
+      @if (totalCount() > 0) {
         <span class="results-count">{{
-          (resultCount() === 1 ? 'common.count.result-one' : 'common.count.result-many')
-            | translate: { count: resultCount() }
+          (totalCount() === 1 ? 'common.count.result-one' : 'common.count.result-many')
+            | translate: { count: totalCount() }
         }}</span>
       }
 
@@ -172,7 +139,7 @@
         (click)="exportCsv()"
         class="toolbar-btn"
       >
-        <mat-icon>download</mat-icon>
+        <mat-icon svgIcon="download" />
       </button>
 
       <!--
@@ -190,7 +157,7 @@
         (click)="setViewMode('grid')"
         class="toolbar-btn"
       >
-        <mat-icon>grid_view</mat-icon>
+        <mat-icon svgIcon="grid_view" />
       </button>
 
       <button
@@ -202,7 +169,7 @@
         (click)="setViewMode('table')"
         class="toolbar-btn"
       >
-        <mat-icon>view_list</mat-icon>
+        <mat-icon svgIcon="bullet_list" />
       </button>
 
       <button
@@ -214,18 +181,25 @@
         [attr.aria-pressed]="viewMode() === 'list'"
         (click)="setViewMode('list')"
       >
-        <mat-icon>format_list_bulleted</mat-icon>
+        <mat-icon svgIcon="bullet_list" />
       </button>
     </div>
   </div>
 
   @if (busy()) {
     <div class="results-loading">
-      <mat-spinner diameter="32" [attr.aria-label]="'search.search.loading' | translate" />
+      <nxs-spinner diameter="32" [label]="'search.search.loading' | translate" />
     </div>
+  } @else if (resultsError(); as message) {
+    <nxs-error-state
+      [status]="errorStatus()"
+      [heading]="message"
+      retryable
+      (retry)="retrySearch()"
+    />
   }
 
-  @if (!busy() && viewMode() === 'grid') {
+  @if (!busy() && !resultsError() && viewMode() === 'grid') {
     <div class="grid-container">
       <div class="grid-action-bar">
         <div class="grid-actions-left">
@@ -252,7 +226,7 @@
             (click)="setGridSortOrder(gridSortOrder() === 'asc' ? 'desc' : 'asc')"
             class="action-btn"
           >
-            <mat-icon>{{ gridSortOrder() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            <mat-icon [svgIcon]="gridSortOrder() === 'asc' ? 'arrow_up' : 'arrow_down'" />
           </button>
         </div>
       </div>
@@ -263,17 +237,15 @@
             <div class="grid-card-checkbox col-hover-select">
               <mat-checkbox
                 [checked]="isSelected(row.id)"
-                [attr.aria-label]="'common.select-item' | translate: { name: row.name }"
+                [aria-label]="'common.select-item' | translate: { name: row.name }"
                 (change)="toggleSelection(row.id)"
                 (click)="$event.stopPropagation()"
               ></mat-checkbox>
             </div>
             <div class="result-card-thumbnail">
-              @if (thumbnailMap()[row.id]; as thumb) {
-                <img class="result-thumbnail-image" [src]="thumb" alt="" />
-              } @else {
-                <mat-icon class="result-icon">{{ row.icon }}</mat-icon>
-              }
+              <nxs-thumbnail class="result-thumbnail-image" [documentId]="row.id">
+                <mat-icon class="result-icon" [svgIcon]="row.icon" />
+              </nxs-thumbnail>
             </div>
             <div class="result-card-body">
               <div class="result-head">
@@ -290,18 +262,12 @@
                 }}</span>
               </div>
               <div class="grid-card-actions col-hover-actions">
-                <button
-                  mat-icon-button
-                  [matTooltip]="'search.search.add-to-favorites' | translate"
-                  [attr.aria-label]="'search.search.add-to-favorites' | translate"
-                  class="action-btn"
-                  [disabled]="favoritePendingIds().has(row.id)"
-                  (click)="toggleFavorite(row.id, $event)"
-                >
-                  <mat-icon class="action-icon" [class.favorited]="isFavorited(row.id)">{{
-                    isFavorited(row.id) ? 'star' : 'star_outline'
-                  }}</mat-icon>
-                </button>
+                <nxs-favorite-toggle
+                  [documentId]="row.id"
+                  [favorite]="isFavorited(row.id)"
+                  (changed)="onFavoriteChanged(row.id, $event)"
+                  (failed)="onFavoriteFailed($event)"
+                />
                 @if (isDownloadableType(row.type)) {
                   <button
                     mat-icon-button
@@ -310,7 +276,7 @@
                     class="action-btn"
                     (click)="downloadDocument(row.id, row.name, $event)"
                   >
-                    <mat-icon class="action-icon">download</mat-icon>
+                    <mat-icon class="action-icon" svgIcon="download" />
                   </button>
                 }
               </div>
@@ -327,37 +293,15 @@
     </div>
   }
 
-  @if (!busy() && viewMode() === 'table') {
+  @if (!busy() && !resultsError() && viewMode() === 'table') {
     <div class="list-wrapper">
       @if (columnPanelOpen()) {
-        <button
-          type="button"
-          class="col-panel-backdrop"
-          [attr.aria-label]="'search.search.close-column-picker' | translate"
-          (click)="closeColumnPanel()"
-          (keydown.escape)="closeColumnPanel()"
-        ></button>
-        <div class="col-panel">
-          <p class="col-panel-title">{{ 'search.search.column-settings' | translate }}</p>
-          <div class="col-panel-list">
-            @for (col of columnsForPanel; track col.key) {
-              <mat-checkbox
-                class="col-panel-option"
-                [checked]="isPendingColumn(col.key)"
-                (change)="togglePendingColumn(col.key)"
-                >{{ col | descriptorLabel }}</mat-checkbox
-              >
-            }
-          </div>
-          <div class="col-panel-actions">
-            <button mat-button (click)="resetColumns()">
-              {{ 'search.search.reset' | translate }}
-            </button>
-            <button mat-flat-button color="primary" (click)="applyColumns()">
-              {{ 'search.search.done' | translate }}
-            </button>
-          </div>
-        </div>
+        <nxs-column-picker
+          [columns]="pickerColumns()"
+          [defaults]="defaultColumnKeys"
+          (apply)="applyColumns($event)"
+          (dismiss)="closeColumnPanel()"
+        />
       }
 
       <div class="result-list">
@@ -372,13 +316,15 @@
                 (click)="sortBy(col.key)"
               >
                 {{ col | descriptorLabel }}
-                <mat-icon class="sort-icon" [class.sort-active]="sortColumn() === col.key">
-                  {{
+                <mat-icon
+                  class="sort-icon"
+                  [class.sort-active]="sortColumn() === col.key"
+                  [svgIcon]="
                     sortColumn() === col.key && sortDirection() === 'desc'
-                      ? 'arrow_downward'
-                      : 'arrow_upward'
-                  }}
-                </mat-icon>
+                      ? 'arrow_down'
+                      : 'arrow_up'
+                  "
+                />
               </button>
             } @else {
               <span>{{ col | descriptorLabel }}</span>
@@ -392,7 +338,7 @@
               [attr.aria-label]="'search.search.manage-columns' | translate"
               (click)="openColumnPanel()"
             >
-              <mat-icon>tune</mat-icon>
+              <mat-icon svgIcon="settings" />
             </button>
           </span>
         </div>
@@ -406,7 +352,7 @@
             <span class="col-checkbox col-hover-select">
               <mat-checkbox
                 [checked]="isSelected(row.id)"
-                [attr.aria-label]="'common.select-item' | translate: { name: row.name }"
+                [aria-label]="'common.select-item' | translate: { name: row.name }"
                 (click)="$event.stopPropagation()"
                 (change)="toggleSelection(row.id)"
               ></mat-checkbox>
@@ -414,11 +360,9 @@
             @for (col of visibleColumns(); track col.key) {
               @if (col.key === 'name') {
                 <span class="col-name">
-                  @if (thumbnailMap()[row.id]; as thumb) {
-                    <img class="row-thumbnail-image" [src]="thumb" alt="" />
-                  } @else {
-                    <mat-icon class="row-icon">{{ row.icon }}</mat-icon>
-                  }
+                  <nxs-thumbnail class="row-thumbnail-image" [documentId]="row.id">
+                    <mat-icon class="row-icon" [svgIcon]="row.icon" />
+                  </nxs-thumbnail>
                   <button
                     type="button"
                     class="row-name-text"
@@ -447,7 +391,7 @@
     </div>
   }
 
-  @if (!busy() && viewMode() === 'list') {
+  @if (!busy() && !resultsError() && viewMode() === 'list') {
     <div class="list-action-bar">
       <div class="list-actions-left">
         <mat-select
@@ -473,7 +417,7 @@
           (click)="setGridSortOrder(gridSortOrder() === 'asc' ? 'desc' : 'asc')"
           class="action-btn"
         >
-          <mat-icon>{{ gridSortOrder() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+          <mat-icon [svgIcon]="gridSortOrder() === 'asc' ? 'arrow_up' : 'arrow_down'" />
         </button>
       </div>
     </div>
@@ -482,15 +426,13 @@
       @for (row of displayResults(); track row.id) {
         <div class="simple-list-item" [class.selected]="isSelected(row.id)">
           <div class="simple-list-thumb-wrap">
-            @if (thumbnailMap()[row.id]; as thumb) {
-              <img class="simple-list-thumb" [src]="thumb" alt="" />
-            } @else {
-              <mat-icon class="simple-list-icon">{{ row.icon }}</mat-icon>
-            }
+            <nxs-thumbnail class="simple-list-thumb" [documentId]="row.id">
+              <mat-icon class="simple-list-icon" [svgIcon]="row.icon" />
+            </nxs-thumbnail>
             <span class="simple-list-checkbox col-hover-select">
               <mat-checkbox
                 [checked]="isSelected(row.id)"
-                [attr.aria-label]="'common.select-item' | translate: { name: row.name }"
+                [aria-label]="'common.select-item' | translate: { name: row.name }"
                 (click)="$event.stopPropagation()"
                 (change)="toggleSelection(row.id)"
               ></mat-checkbox>
@@ -511,18 +453,12 @@
               }}</span>
             </div>
             <div class="simple-list-actions col-hover-actions">
-              <button
-                mat-icon-button
-                [matTooltip]="'search.search.add-to-favorites' | translate"
-                [attr.aria-label]="'search.search.add-to-favorites' | translate"
-                class="action-btn"
-                [disabled]="favoritePendingIds().has(row.id)"
-                (click)="toggleFavorite(row.id, $event)"
-              >
-                <mat-icon class="action-icon" [class.favorited]="isFavorited(row.id)">{{
-                  isFavorited(row.id) ? 'star' : 'star_outline'
-                }}</mat-icon>
-              </button>
+              <nxs-favorite-toggle
+                [documentId]="row.id"
+                [favorite]="isFavorited(row.id)"
+                (changed)="onFavoriteChanged(row.id, $event)"
+                (failed)="onFavoriteFailed($event)"
+              />
               @if (isDownloadableType(row.type)) {
                 <button
                   mat-icon-button
@@ -531,7 +467,7 @@
                   class="action-btn"
                   (click)="downloadDocument(row.id, row.name, $event)"
                 >
-                  <mat-icon class="action-icon">download</mat-icon>
+                  <mat-icon class="action-icon" svgIcon="download" />
                 </button>
               }
             </div>
@@ -545,5 +481,15 @@
         </div>
       }
     </div>
+  }
+  @if (!resultsError() && !(aiSearchMode() && aiSearchExecuted())) {
+    <nxs-pager
+      [pageIndex]="pager().pageIndex"
+      [pageSize]="pageSize"
+      [itemCount]="pager().itemCount"
+      [totalSize]="pager().totalSize"
+      [hasNextPage]="pager().hasNextPage"
+      (pageChange)="goToPage($event)"
+    />
   }
 </div>

@@ -1,7 +1,6 @@
 /** NXENG-930 — Preview tab `.format-type` label WCAG 1.4.3 AA contrast (IBM 4250318785). */
 
-export const summary =
-  'Document detail Preview tab format-type label meets WCAG AA text contrast';
+export const summary = 'Document detail Preview tab format-type label meets WCAG AA text contrast';
 
 const DOC_UID = process.env['NUXEO_DOC_UID']?.trim();
 
@@ -72,7 +71,10 @@ export const scenes = [
       );
       await h.goToDoc(DOC_UID);
       await h.expectVisible('document detail loads', 'lib-document-detail');
-      await h.shot('doc-detail-preview', { highlight: 'lib-document-viewer', label: 'Preview viewer' });
+      await h.shot('doc-detail-preview', {
+        highlight: 'lib-document-viewer',
+        label: 'Preview viewer',
+      });
     },
   },
   {
@@ -123,7 +125,8 @@ export const scenes = [
       await h.expectNoConsoleErrors('document detail preview', [
         /automation\/AI\./,
         '/nuxeo/logout',
-        '/nuxeo/api/v1/path/default-domain/config/agentic-ui',
+        '/agentic-ui-config/bootstrap.json',
+        '/agentic-ui-config/manifest.json',
       ]);
     },
   },

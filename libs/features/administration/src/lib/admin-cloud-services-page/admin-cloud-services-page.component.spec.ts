@@ -6,7 +6,7 @@ import { Subject, of, throwError } from 'rxjs';
 import {
   AdministrationService,
   type NuxeoOAuth2Provider,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 import { AdminCloudServicesPageComponent } from './admin-cloud-services-page.component';

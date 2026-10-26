@@ -1,10 +1,17 @@
-import { Component, LOCALE_ID, computed, effect, inject, signal } from '@angular/core';
+import {
+  Component,
+  LOCALE_ID,
+  computed,
+  effect,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { forkJoin, of } from 'rxjs';
@@ -15,9 +22,10 @@ import {
   buildDocumentCompareSections,
   isCompareIconField,
   type CompareRow,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { CompareIconImageComponent } from './compare-icon-image.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { NxsSpinnerComponent } from '@nuxeo/satori-platform/components';
 
 export interface DocumentCompareDialogData {
   items: Array<{ id: string; name: string }>;
@@ -27,18 +35,19 @@ export interface DocumentCompareDialogData {
   selector: 'lib-document-compare-dialog',
   standalone: true,
   imports: [
+    NxsSpinnerComponent,
     TranslatePipe,
     MatDialogModule,
     MatButtonModule,
     MatCheckboxModule,
     MatFormFieldModule,
     MatSelectModule,
-    MatProgressSpinnerModule,
     MatIconModule,
     MatSlideToggleModule,
     CompareIconImageComponent,
   ],
   templateUrl: './document-compare-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './document-compare-dialog.scss',
 })
 export class DocumentCompareDialogComponent {

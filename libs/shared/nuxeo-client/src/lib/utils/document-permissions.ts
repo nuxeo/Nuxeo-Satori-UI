@@ -65,6 +65,62 @@ export function canWriteDocument(doc: NuxeoDocument | null | undefined): boolean
   return hasDocumentPermission(doc, WRITE_DOCUMENT) || hasDocumentPermission(doc, WRITE_PROPERTIES);
 }
 
+/**
+ * Web UI's `isTaggable`: the document itself, not a proxy or a version, and the user holds Write.
+ * Nuxeo accepts a tag from a reader too, but Web UI does not offer it, and only a user with Write
+ * may take a tag off.
+ */
+export function canTagDocument(doc: NuxeoDocument | null | undefined): boolean {
+  return !!doc && !doc.isProxy && !doc.isVersion && hasDocumentPermission(doc, WRITE_DOCUMENT);
+}
+
+/** The permission Nuxeo checks to create, restore and publish versions. */
+export const WRITE_VERSION = 'WriteVersion';
+
+/**
+ * Nuxeo flags a record with the `isRecord` field of the document JSON — there is no facet for it.
+ * The public `NuxeoDocument` model does not declare the field, so it is read here rather than
+ * added to that published type.
+ */
+export function isRecordDocument(doc: NuxeoDocument | null | undefined): boolean {
+  return (
+    (doc as (NuxeoDocument & { readonly isRecord?: boolean }) | null | undefined)?.isRecord === true
+  );
+}
+
+/**
+ * Web UI's Create Version gate (`nuxeo-document-create-version`): the live document, not a version,
+ * a publication or a record, with the `Versionable` facet, and the user holds `WriteVersion`. A
+ * publication keeps its source's facet and permissions but has no versions of its own, which is
+ * why Web UI shows it no versions control at all.
+ */
+export function canCreateDocumentVersion(doc: NuxeoDocument | null | undefined): boolean {
+  return (
+    !!doc &&
+    !doc.isVersion &&
+    !doc.isProxy &&
+    !isRecordDocument(doc) &&
+    (doc.facets ?? []).includes('Versionable') &&
+    hasDocumentPermission(doc, WRITE_VERSION)
+  );
+}
+
+/**
+ * Web UI's `isPublishable`: not a proxy, a record or in the trash, the `Publishable` facet, and
+ * `WriteVersion`. A version is publishable — `Document.PublishToSection` publishes it as it is.
+ * Without an `isTrashed` flag, Web UI reads the `deleted` life-cycle state as the trash.
+ */
+export function canPublishDocument(doc: NuxeoDocument | null | undefined): boolean {
+  return (
+    !!doc &&
+    !doc.isProxy &&
+    !isRecordDocument(doc) &&
+    !(doc.isTrashed ?? doc.state === 'deleted') &&
+    (doc.facets ?? []).includes('Publishable') &&
+    hasDocumentPermission(doc, WRITE_VERSION)
+  );
+}
+
 /** True when the current user can create child documents in a folder. */
 export function canAddChildren(doc: NuxeoDocument | null | undefined): boolean {
   return hasDocumentPermission(doc, ADD_CHILDREN);

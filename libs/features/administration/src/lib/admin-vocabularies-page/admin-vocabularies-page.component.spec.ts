@@ -11,7 +11,7 @@ import {
   DirectoryService,
   DirectoryMetadata,
   ManagedDirectoryEntry,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 describe('AdminVocabulariesPageComponent', () => {
   let component: AdminVocabulariesPageComponent;

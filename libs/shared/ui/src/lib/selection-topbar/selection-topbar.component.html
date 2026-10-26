@@ -29,7 +29,7 @@
           [disabled]="!isEnabled(action)"
           (click)="run(action)"
         >
-          <mat-icon>{{ action.icon }}</mat-icon>
+          <mat-icon [svgIcon]="action.icon!" />
         </button>
       }
     </div>
@@ -62,18 +62,16 @@
         class="selection-popup-close"
         (click)="closeSelectionPopup()"
       >
-        <mat-icon>close</mat-icon>
+        <mat-icon svgIcon="x_large" />
       </button>
     </div>
 
     <div class="selection-popup-body">
       @for (item of selectedItems(); track item.id) {
         <div class="selection-item">
-          @if (item.preview) {
-            <img class="selection-item-preview" [src]="item.preview" alt="" />
-          } @else {
+          <nxs-thumbnail class="selection-item-preview" [documentId]="item.id">
             <span class="selection-item-preview selection-item-preview--placeholder"></span>
-          }
+          </nxs-thumbnail>
           <span class="selection-item-name">{{ item.name }}</span>
         </div>
       }

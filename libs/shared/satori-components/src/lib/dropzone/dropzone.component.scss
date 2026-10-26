@@ -1,0 +1,36 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  border: 2px dashed var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+  text-align: center;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+:host(.nxs-dropzone--over) {
+  border-color: var(--mat-sys-primary);
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+:host(.nxs-dropzone--disabled) {
+  opacity: 0.6;
+}
+
+.nxs-dropzone__icon {
+  width: 32px;
+  height: 32px;
+  font-size: 32px;
+}
+
+.nxs-dropzone__input {
+  display: none;
+}

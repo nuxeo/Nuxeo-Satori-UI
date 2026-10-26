@@ -1,0 +1,40 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-empty-state__icon {
+  width: 48px;
+  height: 48px;
+  font-size: 48px;
+  color: var(--mat-sys-outline);
+}
+
+// Doubled to outrank the app theme's `html[data-app-theme] .mat-typography h1`–`h6`, which would
+// otherwise render this heading at display size — 45px against title-medium's 16px, measured.
+.nxs-empty-state__heading.nxs-empty-state__heading {
+  margin: 0;
+  font: var(--mat-sys-title-medium);
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-empty-state__message {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+}
+
+.nxs-empty-state__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+
+  &:empty {
+    display: none;
+  }
+}

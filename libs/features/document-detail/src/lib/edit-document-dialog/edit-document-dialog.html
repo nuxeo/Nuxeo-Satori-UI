@@ -1,203 +1,31 @@
 <h2 mat-dialog-title>{{ 'document-detail.edit-document-dialog.edit-document' | translate }}</h2>
 
 <mat-dialog-content>
-  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
-    <mat-label>{{ 'document-detail.edit-document-dialog.title' | translate }}</mat-label>
-    <input matInput [(ngModel)]="title" required />
-  </mat-form-field>
-
-  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
-    <mat-label>{{ 'document-detail.edit-document-dialog.description' | translate }}</mat-label>
-    <textarea matInput [(ngModel)]="description" rows="2"></textarea>
-  </mat-form-field>
-
-  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width vocab-field">
-    <mat-label>{{ 'document-detail.edit-document-dialog.nature' | translate }}</mat-label>
-    <mat-select
-      #natureSelect
-      [(ngModel)]="nature"
-      panelClass="vocab-select-panel"
-      (openedChange)="onNaturePanelOpen($event)"
-      (selectionChange)="natureSelect.close()"
-    >
-      <mat-select-trigger>
-        @if (nature; as natureId) {
-          <mat-chip-set class="vocab-trigger-chips">
-            <mat-chip (removed)="clearNature()">
-              {{ naturePillLabel(natureId) }}
-              <button
-                type="button"
-                matChipRemove
-                [attr.aria-label]="
-                  'shared.remove-item' | translate: { name: naturePillLabel(natureId) }
-                "
-                (click)="$event.stopPropagation(); clearNature()"
-              >
-                <mat-icon>cancel</mat-icon>
-              </button>
-            </mat-chip>
-          </mat-chip-set>
-        }
-      </mat-select-trigger>
-      <div class="vocab-panel__search">
-        <input
-          type="text"
-          [placeholder]="'document-detail.edit-document-dialog.search' | translate"
-          [attr.aria-label]="'document-detail.edit-document-dialog.search-nature' | translate"
-          [(ngModel)]="naturePanelSearch"
-          [ngModelOptions]="{ standalone: true }"
-          (click)="$event.stopPropagation()"
-          (keydown)="$event.stopPropagation()"
-        />
-      </div>
-      <div class="vocab-panel__list">
-        @for (entry of filteredNatureOptions(); track entry.id) {
-          <mat-option [value]="entry.id">{{ directoryPickerLabel(entry) }}</mat-option>
-        }
-      </div>
-    </mat-select>
-  </mat-form-field>
-
-  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width vocab-field">
-    <mat-label>{{ 'document-detail.edit-document-dialog.subjects' | translate }}</mat-label>
-    <mat-select
-      [(ngModel)]="subjects"
-      multiple
-      panelClass="vocab-select-panel vocab-grouped-select-panel"
-      (openedChange)="onSubjectsPanelOpen($event)"
-    >
-      <mat-select-trigger>
-        <mat-chip-set class="vocab-trigger-chips">
-          @for (id of subjects; track id) {
-            <mat-chip (removed)="removeSubject(id)">
-              {{ subjectPillLabel(id) }}
-              <button
-                type="button"
-                matChipRemove
-                [attr.aria-label]="'shared.remove-item' | translate: { name: subjectPillLabel(id) }"
-                (click)="$event.stopPropagation()"
-              >
-                <mat-icon>cancel</mat-icon>
-              </button>
-            </mat-chip>
-          }
-        </mat-chip-set>
-      </mat-select-trigger>
-      <div class="vocab-panel__search">
-        <input
-          type="text"
-          [placeholder]="'document-detail.edit-document-dialog.search' | translate"
-          [attr.aria-label]="'document-detail.edit-document-dialog.search-subjects' | translate"
-          [(ngModel)]="subjectsPanelSearch"
-          [ngModelOptions]="{ standalone: true }"
-          (click)="$event.stopPropagation()"
-          (keydown)="$event.stopPropagation()"
-        />
-      </div>
-      <div class="vocab-panel__list">
-        @for (group of groupedSubjectOptions(); track group.parentLabel) {
-          <mat-optgroup [label]="group.parentLabel">
-            @for (entry of group.entries; track entry.id) {
-              <mat-option [value]="entry.id">{{ l10nEntryLabel(entry) }}</mat-option>
-            }
-          </mat-optgroup>
-        }
-      </div>
-    </mat-select>
-  </mat-form-field>
-
-  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width vocab-field">
-    <mat-label>{{ 'document-detail.edit-document-dialog.coverage' | translate }}</mat-label>
-    <mat-select
-      #coverageSelect
-      [(ngModel)]="coverage"
-      panelClass="vocab-select-panel vocab-grouped-select-panel"
-      (openedChange)="onCoveragePanelOpen($event)"
-      (selectionChange)="coverageSelect.close()"
-    >
-      <mat-select-trigger>
-        @if (coverage; as coverageId) {
-          <mat-chip-set class="vocab-trigger-chips">
-            <mat-chip (removed)="clearCoverage()">
-              {{ coveragePillLabel(coverageId) }}
-              <button
-                type="button"
-                matChipRemove
-                [attr.aria-label]="
-                  'shared.remove-item' | translate: { name: coveragePillLabel(coverageId) }
-                "
-                (click)="$event.stopPropagation(); clearCoverage()"
-              >
-                <mat-icon>cancel</mat-icon>
-              </button>
-            </mat-chip>
-          </mat-chip-set>
-        }
-      </mat-select-trigger>
-      <div class="vocab-panel__search">
-        <input
-          type="text"
-          [placeholder]="'document-detail.edit-document-dialog.search' | translate"
-          [attr.aria-label]="'document-detail.edit-document-dialog.search-coverage' | translate"
-          [(ngModel)]="coveragePanelSearch"
-          [ngModelOptions]="{ standalone: true }"
-          (click)="$event.stopPropagation()"
-          (keydown)="$event.stopPropagation()"
-        />
-      </div>
-      <div class="vocab-panel__list">
-        @for (group of groupedCoverageOptions(); track group.parentLabel) {
-          <mat-optgroup [label]="group.parentLabel">
-            @for (entry of group.entries; track entry.id) {
-              <mat-option [value]="entry.id">{{ l10nEntryLabel(entry) }}</mat-option>
-            }
-          </mat-optgroup>
-        }
-      </div>
-    </mat-select>
-  </mat-form-field>
-
-  <mat-form-field
-    appearance="outline"
-    subscriptSizing="dynamic"
-    class="full-width"
-    [class.expires-field-invalid]="showExpiresError()"
-  >
-    <mat-label>{{ 'document-detail.edit-document-dialog.expires' | translate }}</mat-label>
-    <input
-      matInput
-      name="expires"
-      [matDatepicker]="picker"
-      [ngModel]="expires"
-      [errorStateMatcher]="expiresErrorMatcher"
-      (ngModelChange)="onExpiresChange($event)"
-      (input)="onExpiresInput($event)"
-      #expiresInput="ngModel"
-      [placeholder]="'common.date-mask' | translate"
-    />
-    <mat-datepicker-toggle matIconSuffix [for]="picker" />
-    <mat-datepicker #picker />
-    @if (showExpiresError()) {
-      <mat-error>{{
-        'document-detail.edit-document-dialog.enter-a-valid-date' | translate
-      }}</mat-error>
-    }
-  </mat-form-field>
+  @if (saveError(); as message) {
+    <div class="edit-document-dialog__error" role="alert">
+      <mat-icon aria-hidden="true" svgIcon="error" />
+      <span>{{ message }}</span>
+    </div>
+  }
+  <lib-document-layout-form
+    mode="edit"
+    [document]="data.document"
+    [disabled]="saving()"
+    [headingLevel]="3"
+  />
 </mat-dialog-content>
 
 <mat-dialog-actions>
   <button mat-stroked-button mat-dialog-close [disabled]="saving()">
     {{ 'document-detail.edit-document-dialog.cancel' | translate }}
   </button>
-  <span class="spacer"></span>
-  <button
-    mat-flat-button
-    color="primary"
-    [disabled]="!title.trim() || saving() || !isExpiresValid()"
-    (click)="save()"
-  >
+  <span class="edit-document-dialog__spacer"></span>
+  <button mat-flat-button color="primary" [disabled]="saving()" (click)="save()">
     @if (saving()) {
-      <mat-spinner diameter="18" />
+      <mat-spinner
+        diameter="18"
+        [attr.aria-label]="'document-detail.edit-document-dialog.saving' | translate"
+      />
     } @else {
       {{ 'document-detail.edit-document-dialog.save' | translate }}
     }

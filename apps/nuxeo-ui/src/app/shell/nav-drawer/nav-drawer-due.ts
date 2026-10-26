@@ -1,4 +1,4 @@
-import type { TaskDueDistance } from '@nuxeo-satori/platform/nuxeo-client';
+import type { TaskDueDistance } from '@nuxeo/satori-platform/nuxeo-client';
 
 const DUE_KEYS = {
   due: {

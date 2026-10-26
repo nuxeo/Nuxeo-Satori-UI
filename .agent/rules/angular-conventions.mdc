@@ -8,7 +8,7 @@ alwaysApply: false
 
 ## Shared Constants & Utilities
 
-- Never define local `DOC_TYPE_ICONS` maps. Always import `docTypeIcon()` from `@nuxeo-satori/platform/nuxeo-client`.
+- Never define local `DOC_TYPE_ICONS` maps. Always import `docTypeIcon()` from `@nuxeo/satori-platform/nuxeo-client`.
 - Domain-specific API methods (e.g. `fetchThumbnail`) belong in their domain service (`DocumentDetailService`), not in `NuxeoApiBase`.
 - Keep shared constants, models, and utilities in `libs/shared/` — never duplicate across feature libs or apps.
 

@@ -48,6 +48,7 @@ import {
   scan,
   unknownSelectors,
 } from '../overlay/provenance-overlay.mjs';
+import { requireNuxeoCredentials } from '../../../scripts/beta-harness/nuxeo-credentials.mjs';
 
 const PRODUCT = 'http://localhost:4200';
 
@@ -77,10 +78,7 @@ async function productReachable() {
  * authenticates as Anonymous, which can see 1 document out of 123. An earlier recording
  * did exactly that and looked like a working demo of an empty repository.
  */
-async function signIn(page) {
-  const user = process.env['NUXEO_USER'] ?? 'Administrator';
-  const pass = process.env['NUXEO_PASS'] ?? 'Administrator';
-
+async function signIn(page, { username: user, password: pass }) {
   const username = page.locator('input[formcontrolname="username"]');
   if (!(await username.count())) return false;
   if (!(await username.isVisible().catch(() => false))) return false;
@@ -198,6 +196,11 @@ export default async function run({ page, deckUrl, hold, playDeck }) {
   }
 
   // ---- Sign in as Administrator -------------------------------------------
+  // NUXEO_USER / NUXEO_PASS, no default (NXSAT-649) — both fell back to the local Docker
+  // administrator pair. Required here, where the live cut starts, and outside `signIn`'s
+  // `.catch(() => false)` below: inside it, a missing pair would read as "NOT signed in" and
+  // quietly record the framing only, which is a different and misleading outcome.
+  const credentials = requireNuxeoCredentials('sign in for the 01-provenance live cut');
   await page.goto(`${PRODUCT}/`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => {
     localStorage.clear();
@@ -206,7 +209,7 @@ export default async function run({ page, deckUrl, hold, playDeck }) {
   });
   await page.goto(`${PRODUCT}/#/login`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
-  const signedIn = await signIn(page).catch(() => false);
+  const signedIn = await signIn(page, credentials).catch(() => false);
   console.log(`  [scene] signed in: ${signedIn}`);
   if (!signedIn) {
     // Filming Anonymous and captioning it Administrator is the failure mode this guard
@@ -313,7 +316,7 @@ export default async function run({ page, deckUrl, hold, playDeck }) {
   await page
     // By id, not by label: the entry's text is a translated Layer 0 string and a
     // relabel would leave this matching nothing, silently filming the wrong beat.
-    .locator('sat-platform-nav-list-item[data-nav-id="app.navbar.browseAdfHx"]')
+    .locator('a[sat-platform-nav-menu-item][data-nav-id="app.navbar.browseAdfHx"]')
     .first()
     .click({ timeout: 8000 })
     .catch((e) => console.log(`  [scene] nav item click failed: ${e.message}`));

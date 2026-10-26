@@ -130,7 +130,7 @@
           ]
         }
       ],
-      "footnote": "The rule matters because a leaked upstream type would make every customer of `@nuxeo-satori/platform` depend on adf-hx, and pull `adf-core` into their bundle whether they use it or not."
+      "footnote": "The rule matters because a leaked upstream type would make every customer of `@nuxeo/satori-platform` depend on adf-hx, and pull `adf-core` into their bundle whether they use it or not."
     },
     {
       "eyebrow": "The cost, recorded",

@@ -8,23 +8,25 @@ import {
   output,
   signal,
   untracked,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { CommonModule } from '@angular/common';
+
 import { MatIconModule } from '@angular/material/icon';
 import {
   AssetAggregationService,
   DocumentDetailService,
   type AssetQueueItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { catchError, of } from 'rxjs';
 import { TranslatePipe } from '@ngx-translate/core';
 
 @Component({
   selector: 'lib-assets-queue',
   standalone: true,
-  imports: [TranslatePipe, CommonModule, MatIconModule],
+  imports: [TranslatePipe, MatIconModule],
   templateUrl: './assets-queue.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './assets-queue.component.scss',
 })
 export class AssetsQueueComponent {

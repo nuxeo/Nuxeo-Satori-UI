@@ -1,4 +1,13 @@
-import { Component, DestroyRef, OnInit, ViewChild, inject, signal } from '@angular/core';
+import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  ViewChild,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgModel } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
@@ -7,11 +16,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { forkJoin } from 'rxjs';
 
 import {
@@ -26,13 +33,15 @@ import {
   groupL10nChildrenByParent,
   createExpiresErrorStateMatcher,
   isExpiresFieldValid,
-  shouldShowExpiresFieldError,
   l10nEntryLabel,
   PERMISSION_DENIED_KEY,
   isPermissionDeniedError,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
+import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
+import { DateMaskPipe } from '../date-adapter/date-mask.pipe';
+import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';
 
 export interface EditCollectionDialogData {
   document: NuxeoDocument;
@@ -42,6 +51,7 @@ export interface EditCollectionDialogData {
   selector: 'lib-edit-collection-dialog',
   standalone: true,
   imports: [
+    DateMaskPipe,
     TranslatePipe,
     FormsModule,
     MatDialogModule,
@@ -53,10 +63,10 @@ export interface EditCollectionDialogData {
     MatProgressSpinnerModule,
     MatChipsModule,
     MatIconModule,
-    MatSnackBarModule,
   ],
-  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   templateUrl: './edit-collection-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './edit-collection-dialog.scss',
 })
 export class EditCollectionDialogComponent implements OnInit {
@@ -66,7 +76,9 @@ export class EditCollectionDialogComponent implements OnInit {
   private readonly collectionService = inject(CollectionService);
   private readonly directoryService = inject(DirectoryService);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
+  private readonly dateAdapter = inject<DateAdapter<Date>>(DateAdapter);
+  private readonly dateFormats = inject(MAT_DATE_FORMATS);
 
   readonly l10nEntryLabel = l10nEntryLabel;
   protected readonly directoryPickerLabel = directoryPickerLabel;
@@ -99,9 +111,7 @@ export class EditCollectionDialogComponent implements OnInit {
   coverage: string | null = null;
   expires: Date | null = null;
   expiresRawText = '';
-  readonly expiresErrorMatcher = createExpiresErrorStateMatcher(() =>
-    shouldShowExpiresFieldError(this.expiresRawText, this.expires),
-  );
+  readonly expiresErrorMatcher = createExpiresErrorStateMatcher(() => this.showExpiresError());
 
   ngOnInit(): void {
     const doc = this.data.document;
@@ -128,10 +138,8 @@ export class EditCollectionDialogComponent implements OnInit {
           this.coverageEntries.set(coverage);
         },
         error: () => {
-          this.snackBar.open(
+          this.toast.error(
             this.translate.instant('shared-ui.message.failed-to-load-vocabulary-options'),
-            this.translate.instant('common.ok'),
-            { duration: 4000 },
           );
         },
       });
@@ -208,15 +216,24 @@ export class EditCollectionDialogComponent implements OnInit {
   }
 
   isExpiresValid(): boolean {
-    return isExpiresFieldValid(this.expiresRawText, this.expires);
+    const parsed = this.expiresRawText.trim()
+      ? this.dateAdapter.parse(this.expiresRawText, this.dateFormats.parse.dateInput)
+      : this.expires;
+    return isExpiresFieldValid(this.expiresRawText, parsed);
   }
 
   showExpiresError(): boolean {
-    return shouldShowExpiresFieldError(this.expiresRawText, this.expires);
+    return !this.isExpiresValid();
   }
 
   onExpiresInput(event: Event): void {
     this.expiresRawText = (event.target as HTMLInputElement).value;
+    // Parse synchronously so validation and the saved payload agree even before ngModel updates.
+    const parsed = this.dateAdapter.getValidDateOrNull(
+      this.dateAdapter.parse(this.expiresRawText.trim(), this.dateFormats.parse.dateInput),
+    );
+    // The datepicker already holds null or this instant; another value makes [ngModel] rewrite the text.
+    if (parsed?.getTime() !== this.expires?.getTime()) this.expires = parsed;
     const ctrl = this.expiresNgModel?.control;
     if (ctrl) {
       ctrl.markAsDirty();
@@ -256,12 +273,10 @@ export class EditCollectionDialogComponent implements OnInit {
         },
         error: (err) => {
           this.saving.set(false);
-          this.snackBar.open(
+          this.toast.error(
             isPermissionDeniedError(err)
               ? this.translate.instant(PERMISSION_DENIED_KEY)
               : this.translate.instant('shared-ui.message.failed-to-update-collection'),
-            this.translate.instant('common.ok'),
-            { duration: 4000 },
           );
         },
       });

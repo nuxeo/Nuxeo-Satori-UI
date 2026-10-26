@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import {
@@ -11,7 +11,6 @@ import {
   withDisabledInitialNavigation,
 } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Observable, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -31,7 +30,7 @@ import {
   type NuxeoAce,
   type NuxeoComment,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   AiChatService,
@@ -44,9 +43,10 @@ import {
   PACKAGED_DOCUMENT_TABS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 /**
  * The tab surfaces: publishing, permissions, comments, activity and attachments,
@@ -69,6 +69,16 @@ function doc(over: Partial<NuxeoDocument> = {}): NuxeoDocument {
     contextParameters: { permissions: ['Read', 'Write', 'ReadWrite', 'Everything', 'Remove'] },
     ...over,
   };
+}
+
+/** What Web UI's `isPublishable` asks for: the `Publishable` facet and `WriteVersion`. */
+function publishable(over: Partial<NuxeoDocument> = {}): NuxeoDocument {
+  return doc({
+    facets: ['Publishable', 'Versionable'],
+    contextParameters: { permissions: ['Read', 'Write', 'ReadWrite', 'WriteVersion'] },
+    properties: { 'uid:major_version': 2, 'uid:minor_version': 0 },
+    ...over,
+  });
 }
 
 function section(path: string, uid = path): NuxeoDocument {
@@ -98,25 +108,6 @@ function comment(over: Partial<NuxeoComment> = {}): NuxeoComment {
     author: 'alice',
     creationDate: '2026-08-24T10:00:00.000Z',
     ...over,
-  };
-}
-
-/** A raw comment document, as `getAllComments` returns them. */
-function commentEntry(
-  uid: string,
-  text: string,
-  parentId = 'doc-1',
-  over: Record<string, unknown> = {},
-): { uid: string; properties: Record<string, unknown> } {
-  return {
-    uid,
-    properties: {
-      'comment:parentId': parentId,
-      'comment:text': text,
-      'comment:author': 'alice',
-      'comment:creationDate': '2026-08-24T10:00:00.000Z',
-      ...over,
-    },
   };
 }
 
@@ -166,6 +157,7 @@ const mockDetailService = {
   updateComment: vi.fn((): Observable<NuxeoComment> => of(comment({ text: 'edited' }))),
   deleteComment: vi.fn((): Observable<void> => of(undefined)),
   getVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
+  getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
   getPublishedVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getSectionTree: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
@@ -194,8 +186,8 @@ const mockDirectoryService = {
 
 const mockTagService = {
   searchTags: vi.fn((_term: string): Observable<string[]> => of([])),
-  addTag: vi.fn((_uid: string, _label: string): Observable<unknown> => of({})),
-  removeTag: vi.fn((_uid: string, _label: string): Observable<void> => of(undefined)),
+  addTag: vi.fn((_uid: string, _label: string): Observable<string[]> => of([])),
+  removeTag: vi.fn((_uid: string, _label: string): Observable<string[]> => of([])),
 };
 
 const mockAiGateway = {
@@ -245,7 +237,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
   let component: DocumentDetailComponent;
   let fixture: ComponentFixture<DocumentDetailComponent>;
   let http: HttpTestingController;
-  let snack: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
   const revoked: string[] = [];
   let seq = 0;
@@ -307,7 +299,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
     mockDirectoryService.getEventCategories.mockReturnValue(of([]));
     mockDirectoryService.getEntries.mockReturnValue(of([]));
     mockDirectoryService.getAllL10nEntries.mockReturnValue(of([]));
-    mockTagService.addTag.mockReturnValue(of({}));
+    mockTagService.addTag.mockReturnValue(of([]));
     mockAiGateway.summarize.mockReturnValue(of({ summary: 'ok' }));
     mockAiGateway.suggestTags.mockReturnValue(of({ tags: [] }));
     mockAiGateway.classify.mockReturnValue(of({ category: 'Invoice' }));
@@ -329,7 +321,8 @@ describe('DocumentDetailComponent — tab surfaces', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     revoked.length = 0;
-    snack = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     installDefaults();
 
     await TestBed.configureTestingModule({
@@ -337,7 +330,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
@@ -372,7 +365,6 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         { provide: ContentLakeIngestService, useValue: mockIngestService },
         { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: snack } },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {
@@ -423,19 +415,16 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledTimes(1);
     });
 
-    it('lazy-loads the history tab with its vocabularies', async () => {
-      mockDirectoryService.getEventTypes.mockReturnValue(of([directoryEntry('a', 'A')]));
-      mockDirectoryService.getEventCategories.mockReturnValue(of([directoryEntry('c', 'C')]));
-      mockDetailService.getAuditLog.mockReturnValue(
-        of({ entries: [auditEntry()], resultsCount: 1 }),
-      );
+    it('leaves the History tab’s requests to nxs-document-history', async () => {
       await build();
+      mockDetailService.getAuditLog.mockClear();
+      mockDirectoryService.getEventTypes.mockClear();
 
       openTab('app.tabs.history');
 
-      expect(component.availableActions()).toHaveLength(1);
-      expect(component.availableCategories()).toHaveLength(1);
-      expect(component.auditEntries()).toHaveLength(1);
+      expect(component.activeTabId()).toBe('app.tabs.history');
+      expect(mockDetailService.getAuditLog).not.toHaveBeenCalled();
+      expect(mockDirectoryService.getEventTypes).not.toHaveBeenCalled();
     });
 
     it('ignores a nonsensical tab index rather than addressing nothing', async () => {
@@ -466,7 +455,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
             title: 'Server copy',
             contextParameters: {
               permissions: ['Everything'],
-              acls: [{ name: 'local', aces: [ace({ id: 'new' })] }],
+              acls: [{ name: 'local', aces: [ace({ id: 'new', externalUser: true })] }],
             },
           }),
         ),
@@ -474,7 +463,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       openTab('app.tabs.permissions');
 
-      expect(component.localAces().map((a) => a.id)).toEqual(['new']);
+      expect(component.externalAces().map((a) => a.id)).toEqual(['new']);
       expect(component.permissionsLoading()).toBe(false);
     });
 
@@ -485,7 +474,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       openTab('app.tabs.permissions');
 
       expect(component.permissionsLoading()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to refresh permissions', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to refresh permissions');
 
       mockDetailService.getDocumentPermissions.mockReturnValue(of(doc()));
       openTab('app.tabs.view');
@@ -494,50 +483,18 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledTimes(2);
     });
 
-    it('reloads the permissions after one is added', async () => {
-      await build();
-      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
-      mockDetailService.getDocumentPermissions.mockClear();
-
-      component.openAddPermissionDialog();
-
-      expect(lastDialogData()).toEqual({ documentUid: 'doc-1' });
-      expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledWith('doc-1');
-    });
-
-    it('does not reload when the add-permission dialog is dismissed', async () => {
-      await build();
-      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(false) }));
-      mockDetailService.getDocumentPermissions.mockClear();
-
-      component.openAddPermissionDialog();
-
-      expect(mockDetailService.getDocumentPermissions).not.toHaveBeenCalled();
-    });
-
-    it('reloads after a permission is edited and reports it', async () => {
-      await build();
-      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
-      mockDetailService.getDocumentPermissions.mockClear();
-
-      component.editPermission(ace());
-
-      expect(lastDialogData()).toEqual({ documentUid: 'doc-1', ace: ace() });
-      expect(snack).toHaveBeenCalledWith('Permission updated', 'OK', expect.anything());
-      expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledWith('doc-1');
-    });
-
-    it('describes the grant being removed in the delete confirmation', async () => {
+    it('hands the delete confirmation the one entry and the ACL it is on', async () => {
       await build();
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
 
-      component.deletePermission(ace({ permission: 'ReadWrite', begin: '2026-01-01' }));
+      component.deletePermission({ ...ace({ id: 'ace-9' }), aclName: 'local' });
 
       expect(lastDialogData()).toMatchObject({
         documentUid: 'doc-1',
-        permissionLabel: 'Edit',
+        ace: { id: 'ace-9' },
+        acl: 'local',
       });
-      expect(snack).toHaveBeenCalledWith('Permission deleted', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Permission deleted');
     });
 
     it('leaves the permissions alone when the delete is cancelled', async () => {
@@ -550,82 +507,28 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(mockDetailService.getDocumentPermissions).not.toHaveBeenCalled();
     });
 
-    it('flags an external grant as external when editing it', async () => {
+    it('reloads after an external grant is updated, leaving the toast to the dialog', async () => {
       await build();
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
+      mockDetailService.getDocumentPermissions.mockClear();
 
-      component.editExternalPermission(ace({ externalUser: true }));
+      component.editExternalPermission(ace({ id: 'ace-3', externalUser: true }));
 
-      expect(lastDialogData()).toMatchObject({ isExternal: true });
-      expect(snack).toHaveBeenCalledWith('Permission updated', 'OK', expect.anything());
+      expect(lastDialogData()).toMatchObject({ documentUid: 'doc-1', ace: { id: 'ace-3' } });
+      expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledWith('doc-1');
+      expect(toast.show).not.toHaveBeenCalled();
     });
 
-    it('reloads after an external share is created', async () => {
+    it('reloads after an external share is created, leaving the toast to the dialog', async () => {
       await build();
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
       mockDetailService.getDocumentPermissions.mockClear();
 
       component.openExternalPermissionDialog();
 
-      expect(snack).toHaveBeenCalledWith('Shared with external user', 'OK', expect.anything());
+      expect(lastDialogData()).toMatchObject({ documentUid: 'doc-1' });
       expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledWith('doc-1');
-    });
-
-    it('blocks inheritance and reloads', async () => {
-      await build(
-        doc({
-          contextParameters: {
-            permissions: ['Everything'],
-            acls: [
-              { name: 'local', aces: [ace()] },
-              { name: 'inherited', aces: [ace({ id: 'i' })] },
-            ],
-          },
-        }),
-      );
-      expect(component.isInheritanceBlocked()).toBe(false);
-
-      component.toggleInheritanceBlock();
-
-      expect(mockDetailService.blockPermissionInheritance).toHaveBeenCalledWith('doc-1');
-      expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Permission inheritance blocked', 'OK', expect.anything());
-    });
-
-    it('unblocks inheritance when it is already blocked', async () => {
-      await build(
-        doc({
-          contextParameters: {
-            permissions: ['Everything'],
-            acls: [{ name: 'local', aces: [ace()] }],
-          },
-        }),
-      );
-
-      component.toggleInheritanceBlock();
-
-      expect(mockDetailService.unblockPermissionInheritance).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith(
-        'Permission inheritance unblocked',
-        'OK',
-        expect.anything(),
-      );
-    });
-
-    it('releases the in-progress flag when the inheritance change fails', async () => {
-      await build();
-      mockDetailService.blockPermissionInheritance.mockReturnValue(
-        throwError(() => new Error('403')),
-      );
-
-      component.toggleInheritanceBlock();
-
-      expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith(
-        'Failed to update permission inheritance',
-        'OK',
-        expect.anything(),
-      );
+      expect(toast.show).not.toHaveBeenCalled();
     });
 
     it('sends a notification email for a grant', async () => {
@@ -638,7 +541,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         'ace-7',
       );
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Notification email sent', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Notification email sent');
     });
 
     it('reports a generic failure when the notification cannot be sent', async () => {
@@ -650,11 +553,16 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.sendPermissionNotification(ace());
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to send notification', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to send notification');
     });
   });
 
   describe('publishing tab', () => {
+    // Unpublish, Republish and Unpublish All ask first; these specs answer Yes.
+    beforeEach(() => {
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
+    });
+
     it('builds a nested section tree from the flat server list', async () => {
       mockDetailService.getSectionTree.mockReturnValue(
         of({
@@ -734,7 +642,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
     });
 
     it('publishes to the selected section and refreshes the publication list', async () => {
-      await build();
+      await build(publishable());
       component.selectedSectionId.set('sec-1');
       const proxy = doc({ uid: 'proxy-1', path: '/default-domain/sections/news/doc' });
       mockDetailService.getPublishedVersions.mockReturnValue(of({ entries: [proxy] }));
@@ -759,7 +667,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
     });
 
     it('clears the publishing flag when the publish fails', async () => {
-      await build();
+      await build(publishable());
       component.selectedSectionId.set('sec-1');
       mockDetailService.publishDocument.mockReturnValue(throwError(() => new Error('403')));
 
@@ -767,7 +675,40 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(component.publishing()).toBe(false);
       expect(component.selectedSectionId()).toBe('sec-1');
-      expect(snack).toHaveBeenCalledWith('Failed to publish', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to publish');
+    });
+
+    it('refuses to publish a document it cannot publish, even when called directly', async () => {
+      // Write but not WriteVersion: Nuxeo refuses the publish, as the toolbar's rule does.
+      await build(doc({ facets: ['Publishable'] }));
+      component.selectedSectionId.set('sec-1');
+
+      component.publishToSection();
+
+      expect(component.canPublish()).toBe(false);
+      expect(mockDetailService.publishDocument).not.toHaveBeenCalled();
+    });
+
+    it('offers Republish of the current version only once the document has changed since', async () => {
+      const current = doc({
+        uid: 'p-now',
+        path: '/s/now/doc',
+        contextParameters: { permissions: ['WriteVersion'] },
+        properties: { 'uid:major_version': 2, 'uid:minor_version': 0 },
+      });
+      await build(publishable({ isCheckedOut: false }));
+      expect(component.canUnpublish(current)).toBe(true);
+      expect(component.canRepublish(current)).toBe(false);
+
+      fixture.destroy();
+      // Checked out at 2.0+: Web UI's `_canRepublish` offers 2.0 again.
+      await build(publishable({ isCheckedOut: true }));
+      expect(component.canRepublish(current)).toBe(true);
+      expect(
+        component.canRepublish(
+          doc({ ...current, properties: { 'uid:major_version': 3, 'uid:minor_version': 0 } }),
+        ),
+      ).toBe(false);
     });
 
     it('removes just the unpublished proxy from the list', async () => {
@@ -793,7 +734,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(component.publishedDocs().map((d) => d.uid)).toEqual(['p1']);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to unpublish', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to unpublish');
     });
 
     it('republishes against the section uid already in the loaded tree', async () => {
@@ -837,7 +778,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(mockDetailService.publishDocument).not.toHaveBeenCalled();
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Section not found', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Section not found');
     });
 
     it('releases the in-progress flag when the section lookup fails', async () => {
@@ -847,7 +788,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.republishDocument(doc({ uid: 'p1', path: '/s/news/doc' }));
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to republish', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to republish');
     });
 
     it('releases the in-progress flag when the republish itself fails', async () => {
@@ -861,7 +802,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.republishDocument(doc({ uid: 'p1', path: '/s/news/doc' }));
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to republish', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to republish');
     });
 
     it('empties the publication list when every publication is removed', async () => {
@@ -890,11 +831,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(component.publishedDocs()).toEqual([survivor]);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith(
-        'Failed to remove some publications',
-        'OK',
-        expect.anything(),
-      );
+      expect(toast.error).toHaveBeenCalledWith('Failed to remove some publications');
     });
 
     it('does nothing when there is nothing published', async () => {
@@ -961,7 +898,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(
         component.sectionIcon({ doc: doc({ type: 'SectionRoot' }), children: [], expanded: true }),
-      ).toBe('library_books');
+      ).toBe('book');
       expect(
         component.sectionIcon({ doc: doc({ type: 'Section' }), children: [], expanded: true }),
       ).toBe('folder');
@@ -980,300 +917,11 @@ describe('DocumentDetailComponent — tab surfaces', () => {
   });
 
   describe('comments', () => {
-    it('separates top-level comments from their replies', async () => {
-      mockDetailService.getAllComments.mockReturnValue(
-        of({
-          entries: [
-            commentEntry('c1', 'top level'),
-            commentEntry('r1', 'a reply', 'c1'),
-            commentEntry('r2', 'another reply', 'c1'),
-          ],
-        }),
-      );
+    it('offers Comments only on a commentable document', async () => {
       await build();
-
-      component.switchPanelSubTab('comments');
-
-      expect(component.comments().map((c) => c.id)).toEqual(['c1']);
-      expect(component.replyCount('c1')).toBe(2);
-      expect(component.commentsLoading()).toBe(false);
-    });
-
-    it('loads comments only the first time the sub-tab is shown', async () => {
-      await build();
-
-      component.switchPanelSubTab('comments');
-      component.switchPanelSubTab('properties');
-      component.switchPanelSubTab('comments');
-
-      expect(mockDetailService.getAllComments).toHaveBeenCalledTimes(1);
-    });
-
-    it('clears the loading flag when the comment fetch fails', async () => {
-      mockDetailService.getAllComments.mockReturnValue(throwError(() => new Error('500')));
-      await build();
-
-      component.switchPanelSubTab('comments');
-
-      expect(component.commentsLoading()).toBe(false);
-      expect(component.comments()).toEqual([]);
-    });
-
-    it('puts a new comment at the top of the thread and clears the box', async () => {
-      await build();
-      mockDetailService.createComment.mockReturnValue(of(comment({ id: 'new', text: 'fresh' })));
-      component.comments.set([comment({ id: 'old' })]);
-      component.newCommentText.set('  fresh  ');
-
-      component.submitComment();
-
-      expect(mockDetailService.createComment).toHaveBeenCalledWith('doc-1', 'fresh');
-      expect(component.comments().map((c) => c.id)).toEqual(['new', 'old']);
-      expect(component.newCommentText()).toBe('');
-      expect(component.commentSaving()).toBe(false);
-    });
-
-    it('does not post a comment that is only whitespace', async () => {
-      await build();
-      component.newCommentText.set('   ');
-
-      component.submitComment();
-
-      expect(mockDetailService.createComment).not.toHaveBeenCalled();
-    });
-
-    it('keeps the typed text when posting a comment fails', async () => {
-      await build();
-      mockDetailService.createComment.mockReturnValue(throwError(() => new Error('500')));
-      component.newCommentText.set('keep me');
-
-      component.submitComment();
-
-      expect(component.newCommentText()).toBe('keep me');
-      expect(component.commentSaving()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to add comment', 'OK', expect.anything());
-    });
-
-    it('refuses to comment on a document the user cannot write', async () => {
-      await build(doc({ contextParameters: { permissions: ['Read'] } }));
-      component.newCommentText.set('nope');
-
-      component.submitComment();
-
-      expect(mockDetailService.createComment).not.toHaveBeenCalled();
-    });
-
-    it('discards the draft comment on cancel', async () => {
-      await build();
-      component.newCommentText.set('draft');
-
-      component.cancelNewComment();
-
-      expect(component.newCommentText()).toBe('');
-    });
-
-    it('opens and closes the inline editor for a comment', async () => {
-      await build();
-
-      component.startEditComment(comment({ id: 'c9', text: 'original' }));
-      expect(component.editingCommentId()).toBe('c9');
-      expect(component.editingCommentText()).toBe('original');
-
-      component.cancelEditComment();
-      expect(component.editingCommentId()).toBeNull();
-      expect(component.editingCommentText()).toBe('');
-    });
-
-    it('refuses to open the editor without the write permission', async () => {
-      await build(doc({ contextParameters: { permissions: ['Read'] } }));
-
-      component.startEditComment(comment({ id: 'c9' }));
-
-      expect(component.editingCommentId()).toBeNull();
-    });
-
-    it('replaces the edited text of a top-level comment', async () => {
-      await build();
-      component.comments.set([comment({ id: 'c1', text: 'before' })]);
-      mockDetailService.updateComment.mockReturnValue(of(comment({ id: 'c1', text: 'after' })));
-      component.startEditComment(comment({ id: 'c1', text: 'before' }));
-      component.editingCommentText.set('after');
-
-      component.saveEditComment();
-
-      expect(mockDetailService.updateComment).toHaveBeenCalledWith('doc-1', 'c1', 'after');
-      expect(component.comments()[0].text).toBe('after');
-      expect(component.editingCommentId()).toBeNull();
-    });
-
-    it('replaces the edited text of a reply, which is not in the top-level list', async () => {
-      await build();
-      component.comments.set([comment({ id: 'c1' })]);
-      component.repliesMap.set({ c1: [comment({ id: 'r1', text: 'before', parentId: 'c1' })] });
-      mockDetailService.updateComment.mockReturnValue(
-        of(comment({ id: 'r1', text: 'after', parentId: 'c1' })),
-      );
-      component.editingCommentId.set('r1');
-      component.editingCommentText.set('after');
-
-      component.saveEditComment();
-
-      expect(component.repliesMap()['c1'][0].text).toBe('after');
-    });
-
-    it('keeps the editor open when saving an edit fails', async () => {
-      await build();
-      mockDetailService.updateComment.mockReturnValue(throwError(() => new Error('500')));
-      component.editingCommentId.set('c1');
-      component.editingCommentText.set('after');
-
-      component.saveEditComment();
-
-      expect(component.editingCommentId()).toBe('c1');
-      expect(component.commentSaving()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to update comment', 'OK', expect.anything());
-    });
-
-    it('does not save an edit that has been emptied', async () => {
-      await build();
-      component.editingCommentId.set('c1');
-      component.editingCommentText.set('   ');
-
-      component.saveEditComment();
-
-      expect(mockDetailService.updateComment).not.toHaveBeenCalled();
-    });
-
-    it('removes a deleted comment and its replies from the thread', async () => {
-      await build();
-      component.comments.set([comment({ id: 'c1' }), comment({ id: 'c2' })]);
-      component.repliesMap.set({ c1: [comment({ id: 'r1', parentId: 'c1' })] });
-      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
-
-      component.deleteComment(comment({ id: 'c1' }));
-
-      expect(mockDetailService.deleteComment).toHaveBeenCalledWith('doc-1', 'c1');
-      expect(component.comments().map((c) => c.id)).toEqual(['c2']);
-      expect(component.repliesMap()['c1']).toBeUndefined();
-      expect(snack).toHaveBeenCalledWith('Comment deleted', 'OK', expect.anything());
-    });
-
-    it('removes only the deleted reply and keeps its parent', async () => {
-      await build();
-      component.comments.set([comment({ id: 'c1' })]);
-      component.repliesMap.set({
-        c1: [comment({ id: 'r1', parentId: 'c1' }), comment({ id: 'r2', parentId: 'c1' })],
-      });
-      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
-
-      component.deleteComment(comment({ id: 'r1', parentId: 'c1' }), 'c1');
-
-      expect(component.comments().map((c) => c.id)).toEqual(['c1']);
-      expect(component.repliesMap()['c1'].map((r) => r.id)).toEqual(['r2']);
-      expect(snack).toHaveBeenCalledWith('Reply deleted', 'OK', expect.anything());
-    });
-
-    it('leaves the thread alone when the delete is cancelled', async () => {
-      await build();
-      component.comments.set([comment({ id: 'c1' })]);
-      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(false) }));
-
-      component.deleteComment(comment({ id: 'c1' }));
-
-      expect(mockDetailService.deleteComment).not.toHaveBeenCalled();
-      expect(component.comments()).toHaveLength(1);
-    });
-
-    it('keeps the comment on screen when the delete fails', async () => {
-      await build();
-      component.comments.set([comment({ id: 'c1' })]);
-      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
-      mockDetailService.deleteComment.mockReturnValue(throwError(() => new Error('403')));
-
-      component.deleteComment(comment({ id: 'c1' }));
-
-      expect(component.comments()).toHaveLength(1);
-      expect(snack).toHaveBeenCalledWith('Failed to delete comment', 'OK', expect.anything());
-    });
-
-    it('files a reply under the comment it answers', async () => {
-      await build();
-      mockDetailService.createReply.mockReturnValue(of(comment({ id: 'r1', text: 'replied' })));
-
-      component.startReply('c1');
-      expect(component.replyingToId()).toBe('c1');
-      component.replyText.set('replied');
-      component.submitReply('c1');
-
-      expect(mockDetailService.createReply).toHaveBeenCalledWith('doc-1', 'c1', 'replied');
-      // The server echoes the document uid as the parent; the reply belongs to the comment.
-      expect(component.repliesMap()['c1'].map((r) => r.parentId)).toEqual(['c1']);
-      expect(component.replyingToId()).toBeNull();
-      expect(component.replyText()).toBe('');
-    });
-
-    it('keeps the reply box open when posting the reply fails', async () => {
-      await build();
-      mockDetailService.createReply.mockReturnValue(throwError(() => new Error('500')));
-      component.replyText.set('keep me');
-
-      component.submitReply('c1');
-
-      expect(component.replyText()).toBe('keep me');
-      expect(component.commentSaving()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to add reply', 'OK', expect.anything());
-    });
-
-    it('does not post an empty reply', async () => {
-      await build();
-      component.replyText.set('  ');
-
-      component.submitReply('c1');
-
-      expect(mockDetailService.createReply).not.toHaveBeenCalled();
-    });
-
-    it('discards the draft reply on cancel', async () => {
-      await build();
-      component.startReply('c1');
-      component.replyText.set('draft');
-
-      component.cancelReply();
-
-      expect(component.replyingToId()).toBeNull();
-      expect(component.replyText()).toBe('');
-    });
-
-    it('reports the time of the most recent reply', async () => {
-      await build();
-      component.repliesMap.set({
-        c1: [
-          comment({ id: 'r1', creationDate: '2020-01-01T00:00:00.000Z' }),
-          comment({ id: 'r2', creationDate: new Date(Date.now() - 5000).toISOString() }),
-        ],
-      });
-
-      // `Intl.RelativeTimeFormat` says "now" below a minute, where the hand-rolled
-      // formatter said "a few seconds ago". See `formatRelativeTime`.
-      expect(component.lastReplyTime('c1')).toBe('now');
-      expect(component.lastReplyTime('none')).toBe('');
-      expect(component.replyCount('none')).toBe(0);
-    });
-
-    it('marks a comment edited only when it changed after creation', async () => {
-      await build();
-
-      expect(
-        component.isCommentEdited(
-          comment({ creationDate: '2026-01-01', modificationDate: '2026-02-01' }),
-        ),
-      ).toBe(true);
-      expect(
-        component.isCommentEdited(
-          comment({ creationDate: '2026-01-01', modificationDate: '2026-01-01' }),
-        ),
-      ).toBe(false);
-      expect(component.isCommentEdited(comment({ modificationDate: undefined }))).toBe(false);
+      expect(component.panelViews().map((v) => v.id)).not.toContain('comments');
+      await build(doc({ facets: ['Commentable'] }));
+      expect(component.panelViews().map((v) => v.id)).toContain('comments');
     });
 
     it('describes an age in the largest unit that still fits', async () => {
@@ -1395,20 +1043,22 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       clickSpy.mockRestore();
     });
 
-    it('labels an audit event from the vocabulary, falling back to the raw id', async () => {
+    it('names an activity by the eventTypes vocabulary, read once with the activity', async () => {
       mockDirectoryService.getEventTypes.mockReturnValue(
-        of([directoryEntry('documentModified', 'Modified')]),
+        of([directoryEntry('custom.reviewed', 'Reviewed the contract')]),
       );
-      mockDirectoryService.getEventCategories.mockReturnValue(
-        of([directoryEntry('eventDocumentCategory', 'Document')]),
+      mockDetailService.getAuditLog.mockReturnValue(
+        of({ entries: [auditEntry({ eventId: 'custom.reviewed' })], resultsCount: 1 }),
       );
       await build();
-      openTab('app.tabs.history');
+      mockDirectoryService.getEventTypes.mockClear();
 
-      expect(component.eventLabel('documentModified')).toBe('Modified');
-      expect(component.eventLabel('somethingElse')).toBe('Something Else');
-      expect(component.categoryLabel('eventDocumentCategory')).toBe('Document');
-      expect(component.categoryLabel('eventLifeCycleCategory')).toBe('Event Life Cycle');
+      component.switchPanelSubTab('activity');
+      component.switchPanelSubTab('properties');
+      component.loadPanelActivity();
+
+      expect(mockDirectoryService.getEventTypes).toHaveBeenCalledTimes(1);
+      expect(component.activityLabel(component.panelActivity()[0])).toBe('Reviewed the contract');
     });
   });
 
@@ -1468,7 +1118,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       );
       expect(component.actionInProgress()).toBeNull();
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith('"notes.txt" attached', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('"notes.txt" attached');
     });
 
     it('releases the in-progress flag when the upload fails', async () => {
@@ -1478,7 +1128,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.uploadAttachment(fileInput(new File(['x'], 'big.bin')));
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to upload attachment', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to upload attachment');
     });
 
     it('does nothing when the file picker was dismissed', async () => {
@@ -1513,7 +1163,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         expect.objectContaining({ name: 'new.pdf' }),
       );
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('"old.pdf" replaced', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('"old.pdf" replaced');
     });
 
     it('does not replace an attachment when the dialog is dismissed', async () => {
@@ -1535,7 +1185,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openReplaceDialog({ index: 0, name: 'old.pdf' });
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to replace attachment', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to replace attachment');
     });
 
     it('removes an attachment after confirmation', async () => {
@@ -1545,7 +1195,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openRemoveDialog({ index: 2, name: 'gone.pdf' });
 
       expect(mockDetailService.removeAttachment).toHaveBeenCalledWith('doc-1', 2);
-      expect(snack).toHaveBeenCalledWith('"gone.pdf" removed', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('"gone.pdf" removed');
     });
 
     it('keeps the attachment when the removal is cancelled', async () => {
@@ -1565,7 +1215,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openRemoveDialog({ index: 0, name: 'x.pdf' });
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to remove attachment', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to remove attachment');
     });
 
     it('replaces the main file and reloads', async () => {
@@ -1582,7 +1232,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         expect.objectContaining({ name: 'main.pdf' }),
       );
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith('Main file replaced', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Main file replaced');
     });
 
     it('releases the in-progress flag when replacing the main file fails', async () => {
@@ -1595,7 +1245,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openReplaceMainFileDialog();
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to replace main file', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to replace main file');
     });
 
     it('removes the main file after confirmation', async () => {
@@ -1605,7 +1255,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openRemoveMainFileDialog();
 
       expect(mockDetailService.removeMainFile).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith('Main file removed', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Main file removed');
     });
 
     it('releases the in-progress flag when removing the main file fails', async () => {
@@ -1616,7 +1266,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openRemoveMainFileDialog();
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to remove main file', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to remove main file');
     });
 
     it('refuses every attachment mutation without the write permission', async () => {
@@ -1674,7 +1324,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         .error(new ProgressEvent('error'), { status: 404, statusText: 'Not Found' });
 
       expect(mockDialog.open).not.toHaveBeenCalled();
-      expect(snack).toHaveBeenCalledWith('Failed to load preview', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to load preview');
     });
   });
 
@@ -1722,11 +1372,13 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.suggestTags();
       expect(component.aiSuggestedTags().map((t) => t.label)).toEqual(['invoice', 'q3']);
 
+      mockTagService.addTag.mockReturnValue(of(['invoice']));
       component.applyAiTag('invoice');
 
       expect(mockTagService.addTag).toHaveBeenCalledWith('doc-1', 'invoice');
+      expect(component.tags()).toEqual(['invoice']);
       expect(component.aiSuggestedTags().map((t) => t.label)).toEqual(['q3']);
-      expect(snack).toHaveBeenCalledWith('Tag "invoice" applied', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Tag "invoice" applied');
     });
 
     it('keeps the suggestion when applying it fails', async () => {
@@ -1738,7 +1390,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.applyAiTag('invoice');
 
       expect(component.aiSuggestedTags().map((t) => t.label)).toEqual(['invoice']);
-      expect(snack).toHaveBeenCalledWith('Failed to apply tag', 'Dismiss', { duration: 3000 });
+      expect(toast.error).toHaveBeenCalledWith('Failed to apply tag');
     });
 
     it('clears the tag loading flag when the suggestion call fails', async () => {
@@ -1811,6 +1463,9 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(mockKeClient.enrich).not.toHaveBeenCalled();
       expect(component.keError()).toContain('"nature" vocabulary failed to load');
       expect(component.keActionInFlight()).toBeNull();
+      // A refusal, so it is announced as an error rather than as news.
+      expect(toast.error).toHaveBeenCalledWith(component.keError());
+      expect(toast.show).not.toHaveBeenCalled();
     });
 
     it('writes the matched vocabulary id, not the label the model returned', async () => {
@@ -2035,6 +1690,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.ingestToContentLake();
 
       expect(component.contentLakeIngestError()).toContain('(3 failed)');
+      expect(toast.error).toHaveBeenCalledWith(component.contentLakeIngestError());
       expect(component.contentLakeIngestStatus()).toBeNull();
       expect(component.contentLakePresenceVerified()).toBe(false);
       expect(component.contentLakeIngestInFlight()).toBe(false);

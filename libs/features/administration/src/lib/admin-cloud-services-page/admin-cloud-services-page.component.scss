@@ -58,12 +58,14 @@
   max-width: 60ch;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .cloud-page .mat-mdc-unelevated-button,
 .cloud-page .mat-mdc-outlined-button,
 .cloud-page .mat-mdc-button {
   min-height: var(--admin-control-height, 40px);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .cloud-table th.mat-mdc-header-cell,
 .cloud-table td.mat-mdc-cell {
   padding-top: var(--admin-row-padding-y, 0.68rem);

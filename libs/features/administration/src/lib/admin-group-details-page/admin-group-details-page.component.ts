@@ -1,4 +1,11 @@
-import { Component, LOCALE_ID, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  LOCALE_ID,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -18,9 +25,9 @@ import {
   PrincipalPermissionsService,
   UserService,
   principalPermissionTimeFrameLabel,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
-import { ConfirmDialogComponent, ConfirmDialogData } from '@nuxeo-satori/platform/ui';
+import { ConfirmDialogComponent, ConfirmDialogData } from '@nuxeo/satori-platform/ui';
 import {
   GroupFormDialogComponent,
   GroupFormDialogData,
@@ -44,6 +51,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
     MatPaginatorModule,
   ],
   templateUrl: './admin-group-details-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-group-details-page.component.scss',
 })
 export class AdminGroupDetailsPageComponent implements OnInit {

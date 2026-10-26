@@ -12,10 +12,13 @@
 name: "CodeQL Advanced"
 
 on:
+  # PRs into an `integration/<ticket>` branch need an analysis on `refs/pull/<n>/merge` for the
+  # `code-scanning` gate, and the push trigger gives the integration branch a baseline for those
+  # PR results to be compared against.
   push:
-    branches: [ "main" ]
+    branches: [ "main", "integration/**" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "integration/**" ]
   schedule:
     - cron: '22 6 * * 5'
 

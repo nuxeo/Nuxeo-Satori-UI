@@ -9,7 +9,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 
-import { UserService } from '@nuxeo-satori/platform/nuxeo-client';
+import { UserService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AdminUsersGroupsPageComponent } from './admin-users-groups-page.component';
 

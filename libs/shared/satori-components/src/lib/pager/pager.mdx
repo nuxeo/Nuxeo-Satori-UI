@@ -1,0 +1,83 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as PagerStories from './pager.stories';
+
+<Meta of={PagerStories} name="Overview" />
+
+# Pager
+
+The pager is the Previous and Next buttons under a list the server pages, with the range of items
+on screen: "51–100", or "51–60 of 60" when the total is known. Use it under any list whose pages come
+from Nuxeo. The document list already includes one; use it on its own beside a grid of cards or any
+other view of the same pages.
+
+## Key features
+
+- **Next and previous, not numbered.** Nuxeo counts a folder's children only when they fit on one
+  page, so a numbered pager cannot be built on it. Next follows `hasNextPage`, Previous follows the
+  page index.
+- **A total only when there is one.** "of N" appears only for a real, non-negative `totalSize`.
+  A negative total, Nuxeo's "did not count", shows the range alone.
+- **Nothing for a single page.** On a first page with no next page it renders nothing.
+- **Past the end.** A next page that turns out to be empty says "No more items" and keeps Previous.
+
+## Demo showcase
+
+<Canvas of={PagerStories.UncountedFolder} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsPagerComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-pager
+  [pageIndex]="pageIndex()"
+  [pageSize]="50"
+  [itemCount]="entries().length"
+  [totalSize]="totalSize()"
+  [hasNextPage]="hasNextPage()"
+  [disabled]="loading()"
+  (pageChange)="load($event)"
+/>`;
+
+<Source language="html" dark code={usageHtml} />
+
+Every input is optional. `pageChange` carries the page index to load, one less or one more than
+`pageIndex`; the host fetches it and passes the new page back. The pager's own words — its landmark
+name, the button names and the range — are translated with ngx-translate under
+`satori-components.pager.*`, and `providePlatformEnglishFallback()` supplies the English when your
+catalogue does not.
+
+## Where its data comes from
+
+The pager reads nothing. Pass it Nuxeo's own pagination facts for the page you fetched:
+`isNextPageAvailable` as `hasNextPage`, and the response's count as `totalSize` — negative when Nuxeo
+declined to count.
+
+## Examples
+
+### The last page of a counted list
+
+<Canvas of={PagerStories.LastPageOfACountedList} />
+
+### Past the end
+
+<Canvas of={PagerStories.PastTheEnd} />
+
+### While a page loads
+
+<Canvas of={PagerStories.Loading} />
+
+## Accessibility
+
+- **A landmark.** The pager is a `nav`, named "Pages" unless you give it a `label`.
+- **Named buttons.** Previous and Next show only an icon; each is named, with a matching tooltip,
+  and the icons are hidden from assistive technology. In a right-to-left page the chevrons point the
+  other way, as the page turns.
+- **The range is announced.** It is a polite live region, so a screen reader reads "51–100" after
+  Next without the user moving focus.
+- **Keyboard.** Both are ordinary buttons: **Tab** reaches them, **Enter** or **Space** presses them.
+  A disabled button is skipped.

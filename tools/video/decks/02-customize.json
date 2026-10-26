@@ -17,13 +17,13 @@
           "items": [
             {
               "series": "adfhx",
-              "title": "Layer 0 — configuration. A JSON file, no rebuild.",
-              "text": "`bootstrap.json`, deployed **beside** the bundle rather than inside it. Branding, themes, the Nuxeo endpoint, session timeouts, SSO. Edit it, reload the browser, done."
+              "title": "Layer 0 — configuration. A JSON fragment, no rebuild.",
+              "text": "A `bootstrap` fragment in **your own** Marketplace package, served after our defaults before sign-in. Branding, themes, the Nuxeo endpoint, session timeouts, SSO. Install the package, reload the browser, done."
             },
             {
               "series": "ours",
-              "title": "Layer 1 — the manifest. Declarative, no rebuild, no deploy.",
-              "text": "A Nuxeo **document**, so it inherits the repository's versioning, audit trail and ACLs. Hide, reorder, relabel or rule-gate anything addressable by ID; add your own entries."
+              "title": "Layer 1 — the manifest. Declarative, no rebuild.",
+              "text": "A `manifest` fragment in the same package, versioned with it. Hide, reorder, relabel or rule-gate anything addressable by ID; add your own entries."
             },
             {
               "series": "3",
@@ -43,14 +43,14 @@
     {
       "eyebrow": "Layer 0 — configuration",
       "title": "It survives your next upgrade — rehearsed",
-      "lede": "The marketplace installer copies the bundle directory with `overwrite=\"true\"`. Anything a customer edits **inside** the bundle is destroyed on upgrade — so the config file lives one level up, where the package installs only a sample. The customer copies it to `bootstrap.json`, which no upgrade touches; a real marketplace upgrade with an edited file was rehearsed (NXSAT-317).",
+      "lede": "The marketplace installer copies our bundle directory with `overwrite=\"true\"`, and installs **no** configuration file. Your fragments live in your own package, which depends on ours, so upgrading ours cannot replace them. Rehearsed with `nuxeoctl mp-install`: upgrading ours with two customer packages installed served byte-identical configuration (NXSAT-312).",
       "blocks": [
         {
           "type": "code",
-          "code": "<span class=\"c\">// nxserver/nuxeo.war/agentic-ui-config/bootstrap.json</span>\n<span class=\"c\">// — beside the bundle, copied from bootstrap.example.json</span>\n{\n  <b>\"branding\"</b>: {\n    <b>\"applicationTitle\"</b>: \"Acme Content\",\n    <b>\"documentTitle\"</b>: \"Acme Content\"\n  },\n  <b>\"defaultThemeId\"</b>: \"acme\",\n  <b>\"themes\"</b>: [{\n    \"id\": \"acme\", \"label\": \"Acme\", \"base\": \"nuxeo\",\n    <b>\"tokens\"</b>: { \"--shell-nav-bg\": \"#0f2b46\", \"--shell-nav-active\": \"#1f6feb\" }\n  }],\n  <b>\"nuxeoApiOrigin\"</b>: \"\",\n  <b>\"manifestDocumentPath\"</b>: \"/default-domain/config/agentic-ui\"\n}"
+          "code": "<span class=\"c\">// agentic-ui-config/bootstrap.json in YOUR configuration package</span>\n<span class=\"c\">// — a fragment contributed to org.nuxeo.agentic.ui.config</span>\n{\n  <b>\"branding\"</b>: {\n    <b>\"applicationTitle\"</b>: \"Acme Content\",\n    <b>\"documentTitle\"</b>: \"Acme Content\"\n  },\n  <b>\"defaultThemeId\"</b>: \"acme\",\n  <b>\"themes\"</b>: [{\n    \"id\": \"acme\", \"label\": \"Acme\", \"base\": \"nuxeo\",\n    <b>\"tokens\"</b>: { \"--shell-nav-bg\": \"#0f2b46\", \"--shell-nav-active\": \"#1f6feb\" }\n  }],\n  <b>\"nuxeoApiOrigin\"</b>: \"\"\n}"
         }
       ],
-      "footnote": "Every key is optional. An absent file, or a key you leave out, falls back to the value compiled in — so an untouched deployment behaves exactly like no file at all. `AppConfigService.diagnostics()` reports which half loaded and which fell back, and why."
+      "footnote": "Every key is optional. A key no package sets falls back to the value compiled in — so a server with only our package behaves exactly like no configuration at all. `AppConfigService.diagnostics()` reports which half loaded and which fell back, and why."
     },
     {
       "eyebrow": "Layer 1 — the manifest",
@@ -59,7 +59,7 @@
       "blocks": [
         {
           "type": "code",
-          "code": "<span class=\"c\">// A Nuxeo document at /default-domain/config/agentic-ui</span>\n{\n  \"extensions\": {\n    <b>\"overrides\"</b>: {\n      \"app.navbar.trash\":     { <b>\"visible\"</b>: false },        <span class=\"c\">// hide it</span>\n      \"app.navbar.assets\":    { <b>\"label\"</b>: \"Documents\" },     <span class=\"c\">// rename it</span>\n      \"app.navbar.dashboard\": { <b>\"order\"</b>: 5 }               <span class=\"c\">// move it</span>\n    },\n    <b>\"slots\"</b>: {\n      \"navbar\": [{\n        \"id\": \"acme.navbar.contracts\", \"label\": \"Contracts\",\n        \"path\": \"/browse/contracts\", \"icon\": \"folder\", \"order\": 35,\n        <b>\"rule\"</b>: \"acme.rules.isLegalTeam\"      <span class=\"c\">// gate it on your own rule</span>\n      }]\n    }\n  }\n}"
+          "code": "<span class=\"c\">// agentic-ui-config/manifest.json in YOUR configuration package</span>\n{\n  \"extensions\": {\n    <b>\"overrides\"</b>: {\n      \"app.navbar.trash\":     { <b>\"visible\"</b>: false },        <span class=\"c\">// hide it</span>\n      \"app.navbar.assets\":    { <b>\"label\"</b>: \"Documents\" },     <span class=\"c\">// rename it</span>\n      \"app.navbar.dashboard\": { <b>\"order\"</b>: 5 }               <span class=\"c\">// move it</span>\n    },\n    <b>\"slots\"</b>: {\n      \"navbar\": [{\n        \"id\": \"acme.navbar.contracts\", \"label\": \"Contracts\",\n        \"path\": \"/browse/contracts\", \"icon\": \"folder\", \"order\": 35,\n        <b>\"rule\"</b>: \"acme.rules.isLegalTeam\"      <span class=\"c\">// gate it on your own rule</span>\n      }]\n    }\n  }\n}"
         }
       ],
       "footnote": "An **unregistered rule ID evaluates to `true`** on purpose, so a typo or a manifest written against a newer release cannot silently strip working actions out of the UI. The exception is rules that gate administrative surfaces — those are declared fail-closed."
@@ -137,7 +137,7 @@
             {
               "value": "1",
               "label": "package to upgrade",
-              "sub": "`@nuxeo-satori/platform` — one version, one changelog, five entry points",
+              "sub": "`@nuxeo/satori-platform` — one version, one changelog, five entry points",
               "series": "adfhx"
             },
             {
@@ -150,7 +150,7 @@
           ]
         }
       ],
-      "footnote": "Your Layer 0 file survives because it lives outside the bundle. Your Layer 1 manifest survives because it is a Nuxeo document. Your Layer 2 library survives because it only ever referenced IDs."
+      "footnote": "Your Layer 0 and Layer 1 fragments survive because they live in your own package, which depends on ours rather than being edited into it. Your Layer 2 library survives because it only ever referenced IDs."
     }
   ]
 }

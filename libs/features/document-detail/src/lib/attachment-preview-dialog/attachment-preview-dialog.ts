@@ -1,11 +1,11 @@
-import { Component, inject, signal, OnDestroy } from '@angular/core';
+import { Component, inject, signal, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SafeResourceUrl } from '@angular/platform-browser';
 // Shared rather than local: see the note on the helper — one normalisation for three checks.
-import { mediaTypeEssence } from '@nuxeo-satori/platform/nuxeo-client';
+import { mediaTypeEssence } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 
 export interface AttachmentPreviewData {
@@ -85,6 +85,7 @@ const PREVIEWABLE_TEXT_TYPES = new Set(['text/plain', 'text/csv', 'application/j
   standalone: true,
   imports: [TranslatePipe, MatDialogModule, MatIconModule, MatButtonModule, MatTooltipModule],
   templateUrl: './attachment-preview-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

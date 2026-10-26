@@ -1,9 +1,17 @@
 ---
 name: implement-api-port
-description: Implement one of the twelve adf-hx API ports against Nuxeo REST in the agentic-ui-poc bridge library — pick the port, map the upstream interface, implement over existing nuxeo-client services, register the upstream injection token, add unit tests including error paths, and gate it. Use when asked to implement or wire an adf-hx API port (document, query, upload, version, download, renditions, user, group, move, copy, checkIn, model), to back adf-hx with Nuxeo, or to extend libs/shared/adf-hx-bridge.
+description: Retired, kept as a record — the adf-hx bridge and API ports it describes were removed (NXSAT-635, NXSAT-637); do not follow it. Implement one of the twelve adf-hx API ports against Nuxeo REST in the agentic-ui-poc bridge library — pick the port, map the upstream interface, implement over existing nuxeo-client services, register the upstream injection token, add unit tests including error paths, and gate it. Use when asked to implement or wire an adf-hx API port (document, query, upload, version, download, renditions, user, group, move, copy, checkIn, model), to back adf-hx with Nuxeo, or to extend libs/shared/adf-hx-bridge.
 ---
 
 # Implement an adf-hx API port over Nuxeo
+
+> **Retired — kept as a record.** The surface this skill describes no longer exists:
+> `libs/shared/adf-hx-bridge`, its twelve API ports and the POC routes were removed on 2026-10-14
+> (NXSAT-635), and the adf-hx packages by NXSAT-637. Do not follow it. Components now read Nuxeo
+> through the `nuxeo-client` domain services directly: a new call is
+> [`add-nuxeo-api`](../add-nuxeo-api.md), and a new `nxs-` component in
+> `libs/shared/satori-components` starts from the `satori-component` generator
+> (`AGENTS/00-architecture.md`, "Adding a component").
 
 This is the most repeated task in Beta phase 3 — roughly ten of these. Follow the
 same shape every time so the tenth is as cheap as the second.

@@ -1,0 +1,81 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as EmptyStateStories from './empty-state.stories';
+
+<Meta of={EmptyStateStories} name="Overview" />
+
+# Empty state
+
+The empty state is the "nothing here" message for a list, panel or set of results: a heading, an
+optional second line, an optional icon, and any buttons you place inside it. Use it instead of an
+empty table or a blank area, so the user knows the place is empty on purpose and what to do next.
+
+## Key features
+
+- **A heading and a next step.** `heading` says what is empty; `message` usually says what to do
+  about it.
+- **Your actions.** Buttons such as "Create folder" or "Clear filters" are placed inside the
+  component as content, so they and what they do stay yours.
+- **A real heading.** The heading is a native `<h1>` to `<h6>`, at the level you choose, so heading
+  navigation stays in order.
+- **A status region.** It has the `status` role, so a change to its text can be announced without
+  moving focus.
+
+## Demo showcase
+
+<Canvas of={EmptyStateStories.WithMessageAndIcon} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsEmptyStateComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-empty-state
+  [heading]="'acme.results.empty' | translate"
+  [message]="'acme.results.empty-hint' | translate"
+  icon="search_off"
+>
+  <button mat-button type="button" (click)="clearFilters()">
+    {{ 'acme.results.clear-filters' | translate }}
+  </button>
+</nxs-empty-state>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+Only `heading` is required, already translated. The library ships no translations for the text you
+give it. Used directly, the empty state needs no providers.
+
+## Examples
+
+### Heading only
+
+<Canvas of={EmptyStateStories.HeadingOnly} />
+
+### With an action
+
+<Canvas of={EmptyStateStories.WithProjectedAction} />
+
+### Inside a section
+
+Set `headingLevel` one below the heading of the section it sits in. The default is `2`.
+
+<Canvas of={EmptyStateStories.InsideASection} />
+
+## Accessibility
+
+- **Status role.** The component has the `status` role, a polite live region. Screen readers
+  announce a change to its text without moving focus; whether one announces the empty state when it
+  first appears varies, so do not rely on it as the only signal that a search returned nothing.
+- **Heading.** The heading is a native heading element at `headingLevel`. Choose the level that fits
+  the page outline.
+- **Icon.** The icon is decorative and hidden from assistive technology. The heading says what it
+  means.
+- **Keyboard.** The component itself takes no focus. Buttons you place inside it are reached with
+  **Tab** as usual.

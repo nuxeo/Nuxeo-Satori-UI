@@ -1,4 +1,4 @@
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 /** Relative nxfile path fallback when `file:content.data` is unavailable (tests/utilities only). */
 export function buildNotePictureNxfileUrl(uid: string, fileName: string): string {

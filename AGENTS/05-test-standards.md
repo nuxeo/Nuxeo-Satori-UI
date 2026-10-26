@@ -79,7 +79,7 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { MyFeatureComponent } from './my-feature';
-import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 
 describe('MyFeatureComponent', () => {
   let component: MyFeatureComponent;

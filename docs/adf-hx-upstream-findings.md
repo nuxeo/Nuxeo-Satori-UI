@@ -21,6 +21,10 @@ from reading the source. The last two are no longer rendered in our browse page,
 2026-09-23 keeps per-document panels on the document page as production browse does; the findings
 about them were observed while they were.
 
+_Changed by NXSAT-635 and NXSAT-638 (2026-10):_ the adoption has ended. The API ports, the POC
+routes and the adopted components were removed on 2026-10-14, and the packages after them. The
+findings stand against the versions above; the code they were observed in is in git history.
+
 **Deliberately excluded.** Problems caused by _our_ environment are not listed here — a Node 25
 `localStorage` global, a macOS lockfile pruning platform-optional entries, and Angular replacing
 rather than merging an `assets` array in a build configuration. None is adf-hx's fault and including
@@ -638,6 +642,9 @@ Three things a host finds out only once a file actually renders:
 Close button, and `angular.json` adds `cropper.min.css` to the global styles. WebP stays
 unsupported. The Phase 3 evidence asserts that a fixture file's own text renders in the viewer,
 because the earlier check (overlay opens, component exists) passed while every preview failed.
+
+_Changed by NXSAT-635 (2026-10):_ this mitigation went with the POC route and its viewer, removed on
+2026-10-14.
 
 **Ask:** fall back to adf-core's default toolbar when no `#toolbar` template is given; document
 the cropperjs stylesheet or bundle it; add `image/webp` to the natively viewable images.

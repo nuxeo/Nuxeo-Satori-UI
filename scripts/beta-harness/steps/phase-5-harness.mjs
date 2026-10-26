@@ -51,6 +51,8 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } 
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { requireStepCredentials } from '../helpers.mjs';
+
 const ROOT = resolve(import.meta.dirname, '..', '..', '..');
 const DIST = join(ROOT, 'dist', 'libs', 'platform');
 const LIBRARY = join(ROOT, 'libs', 'extensions', 'acme-extensions');
@@ -81,7 +83,7 @@ export default async function run(page, h) {
   const cleanup = [];
 
   // -------------------------------------------------------------------------
-  h.step('Precondition: the platform is built and the template is being served');
+  await h.step('Precondition: the platform is built and the template is being served');
 
   h.requirePrecondition(
     'dist/libs/platform exists',
@@ -104,7 +106,7 @@ export default async function run(page, h) {
   );
 
   // -------------------------------------------------------------------------
-  h.step('A generated contribution reaches the screen, not just the source');
+  await h.step('A generated contribution reaches the screen, not just the source');
 
   /**
    * Sign in first — the entries are rule-gated.
@@ -118,8 +120,11 @@ export default async function run(page, h) {
    */
   const signInForm = page.locator('input[name="username"]');
   if (await signInForm.count()) {
-    await signInForm.fill(process.env['NUXEO_USER'] ?? 'Administrator');
-    await page.locator('input[name="password"]').fill(process.env['NUXEO_PASS'] ?? 'Administrator');
+    // From the environment, no default — both used to fall back to the local Docker
+    // administrator pair (NXSAT-649). The runner refuses this file without them already.
+    const { username, password } = requireStepCredentials('sign in through the template');
+    await signInForm.fill(username);
+    await page.locator('input[name="password"]').fill(password);
     await page.locator('.sign-in__submit').click();
     await page.waitForTimeout(4000);
   }
@@ -164,7 +169,7 @@ export default async function run(page, h) {
   await h.screenshot('generated-contribution-rendered');
 
   // -------------------------------------------------------------------------
-  h.step('The package ships the contract and the procedure');
+  await h.step('The package ships the contract and the procedure');
 
   for (const name of ['README.md', 'extension-reference.md', 'AGENTS.md']) {
     h.check(
@@ -191,7 +196,7 @@ export default async function run(page, h) {
   );
 
   // -------------------------------------------------------------------------
-  h.step('The customer guardrail passes the real library and catches five mistakes');
+  await h.step('The customer guardrail passes the real library and catches five mistakes');
 
   const clean = runGuardrail(LIBRARY);
   h.check(
@@ -214,8 +219,8 @@ export default async function run(page, h) {
         writeFileSync(
           f,
           readFileSync(f, 'utf8').replace(
-            "from '@nuxeo-satori/platform/extensions'",
-            "from '@nuxeo-satori/platform/extensions/lib/internal'",
+            "from '@nuxeo/satori-platform/extensions'",
+            "from '@nuxeo/satori-platform/extensions/lib/internal'",
           ),
         );
       },
@@ -279,7 +284,7 @@ export default async function run(page, h) {
   }
 
   // -------------------------------------------------------------------------
-  h.step('All four generators are registered and resolvable');
+  await h.step('All four generators are registered and resolvable');
 
   const collection = JSON.parse(
     readFile(join(ROOT, 'tools', 'satori-generators', 'generators.json')) ?? '{}',
@@ -307,7 +312,7 @@ export default async function run(page, h) {
   }
 
   // -------------------------------------------------------------------------
-  h.step('Non-interference with the internal harness (negative check)');
+  await h.step('Non-interference with the internal harness (negative check)');
 
   // Phase 5 was required not to disturb the harness this development runs on. This
   // asserts the state rather than the change, so it would also pass had Phase 5 done

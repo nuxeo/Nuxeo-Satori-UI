@@ -1,9 +1,10 @@
 <div class="collection-page">
   @if (loadState() === 'not-found' || loadState() === 'error') {
     <div class="collection-unavailable" role="status">
-      <mat-icon class="unavailable-icon">
-        {{ loadState() === 'not-found' ? 'search_off' : 'error_outline' }}
-      </mat-icon>
+      <mat-icon
+        class="unavailable-icon"
+        [svgIcon]="loadState() === 'not-found' ? 'search' : 'error'"
+      />
       <div class="unavailable-title" role="heading" aria-level="1">
         {{
           loadState() === 'not-found'
@@ -31,23 +32,24 @@
     </div>
   } @else {
     <!-- Header -->
-    <div class="collection-header">
-      <div class="header-left">
-        <mat-icon class="header-icon">collections_bookmark</mat-icon>
-        <div class="header-info">
-          <div class="header-title" role="heading" aria-level="1">
-            {{ collection()?.title ?? ('collections.collection' | translate) }}
-          </div>
-          @if (showBreadcrumbs() && breadcrumbItems().length) {
-            <div class="header-path-row">
-              <sat-breadcrumbs
-                [items]="breadcrumbItems()"
-                (click)="onBreadcrumbClick($event)"
-              ></sat-breadcrumbs>
-            </div>
+    <nxs-folder-header
+      class="collection-header"
+      [documentType]="'Collection'"
+      [heading]="collection()?.title ?? ('collections.collection' | translate)"
+    >
+      @if (showBreadcrumbs() && breadcrumbItems().length) {
+        <div class="header-path-row" nxsFolderHeaderDetail>
+          @let trailLabel = 'collections.collection-detail.breadcrumbs' | translate;
+          <lib-extension-outlet
+            #breadcrumbsOutlet
+            [componentId]="breadcrumbsId"
+            [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
+          />
+          @if (breadcrumbsOutlet.unresolved()) {
+            <nxs-breadcrumbs [items]="breadcrumbItems()" [label]="trailLabel" />
           }
         </div>
-      </div>
+      }
 
       <div class="header-actions">
         <button
@@ -56,7 +58,7 @@
           [attr.aria-label]="'collections.collection-detail.refresh' | translate"
           (click)="loadMembers()"
         >
-          <mat-icon>sync</mat-icon>
+          <mat-icon svgIcon="sync" />
         </button>
         @if (canEditCollection()) {
           <button
@@ -65,7 +67,7 @@
             [attr.aria-label]="'collections.collection-detail.edit' | translate"
             (click)="editCollection()"
           >
-            <mat-icon>edit</mat-icon>
+            <mat-icon svgIcon="pencil" />
           </button>
         }
         @if (canDeleteCollection()) {
@@ -76,7 +78,7 @@
             [matTooltip]="'collections.collection-detail.delete' | translate"
             [attr.aria-label]="'collections.collection-detail.delete' | translate"
           >
-            <mat-icon>delete</mat-icon>
+            <mat-icon svgIcon="trash" />
           </button>
         }
         <button
@@ -86,28 +88,51 @@
           [matTooltip]="'collections.collection-detail.export' | translate"
           [attr.aria-label]="'collections.collection-detail.export' | translate"
         >
-          <mat-icon>download</mat-icon>
+          <mat-icon svgIcon="download" />
         </button>
+        @if (showsLockAction()) {
+          <!-- An icon button rather than a menu item: `disabledInteractive` keeps a reader's
+               disabled Unlock focusable, so "Locked by …" is reachable from the keyboard, which a
+               disabled menu item is not. -->
+          <button
+            mat-icon-button
+            type="button"
+            data-testid="collection-lock-toggle"
+            (click)="toggleLock()"
+            [disabled]="actionInProgress() === 'lock' || !canEditCollection()"
+            disabledInteractive
+            [class.lock-toggle--active]="isLocked() && canEditCollection()"
+            [matTooltip]="
+              lockTooltip() ??
+              (isLocked() ? ('collections.unlock' | translate) : ('collections.lock' | translate))
+            "
+            [attr.aria-label]="
+              isLocked() ? ('collections.unlock' | translate) : ('collections.lock' | translate)
+            "
+          >
+            <mat-icon [svgIcon]="isLocked() ? 'lock' : 'unlocked'" />
+          </button>
+        }
         <button
           mat-icon-button
           [matMenuTriggerFor]="moreMenu"
           [matTooltip]="'collections.collection-detail.more-actions' | translate"
           [attr.aria-label]="'collections.collection-detail.more-actions' | translate"
         >
-          <mat-icon>more_vert</mat-icon>
+          <mat-icon svgIcon="more_vert" />
         </button>
         <button
           mat-icon-button
           [matTooltip]="'collections.collection-detail.search' | translate"
           [attr.aria-label]="'collections.collection-detail.search' | translate"
         >
-          <mat-icon>search</mat-icon>
+          <mat-icon svgIcon="search" />
         </button>
       </div>
 
       <mat-menu #moreMenu="matMenu">
         <button mat-menu-item (click)="shareCollection()">
-          <mat-icon>share</mat-icon>
+          <mat-icon svgIcon="share" />
           <span>{{ 'collections.collection-detail.share' | translate }}</span>
         </button>
         <button
@@ -115,7 +140,7 @@
           (click)="toggleSubscription()"
           [disabled]="actionInProgress() === 'subscribe'"
         >
-          <mat-icon>{{ isSubscribed() ? 'notifications_active' : 'notifications' }}</mat-icon>
+          <mat-icon [svgIcon]="isSubscribed() ? 'bell' : 'bell'" />
           <span>{{
             isSubscribed()
               ? ('collections.unsubscribe' | translate)
@@ -123,17 +148,11 @@
           }}</span>
         </button>
         <button mat-menu-item (click)="toggleClipboard()">
-          <mat-icon>{{ isInClipboard() ? 'content_paste_off' : 'content_paste' }}</mat-icon>
+          <mat-icon [svgIcon]="isInClipboard() ? 'content_paste_off' : 'content_paste'" />
           <span>{{
             isInClipboard()
               ? ('collections.remove-from-clipboard' | translate)
               : ('collections.add-to-clipboard' | translate)
-          }}</span>
-        </button>
-        <button mat-menu-item (click)="toggleLock()" [disabled]="actionInProgress() === 'lock'">
-          <mat-icon>{{ isLocked() ? 'lock_open' : 'lock' }}</mat-icon>
-          <span>{{
-            isLocked() ? ('collections.unlock' | translate) : ('collections.lock' | translate)
           }}</span>
         </button>
         <button
@@ -141,11 +160,11 @@
           (click)="exportCollection()"
           [disabled]="actionInProgress() === 'export'"
         >
-          <mat-icon>download</mat-icon>
+          <mat-icon svgIcon="download" />
           <span>{{ 'collections.collection-detail.export' | translate }}</span>
         </button>
       </mat-menu>
-    </div>
+    </nxs-folder-header>
 
     <!-- Tabs -->
     <mat-tab-group
@@ -156,287 +175,161 @@
     >
       <mat-tab [label]="'collections.tab.view' | translate">
         <div class="tab-content">
-          @if (loading()) {
-            <div class="tab-loading">
-              <mat-spinner
-                diameter="36"
-                [attr.aria-label]="'collections.collection-detail.loading' | translate"
-              />
-            </div>
-          } @else if (error()) {
-            <div class="tab-error">
-              <mat-icon class="error-icon">error_outline</mat-icon>
-              <p>{{ error() }}</p>
-              <button mat-stroked-button (click)="loadMembers()">
-                <mat-icon>refresh</mat-icon> {{ 'collections.collection-detail.retry' | translate }}
-              </button>
-            </div>
-          } @else if (members().length === 0) {
-            <div class="tab-empty">
-              <mat-icon class="empty-icon">collections_bookmark</mat-icon>
-              <p>{{ 'collections.collection-detail.this-collection-is-empty' | translate }}</p>
-            </div>
-          } @else {
+          @if (members().length > 0 && totalSize() >= 0 && !loading() && !error()) {
             <div class="result-count">
               {{
                 (totalSize() === 1 ? 'common.count.result-one' : 'common.count.result-many')
                   | translate: { count: totalSize() }
               }}
             </div>
-            <div class="members-table-wrapper">
-              <table class="members-table">
-                <thead>
-                  <tr>
-                    <th class="col-title">
-                      {{ 'collections.collection-detail.title' | translate }}
-                    </th>
-                    <th class="col-modified">
-                      {{ 'collections.collection-detail.modified' | translate }}
-                    </th>
-                    <th class="col-contributor">
-                      {{ 'collections.collection-detail.last-contributor' | translate }}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (doc of members(); track doc.uid) {
-                    <tr class="member-row" (click)="onRowClick(doc)">
-                      <td class="cell-title">
-                        @if (thumbnailMap()[doc.uid]; as thumb) {
-                          <img [src]="thumb" alt="" class="doc-thumb" />
-                        } @else {
-                          <mat-icon class="doc-icon">{{ docIcon(doc) }}</mat-icon>
-                        }
-                        <span class="doc-name">{{ doc.title }}</span>
-                      </td>
-                      <td class="cell-modified">{{ doc.lastModified | date: 'mediumDate' }}</td>
-                      <td class="cell-contributor">
-                        <span class="contributor-avatar">{{ contributorInitial(doc) }}</span>
-                        {{ lastContributor(doc) }}
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
           }
+          <nxs-document-list
+            class="members-list"
+            [documents]="members()"
+            [columns]="memberColumns()"
+            [label]="
+              'collections.collection-detail.members-of'
+                | translate: { name: collection()?.title ?? '' }
+            "
+            [selectable]="false"
+            [sort]="memberSort()"
+            [pageIndex]="memberPageIndex()"
+            [pageSize]="memberPageSize"
+            [totalSize]="totalSize()"
+            [hasNextPage]="membersHaveNextPage()"
+            [loading]="loading()"
+            [error]="error() ? errorStatus() : null"
+            [errorHeading]="error() ?? ''"
+            [emptyHeading]="'collections.collection-detail.this-collection-is-empty' | translate"
+            (sortChange)="onMemberSortChange($event)"
+            (pageChange)="goToMemberPage($event)"
+            (open)="onRowClick($event)"
+            (retry)="loadMembers()"
+          />
         </div>
       </mat-tab>
 
       <mat-tab [label]="'collections.tab.permissions' | translate">
         <div class="permissions-container">
-          <!-- Permissions defined locally -->
-          <section class="perm-section">
-            <div class="perm-section-header">
-              <div class="perm-section-title" role="heading" aria-level="3">
-                {{ 'collections.collection-detail.permissions-defined-locally' | translate }}
-              </div>
-              <button mat-button color="primary" class="perm-action-btn" (click)="addPermission()">
-                {{ 'collections.collection-detail.new' | translate }}
-              </button>
-            </div>
-            @if (localAces().length === 0) {
-              <div class="perm-empty">
-                {{ 'collections.collection-detail.there-are-no-local-permissions' | translate }}
-              </div>
-            } @else {
-              <table class="perm-table">
-                <thead>
-                  <tr>
-                    <th>{{ 'collections.collection-detail.user-group' | translate }}</th>
-                    <th>{{ 'collections.collection-detail.right' | translate }}</th>
-                    <th>{{ 'collections.collection-detail.time-frame' | translate }}</th>
-                    <th>{{ 'collections.collection-detail.granted-by' | translate }}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (ace of localAces(); track ace.id) {
-                    <tr>
-                      <td>{{ ace.username }}</td>
-                      <td>{{ permissionLabel(ace.permission) }}</td>
-                      <td>{{ aceTimeFrame(ace) }}</td>
-                      <td>{{ ace.creator ?? '—' }}</td>
-                      <td class="perm-row-actions">
-                        <button
-                          mat-icon-button
-                          [matTooltip]="'collections.collection-detail.edit' | translate"
-                          [attr.aria-label]="
-                            'collections.collection-detail.edit-permission' | translate
-                          "
-                          (click)="editPermission(ace)"
-                        >
-                          <mat-icon>edit</mat-icon>
-                        </button>
-                        <button
-                          mat-icon-button
-                          [matTooltip]="'collections.collection-detail.delete' | translate"
-                          [attr.aria-label]="
-                            'collections.collection-detail.delete-permission' | translate
-                          "
-                          (click)="deletePermission(ace)"
-                        >
-                          <mat-icon>delete</mat-icon>
-                        </button>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+          <!-- Local and inherited permissions: the nxs- panel, resolved by its registered ID so a
+               customer library can re-register a replacement. -->
+          @if (collection(); as current) {
+            <lib-extension-outlet
+              #permissionsPanelOutlet
+              [componentId]="permissionsPanelId"
+              [componentInputs]="{
+                documentId: current.uid,
+                permissionsChanged: onPermissionsChanged,
+                offer: 'type',
+              }"
+            />
+            @if (permissionsPanelOutlet.unresolved()) {
+              <nxs-permissions-panel
+                [documentId]="current.uid"
+                [permissionsChanged]="onPermissionsChanged"
+                offer="type"
+              />
             }
-          </section>
+          }
 
-          <!-- Permissions inherited from upper levels -->
-          <section class="perm-section">
-            <div class="perm-section-header">
-              <div class="perm-section-title" role="heading" aria-level="3">
-                {{
-                  'collections.collection-detail.permissions-inherited-from-upper-levels'
-                    | translate
-                }}
+          <!-- Permissions Assigned to External Users -->
+          @if (showExternalShares()) {
+            <section class="perm-section">
+              <div class="perm-section-header">
+                <div class="perm-section-title" role="heading" aria-level="3">
+                  {{
+                    'collections.collection-detail.permissions-assigned-to-external-users'
+                      | translate
+                  }}
+                </div>
+                @if (canManagePermissions()) {
+                  <button
+                    mat-button
+                    color="primary"
+                    type="button"
+                    class="perm-action-btn"
+                    (click)="shareWithExternal()"
+                  >
+                    {{ 'collections.collection-detail.new' | translate }}
+                  </button>
+                }
               </div>
-              <button
-                mat-button
-                color="primary"
-                class="perm-action-btn"
-                (click)="toggleInheritance()"
-                [disabled]="actionInProgress() === 'inheritance'"
-              >
-                {{
-                  isInheritanceBlocked()
-                    ? ('collections.unblock' | translate)
-                    : ('collections.block' | translate)
-                }}
-              </button>
-            </div>
-            @if (!isInheritanceBlocked()) {
               <div class="perm-info-bar">
                 <span class="perm-info-accent"></span>
                 <p>
                   {{
-                    'collections.collection-detail.if-you-want-to-explicitly-control' | translate
+                    'collections.collection-detail.sharing-to-external-users-does-not' | translate
                   }}
                 </p>
               </div>
-            }
-            @if (isInheritanceBlocked()) {
-              <div class="perm-empty">
-                {{ 'collections.collection-detail.permissions-inheritance-is-blocked' | translate }}
-              </div>
-            } @else if (inheritedAces().length === 0) {
-              <div class="perm-empty">
-                {{ 'collections.collection-detail.no-inherited-permissions' | translate }}
-              </div>
-            } @else {
-              <table class="perm-table">
-                <thead>
-                  <tr>
-                    <th>{{ 'collections.collection-detail.user-group' | translate }}</th>
-                    <th>{{ 'collections.collection-detail.right' | translate }}</th>
-                    <th>{{ 'collections.collection-detail.time-frame' | translate }}</th>
-                    <th>{{ 'collections.collection-detail.granted-by' | translate }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (ace of inheritedAces(); track ace.id) {
+              @if (externalAces().length === 0) {
+                <div class="perm-empty">
+                  {{ 'collections.collection-detail.the-document-is-not-shared-with' | translate }}
+                </div>
+              } @else {
+                <table class="perm-table">
+                  <thead>
                     <tr>
-                      <td>{{ ace.username }}</td>
-                      <td>{{ permissionLabel(ace.permission) }}</td>
-                      <td>{{ aceTimeFrame(ace) }}</td>
-                      <td>{{ ace.creator ?? '—' }}</td>
+                      <th>{{ 'collections.collection-detail.user' | translate }}</th>
+                      <th>{{ 'collections.collection-detail.right' | translate }}</th>
+                      <th>{{ 'collections.collection-detail.time-frame' | translate }}</th>
+                      <th>{{ 'collections.collection-detail.granted-by' | translate }}</th>
+                      @if (canManagePermissions()) {
+                        <th>{{ 'collections.collection-detail.actions' | translate }}</th>
+                      }
                     </tr>
-                  }
-                </tbody>
-              </table>
-            }
-          </section>
-
-          <!-- Permissions Assigned to External Users -->
-          <section class="perm-section">
-            <div class="perm-section-header">
-              <div class="perm-section-title" role="heading" aria-level="3">
-                {{
-                  'collections.collection-detail.permissions-assigned-to-external-users' | translate
-                }}
-              </div>
-              <button
-                mat-button
-                color="primary"
-                class="perm-action-btn"
-                (click)="shareWithExternal()"
-              >
-                {{ 'collections.collection-detail.new' | translate }}
-              </button>
-            </div>
-            <div class="perm-info-bar">
-              <span class="perm-info-accent"></span>
-              <p>
-                {{ 'collections.collection-detail.sharing-to-external-users-does-not' | translate }}
-              </p>
-            </div>
-            @if (externalAces().length === 0) {
-              <div class="perm-empty">
-                {{ 'collections.collection-detail.the-document-is-not-shared-with' | translate }}
-              </div>
-            } @else {
-              <table class="perm-table">
-                <thead>
-                  <tr>
-                    <th>{{ 'collections.collection-detail.user' | translate }}</th>
-                    <th>{{ 'collections.collection-detail.right' | translate }}</th>
-                    <th>{{ 'collections.collection-detail.time-frame' | translate }}</th>
-                    <th>{{ 'collections.collection-detail.granted-by' | translate }}</th>
-                    <th>{{ 'collections.collection-detail.actions' | translate }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (ace of externalAces(); track ace.id) {
-                    <tr>
-                      <td>{{ displayUsername(ace) }}</td>
-                      <td>{{ permissionLabel(ace.permission) }}</td>
-                      <td>{{ aceTimeFrame(ace) }}</td>
-                      <td>{{ ace.creator ?? '—' }}</td>
-                      <td class="perm-row-actions">
-                        <button
-                          mat-icon-button
-                          [matTooltip]="'collections.collection-detail.edit' | translate"
-                          [attr.aria-label]="
-                            'collections.collection-detail.edit-permission' | translate
-                          "
-                          (click)="editExternalPermission(ace)"
-                        >
-                          <mat-icon>edit</mat-icon>
-                        </button>
-                        <button
-                          mat-icon-button
-                          [matTooltip]="
-                            'collections.collection-detail.send-notification-email' | translate
-                          "
-                          [attr.aria-label]="
-                            'collections.collection-detail.send-notification' | translate
-                          "
-                          [disabled]="actionInProgress() === 'notify-' + ace.id"
-                          (click)="sendNotificationEmail(ace)"
-                        >
-                          <mat-icon>send</mat-icon>
-                        </button>
-                        <button
-                          mat-icon-button
-                          [matTooltip]="'collections.collection-detail.delete' | translate"
-                          [attr.aria-label]="
-                            'collections.collection-detail.delete-permission' | translate
-                          "
-                          (click)="deletePermission(ace)"
-                        >
-                          <mat-icon>delete</mat-icon>
-                        </button>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            }
-          </section>
+                  </thead>
+                  <tbody>
+                    @for (ace of externalAces(); track ace.id) {
+                      <tr>
+                        <td>{{ displayUsername(ace) }}</td>
+                        <td>{{ permissionLabel(ace.permission) }}</td>
+                        <td>{{ aceTimeFrame(ace) }}</td>
+                        <td>{{ ace.creator ?? '—' }}</td>
+                        @if (canManagePermissions()) {
+                          <td class="perm-row-actions">
+                            <button
+                              mat-icon-button
+                              [matTooltip]="'collections.collection-detail.edit' | translate"
+                              [attr.aria-label]="
+                                'collections.collection-detail.edit-permission' | translate
+                              "
+                              (click)="editExternalPermission(ace)"
+                            >
+                              <mat-icon svgIcon="pencil" />
+                            </button>
+                            <button
+                              mat-icon-button
+                              [matTooltip]="
+                                'collections.collection-detail.send-notification-email' | translate
+                              "
+                              [attr.aria-label]="
+                                'collections.collection-detail.send-notification' | translate
+                              "
+                              [disabled]="actionInProgress() === 'notify-' + ace.id"
+                              (click)="sendNotificationEmail(ace)"
+                            >
+                              <mat-icon svgIcon="send" />
+                            </button>
+                            <button
+                              mat-icon-button
+                              [matTooltip]="'collections.collection-detail.delete' | translate"
+                              [attr.aria-label]="
+                                'collections.collection-detail.delete-permission' | translate
+                              "
+                              (click)="deletePermission(ace)"
+                            >
+                              <mat-icon svgIcon="trash" />
+                            </button>
+                          </td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </section>
+          }
         </div>
       </mat-tab>
 
@@ -466,7 +359,7 @@
                 <input
                   matInput
                   [matDatepicker]="fromPicker"
-                  [placeholder]="'common.date-mask' | translate"
+                  [placeholder]="'common.date-mask' | translate | dateMask"
                   [ngModel]="filterDateFrom()"
                   (ngModelChange)="filterDateFrom.set($event)"
                 />
@@ -479,7 +372,7 @@
                 <input
                   matInput
                   [matDatepicker]="toPicker"
-                  [placeholder]="'common.date-mask' | translate"
+                  [placeholder]="'common.date-mask' | translate | dateMask"
                   [ngModel]="filterDateTo()"
                   (ngModelChange)="filterDateTo.set($event)"
                 />
@@ -525,14 +418,14 @@
           <!-- Table -->
           @if (auditLoading()) {
             <div class="history-loading">
-              <mat-spinner
+              <nxs-spinner
                 diameter="32"
-                [attr.aria-label]="'collections.collection-detail.loading' | translate"
+                [label]="'collections.collection-detail.loading' | translate"
               />
             </div>
           } @else if (filteredAuditEntries().length === 0) {
             <div class="history-empty">
-              <mat-icon>event_busy</mat-icon>
+              <mat-icon svgIcon="calendar" />
               <p>{{ 'collections.collection-detail.no-history-entries-found' | translate }}</p>
             </div>
           } @else {
@@ -556,7 +449,7 @@
                     {{ 'collections.collection-detail.date' | translate }}
                   </th>
                   <td mat-cell *matCellDef="let entry">
-                    {{ entry.eventDate | date: ('collections.mmmm-d-yyyy' | translate) }}
+                    {{ entry.eventDate | date: 'longDate' }}
                   </td>
                 </ng-container>
 

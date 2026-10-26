@@ -1,0 +1,29 @@
+// The layout every nxs- picker shares: a full-width field, and options with a label over a detail.
+@mixin field {
+  display: block;
+  min-inline-size: 12rem;
+
+  .nxs-picker__field {
+    inline-size: 100%;
+  }
+}
+
+// The options render in the overlay, outside the host, but are declared in the picker's template,
+// so these rules — scoped to the picker like the rest of its stylesheet — still reach them.
+@mixin options {
+  .nxs-picker__option {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .nxs-picker__option-label {
+    overflow-wrap: anywhere;
+  }
+
+  .nxs-picker__option-detail {
+    font: var(--mat-sys-body-small);
+    color: var(--mat-sys-on-surface-variant);
+    overflow-wrap: anywhere;
+  }
+}

@@ -1,13 +1,14 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
-import { SettingsService, type ConnectedAccount } from '@nuxeo-satori/platform/nuxeo-client';
+import { SettingsService, type ConnectedAccount } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 @Component({
   standalone: true,
   imports: [TranslatePipe],
   templateUrl: './cloud-services-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './cloud-services-page.component.scss',
 })
 export class CloudServicesPageComponent {

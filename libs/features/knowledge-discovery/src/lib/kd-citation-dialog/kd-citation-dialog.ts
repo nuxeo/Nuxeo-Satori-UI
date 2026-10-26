@@ -1,4 +1,12 @@
-import { Component, DestroyRef, OnDestroy, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnDestroy,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { DomSanitizer, SafeHtml, SafeResourceUrl } from '@angular/platform-browser';
 import { MatButtonModule } from '@angular/material/button';
@@ -26,7 +34,7 @@ import {
   trustObjectUrl,
   mediaTypeEssence,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 export interface KdCitationDialogData {
@@ -48,6 +56,7 @@ type PreviewMode = 'pdf' | 'image' | 'text' | 'unsupported';
     MatTooltipModule,
   ],
   templateUrl: './kd-citation-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kd-citation-dialog.scss',
 })
 export class KdCitationDialogComponent implements OnDestroy {
@@ -56,7 +65,7 @@ export class KdCitationDialogComponent implements OnDestroy {
   /** The active language as a signal, so a `computed` that calls `instant()` recomputes on a switch. */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.getCurrentLang() },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
   private readonly data = inject<KdCitationDialogData>(MAT_DIALOG_DATA);
   private readonly detailService = inject(DocumentDetailService);

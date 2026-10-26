@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Nuxeo Satori manifest fragment (Layer 1)",
+  "description": "One manifest fragment of a configuration package: what the application shows, and in what order. Served without authentication. Hiding an action is not a security control — Nuxeo permissions still decide what each user may do. An unknown key is ignored by the application, so this schema refuses it to catch the typo.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "number" },
+    "navItems": { "type": "array", "items": { "type": "object" } },
+    "actions": { "type": "object", "additionalProperties": { "type": "object" } },
+    "rules": { "type": "object", "additionalProperties": { "type": "boolean" } },
+    "presets": { "type": "object" },
+    "featureToggles": {
+      "type": "object",
+      "description": "Feature flags by ID; a key no package sets keeps the application's default.",
+      "additionalProperties": { "type": "boolean" }
+    },
+    "labels": {
+      "type": "object",
+      "description": "Catalogue keys replaced with your text, the same in every language — for example \"nav.item.collections\": \"Cases\".",
+      "additionalProperties": { "type": "string" }
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Layer 1 extension configuration: overrides, slots and named layers. Documented in extension-reference.md."
+    }
+  }
+}

@@ -665,7 +665,9 @@ journeyTest('browse', async ({ signedIn: page, a11y }) => {
 
   await expect(page.locator('lib-browse'), 'lib-browse must render').toBeVisible();
   await expect(
-    page.locator('.browse-row, .doc-card-wrapper').first(),
+    page
+      .locator('.browse-row, .doc-card-wrapper, nxs-document-list .nxs-document-list__row')
+      .first(),
     'browse must list at least one document, or this scans an empty table',
   ).toBeVisible();
   await waitForScreenSettled(page, 'lib-browse', true);
@@ -682,6 +684,90 @@ journeyTest('browse', async ({ signedIn: page, a11y }) => {
  * the journey reached the intended DOM state: control present, tooltip visible, tooltip text
  * matches the control's accessible name (precondition, not axe).
  */
+const DOCUMENT_DETAIL_TOOLBAR_ADD_TO_COLLECTION = '[data-action-id="app.toolbar.addToCollection"]';
+
+/**
+ * NXENG-808 — keyboard focus on a header toolbar icon button before the journey scan.
+ *
+ * Focus visibility and 1.4.11 contrast verdicts belong to a11y-scout `focusChecks`
+ * (`docs/accessibility.md`); this only proves the scan runs with Add to collection focused.
+ */
+async function enterDocumentDetailHeaderToolbarIconFocusState(page: Page): Promise<void> {
+  const addToCollection = page.locator(DOCUMENT_DETAIL_TOOLBAR_ADD_TO_COLLECTION).first();
+  await expect(
+    addToCollection,
+    'Add to collection must render on a non-trashed document detail header',
+  ).toBeVisible();
+
+  const back = page
+    .locator('.detail-header > button.mat-mdc-icon-button, .detail-header > button.mat-icon-button')
+    .first();
+  await expect(back, 'detail header back button must be focusable').toBeVisible();
+  await back.focus();
+
+  const maxSteps = 120;
+  for (let step = 0; step <= maxSteps; step++) {
+    const onTarget = await page.evaluate((sel) => {
+      const target = document.querySelector(sel);
+      return target !== null && document.activeElement === target;
+    }, DOCUMENT_DETAIL_TOOLBAR_ADD_TO_COLLECTION);
+    if (onTarget) {
+      return;
+    }
+    if (step === maxSteps) {
+      throw new Error(`Tab did not reach Add to collection within ${maxSteps} steps`);
+    }
+    await page.keyboard.press('Tab');
+  }
+}
+
+/**
+ * NXSAT-535 — keyboard focus on the header **More actions** overflow trigger before a journey scan.
+ *
+ * Focus visibility and 1.4.11 contrast verdicts belong to a11y-scout `focusChecks`
+ * (`docs/accessibility.md`); this only proves the scan runs with that control focused.
+ */
+async function enterDocumentDetailHeaderMoreActionsFocusState(page: Page): Promise<void> {
+  const moreActions = page
+    .locator('.detail-header .header-actions button.mat-mdc-icon-button')
+    .filter({ has: page.locator('mat-icon[aria-hidden="true"]', { hasText: 'more_vert' }) })
+    .first();
+  await expect(
+    moreActions,
+    'More actions overflow trigger must render on a non-trashed document detail header',
+  ).toBeVisible();
+
+  const back = page
+    .locator('.detail-header > button.mat-mdc-icon-button, .detail-header > button.mat-icon-button')
+    .first();
+  await expect(back, 'detail header back button must be focusable').toBeVisible();
+  await back.focus();
+
+  const maxSteps = 120;
+  for (let step = 0; step <= maxSteps; step++) {
+    const onTarget = await page.evaluate(() => {
+      const buttons = document.querySelectorAll(
+        '.detail-header .header-actions button.mat-mdc-icon-button',
+      );
+      for (const target of buttons) {
+        const icon = target.querySelector('mat-icon[aria-hidden="true"]');
+        if (icon?.textContent?.trim() !== 'more_vert') {
+          continue;
+        }
+        return document.activeElement === target;
+      }
+      return false;
+    });
+    if (onTarget) {
+      return;
+    }
+    if (step === maxSteps) {
+      throw new Error(`Tab did not reach More actions within ${maxSteps} steps`);
+    }
+    await page.keyboard.press('Tab');
+  }
+}
+
 async function enterDocumentDetailReplaceMainFileTooltipState(page: Page): Promise<void> {
   const replaceButtons = page
     .locator('lib-document-viewer .viewer-footer-actions button')
@@ -724,15 +810,45 @@ journeyTest('document-detail', async ({ signedIn: page, a11y }) => {
   await waitForScreenSettled(page, 'lib-document-detail', true);
   await expectSurfaceUsable(page, 'lib-document-detail', 'document detail');
   await enterDocumentDetailReplaceMainFileTooltipState(page);
+  await enterDocumentDetailHeaderToolbarIconFocusState(page);
 
   await a11y.scanPage({ ...SCREEN_SCAN, extraWaitMs: 600 });
   await emitScreenReport(a11y, journeyReportName('document-detail'));
 });
 
+/**
+ * Screen 5 — document detail with header **More actions** overflow trigger focused (NXSAT-535).
+ *
+ * Separate journey project so the a11y-scout accumulator stays one scan per worker/report
+ * (`emitScreenReport` requires `pagesScanned.length === 1`). NXENG-808 keeps the Add to
+ * collection pre-scan on `document-detail` (Screen 4) above.
+ */
+journeyTest('document-detail-more-actions', async ({ signedIn: page, a11y }) => {
+  await page.goto('/#/browse', { waitUntil: 'networkidle' });
+  const { uid, title } = await firstFileWithMainBlob(page);
+
+  await page.goto(`/#/doc/${uid}`, { waitUntil: 'networkidle' });
+
+  await expect(
+    page.locator('lib-document-detail'),
+    'lib-document-detail must render',
+  ).toBeVisible();
+  await expect(
+    page.locator('lib-document-detail'),
+    `the detail view must show "${title}" — an error panel is visible too, and would scan clean`,
+  ).toContainText(title);
+  await waitForScreenSettled(page, 'lib-document-detail', true);
+  await expectSurfaceUsable(page, 'lib-document-detail', 'document detail');
+  await enterDocumentDetailHeaderMoreActionsFocusState(page);
+
+  await a11y.scanPage({ ...SCREEN_SCAN, extraWaitMs: 600 });
+  await emitScreenReport(a11y, journeyReportName('document-detail-more-actions'));
+});
+
 // ─────────────────────────── core flows ───────────────────────────
 
 /**
- * Screen 5 — search, with a query applied and results returned.
+ * Screen 6 — search, with a query applied and results returned.
  *
  * ## Why the query is a quick filter and not typed text
  *
@@ -782,7 +898,7 @@ journeyTest('search', async ({ signedIn: page, a11y }) => {
   await emitScreenReport(a11y, journeyReportName('search'));
 });
 
-/** Screen 6 — documents, the asset search, as it opens with no filter applied. */
+/** Screen 7 — documents, the asset search, as it opens with no filter applied. */
 journeyTest('documents', async ({ signedIn: page, a11y }) => {
   // The drawer runs the same search with `pageSize: 200` for its facets and renders empty
   // facets if it fails, so both requests must succeed. `pageSize` then picks the page's: its
@@ -812,7 +928,7 @@ journeyTest('documents', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Screen 7 — one collection, opened by uid, with members in it.
+ * Screen 8 — one collection, opened by uid, with members in it.
  *
  * `/#/collections` alone renders nothing — `collectionsRoutes` declares only `:uid` — which is
  * why `SURFACES` leaves it out and why phase-6's scan of it is a vacuous pass. A real uid is
@@ -889,7 +1005,10 @@ journeyTest('collection', async ({ signedIn: page, a11y }) => {
   await expect(host.locator('.collection-unavailable')).toHaveCount(0);
   await expect(host, `the page must be "${collection.title}"`).toContainText(collection.title);
   await expect(
-    host.locator('.member-row').filter({ hasText: member.title }).first(),
+    host
+      .locator('nxs-document-list .nxs-document-list__row')
+      .filter({ hasText: member.title })
+      .first(),
     `the collection must list its member "${member.title}"`,
   ).toBeVisible();
   await waitForScreenSettled(page, 'lib-collection-detail', false);
@@ -900,7 +1019,7 @@ journeyTest('collection', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Screen 8 — the favorites panel.
+ * Screen 9 — the favorites panel.
  *
  * The panel has no error state: a failed request renders the empty "no favorites" message. So
  * the members request is captured, and the precondition is checked first — when the user has
@@ -952,7 +1071,7 @@ journeyTest('favorites', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Screen 9 — the recently viewed panel.
+ * Screen 10 — the recently viewed panel.
  *
  * Named for views, but `RECENTLY_VIEWED_QUERY` lists documents the user created or last
  * modified; it reads no audit trail. The request is matched on that clause.
@@ -981,7 +1100,7 @@ journeyTest('recently-viewed', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Screen 10 — personal space.
+ * Screen 11 — personal space.
  *
  * `/#/personal-space` is a redirect: the page asks for the user's workspace and navigates to
  * `/#/browse<workspace path>`, so the screen a user lands on is browse, rooted in their own
@@ -1016,7 +1135,9 @@ journeyTest('personal-space', async ({ signedIn: page, a11y }) => {
     timeout: 15_000,
   });
   await expect(
-    page.locator('lib-browse .browse-row').first(),
+    page
+      .locator('lib-browse .browse-row, lib-browse nxs-document-list .nxs-document-list__row')
+      .first(),
     `the workspace at ${workspacePath} must list something, or this scans an empty table`,
   ).toBeVisible();
   await waitForScreenSettled(page, 'lib-browse', true);
@@ -1032,7 +1153,7 @@ journeyTest('personal-space', async ({ signedIn: page, a11y }) => {
 const CLIPBOARD_STORAGE_KEY = 'nuxeo_clipboard';
 
 /**
- * Screen 11 — the clipboard panel.
+ * Screen 12 — the clipboard panel.
  *
  * The clipboard lives in the browser, not on the server, so it is seeded rather than found:
  * one real document, written in the app's own storage shape. Nothing on the server changes,
@@ -1081,7 +1202,7 @@ function describeState(count: number, noun: string): string {
 }
 
 /**
- * Screen 12 — tasks.
+ * Screen 13 — tasks.
  *
  * With tasks, the page selects the first one and navigates to `/#/tasks/<id>`, so the screen
  * is the task form; without, it is a prompt to pick a task from the drawer. Both are required
@@ -1136,7 +1257,7 @@ journeyTest('tasks', async ({ signedIn: page, a11y }) => {
   await emitScreenReport(a11y, journeyReportName('tasks'), describeState(tasks.length, 'task(s)'));
 });
 
-/** Screen 13 — the expired queue panel: documents whose `dc:expired` date has passed. */
+/** Screen 14 — the expired queue panel: documents whose `dc:expired` date has passed. */
 journeyTest('expired-queue', async ({ signedIn: page, a11y }) => {
   const body = await captureDataRequest(
     page,
@@ -1170,7 +1291,7 @@ journeyTest('expired-queue', async ({ signedIn: page, a11y }) => {
   );
 });
 
-/** Screen 14 — trash, with something in it. */
+/** Screen 15 — trash, with something in it. */
 journeyTest('trash', async ({ signedIn: page, a11y }) => {
   // The filters drawer runs the same query with `pageSize: 200` for its counts and shows zero
   // counts if it fails (`catchError` to an empty list), so both requests must succeed.
@@ -1200,7 +1321,7 @@ journeyTest('trash', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Screen 15 — administration, as an administrator lands on it.
+ * Screen 16 — administration, as an administrator lands on it.
  *
  * `/#/administration` redirects to `analytics`, whose first tab is Document Distribution. At
  * the domain root that tab deliberately shows a callout instead of counts — the query would

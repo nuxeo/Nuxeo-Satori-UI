@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<component name="hyland.config.presales-demo" version="1.0">
+  <!-- Registers after Satori's defaults, so every fragment below applies on top of them. -->
+  <require>org.nuxeo.agentic.ui.config.defaults</require>
+
+  <extension target="org.nuxeo.agentic.ui.config" point="configuration">
+    <fragment name="presales-demo" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />
+    <fragment name="presales-demo" layer="manifest" src="agentic-ui-config/manifest.json" />
+
+    <!-- The logos the two presets name as "assets/<name>". -->
+    <asset name="acme-logo.svg" src="agentic-ui-config/assets/acme-logo.svg" />
+    <asset name="globex-logo.svg" src="agentic-ui-config/assets/globex-logo.svg" />
+  </extension>
+</component>

@@ -38,8 +38,9 @@ twelve. **Then stop talking and let them steer.**
 
 The one distinction that makes everything else make sense:
 
-> "Two ways a customer changes this product. Track A is configuration — a file, or a document in the
-> repository. **No rebuild, no deploy, no fork.** Track B is their own code in their own repo,
+> "Two ways a customer changes this product. Track A is configuration — JSON in the customer's own
+> configuration package. **No rebuild of the application, no fork**: the package is zipped and
+> installed like any Marketplace package. Track B is their own code in their own repo,
 > against our published package. Most of what customers ask for lands in Track A."
 
 If asked how you know that: it is a **design expectation, not a measured fact**. We have not yet
@@ -59,40 +60,41 @@ than quoting a number that will be wrong by the time anyone checks.
 
 ---
 
-## Track A — five changes, no build
+## Track A — five changes, no rebuild of the application
 
 ### Slide 4 — Make it their product, in a file · 1 min
 
-> "Branding is Layer 0, and it lives in a **file** — not in the manifest document. Application title,
-> logo, default theme, and a set of CSS custom properties. That is the whole rebrand surface."
+> "Branding is Layer 0, and it lives in a **bootstrap fragment** — not in the manifest. Application
+> title, logo, default theme, and a set of CSS custom properties. That is the whole rebrand surface."
 
 The distinction to land, because it is the most common way this goes wrong:
 
-> "There are **two** configuration stores and people conflate them. Branding and themes are in
-> `bootstrap.json`, a file. Navigation, labels, actions and columns are in a Nuxeo **document**.
-> `runtime-manifest.ts` has no branding key at all — if you put branding in the manifest, nothing
-> happens and nothing tells you why."
+> "There are **two** configuration layers and people conflate them. Branding and themes are in the
+> `bootstrap` fragment. Navigation, labels, actions and columns are in the `manifest` fragment. Both
+> ship in the customer's own Marketplace package. `runtime-manifest.ts` has no branding key at all —
+> if you put branding in the manifest, nothing happens and nothing tells you why."
 
 Then the upgrade point, which is a real engineering decision rather than a diagram:
 
-> "That file lives **beside** the app bundle, and our package never installs it — it ships a sample,
-> and the customer copies it to `bootstrap.json`. The bundle directory is replaced on every upgrade.
-> We rehearsed the upgrade on a real server: the customer's edited file survives it and is still
-> served. The first design, which installed the file itself, broke that upgrade — the rehearsal
-> found it and NXSAT-317 fixed it."
+> "That package is the customer's, and it depends on ours. Our package installs no configuration
+> file, so upgrading ours cannot replace theirs. We rehearsed it with `nuxeoctl mp-install`:
+> upgrading ours with two customer packages installed served byte-identical configuration. The first
+> design, which installed `bootstrap.json` itself, broke the upgrade — NXSAT-317 found that, and
+> NXSAT-312 removed configuration files from the server altogether."
 
 **Volunteer the logo, then the limit.** They will ask about it, so get there first:
 
-> "The logo is in the same file. The customer's logo sits beside `bootstrap.json` in the config
-> directory, `branding.logo` names it, and it replaces our mark in the header and on the login page —
-> no rebuild. The one piece that is not configurable yet is the favicon."
+> "The logo is in the same package. It is an asset the package contributes, `branding.logo` names
+> it, and it replaces the word mark in the header and the logo on the login page — no rebuild of the application. What
+> it does not change: the small Hyland mark at the top of the navigation rail, the 'Content Innovation
+> Cloud' title when the rail is expanded, and the favicon."
 
-The package never installs anything in the config directory except its sample,
-`bootstrap.example.json`, so a logo the customer puts there is left alone by an upgrade, as their
-`bootstrap.json` is. The upgrade was rehearsed for an edited `bootstrap.json` (NXSAT-317), not
-separately with a logo file, so say the mechanism, not that a logo upgrade was observed.
+The logo is served from the customer's package like its fragments, so an upgrade of ours leaves it
+alone by the same mechanism. Say the mechanism; `docs/demo-deck-claims.md` records exactly what the
+NXSAT-312 rehearsal observed. The Admin Center path is unrehearsed.
 
-**Do not say the favicon is done, planned for a release, or costed.** It has no key.
+**Do not say the rail mark, the rail title or the favicon is done, planned for a release, or
+costed.** None has a key: the first two are hard-coded in Satori's `sat-platform-nav`.
 
 ---
 
@@ -185,7 +187,7 @@ and silently drops the rest. Our own documentation had that example wrong once.
 **Be precise about the boundary, because a technical audience will find it otherwise:**
 
 > "The component has to be compiled in. That is a one-time Layer 2 step. From then on, placing it,
-> routing it, naming it, ordering it and rule-gating it are all Layer 1 and need no build."
+> routing it, naming it, ordering it and rule-gating it are all Layer 1 and need no rebuild of the application."
 
 Worth saying plainly, because it is the kind of thing that earns trust:
 
@@ -250,7 +252,7 @@ fail _closed_, so an unknown admin rule cannot hand everyone the Administration 
 
 The line that matters for support:
 
-> "Look at the imports. `@nuxeo-satori/platform/nuxeo-client` and `/ui`. **Nothing from our internals.**
+> "Look at the imports. `@nuxeo/satori-platform/nuxeo-client` and `/ui`. **Nothing from our internals.**
 > If we change how the bridge works, this keeps compiling — which is what makes an upgrade a version
 > bump instead of a merge."
 
@@ -449,17 +451,17 @@ Then the upgrade proof, which is the commercial claim:
 
 Have these ready. Each is verified; none needs hedging.
 
-| Question                                        | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **"Can I install it from npm today?"**          | No. It is **publishable and dry-run verified**, not published. The first publish is a deliberate step and the final package name is part of it.                                                                                                                                                                                                                                                                                                                                                  |
-| **"Is this adf-hx or your own UI?"**            | Both, deliberately. **Seven** upstream components render real adf-hx surfaces; the surrounding chrome is ours — thirteen components sharing the same `hxp-` prefix. The prefix tells you nothing; the import does.                                                                                                                                                                                                                                                                               |
-| **"Does the marketplace package install?"**     | **Yes, with `nuxeoctl mp-install` — rehearsed 2026-10-07 on a throwaway server.** Say: install, customise and upgrade were all run, and the rehearsal found that the original design broke on an upgrade after `bootstrap.json` was edited; NXSAT-317 fixed that, and the fixed package passed the same rehearsal. **Do not** extend it to the Admin Center / Update Center screens: that path has not been rehearsed. The older answer, "nobody has run Maven", was withdrawn 2026-09-26 (F13). |
-| **"Is it production quality?"**                 | **Do not say "ten of ten".** Say: **ten of eleven** in-scope projects are above 90% as of 2026-09-22, and Phase 6 step 6 is reopened for the eleventh — `shared-ai-client` at 15.98%. It was ten of ten until three never-measured projects entered the denominator. **And the caveat travels with it** — those are percentages of the measured subset, and **6,137** in-scope lines are in no test at all. "The bar is met" and "the code is 90% tested" are different sentences.               |
-| **"Accessibility?"**                            | **Do not say "met".** Say: it was met on 2026-08-24 across fifteen cases on eight routes, and it is being re-verified — five consecutive `phase-6-a11y` captures from 2026-09-15 to 2026-09-16 fail 3 `button-name` checks (browse, browse cards, column panel), undiagnosed as of 2026-09-23. **Dialogs, upload, dark mode and the login page were never in that scan.** One remaining violation is upstream's.                                                                                 |
-| **"How big is the bundle?"**                    | 3.56 MB initial against a 4 MB budget. adf-core registers eleven root services so it is eager — every user pays it, including users who never open an adf-hx route. A known constraint, not a surprise.                                                                                                                                                                                                                                                                                          |
-| **"Can I change the logo?"**                    | Yes, with no rebuild: `branding.logo` in `bootstrap.json` names an image beside the file, and it replaces the Satori marks in the header and on the login page. The package installs only a sample in that directory, so the logo, like `bootstrap.json`, is the customer's own file and an upgrade leaves it alone (rehearsed for `bootstrap.json`, NXSAT-317; not separately with a logo). The favicon cannot be changed yet.                                                                  |
-| **"Can I edit metadata in the adf-hx panel?"**  | No. Upstream does not export the cache service its editable sidebar needs, so the read-only properties panel renders instead. Upstream's to fix.                                                                                                                                                                                                                                                                                                                                                 |
-| **"How do I know these screenshots are real?"** | Each one asserts its own content before the run is allowed to pass, all images are hashed so no two can be duplicates, and the run aborts if it is authenticated as the wrong user. That last check exists because a whole run once came back as `Anonymous` and every other check still passed.                                                                                                                                                                                                 |
+| Question                                        | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **"Can I install it from npm today?"**          | No. It is **publishable and dry-run verified**, not published. The first publish is a deliberate step and the final package name is part of it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **"Is this adf-hx or your own UI?"**            | Both, deliberately. **Seven** upstream components render real adf-hx surfaces; the surrounding chrome is ours — thirteen components sharing the same `hxp-` prefix. The prefix tells you nothing; the import does.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **"Does the marketplace package install?"**     | **Yes, with `nuxeoctl mp-install` — rehearsed 2026-10-07 on a throwaway server.** Say: install, customise and upgrade were all run. Customisation is the customer's own configuration package (NXSAT-312), and upgrading ours with two customer packages installed served byte-identical configuration. An earlier rehearsal found the original design broke on an upgrade after `bootstrap.json` was edited (NXSAT-317); since NXSAT-312 there is no configuration file on the server at all. **Do not** extend it to the Admin Center / Update Center screens: that path has not been rehearsed. The older answer, "nobody has run Maven", was withdrawn 2026-09-26 (F13). |
+| **"Is it production quality?"**                 | **Do not say "ten of ten".** Say: **ten of eleven** in-scope projects are above 90% as of 2026-09-22, and Phase 6 step 6 is reopened for the eleventh — `shared-ai-client` at 15.98%. It was ten of ten until three never-measured projects entered the denominator. **And the caveat travels with it** — those are percentages of the measured subset, and **6,137** in-scope lines are in no test at all. "The bar is met" and "the code is 90% tested" are different sentences.                                                                                                                                                                                           |
+| **"Accessibility?"**                            | **Do not say "met".** Say: it was met on 2026-08-24 across fifteen cases on eight routes, and it is being re-verified — five consecutive `phase-6-a11y` captures from 2026-09-15 to 2026-09-16 fail 3 `button-name` checks (browse, browse cards, column panel), undiagnosed as of 2026-09-23. **Dialogs, upload, dark mode and the login page were never in that scan.** One remaining violation is upstream's.                                                                                                                                                                                                                                                             |
+| **"How big is the bundle?"**                    | 3.56 MB initial against a 4 MB budget. adf-core registers eleven root services so it is eager — every user pays it, including users who never open an adf-hx route. A known constraint, not a surprise.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **"Can I change the logo?"**                    | Yes, with no rebuild of the application: `branding.logo` in a bootstrap fragment names an asset the customer's configuration package contributes, served at `agentic-ui-config/assets/<name>`, and it replaces the Satori word mark in the header and the lockup on the login page. The logo is part of the customer's package, so an upgrade of ours leaves it alone by the same mechanism as their fragments; say the mechanism. It does not replace the navigation-rail mark or the expanded rail's "Content Innovation Cloud" title (hard-coded in Satori), and the favicon cannot be changed yet.                                                                       |
+| **"Can I edit metadata in the adf-hx panel?"**  | No. Upstream does not export the cache service its editable sidebar needs, so the read-only properties panel renders instead. Upstream's to fix.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **"How do I know these screenshots are real?"** | Each one asserts its own content before the run is allowed to pass, all images are hashed so no two can be duplicates, and the run aborts if it is authenticated as the wrong user. That last check exists because a whole run once came back as `Anonymous` and every other check still passed.                                                                                                                                                                                                                                                                                                                                                                             |
 
 ---
 

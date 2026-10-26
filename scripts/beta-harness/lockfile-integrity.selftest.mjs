@@ -360,10 +360,10 @@ expect(
 /**
  * The dependent in the `"."` fixture below, kept in a constant rather than written inline.
  *
- * `minimatch` is a production dependency with an `unreferencedDependencies` exception, and the
- * `supply-chain` gate treats a literal `node_modules/<dep>` anywhere under `scripts/` as a build
- * reference. Spelling the lock path out therefore forged a reference to it and turned that gate red
- * — correctly: a string in a fixture making an unused production dependency look used is exactly
+ * `minimatch` was a production dependency with an `unreferencedDependencies` exception until
+ * NXSAT-672, and the `supply-chain` gate treats a literal `node_modules/<dep>` anywhere under
+ * `scripts/` as a build reference. Spelling the lock path out therefore forged a reference to it
+ * and turned that gate red — correctly: a string in a fixture making an unused production dependency look used is exactly
  * the weakening it exists to catch. Interpolating the name keeps the fixture honest.
  */
 const SELF_REF_DEPENDENT = 'minimatch';
@@ -477,51 +477,87 @@ expect(
 );
 
 // ---------------------------------------------------------------------------------------------
-// 18. The Phase 2 failure itself, on the real lock: prune `@oxc-resolver/binding-wasm32-wasi`'s
-//    nested `@emnapi/*` entries, as a bare `npm install` on macOS does, and the v1.11.2 pins
-//    walk up to the top-level 1.11.3. This is the control that was previously run by hand.
+// 18. The Phase 2 failure itself, fixed in NXSAT-673: the lockfile originally had nested
+//    `@emnapi/*` entries at 1.11.2 under `@oxc-resolver/binding-wasm32-wasi` that a bare
+//    `npm install` on macOS would prune, causing version mismatches with top-level 1.11.3.
+//    The fix hoisted @emnapi/core and @emnapi/runtime to the top level and removed the nested
+//    copies. This control verifies the fix stays in place: if nested @emnapi entries at the
+//    wrong version reappear (under any path), the gate catches them.
 // ---------------------------------------------------------------------------------------------
 {
   const lock = JSON.parse(readFileSync(REAL_LOCK, 'utf8'));
   const manifest = JSON.parse(readFileSync(REAL_MANIFEST, 'utf8'));
-  const pruned = Object.keys(lock.packages).filter((k) =>
-    k.startsWith('node_modules/@oxc-resolver/binding-wasm32-wasi/node_modules/@emnapi/'),
-  );
-  if (pruned.length === 0) {
-    throw new Error(
-      'the @emnapi control found nothing to prune — the lock has changed shape, so this control ' +
-        'would have passed for the wrong reason',
-    );
-  }
-  for (const key of pruned) delete lock.packages[key];
+  // The fix removed node_modules/@oxc-resolver/.../node_modules/@emnapi/* entries.
+  // They may exist elsewhere (e.g. under storybook or nx) at correct versions.
+  // This control adds back a problematic nested entry at the old wrong version to verify
+  // the gate would catch a regression.
+  const testLock = structuredClone(lock);
+  const WRONG_VERSION = '1.11.2';
+  const problematicEntry = {
+    version: WRONG_VERSION,
+    resolved: `https://registry.npmjs.org/@emnapi/core/-/core-${WRONG_VERSION}.tgz`,
+    integrity: 'sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA==',
+    dev: true,
+    license: 'MIT',
+    dependencies: { tslib: '^2.4.0' },
+  };
+  testLock.packages['node_modules/@oxc-resolver/binding-wasm32-wasi/node_modules/@emnapi/core'] =
+    problematicEntry;
   expect(
-    `Phase 2 regression: pruning ${pruned.length} nested @emnapi entries from the real lock`,
+    'Phase 2 regression: nested @emnapi/core at wrong version under @oxc-resolver should fail',
     'fail',
-    '@emnapi/',
-    runGate('phase2-emnapi-pruned', manifest, lock),
+    'at 1.11.2',
+    runGate('phase2-emnapi-wrong-version', manifest, testLock),
   );
 }
 
 // ---------------------------------------------------------------------------------------------
-// 19. The real lock's own `brace-expansion@^5.0.0` pin is load-bearing: with the key removed,
-//     the real lock goes red on that edge. The pass in control 1 is therefore the selector-scoped
-//     waiver excusing it, not the version check failing to look.
+// 19. At least one of the real manifest's override keys is load-bearing: with that key removed,
+//     the real lock goes red on the edge it was waiving. The pass in control 1 is therefore the
+//     override waiver excusing those edges, not the version check failing to look.
+//
+//     The key is found rather than named. This control used to remove `brace-expansion@^5.0.0`,
+//     which was load-bearing when it was written and stopped being so under Nx 23: nx then
+//     requests `brace-expansion` at exactly the version the lock holds, so the waiver has nothing
+//     to excuse and removing it changes nothing. The control went green-by-vacuity — the very
+//     failure it exists to rule out for control 1. Searching keeps it honest as the tree moves;
+//     only "no key is load-bearing" can now pass for the wrong reason, and that throws.
 // ---------------------------------------------------------------------------------------------
 {
   const lock = JSON.parse(readFileSync(REAL_LOCK, 'utf8'));
   const manifest = JSON.parse(readFileSync(REAL_MANIFEST, 'utf8'));
-  if (!Object.hasOwn(manifest.overrides ?? {}, 'brace-expansion@^5.0.0')) {
+  const keys = Object.keys(manifest.overrides ?? {});
+  if (keys.length === 0) {
     throw new Error(
-      'the real manifest no longer carries a "brace-expansion@^5.0.0" override — this control ' +
-        'would have passed for the wrong reason',
+      'the real manifest declares no overrides — this control would have passed for the wrong reason',
     );
   }
-  delete manifest.overrides['brace-expansion@^5.0.0'];
+
+  let found = null;
+  for (const key of keys) {
+    const without = JSON.parse(JSON.stringify(manifest));
+    delete without.overrides[key];
+    const result = runGate(`real-lock-no-override-${key.replace(/[^\w.-]/g, '_')}`, without, lock);
+    if (result.code === 1 && result.out.includes('requires ')) {
+      found = { key, result };
+      break;
+    }
+  }
+
+  if (!found) {
+    throw new Error(
+      `removing each of the ${keys.length} override key(s) in turn left the real lock green, so ` +
+        'control 1 does not depend on the override waiver and this control cannot prove it does. ' +
+        'Either the waiver is dead code or the lock no longer needs it — decide which, do not ' +
+        'delete this control.',
+    );
+  }
+
   expect(
-    'real lock goes red on brace-expansion once its override key is removed',
+    `real lock goes red on ${found.key} once its override key is removed`,
     'fail',
-    'requires brace-expansion@',
-    runGate('real-lock-no-brace-override', manifest, lock),
+    'requires ',
+    found.result,
   );
 }
 

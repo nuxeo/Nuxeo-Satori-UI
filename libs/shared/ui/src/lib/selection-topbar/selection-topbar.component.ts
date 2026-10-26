@@ -9,6 +9,7 @@ import {
   input,
   output,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { SafeUrl } from '@angular/platform-browser';
 import { MatButtonModule } from '@angular/material/button';
@@ -21,14 +22,24 @@ import {
   ExtensionActionRegistry,
   ExtensionRuleContextService,
   type ExtensionActionDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import { TranslatePipe } from '@ngx-translate/core';
+import { NxsThumbnailComponent, provideNxsThumbnailCache } from '@nuxeo/satori-platform/components';
 
 @Component({
   selector: 'lib-selection-topbar',
   standalone: true,
-  imports: [DescriptorLabelPipe, TranslatePipe, MatButtonModule, MatIconModule, MatTooltipModule],
+  imports: [
+    DescriptorLabelPipe,
+    NxsThumbnailComponent,
+    TranslatePipe,
+    MatButtonModule,
+    MatIconModule,
+    MatTooltipModule,
+  ],
+  providers: [provideNxsThumbnailCache()],
   templateUrl: './selection-topbar.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './selection-topbar.component.scss',
 })
 export class SelectionTopbarComponent {
@@ -38,6 +49,10 @@ export class SelectionTopbarComponent {
   private lastFocusedElement: HTMLElement | null = null;
 
   readonly selectedCount = input.required<number>();
+  /**
+   * The selected documents. The popup draws each preview itself from `id`, so a `preview` URL
+   * whose owner has since revoked it cannot break the popup; the field is kept for existing callers.
+   */
   readonly selectedItems = input<
     Array<{ id: string; name: string; preview: SafeUrl | string | null }>
   >([]);

@@ -27,16 +27,6 @@
     "toolbar-unlock": "ロック解除",
     "toolbar-unsubscribe": "購読を解除"
   },
-  "adf-hx-bridge": {
-    "loading": "読み込んでいます",
-    "notify-me": "通知を受け取る",
-    "pager": {
-      "no-documents": "文書はありません",
-      "range": "{{ first }}–{{ last }}",
-      "range-of-total": "{{ first }}–{{ last }} / {{ total }}"
-    },
-    "unsubscribe": "購読を解除"
-  },
   "admin": {
     "admin-analytics-page": {
       "ai-audit-anomalies": "AI 監査の異常",
@@ -517,6 +507,9 @@
     "placeholder-page": {
       "coming-soon": "近日公開"
     },
+    "preset": {
+      "badge": "Preset: {{ label }}"
+    },
     "profile-page": {
       "change-password": "パスワードの変更",
       "company": "会社",
@@ -706,17 +699,6 @@
       "user-group": "ユーザー / グループ",
       "username": "ユーザー名"
     },
-    "browse-adf-hx-poc": {
-      "columns": "列",
-      "manage-columns": "列を管理",
-      "preview": "プレビュー",
-      "preview-document": "文書をプレビュー",
-      "retry": "再試行",
-      "select-a-single-document-in-the": "[表示] タブで文書を 1 つ選択すると、そのプロパティが表示されます。",
-      "select-a-single-document-in-the-2": "[表示] タブで文書を 1 つ選択すると、そのバージョンが表示されます。",
-      "the-repository-root-carries-no-access": "リポジトリルートにはアクセス制御リストがありません。権限を表示および管理するには、ドメインまたはフォルダを開いてください。",
-      "this-folder-is-empty": "このフォルダは空です"
-    },
     "column": {
       "author": "作成者",
       "coverage": "対象範囲",
@@ -897,17 +879,6 @@
       "notify": "通知",
       "share": "共有"
     },
-    "search-adf-hx": {
-      "enter-search-term": "検索語を入力...",
-      "loading": "読み込んでいます",
-      "next-page": "次のページ",
-      "no-results-found": "一致するアイテムはありません",
-      "previous-page": "前のページ",
-      "search": "検索",
-      "search-documents": "文書を検索",
-      "searching": "検索中...",
-      "try-a-different-search-term": "別の検索語をお試しください"
-    },
     "show-details": "詳細を表示",
     "tab": {
       "history": "履歴",
@@ -989,7 +960,6 @@
       "notifications-enabled": "通知が有効になりました",
       "removed-from-clipboard": "クリップボードから削除しました"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "notify-me": "通知を受け取る",
     "remove-from-clipboard": "クリップボードから削除",
     "share-fallback-title": "コレクション",
@@ -1055,9 +1025,16 @@
       "trashed-document-many": "ごみ箱内の文書: {{ count }} 件",
       "trashed-document-one": "ごみ箱内の文書: {{ count }} 件"
     },
-    "date-mask": "mm/dd/yyyy",
+    "date-mask": "yyyy/mm/dd",
     "dismiss": "破棄",
     "email-example": "name@company.com",
+    "lock": {
+      "already-locked": "文書は既に別のユーザーによってロックされています。ページを更新してください。",
+      "lock-no-permission": "この文書をロックする権限がありません。",
+      "locked-by": "{{ owner }} によって {{ date }} にロックされました",
+      "locked-by-another-user": "この文書は別のユーザーによってロックされているため、ロックを解除できません。",
+      "unlock-no-permission": "この文書のロックを解除する権限がありません。"
+    },
     "ok": "OK",
     "page-number": "{{ page }} ページ",
     "page-of": "{{ page }} / {{ total }} ページ",
@@ -1103,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "契約 ABC-123.pdf",
     "saved-search-placeholder": "例: 「第 3 四半期のレビュー保留中の契約」",
-    "showcase-dialog-message": "このダイアログは @nuxeo-satori/platform/ui からインポートされています。確認プロンプト、警告、破壊的な操作に使用できます。",
+    "showcase-dialog-message": "このダイアログは @nuxeo/satori-platform/ui からインポートされています。確認プロンプト、警告、破壊的な操作に使用できます。",
     "showcase-dialog-title": "コンポーネントショーケースのデモ"
   },
   "dashboard": {
@@ -1411,6 +1388,8 @@
       "publication-removed": "公開を削除しました",
       "removed-from-favorites": "お気に入りから削除されました",
       "reply-deleted": "返信を削除しました",
+      "restore-version-conflict": "文書の現在の状態と競合しているため、このバージョンを復元できません。ページを再読み込みして、もう一度お試しください。",
+      "restore-version-forbidden": "このバージョンを復元できません。権限がないか、別のユーザーが文書をロックしています。",
       "search-failed-try-again": "検索に失敗しました。もう一度お試しください。",
       "section-not-found": "セクションが見つかりません",
       "selected-documents-have-no-insertable-image-url": "選択した文書には挿入可能な画像 URL がありません",
@@ -1421,7 +1400,6 @@
       "workflow-abandoned": "ワークフローを中止しました。",
       "workflow-started-successfully": "ワークフローを開始しました"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "note-editor": {
       "align-center": "中央揃え",
       "align-left": "左揃え",
@@ -1505,10 +1483,20 @@
     "task-due-before": "{{ due }} まで",
     "unblock": "ブロック解除",
     "unknown": "不明",
+    "version-go-to-latest": "最新バージョンに移動",
     "version-latest": "{{ version }} 最新",
+    "version-latest-entry": "最新バージョン",
     "version-modified-by": "{{ who }} が {{ when }} に変更",
+    "version-restore": "{{ version }} を復元",
+    "version-restore-confirm-title": "よろしいですか?",
+    "version-viewing": "バージョン {{ version }} を表示しています。",
     "visual-editor": "ビジュアルエディター",
     "workflow-started-on-document": "この文書で {{ workflow }} ワークフローを開始しました。"
+  },
+  "document-layouts": {
+    "no": "No",
+    "sections": "Property sections",
+    "yes": "Yes"
   },
   "drawer": {
     "administration-analytics": "分析",
@@ -1526,104 +1514,6 @@
   "extensions": {
     "extension-outlet": {
       "loading": "読み込み中…"
-    }
-  },
-  "hxp": {
-    "hxp-browse-details-panel": {
-      "activity": "アクティビティ",
-      "by": "変更者",
-      "close-panel": "パネルを閉じる",
-      "contributors": "投稿者",
-      "created": "作成日",
-      "document-details": "文書の詳細",
-      "info": "情報",
-      "last-modified": "最終変更日",
-      "no-recent-activity": "最近のアクティビティはありません",
-      "no-tags-yet": "タグはまだありません",
-      "properties": "プロパティ",
-      "search-or-create-a-tag": "タグを検索または作成",
-      "state": "状態",
-      "tags": "タグ",
-      "title": "タイトル",
-      "type": "タイプ"
-    },
-    "hxp-browse-history": {
-      "action": "アクション",
-      "all": "すべて",
-      "category": "カテゴリ",
-      "comment": "コメント",
-      "date": "日付",
-      "from": "開始",
-      "next": "次",
-      "no-audit-entries-found": "監査エントリが見つかりませんでした。",
-      "performed-action": "実行されたアクション",
-      "previous": "前",
-      "state": "状態",
-      "to": "から",
-      "username": "ユーザー名"
-    },
-    "hxp-browse-nav-drawer": {
-      "refresh": "更新"
-    },
-    "hxp-browse-pager": {
-      "document-list-pages": "文書リストのページ",
-      "next": "次",
-      "next-page": "次のページ",
-      "previous": "前",
-      "previous-page": "前のページ"
-    },
-    "hxp-browse-tabs": {
-      "browse-folder-tabs": "フォルダ参照タブ"
-    },
-    "hxp-browse-toolbar": {
-      "all-types": "すべてのタイプ",
-      "card-view": "カード表示",
-      "clear-contributor-filter": "投稿者フィルタを消去",
-      "clear-title-filter": "タイトルフィルタを消去",
-      "contributor": "投稿者...",
-      "export-csv": "CSV をエクスポート",
-      "filter-by-title": "タイトルでフィルタ...",
-      "last-contributor": "最終投稿者",
-      "list-view": "リスト表示",
-      "modified-from": "変更日 (開始)",
-      "modified-to": "変更日 (終了)",
-      "type": "タイプ"
-    },
-    "hxp-browse-trash": {
-      "actions": "アクション",
-      "failed-to-load": "ごみ箱を読み込めませんでした。",
-      "last-modified": "最終変更日",
-      "name": "名前",
-      "restore": "復元",
-      "retry": "再試行",
-      "trash-is-empty": "ごみ箱は空です",
-      "type": "タイプ"
-    },
-    "hxp-column-picker": {
-      "close-column-picker": "列の選択を閉じる",
-      "column-settings": "列の設定",
-      "done": "完了",
-      "reset": "リセット"
-    },
-    "hxp-folder-header": {
-      "close-menu": "メニューを閉じる",
-      "create-folder-upload-files-or-import": "フォルダの作成、ファイルのアップロード、または CSV のインポート",
-      "create-import": "作成 / インポート",
-      "delete": "削除",
-      "download-all": "すべてダウンロード",
-      "edit": "編集",
-      "export": "エクスポート",
-      "more-actions": "その他の処理",
-      "share": "共有",
-      "upload-with-nuxeo-drive": "Nuxeo Drive でアップロード"
-    },
-    "tab": {
-      "history": "履歴",
-      "permissions": "権限",
-      "properties": "プロパティ",
-      "trash": "ごみ箱",
-      "versions": "バージョン",
-      "view": "表示"
     }
   },
   "kd": {
@@ -1777,7 +1667,6 @@
       "administration": "管理",
       "assets": "アセット",
       "browse": "参照",
-      "browse-adf-hx": "参照",
       "clipboard": "クリップボード",
       "collections": "コレクション",
       "dashboard": "ダッシュボード",

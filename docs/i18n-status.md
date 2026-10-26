@@ -122,8 +122,8 @@ back to the type's own name, camel case split, for a custom type — never a raw
 English text this change alters, and invisible in HTML text, which collapses whitespace anyway.
 
 **Deliberately left hard-coded**, each for a stated reason: CSV export header rows (a file format
-downstream tools key on); `Manage everything` / `Can collect` in the share-saved-search dialogs,
-which double as data values mapped back to API rights; `versionLabel: 'Current'`, which is also the
+downstream tools key on); `Manage everything` / `Can collect` in the share-saved-search dialog's API
+mapping and its external-user dialog, which double as data values mapped back to API rights; `versionLabel: 'Current'`, which is also the
 publish dialog's form value; adf-hx port errors, which are diagnostics returned to the upstream
 library; product names (`Nuxeo Drive`, the Layer 0 branding defaults); and `apps/nuxeo-satori-template`
 (slice 11).
@@ -207,6 +207,37 @@ Three lessons from it, each of which cost something:
   `nuxeo-client`, `browse` and `document-detail` report 7, 48 and 71 failures, all
   `Cannot initialize local storage without a --localstorage-file path`. Under the pinned Node 20
   (`nvm use 20`) all three are green. Always confirm on 20 before believing a red.
+
+### Reopened and re-closed 2026-10-12 (NXSAT-628): the grep above could not see two of them
+
+"Closed" above was true of the eleven call sites that grep finds and false of the product. Two
+more — the History tab's Date column in `document-detail.html` and `collection-detail.html` —
+took their `DatePipe` format from the **translation catalogue**:
+
+```html
+{{ entry.eventDate | date: ('collections.mmmm-d-yyyy' | translate) }}
+```
+
+The grep looks for `toLocaleDateString`, so neither was ever a candidate, and both were already
+using `LOCALE_ID` correctly — they just handed the pipe a hardcoded `MMMM d, yyyy`. `M`, `d` and
+`y` are locale-**independent** tokens, so French rendered `octobre 12, 2026`: the English field
+order wearing a French month name. Measured, not argued — `formatDate` with that pattern against
+`longDate`, in all seven shipped locales, differs in six of them.
+
+Two things worth carrying forward:
+
+- **It was reported by the translators, not by us.** The keys reached Crowdin and Łukasz
+  Biedrzycki asked why format patterns were being sent for translation. No gate was looking: the
+  extraction codemod slugs a key from its value, and `mmmm-d-yyyy` is the codemod recording that
+  it read `MMMM d, yyyy` as prose. `checkNoTranslatableDatePatterns` now fails both halves of
+  that — a catalogue value that is nothing but a date pattern, and any `date:` format routed
+  through `translate`.
+- **"Never hand-edit a non-English catalogue" has one exception, and it is not translation.**
+  Deleting a source key leaves the six non-English catalogues carrying it, which
+  `checkTranslationCatalogues` fails as an _extra_ key. Its own remedy — push sources with
+  `--delete-obsolete` — only runs on merge to `main`, so the pull request cannot be green until
+  the key is gone locally too. Removing it is safe **only because the value was untranslated
+  English**; verify that before deleting, and never remove a real translation.
 
 ### Pluralisation 2026-09-22: ICU deferred, but French is wrong today — and the first reason given was false
 
@@ -854,7 +885,7 @@ fails any source that is not.
   `libs/shared/extensions` reference **120 distinct keys** (`shared-ui.*`, `extensions.*`) that exist
   only in `apps/nuxeo-ui/public/i18n/en.json`. Neither library ships an `i18n/` directory and
   `libs/platform/ng-package.json` packages no catalogue, so someone installing
-  `@nuxeo-satori/platform/ui` gets templates asking for keys nothing supplies.
+  `@nuxeo/satori-platform/ui` gets templates asking for keys nothing supplies.
 
   Adding `@ngx-translate/core` as a peer dependency made the pipe resolvable; it did not make the
   STRINGS available, and those are two different problems that look like one.
@@ -865,7 +896,7 @@ fails any source that is not.
   required per-library catalogues, so the requirement is not new, only unmet.
 
   **Partly closed, 29 Sep 2026: English travels with the package.** `PLATFORM_EN_TRANSLATIONS` in
-  `@nuxeo-satori/platform/ui` is the English for the 299 keys the package's entry points reference,
+  `@nuxeo/satori-platform/ui` is the English for the 299 keys the package's entry points reference,
   generated from `en.json` by `tools/i18n/platform-english.mjs`. A host opts in with
   `providePlatformEnglishFallback()`, a missing-translation handler that answers only keys its own
   catalogues lack and can hand anything else to the host's existing handler. `nuxeo-ui` does not opt

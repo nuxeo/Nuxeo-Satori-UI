@@ -1,68 +1,17 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { signal } from '@angular/core';
 
-import {
-  AppTranslateLoader,
-  UPSTREAM_KEY_ALIAS_PAIRS,
-  applyUpstreamKeyAliases,
-} from './app-translate-loader';
+import { AppTranslateLoader } from './app-translate-loader';
 import { EN_FALLBACK_TRANSLATIONS } from './en-fallback';
 
-/** The four folders `SEEDED_FOLDERS` declares, in order, plus the app's own catalogue last. */
-const SEEDED_FOLDER_COUNT = 4;
+/** The one upstream folder `UPSTREAM_FOLDERS` declares, then the app's own catalogue last. */
+const UPSTREAM_FOLDER_COUNT = 1;
 
 /** A catalogue as served: nested or flat, string leaves only once flattened. */
 type CatalogueBody = Record<string, unknown>;
-
-describe('applyUpstreamKeyAliases', () => {
-  it('copies the canonical value onto the key upstream asks for', () => {
-    const catalogue = applyUpstreamKeyAliases({
-      'DOCUMENT_TREE.TOGGLE_ARIA-LABEL': 'Toggle',
-    });
-
-    expect(catalogue['DOCUMENT_TREE.TOGGLE_ARIA-LABEL ']).toBe('Toggle');
-  });
-
-  it('copies the translated value, not a hardcoded English one', () => {
-    const catalogue = applyUpstreamKeyAliases({
-      'DOCUMENT_TREE.TOGGLE_ARIA-LABEL': 'Basculer',
-    });
-
-    expect(catalogue['DOCUMENT_TREE.TOGGLE_ARIA-LABEL ']).toBe('Basculer');
-  });
-
-  it('leaves an alias upstream already ships alone', () => {
-    const catalogue = applyUpstreamKeyAliases({
-      'DOCUMENT_TREE.TOGGLE_ARIA-LABEL': 'Toggle',
-      'DOCUMENT_TREE.TOGGLE_ARIA-LABEL ': 'Upstream fixed it',
-    });
-
-    expect(catalogue['DOCUMENT_TREE.TOGGLE_ARIA-LABEL ']).toBe('Upstream fixed it');
-  });
-
-  it('adds nothing when the canonical key is absent', () => {
-    expect(applyUpstreamKeyAliases({})).toEqual({});
-  });
-
-  /**
-   * The negative control for the whole workaround. Every alias exists *because* it differs from
-   * its canonical key by whitespace a reader cannot see. A formatter, an editor's
-   * trim-on-save, or a helpful cleanup that collapses the two makes the alias a no-op and
-   * silently restores the defect — the accessible name goes back to rendering a raw key, and
-   * nothing else changes. This is the assertion that turns that into a red test.
-   */
-  it('keeps every alias distinct from its canonical key, differing only by trailing whitespace', () => {
-    expect(UPSTREAM_KEY_ALIAS_PAIRS.length).toBeGreaterThan(0);
-
-    for (const [alias, canonical] of UPSTREAM_KEY_ALIAS_PAIRS) {
-      expect(alias).not.toBe(canonical);
-      expect(alias.trimEnd()).toBe(canonical);
-    }
-  });
-});
 
 describe('AppTranslateLoader', () => {
   let loader: AppTranslateLoader;
@@ -71,7 +20,7 @@ describe('AppTranslateLoader', () => {
   function configure(labels: Record<string, string> = {}): void {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: AppConfigService,
@@ -85,40 +34,42 @@ describe('AppTranslateLoader', () => {
   }
 
   /**
-   * Answers every outstanding request: the seeded folders in declaration order, then the app's
+   * Answers every outstanding request: the upstream folders in declaration order, then the app's
    * own catalogue. `getTranslation` issues them in one `forkJoin`, so they are all pending at
    * once and the order of `httpMock.match` is the order the loader built them in.
    */
   function flushCatalogues(folders: CatalogueBody[], app: CatalogueBody): void {
     const requests = httpMock.match(() => true);
-    expect(requests.length).toBe(SEEDED_FOLDER_COUNT + 1);
+    expect(requests.length).toBe(UPSTREAM_FOLDER_COUNT + 1);
 
-    requests.slice(0, SEEDED_FOLDER_COUNT).forEach((request, index) => {
+    requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request, index) => {
       request.flush(folders[index] ?? {});
     });
-    requests[SEEDED_FOLDER_COUNT].flush(app);
+    requests[UPSTREAM_FOLDER_COUNT].flush(app);
   }
 
   afterEach(() => httpMock.verify());
 
-  it('aliases the document tree toggle key from the adf-hx catalogue', () => {
+  /**
+   * Exactly two catalogues per language: the app's own, and satori-ui's, which names controls —
+   * `sat-platform-nav`'s toggle has an empty accessible name without it.
+   */
+  it('fetches the satori-ui catalogue and the app catalogue, and nothing else', () => {
     configure();
-    let merged: Record<string, string> | undefined;
-    loader.getTranslation('en').subscribe((value) => (merged = value));
+    loader.getTranslation('fr').subscribe();
 
-    flushCatalogues([{}, { DOCUMENT_TREE: { 'TOGGLE_ARIA-LABEL': 'Toggle' } }], {});
+    const urls = httpMock
+      .match(() => true)
+      .map((request) => {
+        request.flush({});
+        return request.request.url;
+      });
 
-    expect(merged?.['DOCUMENT_TREE.TOGGLE_ARIA-LABEL ']).toBe('Toggle');
-  });
-
-  it('lets the manifest override an aliased key, so it stays Layer 0 configurable', () => {
-    configure({ 'DOCUMENT_TREE.TOGGLE_ARIA-LABEL ': 'Expand folder' });
-    let merged: Record<string, string> | undefined;
-    loader.getTranslation('en').subscribe((value) => (merged = value));
-
-    flushCatalogues([{}, { DOCUMENT_TREE: { 'TOGGLE_ARIA-LABEL': 'Toggle' } }], {});
-
-    expect(merged?.['DOCUMENT_TREE.TOGGLE_ARIA-LABEL ']).toBe('Expand folder');
+    expect(urls).toEqual([
+      'assets/satori-ui/i18n/fr.json',
+      jasmine.stringMatching(/\/i18n\/fr\.json$/),
+    ]);
+    expect(urls[1]).not.toContain('assets/');
   });
 
   it('applies precedence folders < app catalogue < manifest labels', () => {
@@ -142,8 +93,8 @@ describe('AppTranslateLoader', () => {
     loader.getTranslation('en').subscribe((value) => (merged = value));
 
     const requests = httpMock.match(() => true);
-    requests.slice(0, SEEDED_FOLDER_COUNT).forEach((request) => request.flush({}));
-    requests[SEEDED_FOLDER_COUNT].flush('', { status: 404, statusText: 'Not Found' });
+    requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request) => request.flush({}));
+    requests[UPSTREAM_FOLDER_COUNT].flush('', { status: 404, statusText: 'Not Found' });
 
     expect(merged?.['app.title']).toBe(EN_FALLBACK_TRANSLATIONS['app.title']);
   });
@@ -160,19 +111,11 @@ describe('AppTranslateLoader', () => {
     loader.getTranslation('en').subscribe((value) => (merged = value));
 
     const requests = httpMock.match(() => true);
-    requests.slice(0, SEEDED_FOLDER_COUNT).forEach((request) => request.flush({}));
-    requests[SEEDED_FOLDER_COUNT].flush('', { status: 500, statusText: 'Server Error' });
+    requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request) => request.flush({}));
+    requests[UPSTREAM_FOLDER_COUNT].flush('', { status: 500, statusText: 'Server Error' });
 
     expect(merged?.['settings.themes.search']).toBe('Search themes');
     expect(merged?.['document-detail.hide-details']).toBe('Hide details');
     expect(merged?.['document-detail.show-details']).toBe('Show details');
-  });
-
-  it('exposes the merged folder catalogue to adf-core synchronously once loaded', () => {
-    configure();
-    loader.getTranslation('en').subscribe();
-    flushCatalogues([{ DOCUMENT_TREE: { ROOT: 'Home' } }], {});
-
-    expect(loader.getFullTranslationJSON('en')['DOCUMENT_TREE.ROOT']).toBe('Home');
   });
 });

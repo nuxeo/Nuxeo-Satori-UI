@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { filterEnabled, sortByOrder } from '@alfresco/adf-extensions';
 
+import { filterEnabled, sortByOrder } from './extension-element';
 import {
   EMPTY_EXTENSION_RULE_CONTEXT,
   ExtensionRuleRegistry,
@@ -42,9 +42,9 @@ export const NO_EXTENSION_SLOT_OVERRIDES: ExtensionSlotOverrides = { byId: {}, a
  * the nine Beta slots extensible to a tenth without touching them — see
  * `extension-slots.ts` and the additivity spec.
  *
- * `filterEnabled` and `sortByOrder` come from `@alfresco/adf-extensions`, so
- * `disabled` and `order` mean exactly what they mean in an ACA manifest rather
- * than approximately.
+ * `filterEnabled` and `sortByOrder` reproduce ACA's, pinned case by case to
+ * `@alfresco/adf-extensions@9.0.0`, so `disabled` and `order` mean exactly
+ * what they mean in an ACA manifest rather than approximately.
  */
 @Injectable({ providedIn: 'root' })
 export class ExtensionSlotRegistry {

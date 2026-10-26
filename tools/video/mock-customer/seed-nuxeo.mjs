@@ -17,33 +17,38 @@
  * - `/default-domain/workspaces/acme-insurance` — the customer's workspace, with
  *   three folders and a dozen documents carrying real Dublin Core metadata and
  *   text blobs, so full-text search has something to find.
- * - `/default-domain/config/satori-template` — the Layer 1 manifest document.
- *   Created **empty** on purpose: the screencast fills it in mid-recording so
- *   the "before" state is honest.
  *
- * Idempotent: both trees are deleted and rebuilt on every run.
+ * Nothing about configuration: the manifest the screencast applies is a fragment
+ * the scene serves beside the bundle, as a configuration package's would be, not
+ * a document in the repository.
+ *
+ * Idempotent: the workspace is deleted and rebuilt on every run.
  *
  * Usage:
  *   node tools/video/mock-customer/seed-nuxeo.mjs
  *   node tools/video/mock-customer/seed-nuxeo.mjs --check   # verify only
  *
- * Credentials come from `NUXEO_USER` / `NUXEO_PASS`, which default to the local
- * Docker instance's `Administrator` as documented in CLAUDE.md. Nothing here is
+ * Credentials come from `NUXEO_USER` / `NUXEO_PASS`, with no default. They used to
+ * fall back to the local Docker instance's administrator pair, citing CLAUDE.md,
+ * which said the same; both were corrected by NXSAT-649. Run directly, a missing
+ * pair exits 2 before anything is written; imported (scene 3 calls `check()`),
+ * the first request throws instead, so the caller decides. Nothing here is
  * ever pointed at a deployed server: `NUXEO_BASE` defaults to localhost:8080 and
  * the script refuses a non-loopback host unless `--allow-remote` is passed.
  */
 
+import {
+  basicAuthorization,
+  nuxeoCredentialsOrExit,
+  requireNuxeoCredentials,
+} from '../../../scripts/beta-harness/nuxeo-credentials.mjs';
+
 const BASE = (process.env['NUXEO_BASE'] ?? 'http://localhost:8080').replace(/\/$/, '');
-const USER = process.env['NUXEO_USER'] ?? 'Administrator';
-const PASS = process.env['NUXEO_PASS'] ?? 'Administrator';
 
 const ARGS = new Set(process.argv.slice(2));
 
 /** Where the customer's content lives. */
 export const ACME_WORKSPACE_PATH = '/default-domain/workspaces/acme-insurance';
-/** Where the Layer 1 manifest document lives — matches `bootstrap.json`. */
-export const MANIFEST_DOCUMENT_PATH = '/default-domain/config/satori-template';
-const MANIFEST_PROPERTY = 'note:note';
 
 function assertLocal() {
   const host = new URL(BASE).hostname;
@@ -55,7 +60,10 @@ function assertLocal() {
   }
 }
 
-const authHeader = () => `Basic ${Buffer.from(`${USER}:${PASS}`).toString('base64')}`;
+// Read per request, not at import: scene 3 imports this module for `check()`, and an import that
+// exits would take the recording with it.
+const authHeader = () =>
+  basicAuthorization(requireNuxeoCredentials('seed or check the mock-customer content'));
 
 async function api(path, { method = 'GET', body, headers = {}, raw = false } = {}) {
   const res = await fetch(`${BASE}/nuxeo/api/v1${path}`, {
@@ -386,60 +394,7 @@ async function seed() {
     console.log(`  ${folder.title}: ${folder.files.length + folder.notes.length} documents`);
   }
 
-  // ---- the Layer 1 manifest document, deliberately empty --------------------
-  if (!(await exists('/default-domain/config'))) {
-    await createChild('/default-domain', {
-      type: 'Folder',
-      name: 'config',
-      properties: { 'dc:title': 'Configuration' },
-    });
-  }
-  await removeIfPresent(MANIFEST_DOCUMENT_PATH);
-  await createChild('/default-domain/config', {
-    type: 'Note',
-    name: 'satori-template',
-    properties: {
-      'dc:title': 'Satori template runtime manifest',
-      // Empty, not absent. An absent document and an empty one take different
-      // code paths in `AppConfigService`, and the screencast needs the one where
-      // the document exists and simply has nothing to say yet.
-      'note:note': '',
-      'note:mime_type': 'text/plain',
-    },
-  });
-  console.log(`  created ${MANIFEST_DOCUMENT_PATH} (empty manifest)`);
-
   return documents;
-}
-
-/**
- * Write a manifest into the Nuxeo document. Used by the scene, mid-recording.
- *
- * A string argument is written **verbatim**, and that is not a convenience. The
- * first version stringified unconditionally, so `clearManifest()` stored the two
- * characters `""` rather than nothing. `parseRuntimeManifest` then parsed that
- * successfully, returned the default manifest, and `AppConfigService` recorded the
- * source as `nuxeo-document` — so the application reported a live Layer 1 manifest
- * before one existed, and the recording's before/after was ruined. Caught by
- * reading the shell's own diagnostics line in an extracted frame.
- */
-export async function writeManifest(manifest) {
-  const value = typeof manifest === 'string' ? manifest : JSON.stringify(manifest, null, 2);
-  const doc = await api(`/path${MANIFEST_DOCUMENT_PATH}`, { headers: { properties: '*' } });
-  await api(`/id/${doc['uid']}`, {
-    method: 'PUT',
-    headers: { properties: '*' },
-    body: {
-      'entity-type': 'document',
-      uid: doc['uid'],
-      properties: { [MANIFEST_PROPERTY]: value },
-    },
-  });
-}
-
-/** Empty the manifest document again, so a re-run starts from the same place. */
-export async function clearManifest() {
-  await writeManifest('');
 }
 
 /**
@@ -469,20 +424,18 @@ export async function check({ quiet = false } = {}) {
     await new Promise((r) => setTimeout(r, 1000));
   }
 
-  const manifestReadable = await exists(MANIFEST_DOCUMENT_PATH);
-
   if (!quiet) {
     console.log(`  folders: ${folders.join(', ')}`);
     console.log(`  full-text "hurricane" → ${hits.length} hit(s): ${hits.join(' | ')}`);
-    console.log(`  manifest document present: ${manifestReadable}`);
   }
 
-  const ok = folders.length === 3 && hits.length >= 2 && manifestReadable;
+  const ok = folders.length === 3 && hits.length >= 2;
   if (!ok) throw new Error('seed verification failed — see the lines above');
   return { folders, hits };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  nuxeoCredentialsOrExit('seed or check the mock-customer content');
   if (ARGS.has('--check')) {
     console.log(`\nChecking ${BASE}${ACME_WORKSPACE_PATH}`);
     await check();

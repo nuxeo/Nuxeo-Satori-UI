@@ -21,7 +21,7 @@ This guide documents the coding conventions, project structure, and step-by-step
 git clone <repo-url> && cd agentic-ui-poc
 ```
 
-Set a GitHub Packages read token for Hyland/Alfresco scoped packages (required for `@hylandsoftware/satori-ui`, `@hylandsoftware/hxcs-js-client`, and future `@alfresco/*` packages):
+Set a GitHub Packages read token for the Hyland scoped packages (required for `@hylandsoftware/satori-ui` and the Satori fonts, icons and tokens it brings):
 
 ```powershell
 # PowerShell
@@ -29,7 +29,7 @@ $env:SATORI_GH_READONLY_TOKEN = "<github-packages-read-token>"
 npm install
 ```
 
-The root [`.npmrc`](../.npmrc) maps `@hylandsoftware` and `@alfresco` to `https://npm.pkg.github.com` using `SATORI_GH_READONLY_TOKEN`.
+The root [`.npmrc`](../.npmrc) maps `@hylandsoftware` to `https://npm.pkg.github.com` using `SATORI_GH_READONLY_TOKEN`.
 
 ### Start the dev server
 
@@ -111,7 +111,7 @@ All library imports use `@agentic-ui/` aliases defined in `tsconfig.base.json`:
 | Alias                                 | Entry point                                  |
 | ------------------------------------- | -------------------------------------------- |
 | `@agentic-ui/core`                    | `libs/core/src/index.ts`                     |
-| `@nuxeo-satori/platform/ui`           | `libs/shared/ui/src/index.ts`                |
+| `@nuxeo/satori-platform/ui`           | `libs/shared/ui/src/index.ts`                |
 | `@agentic-ui/shared/util`             | `libs/shared/util/src/index.ts`              |
 | `@agentic-ui/feature-browse`          | `libs/features/browse/src/index.ts`          |
 | `@agentic-ui/feature-search`          | `libs/features/search/src/index.ts`          |
@@ -390,7 +390,7 @@ export { MyComponent } from './lib/my-component/my-component.component';
 ### Step 4: Import from consumers
 
 ```typescript
-import { MyComponent } from '@nuxeo-satori/platform/ui';
+import { MyComponent } from '@nuxeo/satori-platform/ui';
 ```
 
 ---
@@ -463,7 +463,7 @@ export class AuthService {
 }
 ```
 
-### Nuxeo client library (`@nuxeo-satori/platform/nuxeo-client`)
+### Nuxeo client library (`@nuxeo/satori-platform/nuxeo-client`)
 
 All Nuxeo REST API services live in `libs/shared/nuxeo-client/`. The library is split by domain:
 
@@ -478,7 +478,7 @@ All Nuxeo REST API services live in `libs/shared/nuxeo-client/`. The library is 
 When adding a new Nuxeo API domain (e.g., workflows, users, audit), create a new service file in `src/lib/services/`, a model file if needed, and re-export from `src/index.ts`. Import in consumers via:
 
 ```typescript
-import { DocumentService, NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentService, NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 ```
 
 ### Signal-based state management

@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { APP_CONFIG_FORMAT, AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import { appConfig } from '../app.config';
 import { AuthService } from '../auth/auth.service';
@@ -53,10 +53,22 @@ describe('AppShellComponent — configured logo (branding.logo)', () => {
 
   async function headerWithBootstrap(body: Record<string, unknown>): Promise<HTMLElement> {
     const fixture = TestBed.createComponent(AppShellComponent);
-    const loaded = TestBed.inject(AppConfigService).loadBootstrap();
+    const loaded = TestBed.inject(AppConfigService).load();
     http
       .match((request) => request.url.endsWith('/agentic-ui-config/bootstrap.json'))
-      .forEach((request) => request.flush(body));
+      .forEach((request) =>
+        request.flush({
+          format: APP_CONFIG_FORMAT,
+          layer: 'bootstrap',
+          fragments: [
+            { name: 'acme', component: 'com.acme', bundle: 'com.acme', source: 'x', content: body },
+          ],
+          diagnostics: [],
+        }),
+      );
+    http
+      .match((request) => request.url.endsWith('/agentic-ui-config/manifest.json'))
+      .forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
     await loaded;
     fixture.detectChanges();
 

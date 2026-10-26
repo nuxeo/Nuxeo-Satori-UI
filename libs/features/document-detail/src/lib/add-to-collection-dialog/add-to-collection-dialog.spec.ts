@@ -8,7 +8,7 @@ import {
   DocumentDetailService,
   type NuxeoDocument,
   type NuxeoDocumentList,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AddToCollectionDialogComponent } from './add-to-collection-dialog';
 

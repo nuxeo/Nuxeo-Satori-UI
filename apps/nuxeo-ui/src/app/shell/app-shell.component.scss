@@ -17,12 +17,17 @@ sat-platform-nav-container.has-selection-topbar {
   height: calc(100% - var(--selection-topbar-height));
 }
 
-:host ::ng-deep sat-platform-nav-list-item.nav-item--clipboard-badge .sat-platform-nav-icon {
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+:host ::ng-deep a[sat-platform-nav-menu-item].nav-item--clipboard-badge .sat-platform-nav-icon {
   position: relative;
   overflow: visible;
 }
 
-:host ::ng-deep sat-platform-nav-list-item.nav-item--clipboard-badge .sat-platform-nav-icon::after {
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+:host
+  ::ng-deep
+  a[sat-platform-nav-menu-item].nav-item--clipboard-badge
+  .sat-platform-nav-icon::after {
   content: var(--nav-clipboard-count);
   position: absolute;
   top: -4px;
@@ -54,6 +59,7 @@ sat-platform-nav-container.has-selection-topbar {
   overflow: hidden;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 :host ::ng-deep .nav-drawer-sidenav .mat-drawer-inner-container {
   overflow: hidden !important;
   scrollbar-width: none;
@@ -64,12 +70,14 @@ sat-platform-nav-container.has-selection-topbar {
   }
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 :host ::ng-deep sat-app-header .sat-app-header-leading-container {
   width: 30%;
   max-width: 30%;
   min-width: 0;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 :host ::ng-deep sat-app-header,
 :host ::ng-deep sat-app-header header,
 :host ::ng-deep sat-app-header .sat-app-header-content-container,
@@ -77,6 +85,7 @@ sat-platform-nav-container.has-selection-topbar {
   overflow: visible;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 :host ::ng-deep sat-app-header .sat-app-header-trailing-container {
   position: relative;
   width: 70%;
@@ -208,6 +217,7 @@ sat-platform-nav-container.has-selection-topbar {
 
 // Same IBM `style_focus_visible` constraints as `.header-search-input:focus` above.
 // Chain Material's own classes so this wins over MDC's `outline-style: none` on icon buttons.
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .header-settings-menu-button.mat-mdc-icon-button:focus {
   outline-style: solid;
   outline-width: 2px;
@@ -769,13 +779,7 @@ $ai-radius: 14px;
   }
 }
 
-:host ::ng-deep sat-platform-nav-user-profile mat-icon.app-shell-user-profile-icon {
+:host ::ng-deep button[satPlatformNavUserProfile] mat-icon {
   flex-shrink: 0;
-
-  &::before {
-    content: '\e853';
-    font-family: 'Material Icons';
-    font-size: 24px;
-    line-height: 1;
-  }
+  // NXENG-894 — CSS codepoint workaround removed in NXSAT-673 — now uses svgIcon="user_circle".
 }

@@ -1,21 +1,27 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { RouterOutlet, provideRouter, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import { AppExtensionsService } from './app-extensions.service';
 import { extensionRoutes, provideExtensionRoutes } from './extension-routes';
 import { provideSatoriExtensions } from './provide-satori-extensions';
 
-@Component({ standalone: true, selector: 'lib-test-home', template: 'PACKAGED HOME' })
+@Component({
+  standalone: true,
+  selector: 'lib-test-home',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: 'PACKAGED HOME',
+})
 class HomeComponent {}
 
 @Component({
   standalone: true,
   selector: 'lib-test-shell',
   imports: [RouterOutlet],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<router-outlet />',
 })
 class ShellComponent {}
@@ -23,6 +29,7 @@ class ShellComponent {}
 @Component({
   standalone: true,
   selector: 'lib-test-reports',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="reports">CONTRIBUTED REPORTS PAGE</p>',
 })
 class ReportsComponent {}
@@ -30,7 +37,7 @@ class ReportsComponent {}
 /**
  * A manifest with one `routes` entry, fed the way the product feeds one.
  *
- * `AppExtensionsService` reads `AppConfigService.manifest().extensions`, so
+ * `AppExtensionsService` reads `AppConfigService.manifest().extensionLayers`, so
  * standing in a manifest here exercises the real merge path rather than calling
  * `ExtensionSlotRegistry.register()` directly — which is what a customer cannot
  * do and therefore what this test must not do either.
@@ -38,7 +45,7 @@ class ReportsComponent {}
 function provideManifest(extensions: unknown) {
   return {
     provide: AppConfigService,
-    useValue: { manifest: signal({ extensions }) },
+    useValue: { manifest: signal({ extensionLayers: [extensions] }) },
   };
 }
 

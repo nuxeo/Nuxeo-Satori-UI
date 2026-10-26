@@ -1,9 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
+
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
@@ -82,7 +84,8 @@ function flatten(value: string, backdrop: readonly number[]): number[] {
  */
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, TranslatePipe, testTranslateModule()],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-focus-ring.host.html',
 })
 class NavHostComponent {}
@@ -108,7 +111,7 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
       // Satori's nav translates its collapse/expand tooltips, and ngx-translate is
       // bootstrapped by the application rather than by the component — the same reason
       // `tasks-page.viewer-mime.spec.ts` imports it.
-      imports: [NavHostComponent, TranslateModule.forRoot()],
+      imports: [NavHostComponent, TranslatePipe, testTranslateModule()],
     }).compileComponents();
     originalTheme = document.documentElement.getAttribute('data-app-theme');
     fixture = TestBed.createComponent(NavHostComponent);
@@ -130,7 +133,7 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
 
   function link(navId: 'idle' | 'active'): HTMLElement {
     const el = fixture.nativeElement.querySelector(
-      `sat-platform-nav-list-item[data-nav-id="${navId}"] .sat-platform-nav-item`,
+      `a[sat-platform-nav-menu-item][data-nav-id="${navId}"]`,
     );
     expect(el).withContext(`the ${navId} nav link renders`).toBeTruthy();
     return el as HTMLElement;
@@ -283,9 +286,7 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
       }
       for (const rule of Array.from(rules)) {
         const styleRule = rule as CSSStyleRule;
-        const canonical = styleRule.selectorText
-          ?.replace(/\[_ngcontent-[^\]]+\]/g, '')
-          .trim();
+        const canonical = styleRule.selectorText?.replace(/\[_ngcontent-[^\]]+\]/g, '').trim();
         if (canonical === target) {
           matched = styleRule;
           break;
@@ -293,7 +294,9 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
       }
       if (matched) break;
     }
-    expect(matched).withContext(`stylesheet must contain ${target} without a comma list`).toBeDefined();
+    expect(matched)
+      .withContext(`stylesheet must contain ${target} without a comma list`)
+      .toBeDefined();
     expect(matched!.cssText).toMatch(/outline:\s*2px\s+solid/);
     expect(matched!.cssText).toMatch(/outline-offset:\s*-2px/);
   });
@@ -320,7 +323,8 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
  */
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, TranslatePipe],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-collections-focus-ring.host.html',
 })
 class CollectionsNavHostComponent {}
@@ -356,7 +360,7 @@ describe('platform sidebar nav — Collections link (NXENG-777)', () => {
 
   function collectionsLink(): HTMLElement {
     const el = fixture.nativeElement.querySelector(
-      `sat-platform-nav-list-item[data-nav-id="${COLLECTIONS_NAV_ID}"] .sat-platform-nav-item`,
+      `a[sat-platform-nav-menu-item][data-nav-id="${COLLECTIONS_NAV_ID}"]`,
     );
     expect(el).withContext('Collections nav link renders').toBeTruthy();
     return el as HTMLElement;

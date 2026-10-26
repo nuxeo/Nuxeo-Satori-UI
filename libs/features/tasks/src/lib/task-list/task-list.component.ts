@@ -1,10 +1,10 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { NuxeoTask, TaskService, CURRENT_USERNAME } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoTask, TaskService, CURRENT_USERNAME } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 @Component({
@@ -12,6 +12,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
   standalone: true,
   imports: [TranslatePipe, MatIconModule, MatButtonModule, MatProgressSpinnerModule],
   templateUrl: './task-list.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './task-list.component.scss',
 })
 export class TaskListComponent implements OnInit {

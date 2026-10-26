@@ -1,12 +1,13 @@
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { WidgetContainerComponent } from '@nuxeo-satori/platform/ui';
-import { TranslateModule } from '@ngx-translate/core';
+import { WidgetContainerComponent } from '@nuxeo/satori-platform/ui';
+import { TranslatePipe } from '@ngx-translate/core';
+import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
 @Component({
   standalone: true,
-  imports: [WidgetContainerComponent, TranslateModule],
+  imports: [WidgetContainerComponent, TranslatePipe],
   templateUrl: './dashboard-theme-surfaces.host.html',
   styleUrl: './dashboard-page.component.scss',
 })
@@ -23,7 +24,7 @@ describe('dashboard theme surfaces (NXSAT-215)', () => {
     originalTheme = document.documentElement.getAttribute('data-app-theme');
     originalScheme = document.documentElement.style.colorScheme;
     await TestBed.configureTestingModule({
-      imports: [DashboardThemeSurfacesHostComponent, TranslateModule.forRoot()],
+      imports: [DashboardThemeSurfacesHostComponent, testTranslateModule()],
     }).compileComponents();
     fixture = TestBed.createComponent(DashboardThemeSurfacesHostComponent);
     document.body.appendChild(fixture.nativeElement);

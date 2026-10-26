@@ -1,13 +1,14 @@
-import { Component, inject, computed } from '@angular/core';
+import { Component, inject, computed, ChangeDetectionStrategy } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { SearchService } from '@nuxeo-satori/platform/nuxeo-client';
-import { WidgetGridComponent, WidgetContainerComponent } from '@nuxeo-satori/platform/ui';
+import { SearchService } from '@nuxeo/satori-platform/nuxeo-client';
+import { WidgetGridComponent, WidgetContainerComponent } from '@nuxeo/satori-platform/ui';
 
 @Component({
   selector: 'app-stats',
   standalone: true,
   imports: [WidgetGridComponent, WidgetContainerComponent],
   templateUrl: './stats.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stats.scss',
 })
 export class StatsComponent {

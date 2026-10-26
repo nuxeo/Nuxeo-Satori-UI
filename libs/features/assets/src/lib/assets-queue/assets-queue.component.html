@@ -1,7 +1,7 @@
 <div class="queue-list">
   @if (items().length === 0) {
     <div class="queue-empty">
-      <mat-icon>search_off</mat-icon>
+      <mat-icon svgIcon="search" />
       <p>{{ 'assets.assets-queue.no-asset-results' | translate }}</p>
     </div>
   } @else {
@@ -16,7 +16,7 @@
           @if (thumbnailFor(item.id); as preview) {
             <img [src]="preview" [alt]="item.title" class="queue-item-image" />
           } @else {
-            <mat-icon class="queue-item-icon">{{ item.icon || 'description' }}</mat-icon>
+            <mat-icon class="queue-item-icon" [svgIcon]="item.icon || 'page'" />
           }
         </div>
         <div class="queue-item-content">

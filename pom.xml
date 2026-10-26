@@ -6,7 +6,7 @@
 
   <groupId>org.nuxeo.agentic</groupId>
   <artifactId>nuxeo-agentic-ui-parent</artifactId>
-  <version>2026.0.1-SNAPSHOT</version>
+  <version>2026.0.2-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Nuxeo Agentic UI - Parent</name>
 

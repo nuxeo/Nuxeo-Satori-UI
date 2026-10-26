@@ -1,0 +1,13 @@
+<!--
+  Fixture for panel-close-focus-ring.spec.ts. Renders the real nxs-details-panel the document page
+  uses, with the page's .properties-panel token overrides; Karma locates the close control by its
+  accessible name. Production wiring is asserted in document-detail-panel-close-focus-ring.spec.ts.
+-->
+<nxs-details-panel
+  class="properties-panel"
+  [heading]="heading"
+  [tabs]="views"
+  [closeLabel]="'document-detail.document-detail.close-panel' | translate"
+>
+  <p>Properties</p>
+</nxs-details-panel>

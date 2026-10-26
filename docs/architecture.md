@@ -4,16 +4,16 @@ Nx monorepo: `apps/nuxeo-ui` (shell) and libraries under `libs/`. Path aliases a
 
 ## Stack version (authoritative)
 
-The repo targets **Angular 20.3.x** (`@angular/*` and `@angular/build` in the **20.3** line—see root `package.json`). This document describes that stack. It is **not** aligned with Angular 21 APIs or CLI behavior; if you upgrade major versions, revisit routing, builders, and Material/Satori peer ranges.
+The repo targets **Angular 22.2.x** (`@angular/*` and `@angular/build` in the **22.2** line—see root `package.json`). This document describes that stack. It is **not** aligned with Angular 23 APIs or CLI behavior; if you upgrade major versions, revisit routing, builders, and Material/Satori peer ranges. What the 21 → 22 move changed is in [`angular-22-migration.md`](angular-22-migration.md).
 
 **Tooling (web vs libraries):**
 
 - **`apps/nuxeo-ui`**: Built and served with the root [`angular.json`](../angular.json) and `ng` CLI (`@angular/build:application`). Nx targets in [`apps/nuxeo-ui/project.json`](../apps/nuxeo-ui/project.json) delegate to `ng build` / `ng serve` / `ng test` (Karma) for compatibility with the current Nx + application-builder setup.
-- **Libraries** under `libs/*`: Unit tests use **Vitest** and **Analog** (Angular 20–compatible), not Karma.
+- **Libraries** under `libs/*`: Unit tests use **Vitest** and **Analog** (Angular 22–compatible), not Karma.
 
 The shell uses **Hyland Satori Platform Nav** (`sat-platform-nav-container`, list items, main content with `router-outlet`). Navigation labels and paths are defined in `apps/nuxeo-ui/src/app/platform-nav-items.ts` and stay in the app until another surface needs the same config. With `@hylandsoftware/satori-ui` **0.2.x**, the sidebar product title is whatever Satori renders by default (Figma-specific title may require a newer Satori release or internal customization).
 
-**adf-hx browse POC (NXENG-619 Scope A):** parallel route `/#/browse-adf-hx` uses `libs/shared/adf-hx-bridge` to implement HxPR API tokens over Nuxeo. Production browse (`/#/browse`) remains Satori + Material. See [`libs/shared/adf-hx-bridge/ARCHITECTURE.md`](../libs/shared/adf-hx-bridge/ARCHITECTURE.md) for layers, data flow, routes, and Scope A/B boundaries.
+**adf-hx browse POC — removed:** the parallel `/#/browse-adf-hx` and `/#/search-adf-hx` routes and `libs/shared/adf-hx-bridge`, which implemented HxPR API tokens over Nuxeo for them, were removed on 2026-10-14 (NXSAT-635). Browse is one surface, at `/#/browse`; both old paths redirect with their query string intact (`apps/nuxeo-ui/src/app/retired-routes.ts`).
 
 **Auth / Nuxeo (PoC):** Login, session storage, route guards, and the Nuxeo Basic-auth HTTP interceptor currently live under `apps/nuxeo-ui/src/app/auth/` (and related shell config). Per the layer rules below, these concerns are intended to move into **`libs/core`** and be consumed via `@agentic-ui/core` as the implementation hardens.
 
@@ -47,7 +47,7 @@ Run `npx nx graph` to view the dependency graph. Common commands:
 | Alias                                 | Entry                                        |
 | ------------------------------------- | -------------------------------------------- |
 | `@agentic-ui/core`                    | `libs/core/src/index.ts`                     |
-| `@nuxeo-satori/platform/ui`           | `libs/shared/ui/src/index.ts`                |
+| `@nuxeo/satori-platform/ui`           | `libs/shared/ui/src/index.ts`                |
 | `@agentic-ui/shared/util`             | `libs/shared/util/src/index.ts`              |
 | `@agentic-ui/feature-browse`          | `libs/features/browse/src/index.ts`          |
 | `@agentic-ui/feature-search`          | `libs/features/search/src/index.ts`          |

@@ -1,0 +1,46 @@
+<div class="nxs-drive-dialog__body">
+  @if (checking()) {
+    <h2 mat-dialog-title class="nxs-drive-dialog__name">
+      {{ 'satori-components.drive-dialog.name' | translate }}
+    </h2>
+    <output class="nxs-drive-dialog__checking">
+      <nxs-spinner diameter="32" />
+      <span class="nxs-drive-dialog__checking-text">
+        {{ 'satori-components.drive-dialog.checking' | translate }}
+      </span>
+    </output>
+  } @else {
+    <h2 mat-dialog-title class="nxs-drive-dialog__title">
+      {{ 'satori-components.drive-dialog.title' | translate }}
+    </h2>
+    <table class="nxs-drive-dialog__table">
+      <thead>
+        <tr>
+          <th scope="col">{{ 'satori-components.drive-dialog.platform' | translate }}</th>
+          <th scope="col">{{ 'satori-components.drive-dialog.package' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (pkg of packages; track pkg.platform) {
+          <tr>
+            <td>
+              <span class="nxs-drive-dialog__platform">{{ pkg.platform }}</span>
+            </td>
+            <td>
+              <a
+                class="nxs-drive-dialog__package"
+                [href]="pkg.url"
+                target="_blank"
+                rel="noopener"
+                >{{ pkg.name }}</a
+              >
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <button type="button" class="nxs-drive-dialog__close" (click)="close()">
+      {{ 'satori-components.drive-dialog.close' | translate }}
+    </button>
+  }
+</div>

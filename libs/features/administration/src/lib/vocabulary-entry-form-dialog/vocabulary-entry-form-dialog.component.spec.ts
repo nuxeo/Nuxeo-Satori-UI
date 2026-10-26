@@ -9,7 +9,7 @@ import {
   DirectoryService,
   type DirectoryMetadata,
   type ManagedDirectoryEntry,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 import {

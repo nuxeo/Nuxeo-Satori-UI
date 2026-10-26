@@ -1,0 +1,113 @@
+<h2 mat-dialog-title>{{ 'satori-components.permission-dialogs.share.title' | translate }}</h2>
+
+<mat-dialog-content class="nxs-share-external-dialog__content">
+  <mat-form-field appearance="outline">
+    <mat-label>{{ 'satori-components.permission-dialogs.share.email' | translate }}</mat-label>
+    <input
+      #emailBox
+      matInput
+      type="email"
+      autocomplete="off"
+      required
+      [placeholder]="'satori-components.permission-dialogs.share.email-placeholder' | translate"
+      [value]="email()"
+      [errorStateMatcher]="emailError"
+      (input)="email.set(emailBox.value)"
+      (blur)="emailLeft.set(true)"
+    />
+    <mat-error>{{
+      'satori-components.permission-dialogs.share.email-invalid' | translate
+    }}</mat-error>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>{{ 'satori-components.permission-dialogs.right' | translate }}</mat-label>
+    <mat-select [value]="right()" (valueChange)="right.set($event)">
+      @for (permission of rights; track permission) {
+        <mat-option [value]="permission">{{ label(permission) }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <div class="nxs-share-external-dialog__dates">
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'satori-components.permission-dialogs.from' | translate }}</mat-label>
+      <input
+        matInput
+        [matDatepicker]="beginPicker"
+        [value]="beginField()"
+        (dateChange)="begin.set(fieldDay($event.value))"
+      />
+      <mat-datepicker-toggle matIconSuffix [for]="beginPicker" />
+      <mat-datepicker #beginPicker />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'satori-components.permission-dialogs.to' | translate }}</mat-label>
+      <input
+        matInput
+        required
+        [matDatepicker]="endPicker"
+        [value]="endField()"
+        (dateChange)="end.set(fieldDay($event.value))"
+      />
+      <mat-datepicker-toggle matIconSuffix [for]="endPicker" />
+      <mat-datepicker #endPicker />
+    </mat-form-field>
+  </div>
+  @if (endBeforeBegin()) {
+    <p class="nxs-share-external-dialog__error" role="alert">
+      {{ 'satori-components.permission-dialogs.end-before-begin' | translate }}
+    </p>
+  }
+
+  <mat-form-field appearance="outline">
+    <mat-label>{{ 'satori-components.permission-dialogs.comment' | translate }}</mat-label>
+    <textarea
+      #commentBox
+      matInput
+      rows="2"
+      [placeholder]="'satori-components.permission-dialogs.comment-placeholder' | translate"
+      [value]="comment()"
+      (input)="comment.set(commentBox.value)"
+    ></textarea>
+    <mat-hint>{{ mailHint | translate }}</mat-hint>
+  </mat-form-field>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" [disabled]="!!saving()" (click)="cancel()">
+    {{ 'satori-components.permission-dialogs.cancel' | translate }}
+  </button>
+  <button
+    mat-stroked-button
+    type="button"
+    class="nxs-share-external-dialog__another"
+    [disabled]="!valid() || !!saving()"
+    (click)="create(true)"
+  >
+    @if (saving() === 'another') {
+      <nxs-spinner
+        diameter="18"
+        [label]="'satori-components.permission-dialogs.share.saving' | translate"
+      />
+    } @else {
+      {{ 'satori-components.permission-dialogs.share.create-another' | translate }}
+    }
+  </button>
+  <button
+    mat-flat-button
+    type="button"
+    class="nxs-share-external-dialog__create"
+    [disabled]="!valid() || !!saving()"
+    (click)="create(false)"
+  >
+    @if (saving() === 'create') {
+      <nxs-spinner
+        diameter="18"
+        [label]="'satori-components.permission-dialogs.share.saving' | translate"
+      />
+    } @else {
+      {{ 'satori-components.permission-dialogs.share.create' | translate }}
+    }
+  </button>
+</mat-dialog-actions>

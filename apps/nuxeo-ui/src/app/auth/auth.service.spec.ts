@@ -6,7 +6,7 @@ import {
   SelectionService,
   BrowseContextService,
   ClipboardTargetService,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { AuthService } from './auth.service';
 import { testTranslateModule } from '../i18n/translate-testing';
 

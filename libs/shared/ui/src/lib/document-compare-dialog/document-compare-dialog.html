@@ -11,7 +11,7 @@
       </mat-select>
     </mat-form-field>
 
-    <mat-icon class="compare-swap-icon" aria-hidden="true">swap_horiz</mat-icon>
+    <mat-icon class="compare-swap-icon" aria-hidden="true" svgIcon="switch_camera" />
 
     <mat-form-field appearance="outline" subscriptSizing="dynamic" class="compare-select">
       <mat-label>{{ 'shared-ui.document-compare-dialog.document-2' | translate }}</mat-label>
@@ -34,9 +34,9 @@
 
   @if (loading()) {
     <div class="compare-loading">
-      <mat-spinner
+      <nxs-spinner
         diameter="32"
-        [attr.aria-label]="'shared-ui.document-compare-dialog.loading' | translate"
+        [label]="'shared-ui.document-compare-dialog.loading' | translate"
       />
     </div>
   } @else if (error()) {
@@ -55,7 +55,7 @@
         <details class="compare-section" open>
           <summary class="compare-section-header">
             <span class="compare-section-title">{{ section.label }}</span>
-            <mat-icon class="compare-section-chevron">expand_more</mat-icon>
+            <mat-icon class="compare-section-chevron" svgIcon="chevron_down" />
           </summary>
 
           <div class="compare-section-body">

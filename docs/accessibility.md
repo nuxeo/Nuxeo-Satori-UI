@@ -32,17 +32,42 @@ thing that turns a run red and the number anyone quotes.
 | **a11y-scout**       | `npm run a11y:scan -- surfaces` (routes), `npm run a11y:scan -- states` (interaction states), `npm run a11y:scan -- modes` (display modes), `npm run a11y:scan -- journey` (per-screen) | Keyboard traps, focus order, focus visibility, reflow, AI semantics | 26.8, 25.3, 19.5 and 70.3 min, all measured |
 | **Manual**           | —                                                                                                                                                                                       | Everything automation cannot decide                                 | per release                                 |
 
+**Observation outside the four layers: the component library's Storybook.** Its accessibility
+panel (`@storybook/addon-a11y`) runs axe over every story of `libs/shared/satori-components`. It owns
+no verdict. `.storybook/preview.ts` sets `a11y.test` to `todo`, which reports a violation as a
+warning rather than failing the story. CI's Storybook interaction runner
+(`scripts/storybook-interactions.mjs`) runs every story, play function included, and prints how many
+stories the panel's axe pass found violations in — a count, never a failure. Treat what it shows as a
+cross-check: triage a finding against the axe runtime layer, as for any disagreement below. The lock resolves
+its `axe-core` to the same 4.13.0 that `a11y/versions.mjs` records as the baseline engine, so a
+difference between the two is not an engine difference.
+
+**Not an accessibility verdict either: the dialog layout check.** The same runner fails a
+`Dialogs/` story whose preview is not laid out as MatDialog lays the dialog out in the application,
+at 1280 px and at 320 px (`scripts/storybook-dialog-layout.mjs`, its negative controls in
+`storybook-dialog-layout.selftest.mjs`). Some of what it measures has an accessibility name, such
+as a sideways scroll at 320 px or a focus indicator painting outside the dialog, but the verdict it
+owns is narrower: that a preview shows the dialog a page opens. Reflow (1.4.10) and focus visibility
+stay a11y-scout's, on the application's screens; a preview that fits 320 px says nothing about a
+route that opens it.
+
 ### Why axe is owned by `phase-6-a11y.mjs` and not by a11y-scout
 
 Both run axe, so one of them had to give it up. phase-6 keeps it for three reasons:
 
-1. **It was driven to zero, and is one fix from zero again.** Seven rule classes and 77
+1. **It was driven to zero, and is back at zero.** Seven rule classes and 77
    violating nodes were cleared to empty `KNOWN_VIOLATIONS` and make the verdict
-   unconditional. That zero has since gone stale — two `color-contrast` nodes on `/#/tasks`
-   still fail under phase-6's own tags as of 2026-09-30; see
-   [The disagreement](#the-disagreement--resolved-2026-09-11-against-phase-6). The remedy is
-   to fix those and re-measure phase-6, not to move the verdict to a scanner with 22
-   untriaged axe findings.
+   unconditional. That zero went stale — two `color-contrast` nodes on `/#/tasks`
+   still failed under phase-6's own tags as of 2026-09-30; see
+   [The disagreement](#the-disagreement--resolved-2026-09-11-against-phase-6). Those two were
+   `.task-due-prefix` in the nav drawer's task list, taking its colour from
+   `--mat-sys-outline`: measured 4.25:1 on `--mat-sys-surface` (`rgb(249, 249, 252)`) against
+   1.4.3's 4.5:1. Both reported nodes sit on that background — `.task-item.active` differs only
+   by an inset box-shadow, not its fill. Fixed under NXSAT-647 by moving to
+   `--mat-sys-on-surface-variant` (8.93:1), and phase-6 re-measured at **35/35, `verdict PASS`**
+   on 2026-10-22.
+   The remedy was to fix those and re-measure phase-6, not to move the verdict to a scanner
+   with 22 untriaged axe findings.
 2. **It depends on a public package.** `@axe-core/playwright` is on the public registry.
    a11y-scout is distributed as hand-passed tarballs that no registry can serve. A
    customer-shippable product should not have its conformance claim depend on a file
@@ -94,6 +119,60 @@ verdict.
 | Reflow (1.4.10)                                                        | a11y-scout      | Narrow-viewport geometry                                                                                           |
 | Content quality — meaningless `alt`, vague headings, generic link text | a11y-scout (AI) | Needs a real LLM; skipped in mock mode, so empty means _not measured_                                              |
 | Screen-reader output, cognitive load, focus _appropriateness_          | Manual          | No tool decides these                                                                                              |
+
+### Component specs are a declared cross-check, not a fifth layer
+
+Vitest specs across the repository assert accessibility properties directly — nine in
+`libs/shared/ui/src/lib/document-viewer/` alone, covering label-in-name, focus rings, label
+contrast and frame titles. They are **not** in the table above and must not be read into it.
+The split is:
+
+- **The four layers own the verdict.** The WCAG 2.1 AA number this product publishes comes from
+  the axe runtime layer and nowhere else. A component spec never contributes to it.
+- **A component spec owns a code invariant** — that a named key is bound at a named site and
+  resolves to real words. It runs without a browser, so it cannot judge conformance and does not
+  claim to.
+
+That is an overlap in _observation_, which this standard permits and which is kept here
+deliberately, for a reason the `frame-title` case demonstrates: **the runtime layer cannot reach
+the state the defect lives in.** The viewer's ARender frame renders only when
+`integrations.arender` is in the served configuration. No CI run configures it, so axe has never
+had the node to judge, and the frame went untitled through every green accessibility gate —
+`frame-title` was enabled in both tag sets the whole time. "Extend the owner instead" was not
+available: a check added to the phase-6 harness for that frame would never execute.
+
+The rule this implies, and the one to apply to the next such spec: a component spec is
+justified when the owning layer **structurally cannot** reach the state, and it must assert the
+invariant rather than restate the conformance verdict. If the owning layer can reach it, extend
+the owner.
+
+`libs/shared/satori-components/src/lib/named-colors.spec.ts` is the second case. It holds the
+built-in avatar's and tag's eight named colours at 4.5:1 in the Material themes this repository
+compiles, because no screen renders those components in every colour — screens use Satori's — so
+the axe layer has no node to judge. It computes from the palette and the compiled theme values; a
+host's own `--nxs-*` colours are outside it, and the published WCAG number still comes from axe.
+
+### A static rule for this defect class was attempted and withdrawn
+
+The `--mat-sys-outline`-as-text-colour defect fixed under NXSAT-647 resists being found by the
+runtime layer, because axe only judges what is rendered while it is scanning: of four measured
+instances, the axe-driven sweep found the two that were on screen and left `.task-due-prefix`
+(which needs a task with a due date) and `.expired-sep` (in a drawer panel phase-6 never opens).
+
+A diff-scoped guardrail was therefore written to forbid the token as a text `color`, and
+**withdrawn before merge**. Over seven review rounds it produced ten valid findings, every one in
+its text matching rather than in the accessibility fix: a declaration split across lines, a
+`var()` fallback moving the closing line, a `style` attribute allowed to omit its last semicolon,
+an HTML comment holding retired markup, element text containing the opt-out word, a token inside
+`content: "…"`, an opt-out read from a selector name, `Array.from` counting code points where the
+offsets were code units, a Sass `$color:` assignment, a Sass map entry, and SCSS property nesting
+— where `border: { color: … }` **is** `border-color`, a correct non-text use the rule called a
+violation.
+
+Seven consecutive rounds in one class is a statement about the approach: the rule needs a real
+Sass parser (`postcss-scss`), not a regex, and that is tracked as **NXSAT-709**. Recorded here so the
+next attempt starts from the ten known cases and their controls rather than from scratch. The
+WCAG verdict is unaffected either way — it belongs to axe, and `phase-6-a11y` is `PASS 35/35`.
 
 ## Baselines and suppression
 
@@ -173,20 +252,58 @@ Stated explicitly, because "WCAG 2.1 AA met" is a claim whose scope is what make
   renders a DOM attribute literally named `attr.aria-label`, leaving the control unnamed. None
   of the eleven template rules catches it; verified against the one instance in this repo.
 - **Screen-reader output.** No layer tests it.
-- **Seven routes no runtime layer visits:** `/#/contracts`, `/#/search-adf-hx` and the five
-  `/#/settings/*` pages (Nuxeo Drive, profile, authorized applications, cloud services, themes).
-  Contracts was dropped from the journey on purpose — see "Fifteen screens" below.
+- **The viewer's ARender annotation frame.** It renders only when `integrations.arender` is in
+  the served configuration, which no CI run sets, so no runtime layer has ever scanned it. This
+  is how it went untitled past `frame-title` in both tag sets; a component spec now asserts the
+  title, but the frame itself remains unscanned by axe. The viewer's `pdf`, `pdfRendition` and
+  `srcdoc` note frames are reachable in principle, but neither phase-6 visit targets them: one
+  opens a Picture, the other any File with a main blob, so whether a `pdf` frame is ever scanned
+  depends on what the test repository happens to hold rather than on anything the journey asserts.
+- **Six routes no runtime layer visits:** `/#/contracts` and the five `/#/settings/*` pages
+  (Nuxeo Drive, profile, authorized applications, cloud services, themes). Contracts was dropped
+  from the journey on purpose — see "Fifteen screens" below. `/#/search-adf-hx` was the seventh
+  until the adf-hx routes were retired on 2026-10-14; it and `/#/browse-adf-hx` now redirect to
+  `/#/search` and `/#/browse`, which the surfaces and display-modes suites scan, so both suites
+  dropped their `/#/browse-adf-hx` row rather than moved it.
 - **Populated tasks and expired-queue screens.** The journey scans their empty states on a server
   with neither, and says so in its output; a task form or an expired card has never been scanned.
 - **Horizontal scrolling inside a region at 320px.** Reflow checks the document's `scrollWidth`
   only, and overflow inside a scroll container never reaches it — search and trash results and
   the browse table wrapper all scroll inside their own box. See "Reflow measured the nav drawer"
-  below.
+  below. The component library's dialog previews are measured for it, as layout rather than as a
+  verdict, by the dialog layout check above; the application's dialogs are not.
 - **The narrow layout as a user first sees it.** At 320px every route `reflow-probe.mjs`
   measured — six, on 2026-10-02 — opens behind the nav drawer with the screen 0px wide. The probe
   measures the screen only after closing the drawer; a11y-scout's reflow check does not close
   it. Card view, and the journey's screens other than those six, have never been measured at
   320px with the drawer closed.
+
+## Storybook observations — triaged 2026-10-15
+
+The interaction runner's axe pass flagged eight stories. None is a best-practice-only finding:
+each fails under the runtime layer's own tags (`wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, axe-core
+4.13.0). The runtime layer has said nothing about any of them because none of its steps reaches
+where they render, so each was measured again with its rules in the running app, signed in and
+checked against `/me`.
+
+| Finding                                                                           | Stories                                                                                  | Where the app renders it                                               | With the runtime layer's rules, in the app                                                                                  | Verdict                                                                                            |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `aria-required-children` (critical, 1.3.1): the combobox sits inside the `grid`   | Tag input: Adding tags, Disabled, With tags. Vocabulary select: Several from a hierarchy | Nowhere yet: no screen uses either picker                              | Not reachable                                                                                                               | A real defect in both components. Fix it before a screen adopts them                               |
+| `aria-required-children` (critical, 1.3.1): the text input sits inside the `grid` | Metadata editor: As tabs, Customer type, Saving                                          | Document detail's Edit dialog, for a field holding a list of free text | Edit on a File: no chip grid. Its fields are title, description, nature, subjects, coverage and expiry; none is such a list | A real defect, latent with the default types. A customer type with a free-text list field shows it |
+| `color-contrast` (serious, 1.4.3): 3.11:1 on the disabled dropzone's text         | Dropzone: Disabled                                                                       | Browse, Create / Import, Import tab, while an import is in flight      | 3.12:1, the same failure                                                                                                    | Real in the app while an import runs. Idle, the same dialog is clean                               |
+
+- **The chip grid.** Material's `mat-chip-grid` has the `grid` role, which may hold only rows, and
+  the three components put their input inside it. `nxs-tag-editor` already keeps its input outside
+  its grid for this rule; the three components above have not followed it yet.
+- **The dropzone.** WCAG 1.4.3 does not apply to an inactive component's text, but nothing marks the
+  text inactive: the host's `opacity: 0.6` dims a plain `<span>`, and only the button and the hidden
+  file input are disabled. The runtime layer would fail it if it reached the state, so the fix
+  belongs in the component rather than in a suppression: keep the text at full contrast and let the
+  disabled button and the icon carry the state.
+- **Found on the way, not a Storybook observation.** Document detail for a File without a main
+  file shows its viewer placeholder at 2.72:1 (`color-contrast`, `.viewer-placeholder > p`,
+  `#999999` on `#fafafa`). Neither phase-6 visit sees it: one opens a Picture, the other a File
+  with a main blob.
 
 ## The disagreement — resolved 2026-09-11, against phase-6
 
@@ -498,7 +615,7 @@ renders and an absent host — and to pass with the same loader hidden.
 surfaces and display-modes suites already scan `/#/knowledge-discovery`. `/#/contracts` was
 dropped: it is a component showcase built on mock data (`Contract ABC-123.pdf`), reachable only by
 URL or through a customer manifest's navbar entry, and its findings would belong to the shared
-`@nuxeo-satori/platform/ui` dialogs it demonstrates rather than to a screen anyone owns. See
+`@nuxeo/satori-platform/ui` dialogs it demonstrates rather than to a screen anyone owns. See
 "What nothing covers".
 
 ### The whole journey re-measured 2026-09-22, and most of it is fixed
@@ -606,9 +723,8 @@ It began in
 `journey` alone, and the diagnostics kept a fixed 1.2-second pause for longer still — which on
 hash routes was the only wait they had, because a `goto` to another `/#/…` is a same-document
 navigation and `networkidle` resolves at once. What it cannot see is a loading state carrying
-none of those markers — on `/#/browse-adf-hx`, whatever upstream `hxp-document-tree` shows while
-it loads, if it is not one of them — and that is only missed if it outlasts the quiet window
-without the DOM changing.
+none of those markers, and that is only missed if it outlasts the quiet window without the DOM
+changing.
 
 **Verified reproducible afterwards:** two further runs against the same uid produced 24 findings
 each, identical on rule _and_ selector, with all seven tree toggles reported. Two runs is not a
@@ -681,18 +797,19 @@ hard requirement for the keyboard and focus checks.
 The standard is written; the code does not fully implement it yet. Gaps, in the order they
 should be closed:
 
-| #   | Gap                                                                                                  | Status                                                                                                                        |
-| --- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 1   | The axe disagreement                                                                                 | **Resolved** 2026-09-11 — a11y-scout was right, phase-6 was stale                                                             |
-| 1a  | Blocking nodes phase-6 claims do not exist: `button-name` ×2 on browse, `color-contrast` ×2 on tasks | **Open, halved** — browse fixed by `NXSAT-227` (0 on 2026-09-30); tasks ×2 still real, so the published number is still wrong |
-| 1b  | Six `color-contrast` findings that reproduce under neither harness; state-dependent                  | **Open** — reproduce the state before judging them                                                                            |
-| 2   | a11y-scout's verdict does not filter `source !== 'axe'`; it reports every finding equally            | **Open**                                                                                                                      |
-| 3   | Findings are untriaged (81 in the first baseline), so `failOnBlockers` is `false` everywhere         | **Open** — a gate red on its first run for untriaged reasons is one people learn to ignore                                    |
-| 4   | a11y-scout has no baseline file; phase-6 uses a rule-id array rather than the keyed-count shape      | **Open**                                                                                                                      |
-| 5   | phase-6 scans `/#/collections`, which renders nothing, without a selector assertion                  | **Confirmed** — probe written and red; the fix to phase-6 is still open                                                       |
-| 6   | Ownership is documented but not enforced by anything executable                                      | **Partly closed** — `a11y/diagnostics/route-render-check.mjs` enforces the "a scan must have something to scan" half          |
+| #   | Gap                                                                                                  | Status                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | The axe disagreement                                                                                 | **Resolved** 2026-09-11 — a11y-scout was right, phase-6 was stale                                                                                                                                                                                                                                                                                                                                      |
+| 1a  | Blocking nodes phase-6 claims do not exist: `button-name` ×2 on browse, `color-contrast` ×2 on tasks | **Resolved** 2026-10-22 — browse fixed by `NXSAT-227` (0 on 2026-09-30); the tasks ×2 were `.task-due-prefix` on `--mat-sys-outline` at 4.25:1 against 1.4.3's 4.5:1, fixed under `NXSAT-647`, phase-6 re-measured 35/35 `PASS`                                                                                                                                                                        |
+| 1b  | Six `color-contrast` findings that reproduce under neither harness; state-dependent                  | **Open** — reproduce the state before judging them                                                                                                                                                                                                                                                                                                                                                     |
+| 2   | a11y-scout's verdict does not filter `source !== 'axe'`; it reports every finding equally            | **Open**                                                                                                                                                                                                                                                                                                                                                                                               |
+| 3   | Findings are untriaged (81 in the first baseline), so `failOnBlockers` is `false` everywhere         | **Open** — a gate red on its first run for untriaged reasons is one people learn to ignore                                                                                                                                                                                                                                                                                                             |
+| 4   | a11y-scout has no baseline file; phase-6 uses a rule-id array rather than the keyed-count shape      | **Open**                                                                                                                                                                                                                                                                                                                                                                                               |
+| 5   | phase-6 scans `/#/collections`, which renders nothing, without a selector assertion                  | **Confirmed** — probe written and red; the fix to phase-6 is still open                                                                                                                                                                                                                                                                                                                                |
+| 6   | Ownership is documented but not enforced by anything executable                                      | **Partly closed** — `a11y/diagnostics/route-render-check.mjs` enforces the "a scan must have something to scan" half                                                                                                                                                                                                                                                                                   |
+| 7   | Three untriaged text uses of `--mat-sys-outline`, in states no harness renders                       | **Open** — `tasks-page.component.scss:312` (`.graph-empty`, 0.82rem), `:569` (`.dropdown-id`, 0.72rem) and `kd-citation-dialog.scss:129` (`.__mime`, 11px). Found by token search under `NXSAT-647`, not by a scan; each needs its background measured in the state that renders it before it is called a violation. `:281` was checked and is an 18px icon, so 1.4.11's 3:1 applies and it is correct |
 
-Do not describe accessibility as standardised until rows 1a, 2 and 5 are closed. Rows 3 and 4
+Do not describe accessibility as standardised until rows 2 and 5 are closed. Rows 3 and 4
 depend on triage and are expected to take longer.
 
 ## The verification scripts

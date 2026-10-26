@@ -19,9 +19,16 @@ node -e "require.resolve('@playwright/test')" 2>/dev/null && echo available || e
 # if missing (deliberately untracked, so CI installs stay unaffected):
 npm install --no-save @playwright/test && npx playwright install chromium
 
+export NUXEO_USER=<user> NUXEO_PASS=<password>   # required — there is no default
 npm run beta:backend     # start nuxeo + nuxeo-opensearch, wait for the REST API
 npx nx serve nuxeo-ui    # separate terminal, must be running
 ```
+
+**The credentials have no default.** Unset, `beta:backend` exits **2** (precondition not met),
+and so does `beta:evidence` for any steps file that needs them, before a browser opens — fix the
+environment, not the code. A steps file that needs no backend says so with
+`export const skipHttpCredentials = true` and runs without them;
+`git grep -l skipHttpCredentials scripts/beta-harness/steps` lists which do.
 
 **Check the backend before diagnosing selector failures.** A stopped container
 produces a dozen scattered "selector not visible" reds that read exactly like
@@ -39,11 +46,11 @@ Copy `scripts/beta-harness/steps/_template.mjs` to
 
 ```js
 export default async function run(page, h) {
-  h.step('Document list shows the Modified By column');
+  h.step('Document list shows the Last Contributor column');
   await h.login();
-  await h.goTo('/#/browse-adf-hx');
-  await h.expectVisible('document list rendered', 'hxp-document-list');
-  await h.expectText('Modified By column present', 'hxp-document-list', 'Modified By');
+  await h.goTo('/#/browse');
+  await h.expectVisible('document list rendered', 'nxs-document-list');
+  await h.expectText('Last Contributor column present', 'nxs-document-list', 'Last Contributor');
   await h.screenshot('document-list-columns');
 
   h.step('Health');
@@ -128,15 +135,16 @@ files. Quote the verdict line verbatim.
 
 ## Common problems
 
-| Symptom                                   | Cause                                                                                                    |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `ERR_CONNECTION_REFUSED`                  | Dev server not running.                                                                                  |
-| Many scattered "selector not visible"     | Backend down before you suspect a component. `npm run beta:backend -- --check`.                          |
-| Login appears to work but pages are empty | Nuxeo unreachable through the proxy; check `proxy.conf` and that Nuxeo is up.                            |
-| Every check fails on selectors            | Component selectors changed. Verify with `grep -rh "selector: '" libs/shared/adf-hx-bridge/src/lib/ui/`. |
-| Verdict `fail` with 0 checks              | The steps file captured screenshots but asserted nothing. Add checks.                                    |
-| Screenshots blank at the top of the run   | Add a short wait after `login()`; the shell needs a beat to hydrate.                                     |
-| Screenshot audit check failed             | Every shot in the run is the same image. The visual record proves nothing — fix the steps.               |
+| Symptom                                   | Cause                                                                                                     |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `ERR_CONNECTION_REFUSED`                  | Dev server not running.                                                                                   |
+| Exit 2, "NUXEO_USER and NUXEO_PASS must…" | The credentials are not exported. There is no default; export them.                                       |
+| Many scattered "selector not visible"     | Backend down before you suspect a component. `npm run beta:backend -- --check`.                           |
+| Login appears to work but pages are empty | Nuxeo unreachable through the proxy; check `proxy.conf` and that Nuxeo is up.                             |
+| Every check fails on selectors            | Component selectors changed. Verify with `grep -rh "selector: '" libs/shared/satori-components/src/lib/`. |
+| Verdict `fail` with 0 checks              | The steps file captured screenshots but asserted nothing. Add checks.                                     |
+| Screenshots blank at the top of the run   | Add a short wait after `login()`; the shell needs a beat to hydrate.                                      |
+| Screenshot audit check failed             | Every shot in the run is the same image. The visual record proves nothing — fix the steps.                |
 
 ## Never
 

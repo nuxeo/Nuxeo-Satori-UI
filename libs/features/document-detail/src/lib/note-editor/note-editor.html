@@ -2,10 +2,7 @@
   @if (readOnly()) {
     @if (loading()) {
       <div class="note-editor-loading">
-        <mat-spinner
-          diameter="36"
-          [attr.aria-label]="'document-detail.note-editor.loading' | translate"
-        />
+        <nxs-spinner diameter="36" [label]="'document-detail.note-editor.loading' | translate" />
       </div>
     } @else {
       <div class="note-body note-body--read-only">
@@ -24,10 +21,7 @@
     }
   } @else if (loading()) {
     <div class="note-editor-loading">
-      <mat-spinner
-        diameter="36"
-        [attr.aria-label]="'document-detail.note-editor.loading' | translate"
-      />
+      <nxs-spinner diameter="36" [label]="'document-detail.note-editor.loading' | translate" />
     </div>
   } @else {
     <div class="note-body">
@@ -35,7 +29,7 @@
         <div class="note-quill-shell">
           @if (imageUploading()) {
             <div class="note-image-upload-overlay" aria-live="polite">
-              <mat-spinner diameter="28" />
+              <nxs-spinner diameter="28" />
               <span>{{ 'document-detail.note-editor.uploading-image' | translate }}</span>
             </div>
           }
@@ -47,7 +41,7 @@
             [attr.aria-label]="'document-detail.note-editor.edit-note' | translate"
             (click)="focusForEdit()"
           >
-            <mat-icon>edit</mat-icon>
+            <mat-icon svgIcon="pencil" />
           </button>
           <div
             #quillToolbar
@@ -282,7 +276,7 @@
                 [attr.aria-label]="'document-detail.note-editor.edit-note' | translate"
                 (click)="enterPlainTextEdit()"
               >
-                <mat-icon>edit</mat-icon>
+                <mat-icon svgIcon="pencil" />
               </button>
               @if (isMarkdown()) {
                 <div class="note-markdown-rendered" [innerHTML]="markdownHtml()"></div>
@@ -346,7 +340,7 @@
           "
           (click)="toggleSourceMode()"
         >
-          <mat-icon>{{ sourceMode() ? 'edit' : 'code' }}</mat-icon>
+          <mat-icon [svgIcon]="sourceMode() ? 'pencil' : 'code'" />
         </button>
         <button
           type="button"

@@ -1,0 +1,30 @@
+{
+  "$schema": "../../schema/bootstrap.schema.json",
+  "presales": {
+    "presetSwitching": true,
+    "presets": {
+      "insurance": {
+        "label": "Acme Insurance",
+        "bootstrap": {
+          "branding": {
+            "applicationTitle": "Acme Claims Cloud",
+            "documentTitle": "Acme Claims Cloud",
+            "logo": { "src": "assets/acme-logo.svg", "alt": "Acme Insurance" }
+          }
+        },
+        "manifest": { "labels": { "nav.item.collections": "Claim files" } }
+      },
+      "logistics": {
+        "label": "Globex Logistics",
+        "bootstrap": {
+          "branding": {
+            "applicationTitle": "Globex Shipment Records",
+            "documentTitle": "Globex Shipment Records",
+            "logo": { "src": "assets/globex-logo.svg", "alt": "Globex Logistics" }
+          }
+        },
+        "manifest": { "labels": { "nav.item.collections": "Shipments" } }
+      }
+    }
+  }
+}

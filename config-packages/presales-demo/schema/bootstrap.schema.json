@@ -1,0 +1,169 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Nuxeo Satori bootstrap fragment (Layer 0)",
+  "description": "One bootstrap fragment of a configuration package. Fragments apply in the order the server lists them, Satori's defaults first; a key a later fragment sets wins, so any key may be set alone. Served without authentication: put nothing secret here. An unknown key is ignored by the application, so this schema refuses it to catch the typo.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "nuxeoApiOrigin": { "$ref": "#/definitions/nuxeoApiOrigin" },
+    "nuxeoServerUrl": { "$ref": "#/definitions/nuxeoServerUrl" },
+    "aiBackendUrl": { "$ref": "#/definitions/aiBackendUrl" },
+    "branding": { "$ref": "#/definitions/branding" },
+    "defaultThemeId": { "$ref": "#/definitions/defaultThemeId" },
+    "themes": { "$ref": "#/definitions/themes" },
+    "defaultLanguage": { "$ref": "#/definitions/defaultLanguage" },
+    "availableLanguages": { "$ref": "#/definitions/availableLanguages" },
+    "integrations": { "$ref": "#/definitions/integrations" },
+    "session": { "$ref": "#/definitions/session" },
+    "sso": { "$ref": "#/definitions/sso" },
+    "presales": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Demo presets. Honoured only when a fragment sets presetSwitching: true; a URL then selects one with ?preset=<name>, for that browser only.",
+      "properties": {
+        "presetSwitching": { "type": "boolean" },
+        "presets": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "label": { "type": "string" },
+              "bootstrap": { "$ref": "#/definitions/overlay" },
+              "manifest": { "$ref": "manifest.schema.json" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "overlay": {
+      "description": "The bootstrap keys a preset applies on top of the fragments: every key except presales.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nuxeoApiOrigin": { "$ref": "#/definitions/nuxeoApiOrigin" },
+        "nuxeoServerUrl": { "$ref": "#/definitions/nuxeoServerUrl" },
+        "aiBackendUrl": { "$ref": "#/definitions/aiBackendUrl" },
+        "branding": { "$ref": "#/definitions/branding" },
+        "defaultThemeId": { "$ref": "#/definitions/defaultThemeId" },
+        "themes": { "$ref": "#/definitions/themes" },
+        "defaultLanguage": { "$ref": "#/definitions/defaultLanguage" },
+        "availableLanguages": { "$ref": "#/definitions/availableLanguages" },
+        "integrations": { "$ref": "#/definitions/integrations" },
+        "session": { "$ref": "#/definitions/session" },
+        "sso": { "$ref": "#/definitions/sso" }
+      }
+    },
+    "nuxeoApiOrigin": {
+      "type": "string",
+      "description": "Origin for Nuxeo REST calls from the browser. Empty keeps requests relative, which is right when Nuxeo serves the application."
+    },
+    "nuxeoServerUrl": {
+      "type": ["string", "null"],
+      "description": "Absolute Nuxeo URL for clients that connect directly (Nuxeo Drive, ARender)."
+    },
+    "aiBackendUrl": {
+      "type": "string",
+      "description": "Base URL for the AI Automation operations."
+    },
+    "branding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "applicationTitle": { "type": "string" },
+        "documentTitle": { "type": "string", "description": "The browser tab title." },
+        "logo": {
+          "description": "Replaces the Satori marks in the header and on the login page; null keeps them. src is relative to the configuration directory (assets/<name>, declared as an <asset> in the component XML), an https: URL, or a data:image/ URI.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["src"],
+              "properties": { "src": { "type": "string" }, "alt": { "type": "string" } }
+            }
+          ]
+        }
+      }
+    },
+    "defaultThemeId": { "type": "string" },
+    "themes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string" },
+          "labelKey": { "type": "string" },
+          "base": { "type": "string" },
+          "preview": { "type": "object" },
+          "tokens": { "type": "object" }
+        }
+      }
+    },
+    "defaultLanguage": { "type": "string" },
+    "availableLanguages": { "type": "array", "items": { "type": "string" } },
+    "integrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "arender": {
+          "description": "null turns the annotation viewer off. A fragment may set either key alone; the viewer needs a viewerOrigin once all fragments are merged.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "viewerOrigin": { "type": "string" },
+                "nuxeoInternalUrl": { "type": "string" }
+              }
+            }
+          ]
+        },
+        "knowledgeDiscoveryOperations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "knowledgeEnrichmentOperations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "idleTimeoutMs": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "warningBeforeMs": { "type": ["number", "null"], "exclusiveMinimum": 0 }
+      }
+    },
+    "sso": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoints": {
+          "type": "array",
+          "description": "Sign-in buttons on the login page, each opening path in the browser.",
+          "items": {
+            "type": "object",
+            "required": ["id", "path"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "label": { "type": "string" },
+              "path": { "type": "string", "pattern": "^/" }
+            }
+          }
+        },
+        "postLoginPath": { "type": ["string", "null"] },
+        "returnQueryParam": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

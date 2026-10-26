@@ -1,13 +1,17 @@
 name: CI
 
 on:
+  # `integration/<ticket>` branches collect a ticket's PRs and reach `main` as one PR (see
+  # AGENTS/06-git-workflow.md), so a PR into one needs the same gate as a PR into `main`.
+  # nx-set-shas diffs a PR against its own base branch, so the affected set is the sub-PR's
+  # change, not the whole integration branch.
   pull_request:
-    branches: [main]
+    branches: [main, 'integration/**']
   # Long-lived feature branches are validated on push as well as on PR, so work in
   # progress is never only "green on my machine". nx-set-shas falls back to comparing
   # against the default branch when a push has no previous successful run to diff from.
   push:
-    branches: [main, 'feature/**', 'fix/**']
+    branches: [main, 'feature/**', 'fix/**', 'integration/**']
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -19,7 +23,7 @@ concurrency:
 # workflow of the nine that lacked it.
 permissions:
   contents: read
-  # `npm ci` resolves @hylandsoftware and @alfresco from GitHub Packages.
+  # `npm ci` resolves @hylandsoftware from GitHub Packages.
   packages: read
   # `nrwl/nx-set-shas` calls the workflow-runs API to find the last successful run to diff
   # against. Without this it fails with `Resource not accessible by integration`, which is
@@ -37,7 +41,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           registry-url: https://npm.pkg.github.com
           scope: '@hylandsoftware'
@@ -71,6 +75,9 @@ jobs:
       # never checks they are capable of failing, which is how a guardrail regresses into an
       # always-green implementation with the required check still reported as passing.
       # Builds throwaway git repositories under the runner's temp dir; touches nothing tracked.
+      - name: Run Satori rename codemod controls
+        run: node --test scripts/rename-satori.selftest.mjs
+
       - name: Run i18n guardrail negative controls
         run: npm run review:guardrails-selftest
 
@@ -79,6 +86,17 @@ jobs:
       # Crowdin project exists.
       - name: Run Crowdin context push controls
         run: npm run review:crowdin-selftest
+
+      # Tooling that runs outside CI — the review-loop harvest and the Confluence publisher both
+      # need credentials CI does not have — so these offline controls are the only part of either
+      # that CI can exercise. The harvest silently dropped every "Previously missed" finding, and
+      # the publisher linked a branch frozen 1364 commits behind main; nothing that ran saw either.
+      - name: Run review-harvest and Confluence link controls
+        run: |
+          set -euo pipefail
+          npm run review:analysis-selftest
+          npm run docs:links-selftest
+          npm run docs:storage-selftest
 
       # Static checks that `beta:gate` has run locally since Phase 5 and that had
       # never run here. They are seconds each and they close a specific hole: the local
@@ -91,7 +109,13 @@ jobs:
       # runs individual scripts. So "registered as a gate" meant local-only, and review had
       # to point out that the gate guarding a shipped XSS-adjacent defect could not block a
       # merge. Registering a check in ALL_GATES is not the same as running it.
-      - name: Static beta gates (evidence, reference drift, customer guardrails, supply chain, sanitizers, lockfile controls)
+      - name: Static beta gates (evidence, reference drift, Satori comparison page, customer guardrails, supply chain, sanitizers, lockfile and dependency-tree controls)
+        env:
+          # The sanitizer budget ratchet compares against the merge base with `origin/main` by
+          # default. A PR into an integration branch must be ratcheted against that branch, or a
+          # budget change already accepted there is charged again to every later sub-PR. Empty on
+          # push, where the default applies; `origin/main` on a PR into `main`, as before.
+          SANITIZER_AUDIT_BASE_REF: ${{ github.base_ref && format('origin/{0}', github.base_ref) || '' }}
         run: |
           set -euo pipefail
           # The lockfile gate and its controls. `npm ci` above already proves this lock installs
@@ -101,6 +125,13 @@ jobs:
           # the override selector was stripped. The controls are the only thing that re-asserts it.
           npm run beta:lockfile
           npm run beta:lockfile-selftest
+          # NXSAT-308 criterion 3: no adf-hx, adf-core, adf-extensions, js-api or hxcs-js-client in
+          # the lock, the installed tree `npm ci` just produced, a manifest, .npmrc or an import.
+          # BLOCKING since the ADF removal (NXSAT-638) set `BLOCKING` in the script: any finding
+          # fails it, and so does a location that cannot be read. The controls are what prove each
+          # location can still find something, so a scanner that finds nothing cannot stay green.
+          npm run beta:dependency-tree
+          npm run beta:dependency-tree-selftest
           # Fails if an evidence step asserts something it cannot observe. Phase 1 shipped
           # a dead feature past two checks that certified properties they could not see.
           npm run beta:audit
@@ -110,12 +141,44 @@ jobs:
           # line above verifies the audit runs; this one verifies it can still report — and
           # that the constants it deliberately does NOT decide are still printed as such.
           npm run beta:audit-selftest
+          # The one steps file that captures the same claims on two sets of components, held to
+          # the rule that only its surface adapter differs between the halves. Nothing enforced
+          # that, and the nxs parity run could not finish for two months: a crumb selected by a
+          # label that was itself under test aborted it on a timeout, eleven of twenty-four steps
+          # never ran, and a permission option matched by its translated label staged no change —
+          # so the save under test never happened and the check on it passed on an untouched ACL.
+          npm run beta:parity-surface
+          # And its controls, for the reason the pair above has them: the defects it guards were
+          # in a file nothing audited, so a guard that could not itself go red is the same mistake.
+          npm run beta:parity-surface-selftest
+          # And step 11's own save verdict, which the audit above structurally cannot judge: it
+          # checks the file's shape, not whether a verdict in it can be wrong. This runs
+          # `aclSaveVerdict` against each situation the step can observe and prints what the old
+          # predicate — the one that passed on an ACL nobody had touched — would have concluded.
+          # ~50 ms, in process, no browser and no backend.
+          npm run beta:parity-selftest
+          # The identity guard's offline controls (NXSAT-643): a guard that accepts Anonymous, or a
+          # step boundary that goes unchecked, is green on every capture it is supposed to reject.
+          # The live half (`beta:identity-guard-controls`) needs a guest-enabled Nuxeo CI lacks.
+          npm run beta:identity-guard-selftest
           # The only customer-facing document nothing checked. When first measured it was
           # wrong in both directions.
           npm run beta:reference
+          # The same for the Confluence page showing each nxs- component with and without Satori:
+          # a section per barrel component and none for a removed one, with its controls.
+          npm run docs:satori-comparison:check
+          npm run docs:satori-comparison:selftest
           # The guardrail we hand customers, run against our own reference library — so we
           # do not learn it is broken from a customer's CI log.
           npm run beta:customer-guardrails
+          # The command that regenerates the shared derived files after a merge, held to its
+          # derived-file list and its conflict handling.
+          npm run sync:derived-selftest
+          # The gate runner's own counting: a gate that reports NOT RUN is never counted green,
+          # and a run containing one is `pass-incomplete`, not `pass`.
+          npm run beta:gate-selftest
+          # The Storybook publication gate's controls: each Satori fingerprint must fail it.
+          npm run storybook:publication-gate-selftest
           # SCA. Fails on a high or critical in the PRODUCTION tree, and on an accepted
           # advisory whose review date has expired. Gating on the dev-inclusive total
           # instead would be permanently red (9 high, none shipped) and so bypassed.
@@ -151,6 +214,101 @@ jobs:
       - name: Typecheck affected projects
         run: npx nx affected -t typecheck --base=$NX_BASE --head=$NX_HEAD
 
+      # The `nxs-` library's Storybook must build without a GitHub Packages token (NXSAT-308, plan
+      # section 9.4). Built here with `@hylandsoftware` and `@alfresco` REMOVED from node_modules,
+      # because with them installed an accidental Satori import compiles and the claim is untested.
+      # `checkSatoriComponentsDependencies` holds the same rule statically; this is the build that
+      # proves it. About a minute, so only when the library is affected, or the interaction runner
+      # below, its dialog layout check or the publication gate changed — a script outside every
+      # project affects none. A skip says so.
+      #
+      # Then the publication gate, which storybook-pages.yml runs before publishing this build to
+      # GitHub Pages: here, whenever this step builds, it fails the pull request instead.
+      - name: Storybook builds without GitHub Packages and carries no Satori (satori-components)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Captured first, so a failing query fails the step instead of reading as "not affected".
+          affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
+          runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
+          gate="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- 'scripts/storybook-publication-gate*.mjs')"
+          if ! grep -qx satori-components <<<"$affected" && [ -z "$runner" ] && [ -z "$gate" ]; then
+            echo "satori-components is not affected and the runner and publication gate are unchanged: Storybook build and publication gate NOT RUN"
+            exit 0
+          fi
+          hidden="$RUNNER_TEMP/github-packages-scopes"
+          mkdir -p "$hidden"
+          restore() { for scope in "$hidden"/@*; do if [ -e "$scope" ]; then mv "$scope" node_modules/; fi; done; }
+          trap restore EXIT
+          # A scope the tree no longer installs is already absent, which is what this build tests.
+          for scope in @hylandsoftware @alfresco; do
+            if [ -e "node_modules/$scope" ]; then mv "node_modules/$scope" "$hidden"/; fi
+          done
+          npx nx run satori-components:build-storybook:ci --skip-nx-cache
+          node scripts/storybook-publication-gate.mjs dist/storybook/satori-components
+
+      # The stories' play functions, run in Chromium against the Storybook just built (Codex audit
+      # F08). Storybook runs a play function only when someone opens the story, so one that started
+      # failing stayed green everywhere. Fails on a throwing play — watched as its own event, because
+      # Storybook reports `storyFinished: success` even then — a render error, an uncaught page error
+      # or an untranslated key. axe results from the a11y addon are printed, never judged:
+      # docs/accessibility.md gives that verdict to the axe runtime layer. Only the token-free
+      # Storybook; the Satori adapter's needs GitHub Packages and is not run. Playwright is installed
+      # with --no-save, so the lockfile and `npm ci` are untouched. Every `Dialogs/` story is also
+      # checked for MatDialog's layout at 1280 and 320 px (`storybook-dialog-layout.mjs`), after
+      # that check's own negative controls have run.
+      #
+      # The suite is about four and a half minutes — 268.9 s for all 214 stories, measured in run
+      # 39914726264 — and it is NOT what spends this step's budget. `playwright install --with-deps`
+      # is: the apt fetch of its 25.9 MB set (CJK fonts, NSS, xvfb) from the Azure Ubuntu mirror was
+      # recorded at 90.9 kB/s (4m45s), 82.9 kB/s (5m13s) and 49.2 kB/s (8m47s) in three runs on
+      # 2026-10-23, so everything before the suite took up to 9m42s and the step would have needed
+      # about 14m10s while `timeout-minutes` said 10. All three were killed without one story or
+      # layout failure between them — one printing `214 of 214 stories passed` in the same second as
+      # the timeout — which reads as a broken suite and is a download that went slowly. They were
+      # masked on `integration/**` by the static-gate failure skipping this step, so this surfaces
+      # on new branches: `nx-set-shas` has no previous successful run to diff from and falls back to
+      # the default branch, which makes the affected set wide enough to reach `satori-components`
+      # even on a branch that did not touch it.
+      #
+      # So 25 minutes, and it is not headroom over the suite: the suite already has its own budget.
+      # `storybook-interactions.mjs` defaults to `--budget 600000`, a hard 10-minute cap measured
+      # from browser launch after which every remaining story is FAILED rather than skipped, so a
+      # suite that slows down goes red on its own terms and this timeout can never be what hides
+      # it. 25 = that 10-minute self-cap plus 15 minutes for everything before it, which is 1.5x the
+      # slowest pre-suite phase on record. Do not trim it back towards the suite's duration: the
+      # install is the unbounded half, it answers to a mirror's throughput rather than to anything
+      # in this repository, and `registry-auth.yml` already allows 25 for the same reason.
+      - name: Storybook interactions (satori-components)
+        shell: bash
+        timeout-minutes: 25
+        env:
+          # `.npmrc` reads both; npm refuses to start when a variable it names is unset.
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+        run: |
+          set -euo pipefail
+          affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
+          runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
+          if ! grep -qx satori-components <<<"$affected" && [ -z "$runner" ]; then
+            echo "satori-components is not affected and the runner is unchanged: Storybook interactions NOT RUN"
+            exit 0
+          fi
+          version="$(node --input-type=module -e "import { PLAYWRIGHT_TEST_VERSION } from './a11y/versions.mjs'; console.log(PLAYWRIGHT_TEST_VERSION)")"
+          npm install --no-save --no-audit --no-fund "@playwright/test@${version}"
+          npx playwright install --with-deps chromium
+          # The dialog layout check's negative controls first: a check that cannot fail proves nothing.
+          node --test scripts/storybook-dialog-layout.selftest.mjs
+          node scripts/storybook-interactions.mjs --json "$RUNNER_TEMP/storybook-interactions.json"
+
+      - name: Upload the Storybook interaction results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-interactions
+          path: ${{ runner.temp }}/storybook-interactions.json
+          if-no-files-found: ignore
+
       # The three checks that guard the published package. Run unconditionally rather
       # than only when affected: they are ~30s in total, and they are the checks that
       # catch the expensive class of defect — both of the ones below were configuration
@@ -171,6 +329,12 @@ jobs:
           # `prepublishOnly` script. Phase 4 shipped a package that could not be
           # published at all, for want of `compilationMode: partial`.
           npm run beta:publishable
+          # Installs the built tarball into a scratch project with NO GitHub Packages credentials,
+          # from public npm, and requires it to succeed; then makes the Satori peer required again
+          # and requires the install to FAIL. Everything above runs against this monorepo's
+          # node_modules, which already holds @hylandsoftware/satori-ui, so none of it can see a
+          # customer's install 401 or 404 on a required peer.
+          npm run beta:installable
           # Compiles the template against the BUILT declarations instead of the source
           # tree — the resolution a customer actually gets. Found the platform being
           # compiled without `strictNullChecks`, shipping 27 wrong public types.

@@ -2,6 +2,7 @@ import {
   mergeExtensionConfigs,
   readExtensionConfig,
   resolveExtensionConfig,
+  resolveExtensionLayers,
   type ExtensionConfig,
 } from './extension-config';
 
@@ -115,6 +116,86 @@ describe('resolveExtensionConfig', () => {
   });
 });
 
+describe('resolveExtensionLayers', () => {
+  it('merges packages in contribution order, so a later package wins over an earlier one', () => {
+    const { config } = resolveExtensionLayers([
+      { overrides: { 'app.navbar.trash': { visible: false, label: 'Bin' } } },
+      { overrides: { 'app.navbar.trash': { label: 'Recycle' } } },
+    ]);
+
+    expect(config.overrides?.['app.navbar.trash']).toEqual({ visible: false, label: 'Recycle' });
+  });
+
+  it("resolves each package's $layers on its own, even when two use the same name", () => {
+    const { config, applied, missing } = resolveExtensionLayers([
+      {
+        $references: ['brand'],
+        $layers: { brand: { overrides: { 'app.navbar.trash': { label: 'Bin' } } } },
+      },
+      {
+        $references: ['brand'],
+        $layers: { brand: { overrides: { 'app.navbar.tasks': { label: 'Queue' } } } },
+      },
+    ]);
+
+    expect(config.overrides?.['app.navbar.trash']).toEqual({ label: 'Bin' });
+    expect(config.overrides?.['app.navbar.tasks']).toEqual({ label: 'Queue' });
+    expect(applied).toEqual(['brand', 'brand']);
+    expect(missing).toEqual([]);
+  });
+
+  it("cannot reference another package's named layer", () => {
+    const { config, missing } = resolveExtensionLayers([
+      { $layers: { shared: { overrides: { 'app.navbar.trash': { visible: false } } } } },
+      { $references: ['shared'] },
+    ]);
+
+    expect(config.overrides?.['app.navbar.trash']).toBeUndefined();
+    expect(missing).toEqual(['shared']);
+  });
+
+  it('lets a later null clear an earlier rule, and a later order replace an earlier null', () => {
+    // Upstream's merge threw here, inside the computed every slot reads, so all of them rethrew.
+    const { config } = resolveExtensionLayers([
+      {
+        overrides: {
+          'app.navbar.trash': {
+            rule: { type: 'core.every', parameters: ['app.rules.isAdministrator'] },
+          },
+          'app.navbar.tasks': { order: null },
+        },
+      },
+      {
+        overrides: {
+          'app.navbar.trash': { rule: null },
+          'app.navbar.tasks': { order: 5 },
+        },
+      },
+    ]);
+
+    expect(config.overrides?.['app.navbar.trash']).toEqual({ rule: null });
+    expect(config.overrides?.['app.navbar.tasks']).toEqual({ order: 5 });
+  });
+
+  it('keeps the other packages when one has malformed layer metadata', () => {
+    const { config, applied, missing } = resolveExtensionLayers([
+      { overrides: { 'app.navbar.trash': { label: 'Bin' } } },
+      { $references: 'brand', $ignoreReferenceList: 1, $layers: { brand: 'x' } },
+      { $references: ['brand', 7], $layers: [] },
+      { $references: ['brand'], $layers: { brand: 'x' } },
+      {
+        $references: ['brand'],
+        $layers: { brand: { overrides: { 'app.navbar.tasks': { label: 'Queue' } } } },
+      },
+    ]);
+
+    expect(config.overrides?.['app.navbar.trash']).toEqual({ label: 'Bin' });
+    expect(config.overrides?.['app.navbar.tasks']).toEqual({ label: 'Queue' });
+    expect(applied).toEqual(['brand']);
+    expect(missing).toEqual(['brand', 'brand']);
+  });
+});
+
 describe('readExtensionConfig', () => {
   it('reads slots and overrides out of untrusted JSON', () => {
     const config = readExtensionConfig({
@@ -132,6 +213,20 @@ describe('readExtensionConfig', () => {
       slots: { navbar: [{ id: '  ' }, { label: 'no id' }, { id: 'acme.navbar.ok' }] },
     });
     expect(config.slots?.['navbar'].map((entry) => entry.id)).toEqual(['acme.navbar.ok']);
+  });
+
+  it('ignores a __proto__ slot or override id rather than re-prototyping what it reads', () => {
+    const config = readExtensionConfig(
+      JSON.parse(
+        '{"slots": {"__proto__": [{"id": "acme.navbar.x"}]},' +
+          ' "overrides": {"__proto__": {"app.navbar.trash": {"visible": false}}}}',
+      ),
+    );
+
+    expect(Object.getPrototypeOf(config.slots)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(config.overrides)).toBe(Object.prototype);
+    expect(config.overrides?.['app.navbar.trash']).toBeUndefined();
+    expect(config).toStrictEqual({ slots: {}, overrides: {} });
   });
 
   it('tolerates the shapes a customer can actually save', () => {

@@ -13,7 +13,7 @@ export default async function collectEvidence(page, helpers, _outDir) {
   // ── Personal Space nav + drawer ───────────────────────────────────────────
   helpers.step('Open Personal Space from platform nav');
   const personalSpaceNav = page
-    .locator('sat-platform-nav-list-item')
+    .locator('a[sat-platform-nav-menu-item]')
     .filter({ hasText: 'Personal Space' })
     .first();
   await personalSpaceNav.click();

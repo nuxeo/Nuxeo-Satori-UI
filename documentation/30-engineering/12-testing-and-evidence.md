@@ -2,15 +2,20 @@
 title: Testing & Evidence
 parent: Engineering
 order: 12
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-16
+repo_commit: 250ec9a
 audience: engineering
 ---
 
 # Testing & Evidence
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
-> Standards: [`AGENTS/05-test-standards.md`](https://github.com/nuxeo/agentic-ui-poc/blob/feature/adf-hx-browse-poc/AGENTS/05-test-standards.md)
+> **Last reviewed:** 2026-10-16 · **Repository:** `250ec9a` (`integration/nxsat-308`)
+> E2E section re-verified for NXSAT-646; other sections retain their earlier review scope.
+> On 2026-10-15 at `c053e63`, only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-08 at `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`):
+> Only the repository links were re-verified at that commit: made relative rather than pinned to
+> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
+> Standards: [`AGENTS/05-test-standards.md`](../../AGENTS/05-test-standards.md)
 
 ---
 
@@ -20,7 +25,7 @@ audience: engineering
 | --------- | --------------------------- | ----------------------------------- | :-------: |
 | Unit      | Vitest                      | 19 projects with a `test` target    |    ✅     |
 | Typecheck | `ngc` per library           | Every library                       |    ✅     |
-| E2E       | Playwright, 12 specs        | 4 critical paths against live Nuxeo |    ❌     |
+| E2E       | Playwright                  | Core slice + auth/engine checks     |    ❌     |
 | Evidence  | Playwright + `phase-runner` | Per-phase claims against live Nuxeo |    ❌     |
 
 The two that need a live backend cannot run on a PR runner. **That is a real limitation**, not a
@@ -90,6 +95,9 @@ visible.
 | `assets`              |    _100%_ | **0** |
 | `core`                |    _100%_ | **0** |
 
+_Changed by NXSAT-635 (2026-10):_ `adf-hx-bridge` was removed on 2026-10-14; its row is the
+measurement above, kept as it was.
+
 > **Three of those numbers are artefacts.** `tasks`, `assets` and `core` have **zero spec files**.
 > Their coverage reports contain 0 total statements, so the summariser computes 0/0 as 100%. So
 > **6 projects read as ≥90% and 3 genuinely are.** Any "N of 17 meet the bar" figure — including
@@ -104,55 +112,168 @@ and then silently excluded from every check).
 
 ## 3. E2E
 
+The live suite runs against a served app and its own Nuxeo backend. The core slice is
+`browse.spec.ts`, `search.spec.ts` and `document-detail.spec.ts`: 12 tests per browser at
+`250ec9a6d`. The full suite also includes authentication and cross-engine checks; a core-slice
+pass does not claim those additional tests passed.
+
+### Prepare an isolated backend
+
+Use a ticket-owned Docker Nuxeo and database with disposable data. Point the app's dev proxy at
+that instance. Keep `NUXEO_USER` and `NUXEO_PASS` in the environment; there is no credential fallback.
+
+Search requires a full-text-capable backend. The bundled H2 repository template hardcodes
+`searchDisabled="true"`, so setting `nuxeo.fulltext.search.disabled=false` alone does not enable
+it. For NXSAT-646, a private PostgreSQL 16 database and Nuxeo's bundled `postgresql` template
+provided full-text search. Configure `nuxeo.db.host`, `nuxeo.db.port`, `nuxeo.db.name`,
+`nuxeo.db.user` and `nuxeo.db.password` for that database, retaining other templates required
+by the installed image. Restart only the ticket's container after changing its configuration.
+
+The core suite discovers a direct `WorkspaceRoot` child of `/default-domain` and an indexed,
+untrashed `File`; it does not pin a document UID. Search pagination creates and cleans up its
+own uniquely named workspace and 41 Notes. Before running, verify that an authenticated
+`default_search` request with `ecm_fulltext` returns HTTP 200 and a known seeded match. An
+unfiltered File query can pass preflight even while full-text search is disabled.
+
+NXSAT-643 added the shared identity guard (`scripts/beta-harness/identity-guard.mjs`) and committed
+the parity seed and start scripts (`scripts/beta-harness/steps/nxsat-308-parity/`). Runs made
+before it are diagnostic results; they did not use that guard or that seed.
+
+### Install and serve
+
+Use Node 20 and install dependencies in an isolated checkout. Do not run `npm install` in a
+checkout whose dependencies are hardlinked to another checkout.
+
 ```bash
-npm install --no-save @playwright/test && npx playwright install chromium
-npm run beta:e2e
+npm ci
+npm install --no-save @playwright/test @axe-core/playwright
+npx playwright install chromium webkit
 ```
 
-12 specs, 4 files, in `apps/nuxeo-ui-e2e/src/`:
+Install both untracked packages in the same command: a later `npm install --no-save` can prune
+an earlier untracked install. Both browser engines must launch for preflight to pass.
 
-| File                      | Asserts                                                                                       |
-| ------------------------- | --------------------------------------------------------------------------------------------- |
-| `browse.spec.ts`          | Repository listing, tree navigation, shell chrome                                             |
-| `search.spec.ts`          | Non-zero results, a zero-result term, **an apostrophe** — the HXQL injection regression guard |
-| `document-detail.spec.ts` | Metadata, the Permissions/History/Publishing tabs, an unknown id                              |
-| `auth.spec.ts`            | A signed-out visitor **is** redirected; Anonymous is **not** granted administration           |
+Create a local `apps/nuxeo-ui/proxy.conf.ticket-nxsat-646.json` pointing at the ticket's Nuxeo
+port, for example port 8096:
 
-### Two design rules
+```json
+{
+  "/nuxeo": {
+    "target": "http://127.0.0.1:8096",
+    "secure": false,
+    "changeOrigin": true,
+    "autoRewrite": true
+  }
+}
+```
 
-**Assert repository data, not that a component rendered.** An unauthenticated XHR draws
-`lib-browse` with no rows — visible, green under `toBeVisible`, and proof of nothing. Hence
-`expectSurfaceWithData`.
+Serve the app from that checkout in a separate terminal:
 
-**Discover the test document; never pin a UID.** A pinned UID passes on one machine and reads as a
-product defect everywhere else. `document-detail.spec.ts` queries through the app's own proxy,
-which also exercises the proxy and auth before the UI is involved.
+```bash
+npx nx serve nuxeo-ui --port 4216 --proxy-config apps/nuxeo-ui/proxy.conf.ticket-nxsat-646.json
+```
 
-### Sensitivity, measured
+Set the credentials through the environment, then name the app's exact host and port before
+sending credentials through its proxy:
 
-With deliberately bogus credentials, **9 of 12 specs fail**. The 3 that pass are the auth specs,
-which are credential-independent by design. That is the evidence the suite reads real data rather
-than just rendering.
+```bash
+export E2E_BASE_URL=http://localhost:4216
+export E2E_ALLOWED_HOSTS=localhost:4216
+npm run beta:e2e-preflight
+npm run beta:e2e -- --project=chromium browse.spec.ts search.spec.ts document-detail.spec.ts --retries=0
+npm run beta:e2e -- --project=webkit browse.spec.ts search.spec.ts document-detail.spec.ts --retries=0
+```
 
-### Authentication in tests — both mechanisms are required
+These examples use Bash. The Windows invocation for the shell-based negative control is shown
+below. For concurrent browser runs, use separate checkouts and app ports, matching each
+host/port in its allowlist.
 
-| Mechanism                                                    | Satisfies                              |
-| ------------------------------------------------------------ | -------------------------------------- |
-| A session injected into `sessionStorage` via `addInitScript` | The **route guard**, so pages render   |
-| `httpCredentials` in the Playwright config                   | **XHRs**, so `/nuxeo/api` returns data |
+### Authentication and remaining guard work
 
-With only the first, `/nuxeo/api` intermittently returns 403 and you get screenshots of empty
-states. Note `storageState` does **not** work here: it persists cookies and localStorage, and this
-app keeps its session in `sessionStorage`. A `storageState` fixture would look right, run, and
-leave every spec signed out.
+The `signedIn` fixture injects the app session into `sessionStorage` before page scripts run;
+Playwright's `storageState` does not preserve that storage. The config also supplies
+`httpCredentials` with `send: 'always'`, which reaches `page.request` only. API fixture discovery
+uses an explicit Authorization header and checks `/nuxeo/api/v1/me` before returning its API
+context.
 
-### The anonymous-auth fact
+Nuxeo can answer as Anonymous with HTTP 200, so status codes and non-empty result sets alone
+cannot establish who made the request. The `signedIn` fixture therefore runs the shared identity
+guard (NXSAT-643) on both sides of every test: it clears cookies and asks who `page.request` runs
+as before, and asks who the app in the page is after. A test whose result was obtained as
+Anonymous or another user fails even when its assertions passed. The guard's negative controls
+are `npm run beta:identity-guard-selftest` and, against a guest-enabled Nuxeo,
+`npm run beta:identity-guard-controls`. Specs that do not use `signedIn` (`auth.spec.ts`) test
+signed-out behaviour on purpose and are not guarded.
 
-The local Nuxeo has **anonymous authentication enabled**: `/me` with no credentials returns 200 and
-`{ id: 'Anonymous' }`. `AuthService` then takes its intentional SSO-detection path and adopts that
-session. So **"an unauthenticated visitor is redirected" is not observable here** — the guard is
-sound; the environment makes the assertion untestable. Removing `httpCredentials` does not help,
-because credentials were never what made `/me` succeed. Test the **privilege** boundary instead.
+### Vacuity control and evidence retention
+
+```bash
+npm run beta:e2e-negative-control
+```
+
+On Windows, opening Git Bash does not change npm's default script shell (`cmd.exe`). From Git
+Bash, invoke the script explicitly:
+
+```bash
+bash scripts/e2e-negative-control.sh
+```
+
+To use the npm entry point instead, set its script shell for that invocation (adjust the path
+if Git is installed elsewhere):
+
+```bash
+npm_config_script_shell='C:/Program Files/Git/bin/bash.exe' npm run beta:e2e-negative-control
+```
+
+The command runs preflight with correct credentials, then runs the full Chromium suite
+**twice**: a baseline, and again with `E2E_STARVE_APP=1`, which makes the app's own
+`/nuxeo/api` calls answer 200-but-empty while leaving the specs' discovery context untouched.
+A spec counts as data-sensitive when it **passed the baseline and then failed at an `expect()`
+of its own** when starved. The wrapper exits 0 at or above five such specs, 1 below, and 2 when
+an environment prerequisite was missing. The verdict comes from
+`scripts/beta-harness/vacuity-verdict.mjs`, whose selftest is `npm run beta:e2e-vacuity-selftest`.
+
+It used to run once with a deliberately wrong password and count the same kind of failure.
+NXSAT-643's identity guard ended that: a wrong password now fails inside the `signedIn`
+fixture and in `test.beforeAll`, and the assertion reporter excludes hook and fixture failures
+by design, so the counted population became empty and the control could only report FAIL.
+The two runs also remove a second problem a single run cannot see — a spec that was already
+red counts as sensitive when it is red either way.
+
+Specs that pass **both** runs are listed by name as a standing vacuity list. That is a finding,
+not a failure: chrome, redirect and negative-case assertions legitimately survive an empty
+repository, while anything claiming to read repository data and appearing there is a defect.
+
+Starvation rides on the `signedIn` fixture, so specs that do not use it — `auth.spec.ts`, which
+tests the guards that fixture defeats — are never starved. The fixture annotates each test it
+starves and the verdict lists the rest as **not perturbed**, because counting them as having
+survived an empty repository would claim a perturbation they never saw.
+
+A successful control establishes data-sensitivity for the specs it counted, and says nothing
+about the ones it lists as vacuous, not perturbed, inconclusive or not measured.
+
+Archive `dist/e2e/results.json`, `dist/e2e/assertion-failures.json` and `dist/e2e/artifacts/`
+after each build/browser run and before the vacuity control: later runs overwrite them. The
+control keeps its own two runs apart under `dist/e2e/vacuity-baseline/` and
+`dist/e2e/vacuity-starved/`.
+The committed config retains screenshots and recordings only on failure. For successful-run
+media, use a local config importing the committed config and changing only retention to
+`screenshot: 'on'` and `video: 'on'`; pass that config with `-c`. Keep local configs, media and
+reports outside the committed change. Review failures before rerunning, and retain the first
+attempt and its diagnosis rather than accepting an unexplained retry pass.
+
+### Before and after the rename
+
+For NXSAT-646, the integration mainline before the rename merge was `de0080f94`, and the
+renamed build was `250ec9a6d`. Each browser passed all 12 core tests on each revision with
+retries disabled. The full Chromium negative control produced six counted assertion failures,
+with three setup failures excluded; its wrapper passed while Playwright exited 1.
+
+The initial H2 runs failed four full-text-dependent tests on each browser. After verifying the
+PostgreSQL repair with an authenticated full-text request, both baseline runs were repeated.
+The original failures and successful comparison are retained in the
+[NXSAT-646 Jira evidence](https://hyland.atlassian.net/browse/NXSAT-646?focusedCommentId=3245128).
+These are provisional diagnostics: they predate the NXSAT-643 identity guard.
 
 ---
 
@@ -220,8 +341,9 @@ The single exclusion is scoped to the **adf-hx step alone**, not to `KNOWN_VIOLA
 rule failing on a surface we own still fails the capture.
 
 **Not covered:** dialogs, the upload flow, dark mode, and the pre-auth login surface. The last is a
-harness limitation — the runner sets `httpCredentials`, so the app authenticates before login can
-render.
+harness limitation — the capture signs in before its first scan, and on a guest-enabled Nuxeo an
+unsigned app does not show the login page either: it signs itself in as Anonymous, which the
+identity guard rejects (NXSAT-643).
 
 ---
 

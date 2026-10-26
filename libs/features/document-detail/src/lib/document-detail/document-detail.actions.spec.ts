@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import {
@@ -11,8 +11,8 @@ import {
   withDisabledInitialNavigation,
 } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { NEVER, Observable, of, throwError } from 'rxjs';
+import { MatIconTestingModule } from '@angular/material/icon/testing';
+import { BehaviorSubject, NEVER, Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import {
@@ -31,7 +31,7 @@ import {
   type NuxeoDocument,
   type NuxeoTask,
   type NuxeoWorkflow,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   AiChatService,
@@ -47,9 +47,10 @@ import {
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   provideSatoriExtensions,
   type ExtensionActionDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 /**
  * Toolbar behaviour, document actions, and the dialogs they open.
@@ -145,6 +146,7 @@ const mockDetailService = {
   exportZip: vi.fn((): Observable<Blob> => of(new Blob(['zip'], { type: 'application/zip' }))),
   getAllComments: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
+  getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
   getPublishedVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getSectionTree: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
@@ -187,7 +189,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
   let fixture: ComponentFixture<DocumentDetailComponent>;
   let ruleContext: ExtensionRuleContextService;
   let actionRegistry: ExtensionActionRegistry;
-  let snack: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
   const revoked: string[] = [];
   let seq = 0;
@@ -215,9 +217,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
    * here is the correct outcome.
    */
   function offered(id: string): ExtensionActionDescriptor {
-    const found = [...component.toolbarActions(), ...component.overflowActions()].find(
-      (a) => a.id === id,
-    );
+    const found = component.toolbarActions().find((a) => a.id === id);
     if (!found) {
       throw new Error(`toolbar action "${id}" is not offered for this document`);
     }
@@ -242,6 +242,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     mockDetailService.exportZip.mockReturnValue(of(new Blob(['zip'], { type: 'application/zip' })));
     mockDetailService.getAllComments.mockReturnValue(of({ entries: [] }));
     mockDetailService.getVersions.mockReturnValue(of({ entries: [] }));
+    mockDetailService.getVersionsDirect.mockReturnValue(of([]));
     mockDetailService.getPublishedVersions.mockReturnValue(of({ entries: [] }));
     mockDetailService.getSectionTree.mockReturnValue(of({ entries: [] }));
     mockDetailService.getRunnableWorkflows.mockReturnValue(of([]));
@@ -265,15 +266,21 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     vi.clearAllMocks();
     revoked.length = 0;
     localStorage.removeItem(CLIPBOARD_STORAGE_KEY);
-    snack = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     installDefaults();
 
     await TestBed.configureTestingModule({
-      imports: [testTranslateModule(), testTranslateModule(), DocumentDetailComponent],
+      imports: [
+        testTranslateModule(),
+        testTranslateModule(),
+        MatIconTestingModule,
+        DocumentDetailComponent,
+      ],
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
@@ -305,8 +312,8 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
           provide: TagService,
           useValue: {
             searchTags: vi.fn(() => of([])),
-            addTag: vi.fn(() => of({})),
-            removeTag: vi.fn(() => of(undefined)),
+            addTag: vi.fn(() => of([])),
+            removeTag: vi.fn(() => of([])),
           },
         },
         {
@@ -335,7 +342,6 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         },
         { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: snack } },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {
@@ -360,7 +366,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(mockDetailService.lockDocument).toHaveBeenCalledWith('doc-1');
       expect(component.isLocked()).toBe(true);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Document locked', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Document locked');
     });
 
     it('offers Unlock rather than Lock once the document is locked', async () => {
@@ -448,7 +454,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.toggleLock();
 
       expect(component.lockOwner()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Document unlocked', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Document unlocked');
     });
 
     it('leaves the lock state untouched and releases the flag when the call fails', async () => {
@@ -459,7 +465,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.isLocked()).toBe(false);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to toggle lock', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to toggle lock');
     });
 
     it('refuses to lock a document the user cannot write', async () => {
@@ -471,6 +477,41 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.isLocked()).toBe(false);
     });
 
+    describe('when a manifest has cleared the Lock rule', () => {
+      /** What `rule: null` in an override leaves: the packaged descriptor, ungated. */
+      function ungated(id: string): ExtensionActionDescriptor {
+        const packaged = PACKAGED_DOCUMENT_TOOLBAR_ACTIONS.find((a) => a.id === id);
+        if (!packaged) throw new Error(`no packaged action "${id}"`);
+        const { rule: _cleared, ...rest } = packaged;
+        return rest;
+      }
+
+      it('still reaches the handler for an ordinary document', async () => {
+        await build();
+
+        component.runToolbarAction(ungated('app.toolbar.lock'));
+
+        expect(mockDetailService.lockDocument).toHaveBeenCalledWith('doc-1');
+      });
+
+      it('refuses to lock a version, on which an administrator keeps Write', async () => {
+        await build(doc({ facets: ['Immutable', 'Versionable'] }));
+
+        component.runToolbarAction(ungated('app.toolbar.lock'));
+
+        expect(mockDetailService.lockDocument).not.toHaveBeenCalled();
+        expect(component.isLocked()).toBe(false);
+      });
+
+      it('refuses to lock the repository root', async () => {
+        await build(doc({ type: 'Root' }));
+
+        component.runToolbarAction(ungated('app.toolbar.lock'));
+
+        expect(mockDetailService.lockDocument).not.toHaveBeenCalled();
+      });
+    });
+
     it('ignores a second lock request while the first is still in flight', async () => {
       await build();
       mockDetailService.lockDocument.mockReturnValue(NEVER);
@@ -480,6 +521,235 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(mockDetailService.lockDocument).toHaveBeenCalledTimes(1);
       expect(component.actionInProgress()).toBe('lock');
+    });
+  });
+
+  describe('lock owner and who may unlock', () => {
+    const LOCKED_AT = '2026-08-24T10:00:00.000Z';
+    /** What Nuxeo's lock policy leaves a non-owner with ReadWrite: Write is gone, Read is not. */
+    const NON_OWNER_PERMISSIONS = ['Read', 'ReadWrite', 'ReadProperties', 'Browse'];
+    const lockedByAlice = (permissions: string[] = ['Read', 'Write', 'ReadWrite']): NuxeoDocument =>
+      doc({ lockOwner: 'alice', lockCreated: LOCKED_AT, contextParameters: { permissions } });
+
+    it('opens a document locked earlier as locked, and remembers who holds it since when', async () => {
+      await build(doc({ lockOwner: 'alice', lockCreated: LOCKED_AT }));
+
+      expect(component.isLocked()).toBe(true);
+      expect(component.lockOwner()).toBe('alice');
+      expect(component.lockCreated()).toBe(LOCKED_AT);
+    });
+
+    it('treats a lock date with no owner as locked', async () => {
+      await build(doc({ lockOwner: null, lockCreated: LOCKED_AT }));
+
+      expect(component.isLocked()).toBe(true);
+    });
+
+    it('names the owner and the localised date in the Unlock tooltip', async () => {
+      await build(lockedByAlice());
+
+      expect(component.toolbarTooltip(offered('app.toolbar.unlock'))).toBe(
+        'Locked by alice on August 24, 2026',
+      );
+    });
+
+    it('leaves the tooltip to the label while the document is unlocked', async () => {
+      await build();
+
+      expect(component.toolbarTooltip(offered('app.toolbar.lock'))).toBeNull();
+    });
+
+    it('keeps a manifest tooltip that is deliberately empty', async () => {
+      await build(lockedByAlice());
+
+      const silenced = { ...offered('app.toolbar.unlock'), tooltip: '' };
+
+      expect(component.toolbarTooltip(silenced)).toBe('');
+    });
+
+    it('lets a lock request from the previous document neither hold nor clear the busy flag', async () => {
+      await build();
+      const first = new Subject<NuxeoDocument>();
+      mockDetailService.lockDocument.mockReturnValueOnce(first);
+      component.toggleLock();
+
+      // What the route handler does before it switches `docUid`.
+      component['releaseLockRequest']();
+      component['docUid'] = 'doc-2';
+      expect(component.actionInProgress()).toBeNull();
+
+      mockDetailService.lockDocument.mockReturnValueOnce(NEVER);
+      component.toggleLock();
+      first.next(doc({ lockOwner: 'tester', lockCreated: LOCKED_AT }));
+
+      expect(mockDetailService.lockDocument).toHaveBeenLastCalledWith('doc-2');
+      expect(component.actionInProgress()).toBe('lock');
+      expect(component.isLocked()).toBe(false);
+    });
+
+    it('lets a tooltip a manifest sets win over the lock owner', async () => {
+      await build(lockedByAlice());
+
+      const relabelled = { ...offered('app.toolbar.unlock'), tooltip: 'Release the lock' };
+
+      expect(component.toolbarTooltip(relabelled)).toBe('Release the lock');
+    });
+
+    /** nxs-document-toolbar names the button "Unlock. Locked by …" from these two (NXSAT-528). */
+    it('hands the toolbar the Unlock label and who holds the lock as its tooltip', async () => {
+      await build(lockedByAlice());
+
+      const unlock = component.toolbarEntries().find((entry) => entry.id === 'app.toolbar.unlock');
+      expect(unlock?.label).toBe('Unlock');
+      expect(unlock?.tooltip).toBe('Locked by alice on August 24, 2026');
+    });
+
+    it('shows the closed padlock, marked active, while locked and the open one while unlocked', async () => {
+      await build(lockedByAlice());
+      const unlock = offered('app.toolbar.unlock');
+      expect(unlock.icon).toBe('lock');
+      expect(component.isToolbarActionActive(unlock)).toBe(true);
+
+      component.toggleLock();
+      await fixture.whenStable();
+
+      const lock = offered('app.toolbar.lock');
+      expect(lock.icon).toBe('unlocked');
+      expect(component.isToolbarActionActive(lock)).toBe(false);
+    });
+
+    it('shows a locked document to a user the lock policy has left read-only, with Unlock disabled', async () => {
+      await build(lockedByAlice(NON_OWNER_PERMISSIONS));
+
+      const unlock = offered('app.toolbar.unlock');
+
+      expect(component.isToolbarActionEnabled(unlock)).toBe(false);
+      expect(component.toolbarTooltip(unlock)).toBe('Locked by alice on August 24, 2026');
+    });
+
+    it('does not run a disabled toolbar action', async () => {
+      await build(lockedByAlice(NON_OWNER_PERMISSIONS));
+
+      component.runToolbarAction(offered('app.toolbar.unlock'));
+
+      expect(mockDetailService.unlockDocument).not.toHaveBeenCalled();
+      expect(component.isLocked()).toBe(true);
+    });
+
+    it('enables Unlock for the lock owner', async () => {
+      await build(doc({ lockOwner: 'tester', lockCreated: LOCKED_AT }));
+
+      expect(component.isToolbarActionEnabled(offered('app.toolbar.unlock'))).toBe(true);
+    });
+
+    it('enables Unlock for an administrator on a lock another user holds', async () => {
+      // An administrator keeps Write and Everything on a document another user locked.
+      await build(lockedByAlice(['Read', 'Write', 'Everything', 'Unlock']));
+
+      expect(component.isToolbarActionEnabled(offered('app.toolbar.unlock'))).toBe(true);
+    });
+
+    it('offers neither half to a read-only user on an unlocked document', async () => {
+      await build(doc({ contextParameters: { permissions: ['Read'] } }));
+
+      const ids = component.toolbarActions().map((a) => a.id);
+
+      expect(ids).not.toContain('app.toolbar.lock');
+      expect(ids).not.toContain('app.toolbar.unlock');
+    });
+
+    it('offers no lock control on a version, which carries the Immutable facet', async () => {
+      await build(doc({ isVersion: true, facets: ['Immutable', 'Versionable'] }));
+
+      const ids = component.toolbarActions().map((a) => a.id);
+
+      expect(ids).not.toContain('app.toolbar.lock');
+      expect(ids).not.toContain('app.toolbar.unlock');
+    });
+
+    it('offers no lock control on a locked immutable document', async () => {
+      await build(doc({ lockOwner: 'alice', lockCreated: LOCKED_AT, facets: ['Immutable'] }));
+
+      expect(component.toolbarActions().map((a) => a.id)).not.toContain('app.toolbar.unlock');
+    });
+
+    it('offers no lock control on the repository root', async () => {
+      // No `Folderish` facet: the page hands folderish documents to browse before the toolbar
+      // resolves, which would make this pass without the rule being consulted at all.
+      await build(doc({ type: 'Root' }));
+
+      expect(component.toolbarActions().map((a) => a.id)).not.toContain('app.toolbar.lock');
+    });
+
+    it('records the owner and date the server returns from Lock', async () => {
+      await build();
+      mockDetailService.lockDocument.mockReturnValue(
+        of(doc({ lockOwner: 'tester', lockCreated: '2026-09-01T08:00:00.000Z' })),
+      );
+
+      component.toggleLock();
+      await fixture.whenStable();
+
+      expect(component.lockCreated()).toBe('2026-09-01T08:00:00.000Z');
+      expect(component.toolbarTooltip(offered('app.toolbar.unlock'))).toBe(
+        'Locked by tester on September 1, 2026',
+      );
+    });
+
+    it('clears the lock date on unlock', async () => {
+      await build(doc({ lockOwner: 'tester', lockCreated: LOCKED_AT }));
+
+      component.toggleLock();
+
+      expect(component.lockCreated()).toBeNull();
+    });
+
+    it.each([
+      [
+        'succeeds',
+        (pending: Subject<NuxeoDocument>) =>
+          pending.next(doc({ lockOwner: 'tester', lockCreated: LOCKED_AT })),
+      ],
+      [
+        'is refused',
+        (pending: Subject<NuxeoDocument>) => pending.error(new HttpErrorResponse({ status: 409 })),
+      ],
+    ])('ignores a Lock that %s after navigating to another document', async (_how, settle) => {
+      await build();
+      const pending = new Subject<NuxeoDocument>();
+      mockDetailService.lockDocument.mockReturnValue(pending);
+
+      component.toggleLock();
+      component['docUid'] = 'doc-2';
+      toast.show.mockClear();
+      toast.error.mockClear();
+      settle(pending);
+
+      expect(mockDetailService.lockDocument).toHaveBeenCalledWith('doc-1');
+      expect(component.isLocked()).toBe(false);
+      expect(component.lockOwner()).toBeNull();
+      expect(component.actionInProgress()).toBeNull();
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [false, 409, 'Document already locked by another user, please refresh your page.'],
+      [false, 403, "You don't have permission to lock this document."],
+      [true, 409, "You can't unlock this document because it is locked by another user."],
+      [true, 403, "You don't have permission to unlock this document."],
+      [true, 500, 'Failed to toggle lock'],
+    ])('locked=%s: explains a %i refusal specifically', async (locked, status, message) => {
+      await build(locked ? doc({ lockOwner: 'tester', lockCreated: LOCKED_AT }) : doc());
+      const refusal = throwError(() => new HttpErrorResponse({ status }));
+      mockDetailService.lockDocument.mockReturnValue(refusal);
+      mockDetailService.unlockDocument.mockReturnValue(refusal);
+
+      component.toggleLock();
+
+      expect(toast.error).toHaveBeenCalledWith(message);
+      expect(component.isLocked()).toBe(locked);
+      expect(component.actionInProgress()).toBeNull();
     });
   });
 
@@ -513,6 +783,31 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.isFavorite()).toBe(false);
     });
 
+    it('does not mark the document it moved on to when the last one’s answer arrives', async () => {
+      const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-1' }));
+      TestBed.overrideProvider(ActivatedRoute, {
+        useValue: {
+          paramMap: route,
+          queryParamMap: of(convertToParamMap({})),
+          snapshot: { queryParamMap: convertToParamMap({}) },
+        },
+      });
+      await build();
+      const answer = new Subject<undefined>();
+      mockDetailService.addToFavorites.mockReturnValue(answer);
+      component.toggleFavorite();
+
+      mockDetailService.getFullDocument.mockReturnValue(of(doc({ uid: 'doc-2' })));
+      route.next(convertToParamMap({ uid: 'doc-2' }));
+      await fixture.whenStable();
+      answer.next(undefined);
+      answer.complete();
+
+      expect(mockDetailService.addToFavorites).toHaveBeenCalledWith('doc-1');
+      expect(component.isFavorite()).toBe(false);
+      expect(component.actionInProgress()).toBeNull();
+    });
+
     it('leaves the flag alone when the call fails', async () => {
       await build();
       mockDetailService.addToFavorites.mockReturnValue(throwError(() => new Error('boom')));
@@ -521,7 +816,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.isFavorite()).toBe(false);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to update favorites', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to update favorites');
     });
   });
 
@@ -533,7 +828,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(mockDetailService.subscribe).toHaveBeenCalledWith('doc-1');
       expect(component.isSubscribed()).toBe(true);
-      expect(snack).toHaveBeenCalledWith('Notifications enabled', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Notifications enabled');
     });
 
     it('unsubscribes a document that already has notifications', async () => {
@@ -558,7 +853,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.isSubscribed()).toBe(false);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to update notifications', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to update notifications');
     });
   });
 
@@ -615,6 +910,8 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       );
       await fixture.whenStable();
 
+      // No `note` flag: `app.rules.isNote` reads the document's type, which is not interface
+      // state, so this bag does not repeat it.
       expect(ruleContext.flags()).toEqual({
         favorite: true,
         locked: true,
@@ -622,8 +919,8 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         inClipboard: false,
         hasVersion: true,
         aiEnabled: false,
-        note: true,
       });
+      expect(ruleContext.document()?.type).toBe('Note');
     });
 
     it('publishes a busy flag naming the operation in flight', async () => {
@@ -661,7 +958,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.doc()?.title).toBe('Renamed');
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith('Document updated', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Document updated');
     });
 
     it('leaves the document alone when the dialog is dismissed', async () => {
@@ -671,7 +968,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.onEditClick();
 
       expect(component.doc()?.title).toBe('Original');
-      expect(snack).not.toHaveBeenCalledWith('Document updated', 'OK', expect.anything());
+      expect(toast.show).not.toHaveBeenCalledWith('Document updated');
     });
 
     it('refuses to open for a document the user cannot write', async () => {
@@ -693,7 +990,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(mockDetailService.addToCollection).toHaveBeenCalledWith('doc-1', 'col-9');
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Added to collection', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Added to collection');
     });
 
     it('does nothing when no collection is chosen', async () => {
@@ -713,7 +1010,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.openAddToCollectionDialog();
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to add to collection', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to add to collection');
     });
   });
 
@@ -766,7 +1063,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
   });
 
   describe('drive dialog', () => {
-    it('opens Drive in the containing folder with the stored filename', async () => {
+    it('opens Drive in the containing folder', async () => {
       await build(
         doc({
           path: '/default-domain/workspaces/ws/report',
@@ -776,25 +1073,15 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       component.openDriveDialog();
 
-      expect(lastDialogData()).toEqual({
-        docUid: 'doc-1',
-        filename: 'report.docx',
-        blobUrl: '/nuxeo/blob/report',
-        docPath: '/default-domain/workspaces/ws',
-      });
+      expect(lastDialogData()).toEqual({ folderPath: '/default-domain/workspaces/ws' });
     });
 
-    it('falls back to the document title when there is no blob', async () => {
+    it('opens Drive at the repository root for a document directly under it', async () => {
       await build(doc({ title: 'No blob', path: '/x', properties: {} }));
 
       component.openDriveDialog();
 
-      expect(lastDialogData()).toEqual({
-        docUid: 'doc-1',
-        filename: 'No blob',
-        blobUrl: '',
-        docPath: '/',
-      });
+      expect(lastDialogData()).toEqual({ folderPath: '/' });
     });
   });
 
@@ -828,7 +1115,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       component.download();
 
-      expect(snack).toHaveBeenCalledWith('Failed to download document', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to download document');
     });
   });
 
@@ -859,55 +1146,25 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
   });
 
   describe('versions', () => {
+    const WITH_WRITE_VERSION = ['Read', 'Write', 'WriteVersion', 'ReadWrite', 'Remove'];
     const version = (major: number, minor: number): NuxeoDocument =>
       doc({
         uid: `v-${major}-${minor}`,
+        isVersion: true,
         properties: { 'uid:major_version': major, 'uid:minor_version': minor },
+        contextParameters: { permissions: WITH_WRITE_VERSION },
       });
 
-    it('loads the version list the first time the dropdown opens and not again', async () => {
-      mockDetailService.getVersions.mockReturnValue(of({ entries: [version(1, 0)] }));
+    it('restores a version and reloads the document', async () => {
       await build();
-
-      component.toggleVersionDropdown();
-
-      expect(component.versionDropdownOpen()).toBe(true);
-      expect(component.versions().map((v) => component.versionString(v))).toEqual(['1.0']);
-
-      component.toggleVersionDropdown();
-      component.toggleVersionDropdown();
-
-      expect(mockDetailService.getVersions).toHaveBeenCalledTimes(1);
-    });
-
-    it('clears the loading flag when the version list fails so the user can retry', async () => {
-      mockDetailService.getVersions.mockReturnValue(throwError(() => new Error('500')));
-      await build();
-
-      component.toggleVersionDropdown();
-
-      expect(component.versionsLoading()).toBe(false);
-      expect(component.versions()).toEqual([]);
-
-      mockDetailService.getVersions.mockReturnValue(of({ entries: [version(2, 0)] }));
-      component.toggleVersionDropdown();
-      component.toggleVersionDropdown();
-
-      expect(component.versions()).toHaveLength(1);
-    });
-
-    it('restores a version, closes the dropdown and reloads the document', async () => {
-      await build();
-      component.versionDropdownOpen.set(true);
       mockDetailService.getFullDocument.mockClear();
 
       component.restoreVersion(version(3, 1));
 
       expect(mockDetailService.restoreVersion).toHaveBeenCalledWith('v-3-1');
-      expect(component.versionDropdownOpen()).toBe(false);
       expect(component.actionInProgress()).toBeNull();
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith('Restored to version 3.1', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Restored to version 3.1');
     });
 
     it('releases the in-progress flag when the restore fails', async () => {
@@ -917,44 +1174,82 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.restoreVersion(version(1, 0));
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to restore version', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to restore version');
     });
 
-    it('refuses to restore a version without the write permission', async () => {
-      await build(doc({ contextParameters: { permissions: ['Read'] } }));
+    it('refuses to restore a version without WriteVersion, which is what Nuxeo checks', async () => {
+      await build();
 
-      component.restoreVersion(version(1, 0));
+      component.restoreVersion({
+        ...version(1, 0),
+        contextParameters: { permissions: ['Read', 'Write'] },
+      });
 
       expect(mockDetailService.restoreVersion).not.toHaveBeenCalled();
     });
 
-    it('reloads the document after a version is created', async () => {
+    it('returns to the live document after restoring the version it shows', async () => {
       await build();
-      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      component.restoreVersion({ ...version(1, 0), versionableId: 'doc-live' });
+
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live']);
+    });
+
+    it('reloads the document after nxs-manage-versions created a version', async () => {
+      await build();
       mockDetailService.getFullDocument.mockClear();
 
-      component.openCreateVersionDialog();
+      component.onVersionCreated();
 
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
-      expect(mockDetailService.getVersions).toHaveBeenCalled();
     });
   });
 
   describe('publish dialog', () => {
-    it('fetches the versions the dialog needs before opening it', async () => {
+    /** Web UI's `isPublishable`: the `Publishable` facet and `WriteVersion`. */
+    const publishable = (over: Partial<NuxeoDocument> = {}): NuxeoDocument =>
+      doc({
+        facets: ['Publishable', 'Versionable'],
+        properties: { 'uid:major_version': 1 },
+        contextParameters: { permissions: ['Read', 'Write', 'ReadWrite', 'WriteVersion'] },
+        ...over,
+      });
+
+    it('publishes the document on screen, with its versions read from the repository', async () => {
       const v = doc({ uid: 'v1', properties: { 'uid:major_version': 1 } });
-      mockDetailService.getVersions.mockReturnValue(of({ entries: [v] }));
-      await build(doc({ properties: { 'uid:major_version': 1 } }));
+      mockDetailService.getVersionsDirect.mockReturnValue(of([v]));
+      await build(publishable());
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
 
+      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-1');
       expect(lastDialogData()).toMatchObject({ documentUid: 'doc-1', versions: [v] });
     });
 
+    it('publishes a version as it is, as Web UI does, listing its live document’s versions', async () => {
+      await build(
+        publishable({
+          uid: 'v-1-0',
+          isVersion: true,
+          versionableId: 'doc-live',
+          facets: ['Publishable', 'Immutable'],
+        }),
+      );
+      mockDialog.open.mockClear();
+
+      component.openPublishDialog();
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-live');
+      expect(lastDialogData()).toMatchObject({ documentUid: 'v-1-0', versionLabel: '1.0' });
+    });
+
     it('still opens the dialog with no versions when the fetch fails', async () => {
-      mockDetailService.getVersions.mockReturnValue(throwError(() => new Error('500')));
-      await build();
+      mockDetailService.getVersionsDirect.mockReturnValue(throwError(() => new Error('500')));
+      await build(publishable());
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
@@ -964,9 +1259,9 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
     it('offers the renditions the document actually has', async () => {
       await build(
-        doc({
+        publishable({
           contextParameters: {
-            permissions: ['Read', 'Write', 'ReadWrite', 'Everything', 'Remove'],
+            permissions: ['Read', 'Write', 'WriteVersion'],
             renditions: [{ name: 'pdf' }, { name: 'custom' }],
           },
         }),
@@ -984,7 +1279,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     });
 
     it('falls back to the four standard renditions when the enricher is absent', async () => {
-      await build();
+      await build(publishable());
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
@@ -999,12 +1294,37 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       });
     });
 
-    it('refuses to open for a document the user cannot write', async () => {
-      await build(doc({ contextParameters: { permissions: ['Read'] } }));
+    it('re-reads the publications once something was published', async () => {
+      await build(publishable());
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
+      mockDetailService.getPublishedVersions.mockClear();
+
+      component.openPublishDialog();
+
+      expect(mockDetailService.getPublishedVersions).toHaveBeenCalledWith('doc-1');
+    });
+
+    it('refuses to open without WriteVersion, even with Write', async () => {
+      await build(
+        publishable({ contextParameters: { permissions: ['Read', 'Write', 'ReadWrite'] } }),
+      );
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
 
+      expect(mockDialog.open).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('You do not have permission to perform this action');
+    });
+
+    it('refuses to open on a proxy or a document that is not Publishable', async () => {
+      await build(publishable({ isProxy: true }));
+      mockDialog.open.mockClear();
+      component.openPublishDialog();
+      expect(mockDialog.open).not.toHaveBeenCalled();
+
+      await build(publishable({ facets: ['Versionable'] }));
+      mockDialog.open.mockClear();
+      component.openPublishDialog();
       expect(mockDialog.open).not.toHaveBeenCalled();
     });
   });
@@ -1065,7 +1385,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.showStartProcessPanel()).toBe(true);
       expect(component.startingWorkflow()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to start workflow', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to start workflow');
     });
 
     it('refreshes the workflow list after abandoning one', async () => {
@@ -1088,7 +1408,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.abandonWorkflow(workflow());
 
       expect(component.abandoningWorkflow()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to abandon workflow.', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to abandon workflow.');
     });
 
     it('turns an i18n task key into a readable label', async () => {
@@ -1155,6 +1475,15 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       );
     });
 
+    it('shows the day a share ends as the panel does, not its UTC date', async () => {
+      await build();
+
+      // Midnight in Paris on 15 July, which Nuxeo holds as 22:00 UTC on the 14th.
+      expect(component.aceTimeFrame(ace({ end: '2030-07-14T22:00:00.000Z' }))).toBe(
+        'Until Jul 15, 2030',
+      );
+    });
+
     it('strips the transient prefix from a shared-link principal', async () => {
       await build();
 
@@ -1169,7 +1498,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.aceGrantedBy(ace({ creator: null }))).toBe('—');
     });
 
-    it('splits the ACL enricher into local, inherited and external grants', async () => {
+    it('keeps only the external grants, which the host shows beside the panel', async () => {
       await build(
         doc({
           contextParameters: {
@@ -1189,23 +1518,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         }),
       );
 
-      expect(component.localAces().map((a) => a.id)).toEqual(['a']);
-      expect(component.inheritedAces().map((a) => a.id)).toEqual(['d']);
       expect(component.externalAces().map((a) => a.id)).toEqual(['c']);
-      expect(component.isInheritanceBlocked()).toBe(false);
-    });
-
-    it('reports inheritance as blocked when the inherited ACL is gone', async () => {
-      await build(
-        doc({
-          contextParameters: {
-            permissions: ['Everything'],
-            acls: [{ name: 'local', aces: [ace()] }],
-          },
-        }),
-      );
-
-      expect(component.isInheritanceBlocked()).toBe(true);
     });
   });
 
@@ -1262,10 +1575,12 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     it('builds breadcrumb links for every ancestor folder but not the document itself', async () => {
       await build(doc({ path: '/default-domain/workspaces/ws/report', title: 'Report' }));
 
-      expect(component.breadcrumbItems().map((i) => i.label)).toEqual([
-        'default-domain',
-        'workspaces',
-        'ws',
+      expect(
+        component.breadcrumbItems().map((i) => [i.label, 'href' in i ? i.href : undefined]),
+      ).toEqual([
+        ['default-domain', '/browse/default-domain'],
+        ['workspaces', '/browse/default-domain/workspaces'],
+        ['ws', '/browse/default-domain/workspaces/ws'],
       ]);
     });
 

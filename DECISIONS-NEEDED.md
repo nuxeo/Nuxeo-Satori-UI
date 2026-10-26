@@ -8,12 +8,18 @@ before implementation can continue.
 > **The security half is RESOLVED; only the product question below is still open.**
 >
 > The injection guard no longer depends on `?q=` and is no longer blocked on this
-> decision. `apps/nuxeo-ui-e2e/src/search.spec.ts` now drives `/#/search-adf-hx` — the
-> one production call site of `escapeHxqlLiteral` — through the page's own input, and
-> asserts the NXQL that leaves on the wire: that an apostrophe arrives escaped inside
-> the literal, that Nuxeo answers 200, and that stripping every literal from a
-> query-shaped payload leaves no `ecm:uuid` and no top-level `OR` in the structure that
-> remains. It is falsifiable: reverting `escapeHxqlLiteral` takes it red.
+> decision. `apps/nuxeo-ui-e2e/src/search.spec.ts` drives `/#/search` through the search
+> drawer's full-text input and asserts every search request Enter sends — the results request
+> and the drawer's baseline-count search are identical on the wire. Until NXSAT-308
+> it drove `/#/search-adf-hx`, the one production call site of `escapeHxqlLiteral`; that
+> route is deleted with adf-hx, so the specs moved first. `/#/search` sends the term to the
+> `default_search` page provider as the `ecm_fulltext` named parameter and Nuxeo binds it
+> server-side, so the specs assert that the term arrives as that bound value verbatim and in
+> no other parameter, that Nuxeo answers 200, and that the query-shaped payload matches 0
+> documents — as NXQL structure it matched all 1,940 on the shared instance. If the page is
+> ever rewritten to build NXQL itself, the same specs check for an escaped literal instead.
+> It is falsifiable: concatenating the term into NXQL, or pre-escaping the bound value, takes
+> both specs red.
 >
 > What follows is therefore **only** the product question — should `/#/search?q=` be a
 > shareable URL? Nothing in the test suite is waiting on the answer. Task 2.3 is
@@ -60,7 +66,8 @@ make the guard functional.
 
 **Blocked tasks:** none. Task 2.3 (make the injection-guard specs exercise the real
 path) is delivered, by neither option — the specs moved to `/#/search-adf-hx`, which
-is where `escapeHxqlLiteral` is actually called.
+is where `escapeHxqlLiteral` is actually called, and then to `/#/search` through the
+drawer input when NXSAT-308 scheduled that route for deletion.
 
 ---
 

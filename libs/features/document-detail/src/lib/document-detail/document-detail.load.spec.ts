@@ -1,21 +1,21 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import {
   ActivatedRoute,
   convertToParamMap,
+  type Navigation,
+  type ParamMap,
   provideRouter,
   Router,
   withDisabledInitialNavigation,
 } from '@angular/router';
-import { MatChipInputEvent } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { Observable, of, throwError } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import {
@@ -30,7 +30,7 @@ import {
   TaskService,
   WorkflowService,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiChatService,
   AiFeatureFlagService,
@@ -41,9 +41,10 @@ import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 /**
  * The load chain, actually running.
@@ -108,6 +109,7 @@ const mockDetailService = {
   updateComment: vi.fn((): Observable<unknown> => of({})),
   deleteComment: vi.fn((): Observable<void> => of(undefined)),
   getVersions: vi.fn((): Observable<unknown[]> => of([])),
+  getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
   getPublishedVersions: vi.fn((): Observable<unknown[]> => of([])),
   getSectionTree: vi.fn((): Observable<unknown[]> => of([])),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
@@ -158,8 +160,8 @@ const mockARenderService = {
   getPreviewerUrl: vi.fn((): Observable<string | null> => of(null)),
 };
 const mockTagService = {
-  addTag: vi.fn((): Observable<unknown> => of({})),
-  removeTag: vi.fn((): Observable<void> => of(undefined)),
+  addTag: vi.fn((): Observable<string[]> => of([])),
+  removeTag: vi.fn((): Observable<string[]> => of([])),
   searchTags: vi.fn((): Observable<unknown[]> => of([])),
 };
 const mockAiGateway = {
@@ -184,7 +186,8 @@ describe('DocumentDetailComponent — load chain', () => {
   let component: DocumentDetailComponent;
   let fixture: ComponentFixture<DocumentDetailComponent>;
   let router: Router;
-  let snack: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+  let routeParams: BehaviorSubject<ParamMap>;
 
   /**
    * jsdom provides neither `URL.createObjectURL` nor `revokeObjectURL`, and this component
@@ -215,34 +218,20 @@ describe('DocumentDetailComponent — load chain', () => {
     await fixture.whenStable();
   }
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    created.length = 0;
-    revoked.length = 0;
-    snack = vi.fn();
-
-    // `clearAllMocks` clears call history but NOT implementations installed with
-    // `mockReturnValue`, so anything a test overrides must be restored explicitly here or it
-    // leaks into every later test.
-    mockDetailService.getFullDocument.mockReturnValue(of(doc()));
-    mockDetailService.fetchBlob.mockReturnValue(of(new Blob(['x'], { type: 'text/plain' })));
-    mockDetailService.fetchThumbnail.mockReturnValue(of(new Blob(['x'], { type: 'image/png' })));
-    mockDetailService.getAllComments.mockReturnValue(of({ entries: [] }));
-    mockARenderService.isAvailable.mockReturnValue(of(false));
-    mockARenderService.getPreviewerUrl.mockReturnValue(of(null));
-    mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
-
-    await TestBed.configureTestingModule({
+  /** `rendered` keeps the real template, for a test that asserts what the page shows. */
+  async function configure({ rendered = false } = {}): Promise<void> {
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
+    const bed = TestBed.configureTestingModule({
       imports: [testTranslateModule(), testTranslateModule(), DocumentDetailComponent],
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
           useValue: {
-            paramMap: of(convertToParamMap({ uid: 'doc-1' })),
+            paramMap: routeParams,
             queryParamMap: of(convertToParamMap({})),
             snapshot: { queryParamMap: convertToParamMap({}) },
           },
@@ -260,7 +249,6 @@ describe('DocumentDetailComponent — load chain', () => {
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(false) } },
         { provide: NuxeoApiBase, useValue: mockNuxeoApi },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: snack } },
         { provide: MatDialog, useValue: mockDialog },
         // The tab strip is resolved from Layer 1 now, and `onTabChange` keys its
         // lazy loads off the resolved id rather than a literal index. Without the
@@ -269,11 +257,34 @@ describe('DocumentDetailComponent — load chain', () => {
           slots: { [EXTENSION_SLOTS.tabs]: PACKAGED_DOCUMENT_TABS },
         }),
       ],
-    })
-      .overrideComponent(DocumentDetailComponent, {
+    });
+    if (!rendered) {
+      bed.overrideComponent(DocumentDetailComponent, {
         set: { imports: [], template: '<div></div>' },
-      })
-      .compileComponents();
+      });
+    }
+    await bed.compileComponents();
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    created.length = 0;
+    revoked.length = 0;
+    toast = { show: vi.fn(), error: vi.fn() };
+    routeParams = new BehaviorSubject<ParamMap>(convertToParamMap({ uid: 'doc-1' }));
+
+    // `clearAllMocks` clears call history but NOT implementations installed with
+    // `mockReturnValue`, so anything a test overrides must be restored explicitly here or it
+    // leaks into every later test.
+    mockDetailService.getFullDocument.mockReturnValue(of(doc()));
+    mockDetailService.fetchBlob.mockReturnValue(of(new Blob(['x'], { type: 'text/plain' })));
+    mockDetailService.fetchThumbnail.mockReturnValue(of(new Blob(['x'], { type: 'image/png' })));
+    mockDetailService.getAllComments.mockReturnValue(of({ entries: [] }));
+    mockARenderService.isAvailable.mockReturnValue(of(false));
+    mockARenderService.getPreviewerUrl.mockReturnValue(of(null));
+    mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
+
+    await configure();
   });
 
   describe('loadDocument', () => {
@@ -294,8 +305,29 @@ describe('DocumentDetailComponent — load chain', () => {
       await fixture.whenStable();
 
       expect(component.error()).toBe('Failed to load document.');
+      expect(component.errorStatus()).toBe(500);
       expect(component.loading()).toBe(false);
       expect(component.doc()).toBeNull();
+    });
+
+    it('renders a missing document as the 404 state, the page heading, with Go Back', async () => {
+      mockDetailService.getFullDocument.mockReturnValue(throwError(() => ({ status: 404 })));
+      TestBed.resetTestingModule();
+      await configure({ rendered: true });
+
+      fixture = TestBed.createComponent(DocumentDetailComponent);
+      component = fixture.componentInstance;
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const state = (fixture.nativeElement as HTMLElement).querySelector('nxs-error-state');
+      expect(component.errorStatus()).toBe(404);
+      expect(state?.getAttribute('data-status')).toBe('404');
+      expect(state?.querySelector('h1')?.textContent?.trim()).toBe('Failed to load document.');
+      expect(state?.querySelector('.nxs-error-state__message')?.textContent).toContain(
+        'It may have been moved or deleted',
+      );
+      expect(state?.querySelector('button')?.textContent).toContain('Go Back');
     });
 
     /**
@@ -318,6 +350,67 @@ describe('DocumentDetailComponent — load chain', () => {
 
       expect(spy).not.toHaveBeenCalledWith(expect.stringContaining('/browse'), expect.anything());
       spy.mockRestore();
+    });
+
+    /**
+     * The page is reused across `:uid` changes, so a read for the document the user has left can
+     * land after the one they moved to. Applied, it would put the old document's lock state on the
+     * toolbar while `toggleLock()` targets the new uid: Unlock sent to a document nobody locked.
+     */
+    describe('a read that lands after the route has moved on', () => {
+      async function openThenLeave(
+        left: Observable<NuxeoDocument>,
+        next: Observable<NuxeoDocument>,
+      ) {
+        mockDetailService.getFullDocument.mockReturnValueOnce(left).mockReturnValueOnce(next);
+        fixture = TestBed.createComponent(DocumentDetailComponent);
+        component = fixture.componentInstance;
+        await fixture.whenStable();
+        routeParams.next(convertToParamMap({ uid: 'doc-2' }));
+        await fixture.whenStable();
+      }
+
+      it('is dropped, so the toolbar and the lock action describe the current document', async () => {
+        const left = new Subject<NuxeoDocument>();
+        await openThenLeave(left, of(doc({ uid: 'doc-2' })));
+
+        left.next(doc({ lockOwner: 'alice', lockCreated: '2026-08-24T10:00:00.000Z' }));
+        await fixture.whenStable();
+
+        expect(component.doc()?.uid).toBe('doc-2');
+        expect(component.isLocked()).toBe(false);
+        expect(component.lockOwner()).toBeNull();
+
+        component.toggleLock();
+
+        expect(mockDetailService.unlockDocument).not.toHaveBeenCalled();
+        expect(mockDetailService.lockDocument).toHaveBeenCalledWith('doc-2');
+      });
+
+      it('does not report its failure on the current document', async () => {
+        const left = new Subject<NuxeoDocument>();
+        const current = new Subject<NuxeoDocument>();
+        await openThenLeave(left, current);
+
+        left.error(new Error('403'));
+        await fixture.whenStable();
+
+        expect(component.error()).toBeNull();
+        expect(component.loading()).toBe(true);
+      });
+
+      it('does not redirect away from the current document when it was folderish', async () => {
+        const spy = vi.spyOn(Router.prototype, 'navigateByUrl');
+        const left = new Subject<NuxeoDocument>();
+        await openThenLeave(left, of(doc({ uid: 'doc-2' })));
+
+        left.next(doc({ type: 'Folder', path: '/default-domain/workspaces/ws' }));
+        await fixture.whenStable();
+
+        expect(spy).not.toHaveBeenCalledWith(expect.stringContaining('/browse'), expect.anything());
+        expect(component.doc()?.uid).toBe('doc-2');
+        spy.mockRestore();
+      });
     });
   });
 
@@ -405,18 +498,94 @@ describe('DocumentDetailComponent — load chain', () => {
       expect(mockDetailService.fetchBlob).toHaveBeenCalled();
     });
 
-    it('does not attempt a preview for a container type with no content', async () => {
-      // Section is in `noPreviewTypes`; asking for a preview would 404 on every open.
-      await build(doc({ type: 'Section', path: '/default-domain/sections/s1', properties: {} }));
+    /**
+     * Every container type is folderish, and a folderish document with a path is redirected to
+     * browse before `loadBlob` runs, so these use an empty path: it is the only way the branch is
+     * reached. With a path this test passed without ever getting there.
+     */
+    it.each(['Folder', 'Workspace', 'Domain', 'Section', 'OrderedFolder'])(
+      'does not attempt a preview for a %s with no content',
+      async (type) => {
+        await build(
+          doc({
+            type,
+            path: '',
+            properties: {},
+            contextParameters: { preview: { url: '/nuxeo/preview/x' } },
+          }),
+        );
 
-      expect(component.blobLoading()).toBe(false);
-      expect(mockDetailService.fetchBlob).not.toHaveBeenCalled();
-    });
+        expect(component.doc()?.type).toBe(type);
+        expect(component.blobLoading()).toBe(false);
+        expect(component.previewUrl()).toBeNull();
+        expect(mockDetailService.fetchBlob).not.toHaveBeenCalled();
+      },
+    );
 
     it('falls back to a preview for a non-container type with no content', async () => {
-      await build(doc({ type: 'File', properties: {} }));
+      await build(
+        doc({
+          type: 'File',
+          properties: {},
+          contextParameters: { preview: { url: '/nuxeo/preview/x' } },
+        }),
+      );
       // The fallback path runs rather than leaving the viewer stuck loading.
       expect(component.blobLoading()).toBe(false);
+      expect(component.previewUrl()).not.toBeNull();
+    });
+
+    it('fetches a Picture main file as a blob, not as text, whatever its mime type', async () => {
+      mockDetailService.fetchBlob.mockReturnValue(
+        of(new Blob(['line one'], { type: 'text/plain' })),
+      );
+      await build(
+        doc({
+          type: 'Picture',
+          properties: { 'file:content': fileContent('text/plain', 'a.txt') },
+        }),
+      );
+      await fixture.whenStable();
+
+      expect(component.blobUrl()).not.toBeNull();
+      expect(component.noteContent()).toBeNull();
+    });
+
+    it('reads a text main file as text on a File', async () => {
+      mockDetailService.fetchBlob.mockReturnValue(
+        of(new Blob(['line one'], { type: 'text/plain' })),
+      );
+      await build(doc({ properties: { 'file:content': fileContent('text/plain', 'a.txt') } }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(component.noteContent()).toBe('line one');
+      expect(component.blobUrl()).toBeNull();
+    });
+
+    it('fetches a Picture main file rather than its PDF rendition', async () => {
+      await build(
+        doc({
+          type: 'Picture',
+          properties: { 'file:content': fileContent('application/postscript', 'a.eps') },
+          contextParameters: { renditions: [{ name: 'pdf' }] },
+        }),
+      );
+
+      expect(mockDetailService.fetchBlob).toHaveBeenCalledWith('doc-1');
+      expect(mockDetailService.fetchPdfRendition).not.toHaveBeenCalled();
+    });
+
+    it('shows the PDF rendition of a custom type with an unpreviewable main file', async () => {
+      await build(
+        doc({
+          type: 'Claim',
+          properties: { 'file:content': fileContent('application/postscript', 'a.eps') },
+          contextParameters: { renditions: [{ name: 'pdf' }] },
+        }),
+      );
+
+      expect(mockDetailService.fetchPdfRendition).toHaveBeenCalledWith('doc-1');
+      expect(mockDetailService.fetchBlob).not.toHaveBeenCalled();
     });
 
     it('extracts picture metadata when picture:views are present', async () => {
@@ -472,6 +641,59 @@ describe('DocumentDetailComponent — load chain', () => {
     });
   });
 
+  describe('per-type decisions outside the viewer', () => {
+    it.each<[string, string, boolean]>([
+      ['Picture', 'application/octet-stream', true],
+      ['File', 'image/png', true],
+      ['File', 'application/pdf', false],
+      ['Claim', 'application/octet-stream', false],
+    ])('offers image enrichment on a %s holding %s: %s', async (type, mime, expected) => {
+      await build(doc({ type, properties: { 'file:content': fileContent(mime, 'f.bin') } }));
+
+      expect(component.supportsImageKnowledgeEnrichment()).toBe(expected);
+    });
+
+    describe('focusing the editor of a note just created', () => {
+      afterEach(() => history.replaceState(null, ''));
+
+      it('focuses the note editor when the new document is a Note', async () => {
+        history.replaceState({ freshNote: true }, '');
+        await build(doc({ type: 'Note', properties: { 'note:note': '' } }));
+
+        expect(component.focusNoteEditor()).toBe(true);
+      });
+
+      it('does not focus anything when the new document is not a Note', async () => {
+        history.replaceState({ freshNote: true }, '');
+        await build(doc({ type: 'File' }));
+
+        expect(component.focusNoteEditor()).toBe(false);
+      });
+
+      // The flag usually arrives on the navigation still in flight, before it reaches
+      // `history.state`, so both are read. These cover the in-flight half.
+      it('reads both fresh-document flags from the navigation in flight', async () => {
+        vi.spyOn(TestBed.inject(Router), 'currentNavigation').mockReturnValue({
+          extras: { state: { freshNote: true, freshBlobDocument: true } },
+        } as unknown as Navigation);
+        await build(doc({ type: 'Note', properties: { 'note:note': '' } }));
+
+        expect(component.focusNoteEditor()).toBe(true);
+        expect(component['freshBlobDocument']).toBe(true);
+      });
+
+      it('treats a navigation in flight that carries no extras as not fresh', async () => {
+        vi.spyOn(TestBed.inject(Router), 'currentNavigation').mockReturnValue(
+          {} as unknown as Navigation,
+        );
+        await build(doc({ type: 'Note', properties: { 'note:note': '' } }));
+
+        expect(component.focusNoteEditor()).toBe(false);
+        expect(component['freshBlobDocument']).toBe(false);
+      });
+    });
+  });
+
   describe('blob URL lifecycle', () => {
     it('revokes the blob URLs it created when the component is destroyed', async () => {
       await build(doc({ properties: { 'file:content': fileContent('image/png', 'a.png') } }));
@@ -522,151 +744,6 @@ describe('DocumentDetailComponent — load chain', () => {
       expect(component.actionInProgress()).toBeNull();
     });
   });
-  describe('audit / history tab', () => {
-    const entry = (over: Partial<AuditEntry> = {}): AuditEntry =>
-      ({
-        eventId: 'documentModified',
-        eventDate: '2026-08-20T10:00:00.000Z',
-        principalName: 'alice',
-        category: 'eventDocumentCategory',
-        comment: '',
-        docLifeCycle: 'project',
-        ...over,
-      }) as AuditEntry;
-
-    it('loads the audit log and records the total from resultsCount', async () => {
-      mockDetailService.getAuditLog.mockReturnValue(of({ entries: [entry()], resultsCount: 7 }));
-      await build();
-
-      component.loadAuditLog();
-
-      expect(mockDetailService.getAuditLog).toHaveBeenCalledWith('doc-1', 20, 0);
-      expect(component.auditEntries().length).toBe(1);
-      expect(component.auditTotalSize()).toBe(7);
-      expect(component.auditLoading()).toBe(false);
-    });
-
-    it('falls back to the entry count when the server sends no total', async () => {
-      mockDetailService.getAuditLog.mockReturnValue(of({ entries: [entry(), entry()] }));
-      await build();
-
-      component.loadAuditLog();
-
-      expect(component.auditTotalSize()).toBe(2);
-    });
-
-    it('does not query the audit log for a document the user cannot audit', async () => {
-      await build(doc({ contextParameters: { permissions: [] } }));
-      mockDetailService.getAuditLog.mockClear();
-
-      component.loadAuditLog();
-
-      expect(mockDetailService.getAuditLog).not.toHaveBeenCalled();
-      expect(component.auditEntries()).toEqual([]);
-      expect(component.auditTotalSize()).toBe(0);
-      expect(component.auditLoading()).toBe(false);
-    });
-
-    it('clears the loading flag when the audit request fails', async () => {
-      mockDetailService.getAuditLog.mockReturnValue(throwError(() => new Error('500')));
-      await build();
-
-      component.loadAuditLog();
-
-      expect(component.auditLoading()).toBe(false);
-    });
-
-    it('re-queries with the new page size and index on pagination', async () => {
-      await build();
-      mockDetailService.getAuditLog.mockClear();
-      mockDetailService.getAuditLog.mockReturnValue(of({ entries: [], resultsCount: 0 }));
-
-      component.onAuditPageChange({ pageSize: 50, pageIndex: 3, length: 200 } as PageEvent);
-
-      expect(component.auditPageSize()).toBe(50);
-      expect(component.auditPageIndex()).toBe(3);
-      expect(mockDetailService.getAuditLog).toHaveBeenCalledWith('doc-1', 50, 3);
-    });
-
-    describe('filteredAuditEntries', () => {
-      beforeEach(async () => {
-        await build();
-        component.auditEntries.set([
-          entry({ principalName: 'alice', eventDate: '2026-08-10T10:00:00.000Z' }),
-          entry({
-            principalName: 'bob',
-            eventId: 'documentCreated',
-            category: 'eventLifeCycleCategory',
-            eventDate: '2026-08-20T10:00:00.000Z',
-          }),
-          entry({ principalName: 'carol', eventDate: '2026-08-30T10:00:00.000Z' }),
-        ]);
-        component.filterUsername.set('');
-        component.filterDateFrom.set(null);
-        component.filterDateTo.set(null);
-        component.filterAction.set('');
-        component.filterCategory.set('');
-      });
-
-      it('returns everything when no filter is set', () => {
-        expect(component.filteredAuditEntries().length).toBe(3);
-      });
-
-      it('filters by username case-insensitively', () => {
-        component.filterUsername.set('ALI');
-        expect(component.filteredAuditEntries().map((e) => e.principalName)).toEqual(['alice']);
-      });
-
-      it('filters by a start date', () => {
-        component.filterDateFrom.set(new Date('2026-08-20T00:00:00.000Z'));
-        expect(component.filteredAuditEntries().map((e) => e.principalName)).toEqual([
-          'bob',
-          'carol',
-        ]);
-      });
-
-      it('includes the whole of the end date rather than midnight', () => {
-        // The implementation pushes `dateTo` to 23:59:59.999 deliberately; a naive comparison
-        // would drop every entry recorded later in the selected day.
-        component.filterDateTo.set(new Date('2026-08-20T00:00:00.000Z'));
-        expect(component.filteredAuditEntries().map((e) => e.principalName)).toEqual([
-          'alice',
-          'bob',
-        ]);
-      });
-
-      it('filters by action and by category', () => {
-        component.filterAction.set('documentCreated');
-        expect(component.filteredAuditEntries().length).toBe(1);
-        component.filterAction.set('');
-        component.filterCategory.set('eventLifeCycleCategory');
-        expect(component.filteredAuditEntries().length).toBe(1);
-      });
-
-      it('sorts both ways without mutating the source signal', () => {
-        const before = component.auditEntries().map((e) => e.principalName);
-
-        component.onAuditSort({ active: 'principalName', direction: 'asc' } as Sort);
-        expect(component.filteredAuditEntries().map((e) => e.principalName)).toEqual([
-          'alice',
-          'bob',
-          'carol',
-        ]);
-
-        component.onAuditSort({ active: 'principalName', direction: 'desc' } as Sort);
-        expect(component.filteredAuditEntries().map((e) => e.principalName)).toEqual([
-          'carol',
-          'bob',
-          'alice',
-        ]);
-
-        // The sort copies before sorting; sorting the signal's value in place would make the
-        // rendered order depend on how many times the computed had been read.
-        expect(component.auditEntries().map((e) => e.principalName)).toEqual(before);
-      });
-    });
-  });
-
   describe('trash and permanent delete', () => {
     it('trashes after confirmation and navigates away', async () => {
       await build();
@@ -753,122 +830,35 @@ describe('DocumentDetailComponent — load chain', () => {
     });
   });
 
-  describe('inline tags', () => {
-    /**
-     * Tags arrive through the Material chip input, so the entry point takes a
-     * `MatChipInputEvent` and clears the chip itself. Built here rather than calling the private
-     * `applyInlineTag` directly, so the clear-and-apply sequencing is exercised too.
-     */
-    function chipInput(value: string): MatChipInputEvent {
-      return {
-        value,
-        chipInput: { clear: vi.fn() },
-        input: document.createElement('input'),
-      } as unknown as MatChipInputEvent;
-    }
+  describe('tags', () => {
+    it('keeps the document in step with the tags the tag editor saved', async () => {
+      await build(doc({ properties: { 'nxtag:tags': [{ label: 'old', username: 'jdoe' }] } }));
 
-    it('appends a new tag to the document without refetching it', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'existing' }] } }));
-      mockTagService.addTag.mockReturnValue(of({}));
+      component.setTags(['old', 'q3report']);
 
-      component.addInlineTagFromChip(chipInput('fresh'));
-
-      expect(mockTagService.addTag).toHaveBeenCalledWith('doc-1', 'fresh');
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['existing', 'fresh']);
-      expect(component.tagAdding()).toBe(false);
+      expect(component.doc()?.properties['nxtag:tags']).toEqual([
+        { label: 'old' },
+        { label: 'q3report' },
+      ]);
+      expect(component.tags()).toEqual(['old', 'q3report']);
     });
 
-    it('normalises string tags to objects when appending', async () => {
-      // Nuxeo returns `nxtag:tags` as strings on some deployments and objects on others; the
-      // component normalises so the template does not have to.
-      await build(doc({ properties: { 'nxtag:tags': ['plain'] } }));
-      mockTagService.addTag.mockReturnValue(of({}));
-
-      component.addInlineTagFromChip(chipInput('added'));
-
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags).toEqual([{ label: 'plain' }, { label: 'added' }]);
+    it('lets a user with Write tag the document itself, as Web UI does', async () => {
+      await build(doc({ contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canTag()).toBe(true);
     });
 
-    it('does not duplicate a tag that is already present', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'dup' }] } }));
-      mockTagService.addTag.mockReturnValue(of({}));
-
-      component.addInlineTagFromChip(chipInput('dup'));
-
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['dup']);
+    it('does not let a user tag without Write, even with WriteProperties', async () => {
+      await build(doc({ contextParameters: { permissions: ['Read', 'WriteProperties'] } }));
+      expect(component.canTag()).toBe(false);
     });
 
-    it('releases the adding flag and warns when adding a tag fails', async () => {
-      await build();
-      mockTagService.addTag.mockReturnValue(throwError(() => new Error('boom')));
+    it('does not let anyone tag a version or a proxy', async () => {
+      await build(doc({ isVersion: true, contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canTag()).toBe(false);
 
-      component.addInlineTagFromChip(chipInput('nope'));
-
-      expect(component.tagAdding()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to add tag', 'Dismiss', { duration: 3000 });
-    });
-
-    it('removes a tag from the document', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'keep' }, { label: 'drop' }] } }));
-      mockTagService.removeTag.mockReturnValue(of(undefined));
-
-      component.removeInlineTag('drop');
-
-      expect(mockTagService.removeTag).toHaveBeenCalledWith('doc-1', 'drop');
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['keep']);
-    });
-
-    it('warns and leaves the tags alone when removal fails', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'keep' }] } }));
-      mockTagService.removeTag.mockReturnValue(throwError(() => new Error('boom')));
-
-      component.removeInlineTag('keep');
-
-      expect(snack).toHaveBeenCalledWith('Failed to remove tag', 'Dismiss', { duration: 3000 });
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['keep']);
-    });
-  });
-
-  describe('comments', () => {
-    it('loads comments for the document', async () => {
-      // Shape matters: the component reads `res.entries`, so returning a bare array made
-      // `.map` throw as an unhandled error while the test still passed.
-      // Shape matters twice over: the component reads `res.entries`, and then reads
-      // `e.properties['comment:*']` off each entry. A bare array made `.map` throw, and an
-      // entry without `properties` made the property read throw — both as UNHANDLED errors
-      // while the test still reported green.
-      mockDetailService.getAllComments.mockReturnValue(
-        of({
-          entries: [
-            {
-              uid: 'c1',
-              properties: {
-                'comment:parentId': 'doc-1',
-                'comment:text': 'hello',
-                'comment:author': 'alice',
-                'comment:creationDate': '2026-08-24T10:00:00.000Z',
-              },
-            },
-          ],
-        }),
-      );
-      await build();
-
-      component.loadComments();
-
-      expect(mockDetailService.getAllComments).toHaveBeenCalledWith('doc-1');
-    });
-
-    it('survives a failed comment load', async () => {
-      mockDetailService.getAllComments.mockReturnValue(throwError(() => new Error('500')));
-      await build();
-
-      expect(() => component.loadComments()).not.toThrow();
+      await build(doc({ isProxy: true, contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canTag()).toBe(false);
     });
   });
 

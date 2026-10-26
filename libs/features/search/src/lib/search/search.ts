@@ -1,15 +1,22 @@
-import { Component, computed, inject, signal, DestroyRef } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo-satori/platform/extensions';
-import { toSignal, toObservable, takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  DestroyRef,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { DescriptorLabelPipe, descriptorLabel } from '@nuxeo/satori-platform/extensions';
+import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
+  type Observable,
   switchMap,
   catchError,
   of,
-  tap,
   map,
-  combineLatest,
-  finalize,
   Subject,
   debounceTime,
   distinctUntilChanged,
@@ -21,35 +28,51 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import {
   ConfirmDialogComponent,
-  SavedSearchDialogComponent,
   ShareSavedSearchDialogComponent,
   type ConfirmDialogData,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 import {
-  SearchService,
-  SearchAggregationService,
   SelectionService,
   DocumentDetailService,
   FOLDERISH_TYPES,
   NuxeoApiBase,
   NON_CONTENT_DOCUMENT_TYPES,
   type SearchResultItem,
-  type SearchResponse,
-  type SearchQueryParams,
   DocTypeLabelPipe,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiGatewayService,
   AiFeatureFlagService,
   aiErrorMessage,
 } from '@agentic-ui/shared/ai-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import {
+  NxsColumnPickerComponent,
+  NxsErrorStateComponent,
+  NxsFavoriteToggleComponent,
+  NxsPagerComponent,
+  NxsSavedSearchActionsComponent,
+  NxsSpinnerComponent,
+  NxsThumbnailComponent,
+  nxsErrorStatus,
+  provideNxsThumbnailCache,
+  type NxsErrorStatus,
+  type NxsPickableColumn,
+  NxsToastService,
+  provideNxsToast,
+} from '@nuxeo/satori-platform/components';
+
+import { askSavedSearchName } from '../search-session/saved-search-dialogs';
+import {
+  SEARCH_PAGE_SIZE,
+  SearchSession,
+  type SearchResultsState,
+} from '../search-session/search-session';
 
 export type SortDirection = 'asc' | 'desc' | null;
 export type ViewMode = 'grid' | 'table' | 'list';
@@ -68,6 +91,9 @@ interface QuickFilterOption {
   labelKey?: string;
   value: string;
 }
+
+/** The columns a search table starts with, and what the picker's Reset returns to. */
+const DEFAULT_COLUMN_KEYS: readonly string[] = ['name', 'modified', 'contributor'];
 
 const ALL_COLUMNS: ColumnDef[] = [
   { key: 'name', labelKey: 'search.column.name', label: 'Title', width: '2fr' },
@@ -137,11 +163,17 @@ interface SearchResultViewModel {
   icon: string;
 }
 
+/**
+ * Relative, so it resolves against `<base href>`: the Marketplace package serves the app from
+ * `/nuxeo/agentic-ui/`, where a root-absolute path 404s.
+ */
+const FALLBACK_ART_URL = 'images/Login-background.svg';
+
 function mapToView(item: SearchResultItem): SearchResultViewModel {
   return {
     id: item.id,
     name: item.title,
-    imageUrl: '/images/Login-background.svg',
+    imageUrl: FALLBACK_ART_URL,
     type: item.type,
     modifiedDate: item.modifiedDate,
     lastContributor: item.lastContributor,
@@ -161,6 +193,13 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
   selector: 'lib-search',
   standalone: true,
   imports: [
+    NxsColumnPickerComponent,
+    NxsErrorStateComponent,
+    NxsFavoriteToggleComponent,
+    NxsPagerComponent,
+    NxsSavedSearchActionsComponent,
+    NxsSpinnerComponent,
+    NxsThumbnailComponent,
     DocTypeLabelPipe,
     DescriptorLabelPipe,
     TranslatePipe,
@@ -170,31 +209,29 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
     MatCheckboxModule,
     MatProgressSpinnerModule,
     MatSelectModule,
-    MatSnackBarModule,
     MatMenuModule,
     MatAutocompleteModule,
     FormsModule,
   ],
+  providers: [provideNxsToast(), provideNxsThumbnailCache()],
   templateUrl: './search.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './search.scss',
 })
 export class SearchComponent {
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly searchService = inject(SearchService);
-  private readonly searchAggregationService = inject(SearchAggregationService);
+  private readonly session = inject(SearchSession);
   private readonly documentDetailService = inject(DocumentDetailService);
   private readonly nuxeoApi = inject(NuxeoApiBase);
   private readonly aiGateway = inject(AiGatewayService);
   readonly featureFlags = inject(AiFeatureFlagService);
   readonly selectionService = inject(SelectionService);
 
-  readonly thumbnailMap = signal<Record<string, string | null>>({});
-  private thumbnailGeneration = 0;
   /**
    * Sequence for the whole AI request lifecycle — `nlToNxql` *and* the `nxqlSearch` it triggers.
    *
@@ -219,148 +256,129 @@ export class SearchComponent {
   readonly aiSearchExecuted = signal(false);
   private readonly aiSuggestSubject = new Subject<string>();
 
-  readonly loading = signal(true);
+  /** The shared search's state: `SearchSession` runs the one request this page and the drawer show. */
+  private readonly resultsState = toSignal(this.session.results$, {
+    initialValue: {
+      status: 'loading',
+      items: [],
+      aggregations: {},
+      totalSize: -1,
+      hasNextPage: false,
+      error: null,
+    } as SearchResultsState,
+  });
+  readonly loading = computed(() => this.resultsState().status === 'loading');
   /**
    * Loading owned by the AI NXQL request specifically, kept separate from {@link loading}.
    *
-   * `loading` belongs to the standard `results$` pipeline, which sets it on every route/filter change.
-   * When `runNxqlQuery` also wrote to it, `supersedeAiRequest` had to clear it — and that clear could
-   * land while a *standard* search was still in flight, hiding the spinner and rendering the previous
-   * results, because every view mode below is gated on `!loading()`. Superseding AI work must only
-   * release AI-owned loading, so the two are no longer the same flag.
+   * `loading` belongs to the standard search, which `SearchSession` runs on every route/filter
+   * change. When `runNxqlQuery` also wrote to it, `supersedeAiRequest` had to clear it — and that
+   * clear could land while a *standard* search was still in flight, hiding the spinner and rendering
+   * the previous results, because every view mode below is gated on `!loading()`. Superseding AI work
+   * must only release AI-owned loading, so the two are no longer the same flag.
    */
   readonly aiNxqlLoading = signal(false);
   /** Either request is in flight. What the template gates on, so neither can hide the other's spinner. */
   readonly busy = computed(() => this.loading() || this.aiNxqlLoading());
-  readonly error = signal<string | null>(null);
+  readonly error = computed(() =>
+    this.resultsState().status === 'failed'
+      ? this.translate.instant('search.message.failed-to-load-search-results')
+      : null,
+  );
   readonly quickFilterOptions = QUICK_FILTER_OPTIONS;
   readonly selectedQuickFilters = signal<Set<string>>(new Set());
   readonly gridGroupBy = signal<string>('created');
   readonly gridSortOrder = signal<SortDirection>('asc');
   readonly viewMode = signal<ViewMode>('table');
-  readonly visibleColumnKeys = signal<string[]>(['name', 'modified', 'contributor']);
+  readonly visibleColumnKeys = signal<string[]>([...DEFAULT_COLUMN_KEYS]);
   readonly columnPanelOpen = signal(false);
-  readonly pendingColumnKeys = signal<string[]>(['name', 'modified', 'contributor']);
-  readonly columnsForPanel = ALL_COLUMNS;
+  readonly defaultColumnKeys = DEFAULT_COLUMN_KEYS;
+
+  /**
+   * The active language as a signal. `translate.instant` is not reactive, so the picker's
+   * labels read this to follow a language change.
+   */
+  private readonly currentLang = toSignal(
+    this.translate.onLangChange.pipe(map((event) => event.lang)),
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
+  );
+
+  /** Every column as the picker offers it: names resolved for the active language. */
+  readonly pickerColumns = computed<readonly NxsPickableColumn[]>(() => {
+    this.currentLang();
+    const visible = this.visibleColumnKeys();
+    return ALL_COLUMNS.map((column) => ({
+      key: column.key,
+      label: descriptorLabel(column, (key) => this.translate.instant(key)),
+      visible: visible.includes(column.key),
+    }));
+  });
   readonly sortColumn = signal<string | null>(null);
   readonly sortDirection = signal<SortDirection>(null);
   readonly favoriteIds = signal<Set<string>>(new Set());
-  readonly favoritePendingIds = signal<Set<string>>(new Set());
-  readonly selectedSavedSearchId = this.searchAggregationService.selectedSavedSearchId;
-  readonly selectedSavedSearchTitle = this.searchAggregationService.selectedSavedSearchTitle;
+  readonly selectedSavedSearchId = this.session.savedSearchId;
+  readonly selectedSavedSearchTitle = this.session.savedSearchTitle;
+  /** Whether the filters differ from the open saved search's: Save is offered only then. */
+  readonly savedSearchDirty = this.session.dirty;
+  readonly hasFilters = this.session.hasFilters;
 
-  private readonly results$ = combineLatest([
-    this.route.queryParamMap,
-    toObservable(this.searchAggregationService.drawerFilters),
-  ]).pipe(
-    tap(() => {
-      this.loading.set(true);
-      this.error.set(null);
-      // Only invalidate the thumbnail batch if the standard results are going to own the displayed
-      // thumbnails. This was unconditional, and the response path below deliberately skips
-      // `loadThumbnails` while AI results are on screen — so a query-param or drawer-filter change
-      // during a completed AI search bumped the generation, killed every AI thumbnail request still in
-      // flight, and then loaded nothing to replace them. The thumbnails simply disappeared.
-      if (this.standardResultsOwnThumbnails()) this.beginThumbnailBatch();
-    }),
-    switchMap(([params, drawerFilters]) => {
-      const quickFilters = params.get('quickFilters') ?? '';
-      this.selectedQuickFilters.set(this.parseQuickFilters(quickFilters));
-
-      // Update sort from query params only if they exist
-      const querySortBy = params.get('sortBy');
-      const querySortOrderRaw = params.get('sortOrder');
-      const querySortOrder: 'asc' | 'desc' | null =
-        querySortOrderRaw === 'asc' || querySortOrderRaw === 'desc' ? querySortOrderRaw : null;
-
-      // Map API field name back to UI column key for in-memory sorting/indicators
-      const uiSortColumn = querySortBy ? (API_FIELD_TO_COLUMN[querySortBy] ?? querySortBy) : null;
-      this.sortColumn.set(uiSortColumn);
-      this.sortDirection.set(querySortOrder);
-
-      // Sync grid sort UI from query params so grid view stays in sync with table view
-      if (uiSortColumn) {
-        this.gridGroupBy.set(uiSortColumn);
-      }
-      if (querySortOrder) {
-        this.gridSortOrder.set(querySortOrder);
-      }
-
-      const request: {
-        q?: string;
-        ecmFulltext?: string;
-        quickFilters?: string;
-        sortBy?: string | null;
-        sortOrder?: ('asc' | 'desc') | null;
-        modifiedDate?: string;
-        author?: string;
-        collection?: string;
-        tag?: string;
-        nature?: string;
-        subjects?: string;
-        coverage?: string;
-        size?: string;
-      } = {};
-
-      // Sort and quick filters still come from URL params
-      if (quickFilters.trim()) request.quickFilters = quickFilters;
-      if (querySortBy) request.sortBy = querySortBy;
-      if (querySortOrder) request.sortOrder = querySortOrder;
-
-      // All drawer filters come from the shared service signal (not URL)
-      const q = (drawerFilters['q'] ?? '').trim();
-      const ecmFulltext = (drawerFilters['ecm_fulltext'] ?? '').trim();
-      const modifiedDate = (drawerFilters['modifiedDate'] ?? '').trim();
-      const author = (drawerFilters['author'] ?? '').trim();
-      const collection = (drawerFilters['collection'] ?? '').trim();
-      const tag = (drawerFilters['tag'] ?? '').trim();
-      const nature = (drawerFilters['nature'] ?? '').trim();
-      const subjects = (drawerFilters['subjects'] ?? '').trim();
-      const coverage = (drawerFilters['coverage'] ?? '').trim();
-      const size = (drawerFilters['size'] ?? '').trim();
-
-      if (q) request.q = q;
-      if (ecmFulltext) request.ecmFulltext = ecmFulltext;
-      if (modifiedDate) request.modifiedDate = modifiedDate;
-      if (author) request.author = author;
-      if (collection) request.collection = collection;
-      if (tag) request.tag = tag;
-      if (nature) request.nature = nature;
-      if (subjects) request.subjects = subjects;
-      if (coverage) request.coverage = coverage;
-      if (size) request.size = size;
-
-      return this.searchService.search(request as SearchQueryParams).pipe(
-        tap((response: SearchResponse) => {
-          if (this.searchAggregationService?.aggregations?.set) {
-            this.searchAggregationService.aggregations.set(response.aggregations);
-          }
-          if (this.searchAggregationService?.items?.set) {
-            this.searchAggregationService.items.set(response.items);
-          }
-          this.favoriteIds.set(
-            new Set(response.items.filter((item) => item.isFavorite).map((item) => item.id)),
-          );
-        }),
-        map((response) => response.items),
-        tap((items) => {
-          this.loading.set(false);
-          if (this.standardResultsOwnThumbnails()) {
-            this.loadThumbnails(items);
-          }
-        }),
-        catchError(() => {
-          this.searchAggregationService.aggregations.set({});
-          this.searchAggregationService.items.set([]);
-          this.error.set(this.translate.instant('search.message.failed-to-load-search-results'));
-          this.loading.set(false);
-          return of<SearchResultItem[]>([]);
-        }),
-      );
-    }),
+  /** Which error state `error` shows: the status of the search request that failed. */
+  readonly errorStatus = computed<NxsErrorStatus>(() => nxsErrorStatus(this.resultsState().error));
+  /**
+   * The standard search's failure, while its results are the ones on screen. `error` belongs to the
+   * standard search and outlives an AI search, whose results must not be hidden behind it.
+   */
+  readonly resultsError = computed(() =>
+    this.aiSearchMode() && this.aiSearchExecuted() ? null : this.error(),
   );
 
-  readonly results = toSignal(this.results$, { initialValue: [] as SearchResultItem[] });
+  readonly results = computed(() => this.resultsState().items as SearchResultItem[]);
+
+  /** Run the failed search again, with the same query and filters. */
+  retrySearch(): void {
+    this.session.retry();
+  }
+
+  /**
+   * The URL's quick filters and sort: shown here, and handed to the session as part of the query.
+   */
+  private applyPageQuery(params: { get(name: string): string | null }): void {
+    const quickFilters = params.get('quickFilters') ?? '';
+    this.selectedQuickFilters.set(this.parseQuickFilters(quickFilters));
+
+    const sortBy = params.get('sortBy');
+    const sortOrderRaw = params.get('sortOrder');
+    const sortOrder: 'asc' | 'desc' | null =
+      sortOrderRaw === 'asc' || sortOrderRaw === 'desc' ? sortOrderRaw : null;
+
+    // Map API field name back to UI column key for in-memory sorting/indicators
+    const uiSortColumn = sortBy ? (API_FIELD_TO_COLUMN[sortBy] ?? sortBy) : null;
+    this.sortColumn.set(uiSortColumn);
+    this.sortDirection.set(sortOrder);
+
+    // Sync grid sort UI from query params so grid view stays in sync with table view
+    if (uiSortColumn) this.gridGroupBy.set(uiSortColumn);
+    if (sortOrder) this.gridSortOrder.set(sortOrder);
+
+    this.session.setPageQuery({ quickFilters: quickFilters.trim(), sortBy, sortOrder });
+
+    // The URL counts pages from one; the session from zero. No `page` means the first.
+    const page = Number.parseInt(params.get('page') ?? '', 10);
+    this.urlPageIndex = Number.isFinite(page) && page > 1 ? page - 1 : 0;
+    this.session.setPageIndex(this.urlPageIndex);
+  }
+
+  /**
+   * The pager asked for another page. The request and the URL both follow the session.
+   *
+   * Ignored while a page loads. The pager still shows the last answer then, so the page it names
+   * can be out of date: after a filter change it would ask for a page of the new query that the
+   * reset has already moved past. The control stays enabled, so it keeps keyboard focus.
+   */
+  goToPage(pageIndex: number): void {
+    if (this.resultsState().status === 'loading') return;
+    this.session.setPageIndex(pageIndex);
+  }
 
   readonly visibleColumns = computed(() =>
     ALL_COLUMNS.filter((c) => this.visibleColumnKeys().includes(c.key)),
@@ -391,6 +409,22 @@ export class SearchComponent {
   });
 
   readonly resultCount = computed(() => this.displayResults().length);
+  /** Every match the server counted, or the rows on screen when it counted none. */
+  readonly totalCount = computed(() => {
+    // An AI search's rows are not the standard search's results, so its total is not theirs.
+    // An AI search's rows are not the standard search's results, so its total is not theirs.
+    if (this.aiSearchMode() && this.aiSearchExecuted()) return this.resultCount();
+    const total = this.resultsState().totalSize;
+    return total >= 0 ? total : this.resultCount();
+  });
+  readonly pageSize = SEARCH_PAGE_SIZE;
+  /**
+   * The paging of the last answer, which the pager reads. It stays on screen while the next page
+   * loads: a control removed while focused loses the keyboard user's place.
+   */
+  readonly pager = signal({ pageIndex: 0, itemCount: 0, totalSize: -1, hasNextPage: false });
+  /** The page the URL asked for, as the last applied URL; the URL follows the pager through it. */
+  private urlPageIndex = 0;
   readonly selectedCount = computed(() => this.selectionService.selectedCount());
   readonly SORTABLE_COLUMNS = new Set(['name', 'modified', 'contributor', 'author', 'created']);
 
@@ -421,7 +455,10 @@ export class SearchComponent {
 
     this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { quickFilters: orderedSelected.length > 0 ? orderedSelected.join(',') : null },
+      queryParams: {
+        quickFilters: orderedSelected.length > 0 ? orderedSelected.join(',') : null,
+        page: null,
+      },
       queryParamsHandling: 'merge',
     });
   }
@@ -450,7 +487,7 @@ export class SearchComponent {
 
   toggleSelection(id: string): void {
     const row = this.displayResults().find((r) => r.id === id);
-    this.selectionService.toggle(id, row?.name ?? id, this.thumbnailMap()[id] ?? null);
+    this.selectionService.toggle(id, row?.name ?? id);
   }
 
   toggleAll(): void {
@@ -459,15 +496,12 @@ export class SearchComponent {
     } else {
       const rows = this.displayResults();
       const labels: Record<string, string> = {};
-      const previews: Record<string, string | null> = {};
       rows.forEach((row) => {
         labels[row.id] = row.name;
-        previews[row.id] = this.thumbnailMap()[row.id] ?? null;
       });
       this.selectionService.selectAll(
         rows.map((r) => r.id),
         labels,
-        previews,
       );
     }
   }
@@ -476,33 +510,15 @@ export class SearchComponent {
     this.selectionService
       .deleteSelected()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () =>
-          this.router.navigate([], { relativeTo: this.route, queryParamsHandling: 'merge' }),
-      });
+      // The same query again, so the deleted documents leave the results.
+      .subscribe({ next: () => this.session.retry() });
   }
 
   clearSelection(): void {
     this.selectionService.clear();
   }
 
-  isPendingColumn(key: string): boolean {
-    return this.pendingColumnKeys().includes(key);
-  }
-
-  togglePendingColumn(key: string): void {
-    const current = this.pendingColumnKeys();
-    if (current.includes(key)) {
-      this.pendingColumnKeys.set(current.filter((k) => k !== key));
-      return;
-    }
-
-    const ordered = ALL_COLUMNS.map((c) => c.key);
-    this.pendingColumnKeys.set(ordered.filter((k) => [...current, key].includes(k)));
-  }
-
   openColumnPanel(): void {
-    this.pendingColumnKeys.set(this.visibleColumnKeys());
     this.columnPanelOpen.set(true);
   }
 
@@ -510,14 +526,9 @@ export class SearchComponent {
     this.columnPanelOpen.set(false);
   }
 
-  resetColumns(): void {
-    this.pendingColumnKeys.set(['name', 'modified', 'contributor']);
-  }
-
-  applyColumns(): void {
-    this.visibleColumnKeys.set(
-      ALL_COLUMNS.map((c) => c.key).filter((k) => this.pendingColumnKeys().includes(k)),
-    );
+  /** The picker's Done: the keys to show, in column order. */
+  applyColumns(keys: readonly string[]): void {
+    this.visibleColumnKeys.set([...keys]);
     this.columnPanelOpen.set(false);
   }
 
@@ -548,6 +559,7 @@ export class SearchComponent {
       queryParams: {
         sortBy: apiFieldName || null,
         sortOrder: newSortDirection || null,
+        page: null,
       },
       queryParamsHandling: 'merge',
     });
@@ -631,54 +643,27 @@ export class SearchComponent {
   onImageError(event: Event): void {
     const img = event.target as HTMLImageElement | null;
     if (!img) return;
-    img.src = '/images/Login-background.svg';
+    img.src = FALLBACK_ART_URL;
   }
 
-  toggleFavorite(id: string, event?: Event): void {
-    if (event) {
-      event.stopPropagation();
-    }
-    if (!id || this.favoritePendingIds().has(id)) return;
-
-    const isCurrentlyFavorite = this.favoriteIds().has(id);
-    this.favoritePendingIds.update((current) => new Set(current).add(id));
-
-    const op = isCurrentlyFavorite
-      ? this.documentDetailService.removeFromFavorites(id)
-      : this.documentDetailService.addToFavorites(id);
-
-    op.pipe(
-      finalize(() => {
-        this.favoritePendingIds.update((current) => {
-          const next = new Set(current);
-          next.delete(id);
-          return next;
-        });
-      }),
-      takeUntilDestroyed(this.destroyRef),
-    ).subscribe({
-      next: () => {
-        this.favoriteIds.update((current) => {
-          const next = new Set(current);
-          if (isCurrentlyFavorite) next.delete(id);
-          else next.add(id);
-          return next;
-        });
-        window.dispatchEvent(new Event('favorites-changed'));
-      },
-      error: (err) => {
-        this.snackBar.open(
-          this.getApiErrorMessage(
-            err,
-            this.translate.instant('search.message.failed-to-update-favorites'),
-          ),
-          this.translate.instant('common.dismiss'),
-          {
-            duration: 5000,
-          },
-        );
-      },
+  /** A result's star confirmed a change: keep the page's view of it in step. */
+  onFavoriteChanged(id: string, favorite: boolean): void {
+    this.favoriteIds.update((current) => {
+      const next = new Set(current);
+      if (favorite) next.add(id);
+      else next.delete(id);
+      return next;
     });
+  }
+
+  onFavoriteFailed(error: unknown): void {
+    this.toast.error(
+      this.getApiErrorMessage(
+        error,
+        this.translate.instant('search.message.failed-to-update-favorites'),
+      ),
+      { duration: 5000 },
+    );
   }
 
   private getApiErrorMessage(err: unknown, fallback: string): string {
@@ -723,15 +708,12 @@ export class SearchComponent {
           URL.revokeObjectURL(objectUrl);
         },
         error: (err) => {
-          this.snackBar.open(
+          this.toast.error(
             this.getApiErrorMessage(
               err,
               this.translate.instant('search.message.failed-to-download-document'),
             ),
-            this.translate.instant('common.dismiss'),
-            {
-              duration: 5000,
-            },
+            { duration: 5000 },
           );
         },
       });
@@ -785,6 +767,7 @@ export class SearchComponent {
       queryParams: {
         sortBy: apiFieldName,
         sortOrder: 'asc',
+        page: null,
       },
       queryParamsHandling: 'merge',
     });
@@ -800,6 +783,7 @@ export class SearchComponent {
       queryParams: {
         sortBy: apiFieldName,
         sortOrder: effectiveDirection,
+        page: null,
       },
       queryParamsHandling: 'merge',
     });
@@ -815,138 +799,43 @@ export class SearchComponent {
     );
   }
 
-  openSaveAsDialog(): void {
-    this.dialog
-      .open(SavedSearchDialogComponent, {
-        data: {
-          title: this.translate.instant('ui.saved-search'),
-          placeholder: this.translate.instant('saved-search.dialog.name-placeholder'),
-        },
-      })
-      .afterClosed()
-      .subscribe((title) => {
-        const trimmedTitle = title?.trim();
-        if (!trimmedTitle) return;
-
-        this.searchService
-          .saveSavedSearch({
-            title: trimmedTitle,
-            params: this.buildSavedSearchParamsFromFilters(),
-            pageProviderName: 'default_search',
-          })
-          .subscribe({
-            next: (saved) => {
-              this.searchAggregationService.selectedSavedSearchId.set(
-                this.readSavedSearchId(saved),
-              );
-              this.searchAggregationService.selectedSavedSearchTitle.set(
-                this.readSavedSearchTitle(saved) || trimmedTitle,
-              );
-              this.searchAggregationService.markSavedSearchDirty();
-              this.snackBar.open(
-                this.translate.instant('common.search-saved', { name: trimmedTitle }),
-                this.translate.instant('common.ok'),
-                { duration: 3000 },
-              );
-            },
-            error: () => {
-              this.snackBar.open(
-                this.translate.instant('assets.message.failed-to-save-search'),
-                this.translate.instant('common.dismiss'),
-                { duration: 5000 },
-              );
-            },
-          });
-      });
+  /** Save the filters as a new saved search, under a name the user gives. */
+  onSaveAs(): void {
+    this.withSavedSearchName({ heading: this.translate.instant('ui.saved-search') }, (name) =>
+      this.session.saveAs(name).pipe(map(() => name)),
+    ).subscribe({
+      next: (name) => this.toast.show(this.translate.instant('common.search-saved', { name })),
+      error: () => this.savedSearchFailed('assets.message.failed-to-save-search'),
+    });
   }
 
-  hasSelectedSavedSearch(): boolean {
-    return this.selectedSavedSearchId().trim().length > 0;
-  }
-
-  hasSavableFilters(): boolean {
-    return Object.keys(this.buildSavedSearchParamsFromFilters()).length > 0;
-  }
-
-  onSaveSelectedSavedSearch(): void {
-    const id = this.selectedSavedSearchId().trim();
-    if (!id) return;
-
-    const currentTitle =
-      this.selectedSavedSearchTitle().trim() || this.translate.instant('ui.saved-search');
-    this.searchService
-      .updateSavedSearch(id, {
-        title: currentTitle,
-        params: this.buildSavedSearchParamsFromFilters(),
-        pageProviderName: 'default_search',
-      })
+  /** Save the filters into the open saved search. */
+  onSave(): void {
+    const name = this.selectedSavedSearchTitle().trim();
+    this.session
+      .save()
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: () => {
-          this.searchAggregationService.selectedSavedSearchTitle.set(currentTitle);
-          this.searchAggregationService.markSavedSearchDirty();
-          this.snackBar.open(
-            this.translate.instant('common.search-updated', { name: currentTitle }),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
-        },
-        error: () => {
-          this.snackBar.open(
-            this.translate.instant('assets.message.failed-to-save-search'),
-            this.translate.instant('common.dismiss'),
-            { duration: 5000 },
-          );
-        },
+        next: () => this.toast.show(this.translate.instant('common.search-updated', { name })),
+        error: () => this.savedSearchFailed('assets.message.failed-to-save-search'),
       });
   }
 
-  onEditSelectedSavedSearch(): void {
-    const id = this.selectedSavedSearchId().trim();
-    if (!id) return;
-
-    this.dialog
-      .open(SavedSearchDialogComponent, {
-        data: {
-          title: this.translate.instant('ui.edit-saved-search'),
-          placeholder: this.translate.instant('saved-search.dialog.name-placeholder'),
-          initialValue: this.selectedSavedSearchTitle(),
-        },
-      })
-      .afterClosed()
-      .subscribe((title) => {
-        const trimmedTitle = title?.trim();
-        if (!trimmedTitle) return;
-
-        this.searchService
-          .updateSavedSearch(id, {
-            title: trimmedTitle,
-            params: this.buildSavedSearchParamsFromFilters(),
-            pageProviderName: 'default_search',
-          })
-          .subscribe({
-            next: () => {
-              this.searchAggregationService.selectedSavedSearchTitle.set(trimmedTitle);
-              this.searchAggregationService.markSavedSearchDirty();
-              this.snackBar.open(
-                this.translate.instant('common.search-updated', { name: trimmedTitle }),
-                this.translate.instant('common.ok'),
-                {
-                  duration: 3000,
-                },
-              );
-            },
-            error: () => {
-              this.snackBar.open(
-                this.translate.instant('assets.message.failed-to-update-search'),
-                this.translate.instant('common.dismiss'),
-                { duration: 5000 },
-              );
-            },
-          });
-      });
+  /** Rename the open saved search. Its stored filters stay as they are, as in Web UI. */
+  onRename(): void {
+    this.withSavedSearchName(
+      {
+        heading: this.translate.instant('ui.edit-saved-search'),
+        initial: this.selectedSavedSearchTitle(),
+      },
+      (name) => this.session.rename(name).pipe(map(() => name)),
+    ).subscribe({
+      next: (name) => this.toast.show(this.translate.instant('common.search-updated', { name })),
+      error: () => this.savedSearchFailed('assets.message.failed-to-update-search'),
+    });
   }
 
-  onShareSelectedSavedSearch(): void {
+  onShare(): void {
     const id = this.selectedSavedSearchId().trim();
     if (!id) return;
 
@@ -960,68 +849,91 @@ export class SearchComponent {
     });
   }
 
-  onDeleteSelectedSavedSearch(): void {
+  /** Delete the open saved search, once the user confirms. */
+  onDelete(): void {
     const id = this.selectedSavedSearchId().trim();
     if (!id) return;
 
-    const title = this.selectedSavedSearchTitle().trim() || 'this saved search';
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      data: {
-        title: this.translate.instant('confirm.delete-saved-search'),
-        message: this.translate.instant('confirm.delete-saved-search-named', { name: title }),
-        confirmLabel: this.translate.instant('confirm.delete'),
-      } as ConfirmDialogData,
-    });
-
-    dialogRef
+    const title =
+      this.selectedSavedSearchTitle().trim() || this.translate.instant('ui.saved-search');
+    this.dialog
+      .open(ConfirmDialogComponent, {
+        data: {
+          title: this.translate.instant('confirm.delete-saved-search'),
+          message: this.translate.instant('confirm.delete-saved-search-named', { name: title }),
+          confirmLabel: this.translate.instant('confirm.delete'),
+        } as ConfirmDialogData,
+      })
       .afterClosed()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((confirmed) => {
-        if (!confirmed) return;
-
-        this.searchService
-          .deleteSavedSearch(id)
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: () => {
-              this.searchAggregationService.selectedSavedSearchId.set('');
-              this.searchAggregationService.selectedSavedSearchTitle.set('');
-              this.searchAggregationService.drawerFilters.set({});
-              this.searchAggregationService.markSavedSearchDirty();
-            },
-            error: (error) => {
-              console.error('Failed to delete saved search.', error);
-            },
-          });
+      .pipe(
+        switchMap((confirmed) => (confirmed ? this.session.deleteSavedSearch() : of(null))),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        error: () => this.savedSearchFailed('search.message.failed-to-delete-saved-search'),
       });
   }
 
-  private buildSavedSearchParamsFromFilters(): Record<string, string> {
-    const drawerFilters = this.searchAggregationService.drawerFilters();
-    const saved: Record<string, string> = {};
-
-    for (const [key, value] of Object.entries(drawerFilters)) {
-      const trimmed = value.trim();
-      if (trimmed) saved[key] = trimmed;
-    }
-
-    return saved;
+  /** Asks for a name, then runs `run` with it; nothing happens when the dialog is dismissed. */
+  private withSavedSearchName<T>(
+    options: { heading: string; initial?: string },
+    run: (name: string) => Observable<T>,
+  ): Observable<T> {
+    return askSavedSearchName(this.dialog, this.translate, options).pipe(
+      switchMap(run),
+      takeUntilDestroyed(this.destroyRef),
+    );
   }
 
-  private readSavedSearchId(saved: unknown): string {
-    if (!saved || typeof saved !== 'object') return '';
-    const obj = saved as Record<string, unknown>;
-    return typeof obj['id'] === 'string' ? obj['id'] : '';
-  }
-
-  private readSavedSearchTitle(saved: unknown): string {
-    if (!saved || typeof saved !== 'object') return '';
-    const obj = saved as Record<string, unknown>;
-    return typeof obj['title'] === 'string' ? obj['title'] : '';
+  private savedSearchFailed(key: string): void {
+    this.toast.error(this.translate.instant(key), { duration: 5000 });
   }
 
   constructor() {
-    this.destroyRef.onDestroy(() => this.clearThumbnails());
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed())
+      .subscribe((params) => this.applyPageQuery(params));
+
+    // Each answer's paging, for the pager. Only an answer moves it: a page being loaded does not.
+    effect(() => {
+      const state = this.resultsState();
+      if (state.status !== 'loaded') return;
+      untracked(() =>
+        this.pager.set({
+          pageIndex: this.session.pageIndex(),
+          itemCount: state.items.length,
+          totalSize: state.totalSize,
+          hasNextPage: state.hasNextPage,
+        }),
+      );
+    });
+
+    // The page on screen is kept in the URL, so a deep link reopens it. A page the pager or a
+    // filter change moved to is written back, replacing the history entry rather than adding one.
+    effect(() => {
+      const pageIndex = this.session.pageIndex();
+      untracked(() => {
+        if (pageIndex === this.urlPageIndex) return;
+        void this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: { page: pageIndex > 0 ? pageIndex + 1 : null },
+          queryParamsHandling: 'merge',
+          replaceUrl: true,
+        });
+      });
+    });
+
+    // The favourites enricher says which results are favourites; a star's own change is then kept
+    // in `favoriteIds` until the next answer.
+    effect(() => {
+      const state = this.resultsState();
+      if (state.status === 'loading') return;
+      untracked(() =>
+        this.favoriteIds.set(
+          new Set(state.items.filter((item) => item.isFavorite).map((item) => item.id)),
+        ),
+      );
+    });
 
     this.aiSuggestSubject
       .pipe(
@@ -1043,16 +955,14 @@ export class SearchComponent {
     this.aiSearchMode.set(next);
     if (!next) {
       // Invalidate any in-flight AI request before restoring standard state. Without this a late
-      // `nlToNxql` or `nxqlSearch` response re-enabled `aiSearchExecuted` and overwrote the standard
-      // thumbnail batch loaded just below, while the UI was already back in standard mode.
+      // `nlToNxql` or `nxqlSearch` response re-enabled `aiSearchExecuted` and put AI results back on
+      // screen while the UI was already back in standard mode.
       //
       // Via `supersedeAiRequest` rather than a bare increment, because the invalidation alone left
       // `loading` set by a pending `runNxqlQuery` — so leaving AI mode restored the standard results
       // behind a spinner that would never clear.
       this.supersedeAiRequest();
       this.resetAiSearchState();
-      this.beginThumbnailBatch();
-      this.loadThumbnails(this.results());
     }
   }
 
@@ -1079,19 +989,6 @@ export class SearchComponent {
    * both of these call sites. Each time the guard was added and the release was not. Stating it once
    * here is the only version that stops the fourth.
    */
-  /**
-   * Whether the standard search results are what the user is looking at.
-   *
-   * One predicate for two sites that must agree: the `tap` that invalidates the thumbnail batch, and
-   * the response handler that loads it. They were written as separate expressions — an unconditional
-   * `beginThumbnailBatch()` and a guarded `loadThumbnails` — so a standard search fired while AI results
-   * were displayed invalidated the AI thumbnails and then loaded no replacement. Invalidating a batch
-   * nobody is going to refill is strictly worse than leaving it alone.
-   */
-  private standardResultsOwnThumbnails(): boolean {
-    return !this.aiSearchMode() || !this.aiSearchExecuted();
-  }
-
   private supersedeAiRequest(): number {
     const generation = ++this.aiRequestGeneration;
     // Only AI-owned flags. `loading` belongs to the standard pipeline; clearing it here hid the
@@ -1145,13 +1042,6 @@ export class SearchComponent {
   private runNxqlQuery(nxql: string, generation: number): void {
     // `aiNxqlLoading`, not `loading` — this request does not own the standard pipeline's flag.
     this.aiNxqlLoading.set(true);
-    // Deliberately does NOT claim the thumbnail batch. The standard results stay on screen until this
-    // request succeeds, and `loadThumbnails` mints its own generation when it does — so claiming here
-    // only mattered if the request FAILED, in which case every standard thumbnail response still in
-    // flight was discarded by the generation check and the error path reloaded none of them. Permanent
-    // missing thumbnails, from invalidating a batch this method might never refill.
-    //
-    // Same rule as the standard tap above: only invalidate a batch you are going to own.
     this.nuxeoApi
       .nxqlSearch(nxql, 40, {
         properties: 'dublincore,file,common',
@@ -1179,14 +1069,13 @@ export class SearchComponent {
             collectionKey: '',
             tags: [],
             flags: '',
-            icon: 'description',
+            icon: 'page',
             isFavorite: doc.contextParameters?.favorites?.isFavorite ?? false,
           }));
           this.aiResults.set(items);
           this.aiSearchExecuted.set(true);
           this.aiNxqlLoading.set(false);
           this.aiLoading.set(false);
-          this.loadThumbnails(items);
         },
         error: () => {
           // Guarded too: a stale failure would otherwise replace a newer query's results with an
@@ -1201,49 +1090,6 @@ export class SearchComponent {
           this.aiLoading.set(false);
         },
       });
-  }
-
-  private loadThumbnails(items: SearchResultItem[]): void {
-    // Mint a new generation rather than reading the current one. Reading it let two loaders share
-    // a generation — a standard search and an AI search can both resolve under the same
-    // `beginThumbnailBatch()` — so the first load's in-flight callbacks still matched
-    // `this.thumbnailGeneration` after the second call's `clearThumbnails()` and repopulated the
-    // map with thumbnails belonging to the previous result set.
-    const generation = ++this.thumbnailGeneration;
-    this.clearThumbnails();
-    for (const item of items) {
-      this.documentDetailService
-        .fetchThumbnail(item.id)
-        .pipe(
-          catchError(() => of(null)),
-          takeUntilDestroyed(this.destroyRef),
-        )
-        .subscribe((blob) => {
-          if (!blob || generation !== this.thumbnailGeneration) return;
-          const url = URL.createObjectURL(blob);
-          this.thumbnailMap.update((m) => {
-            const previous = m[item.id];
-            if (previous && previous !== url) URL.revokeObjectURL(previous);
-            return {
-              ...m,
-              [item.id]: url,
-            };
-          });
-        });
-    }
-  }
-
-  private beginThumbnailBatch(): void {
-    this.thumbnailGeneration += 1;
-  }
-
-  private clearThumbnails(): void {
-    // Drop the selection layer's copies FIRST. It retains these exact strings and binds them into
-    // `<img [src]>` in the shell topbar, and selection survives a new search — so revoking without
-    // this leaves selected items pointing at revoked blob URLs. See `SelectionService.forgetPreviews`.
-    this.selectionService.forgetPreviews();
-    for (const url of Object.values(this.thumbnailMap())) if (url) URL.revokeObjectURL(url);
-    this.thumbnailMap.set({});
   }
 
   private resetAiSearchState(): void {

@@ -1,7 +1,7 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 
-import { NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { TemplateSessionService } from './template-session.service';
 
@@ -16,10 +16,11 @@ import { TemplateSessionService } from './template-session.service';
  *
  * ## Why the URL is filtered
  *
- * `bootstrap.json` is fetched from the application's own origin and must **not**
- * carry a credential — it is read before sign-in, and sending one would leak it
- * to whatever static host serves the bundle. So the check is on the resolved
- * path, not on "is it a relative URL".
+ * A request to the application's own origin outside `/nuxeo/` must **not**
+ * carry a credential — sending one would leak it to whatever static host serves
+ * the bundle. So the check is on the resolved path, not on "is it a relative
+ * URL". The configuration requests never reach this interceptor at all:
+ * `AppConfigService` sends them without it.
  *
  * The absolute-URL branch matters as soon as a deployment sets Layer 0's
  * `nuxeoApiOrigin` to a cross-origin Nuxeo: without it, every request would go

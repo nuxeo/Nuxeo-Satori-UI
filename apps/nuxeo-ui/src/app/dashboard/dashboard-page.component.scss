@@ -15,6 +15,7 @@
  * Nuxeo-style FAB: inset from edges (not flush to corner), theme primary fill + on-primary icon.
  * Explicit MDC vars so the FAB always follows --mat-sys-* (matches app theme / Themes page).
  */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .dashboard-create-fab.mat-mdc-fab {
   position: fixed;
   z-index: 100;

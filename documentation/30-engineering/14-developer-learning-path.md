@@ -2,15 +2,25 @@
 title: Developer Learning Path (No-Agent)
 parent: Engineering
 order: 14
-last_reviewed: 2026-10-05
-repo_commit: b15d9cf
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Developer Learning Path — Building This Application Without AI Agents
 
-> **Last reviewed:** 2026-10-05 · **Repository:** `b15d9cf` (`fix/nxsat-303-production-advisories`)
-> Only the Angular and `dompurify` rows were re-verified at that commit — see Appendix A.
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-14 at `d36176c` (`feature/nxsat-308-remove-adf-packages`):
+> Only the package table and the authentication paragraph in §16, the `import type` line in §2, the
+> version-pin rows in §18 and the ADF rows in Appendix A were re-verified at that commit, for
+> NXSAT-637. On
+> 2026-10-08 at `5abcd50` (`feature/nxsat-308-replace-adf-extensions`) the
+> `@alfresco/adf-extensions` lines in §15 and §16 and the platform version in §19 were
+> re-verified, and only §22.2, the local gate list, at `fb97d44`
+> (`feature/nxsat-308-dependency-tree-gate`), and the `@hylandsoftware/satori-ui` row at
+> `d500aae` (`feature/nxsat-308-satori-ui-0-2-1`). The Angular and `dompurify` rows were re-verified on
+> 2026-10-05 at `b15d9cf` (`fix/nxsat-303-production-advisories`) — see Appendix A.
 > **Purpose:** the complete list of technologies, versions and concepts a developer must know to
 > build, extend and operate Nuxeo Satori **by hand**, with no AI assistance of any kind.
 > **Sources:** `package.json`, `package-lock.json`, `pom.xml`, `nx.json`, `angular.json`,
@@ -66,7 +76,7 @@ Topics: ES2022 modules vs CommonJS (this repo is `"module": "preserve"` and mixe
 code is ESM, the `scripts/**` tooling is `.mjs`), `package.json` fields (`exports`, `sideEffects`,
 `peerDependencies`, `overrides`), semver ranges (`~` vs `^` vs exact), lockfile semantics.
 
-- [Node 20 API docs](https://nodejs.org/docs/latest-v20.x/api/)
+- [Node 24 API docs](https://nodejs.org/docs/latest-v24.x/api/)
 - [npm `package.json` reference](https://docs.npmjs.com/cli/v11/configuring-npm/package-json)
 - [Node ESM/CJS interop](https://nodejs.org/api/esm.html)
 
@@ -82,9 +92,9 @@ Estimated effort: **6 hours** if you have used Node; **20 hours** if not.
 
 ---
 
-### 2. TypeScript 5.8 — **Must**
+### 2. TypeScript 6.0 — **Must**
 
-Resolved version: **5.8.3** (`~5.8.0`).
+Resolved version: **6.0.3** (`~6.0.0`). Angular 22 accepts `>=6.0 <6.1`, so TypeScript 7 is not an option yet.
 
 This repository runs TypeScript at close to maximum strictness, and the settings are not decorative
 — they are why the published API surface can be gated. From `tsconfig.json`:
@@ -101,8 +111,8 @@ Topics you will actually hit:
   affects every `process.env['X']` and every Nuxeo `properties['dc:title']` access in the codebase.
 - Declaration files (`.d.ts`) and what "public API surface" means — the `beta:api` gate diffs the
   emitted `.d.ts` against `docs/api/platform.api.md`
-- `import type` and why it matters for bundle size (the `@alfresco/js-api` dependency is a
-  devDependency precisely because it is types-only, avoiding 7 MB at runtime)
+- `import type` and why it matters for bundle size (`@alfresco/js-api` was a devDependency
+  precisely because it was types-only, avoiding 7 MB at runtime, until NXSAT-637 removed it)
 - Path mapping (`tsconfig.base.json` holds 25 path aliases across two scopes)
 
 - [TypeScript handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
@@ -173,13 +183,13 @@ Estimated effort: **10 hours**.
 
 ## Part II — The framework
 
-### 5. Angular 20.3 — **Must** (the largest single module)
+### 5. Angular 22.2 — **Must** (the largest single module)
 
-Resolved: **20.3.33** across `@angular/core`, `common`, `router`, `forms`, `compiler`,
-`animations`, `platform-browser`, `platform-browser-dynamic` (`~20.3.33`). CLI and build tooling
-also 20.3.x. `zone.js` **0.15.1**.
+Resolved: **22.2.3** across `@angular/core`, `common`, `router`, `forms`, `compiler`,
+`animations`, `platform-browser`, `platform-browser-dynamic` (`~22.2.3`). CLI and build tooling
+22.2.4. `zone.js` **0.16.3**.
 
-Angular 20 is a genuinely different framework from Angular 8–14. If your Angular knowledge predates
+Angular 22 is a genuinely different framework from Angular 8–14. If your Angular knowledge predates
 standalone components and signals, treat this as learning a new framework, not an upgrade.
 
 #### 5.1 What this repo uses — and what it deliberately does not
@@ -247,13 +257,13 @@ Estimated effort: **70 hours** if you know Angular 15+; **120 hours** otherwise.
 
 ---
 
-### 6. Angular Material 20 and the CDK — **Must**
+### 6. Angular Material 22 and the CDK — **Must**
 
-Resolved: `@angular/material` **20.2.14**, `@angular/cdk` **20.2.14**, plus
-`@angular/material-date-fns-adapter` **20.2.14** and `@mat-datetimepicker/core` **16.0.1**.
+Resolved: `@angular/material` **22.2.4**, `@angular/cdk` **22.2.4**, plus
+`@angular/material-date-fns-adapter` **22.2.4**, which the Satori date adapter is built on.
 
-Material is not a choice here — adf-core imports it at 48 sites, so it is unavoidable in
-`nuxeo-ui`. It is deliberately **absent** from `apps/nuxeo-satori-template`, which hand-rolls SCSS,
+Material is not a choice here — the `nxs-` components in `libs/shared/satori-components` are
+built on it, so it is unavoidable in `nuxeo-ui`. It is deliberately **absent** from `apps/nuxeo-satori-template`, which hand-rolls SCSS,
 because a customer fork must be able to bring its own design system.
 
 Components you will meet (each large feature imports 20–25 modules): dialog, table, paginator,
@@ -283,7 +293,7 @@ Resolved: **7.8.2** (`~7.8.0`).
 Signals own UI state; RxJS owns everything async and HTTP. Both, always. The operator set in
 active use, counted across `libs/`:
 
-- **Promise bridging: `firstValueFrom`** — 324 uses in `nuxeo-client`, 114 in `adf-hx-bridge`,
+- **Promise bridging: `firstValueFrom`** — 324 uses in `nuxeo-client`, 114 in `adf-hx-bridge` (removed since, NXSAT-635),
   59 in `kd-client`. This is the dominant idiom in the data layer, so learn it first.
 - `switchMap` (59 in `nuxeo-client`, 16 in `knowledge-discovery` for answer polling), `concatMap`,
   `mergeMap`
@@ -307,9 +317,9 @@ Estimated effort: **25 hours**.
 
 ## Part III — Repository, build and quality tooling
 
-### 8. Nx 22 monorepo — **Must**
+### 8. Nx 23 monorepo — **Must**
 
-Resolved: **22.7.8** across `nx`, `@nx/angular`, `@nx/eslint`, `@nx/eslint-plugin`, `@nx/js`,
+Resolved: **23.3.0** across `nx`, `@nx/angular`, `@nx/eslint`, `@nx/eslint-plugin`, `@nx/js`,
 `@nx/vite`, `@nx/vitest`, `@nx/workspace`.
 
 27 projects: 3 apps, 22 libraries, plus two untagged support projects.
@@ -347,7 +357,7 @@ Two traps recorded in the repository, both of which cost real time:
    declares an explicit `lint` target with a comment saying why.
 
 A documented limitation you must know before designing anything around it: tag constraints see
-**projects, not import specifiers**, so they cannot distinguish `@nuxeo-satori/platform/extensions`
+**projects, not import specifiers**, so they cannot distinguish `@nuxeo/satori-platform/extensions`
 from a raw `@agentic-ui/shared-extensions` — both are the same graph edge. That guarantee is
 enforced separately by `libs/platform/guardrails/check-extension-library.mjs`.
 
@@ -362,13 +372,13 @@ Estimated effort: **20 hours**.
 
 ### 9. The Angular build system — **Must**
 
-| Tool                         | Version                                                              | Role                                                   |
-| ---------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------ |
-| `@angular/build:application` | 20.3.x                                                               | The esbuild/Vite application builder. **Not webpack.** |
-| `@angular/build:dev-server`  | 20.3.x                                                               | `nx serve nuxeo-ui` → `http://localhost:4200`          |
-| Vite                         | **6.4.3** (pinned via `overrides` under both Angular build packages) | Underlies both the builder and Vitest                  |
-| esbuild                      | **0.28.1** (pinned via `overrides`)                                  |                                                        |
-| ng-packagr                   | **20.3.2**                                                           | Builds the one publishable library                     |
+| Tool                         | Version                                                                                           | Role                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `@angular/build:application` | 22.2.x                                                                                            | The esbuild/Vite application builder. **Not webpack.** |
+| `@angular/build:dev-server`  | 22.2.x                                                                                            | `nx serve nuxeo-ui` → `http://localhost:4200`          |
+| Vite                         | **8.3.5** (the workspace pin; `overrides` pin the same version under both Angular build packages) | Underlies both the builder and Vitest                  |
+| esbuild                      | **0.28.2** (pinned via `overrides`)                                                               |                                                        |
+| ng-packagr                   | **22.2.5**                                                                                        | Builds the one publishable library                     |
 
 Topics: builder configuration in `angular.json`, `inlineStyleLanguage`, asset globs (this app pulls
 assets from five `node_modules` locations for adf-core, adf-hx and Satori i18n), `outputHashing`,
@@ -404,7 +414,7 @@ Estimated effort: **12 hours**.
 | ------------------------ | ------------------------ |
 | ESLint                   | **9.39.5** (flat config) |
 | `typescript-eslint`      | 8.x                      |
-| `angular-eslint`         | 20.x                     |
+| `angular-eslint`         | 22.x                     |
 | `eslint-config-prettier` | 10.x                     |
 | Prettier                 | **3.9.6**                |
 | Husky                    | **9.1.7**                |
@@ -439,10 +449,10 @@ Estimated effort: **8 hours**.
 
 | Tool                                                        | Version    |
 | ----------------------------------------------------------- | ---------- |
-| Vitest                                                      | **3.2.7**  |
-| `@vitest/coverage-v8`, `@vitest/ui`                         | 3.2.7      |
+| Vitest                                                      | **4.1.10** |
+| `@vitest/coverage-v8`, `@vitest/ui`                         | 4.1.10     |
 | jsdom                                                       | **28.1.0** |
-| `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | **1.22.5** |
+| `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | **2.9.0**  |
 
 19 libraries each have a `vite.config.mts` and a `src/test-setup.ts`. Vitest is the real runner.
 Karma and Jasmine are still in `devDependencies` and `angular.json` declares a
@@ -495,8 +505,10 @@ Configuration facts worth knowing before you write a spec:
 - `workers: 1` — serial, because every spec shares one Nuxeo repository
 - `retries: CI ? 2 : 1`, `timeout: 45_000`, `expect.timeout: 10_000`, `forbidOnly: true`
 - Trace, screenshot and video all `retain-on-failure` / `only-on-failure`
-- **Two auth mechanisms, both required**: `httpCredentials` for Basic on every request, _and_ an
-  `addInitScript` that writes the app's session into `sessionStorage`. `storageState` does not work
+- **Two auth mechanisms, both required**: `httpCredentials` with `send: 'always'` for Basic on every
+  `page.request` call, _and_ an `addInitScript` that writes the app's session into `sessionStorage`,
+  which the app turns into the header on its own XHRs. `signedIn` then checks both against `/me`
+  (NXSAT-643). `storageState` does not work
   because the app uses `sessionStorage`, not `localStorage`.
 
 Accessibility: `@axe-core/playwright` (also untracked), scanning 15 cases across 8 routes against
@@ -716,17 +728,20 @@ lines) in full.
 
 **Two configuration stores that are constantly confused. They are not the same thing.**
 
-- **Bootstrap file** — `/nuxeo/agentic-ui-config/bootstrap.json`, read **pre-authentication**.
-  Holds `nuxeoApiOrigin`, `nuxeoServerUrl`, `aiBackendUrl`, `manifestDocumentPath`, `branding`,
+- **Bootstrap** — `/nuxeo/agentic-ui-config/bootstrap.json`, read **pre-authentication**.
+  Holds `nuxeoApiOrigin`, `nuxeoServerUrl`, `aiBackendUrl`, `branding`,
   `themes`/`defaultThemeId`, `defaultLanguage`, `integrations` (ARender, KD and KE operation maps),
   `session` (idle timeout), `sso`.
-- **Runtime manifest** — a **Nuxeo document** at `/default-domain/config/agentic-ui`, read
-  post-authentication with the user's own session. Holds `version`, `navItems`, `actions`, `rules`,
+- **Runtime manifest** — `/nuxeo/agentic-ui-config/manifest.json`, also read
+  **pre-authentication**, in parallel with the bootstrap. Holds `version`, `navItems`, `actions`, `rules`,
   `presets`, `featureToggles`, `labels`, `extensions`. It has **no `integrations` key** — ARender
   configured there silently does nothing.
 
-Both loads are deliberately tolerant: a missing file, an absent document, a 403 or malformed JSON
-all fall back to packaged defaults.
+Both are the configuration servlet's envelope of ordered fragments, one per Marketplace package;
+the browser applies them in order over its compiled defaults. Both loads are deliberately
+tolerant: a 404, an unreachable server or a response that is not the envelope falls back to
+packaged defaults. The manifest Note this used to be (`/default-domain/config/agentic-ui`) is no
+longer read, with no migration.
 
 **Registered IDs** follow `<owner>.<surface>.<name>`. Renaming a shipped ID is a **breaking
 change**. Eight slots: `navbar` (14 packaged entries), `bulk-actions` (6), `toolbar` (16–17),
@@ -746,8 +761,8 @@ change**. Eight slots: `navbar` (14 packaged entries), `bulk-actions` (6), `tool
 - `overrides` honours exactly four keys — `order`, `label`, `rule`, `visible`. Anything else is
   silently dropped; `hiddenByDefault` must go through `slots`.
 
-`$references` layering uses `mergeObjects` from `@alfresco/adf-extensions` directly (Alfresco
-Content App semantics): later wins, `$`-prefixed keys do not merge, arrays of objects merge **by
+`$references` layering uses our own copy of ACA's `mergeObjects`, pinned to the output of
+`@alfresco/adf-extensions` 9.0.0 (Alfresco Content App semantics): later wins, `$`-prefixed keys do not merge, arrays of objects merge **by
 `id`**, `"<key>.$replace"` replaces, `$ignoreReferenceList` drops a layer.
 
 - **In-repo:** `docs/extension-reference.md`, `libs/platform/extension-reference.md`,
@@ -761,22 +776,28 @@ Estimated effort: **20 hours**.
 
 ### 16. adf-hx, ADF and the Hyland Experience stack — **Area** (but Must for browse/search work)
 
-| Package                             | Version                 | Registry             | Note                                                               |
-| ----------------------------------- | ----------------------- | -------------------- | ------------------------------------------------------------------ |
-| `@alfresco/adf-hx-content-services` | **7.20.0-automate.292** | GitHub Packages only | Exact pin. **Never a range** — `latest` is itself a prerelease.    |
-| `@alfresco/adf-core`                | **9.0.0**               | GitHub Packages      | Arrives transitively; brings Material; **eager**, +1.15 MB initial |
-| `@alfresco/adf-extensions`          | **9.0.0**               | public npm           | Only its neutral merge helpers are used                            |
-| `@alfresco/js-api`                  | **10.0.0**              | devDependency        | Types-only peer; 7 MB avoided at runtime                           |
-| `@hylandsoftware/hxcs-js-client`    | **2.0.111**             | GitHub Packages      | The `Document` / HxPR model                                        |
-| `@hylandsoftware/satori-ui`         | **0.2.0** (`^0.2.0`)    | GitHub Packages      | Hyland design system; deliberately absent from the template        |
+_Changed by NXSAT-635 and NXSAT-638 (2026-10):_ none of this module is in the product any more. The
+bridge library, its ports and the POC routes were removed on 2026-10-14 (NXSAT-635), and the
+packages below by NXSAT-637. §16.1 to §16.4 are kept as the record; skip them unless
+you are reading history. Browse and search now use the `nxs-` components in
+`libs/shared/satori-components`.
 
-Authentication for installs is `SATORI_GH_READONLY_TOKEN` with `read:packages` on **both** the
-`@alfresco` and `@hylandsoftware` orgs. `.npmrc` maps both scopes to `https://npm.pkg.github.com`
-and **must not** be repointed at public npm.
+| Package                             | Version             | Registry             | Note                                                        |
+| ----------------------------------- | ------------------- | -------------------- | ----------------------------------------------------------- |
+| `@alfresco/adf-hx-content-services` | 7.20.0-automate.292 | GitHub Packages only | **Removed in NXSAT-637**                                    |
+| `@alfresco/adf-core`                | 9.0.0               | GitHub Packages      | **Removed in NXSAT-637**                                    |
+| `@alfresco/adf-extensions`          | 9.0.0               | public npm           | **Removed in NXSAT-637**                                    |
+| `@alfresco/js-api`                  | 10.0.0              | devDependency        | **Removed in NXSAT-637**                                    |
+| `@hylandsoftware/hxcs-js-client`    | 2.0.111             | GitHub Packages      | **Removed in NXSAT-637**                                    |
+| `@hylandsoftware/satori-ui`         | 0.4.2 (`^0.4.2`)    | GitHub Packages      | Hyland design system; deliberately absent from the template |
+
+Authentication for installs is `SATORI_GH_READONLY_TOKEN` with `read:packages` on the Hyland org.
+`.npmrc` maps `@hylandsoftware` to `https://npm.pkg.github.com`; the `@alfresco` mapping went with
+the last `@alfresco` package in NXSAT-637.
 
 Context that explains a lot of the workarounds: there has been no stable adf-hx release in twelve
 months (last true stable `7.19.5`, on an Angular 15 baseline); the published packages are compiled
-against **Angular 19.2.18** while this repo runs 20.3.33; and the dependency contract is
+against **Angular 19.2.18** while this repo ran 20.3.34; and the dependency contract is
 **under-declared** — one declared peer against thirteen imported packages — so the pin set is
 maintained by hand.
 
@@ -835,7 +856,8 @@ most of that surface; `app.config.ts` and the shell nav drawer also import it on
 
 - [ADF documentation](https://alfresco-ng2-components.netlify.app/)
 - [ADF source](https://github.com/Alfresco/alfresco-ng2-components)
-- **In-repo, and the only accurate source for the bridge:** `libs/shared/adf-hx-bridge/ARCHITECTURE.md`,
+- **In-repo, and the only accurate source for the bridge:** `libs/shared/adf-hx-bridge/ARCHITECTURE.md`
+  (removed with the bridge; in git history),
   `docs/adf-hx-upstream-findings.md`, `docs/adf-hx-workarounds.md`, `docs/adf-hx-beta-plan.md`
 
 Estimated effort: **30 hours**.
@@ -940,18 +962,13 @@ Estimated effort: **20 hours** for §17.1 and §17.2 together.
 
 ### 18. Third-party UI and utility libraries — **Area**
 
-| Library                         | Version                     | Where                                         | What to learn                                                                                                                                                                                                                                                     |
-| ------------------------------- | --------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Quill**                       | **2.0.3** (`^2.0.3`)        | `document-detail/note-editor` — 44 references | Delta model, toolbar modules, custom handlers, image insertion                                                                                                                                                                                                    |
-| **DOMPurify**                   | **3.4.16** (`^3.4.16`)      | Notes, comments, AI markdown, `nuxeo-client`  | Configuration, hooks, and _why_ sanitising on output is not enough                                                                                                                                                                                                |
-| **`@ngx-translate/core`**       | **17.0.0**                  | App and three features                        | Custom `TranslateLoader`. **Trap:** adf-core's `TranslationService` does _not_ use the ngx-translate loader interface — extend `AppTranslateLoader` and override `getTranslation`; swapping in adf-core's loader deletes the manifest-`labels` Layer 0 capability |
-| **`@hylandsoftware/satori-ui`** | **0.2.0**                   | `nuxeo-ui` only                               | `SatAvatar`, `SatBreadcrumbs`, `SatTag`, `sat.theme()`                                                                                                                                                                                                            |
-| **`pdfjs-dist`**                | **6.2.108**                 | Preview                                       | Arrives with the adf-core peer set. Does not tree-shake out.                                                                                                                                                                                                      |
-| **`cropperjs`**                 | **1.6.2**                   | Assets                                        | Image cropping                                                                                                                                                                                                                                                    |
-| **`date-fns`**                  | **2.30.0**                  | Forms, via the Material adapter               | Note the `date-fns/locale` directory-import workaround in every Vite config                                                                                                                                                                                       |
-| **`minimatch`**                 | **10.2.6**                  | Tooling                                       | Glob matching                                                                                                                                                                                                                                                     |
-| **`ng-mocks`**                  | `file:tools/stubs/ng-mocks` | —                                             | **Not a test-tooling choice.** It is a local stub replacing the real package, because adf-hx imports `ng-mocks` from its _shipped runtime_ bundle, putting a test library and two `eval()` calls into a 1.6 MB customer chunk. The `bundle` gate guards it.       |
-| **`angular-oauth2-oidc`**       | **19.0.0**                  | Nowhere                                       | Declared, unused, deliberately retained                                                                                                                                                                                                                           |
+| Library                         | Version                | Where                                         | What to learn                                                                                                                                                                                                                                                     |
+| ------------------------------- | ---------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Quill**                       | **2.0.3** (`^2.0.3`)   | `document-detail/note-editor` — 44 references | Delta model, toolbar modules, custom handlers, image insertion                                                                                                                                                                                                    |
+| **DOMPurify**                   | **3.4.17** (`^3.4.16`) | Notes, comments, AI markdown, `nuxeo-client`  | Configuration, hooks, and _why_ sanitising on output is not enough                                                                                                                                                                                                |
+| **`@ngx-translate/core`**       | **17.0.0**             | App and three features                        | Custom `TranslateLoader`. **Trap:** adf-core's `TranslationService` does _not_ use the ngx-translate loader interface — extend `AppTranslateLoader` and override `getTranslation`; swapping in adf-core's loader deletes the manifest-`labels` Layer 0 capability |
+| **`@hylandsoftware/satori-ui`** | **0.4.2**              | `nuxeo-ui` only                               | `SatAvatar`, `SatBreadcrumbs`, `SatTag`, `sat.theme()`. 0.4 renamed its classes with a `Sat` prefix and re-exports the old names                                                                                                                                  |
+| **`date-fns`**                  | **2.30.0** (`^2.30.0`) | `libs/shared/ui`'s Satori date adapter        | Locales and parsing behind `provideSatoriDateAdapter`, with `@angular/material-date-fns-adapter`.                                                                                                                                                                 |
 
 - [Quill](https://quilljs.com/docs/quickstart)
 - [DOMPurify](https://github.com/cure53/DOMPurify)
@@ -969,7 +986,7 @@ Estimated effort: **12 hours**.
 ### 19. Publishing the platform package — **Area**
 
 `libs/platform` is the only publishable library, built with `@nx/angular:package` (ng-packagr
-**20.3.2** underneath), published as `@nuxeo-satori/platform@0.1.0`.
+**21.2.7** underneath), published as `@nuxeo/satori-platform@0.2.0`.
 
 Topics: ng-packagr, the Angular Package Format, **secondary entry points** (five `ng-package.json`
 files: root plus `app-config`, `extensions`, `nuxeo-client`, `ui`), `sideEffects: false`,
@@ -1006,7 +1023,7 @@ release engineering you can skip this; if you do, it is unavoidable.
 | Java            | **21** (`maven.compiler.source/target`)                       |
 | Maven           | 3.9+                                                          |
 | `nuxeo-parent`  | **11.5.154**                                                  |
-| Reactor version | `org.nuxeo.agentic:nuxeo-agentic-ui-parent:2026.0.1-SNAPSHOT` |
+| Reactor version | `org.nuxeo.agentic:nuxeo-agentic-ui-parent:2026.0.2-SNAPSHOT` |
 | Target platform | `lts [2025.0,2026.0)`                                         |
 
 Three modules: `apps/nuxeo-ui` (packaging `pom`, drives the Angular build through
@@ -1062,11 +1079,13 @@ Configuration keys `opensearch.addressList`, `opensearch.indexName`, `audit.open
 DSL and returns aggregation buckets as facets. **This is the source of the index-lag and
 `resultsCount` behaviour in §13.3** — the two topics are the same topic.
 
-ARender specifics: `ARENDER_CONFIG` defaults to `null`, so **ARender is off unless configured**.
-The compiled-in `localhost:9080` defaults were removed as a Sonar `S5332` finding — a shipped build
+ARender specifics: `ARENDER_CONFIG` defaults to `null`, so **ARender is off unless configured**. The
+compiled-in `localhost:9080` defaults were removed as a Sonar `S5332` finding — a shipped build
 pointed the viewer at the _user's own_ machine over plaintext. Configure
-`integrations.arender.viewerOrigin` and `.nuxeoInternalUrl` in the **bootstrap file**, never the
-runtime manifest. Annotations require a `file:content` blob, so Notes never show the viewer.
+`integrations.arender.viewerOrigin` in a **bootstrap fragment** of the configuration package, never
+the runtime manifest. Leave out `.nuxeoInternalUrl`: nothing uses it, and bootstrap is served before
+authentication, so it would publish an internal host name. Annotations require a `file:content`
+blob, so Notes never show the viewer.
 
 - [Docker Compose](https://docs.docker.com/compose/)
 - [OpenSearch documentation](https://opensearch.org/docs/latest/)
@@ -1088,7 +1107,7 @@ Estimated effort: **15 hours**.
 | `ci.yml`                | PR to `main`; push to `main`/`feature/**`/`fix/**` | The main gate: guardrails → static beta gates → affected lint/build/test/typecheck → published-package checks → bundle-size ceiling (6 MiB total JS+CSS) |
 | `sonarcloud.yml`        | PR, push, dispatch                                 | Coverage merge, scan, quality gate, PR comment                                                                                                           |
 | `a11y.yml`              | PR, push, `workflow_call`, dispatch                | Template a11y rules against a baseline                                                                                                                   |
-| `build-marketplace.yml` | PR (build only), dispatch (can publish)            | JDK 21 + Node 20, Maven package, publish to pre-prod                                                                                                     |
+| `build-marketplace.yml` | PR (build only), dispatch (can publish)            | JDK 21 + Node 24, Maven package, publish to pre-prod                                                                                                     |
 | `release.yml`           | dispatch only                                      | `npm version`, changelog, tag, GitHub release, then dispatches the marketplace build                                                                     |
 | `changelog.yml`         | push to `main`, dispatch                           | Regenerates `CHANGELOG.md` from Conventional Commits                                                                                                     |
 | `dependency-review.yml` | PR                                                 | Fails on moderate-severity advisories                                                                                                                    |
@@ -1100,14 +1119,15 @@ Estimated effort: **15 hours**.
 CodeQL runs through GitHub's **default setup** (repository settings), not a workflow, with the
 `security-extended` suite over `apps` and `libs`.
 
-#### 22.2 The local gate — twenty checks, not six
+#### 22.2 The local gate — twenty-six checks, not six
 
 `npm run beta:gate` runs, cheapest first, stopping at the first failure:
 
-`node` → `lockfile` → `supply-chain` → `code-scanning` → `guardrails` → `sanitizer-audit` →
-`sanitizer-selftest` → `assertions` → `lint` → `test` → `build` → `typecheck` → `spec-types` →
-`bundle` → `api-surface` → `publishability` → `fork-simulation` → `upgrade-rehearsal` →
-`reference-drift` → `customer-guardrails`
+`node` → `lockfile` → `lockfile-selftest` → `dependency-tree` → `dependency-tree-selftest` →
+`supply-chain` → `code-scanning` → `guardrails` → `guardrails-selftest` → `crowdin-selftest` →
+`sanitizer-audit` → `sanitizer-selftest` → `assertions` → `lint` → `test` → `build` → `typecheck`
+→ `spec-types` → `bundle` → `api-surface` → `publishability` → `fork-simulation` →
+`upgrade-rehearsal` → `reference-drift` → `agent-mirror` → `customer-guardrails`
 
 Each exists because of a specific failure that got through. The ones worth understanding in detail:
 `publishability` runs a real `npm publish --dry-run` and is the only thing that executes
@@ -1176,8 +1196,8 @@ is the "do not miss a single feature" checklist.
 | **Trash**                     | `/#/trash`                     | Grid/table/list views, filter drawer, restore and permanent delete (single and bulk), saved searches over trash                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `ecm:isTrashed`, trash operations                                                                      |
 | **Administration**            | `/#/administration`            | Eight pages — Analytics (repository, distribution, workflow, search dashboards), Users & Groups, User Details, Group Details, Vocabularies, Audit log with AI search and summary, Cloud Services (OAuth2 providers/consumers/tokens), raw NXQL console. Three pages behind `fullAdministratorGuard`                                                                                                                                                                                                                                                                                                                       | §13 user/group/directory/audit/OAuth2 APIs, §17.1 three AI ops                                         |
 | **Knowledge Discovery**       | `/#/knowledge-discovery`       | Agent selection, guardrail display, model info, answers rendered as segments with inline numbered citations openable in a dialog, question history, thumbs feedback, direct Content Lake upload, `?debug=1` diagnostic surface                                                                                                                                                                                                                                                                                                                                                                                            | §17.2 in full; 16 `switchMap` for answer polling                                                       |
-| **adf-hx Browse POC**         | `/#/browse-adf-hx`             | Upstream `hxp-document-list`, `hxp-document-tree`, `hxp-breadcrumb`, `hxp-properties-sidebar`, viewer and versions sidebar, backed by Nuxeo                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | §16 in full                                                                                            |
-| **adf-hx Search POC**         | `/#/search-adf-hx`             | Upstream search surface over the Nuxeo query port                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | §16 in full                                                                                            |
+| ~~**adf-hx Browse POC**~~     | ~~`/#/browse-adf-hx`~~         | Removed on 2026-10-14 (NXSAT-635); the path redirects to `/#/browse`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ~~**adf-hx Search POC**~~     | ~~`/#/search-adf-hx`~~         | Removed on 2026-10-14 (NXSAT-635); the path redirects to `/#/search`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ### Shared libraries
 
@@ -1187,7 +1207,7 @@ is the "do not miss a single feature" checklist.
 | `shared/ui`                  | Document viewer (image zoom/rotate/fit, video storyboard, picture formats, EXIF/IPTC, ARender tab), compare dialog, confirm, export, saved-search and share dialogs, selection topbar, widget grid | Blob lifecycle, §21 ARender                               |
 | `shared/extensions`          | Slot, rule, action and component registries; the manifest engine                                                                                                                                   | §15 in full                                               |
 | `shared/app-config`          | Bootstrap config and runtime manifest loading                                                                                                                                                      | `APP_INITIALIZER`, §15                                    |
-| `shared/adf-hx-bridge`       | Twelve API ports, mappers, thirteen `hxp-*` components                                                                                                                                             | §16 in full                                               |
+| ~~`shared/adf-hx-bridge`~~   | Removed on 2026-10-14 (NXSAT-635)                                                                                                                                                                  | —                                                         |
 | `shared/ai-client`           | `AiGatewayService`, `AiChatService`, feature flag                                                                                                                                                  | §17.1                                                     |
 | `shared/kd-client`           | KD operations, citation parsing (~22 utilities)                                                                                                                                                    | §17.2                                                     |
 | `shared/ke-client`           | KE enrichment operations                                                                                                                                                                           | §17.2, multipart                                          |
@@ -1250,85 +1270,70 @@ to read each morning of Phase 4 onwards:
 
 ## Appendix A — Complete version matrix
 
-Versions as resolved in `package-lock.json` at commit `e334b0f`. Where `package.json` declares a
-range, the range follows in brackets.
+Versions as resolved in `package-lock.json`. Where `package.json` declares a range, the range
+follows in brackets.
 
-**Three baselines, not one.** The Angular row was refreshed at `3f381e2` (#164), where the framework
-moved to 20.3.31 to clear two advisories, and again at `b15d9cf` (NXSAT-303, #300) where it moved to
-20.3.33 for GHSA-ff3f-86qr-9cv3 in `@angular/router`; the `dompurify` row was refreshed at that same
-commit, 3.4.13 -> 3.4.16 for GHSA-p98j-92pf-mc4p. Those two rows do not come from `e334b0f` and
-cannot be reproduced there. **No other row has been re-verified since `e334b0f`**, and some may have
-drifted — `axios` and `brace-expansion` also moved at `b15d9cf`, as `overrides` rather than declared
-dependencies, and neither appears in this matrix at all. The honest fix is to re-baseline the whole
-matrix against one revision, which is more than a security bump should carry. Until then, reproduce
-the Angular and `dompurify` rows at `b15d9cf` and the rest at `e334b0f`.
+**One baseline.** Every row was re-read from a single lockfile in NXSAT-669, the move to Angular 21,
+replacing a matrix assembled from four revisions. Packages held by `overrides` only — `axios`,
+`brace-expansion`, `undici` and the other security floors — are not listed; `package.json` is
+their record. A row can drift as soon as the lock moves, so check one with `npm ls <package>`
+before relying on it.
 
 ### Runtime dependencies
 
-| Package                                                                                    | Resolved                                 |
-| ------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| `@angular/core`, `common`, `router`, `forms`, `compiler`, `animations`, `platform-browser` | 20.3.33 (`~20.3.33`)                     |
-| `@angular/material`                                                                        | 20.2.14 (`~20.2.0`)                      |
-| `@angular/cdk`                                                                             | 20.2.14 (`~20.2.0`)                      |
-| `@angular/material-date-fns-adapter`                                                       | 20.2.14                                  |
-| `@mat-datetimepicker/core`                                                                 | 16.0.1                                   |
-| `rxjs`                                                                                     | 7.8.2 (`~7.8.0`)                         |
-| `zone.js`                                                                                  | 0.15.1 (`~0.15.0`)                       |
-| `tslib`                                                                                    | `^2.3.0`                                 |
-| `@alfresco/adf-core`                                                                       | 9.0.0                                    |
-| `@alfresco/adf-extensions`                                                                 | 9.0.0                                    |
-| `@alfresco/adf-hx-content-services`                                                        | 7.20.0-automate.292                      |
-| `@hylandsoftware/satori-ui`                                                                | 0.2.0 (`^0.2.0`)                         |
-| `@hylandsoftware/hxcs-js-client`                                                           | 2.0.111                                  |
-| `@ngx-translate/core`                                                                      | 17.0.0 (`^17.0.0`)                       |
-| `angular-oauth2-oidc`                                                                      | 19.0.0 (unused)                          |
-| `quill`                                                                                    | 2.0.3 (`^2.0.3`)                         |
-| `dompurify`                                                                                | 3.4.16 (`^3.4.16`)                       |
-| `pdfjs-dist`                                                                               | 6.2.108                                  |
-| `cropperjs`                                                                                | 1.6.2                                    |
-| `date-fns`                                                                                 | 2.30.0                                   |
-| `minimatch`                                                                                | 10.2.6                                   |
-| `ng-mocks`                                                                                 | `file:tools/stubs/ng-mocks` (local stub) |
+| Package                                                                                    | Resolved           |
+| ------------------------------------------------------------------------------------------ | ------------------ |
+| `@angular/core`, `common`, `router`, `forms`, `compiler`, `animations`, `platform-browser` | 22.2.3 (`~22.2.3`) |
+| `@angular/material`                                                                        | 22.2.4 (`~22.2.0`) |
+| `@angular/cdk`                                                                             | 22.2.4 (`~22.2.0`) |
+| `@angular/material-date-fns-adapter`                                                       | 22.2.4 (`~22.2.0`) |
+| `rxjs`                                                                                     | 7.8.2 (`~7.8.0`)   |
+| `zone.js`                                                                                  | 0.16.3 (`~0.16.3`) |
+| `tslib`                                                                                    | `^2.3.0`           |
+| `@hylandsoftware/satori-ui`                                                                | 0.4.2 (`^0.4.2`)   |
+| `@ngx-translate/core`                                                                      | 17.0.0 (`^17.0.0`) |
+| `quill`                                                                                    | 2.0.3 (`^2.0.3`)   |
+| `dompurify`                                                                                | 3.4.17 (`^3.4.16`) |
+| `date-fns`                                                                                 | 2.30.0 (`^2.30.0`) |
 
 ### Build and development
 
-| Package                                                     | Resolved                                  |
-| ----------------------------------------------------------- | ----------------------------------------- |
-| `typescript`                                                | 5.8.3 (`~5.8.0`)                          |
-| `nx` and all `@nx/*`                                        | 22.7.8                                    |
-| `@angular/cli`, `@angular/build`, `@angular-devkit/*`       | 20.3.x                                    |
-| `ng-packagr`                                                | 20.3.2                                    |
-| `vite`                                                      | 6.4.3 (pinned by `overrides`)             |
-| `esbuild`                                                   | 0.28.1 (pinned by `overrides`)            |
-| `vitest`, `@vitest/coverage-v8`, `@vitest/ui`               | 3.2.7                                     |
-| `jsdom`                                                     | 28.1.0                                    |
-| `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | 1.22.5                                    |
-| `eslint`                                                    | 9.39.5                                    |
-| `typescript-eslint`                                         | 8.x                                       |
-| `angular-eslint`                                            | 20.x                                      |
-| `prettier`                                                  | 3.9.6                                     |
-| `sass`                                                      | 1.102.0                                   |
-| `husky`                                                     | 9.1.7                                     |
-| `lint-staged`                                               | 16.4.0                                    |
-| `@swc/core`                                                 | ~1.15.5                                   |
-| `@alfresco/js-api`                                          | 10.0.0 (devDependency, types only)        |
-| `@playwright/test`, `@axe-core/playwright`                  | **untracked**, installed with `--no-save` |
-| `knip`                                                      | invoked via `npx` in the weekly workflow  |
+| Package                                                     | Resolved                                                 |
+| ----------------------------------------------------------- | -------------------------------------------------------- |
+| `typescript`                                                | 6.0.3 (`~6.0.0`)                                         |
+| `nx` and all `@nx/*`                                        | 23.3.0                                                   |
+| `@angular/cli`, `@angular/build`, `@angular-devkit/*`       | 22.2.4                                                   |
+| `ng-packagr`                                                | 22.2.5                                                   |
+| `vite`                                                      | 8.3.5 (`^8.3.5`; the same version pinned by `overrides`) |
+| `esbuild`                                                   | 0.28.2 (pinned by `overrides`)                           |
+| `vitest`, `@vitest/coverage-v8`, `@vitest/ui`               | 4.1.10                                                   |
+| `jsdom`                                                     | 28.1.0                                                   |
+| `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | 1.22.5                                                   |
+| `eslint`                                                    | 9.39.5                                                   |
+| `typescript-eslint`                                         | 8.x                                                      |
+| `angular-eslint`                                            | 20.x                                                     |
+| `prettier`                                                  | 3.9.6                                                    |
+| `sass`                                                      | 1.106.1                                                  |
+| `husky`                                                     | 9.1.7                                                    |
+| `lint-staged`                                               | 16.4.0                                                   |
+| `@swc/core`                                                 | ~1.15.5                                                  |
+| `@playwright/test`, `@axe-core/playwright`                  | **untracked**, installed with `--no-save`                |
+| `knip`                                                      | invoked via `npx` in the weekly workflow                 |
 
 ### Platform and infrastructure
 
-| Item                  | Version               |
-| --------------------- | --------------------- |
-| Node.js               | 20.x (pinned)         |
-| npm                   | 11.6.2                |
-| Java                  | 21                    |
-| Maven                 | 3.9+                  |
-| `nuxeo-parent`        | 11.5.154              |
-| Nuxeo target platform | `lts [2025.0,2026.0)` |
-| OpenSearch            | 2.17.1                |
-| Mailpit               | v1.22.3               |
-| ARender               | 2023.19.0             |
-| nginx                 | `alpine`              |
+| Item                  | Version                                                         |
+| --------------------- | --------------------------------------------------------------- |
+| Node.js               | 20 (`.nvmrc`; `engines` `^20.19.0`, the Angular 21 CLI minimum) |
+| npm                   | 11.6.2                                                          |
+| Java                  | 21                                                              |
+| Maven                 | 3.9+                                                            |
+| `nuxeo-parent`        | 11.5.154                                                        |
+| Nuxeo target platform | `lts [2025.0,2026.0)`                                           |
+| OpenSearch            | 2.17.1                                                          |
+| Mailpit               | v1.22.3                                                         |
+| ARender               | 2023.19.0                                                       |
+| nginx                 | `alpine`                                                        |
 
 ---
 
@@ -1350,7 +1355,7 @@ and lose a day. These should be fixed in the `AGENTS/` knowledge base.
 6. **`AGENTS.md` §3 and §8** describe "23 services". There are **27** service files in
    `libs/shared/nuxeo-client/src/lib/services/`. The weekly `staleness-check.yml` workflow diffs
    exactly this, so the drift is already being reported.
-7. **`documentation/30-engineering/05-technology-stack.md`** lists Nx 22.6.3 (now 22.7.8),
+7. **`documentation/30-engineering/05-technology-stack.md`** lists
    DOMPurify `^3.3.3` (now `^3.4.16`), Java 17+ (the POM requires 21), and two unused
    dependencies — `openai` and `express` — that are no longer in `package.json`.
 

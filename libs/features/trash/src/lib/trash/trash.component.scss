@@ -13,18 +13,9 @@
 
 /* ── Page Header Row ── */
 
-.page-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+sat-header-bar {
   flex-shrink: 0;
   margin-bottom: 12px;
-}
-
-.page-header-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--mat-sys-on-surface);
 }
 
 .page-header-actions {
@@ -208,6 +199,15 @@
   align-content: start;
 }
 
+/* Keyboard focus inside a card or a simple-list row reveals its hidden checkbox and actions. */
+.result-card:focus-within .grid-card-checkbox,
+.result-card:focus-within .grid-card-actions,
+.simple-list-item:focus-within .simple-list-checkbox,
+.simple-list-item:focus-within .simple-list-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
 .result-card {
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -387,6 +387,16 @@
       opacity: 1;
       visibility: visible;
     }
+    .col-actions {
+      opacity: 1;
+      visibility: visible;
+    }
+  }
+  /* A keyboard user's focus lands on a row's checkbox and actions, which are hidden until hover.
+     Reveal them while focus is inside the row, so the focused control is visible. */
+  &:focus-within {
+    .col-hover-actions,
+    .col-hover-select,
     .col-actions {
       opacity: 1;
       visibility: visible;

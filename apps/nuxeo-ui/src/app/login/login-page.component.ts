@@ -7,6 +7,7 @@ import {
   inject,
   OnDestroy,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -25,15 +26,15 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
-import { TranslateModule, TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { SatLogoModule } from '@hylandsoftware/satori-ui/logo';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
-import type { NuxeoSamlLoginEndpoint } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoSamlLoginEndpoint } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { observeStripRedundantMatInputAriaRequired } from '@nuxeo-satori/platform/ui';
+import { observeStripRedundantMatInputAriaRequired } from '@nuxeo/satori-platform/ui';
 
 import { AuthService, SignInError } from '../auth/auth.service';
 
@@ -59,13 +60,14 @@ const LAST_USER_KEY = 'agentic_ui_last_username';
 
     MatSnackBarModule,
 
-    TranslateModule,
+    TranslatePipe,
 
     SatLogoModule,
   ],
 
   templateUrl: './login-page.component.html',
 
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './login-page.component.scss',
 })
 export class LoginPageComponent implements AfterViewInit, OnDestroy {
@@ -269,9 +271,12 @@ export class LoginPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  /** Right-panel art from `apps/nuxeo-ui/public/images/Login-background.svg`. */
-
-  protected readonly heroImagePath = '/images/Login-background.svg';
+  /**
+   * Right-panel art from `apps/nuxeo-ui/public/images/Login-background.svg`. Relative, so it
+   * resolves against `<base href>`: the Marketplace package serves the app from
+   * `/nuxeo/agentic-ui/`, where a root-absolute path 404s.
+   */
+  protected readonly heroImagePath = 'images/Login-background.svg';
 
   submit(): void {
     this.syncAutofillFromDom();

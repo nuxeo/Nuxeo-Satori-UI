@@ -1,5 +1,5 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo-satori/platform/extensions';
+import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
@@ -8,18 +8,20 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 import {
   DocumentDetailService,
   PERMISSION_NOTIFICATION_MAIL_HINT_KEY,
   isMailSendError,
   permissionCreateMailFailureMessage,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import {
+  provideSatoriDateAdapter,
+  provideTranslatedDatepickerIntl,
+} from '@nuxeo/satori-platform/ui';
+import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
 
 export interface ShareExternalDialogData {
   documentUid: string;
@@ -46,10 +48,10 @@ const PERMISSION_OPTIONS = [
     MatButtonModule,
     MatDatepickerModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule,
   ],
-  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   templateUrl: './share-external-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {
@@ -117,7 +119,7 @@ export class ShareExternalDialogComponent {
   private readonly translate = inject(TranslateService);
   private readonly data = inject<ShareExternalDialogData>(MAT_DIALOG_DATA);
   private readonly detailService = inject(DocumentDetailService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly saving = signal(false);
@@ -162,9 +164,7 @@ export class ShareExternalDialogComponent {
           this.createdAny = true;
           const message = this.successMessage(result.notificationSent, result.notificationErrorKey);
           if (message) {
-            this.snackBar.open(message, this.translate.instant('common.dismiss'), {
-              duration: 7000,
-            });
+            this.toast.show(message, { duration: 7000 });
           }
           if (andAddAnother) {
             this.resetForm();
@@ -174,11 +174,7 @@ export class ShareExternalDialogComponent {
         },
         error: (err) => {
           this.saving.set(false);
-          this.snackBar.open(
-            this.permissionErrorMessage(err),
-            this.translate.instant('common.dismiss'),
-            { duration: 7000 },
-          );
+          this.toast.error(this.permissionErrorMessage(err), { duration: 7000 });
         },
       });
   }

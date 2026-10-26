@@ -24,27 +24,27 @@
  * | `color-contrast`              |  7  |  0  | ours                                     |
  * | `scrollable-region-focusable` |  2  |  0  | ours                                     |
  * | `aria-progressbar-name`       |  2  |  0  | ours                                     |
- * | `aria-required-children`      |  3  |  3  | **`@alfresco/adf-core@9.0.0`** — see below |
+ * | `aria-required-children`      |  3  |  —  | **`@alfresco/adf-core@9.0.0`** — see below |
  *
- * ## The one exclusion, and why it is scoped to a single step
+ * ## No exclusions
  *
- * `aria-required-children` is excluded on the **adf-hx POC surface only**. It is upstream's defect:
- * `DataTableComponent` emits `role="row"` whose direct children are plain divs and a bare
- * `mat-checkbox`, which the `row` role does not permit. Reported in full, with the template quoted,
- * as finding **1.2** in `docs/adf-hx-upstream-findings.md`.
- *
- * The only host-side fix is to patch `role` attributes onto another library's DOM after render, so
- * it is excluded rather than papered over — and excluded on **one step**, not globally, so the same
- * rule failing on a surface we own still fails this capture. A repo-wide `ignore` list would have
- * hidden exactly that.
+ * Every step scans with `KNOWN_VIOLATIONS`, which is empty. Until 2026-10-14 one step did not: the
+ * adf-hx POC route excluded `aria-required-children`, upstream's defect in adf-core's
+ * `DataTableComponent` (`role="row"` with non-cell children, finding **1.2** in
+ * `docs/adf-hx-upstream-findings.md`). That step was removed with adf-core's wiring (NXSAT-636),
+ * which is why the rule has no "Now" count: the only surface that carried it is no longer scanned.
  *
  * ## What this capture does and does not cover
  *
- * Fifteen cases: eight routes, plus view-mode and column-panel states that a single visit per route
- * does not reach. Three of the seven rule classes were only visible in those extra states.
+ * The landing page, browse, search, trash, tasks, collections, administration, knowledge discovery
+ * and document detail, plus view-mode and column-panel states that a single visit per route does
+ * not reach, a Picture document whose `.picture-cards` metadata strip is not reached by opening an
+ * arbitrary File blob, and the replace-main-file tooltip. Three of the seven rule classes were only
+ * visible in those extra states.
  *
- * The **login surface is still not covered**, and that is a harness limitation rather than a choice:
- * the runner sets `httpCredentials`, so the app authenticates before the login page can render. The
+ * The **login surface is still not covered**: this capture signs in before its first scan, and on a
+ * guest-enabled Nuxeo an unsigned app does not show the login page either — it signs itself in as
+ * `Anonymous`, which the identity guard rejects (NXSAT-643). The
  * first draft of this file labelled a step "Login surface" and actually scanned the dashboard — a
  * test defect, caught by the selector assertion failing rather than by the scan. `phase-0-no-backend`
  * is the only file that sees login, and only because authentication fails there.
@@ -66,30 +66,31 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { requireStepCredentials } from '../helpers.mjs';
+import { basicAuthorization } from '../nuxeo-credentials.mjs';
+
 /**
  * Empty on purpose. Every rule this capture once tolerated is fixed; see the table above.
  *
  * Do not add an entry here to make a run pass. A rule id in this list applies to **every** step, so
  * one addition silences that rule across the whole application. If a specific surface has an
- * unavoidable upstream violation, scope it to that step's own call — as the adf-hx step does — and
- * cite the finding that owns it.
+ * unavoidable upstream violation, scope it to that step's own call and cite the finding that owns
+ * it.
  */
 const KNOWN_VIOLATIONS = [];
-
-/**
- * Upstream-owned, scoped to the adf-hx POC step alone.
- * `docs/adf-hx-upstream-findings.md` §1.2.
- */
-const ADF_HX_UPSTREAM = ['aria-required-children'];
 
 /**
  * @param {import('@playwright/test').Page} page
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
 export default async function run(page, h) {
-  h.step('Precondition: a backend is reachable, so data-bearing screens can be scanned');
+  await h.step('Precondition: a backend is reachable, so data-bearing screens can be scanned');
   const probe = await page.request
-    .get(`${h.baseUrl}/nuxeo/api/v1/me`, { failOnStatusCode: false })
+    .get(`${h.baseUrl}/nuxeo/api/v1/me`, {
+      failOnStatusCode: false,
+      headers: nuxeoApiRequestHeaders(),
+    })
+    // A refused connection fails the precondition below, which reports it as "no response".
     .catch(() => null);
   h.requirePrecondition(
     'Nuxeo API answers through the dev proxy',
@@ -98,7 +99,13 @@ export default async function run(page, h) {
       'Run `npm run beta:backend` first.',
   );
 
-  h.step('Landing surface after authentication');
+  // Signed in first. This step was titled "after authentication" but scanned the landing page
+  // before `h.login()`, relying on `httpCredentials`, which a guest-enabled Nuxeo never
+  // challenges for: the app found no session, asked `/me`, and signed itself in as `Anonymous`.
+  // The identity guard rejects that, so the scan now runs as the user it claims (NXSAT-643).
+  await h.login();
+
+  await h.step('Landing surface after authentication');
   await page.goto(`${h.baseUrl}/`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1500);
   await h.expectVisible('app shell rendered', 'app-shell');
@@ -106,18 +113,19 @@ export default async function run(page, h) {
     ignore: KNOWN_VIOLATIONS,
   });
   await h.screenshot('a11y-landing');
-  h.note('the pre-auth login surface — unreachable here because the runner sets httpCredentials');
+  h.note('the pre-auth login surface — this capture signs in before its first scan');
 
-  await h.login();
-
-  h.step('Production browse — the primary authenticated surface');
+  await h.step('Production browse — the primary authenticated surface');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
-  await h.expectText('repository content listed', 'lib-browse', 'Default domain');
+  await h.expectVisible(
+    'repository content listed',
+    'lib-browse nxs-document-list .nxs-document-list__row',
+  );
   await h.expectNoA11yViolations('browse: no WCAG 2.1 AA violations', { ignore: KNOWN_VIOLATIONS });
   await h.screenshot('a11y-browse');
 
-  h.step('Browse, card view — a state a single visit per route never reaches');
+  await h.step('Browse, card view — a state a single visit per route never reaches');
   // `.card-type` failed contrast at 3.54:1 and was invisible to the baseline scan, which only
   // ever saw the default table view. Two of the seven rule classes were found this way.
   await h.goTo('/#/browse');
@@ -127,7 +135,7 @@ export default async function run(page, h) {
   });
   await h.screenshot('a11y-browse-cards');
 
-  h.step('Browse, column picker open');
+  await h.step('Browse, column picker open');
   await h.goTo('/#/browse');
   // Back to list view first: the view mode is held in a service and survives navigation, so after
   // the card-view step the column-picker button is not rendered at all. Without this the step
@@ -145,14 +153,14 @@ export default async function run(page, h) {
   });
   await h.screenshot('a11y-browse-columns');
 
-  h.step('Search — the surface where the row markup was invalid');
+  await h.step('Search — the surface where the row markup was invalid');
   // 40 `nested-interactive` nodes: every row was a `<button>` wrapping a `mat-checkbox`. The rows
   // are now containers whose title is the control, with a stretched hit area for mouse users.
   await h.goTo('/#/search');
   await h.expectNoA11yViolations('search: no WCAG 2.1 AA violations', { ignore: KNOWN_VIOLATIONS });
   await h.screenshot('a11y-search');
 
-  h.step('Search, grid and list views');
+  await h.step('Search, grid and list views');
   await h.goTo('/#/search');
   await clickIfPresent(page, 'button[aria-label="Grid view"]');
   await h.expectNoA11yViolations('search grid: no WCAG 2.1 AA violations', {
@@ -165,7 +173,7 @@ export default async function run(page, h) {
   });
   await h.screenshot('a11y-search-views');
 
-  h.step('Trash, tasks, collections, administration, knowledge discovery');
+  await h.step('Trash, tasks, collections, administration, knowledge discovery');
   // None of these was scanned by the baseline version. `aria-progressbar-name` was found here:
   // 101 `mat-spinner` elements in the repository had no accessible name, and only knowledge
   // discovery happened to be rendering one at scan time.
@@ -183,25 +191,37 @@ export default async function run(page, h) {
   }
   await h.screenshot('a11y-secondary-surfaces');
 
-  h.step('adf-hx POC browse — the one surface with an upstream exclusion');
-  await h.goTo('/#/browse-adf-hx');
-  await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
-  await h.expectVisible('hxp document list present', 'hxp-document-list');
-  await h.expectNoA11yViolations(
-    'adf-hx browse: no violations except upstream aria-required-children',
-    { ignore: ADF_HX_UPSTREAM },
+  await h.step(
+    'Document detail — Picture metadata strip (NXENG-812 / NXSAT-493 / WCAG 1.4.3 on .info-label)',
   );
-  h.note(
-    'aria-required-children (3 nodes) is excluded HERE ONLY: @alfresco/adf-core@9.0.0 emits ' +
-      'role="row" with non-cell children. docs/adf-hx-upstream-findings.md §1.2. No host-side fix ' +
-      'exists short of patching upstream DOM.',
+  const pictureUid = await findPictureWithPictureCardsUid(page, h.baseUrl);
+  h.check(
+    'a Picture with picture:info and picture:views exists',
+    pictureUid !== null,
+    'repository query returned no Picture whose metadata strip renders — .picture-cards was NOT scanned',
   );
-  await h.screenshot('a11y-browse-adf-hx');
+  if (pictureUid) {
+    await h.goToDoc(pictureUid);
+    await h.expectVisible('document detail rendered', 'lib-document-detail');
+    await h.expectVisible('document viewer rendered', 'lib-document-viewer');
+    const stripLabelVisible = await h.expectVisible(
+      'picture metadata .info-label on the light strip',
+      'lib-document-viewer .picture-cards .info-label',
+      30_000,
+    );
+    if (stripLabelVisible) {
+      await h.expectNoA11yViolations(
+        'document detail (picture metadata strip): no WCAG 2.1 AA violations',
+        { ignore: KNOWN_VIOLATIONS },
+      );
+      await h.screenshot('a11y-document-detail-picture-metadata');
+    }
+  }
 
-  h.step(
+  await h.step(
     'Document detail — Replace main file with tooltip open (NXENG-771 / WCAG 2.5.3 label-in-name)',
   );
-  const docUid = await findFileWithMainBlobUid(page);
+  const docUid = await findFileWithMainBlobUid(page, h.baseUrl);
   h.check(
     'a File with a persisted main blob exists',
     docUid !== null,
@@ -240,7 +260,7 @@ export default async function run(page, h) {
     await h.screenshot('a11y-document-detail-replace-main-file');
   }
 
-  h.step('Keyboard reachability of the primary navigation');
+  await h.step('Keyboard reachability of the primary navigation');
   // Distinct from an axe scan: axe checks markup, this checks that a keyboard user can actually
   // get to the nav. A focusable element behind a pointer-only handler passes every static rule.
   await page.keyboard.press('Tab');
@@ -257,7 +277,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('a11y-keyboard-focus');
 
-  h.step('No catalogue blanks a key that upstream uses as an accessible name');
+  await h.step('No catalogue blanks a key that upstream uses as an accessible name');
   // The regression test for the most widespread violation in the product: `sat-platform-nav` binds
   // ONE translated string to both `matTooltip` and `[attr.aria-label]`, and our catalogues set that
   // key to `''` on purpose, to suppress a duplicate tooltip. The side effect was `aria-label=""` —
@@ -322,7 +342,10 @@ export default async function run(page, h) {
     ...Object.values(build.configurations ?? {}).map((c) => c.assets),
   ].filter(Array.isArray);
   const withSatori = assetArrays.filter((a) =>
-    a.some((entry) => typeof entry === 'object' && /@hylandsoftware\/satori-ui\/i18n/.test(entry.input ?? '')),
+    a.some(
+      (entry) =>
+        typeof entry === 'object' && /@hylandsoftware\/satori-ui\/i18n/.test(entry.input ?? ''),
+    ),
   );
   h.check(
     'every build asset array copies the satori-ui i18n folder',
@@ -350,12 +373,12 @@ export default async function run(page, h) {
   );
   h.note(`served sat.platform-nav.expand = ${JSON.stringify(servedLabel)}`);
 
-  h.step('Health');
+  await h.step('Health');
   h.expectNoConsoleErrors('no unexpected browser console errors', [
     /automation\/AI\./,
     '/nuxeo/logout',
-    '/nuxeo/api/v1/path/default-domain/config/agentic-ui',
     '/agentic-ui-config/bootstrap.json',
+    '/agentic-ui-config/manifest.json',
     // Added with the knowledge-discovery surface, and each verified against the server rather
     // than assumed — widening this list to get to green is how a health check stops meaning
     // anything.
@@ -378,20 +401,51 @@ const FILE_WITH_MAIN_BLOB_NXQL =
   'AND ecm:isVersion = 0 AND ecm:isTrashed = 0 AND file:content/name IS NOT NULL ' +
   'ORDER BY dc:created';
 
+const PICTURE_WITH_METADATA_NXQL =
+  "SELECT * FROM Picture WHERE ecm:mixinType <> 'HiddenInNavigation' " +
+  'AND ecm:isVersion = 0 AND ecm:isTrashed = 0 AND picture:info/width > 0 ' +
+  'AND picture:info/height > 0 ORDER BY dc:created';
+
 /**
- * First File uid whose main blob responds on `@blob/file:content`, paging NXQL until exhausted.
+ * Explicit Basic auth for `page.request` calls to `/nuxeo/api/*`.
+ *
+ * The runner's `httpCredentials` now go out with every `page.request` call (`send: 'always'`,
+ * NXSAT-643), so this header is the same user's, stated where the request is made — see
+ * `phase-runner.mjs` and `apps/nuxeo-ui-e2e/src/fixtures.ts` (Nuxeo does not challenge
+ * unauthenticated API calls, so a challenge-based credential is never sent).
+ *
+ * From the environment, with no default. Both halves defaulted to the local Docker administrator
+ * pair here, which is the fallback NXSAT-649 named as its precondition: a working credential in
+ * the repository, and an accessibility scan that would silently run as an administrator. The
+ * runner already refuses this file without the pair; this throws a `PreconditionError` too, so
+ * the function cannot be lifted somewhere that does not.
+ *
+ * @param {Record<string, string>} [extra]
+ * @returns {Record<string, string>}
+ */
+function nuxeoApiRequestHeaders(extra = {}) {
+  return {
+    ...extra,
+    Authorization: basicAuthorization(requireStepCredentials('scan the phase-6-a11y surfaces')),
+  };
+}
+
+/**
+ * First Picture uid with hydrated `picture:info` and `picture:views`, paging NXQL until exhausted.
  *
  * @param {import('@playwright/test').Page} page
+ * @param {string} baseUrl
  * @returns {Promise<string | null>}
  */
-async function findFileWithMainBlobUid(page) {
+async function findPictureWithPictureCardsUid(page, baseUrl) {
   for (let pageIndex = 0; ; pageIndex++) {
-    const response = await page.request.get('/nuxeo/api/v1/search/lang/NXQL/execute', {
+    const response = await page.request.get(`${baseUrl}/nuxeo/api/v1/search/lang/NXQL/execute`, {
       params: {
-        query: FILE_WITH_MAIN_BLOB_NXQL,
+        query: PICTURE_WITH_METADATA_NXQL,
         pageSize: '20',
         currentPageIndex: String(pageIndex),
       },
+      headers: nuxeoApiRequestHeaders({ 'X-NXproperties': '*' }),
     });
     if (!response.ok()) {
       return null;
@@ -407,8 +461,62 @@ async function findFileWithMainBlobUid(page) {
       if (typeof uid !== 'string') {
         continue;
       }
-      const head = await page.request.head(`/nuxeo/api/v1/id/${uid}/@blob/file:content`, {
+      const doc = await page.request.get(`${baseUrl}/nuxeo/api/v1/id/${uid}`, {
         failOnStatusCode: false,
+        headers: nuxeoApiRequestHeaders({ 'X-NXproperties': '*' }),
+      });
+      if (!doc.ok()) {
+        continue;
+      }
+      const payload = await doc.json();
+      const info = payload?.properties?.['picture:info'];
+      const views = payload?.properties?.['picture:views'];
+      const width = Number(info?.width ?? 0);
+      const height = Number(info?.height ?? 0);
+      if (width > 0 && height > 0 && Array.isArray(views) && views.length > 0) {
+        return uid;
+      }
+    }
+    if (!isNextPageAvailable) {
+      return null;
+    }
+  }
+}
+
+/**
+ * First File uid whose main blob responds on `@blob/file:content`, paging NXQL until exhausted.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} baseUrl
+ * @returns {Promise<string | null>}
+ */
+async function findFileWithMainBlobUid(page, baseUrl) {
+  for (let pageIndex = 0; ; pageIndex++) {
+    const response = await page.request.get(`${baseUrl}/nuxeo/api/v1/search/lang/NXQL/execute`, {
+      params: {
+        query: FILE_WITH_MAIN_BLOB_NXQL,
+        pageSize: '20',
+        currentPageIndex: String(pageIndex),
+      },
+      headers: nuxeoApiRequestHeaders(),
+    });
+    if (!response.ok()) {
+      return null;
+    }
+    const body = await response.json();
+    const entries = Array.isArray(body.entries) ? body.entries : [];
+    const isNextPageAvailable = body.isNextPageAvailable === true;
+    if (entries.length === 0 && isNextPageAvailable) {
+      return null;
+    }
+    for (const entry of entries) {
+      const uid = entry?.uid;
+      if (typeof uid !== 'string') {
+        continue;
+      }
+      const head = await page.request.head(`${baseUrl}/nuxeo/api/v1/id/${uid}/@blob/file:content`, {
+        failOnStatusCode: false,
+        headers: nuxeoApiRequestHeaders(),
       });
       if (head.ok()) {
         return uid;

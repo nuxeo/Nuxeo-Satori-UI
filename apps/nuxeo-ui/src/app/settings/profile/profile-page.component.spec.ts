@@ -8,7 +8,7 @@ import {
   UserService,
   type NuxeoUser,
   type PrincipalPermissionPage,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AuthService } from '../../auth/auth.service';
 import { ProfilePageComponent } from './profile-page.component';

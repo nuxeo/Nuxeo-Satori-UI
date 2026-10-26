@@ -3,14 +3,11 @@
   <div class="viewer-content" [class.fit-real]="fitMode() === 'real' && contentType() === 'image'">
     @if (loading()) {
       <div class="viewer-loading">
-        <mat-spinner
-          diameter="36"
-          [attr.aria-label]="'shared-ui.document-viewer.loading' | translate"
-        />
+        <nxs-spinner diameter="36" [label]="'shared-ui.document-viewer.loading' | translate" />
       </div>
     } @else if (annotationsTab() && !arenderAvailable()) {
       <div class="viewer-placeholder">
-        <mat-icon class="placeholder-icon">edit_note</mat-icon>
+        <mat-icon class="placeholder-icon" svgIcon="note_edit" />
         <p>{{ 'shared-ui.document-viewer.annotations-are-not-available-for-this' | translate }}</p>
         <span class="mime-label">{{
           'shared-ui.document-viewer.use-the-view-tab-for-the' | translate
@@ -20,6 +17,7 @@
       @for (rid of [arenderReloadId()]; track rid) {
         <iframe
           [src]="arenderUrl()"
+          [title]="'shared-ui.document-viewer.annotations-frame' | translate: { name: fileName() }"
           class="viewer-iframe arender-frame"
           allow="fullscreen"
         ></iframe>
@@ -51,7 +49,7 @@
         }
         @case ('audio') {
           <div class="viewer-audio-wrapper">
-            <mat-icon class="audio-icon">audiotrack</mat-icon>
+            <mat-icon class="audio-icon" svgIcon="audio" />
             <audio [src]="rawBlobUrl()" controls class="viewer-audio"></audio>
           </div>
         }
@@ -62,6 +60,7 @@
           <iframe
             class="viewer-iframe viewer-html-frame"
             [srcdoc]="noteContent()"
+            [title]="'shared-ui.document-viewer.note-frame' | translate: { name: fileName() }"
             sandbox="allow-same-origin"
           ></iframe>
         }
@@ -72,17 +71,29 @@
           <pre class="viewer-preformatted">{{ noteContent() }}</pre>
         }
         @case ('pdf') {
-          <iframe [src]="blobUrl()" class="viewer-iframe"></iframe>
+          <iframe
+            [src]="blobUrl()"
+            [title]="'shared-ui.document-viewer.pdf-frame' | translate: { name: fileName() }"
+            class="viewer-iframe"
+          ></iframe>
         }
         @case ('pdfRendition') {
-          <iframe [src]="blobUrl()" class="viewer-iframe"></iframe>
+          <iframe
+            [src]="blobUrl()"
+            [title]="'shared-ui.document-viewer.pdf-frame' | translate: { name: fileName() }"
+            class="viewer-iframe"
+          ></iframe>
         }
         @case ('preview') {
-          <iframe [src]="previewUrl()" class="viewer-iframe"></iframe>
+          <iframe
+            [src]="previewUrl()"
+            [title]="'shared-ui.document-viewer.preview-frame' | translate: { name: fileName() }"
+            class="viewer-iframe"
+          ></iframe>
         }
         @default {
           <div class="viewer-placeholder">
-            <mat-icon class="placeholder-icon">insert_drive_file</mat-icon>
+            <mat-icon class="placeholder-icon" svgIcon="page" />
             <p>{{ 'shared-ui.document-viewer.preview-not-available' | translate }}</p>
             @if (mimeType()) {
               <span class="mime-label">{{ mimeType() }}</span>
@@ -119,7 +130,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.zoom-in' | translate"
         (click)="zoomIn()"
       >
-        <mat-icon>zoom_in</mat-icon>
+        <mat-icon svgIcon="zoom_in" />
       </button>
       <button
         mat-icon-button
@@ -129,7 +140,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.toggle-fit' | translate"
         (click)="toggleFit()"
       >
-        <mat-icon>{{ fitMode() === 'width' ? 'crop_free' : 'fit_screen' }}</mat-icon>
+        <mat-icon [svgIcon]="fitMode() === 'width' ? 'crop' : 'fit_screen'" />
       </button>
       <button
         mat-icon-button
@@ -137,7 +148,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.zoom-out' | translate"
         (click)="zoomOut()"
       >
-        <mat-icon>zoom_out</mat-icon>
+        <mat-icon svgIcon="zoom_out" />
       </button>
       <button
         mat-icon-button
@@ -145,7 +156,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.rotate-left' | translate"
         (click)="rotateLeft()"
       >
-        <mat-icon>rotate_left</mat-icon>
+        <mat-icon svgIcon="rotate_left" />
       </button>
       <button
         mat-icon-button
@@ -153,7 +164,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.rotate-right' | translate"
         (click)="rotateRight()"
       >
-        <mat-icon>rotate_right</mat-icon>
+        <mat-icon svgIcon="rotate_right" />
       </button>
     </div>
   }
@@ -174,16 +185,18 @@
           [attr.aria-label]="'shared-ui.document-viewer.open-with-nuxeo-drive' | translate"
           (click)="openWithDriveClicked.emit()"
         >
-          <mat-icon>cloud_sync</mat-icon>
+          <mat-icon svgIcon="sync" />
         </button>
       }
       <button
         mat-icon-button
         [matTooltip]="'shared-ui.document-viewer.preview' | translate"
-        [attr.aria-label]="'shared-ui.document-viewer.preview' | translate"
         (click)="previewClicked.emit()"
       >
-        <mat-icon>visibility</mat-icon>
+        <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+          'shared-ui.document-viewer.preview' | translate
+        }}</span>
+        <mat-icon aria-hidden="true" svgIcon="view" />
       </button>
       <button
         mat-icon-button
@@ -191,7 +204,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.download' | translate"
         (click)="downloadClicked.emit()"
       >
-        <mat-icon>download</mat-icon>
+        <mat-icon svgIcon="download" />
       </button>
       @if (showMainFileControls()) {
         <button
@@ -201,17 +214,19 @@
           [disabled]="mainFileActionInProgress() === 'replace-main'"
           (click)="replaceMainFileClicked.emit()"
         >
-          <mat-icon>find_replace</mat-icon>
+          <mat-icon svgIcon="search" />
         </button>
         <button
           mat-icon-button
-          [matTooltip]="'shared-ui.document-viewer.remove' | translate"
-          [attr.aria-label]="'shared-ui.document-viewer.remove-main-file' | translate"
+          [matTooltip]="'shared-ui.document-viewer.remove-main-file' | translate"
           class="footer-remove-btn"
           [disabled]="mainFileActionInProgress() === 'remove-main'"
           (click)="removeMainFileClicked.emit()"
         >
-          <mat-icon>cancel</mat-icon>
+          <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+            'shared-ui.document-viewer.remove-main-file' | translate
+          }}</span>
+          <mat-icon aria-hidden="true" svgIcon="circle_x" />
         </button>
       }
     </div>
@@ -342,7 +357,7 @@
                   "
                   (click)="formatDownload.emit(view.downloadUrl)"
                 >
-                  <mat-icon>download</mat-icon>
+                  <mat-icon svgIcon="download" />
                 </button>
               </div>
             }

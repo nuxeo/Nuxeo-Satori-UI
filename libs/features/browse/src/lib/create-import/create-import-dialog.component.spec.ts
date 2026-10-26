@@ -1,8 +1,9 @@
+import { DateAdapter } from '@angular/material/core';
+import { enUS, fr, de, nl, ja, th, zhCN } from 'date-fns/locale';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ElementRef, provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { NoopAnimationsModule, provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Subject, of, throwError, timer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { vi } from 'vitest';
@@ -17,10 +18,11 @@ import {
   type ImportProgress,
   type L10nDirectoryEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { CreateImportDialogComponent } from './create-import-dialog.component';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 const PARENT_PATH = '/default-domain/workspaces/ws';
 
@@ -87,7 +89,7 @@ const mockDirectoryService = {
 };
 
 function pictureType() {
-  return { type: 'Picture', label: 'Picture', icon: 'image' };
+  return { type: 'Picture', label: 'Picture' };
 }
 
 function jpegFile(name = 'photo.jpg') {
@@ -114,7 +116,6 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     })
       .overrideComponent(CreateImportDialogComponent, {
@@ -143,20 +144,57 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     expect(component.coverage).toBeNull();
   });
 
+  it.each([
+    { locale: enUS, input: '12/31/2026' },
+    { locale: fr, input: '31/12/2026' },
+    { locale: de, input: '31.12.2026' },
+    { locale: nl, input: '31-12-2026' },
+    { locale: ja, input: '2026/12/31' },
+    { locale: th, input: '31/12/2026' },
+    { locale: zhCN, input: '26-12-31' },
+  ])(
+    'accepts Expires "$input" using $locale.code and retains the parsed date',
+    ({ locale, input }) => {
+      fixture.debugElement.injector.get<DateAdapter<Date>>(DateAdapter).setLocale(locale);
+      component.onExpiresInput({ target: { value: input } } as unknown as Event);
+      expect(component.isExpiresValid()).toBe(true);
+      expect(component.showExpiresError()).toBe(false);
+      expect(component.expiresErrorMatcher.isErrorState()).toBe(false);
+      expect([
+        component.expires?.getFullYear(),
+        component.expires?.getMonth(),
+        component.expires?.getDate(),
+      ]).toEqual([2026, 11, 31]);
+    },
+  );
+
+  it('shows and blocks locale-invalid Expires text even when the model previously held a valid date', () => {
+    fixture.debugElement.injector.get<DateAdapter<Date>>(DateAdapter).setLocale(de);
+    component.expires = new Date(2026, 3, 3);
+    component.onExpiresInput({ target: { value: '03/04/2026' } } as unknown as Event);
+    expect(component.isExpiresValid()).toBe(false);
+    expect(component.showExpiresError()).toBe(true);
+    expect(component.expiresErrorMatcher.isErrorState()).toBe(true);
+    // Material's ngModel turns an invalid adapter date into null. Non-empty raw text must
+    // still block submission rather than clearing the stored expiry.
+    component.onExpiresChange(null);
+    expect(component.isExpiresValid()).toBe(false);
+  });
+
   it('rejects invalid expiry input while typing', () => {
     component.onExpiresInput({ target: { value: '99/99/9999' } } as unknown as Event);
 
     expect(component.isExpiresValid()).toBe(false);
   });
 
-  it('allows empty expiry and in-progress mm/dd/yyyy input', () => {
+  it('allows empty expiry but blocks incomplete input', () => {
     expect(component.isExpiresValid()).toBe(true);
 
     component.onExpiresInput({ target: { value: '01/15/' } } as unknown as Event);
-    expect(component.isExpiresValid()).toBe(true);
+    expect(component.isExpiresValid()).toBe(false);
   });
 
-  it('allows partial expiry input even when datepicker parse would fail', () => {
+  it('blocks partial expiry input when datepicker parsing fails', () => {
     component.onExpiresInput({ target: { value: '01/15/' } } as unknown as Event);
     component.expiresNgModel = {
       errors: { matDatepickerParse: { text: '01/15/' } },
@@ -164,7 +202,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
       control: { markAsDirty: vi.fn(), updateValueAndValidity: vi.fn() },
     } as unknown as typeof component.expiresNgModel;
 
-    expect(component.isExpiresValid()).toBe(true);
+    expect(component.isExpiresValid()).toBe(false);
   });
 
   it('validates complete mm/dd/yyyy dates deterministically', () => {
@@ -264,7 +302,6 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     component.startCreateFromType({
       type: 'Collection',
       label: 'Collection',
-      icon: 'collections_bookmark',
     });
     component.docTitle = 'My Collection';
     component.createDocument();
@@ -295,7 +332,6 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     component.startCreateFromType({
       type: 'Collection',
       label: 'Collection',
-      icon: 'collections_bookmark',
     });
     component.docTitle = 'Minimal Collection';
     component.createDocument();
@@ -391,7 +427,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
   it('runUpload routes failures to importError instead of dialog error', async () => {
     mockImportService.importFiles.mockReturnValue(throwError(() => ({ message: 'Upload failed' })));
 
-    component.uploadFiles.set([jpegFile('import.pdf')]);
+    component.uploads.stage([jpegFile('import.pdf')]);
     component.runUpload();
     await flushAsync();
 
@@ -416,7 +452,6 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     })
       .overrideComponent(CreateImportDialogComponent, {
@@ -431,7 +466,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
   });
 
   it('startImportProperties opens wizard with inferred Picture type for png', async () => {
-    component.uploadFiles.set([jpegFile('photo.png')]);
+    component.uploads.stage([jpegFile('photo.png')]);
     component.startImportProperties();
 
     expect(component.view()).toBe('importProperties');
@@ -442,7 +477,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
   });
 
   it('close dismisses the dialog from import properties view', async () => {
-    component.uploadFiles.set([jpegFile('photo.png')]);
+    component.uploads.stage([jpegFile('photo.png')]);
     component.startImportProperties();
 
     component.close();
@@ -451,7 +486,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
   });
 
   it('editImportNext advances and marks previous file visited', async () => {
-    component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+    component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
     component.startImportProperties();
     component.docTitle = 'Alpha';
 
@@ -464,7 +499,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
   });
 
   it('editImportPrevious is blocked on the first file', async () => {
-    component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+    component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
     component.startImportProperties();
 
     expect(component.canEditImportPrevious()).toBe(false);
@@ -473,7 +508,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
   });
 
   it('applyImportToAll copies metadata but preserves each file title (Web UI parity)', async () => {
-    component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png'), jpegFile('c.png')]);
+    component.uploads.stage([jpegFile('a.png'), jpegFile('b.png'), jpegFile('c.png')]);
     component.startImportProperties();
     component.docTitle = 'Shared title';
     component.description = 'Shared description';
@@ -491,7 +526,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
   });
 
   it('disables Apply To All once required metadata is filled for the batch', async () => {
-    component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+    component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
     component.startImportProperties();
 
     expect(component.canApplyImportToAll()).toBe(true);
@@ -502,7 +537,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
   });
 
   it('disables Apply To All on the last file when form is complete', async () => {
-    component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+    component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
     component.startImportProperties();
     component.editImportNext();
 
@@ -511,15 +546,72 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
   });
 
   it('disables Apply To All when only one file is staged', async () => {
-    component.uploadFiles.set([jpegFile('a.png')]);
+    component.uploads.stage([jpegFile('a.png')]);
     component.startImportProperties();
 
     expect(component.canApplyImportToAll()).toBe(false);
   });
 
+  describe('an invalid expiry on a file the user has navigated away from', () => {
+    /** Type an unparseable expiry into the file on screen, as the input handler would. */
+    const typeInvalidExpiry = () =>
+      component.onExpiresInput({ target: { value: '99/99/9999' } } as unknown as Event);
+
+    it('blocks the batch from a later file', async () => {
+      // Next saves the entry without validating it, so file 1's invalid expiry used to survive
+      // to `runImportWithProperties()` and serialize as `dc:expired: null`.
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      typeInvalidExpiry();
+      expect(component.isExpiresValid()).toBe(false);
+
+      component.editImportNext();
+
+      expect(component.importFileIndex()).toBe(1);
+      expect(component.isExpiresValid()).toBe(true);
+      expect(component.isImportFormComplete()).toBe(true);
+      expect(component.isImportBatchReadyToCreate()).toBe(false);
+      expect(component.canCreateImportWithProperties()).toBe(false);
+    });
+
+    it('sends no request when the batch is run anyway', async () => {
+      mockImportService.importFilesWithProperties.mockReturnValue(of([]));
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      typeInvalidExpiry();
+      component.editImportNext();
+
+      component.runImportWithProperties();
+      await flushAsync();
+
+      expect(mockImportService.importFilesWithProperties).not.toHaveBeenCalled();
+    });
+
+    it('stops blocking once that file is unchecked', async () => {
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      typeInvalidExpiry();
+      component.editImportNext();
+      expect(component.isImportBatchReadyToCreate()).toBe(false);
+
+      component.toggleImportFileChecked(0, false);
+
+      expect(component.isImportBatchReadyToCreate()).toBe(true);
+    });
+
+    it('still allows a batch whose other entries cleared Expires deliberately', async () => {
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      component.editImportNext();
+
+      expect(component.importEntries()[0].state.expiresRawText).toBe('');
+      expect(component.isImportBatchReadyToCreate()).toBe(true);
+    });
+  });
+
   it('runImportWithProperties sends per-file titles after applyImportToAll', async () => {
     mockImportService.importFilesWithProperties.mockReturnValue(of([]));
-    component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+    component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
     component.startImportProperties();
     component.docTitle = 'Custom first';
     component.description = 'Shared description';
@@ -547,7 +639,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
     };
     mockImportService.importFilesWithProperties.mockReturnValue(of([created]));
 
-    component.uploadFiles.set([jpegFile('photo.png')]);
+    component.uploads.stage([jpegFile('photo.png')]);
     component.startImportProperties();
     component.docTitle = 'My photo';
     component.description = 'A picture';
@@ -578,7 +670,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
 
   it('excludes unchecked files from runImportWithProperties', async () => {
     mockImportService.importFilesWithProperties.mockReturnValue(of([]));
-    component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+    component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
     component.startImportProperties();
     component.toggleImportFileChecked(1, false);
     component.editImportNext();
@@ -596,7 +688,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
   });
 
   it('shows metadata fields only when a blob type is selected', async () => {
-    component.uploadFiles.set([jpegFile('photo.png')]);
+    component.uploads.stage([jpegFile('photo.png')]);
     component.startImportProperties();
     expect(component.showImportBlobMetadataFields()).toBe(true);
 
@@ -628,7 +720,6 @@ describe('CreateImportDialogComponent CSV', () => {
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     }).compileComponents();
 
@@ -678,7 +769,7 @@ describe('CreateImportDialogComponent CSV', () => {
     expect(el.querySelector('.btn-add-properties')).toBeFalsy();
     expect(el.textContent).not.toContain('Add more files');
 
-    component.uploadFiles.set([new File(['x'], 'Console error.png', { type: 'image/png' })]);
+    component.uploads.stage([new File(['x'], 'Console error.png', { type: 'image/png' })]);
     fixture.detectChanges();
 
     el = fixture.nativeElement as HTMLElement;
@@ -711,9 +802,9 @@ describe('CreateImportDialogComponent CSV', () => {
 
   it('clears upload files when switching to CSV tab', async () => {
     await createDialog({ parentPath: '/default-domain/workspaces/demo' });
-    component.uploadFiles.set([new File(['x'], 'a.txt')]);
+    component.uploads.stage([new File(['x'], 'a.txt')]);
     component.setActiveTab('csv');
-    expect(component.uploadFiles()).toEqual([]);
+    expect(component.uploads.pending()).toEqual([]);
   });
 
   it('selects CSV via file input', async () => {
@@ -841,7 +932,6 @@ describe('CreateImportDialogComponent domain create (NXSAT-199)', () => {
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     }).compileComponents();
 
@@ -865,7 +955,7 @@ describe('CreateImportDialogComponent domain create (NXSAT-199)', () => {
     await createDialog();
     expect(component.parentPath()).toBe('/');
 
-    component.startCreateFromType({ type: 'Domain', label: 'Domain', icon: 'domain' });
+    component.startCreateFromType({ type: 'Domain', label: 'Domain' });
     component.docTitle = 'Test Domain';
     component.createDocument();
     await Promise.resolve();
@@ -990,7 +1080,7 @@ interface LocalMocks {
   importCsvFile: ReturnType<typeof vi.fn<DocumentImportService['importCsvFile']>>;
   close: ReturnType<typeof vi.fn>;
   updateSize: ReturnType<typeof vi.fn>;
-  snackOpen: ReturnType<typeof vi.fn>;
+  toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 }
 
 describe('CreateImportDialogComponent location, vocabularies and file handling', () => {
@@ -1036,7 +1126,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       importCsvFile: vi.fn<DocumentImportService['importCsvFile']>(() => of('<p>ok</p>')),
       close: vi.fn(),
       updateSize: vi.fn(),
-      snackOpen: vi.fn(),
+      toast: { show: vi.fn(), error: vi.fn() },
     };
   }
 
@@ -1047,6 +1137,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
     TestBed.resetTestingModule();
     m = makeMocks();
     tweak(m);
+    TestBed.overrideProvider(NxsToastService, { useValue: m.toast });
 
     await TestBed.configureTestingModule({
       imports: [CreateImportDialogComponent, testTranslateModule()],
@@ -1074,7 +1165,6 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
           provide: DirectoryService,
           useValue: { getEntries: m.getEntries, getAllL10nEntries: m.getAllL10nEntries },
         },
-        { provide: MatSnackBar, useValue: { open: m.snackOpen } },
       ],
     })
       .overrideComponent(CreateImportDialogComponent, {
@@ -1414,23 +1504,21 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
     it('clears staged uploads when moving to the CSV tab', async () => {
       await createDialog();
-      component.uploadFiles.set([jpegFile()]);
-      component.dragOverUpload.set(true);
+      component.uploads.stage([jpegFile()]);
 
       component.setActiveTab('csv');
 
-      expect(component.uploadFiles()).toEqual([]);
-      expect(component.dragOverUpload()).toBe(false);
+      expect(component.uploads.items()).toEqual([]);
     });
 
     it('clears both staged sets when returning to the create tab', async () => {
       await createDialog();
-      component.uploadFiles.set([jpegFile()]);
+      component.uploads.stage([jpegFile()]);
       component.csvFile.set(new File(['a,b'], 'x.csv'));
 
       component.setActiveTab('create');
 
-      expect(component.uploadFiles()).toEqual([]);
+      expect(component.uploads.pending()).toEqual([]);
       expect(component.csvFile()).toBeNull();
     });
 
@@ -1445,7 +1533,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
     it('goMain discards both the create form and the import wizard', async () => {
       await createDialog();
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
       component.startImportProperties();
 
       component.goMain();
@@ -1688,7 +1776,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       await createDialog();
       expect(component.currentImportFileLabel()).toBe('');
 
-      component.uploadFiles.set([jpegFile('a.jpg'), jpegFile('b.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
       component.startImportProperties();
       component.selectImportFile(1);
 
@@ -1700,7 +1788,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(component.hasContentField()).toBe(false);
       expect(component.createMissingMainFile()).toBe(false);
 
-      component.startCreateFromType({ type: 'Folder', label: 'Folder', icon: 'folder' });
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
       expect(component.hasContentField()).toBe(false);
       expect(component.createMissingMainFile()).toBe(false);
 
@@ -1711,23 +1799,12 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       component.mainFile.set(jpegFile());
       expect(component.createMissingMainFile()).toBe(false);
     });
-
-    it('clicks the hidden import file input when asked to open the picker', async () => {
-      await createDialog();
-      const input = document.createElement('input');
-      const click = vi.spyOn(input, 'click');
-      component.importFileInput = new ElementRef(input);
-
-      component.openImportFilePicker();
-
-      expect(click).toHaveBeenCalledTimes(1);
-    });
   });
 
   describe('import wizard navigation', () => {
     it('selectImportFile saves the current form before switching, and ignores a no-op', async () => {
       await createDialog();
-      component.uploadFiles.set([jpegFile('a.jpg'), jpegFile('b.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
       component.startImportProperties();
       component.docTitle = 'Alpha';
 
@@ -1744,7 +1821,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
     it('editImportPrevious steps back and reloads that file into the form', async () => {
       await createDialog();
-      component.uploadFiles.set([jpegFile('a.jpg'), jpegFile('b.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
       component.startImportProperties();
       component.editImportNext();
       component.docTitle = 'Beta';
@@ -1758,7 +1835,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
     it('editImportNext is blocked on the last file', async () => {
       await createDialog();
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
       component.startImportProperties();
 
       expect(component.canEditImportNext()).toBe(false);
@@ -1768,7 +1845,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
     it('applyImportToAll is a no-op when it is not available', async () => {
       await createDialog();
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
       component.startImportProperties();
 
       component.applyImportToAll();
@@ -1778,12 +1855,12 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
     it('startImportProperties refuses a restricted location and an empty selection', async () => {
       await createDialog({ parentPath: '/default-domain' });
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
       component.startImportProperties();
       expect(component.view()).toBe('main');
 
       await createDialog();
-      component.uploadFiles.set([]);
+      component.uploads.clear();
       component.startImportProperties();
       expect(component.view()).toBe('main');
     });
@@ -1793,7 +1870,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       m.importFilesWithProperties.mockReturnValue(
         throwError(() => ({ error: { message: 'Quota exceeded' } })),
       );
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
       component.startImportProperties();
 
       component.runImportWithProperties();
@@ -1808,7 +1885,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
     it('falls back to a generic message when the wizard failure carries none', async () => {
       await createDialog();
       m.importFilesWithProperties.mockReturnValue(throwError(() => ({})));
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
       component.startImportProperties();
 
       component.runImportWithProperties();
@@ -1819,7 +1896,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
     it('does not call the API when every staged file is unchecked', async () => {
       await createDialog();
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
       component.startImportProperties();
       component.toggleImportFileChecked(0, false);
 
@@ -1837,7 +1914,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
         fileIndex: 0,
         fileCount: 1,
       };
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
       component.startImportProperties();
 
       let seen: ImportProgress | null = null;
@@ -1868,7 +1945,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
         }),
       );
 
-      component.startCreateFromType({ type: 'Note', label: 'Note', icon: 'note' });
+      component.startCreateFromType({ type: 'Note', label: 'Note' });
       component.docTitle = 'Minutes';
       component.noteFormat = 'text/html';
       component.createDocument();
@@ -1880,9 +1957,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(m.close).toHaveBeenCalledWith(
         expect.objectContaining({ freshNote: true, navigateToUid: 'note-1' }),
       );
-      expect(m.snackOpen).toHaveBeenCalledWith('Created Note “Minutes”', 'Close', {
-        duration: 4000,
-      });
+      expect(m.toast.show).toHaveBeenCalledWith('Created Note “Minutes”');
     });
 
     it('refuses to create a blob type with no file attached', async () => {
@@ -1921,7 +1996,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       component.createDocument();
       expect(m.createChildDocument).not.toHaveBeenCalled();
 
-      component.startCreateFromType({ type: 'Folder', label: 'Folder', icon: 'folder' });
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
       component.docTitle = '   ';
       component.createDocument();
       expect(m.createChildDocument).not.toHaveBeenCalled();
@@ -1929,7 +2004,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
     it('refuses to create while the expiry field is invalid', async () => {
       await createDialog();
-      component.startCreateFromType({ type: 'Folder', label: 'Folder', icon: 'folder' });
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
       component.docTitle = 'Reports';
       component.onExpiresInput(changeEvent(inputWith('99/99/9999')));
 
@@ -1952,7 +2027,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
         }),
       );
 
-      component.startCreateFromType({ type: 'Folder', label: 'Folder', icon: 'folder' });
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
       component.docTitle = 'Reports';
       component.onExpiresInput(changeEvent(inputWith('12/31/2027')));
       component.onExpiresChange(new Date('2027-12-31T00:00:00.000Z'));
@@ -1979,7 +2054,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       await createDialog();
       m.createChildDocument.mockReturnValue(throwError(() => ({ message: 'Name already used' })));
 
-      component.startCreateFromType({ type: 'Folder', label: 'Folder', icon: 'folder' });
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
       component.docTitle = 'Reports';
       component.createDocument();
       await flushAsync();
@@ -1993,7 +2068,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       await createDialog();
       m.createChildDocument.mockReturnValue(throwError(() => ({})));
 
-      component.startCreateFromType({ type: 'Folder', label: 'Folder', icon: 'folder' });
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
       component.docTitle = 'Reports';
       component.createDocument();
       await flushAsync();
@@ -2096,59 +2171,98 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
   });
 
   describe('multi-file upload tab', () => {
-    it('appends files chosen through the input and clears the native value', async () => {
+    it('stages files from the dropzone, after any already chosen, and clears the last error', async () => {
       await createDialog();
-      const input = inputWith('c:/a.jpg', [jpegFile('a.jpg'), jpegFile('b.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
       component.importError.set('previous failure');
 
-      component.onUploadInputChange(changeEvent(input));
+      component.stageImportFiles([jpegFile('b.jpg'), jpegFile('c.jpg')]);
 
-      expect(component.uploadFiles().map((f) => f.name)).toEqual(['a.jpg', 'b.jpg']);
+      expect(component.uploads.pending().map((f) => f.name)).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
       expect(component.importError()).toBeNull();
-      expect(input.value).toBe('');
     });
 
-    it('ignores an input change with no files', async () => {
+    it('ignores an empty selection', async () => {
       await createDialog();
-      component.onUploadInputChange(changeEvent(inputWith('', null)));
+      component.importError.set('previous failure');
+      component.stageImportFiles([]);
 
-      expect(component.uploadFiles()).toEqual([]);
+      expect(component.uploads.pending()).toEqual([]);
+      expect(component.importError()).toBe('previous failure');
     });
 
-    it('appends dropped files to the existing selection', async () => {
+    it('follows each file in the queue while the batch uploads, and closes when all are created', async () => {
       await createDialog();
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
+      let states: string[] = [];
+      m.importFiles.mockImplementation((_path, _files, options) => {
+        options?.onProgress?.({ phase: 'uploading', percent: 75, fileIndex: 1, fileCount: 2 });
+        states = component.uploads.items().map((item) => `${item.state}:${item.percent}`);
+        return of([
+          { uid: 'd-a', title: 'a' } as NuxeoDocument,
+          { uid: 'd-b', title: 'b' } as NuxeoDocument,
+        ]);
+      });
 
-      component.onUploadDrop(dragEvent([jpegFile('b.jpg')]));
+      component.runUpload();
 
-      expect(component.uploadFiles().map((f) => f.name)).toEqual(['a.jpg', 'b.jpg']);
-      expect(component.dragOverUpload()).toBe(false);
+      expect(states).toEqual(['uploading:100', 'uploading:50']);
+      expect(component.uploads.done()).toHaveLength(2);
+      expect(m.close).toHaveBeenCalledWith({
+        refreshed: true,
+        path: WS_PATH,
+        navigateToUid: undefined,
+      });
     });
 
-    it('ignores an empty drop', async () => {
+    it('keeps the files created before a failure, and uploads only the rest on retry', async () => {
       await createDialog();
-      component.onUploadDrop(dragEvent([]));
+      component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
+      m.importFiles.mockImplementationOnce((_path, _files, options) => {
+        options?.onProgress?.({ phase: 'creating', percent: 50, fileIndex: 0, fileCount: 2 });
+        options?.onProgress?.({ phase: 'uploading', percent: 60, fileIndex: 1, fileCount: 2 });
+        return throwError(() => ({ status: 403, message: 'Forbidden' }));
+      });
 
-      expect(component.uploadFiles()).toEqual([]);
+      component.runUpload();
+
+      expect(component.uploads.items().map((item) => item.state)).toEqual(['done', 'failed']);
+      expect(component.importError()).toBe('Forbidden');
+      expect(m.close).not.toHaveBeenCalled();
+
+      m.importFiles.mockReturnValueOnce(of([{ uid: 'd-b', title: 'b' } as NuxeoDocument]));
+      component.runUpload();
+      expect(m.importFiles).toHaveBeenLastCalledWith(
+        WS_PATH,
+        [expect.objectContaining({ name: 'b.jpg' })],
+        expect.anything(),
+      );
     });
 
-    it('tracks drag-over state on the upload area', async () => {
+    it('refreshes the folder when closed after a partly failed upload', async () => {
       await createDialog();
+      component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
+      m.importFiles.mockImplementationOnce((_path, _files, options) => {
+        options?.onProgress?.({ phase: 'creating', percent: 50, fileIndex: 0, fileCount: 2 });
+        return throwError(() => ({ message: 'down' }));
+      });
+      component.runUpload();
 
-      component.onUploadDragOver(dragEvent());
-      expect(component.dragOverUpload()).toBe(true);
+      component.close();
 
-      component.onUploadDragLeave(dragEvent());
-      expect(component.dragOverUpload()).toBe(false);
+      expect(m.close).toHaveBeenCalledWith({
+        refreshed: true,
+        path: WS_PATH,
+      });
     });
 
     it('removes one staged file by index', async () => {
       await createDialog();
-      component.uploadFiles.set([jpegFile('a.jpg'), jpegFile('b.jpg'), jpegFile('c.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg'), jpegFile('c.jpg')]);
 
       component.removeUploadAt(1);
 
-      expect(component.uploadFiles().map((f) => f.name)).toEqual(['a.jpg', 'c.jpg']);
+      expect(component.uploads.pending().map((f) => f.name)).toEqual(['a.jpg', 'c.jpg']);
     });
 
     it('runUpload closes with the created document id for a single file', async () => {
@@ -2165,17 +2279,17 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
           },
         ]),
       );
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
 
       component.runUpload();
       await flushAsync();
 
       expect(m.importFiles).toHaveBeenCalledWith(
         WS_PATH,
-        component.uploadFiles(),
+        [expect.objectContaining({ name: 'a.jpg' })],
         expect.objectContaining({ onProgress: expect.any(Function) }),
       );
-      expect(m.snackOpen).toHaveBeenCalledWith('Created 1 file.', 'Close', { duration: 4000 });
+      expect(m.toast.show).toHaveBeenCalledWith('Created 1 file.');
       expect(m.close).toHaveBeenCalledWith({
         refreshed: true,
         path: WS_PATH,
@@ -2195,7 +2309,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
         properties: {},
       });
       m.importFiles.mockReturnValue(of([doc('f1'), doc('f2')]));
-      component.uploadFiles.set([jpegFile('a.jpg'), jpegFile('b.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
 
       component.runUpload();
       await flushAsync();
@@ -2209,7 +2323,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
     it('runUpload does nothing at a restricted location or with no files', async () => {
       await createDialog({ parentPath: '/default-domain' });
-      component.uploadFiles.set([jpegFile('a.jpg')]);
+      component.uploads.stage([jpegFile('a.jpg')]);
       component.runUpload();
       expect(m.importFiles).not.toHaveBeenCalled();
 
@@ -2256,5 +2370,75 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
       expect(m.close).toHaveBeenCalledWith({ refreshed: true, path: WS_PATH });
     });
+  });
+});
+
+/** Types `text` one keystroke at a time with change detection after each, as a browser does. */
+async function typeKeystrokes(
+  fixture: ComponentFixture<unknown>,
+  input: HTMLInputElement,
+  text: string,
+): Promise<string[]> {
+  const shown: string[] = [];
+  for (let end = 1; end <= text.length; end++) {
+    input.value = text.slice(0, end);
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    shown.push(input.value);
+  }
+  return shown;
+}
+
+const TYPED_EXPIRY = '12/31/2027';
+const TYPED_PREFIXES = [...TYPED_EXPIRY].map((_, index) => TYPED_EXPIRY.slice(0, index + 1));
+const dayOf = (date: Date | null) => date && [date.getFullYear(), date.getMonth(), date.getDate()];
+
+// Material keeps null for a partial date; a handler that stored anything else made [ngModel]
+// write back and erase the text mid-entry. Only a real template exercises that write-back.
+describe('CreateImportDialogComponent Expires typed into the real field', () => {
+  async function render(): Promise<ComponentFixture<CreateImportDialogComponent>> {
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [CreateImportDialogComponent, testTranslateModule()],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: MatDialogRef, useValue: mockDialogRef },
+        { provide: MAT_DIALOG_DATA, useValue: { parentPath: PARENT_PATH } },
+        { provide: DocumentImportService, useValue: mockImportService },
+        { provide: BrowseService, useValue: mockBrowseService },
+        { provide: DirectoryService, useValue: mockDirectoryService },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(CreateImportDialogComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture;
+  }
+
+  it('keeps every partial entry on the create form', async () => {
+    const fixture = await render();
+    fixture.componentInstance.startCreateFromType(pictureType());
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('input[name="expires"]') as HTMLInputElement;
+
+    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
+  });
+
+  it('keeps every partial entry on the import form', async () => {
+    const fixture = await render();
+    fixture.componentInstance.uploads.stage([jpegFile('photo.png')]);
+    fixture.componentInstance.startImportProperties();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector(
+      'input[name="importExpires"]',
+    ) as HTMLInputElement;
+
+    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
   });
 });

@@ -1,28 +1,42 @@
 /**
- * Document detail properties panel sub-tabs — keyboard focus ring (NXENG-776 / NXENG-792;
- * IBM 298748541, 321710239). Karma loads global styles so theme tokens resolve; the host
- * pulls in the real feature SCSS.
+ * Document detail side panel views — keyboard focus ring (NXENG-776 / NXENG-792;
+ * IBM 298748541, 321710239). Karma loads global styles so theme tokens resolve; the host renders
+ * the real `nxs-details-panel` under the feature SCSS, whose `.properties-panel` rule sets the
+ * ring colour the library draws.
  *
- * Standalone `.sub-tab:focus` selector shape is owned by
- * `document-detail-sub-tab-focus-ring.spec.ts` (feature Vitest); this suite owns compiled
- * contrast, inset geometry, and IBM `:focus`-only focus-visible behaviour.
+ * The token wiring is owned by `document-detail-sub-tab-focus-ring.spec.ts` (feature Vitest); this
+ * suite owns compiled contrast, inset geometry, and IBM `:focus`-only focus-visible behaviour.
  */
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import {
+  NxsDetailsPanelComponent,
+  type NxsDetailsPanelTab,
+} from '@nuxeo/satori-platform/components';
 
+import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
 const MINIMUM_RATIO = 3;
 
 @Component({
   standalone: true,
+  imports: [NxsDetailsPanelComponent],
   templateUrl: './sub-tab-focus-ring.host.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
   ],
 })
-class SubTabFocusHostComponent {}
+class SubTabFocusHostComponent {
+  readonly heading = 'Sample document.pdf';
+  readonly views: readonly NxsDetailsPanelTab[] = [
+    { id: 'properties', label: 'Properties' },
+    { id: 'comments', label: 'Comments' },
+    { id: 'activity', label: 'Activity' },
+  ];
+}
 
 function luminance([r, g, b]: readonly number[]): number {
   const channel = (c: number) => {
@@ -70,7 +84,7 @@ describe('Document detail properties sub-tabs — keyboard focus (NXENG-776, NXE
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SubTabFocusHostComponent],
+      imports: [SubTabFocusHostComponent, testTranslateModule()],
       providers: [provideNoopAnimations()],
     }).compileComponents();
     originalTheme = document.documentElement.getAttribute('data-app-theme');
@@ -87,7 +101,7 @@ describe('Document detail properties sub-tabs — keyboard focus (NXENG-776, NXE
 
   function subTab(index: number): HTMLButtonElement {
     const buttons = fixture.nativeElement.querySelectorAll(
-      '.sub-tab',
+      '.properties-panel [role="tab"]',
     ) as NodeListOf<HTMLButtonElement>;
     expect(buttons.length).toBeGreaterThanOrEqual(3);
     return buttons[index];

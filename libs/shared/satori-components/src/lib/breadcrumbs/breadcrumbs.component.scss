@@ -1,0 +1,93 @@
+:host {
+  position: relative;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-breadcrumbs__list {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nxs-breadcrumbs__item {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+// When nothing is left to fold, the first and the last labels are cut short. The last keeps 4em,
+// which `measure()` counts on, so the current page is never hidden.
+.nxs-breadcrumbs__item--first,
+.nxs-breadcrumbs__item--last {
+  flex: 0 1 auto;
+  overflow: hidden;
+
+  .nxs-breadcrumbs__link,
+  .nxs-breadcrumbs__text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.nxs-breadcrumbs__item--last {
+  min-width: min(100%, 4em);
+}
+
+.nxs-breadcrumbs__link {
+  color: var(--mat-sys-primary);
+  text-decoration: underline;
+}
+
+.nxs-breadcrumbs__text[aria-current='page'] {
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-breadcrumbs__separator {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  color: var(--mat-sys-outline);
+}
+
+:host-context([dir='rtl']) .nxs-breadcrumbs__separator {
+  transform: scaleX(-1);
+}
+
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+.nxs-breadcrumbs__overflow {
+  --mat-icon-button-state-layer-size: 28px;
+
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+}
+
+.nxs-breadcrumbs__overflow-measure {
+  display: inline-block;
+  width: 28px;
+}
+
+// In the flow with no height, so a box sized by its content still prefers the whole unfolded trail
+// and folding never takes away the room it is measured against. It wraps, so the narrowest such a
+// box can be is its widest item, not the whole trail.
+.nxs-breadcrumbs__measure {
+  flex-wrap: wrap;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}

@@ -2,14 +2,20 @@
 title: Skills, Agents & Generators
 parent: Engineering
 order: 9
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Skills, Agents and Generators — what the AI tooling actually is
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
+> Only §5's generator list and the summary's generator count were verified at that commit, against
+> `tools/satori-generators/generators.json` and the package `beta:publishable` builds. The link to
+> Dev Harness & Gates §2 was re-verified on 2026-10-08 at `fb97d44`; the rest of the page was last
+> reviewed on 2026-08-24 at `77265f9`.
 > Supersedes [`docs/agentic-system-guide.md`](../../docs/agentic-system-guide.md) and the
 > agent-catalog sections of [`docs/agentic-development-system.md`](../../docs/agentic-development-system.md).
 
@@ -109,8 +115,8 @@ which to read.
 | `verify-gate/SKILL.md`            | Getting to green without churning                                                                    |
 | `capture-phase-evidence/SKILL.md` | Producing evidence that proves something                                                             |
 | `audit-evidence/SKILL.md`         | Auditing evidence adversarially                                                                      |
-| `implement-api-port/SKILL.md`     | One of the twelve adf-hx API ports                                                                   |
-| `adopt-adf-hx-component/SKILL.md` | Swapping a hand-written `hxp-*` for the real component                                               |
+| `implement-api-port/SKILL.md`     | **Retired, kept as a record** — the adf-hx API ports were removed (NXSAT-635, NXSAT-637)             |
+| `adopt-adf-hx-component/SKILL.md` | **Retired, kept as a record** — adf-hx was removed (NXSAT-635, NXSAT-637)                            |
 | `add-extension-point/SKILL.md`    | Making something manifest-addressable                                                                |
 | `fix-bug/SKILL.md`                | Bug workflow                                                                                         |
 | `kd-local-setup/SKILL.md`         | Knowledge Discovery local setup                                                                      |
@@ -166,17 +172,21 @@ the definitions disagree.
 
 ---
 
-## 5. Generators — 4 implemented, and they ship to customers
+## 5. Generators — 6 implemented, 5 of them ship to customers
 
 [`tools/satori-generators`](../../tools/satori-generators), Nx generators compiled into the
-published package.
+published package — all but `satori-component`, which `generators.json` marks
+`x-satori-internal` and `scripts/build-platform-generators.mjs` leaves out, because `nxs-` is our
+prefix.
 
-| Generator             | Produces                                                                                                                                                                                      |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `extension-library`   | A complete Layer 2 library: project config, barrel, `extensions.ts` with marker comments, a rules service, a panel component, a spec asserting registry state, tsconfigs, vite config, README |
-| `extension-rule`      | A rule evaluator spliced into the existing library                                                                                                                                            |
-| `extension-action`    | An action handler                                                                                                                                                                             |
-| `extension-component` | A component + registration                                                                                                                                                                    |
+| Generator             | Produces                                                                                                                                                                                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extension-library`   | A complete Layer 2 library: project config, barrel, `extensions.ts` with marker comments, a rules service, a panel component, a spec asserting registry state, tsconfigs, vite config, README                                                                                                  |
+| `extension-rule`      | A rule evaluator spliced into the existing library                                                                                                                                                                                                                                             |
+| `extension-action`    | An action handler                                                                                                                                                                                                                                                                              |
+| `extension-component` | A component + registration                                                                                                                                                                                                                                                                     |
+| `config-package`      | A Nuxeo Marketplace package carrying Layer 0 and Layer 1 fragments, with a build target that checks them and writes the installable zip                                                                                                                                                        |
+| `satori-component`    | **Internal.** An `nxs-` component in `libs/shared/satori-components`, registered by ID for a slot: spec rendering it as that slot's host does, story tagged `autodocs`, Overview page, barrel export, `provideNxsComponents()` entry, extension-reference row, with-and-without-Satori section |
 
 ### The splice bug, and why the post-condition assertion exists
 
@@ -254,7 +264,7 @@ the architecture.
 
 |                                                                 |                                                                                          Count |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------: |
-| Real, discrete, verifiable components                           |                                   **8 workflows + 2 review agents + 4 generators + 13 skills** |
+| Real, discrete, verifiable components                           |                                   **8 workflows + 2 review agents + 6 generators + 13 skills** |
 | Catalog entries that are context/procedure rather than an agent |                                                                                              8 |
 | Catalog entries not implemented at all                          | **8** (Broken Link, Performance, Refactoring Opportunity, and all six of Tier 4, less overlap) |
 
@@ -269,7 +279,7 @@ document — which is what its own title says.
 ### Demonstrated
 
 - **The gates catch real defects.** The ledger in
-  [Dev Harness & Gates §2](08-dev-harness-and-gates.md#2-the-15-gates) lists nine live
+  [Dev Harness & Gates §2](08-dev-harness-and-gates.md#2-the-gates) lists nine live
   defects found by gates, several of which had passed every other check.
 - **Knowledge compounds.** `AGENTS/08-bug-patterns.md` is 413 lines of bugs already made.
   The counterfactual is a team re-making them.

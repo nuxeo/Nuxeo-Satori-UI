@@ -1,0 +1,17 @@
+<package type="addon" name="satori-beta" version="1.0.0">
+  <title>Nuxeo Satori beta</title>
+  <description>
+    <p>Nuxeo Satori configuration: bootstrap and manifest fragments contributed to org.nuxeo.agentic.ui.config.</p>
+  </description>
+  <vendor>Hyland Software</vendor>
+  <installer restart="true" />
+  <uninstaller restart="true" />
+  <target-platform>
+    <name>lts</name>
+    <version>[2025.0,2026.0)</version>
+  </target-platform>
+  <dependencies>
+    <package>nuxeo-agentic-ui:2026.0.2</package>
+  </dependencies>
+  <visibility>PRIVATE</visibility>
+</package>

@@ -1,22 +1,28 @@
 {
-  "name": "@nuxeo-satori/platform",
-  "version": "0.1.0",
+  "name": "@nuxeo/satori-platform",
+  "version": "0.2.0",
   "generators": "./generators.json",
   "description": "Nuxeo Satori platform — the Layer 0/1/2 extensibility contract, configuration loader, Nuxeo client and shared UI.",
   "private": true,
   "sideEffects": false,
   "peerDependencies": {
-    "@angular/cdk": "^20.2.0",
-    "@angular/common": "^20.3.33",
-    "@angular/core": "^20.3.33",
-    "@angular/forms": "^20.3.33",
-    "@angular/material": "^20.2.0",
-    "@angular/platform-browser": "^20.3.33",
-    "@angular/router": "^20.3.33",
-    "@alfresco/adf-extensions": "^9.0.0",
-    "@hylandsoftware/satori-ui": "^0.2.0",
-    "@ngx-translate/core": "^17.0.0",
+    "@angular/cdk": "^22.2.0",
+    "@angular/common": "^22.2.3",
+    "@angular/core": "^22.2.3",
+    "@angular/forms": "^22.2.3",
+    "@angular/material": "^22.2.0",
+    "@angular/material-date-fns-adapter": "^22.2.0",
+    "@angular/platform-browser": "^22.2.3",
+    "@angular/router": "^22.2.3",
+    "@hylandsoftware/satori-ui": "^1.0.0-alpha.0",
+    "@ngx-translate/core": "^18.0.0",
+    "date-fns": "^2.30.0",
     "rxjs": "^7.8.0"
+  },
+  "peerDependenciesMeta": {
+    "@hylandsoftware/satori-ui": {
+      "optional": true
+    }
   },
   "dependencies": {
     "tslib": "^2.3.0",

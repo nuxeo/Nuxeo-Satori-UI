@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Asserts that `@nuxeo-satori/platform` **can actually be published**.
+ * Asserts that `@nuxeo/satori-platform` **can actually be published**.
  *
  * ## Why this gate exists
  *
@@ -40,7 +40,7 @@
  * that name declared nowhere in the file, and every gate was green.
  *
  * Checks 5 and 6 assert that what the shipped docs tell a customer to run is actually in
- * the package: the guardrail script, and the four Nx generators.
+ * the package: the guardrail script, and the five Nx generators.
  *
  * ## Every check here has been watched failing on purpose
  *
@@ -71,8 +71,10 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import ts from 'typescript';
+
+import { entryTypes } from './package-types.mjs';
 
 const DIST = resolve('dist/libs/platform');
 
@@ -115,6 +117,8 @@ if (pkg.scripts?.prepublishOnly) {
 const fesm = [
   'nuxeo-satori-platform.mjs',
   'nuxeo-satori-platform-app-config.mjs',
+  'nuxeo-satori-platform-components.mjs',
+  'nuxeo-satori-platform-components-satori.mjs',
   'nuxeo-satori-platform-extensions.mjs',
   'nuxeo-satori-platform-nuxeo-client.mjs',
   'nuxeo-satori-platform-ui.mjs',
@@ -163,8 +167,8 @@ if (declared === 0) {
  * the registry. Every other check here passed while `dompurify` was undeclared, including
  * `npm publish --dry-run`, because none of them reads the bundles' import graph.
  *
- * Self-references between entry points are skipped: `@nuxeo-satori/platform/ui` importing
- * `@nuxeo-satori/platform` is the package's own `exports` map, not an external dependency.
+ * Self-references between entry points are skipped: `@nuxeo/satori-platform/ui` importing
+ * `@nuxeo/satori-platform` is the package's own `exports` map, not an external dependency.
  *
  * Specifiers come from a full AST walk. Two earlier attempts were both fail-open:
  *
@@ -191,7 +195,13 @@ if (declared === 0) {
  * whose declaration cannot be checked, which is not the same as an import that is fine.
  */
 function moduleSpecifiersOf(text, fileName) {
-  const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  const source = ts.createSourceFile(
+    fileName,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
   const specifiers = [];
   const unreadable = [];
 
@@ -240,9 +250,9 @@ const manifestDeps = new Set([
 ]);
 
 /**
- * Every `.mjs` the `exports` map actually points at, not the hard-coded five.
+ * Every `.mjs` the `exports` map actually points at, not only the hard-coded list.
  *
- * The `fesm` list above is a deliberate, explicit expectation for check 2 — those five bundles must
+ * The `fesm` list above is a deliberate, explicit expectation for check 2 — those bundles must
  * exist. It is the wrong source for *this* check, which asks a question about the whole published
  * surface: add a sixth entry point and its bundle was silently omitted, so an undeclared runtime
  * dependency reachable only through it still passed. A gate that shrinks as the package grows is the
@@ -268,7 +278,9 @@ function publishedBundleNames() {
 const scanned = publishedBundleNames();
 const extras = scanned.filter((name) => !fesm.includes(name));
 if (extras.length > 0) {
-  notes.push(`import scan covers ${extras.length} bundle(s) beyond the expected five: ${extras.join(', ')}`);
+  notes.push(
+    `import scan covers ${extras.length} bundle(s) beyond the expected ${fesm.length}: ${extras.join(', ')}`,
+  );
 }
 
 const externalImports = new Map();
@@ -277,8 +289,8 @@ for (const name of scanned) {
   if (!existsSync(file)) {
     // A bundle the `exports` map points at but which is not on disk.
     //
-    // Continuing silently was fail-open: the fixed five are asserted present by check 2, but a newly
-    // added sixth export could point at a missing FESM file and still pass this "whole published
+    // Continuing silently was fail-open: the fixed list is asserted present by check 2, but a newly
+    // added export could point at a missing FESM file and still pass this "whole published
     // surface" scan — and `npm publish --dry-run` does not validate export targets either, so nothing
     // would have caught it. An export that does not resolve is a broken package, and it is also a
     // bundle whose imports were never read.
@@ -415,7 +427,7 @@ try {
 
   /**
    * `AGENTS.md` instructs customers to run the guardrail script out of
-   * `node_modules/@nuxeo-satori/platform/guardrails/`. It was absent from the tarball for
+   * `node_modules/@nuxeo/satori-platform/guardrails/`. It was absent from the tarball for
    * the whole of Phase 4 — a documented step that could not be followed. Derived from the
    * docs rather than hardcoded, so a new instruction is covered without editing this file.
    */
@@ -425,14 +437,14 @@ try {
   const advertised = new Set();
   for (const doc of docs) {
     const text = readFileSync(join(copy, doc), 'utf8');
-    for (const m of text.matchAll(/node_modules\/@nuxeo-satori\/platform\/([\w./-]+)/g)) {
+    for (const m of text.matchAll(/node_modules\/@nuxeo\/satori-platform\/([\w./-]+)/g)) {
       advertised.add(m[1]);
     }
   }
   for (const path of advertised) {
     if (!existsSync(join(copy, path))) {
       fail(
-        `The docs tell customers to use \`node_modules/@nuxeo-satori/platform/${path}\`,\n` +
+        `The docs tell customers to use \`node_modules/@nuxeo/satori-platform/${path}\`,\n` +
           '    which is not in the package. Add it to `assets` in libs/platform/ng-package.json.',
       );
     }
@@ -454,7 +466,7 @@ try {
   if (typeof manifestPath !== 'string') {
     fail(
       'package.json has no `generators` field, so Nx cannot see this package as a plugin\n' +
-        '    and `nx g @nuxeo-satori/platform:…` fails with "Cannot find generator".',
+        '    and `nx g @nuxeo/satori-platform:…` fails with "Cannot find generator".',
     );
   } else if (!existsSync(join(copy, manifestPath))) {
     fail(`package.json points at \`${manifestPath}\`, which is not in the package.`);
@@ -469,7 +481,7 @@ try {
     if (names.length === 0) {
       fail(
         `${manifestPath} declares no generators, so check 6 asserted nothing. The package is\n` +
-          '    meant to ship four: extension-library, -rule, -action and -component.',
+          '    meant to ship five: extension-library, -rule, -action, -component and config-package.',
       );
     }
     for (const [name, generator] of Object.entries(generators)) {
@@ -526,7 +538,7 @@ try {
      * `node_modules` — the first attempt produced twenty `TS2307: Cannot find module
      * '@angular/core'` errors that were the harness's fault, not the package's. And the
      * entry points import each other by package specifier
-     * (`@nuxeo-satori/platform/nuxeo-client`), so without a path mapping to `dist/` the
+     * (`@nuxeo/satori-platform/nuxeo-client`), so without a path mapping to `dist/` the
      * siblings do not resolve either.
      *
      * Imports use the **package specifiers a customer writes**, which makes the probe the
@@ -549,7 +561,11 @@ try {
               moduleResolution: 'bundler',
               target: 'es2022',
               types: [],
-              baseUrl: '.',
+              // No `baseUrl`: TypeScript 6 makes it a deprecation error (TS5101) and the gate
+              // refuses to report a pass when its own typecheck could not run, so it went red on
+              // Angular 22. It was never needed — every `paths` value below is relative, and
+              // without `baseUrl` TypeScript resolves those relative to this tsconfig's own
+              // directory, which is `stage`, exactly what they are relative to.
               // Built with `join`, not string concatenation: the first cut produced
               // `./pkg/nuxeo-clientindex.d.ts` for `./nuxeo-client` — a missing separator
               // — and the resulting "Cannot find module" was attributed to `probe.ts`,
@@ -558,7 +574,7 @@ try {
               paths: Object.fromEntries(
                 subpaths.map((s) => [
                   s.replace(/^\./, pkg.name),
-                  [`./${join('pkg', s.replace(/^\.\/?/, ''), 'index.d.ts')}`],
+                  [`./${relative(stage, entryTypes(join(stage, 'pkg'), s))}`],
                 ]),
               ),
             },
@@ -655,7 +671,7 @@ try {
 
   if (advertised.size === 0) {
     fail(
-      `None of the ${docs.length} shipped doc(s) reference a \`node_modules/@nuxeo-satori/platform/…\`\n` +
+      `None of the ${docs.length} shipped doc(s) reference a \`node_modules/@nuxeo/satori-platform/…\`\n` +
         '    path, so check 5 asserted nothing. If the guardrail instruction was removed,\n' +
         '    remove this check deliberately rather than letting it pass empty.',
     );
@@ -674,5 +690,5 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`publishability: pass — @nuxeo-satori/platform@${pkg.version} is publishable`);
+console.log(`publishability: pass — @nuxeo/satori-platform@${pkg.version} is publishable`);
 for (const n of notes) console.log(`  - ${n}`);

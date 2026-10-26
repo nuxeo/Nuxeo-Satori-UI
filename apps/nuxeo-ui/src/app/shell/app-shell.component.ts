@@ -9,6 +9,7 @@ import {
   effect,
   inject,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -33,11 +34,9 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SatAppHeaderModule } from '@hylandsoftware/satori-ui/app-header';
+import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import { SatLogoModule } from '@hylandsoftware/satori-ui/logo';
-import {
-  SatPlatformNavModule,
-  SatPlatformNavStateService,
-} from '@hylandsoftware/satori-ui/platform-nav';
+import { SatPlatformNavModule, SatPlatformNavState } from '@hylandsoftware/satori-ui/platform-nav';
 import {
   CollectionService,
   DocumentDetailService,
@@ -45,22 +44,16 @@ import {
   SearchService,
   SelectionService,
   readClipboardDocs,
-  isAdfHxBrowseRouterUrl,
   isBrowseRouterUrl,
-  parseAdfHxBrowsePathFromRouterUrl,
   parseBrowseNuxeoPathFromRouterUrl,
   toBrowseRouterUrl,
   type GlobalSearchSuggestion,
   docTypeIcon,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import {
-  AdfHxBrowseContextService,
-  toAdfHxBrowseRouterUrl,
-} from '@agentic-ui/shared/adf-hx-bridge';
-import { SelectionTopbarComponent } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { SelectionTopbarComponent } from '@nuxeo/satori-platform/ui';
 import { AiChatService, AiFeatureFlagService } from '@agentic-ui/shared/ai-client';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { APP_NAV_ITEMS, PACKAGED_NAV_ITEMS } from '@nuxeo-satori/platform/extensions';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { APP_NAV_ITEMS, PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
@@ -69,6 +62,7 @@ import { AppNavItem, SETTINGS_DRAWER_ITEMS, toAppNavItem } from '../platform-nav
 import { ThemingFeatureFlagService } from '../theme/theming-feature-flag.service';
 import { drawerItemForPath } from './drawer-route-match';
 import { NavDrawerComponent } from './nav-drawer/nav-drawer.component';
+import { PresetBadgeComponent } from './preset-badge/preset-badge.component';
 import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
 
 @Component({
@@ -78,6 +72,7 @@ import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
     RouterLink,
     SatPlatformNavModule,
     SatAppHeaderModule,
+    SatAvatarModule,
     SatLogoModule,
     MatDialogModule,
     MatMenuModule,
@@ -87,12 +82,14 @@ import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
     MatSidenavModule,
     MatTooltipModule,
     NavDrawerComponent,
+    PresetBadgeComponent,
     SelectionTopbarComponent,
     FormsModule,
     AiMarkdownPipe,
     TranslatePipe,
   ],
   templateUrl: './app-shell.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app-shell.component.scss',
 })
 export class AppShellComponent implements OnDestroy {
@@ -109,7 +106,7 @@ export class AppShellComponent implements OnDestroy {
   };
 
   private readonly router = inject(Router);
-  private readonly platformNavState = inject(SatPlatformNavStateService);
+  private readonly platformNavState = inject(SatPlatformNavState);
   private readonly auth = inject(AuthService);
   private readonly sessionTimeout = inject(SessionTimeoutService);
   private readonly snackBar = inject(MatSnackBar);
@@ -118,7 +115,6 @@ export class AppShellComponent implements OnDestroy {
   private readonly detailService = inject(DocumentDetailService);
   private readonly searchService = inject(SearchService);
   private readonly browseContext = inject(BrowseContextService);
-  private readonly adfHxBrowseContext = inject(AdfHxBrowseContextService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly appConfig = inject(AppConfigService);
   /** Layer 0 `branding.logo`; `null` keeps the Satori word mark. */
@@ -133,7 +129,7 @@ export class AppShellComponent implements OnDestroy {
    */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.currentLang },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
   readonly aiChat = inject(AiChatService);
   readonly featureFlags = inject(AiFeatureFlagService);
@@ -421,9 +417,7 @@ export class AppShellComponent implements OnDestroy {
         } else if (item.path === '/personal-space') {
           void this.router.navigateByUrl('/personal-space');
         } else if (item.path === '/browse') {
-          this.navigateToProductionBrowse();
-        } else if (item.path === '/browse-adf-hx') {
-          this.navigateToAdfHxBrowse();
+          this.navigateToBrowse();
         }
       }
     } else {
@@ -438,9 +432,6 @@ export class AppShellComponent implements OnDestroy {
     const base = path.split('?')[0];
     if (base === '/browse' || base.startsWith('/browse/')) {
       this.browseContext.setFromRouterUrl(path);
-    }
-    if (base === '/browse-adf-hx') {
-      this.adfHxBrowseContext.setFromRouterUrl(path);
     }
     const keepTasksDrawer = /^\/tasks\/[^/]+$/.test(base);
     if (!keepTasksDrawer) {
@@ -491,9 +482,6 @@ export class AppShellComponent implements OnDestroy {
     const base = path.split('?')[0];
     if (base === '/browse' || base.startsWith('/browse/')) {
       this.browseContext.setFromRouterUrl(path);
-    }
-    if (base === '/browse-adf-hx') {
-      this.adfHxBrowseContext.setFromRouterUrl(path);
     }
     void this.router.navigateByUrl(path, { onSameUrlNavigation: 'reload' });
   }
@@ -708,41 +696,13 @@ export class AppShellComponent implements OnDestroy {
     return docTypeIcon(type);
   }
 
-  /** Open production browse at the path the user was viewing in adf-hx (or current browse context). */
-  private navigateToProductionBrowse(): void {
-    const nuxeoPath = this.resolveBrowsePathForProductionSwitch();
+  /** Open browse at the folder being viewed, or else the one browse last showed. */
+  private navigateToBrowse(): void {
+    const url = this.router.url;
+    const nuxeoPath = isBrowseRouterUrl(url)
+      ? parseBrowseNuxeoPathFromRouterUrl(url)
+      : this.browseContext.contextPath();
     this.browseContext.setFromNuxeoPath(nuxeoPath);
     void this.router.navigateByUrl(toBrowseRouterUrl(nuxeoPath));
-  }
-
-  /** Open adf-hx browse at the path the user was viewing in production browse (or current adf-hx context). */
-  private navigateToAdfHxBrowse(): void {
-    const nuxeoPath = this.resolveBrowsePathForAdfHxSwitch();
-    this.adfHxBrowseContext.setFromNuxeoPath(nuxeoPath);
-    void this.router.navigateByUrl(toAdfHxBrowseRouterUrl(nuxeoPath));
-  }
-
-  /** Prefer the live router URL when switching from adf-hx browse to production browse. */
-  private resolveBrowsePathForProductionSwitch(): string {
-    const url = this.router.url;
-    if (isAdfHxBrowseRouterUrl(url)) {
-      return parseAdfHxBrowsePathFromRouterUrl(url);
-    }
-    if (isBrowseRouterUrl(url)) {
-      return parseBrowseNuxeoPathFromRouterUrl(url);
-    }
-    return this.adfHxBrowseContext.contextPath() || this.browseContext.contextPath();
-  }
-
-  /** Prefer the live router URL when switching from production browse to adf-hx browse. */
-  private resolveBrowsePathForAdfHxSwitch(): string {
-    const url = this.router.url;
-    if (isBrowseRouterUrl(url)) {
-      return parseBrowseNuxeoPathFromRouterUrl(url);
-    }
-    if (isAdfHxBrowseRouterUrl(url)) {
-      return parseAdfHxBrowsePathFromRouterUrl(url);
-    }
-    return this.browseContext.contextPath() || this.adfHxBrowseContext.contextPath();
   }
 }

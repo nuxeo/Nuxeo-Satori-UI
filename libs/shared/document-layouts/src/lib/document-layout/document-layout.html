@@ -1,0 +1,106 @@
+@if (entry(); as contributed) {
+  <lib-extension-outlet
+    class="document-layout__contributed"
+    [attr.data-layout-entry]="contributed.id"
+    [componentId]="contributed.componentId ?? contributed.id"
+    [componentInputs]="entryInputs()"
+  />
+}
+@if (view(); as layout) {
+  @if (layout.sections.length > 0) {
+    <div
+      class="document-layout"
+      [attr.data-layout-type]="layout.type"
+      [attr.data-layout-source]="layout.source"
+    >
+      @if (layout.display === 'tabs') {
+        <mat-tab-group
+          class="document-layout__tabs"
+          mat-stretch-tabs="false"
+          animationDuration="0ms"
+          [aria-label]="'document-layouts.sections' | translate"
+        >
+          @for (section of layout.sections; track section.id) {
+            <mat-tab [label]="tabLabel(section)">
+              <ng-template matTabContent>
+                <div class="document-layout__section" [attr.data-section-id]="section.id">
+                  <ng-container
+                    [ngTemplateOutlet]="rows"
+                    [ngTemplateOutletContext]="{ $implicit: section.fields, top: true }"
+                  />
+                </div>
+              </ng-template>
+            </mat-tab>
+          }
+        </mat-tab-group>
+      } @else {
+        @for (section of layout.sections; track section.id) {
+          <section class="document-layout__section" [attr.data-section-id]="section.id">
+            @if (section.heading) {
+              <h4 class="document-layout__heading">{{ section.heading }}</h4>
+            }
+            <ng-container
+              [ngTemplateOutlet]="rows"
+              [ngTemplateOutletContext]="{ $implicit: section.fields, top: true }"
+            />
+          </section>
+        }
+      }
+    </div>
+  }
+}
+
+<ng-template #rows let-fields let-top="top">
+  <dl [class]="top ? 'document-layout__fields' : 'document-layout__nested'">
+    @for (field of fields; track field.key) {
+      <div
+        class="document-layout__field"
+        [attr.data-field]="top ? field.key : null"
+        [attr.data-subfield]="top ? null : field.key"
+      >
+        <dt class="document-layout__label">{{ field.label }}</dt>
+        <dd class="document-layout__value">
+          @switch (field.kind) {
+            @case ('value') {
+              <ng-container
+                [ngTemplateOutlet]="value"
+                [ngTemplateOutletContext]="{ $implicit: field.value }"
+              />
+            }
+            @case ('chips') {
+              <ul class="document-layout__chips">
+                @for (chip of field.chips; track $index) {
+                  <li class="document-layout__chip">
+                    <ng-container
+                      [ngTemplateOutlet]="value"
+                      [ngTemplateOutletContext]="{ $implicit: chip }"
+                    />
+                  </li>
+                }
+              </ul>
+            }
+            @case ('groups') {
+              @for (group of field.groups; track $index) {
+                <ng-container
+                  [ngTemplateOutlet]="rows"
+                  [ngTemplateOutletContext]="{ $implicit: group, top: false }"
+                />
+              }
+            }
+            @default {
+              <span class="document-layout__empty">—</span>
+            }
+          }
+        </dd>
+      </div>
+    }
+  </dl>
+</ng-template>
+
+<ng-template #value let-value>
+  @if (value.flag === undefined) {
+    {{ value.text }}
+  } @else {
+    {{ (value.flag ? 'document-layouts.yes' : 'document-layouts.no') | translate }}
+  }
+</ng-template>

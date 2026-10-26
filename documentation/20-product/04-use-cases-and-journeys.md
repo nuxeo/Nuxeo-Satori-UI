@@ -86,20 +86,20 @@ is exactly the one before registration happens.
 
 ```text
 Problem:        "It must look like our product, not like Nuxeo."
-Entry point:    nxserver/nuxeo.war/agentic-ui-config/bootstrap.json  (on their server),
-                copied from the bootstrap.example.json the package installs beside it
-User action:    Edits branding, defaultThemeId, themes[].tokens, availableLanguages
-System:         AppConfigService loads it BEFORE authentication;
-                TemplateThemeService writes tokens onto <html> as CSS custom properties
+Entry point:    a bootstrap fragment in their own Marketplace package (NXSAT-312)
+User action:    Sets branding, defaultThemeId, themes[].tokens, availableLanguages
+System:         the configuration servlet serves it after our defaults; AppConfigService
+                loads it BEFORE authentication; TemplateThemeService writes tokens onto
+                <html> as CSS custom properties
 Result:         Rebranded application. No build. No deployment of ours.
-On upgrade:     the package replaces only the sample; bootstrap.json is theirs → edits survive
-                (rehearsed on a real server, NXSAT-317)
+On upgrade:     our package and theirs are separate, so upgrading ours leaves their
+                fragment in force (rehearsed on a real server, NXSAT-312)
 Benefit:        Rebranding is a config change, not an engagement
 ```
 
-Evidence: `phase-1-config`, 39 checks. The upgrade-survival half is asserted by
-`npm run beta:upgrade` for the npm package, and was rehearsed for the marketplace package with
-`nuxeoctl mp-install` in NXSAT-317.
+Evidence: `phase-1-config`. The upgrade-survival half is asserted by `npm run beta:upgrade` for
+the npm package, and was rehearsed for the marketplace package with `nuxeoctl mp-install` in
+NXSAT-312 (upgrading ours with a customer configuration package installed).
 
 **Verified caveat:** an earlier version of this installed to `nxserver/web/…`, which is not a
 Tomcat docBase, so it **would have 404'd on every install** — and it was recorded complete
@@ -113,14 +113,14 @@ Layer 1.
 
 ```text
 Problem:        "Hide Reports. Rename Home to Dashboard. Add a Contracts entry."
-Entry point:    A Nuxeo document at /default-domain/config/<their-app> (note:note)
+Entry point:    A manifest fragment in their configuration package (NXSAT-312)
 User action:    Edits JSON:
                   overrides: { "template.navbar.reports": { "visible": false },
                                "template.navbar.home": { "label": "Dashboard", "order": 5 } }
                   slots:     { "navbar": [ { "id": "acme.navbar.contracts", ... } ] }
-System:         AppConfigService fetches the document; registries merge manifest with code
-Result:         Changed navigation. No build. Versioned, audited and ACL'd by Nuxeo.
-Benefit:        Configuration inherits the repository's governance for free
+System:         The server serves the fragment after ours; registries merge manifest with code
+Result:         Changed navigation. No build. Versioned with their package.
+Benefit:        An upgrade of ours leaves their configuration in force
 ```
 
 Evidence: `phase-2-registry`, 46 checks.
@@ -141,10 +141,10 @@ Layer 2, with Layer 3 assistance.
 Problem:        "Add a contract-approval action, visible only to users who can write the
                  document, plus a tab showing approval history."
 Step 1:  Fork apps/nuxeo-satori-template (ships no design system — add yours)
-Step 2:  npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
-Step 3:  npx nx g @nuxeo-satori/platform:extension-action  approve-contract --library=...
+Step 2:  npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
+Step 3:  npx nx g @nuxeo/satori-platform:extension-action  approve-contract --library=...
 Step 4:  Implement the handler and the rule
-Step 5:  node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs libs/acme-extensions
+Step 5:  node node_modules/@nuxeo/satori-platform/guardrails/check-extension-library.mjs libs/acme-extensions
 Step 6:  Add the route for the panel — ExtensionOutletComponent resolves it BY ID
 Step 7:  providers: [ ..., provideAcmeExtensions() ]     ← the whole integration
 Step 8:  Reference the action id from their manifest
@@ -170,11 +170,11 @@ tarball, not the source tree.
 
 ```text
 Problem:        "A new Satori version is out. Will it break what we built?"
-Step 1:  npm version bump of @nuxeo-satori/platform
+Step 1:  npm version bump of @nuxeo/satori-platform
 Step 2:  Reinstall the marketplace package
-System:  install.xml — app overwritten; only the sample in agentic-ui-config replaced,
-         their bootstrap.json never touched (rehearsed, NXSAT-317)
-         Their Layer 1 manifest is a Nuxeo document, untouched
+System:  install.xml — app overwritten; no configuration file installed or replaced
+         Their bootstrap and manifest fragments stay in their own configuration
+         package, which upgrading ours does not touch (rehearsed, NXSAT-312)
          Their Layer 2 library compiles against the new published types
 Result:  Customisation intact
 Benefit: The upgrade promise is TESTED, not asserted

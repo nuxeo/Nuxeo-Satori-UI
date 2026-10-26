@@ -33,6 +33,8 @@
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
+import { docLinkTarget } from './confluence-links.mjs';
+import { codeMacro, esc, toStorage, uploadAttachment } from './confluence-storage.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const DOCS = join(ROOT, 'documentation');
@@ -123,247 +125,22 @@ const pageTitles = new Map();
 
 /* ------------------------------------------------------------ markdown → storage ---- */
 
-// `"` and `'` are escaped because almost every call site puts the result inside a
-// double-quoted XML attribute — `ac:alt="…"`, `href="…"`, `ri:content-title="…"`. Without them a
-// title containing a quote closes the attribute early and injects the rest as markup. CodeQL's
-// `js/incomplete-html-attribute-sanitization` flagged fourteen call sites of this one function.
-const esc = (s) =>
-  s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
 /**
- * The inverse of `esc`, for text that must reach the page raw — i.e. inside CDATA.
- *
- * `&amp;` must be undone LAST or `&amp;quot;` would decode to `"` in two steps rather than to
- * `&quot;` — the double-unescaping mirror of the double-escaping bug that put `Cost &amp;amp; TCO`
- * on a published page.
+ * A page of this set in storage format: a relative link resolves against its siblings by title,
+ * and a Mermaid block becomes an attached diagram. The conversion itself is
+ * `confluence-storage.mjs`'s, shared with every other publisher.
  */
-const unesc = (s) =>
-  s
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&');
-
-/**
- * Inline formatting. Order matters: code spans are extracted first and restored last, so
- * `**` or `_` inside backticks is not treated as emphasis — the mistake that turns a code
- * sample into mangled bold text.
- */
-function inline(text, relPath = '') {
-  const codes = [];
-  let s = text.replace(/`([^`]+)`/g, (_, c) => {
-    codes.push(c);
-    return `@@CODE${codes.length - 1}@@`;
+function pageStorage(md, relPath, attachments) {
+  return toStorage(md, {
+    link: (href) =>
+      docLinkTarget(href, relPath, {
+        pageTitles,
+        branch: manifest.branch,
+        isDirectory: (p) =>
+          statSync(resolve(ROOT, p), { throwIfNoEntry: false })?.isDirectory() ?? false,
+      }),
+    mermaid: (index, source) => mermaidBlock(relPath, index, source, attachments),
   });
-
-  s = esc(s);
-  // Markdown links → Confluence external links. Repo-relative links are rewritten to the
-  // GitHub blob URL so they resolve for a reader who is not looking at a clone.
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
-    if (/^https?:/.test(href)) return `<a href="${esc(href)}">${label}</a>`;
-
-    // Resolve the link against the page it appears on, so `../20-product/x.md` from
-    // `30-engineering/y.md` lands on `20-product/x.md`.
-    const [pathPart, anchorPart] = href.split('#');
-    const from = relPath.includes('/') ? relPath.slice(0, relPath.lastIndexOf('/')) : '';
-    const segments = (from ? `${from}/${pathPart}` : pathPart).split('/');
-    const stack = [];
-    for (const seg of segments) {
-      if (seg === '..') stack.pop();
-      else if (seg && seg !== '.') stack.push(seg);
-    }
-    const target = stack.join('/');
-
-    // Another page in this set → a real Confluence page link, resolved by title.
-    const title = pageTitles.get(target);
-    if (title) {
-      // The label is UNESCAPED here. `esc()` has already run over the whole string, so a
-      // label like "Cost & TCO" arrives as "Cost &amp; TCO" — and CDATA preserves text
-      // verbatim, so it would render to the reader as a literal "Cost &amp; TCO". Caught by
-      // reading the rendered view rather than the storage format.
-      const raw = unesc(label).replace(/]]>/g, ']]]]><![CDATA[>');
-      return (
-        `<ac:link${anchorPart ? ` ac:anchor="${esc(anchorPart)}"` : ''}>` +
-        `<ri:page ri:content-title="${esc(title)}" />` +
-        `<ac:plain-text-link-body><![CDATA[${raw}]]></ac:plain-text-link-body>` +
-        `</ac:link>`
-      );
-    }
-
-    // Anything else is a file in the repository. Relative to the repo root, which is one level
-    // above `documentation/`.
-    const repoPath = target.replace(/^documentation\//, '');
-    const url = `https://github.com/nuxeo/agentic-ui-poc/blob/${manifest.branch}/${repoPath}`;
-    return `<a href="${esc(url)}">${label}</a>`;
-  });
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/(^|[\s(])_([^_]+)_/g, '$1<em>$2</em>');
-  s = s.replace(/~~([^~]+)~~/g, '<span style="text-decoration: line-through;">$1</span>');
-
-  return s.replace(/@@CODE(\d+)@@/g, (_, i) => `<code>${esc(codes[Number(i)])}</code>`);
-}
-
-/** A Confluence code-block macro. */
-function codeMacro(lang, body) {
-  const language =
-    { ts: 'typescript', js: 'javascript', jsonc: 'json', sh: 'bash', text: 'text' }[lang] ??
-    lang ??
-    'text';
-  return (
-    `<ac:structured-macro ac:name="code" ac:schema-version="1">` +
-    `<ac:parameter ac:name="language">${esc(language)}</ac:parameter>` +
-    `<ac:plain-text-body><![CDATA[${body.replace(/]]>/g, ']]]]><![CDATA[>')}]]></ac:plain-text-body>` +
-    `</ac:structured-macro>`
-  );
-}
-
-/** An info/note panel, used for blockquotes. */
-function panel(kind, body) {
-  return (
-    `<ac:structured-macro ac:name="${kind}" ac:schema-version="1">` +
-    `<ac:rich-text-body>${body}</ac:rich-text-body></ac:structured-macro>`
-  );
-}
-
-/**
- * Convert a Markdown document to Confluence storage format.
- *
- * Deliberately a small, explicit converter rather than a dependency: the input is our own
- * Markdown, written by us, using a known subset. A general-purpose converter would add a
- * package to the lockfile — which in this repository is a gated artifact — to handle syntax
- * we do not use.
- *
- * Mermaid blocks become code blocks. Confluence renders Mermaid only with a plugin, and a
- * diagram that silently fails to render is worse than a readable source block. The ASCII
- * diagrams in these documents are there for the same reason.
- */
-function toStorage(md, relPath = '', attachments = []) {
-  let mermaidSeen = 0;
-  // Strip YAML frontmatter — it is publishing metadata, not content.
-  const body = md.replace(/^---\n[\s\S]*?\n---\n/, '');
-  const lines = body.split('\n');
-  const out = [];
-  let i = 0;
-
-  const flushTable = () => {
-    const rows = [];
-    while (i < lines.length && /^\s*\|/.test(lines[i])) {
-      const cells = lines[i]
-        .trim()
-        .replace(/^\||\|$/g, '')
-        .split('|')
-        .map((c) => c.trim());
-      if (!cells.every((c) => /^:?-{2,}:?$/.test(c))) rows.push(cells);
-      i += 1;
-    }
-    if (!rows.length) return;
-    const [head, ...rest] = rows;
-    out.push('<table><tbody>');
-    out.push('<tr>' + head.map((c) => `<th>${inline(c, relPath)}</th>`).join('') + '</tr>');
-    for (const r of rest)
-      out.push('<tr>' + r.map((c) => `<td>${inline(c, relPath)}</td>`).join('') + '</tr>');
-    out.push('</tbody></table>');
-  };
-
-  const flushList = (ordered) => {
-    const tag = ordered ? 'ol' : 'ul';
-    out.push(`<${tag}>`);
-    let depth = 0;
-    while (i < lines.length && /^\s*([-*]|\d+\.)\s/.test(lines[i])) {
-      const indent = (lines[i].match(/^\s*/) ?? [''])[0].length;
-      const content = lines[i].replace(/^\s*([-*]|\d+\.)\s+/, '');
-      if (indent >= 2 && depth === 0) {
-        out.push(`<${tag}>`);
-        depth += 1;
-      } else if (indent < 2 && depth > 0) {
-        out.push(`</${tag}>`);
-        depth -= 1;
-      }
-      out.push(`<li>${inline(content, relPath)}</li>`);
-      i += 1;
-    }
-    while (depth-- > 0) out.push(`</${tag}>`);
-    out.push(`</${tag}>`);
-  };
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (/^```/.test(line)) {
-      const lang = line.replace(/^```/, '').trim();
-      i += 1;
-      const buf = [];
-      while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
-      i += 1;
-      if (lang === 'mermaid') {
-        mermaidSeen += 1;
-        out.push(mermaidBlock(relPath, mermaidSeen, buf.join('\n'), attachments));
-      } else {
-        out.push(codeMacro(lang, buf.join('\n')));
-      }
-      continue;
-    }
-
-    if (/^\s*\|/.test(line)) {
-      flushTable();
-      continue;
-    }
-
-    if (/^\s*([-*]|\d+\.)\s/.test(line)) {
-      flushList(/^\s*\d+\./.test(line));
-      continue;
-    }
-
-    if (/^>/.test(line)) {
-      const buf = [];
-      while (i < lines.length && /^>/.test(lines[i])) buf.push(lines[i++].replace(/^>\s?/, ''));
-      out.push(panel('info', `<p>${inline(buf.join(' '), relPath)}</p>`));
-      continue;
-    }
-
-    const h = /^(#{1,6})\s+(.*)$/.exec(line);
-    if (h) {
-      // The document's own H1 is dropped: Confluence renders the page title above the body,
-      // so keeping it produces the title twice.
-      if (h[1].length === 1 && out.length === 0) {
-        i += 1;
-        continue;
-      }
-      out.push(`<h${h[1].length}>${inline(h[2], relPath)}</h${h[1].length}>`);
-      i += 1;
-      continue;
-    }
-
-    if (/^---+$/.test(line)) {
-      out.push('<hr />');
-      i += 1;
-      continue;
-    }
-
-    if (!line.trim()) {
-      i += 1;
-      continue;
-    }
-
-    const buf = [line];
-    i += 1;
-    while (
-      i < lines.length &&
-      lines[i].trim() &&
-      !/^(#{1,6}\s|```|\s*\||\s*([-*]|\d+\.)\s|>|---+$)/.test(lines[i])
-    ) {
-      buf.push(lines[i++]);
-    }
-    out.push(`<p>${inline(buf.join(' '), relPath)}</p>`);
-  }
-
-  return out.join('\n');
 }
 
 /**
@@ -412,48 +189,6 @@ function mermaidBlock(relPath, index, source, attachments) {
     `<ac:rich-text-body>${codeMacro('text', source)}</ac:rich-text-body>` +
     `</ac:structured-macro>`
   );
-}
-
-/**
- * Upload a file as a page attachment.
- *
- * `POST .../child/attachment` creates; it rejects a duplicate filename, so on conflict the
- * existing attachment's id is looked up and its data replaced. Without that second path,
- * re-running the publisher would fail on every page that already has diagrams — which would
- * make the whole thing single-use.
- */
-async function upload(pageId, filename, absPath) {
-  const body = new FormData();
-  body.append('file', new Blob([readFileSync(absPath)], { type: 'image/png' }), filename);
-  body.append('minorEdit', 'true');
-
-  const post = await fetch(`${BASE}/rest/api/content/${pageId}/child/attachment`, {
-    method: 'POST',
-    headers: { Authorization: auth, 'X-Atlassian-Token': 'no-check' },
-    body,
-  });
-  if (post.ok) return 'created';
-
-  const list = await api(
-    `/rest/api/content/${pageId}/child/attachment?filename=${encodeURIComponent(filename)}`,
-  );
-  const existing = list.results?.[0];
-  if (!existing) throw new Error(`upload ${filename}: ${post.status} and no existing attachment`);
-
-  const again = new FormData();
-  again.append('file', new Blob([readFileSync(absPath)], { type: 'image/png' }), filename);
-  again.append('minorEdit', 'true');
-  const put = await fetch(
-    `${BASE}/rest/api/content/${pageId}/child/attachment/${existing.id}/data`,
-    {
-      method: 'POST',
-      headers: { Authorization: auth, 'X-Atlassian-Token': 'no-check' },
-      body: again,
-    },
-  );
-  if (!put.ok)
-    throw new Error(`replace ${filename}: ${put.status} ${(await put.text()).slice(0, 200)}`);
-  return 'replaced';
 }
 
 /* ----------------------------------------------------------------------- publishing ---- */
@@ -555,7 +290,7 @@ if (dryRun) {
     const md = readFileSync(join(DOCS, p.file), 'utf8');
     const fm = frontmatter(md);
     const atts = [];
-    const storage = toStorage(md, p.file, atts);
+    const storage = pageStorage(md, p.file, atts);
     total += storage.length;
     const missing = atts.filter((a) => a.missing).length;
     console.log(
@@ -602,14 +337,20 @@ for (const p of pages) {
 
   try {
     const atts = [];
-    const storage = toStorage(md, p.file, atts);
+    const storage = pageStorage(md, p.file, atts);
     const r = await upsert(fm.title, storage, parentId, sid);
     results.push({ ...p, ...r, title: fm.title });
 
     let note = '';
     const renderable = atts.filter((a) => !a.missing);
     for (const a of renderable) {
-      const how = await upload(r.id, a.filename, a.path);
+      const how = await uploadAttachment({
+        base: BASE,
+        auth,
+        pageId: r.id,
+        filename: a.filename,
+        absPath: a.path,
+      });
       uploaded += 1;
       void how;
     }

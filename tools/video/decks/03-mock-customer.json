@@ -18,7 +18,7 @@
             {
               "series": "adfhx",
               "title": "Our brand, not yours",
-              "text": "\"Acme Content\" in the header and the browser tab, and our navy in the navigation. **Layer 0** — a JSON edit and a reload."
+              "text": "\"Acme Content\" in the header and the browser tab, and our navy in the navigation. **Layer 0** — a bootstrap fragment and a reload."
             },
             {
               "series": "ours",
@@ -41,12 +41,12 @@
     },
     {
       "eyebrow": "Step 1 — Layer 0",
-      "title": "The rebrand is a JSON file",
-      "lede": "No rebuild, no redeploy of the application bundle. Edit, reload, done — and it survives the next marketplace upgrade because it sits beside the bundle rather than in it.",
+      "title": "The rebrand is a JSON fragment",
+      "lede": "No rebuild, no redeploy of the application bundle. A bootstrap fragment in Acme's own configuration package, reload, done — and it survives the next marketplace upgrade because that package is theirs, not part of ours.",
       "blocks": [
         {
           "type": "code",
-          "code": "<span class=\"c\">// public/agentic-ui-config/bootstrap.json</span>\n{\n  \"branding\": {\n    \"applicationTitle\": <b>\"Acme Content\"</b>,\n    \"documentTitle\":    <b>\"Acme Content\"</b>\n  },\n  \"defaultThemeId\": <b>\"acme\"</b>,\n  \"themes\": [{\n    \"id\": \"acme\", \"label\": \"Acme\", \"base\": \"nuxeo\",\n    \"tokens\": {\n      <b>\"--shell-nav-bg\"</b>:     \"#0f2b46\",   <span class=\"c\">// Acme navy</span>\n      <b>\"--shell-nav-fg\"</b>:     \"#eef4fb\",\n      <b>\"--shell-nav-active\"</b>: \"#1f6feb\"\n    }\n  }]\n}"
+          "code": "<span class=\"c\">// Acme's bootstrap fragment, in their configuration package</span>\n{\n  \"branding\": {\n    \"applicationTitle\": <b>\"Acme Content\"</b>,\n    \"documentTitle\":    <b>\"Acme Content\"</b>\n  },\n  \"defaultThemeId\": <b>\"acme\"</b>,\n  \"themes\": [{\n    \"id\": \"acme\", \"label\": \"Acme\", \"base\": \"nuxeo\",\n    \"tokens\": {\n      <b>\"--shell-nav-bg\"</b>:     \"#0f2b46\",   <span class=\"c\">// Acme navy</span>\n      <b>\"--shell-nav-fg\"</b>:     \"#eef4fb\",\n      <b>\"--shell-nav-active\"</b>: \"#1f6feb\"\n    }\n  }]\n}"
         }
       ],
       "footnote": "The nav carries its own foreground token deliberately. Without it, a customer darkening the navigation background would render dark text on a dark background — a rebrand must not be able to make navigation unreadable from JSON alone. The Phase 4 evidence asserts a luminance gap after the rebrand."
@@ -80,7 +80,7 @@
       "blocks": [
         {
           "type": "code",
-          "code": "<span class=\"c\">// The Nuxeo config document — no rebuild, no deploy</span>\n{\n  \"extensions\": {\n    \"overrides\": {\n      <span class=\"c\">// Rename Acme's own entry and move it to the top</span>\n      \"acme.navbar.acmeExtensions\": { <b>\"label\"</b>: \"Contracts\", <b>\"order\"</b>: 5 }\n    },\n    \"slots\": {\n      <span class=\"c\">// Or place Acme's panel in a drawer instead of on a route</span>\n      \"sidebar\": [{\n        \"id\": \"acme.sidebar.contracts\", \"label\": \"Contracts\",\n        <b>\"component\"</b>: \"acme.panel.acmeExtensions\", \"order\": 10\n      }]\n    }\n  }\n}"
+          "code": "<span class=\"c\">// Acme's manifest fragment, in their configuration package — no rebuild</span>\n{\n  \"extensions\": {\n    \"overrides\": {\n      <span class=\"c\">// Rename Acme's own entry and move it to the top</span>\n      \"acme.navbar.acmeExtensions\": { <b>\"label\"</b>: \"Contracts\", <b>\"order\"</b>: 5 }\n    },\n    \"slots\": {\n      <span class=\"c\">// Or place Acme's panel in a drawer instead of on a route</span>\n      \"sidebar\": [{\n        \"id\": \"acme.sidebar.contracts\", \"label\": \"Contracts\",\n        <b>\"component\"</b>: \"acme.panel.acmeExtensions\", \"order\": 10\n      }]\n    }\n  }\n}"
         }
       ],
       "footnote": "This is the payoff of IDs being the contract. The code says *what exists*; configuration says *where it appears and when* — and the two can be changed by different people, at different times, with different permissions."
@@ -104,7 +104,7 @@
         {
           "type": "banner",
           "tone": "good",
-          "text": "Acme changed the brand from a JSON file, added a rule-gated section and a panel from their own npm library, and their administrators can still move both from the manifest. Our libraries are byte-for-byte unchanged, so next quarter's upgrade is a version bump."
+          "text": "Acme changed the brand from a bootstrap fragment, added a rule-gated section and a panel from their own npm library, and their administrators can still move both from the manifest. Our libraries are byte-for-byte unchanged, so next quarter's upgrade is a version bump."
         }
       ],
       "footnote": "Still honest about what is not proven: the platform has never been published to a registry, and no test resolves its ten peer dependencies from a clean install. The first real publish will be tagged `alpha` for exactly that reason."

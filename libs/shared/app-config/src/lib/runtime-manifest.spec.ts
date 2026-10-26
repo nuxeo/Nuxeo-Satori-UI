@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  DEFAULT_APP_RUNTIME_MANIFEST,
-  mergeRuntimeManifest,
-  parseRuntimeManifest,
-} from './runtime-manifest';
+import { DEFAULT_APP_RUNTIME_MANIFEST, mergeRuntimeManifest } from './runtime-manifest';
 
 describe('mergeRuntimeManifest', () => {
   it('returns the defaults for an empty manifest', () => {
@@ -80,6 +76,17 @@ describe('mergeRuntimeManifest', () => {
     expect(mergeRuntimeManifest(withItems, { navItems: [] }).navItems).toHaveLength(0);
   });
 
+  it("keeps each fragment's extensions as its own layer, in order", () => {
+    const merged = [
+      { extensions: { overrides: { a: 1 } } },
+      { labels: { x: 'y' } },
+      { extensions: { overrides: { b: 2 } } },
+      { extensions: 'not an object' },
+    ].reduce(mergeRuntimeManifest, DEFAULT_APP_RUNTIME_MANIFEST);
+
+    expect(merged.extensionLayers).toEqual([{ overrides: { a: 1 } }, { overrides: { b: 2 } }]);
+  });
+
   // Error paths.
   it.each([
     ['null', null],
@@ -101,28 +108,5 @@ describe('mergeRuntimeManifest', () => {
     });
 
     expect(manifest).toEqual(DEFAULT_APP_RUNTIME_MANIFEST);
-  });
-});
-
-describe('parseRuntimeManifest', () => {
-  it('parses JSON held in a document property', () => {
-    const manifest = parseRuntimeManifest('{"version":2,"labels":{"a":"b"}}');
-    expect(manifest?.version).toBe(2);
-    expect(manifest?.labels).toEqual({ a: 'b' });
-  });
-
-  // Error paths: every one of these is a normal state for a fresh install.
-  it.each([
-    ['the property is absent', undefined],
-    ['the property is null', null],
-    ['the property is empty', '   '],
-    ['the property is not a string', { version: 2 }],
-    ['the JSON is malformed', '{"version": '],
-  ])('returns null when %s', (_label, raw) => {
-    expect(parseRuntimeManifest(raw)).toBeNull();
-  });
-
-  it('returns the defaults for valid JSON that is not an object', () => {
-    expect(parseRuntimeManifest('"just a string"')).toEqual(DEFAULT_APP_RUNTIME_MANIFEST);
   });
 });

@@ -1,14 +1,14 @@
 import { provideZonelessChangeDetection } from '@angular/core';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   ActivatedRoute,
   convertToParamMap,
   provideRouter,
   withDisabledInitialNavigation,
 } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+// TranslateModule removed - no longer exported in ngx-translate 18
 import { of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -18,7 +18,7 @@ import {
   DirectoryService,
   DocumentDetailService,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { CollectionDetailComponent } from './collection-detail';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
@@ -68,6 +68,7 @@ const mockCollectionService = {
 
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument | null> => of(null)),
+  getDocumentPermissions: vi.fn((): Observable<NuxeoDocument> => of({} as NuxeoDocument)),
   fetchThumbnail: vi.fn((): Observable<Blob | null> => of(null)),
 };
 
@@ -98,8 +99,11 @@ describe('CollectionDetailComponent — unresolved collection', () => {
         { provide: CollectionService, useValue: mockCollectionService },
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: DirectoryService, useValue: mockDirectoryService },
+        {
+          provide: AppConfigService,
+          useValue: { featureToggle: (_id: string, fallback: boolean) => fallback },
+        },
         { provide: MatDialog, useValue: { open: vi.fn() } },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     }).compileComponents();
 

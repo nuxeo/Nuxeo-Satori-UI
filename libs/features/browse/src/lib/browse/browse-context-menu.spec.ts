@@ -1,20 +1,19 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+// TranslateModule removed - no longer exported in ngx-translate 18
 import { EMPTY, of } from 'rxjs';
 import { vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   EXTENSION_SLOTS,
   PACKAGED_BROWSE_CONTEXT_MENU,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   BrowseService,
   DirectoryService,
@@ -22,7 +21,7 @@ import {
   SelectionService,
   TagService,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { BrowseComponent } from './browse';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
@@ -64,7 +63,7 @@ const mockBrowseService = {
   updateDocument: vi.fn(() => of(folder)),
 };
 
-const manifest = signal<{ extensions?: unknown }>({});
+const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
 
 /**
  * The `contextMenu` slot, asserted against the rendered overlay.
@@ -78,14 +77,14 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
   let fixture: ComponentFixture<BrowseComponent>;
 
   async function render(extensions: unknown): Promise<void> {
-    manifest.set({ extensions });
+    manifest.set({ extensionLayers: [extensions] });
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       imports: [BrowseComponent, testTranslateModule()],
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: BrowseService, useValue: mockBrowseService },
         {
@@ -123,7 +122,6 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
             forgetPreviews: vi.fn(),
           },
         },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
         {
           provide: MatDialog,
           useValue: { open: vi.fn(() => ({ afterClosed: () => of(false) })) },
@@ -144,8 +142,8 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
     // nothing is on screen until the trigger is used.
     const trigger = fixture.nativeElement.querySelector(
       '[aria-label="More actions"]',
-    ) as HTMLElement;
-    trigger.click();
+    ) as HTMLElement | null;
+    trigger?.click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -178,7 +176,7 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
       '[data-action-id="acme.contextMenu.escalate"]',
     ) as HTMLElement;
     expect(item.textContent).toContain('Escalate');
-    expect(item.textContent).toContain('flag');
+    expect(item.querySelector('mat-icon')?.getAttribute('data-mat-icon-name')).toBe('flag');
   });
 
   /**
@@ -210,5 +208,31 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
       '[data-action-id="app.contextMenu.subscribe"]',
     ) as HTMLElement;
     expect(subscribe.textContent).toContain('Watch this folder');
+  });
+
+  it('runs the chosen entry’s descriptor', async () => {
+    await render({});
+    const run = vi.spyOn(fixture.componentInstance, 'runContextMenuAction');
+
+    (
+      document.body.querySelector('[data-action-id="app.contextMenu.export"]') as HTMLElement
+    ).click();
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0][0].id).toBe('app.contextMenu.export');
+  });
+
+  it('renders no trigger when the manifest hides every entry', async () => {
+    await render({
+      overrides: {
+        'app.contextMenu.share': { visible: false },
+        'app.contextMenu.subscribe': { visible: false },
+        'app.contextMenu.unsubscribe': { visible: false },
+        'app.contextMenu.export': { visible: false },
+      },
+    });
+
+    expect(fixture.nativeElement.querySelector('[aria-label="More actions"]')).toBeNull();
+    expect(menuActionIds()).toEqual([]);
   });
 });

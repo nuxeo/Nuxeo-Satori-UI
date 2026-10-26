@@ -1,0 +1,22 @@
+{
+  "$schema": "../../schema/bootstrap.schema.json",
+  "branding": {
+    "applicationTitle": <%- JSON.stringify(title) %>,
+    "documentTitle": <%- JSON.stringify(title) %>
+  }<% if (presales) { %>,
+  "presales": {
+    "presetSwitching": true,
+    "presets": {
+      "example": {
+        "label": "Example customer",
+        "bootstrap": {
+          "branding": {
+            "applicationTitle": "Example customer",
+            "documentTitle": "Example customer"
+          }
+        },
+        "manifest": { "labels": { "nav.item.collections": "Cases" } }
+      }
+    }
+  }<% } %>
+}

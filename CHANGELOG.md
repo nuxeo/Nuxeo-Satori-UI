@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+`@nuxeo-satori/platform` is versioned `0.2.0` from here (`libs/platform/package.json`, previously
+`0.1.0`). This section holds breaking changes made since `0.1.0`, and `^0.1.0` admits only `0.1.x`,
+so the next publish has to be a minor. Nothing has been published yet.
+
+### Changed — BREAKING (registered IDs) — one Browse entry again
+
+The adf-hx proof of concept is removed, with its two routes and its navigation entry.
+
+- **`app.navbar.browseAdfHx` is retired.** An `overrides` key naming it now addresses nothing. A
+  `navbar` slot entry naming it no longer patches a packaged entry, so it becomes an entry of its
+  own — with no path or label unless it gives them, which renders a blank item: delete it. Its
+  label key, `nav.item.browse-adf-hx`, is on no entry any more: move a `labels` entry for it to
+  `nav.item.browse`.
+- **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the adf-hx entry read
+  "Browse". A manifest that restated it with `"disabled": false` to get both entries can drop that;
+  it is now redundant, not harmful.
+- **Old links redirect.** `/#/browse-adf-hx` and `/#/search-adf-hx` go to `/browse` and `/search`
+  with their query string intact, and a `?path=` folder opens in `/browse`.
+
+### Removed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`) — the adf-hx browse URL helpers
+
+They built, recognised and parsed `/browse-adf-hx` URLs, and chose between that route and
+`/browse` for document detail's way back. With the route retired, all seven go:
+`toAdfHxBrowseRouterUrl`, `isAdfHxBrowseRouterUrl`, `parseAdfHxBrowsePathFromRouterUrl`,
+`toBrowseRouterUrlForReturnMode`, `parseBrowseReturnMode`, `BrowseReturnMode` and
+`BROWSE_RETURN_MODE_PARAM`. Use `toBrowseRouterUrl`, `isBrowseRouterUrl` and
+`parseBrowseNuxeoPathFromRouterUrl`. Document detail no longer reads `?browseReturn=`; an old link
+carrying it opens normally, with breadcrumbs into `/browse`.
+
+### Changed (`@nuxeo-satori/platform`) — `@hylandsoftware/satori-ui` is an optional peer
+
+- **`@hylandsoftware/satori-ui` is now an optional peer** (`peerDependenciesMeta`). npm installs
+  every non-optional peer, and Satori resolves only from GitHub Packages, so installing the package
+  without a token failed with `E404` on public npm. Only the new `/components-satori` entry point
+  imports Satori; install it, with GitHub Packages access, only if you import that entry point.
+  `npm run beta:installable` installs the built tarball from public npm with no credentials.
+
+### Added (`@nuxeo-satori/platform/components`, `@nuxeo-satori/platform/components-satori`)
+
+- `nxs-avatar`, `nxs-breadcrumbs`, `nxs-tag` and `nxs-rich-tooltip` on Material, registered as
+  `nxs.primitives.avatar`, `.breadcrumbs`, `.tag` and `.richTooltip` by `provideNxsComponents()`,
+  with their input contracts (`NxsAvatarInputs` and the rest) and `NXS_PRIMITIVE_IDS`.
+- A new entry point, `@nuxeo-satori/platform/components-satori`, whose
+  `provideNxsSatoriComponents()` re-registers the same four IDs on Satori. List it after
+  `provideNxsComponents()`; later registrations win.
+
+### Added (`@nuxeo-satori/platform/components`) — search
+
+- `nxs-search-filters`, Web UI's search form over `default_search`, which edits `NxsSearchFilters`
+  and takes the server's `aggregations` for its counts; with `nxsSearchFiltersToQuery`,
+  `nxsSearchFiltersToSavedParams`, `nxsSearchFiltersFromParams` and `nxsSearchFiltersToRecord` to
+  convert the filters.
+- `nxs-saved-search-select`, the saved searches a page provider lists, and
+  `nxs-saved-search-actions`, which offers Save, Rename, Share and Delete only with `WriteProperties`
+  on the saved search, as Web UI does.
+
+### Fixed (`@nuxeo-satori/platform/nuxeo-client`) — search
+
+- `SearchService.search` sends a collection on `ecm_collections`. It sent the collection id on
+  `dc_coverage_agg` too, which the server applied as a coverage filter, so a collection search
+  returned nothing. `moreThan1YearAgo`, which the server ignored, is sent as `priorToLastYear`;
+  the page is no longer filtered again client-side; dashes in the full text become spaces, as in Web
+  UI; and a list parameter may be a JSON array, which keeps a value containing a comma whole.
+- `SearchService.getSavedSearchById` returns a list parameter as JSON rather than comma-joined.
+- Added `SearchService.getTagSuggestions` (`Tag.Suggestion`) and `renameSavedSearch`, which keeps
+  the stored filters.
+
+### Removed (`@nuxeo-satori/platform`) — a peer dependency
+
+- **`@alfresco/adf-extensions` is no longer a peer dependency.** The extension engine used three of
+  its functions — `filterEnabled`, `sortByOrder` and `mergeObjects` — and now has its own, pinned
+  case by case to the output 9.0.0 produced (`extension-element.spec.ts` and
+  `extension-merge.spec.ts` in `libs/shared/extensions`). No export changes. A consumer no longer
+  has to install the package, and can remove it unless its own code imports it.
+
+### Fixed (`@nuxeo-satori/platform/extensions`)
+
+- Two extension layers that set the same key to `null` and to an object, in either order, no
+  longer break every slot. The `$references` merge (`mergeExtensionConfigs`) threw `TypeError`
+  there — so `"rule": null` after a nested rule, or any `order` after `"order": null`, made every
+  slot's `resolve()` rethrow — and now the later layer's value is used.
+- A `__proto__` key in an extension layer — a slot id, an override id, or any key the merge
+  reaches — is ignored instead of replacing an object's prototype, and an entry whose `id` is
+  `__proto__` or names an `Object.prototype` member (`constructor`, `toString`) merges by id like
+  any other.
+
 ### Changed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`)
 
 Four exported functions gained a **required** `locale: string` parameter. Each previously
@@ -39,6 +125,22 @@ private readonly locale = inject(LOCALE_ID);
 - `permissionRightLabel(permission, translate)` — maps a Nuxeo permission identifier to its
   display label, replacing three hardcoded English `Record<string, string>` copies. Unknown
   permissions (for example from a marketplace package) still render their raw Nuxeo name.
+
+### Added (`@nuxeo-satori/platform` generators)
+
+- `generators/config-package/create.mjs` scaffolds a configuration package with Node 20 alone —
+  no install, no Nx, no registry token (NXSAT-312). In a clone of this repository:
+  `node tools/satori-generators/src/config-package/create.mjs acme-config --owner=acme`. It writes
+  the same files as the `config-package` generator, byte for byte, which `create.spec.ts` checks.
+
+### Changed (`@nuxeo-satori/platform` generators)
+
+- The `config-package` generator no longer runs Prettier over what it writes, so its output no
+  longer depends on the workspace's Prettier configuration or on the title (Prettier rewrote
+  `*Claims*` as `_Claims_`). Its templates are stored as Prettier formatted them, so the only file
+  formatted differently is `project.json`, now as Nx serialises it, one array item per line. The
+  generated README builds with `node build.mjs`, and its table no longer names the component file.
+  A `.gitignore` keeps the `dist/` that `node build.mjs` writes inside the package out of git.
 
 ### Fixed
 

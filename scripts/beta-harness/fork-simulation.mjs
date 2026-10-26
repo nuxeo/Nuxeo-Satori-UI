@@ -4,7 +4,7 @@
  *
  * ## The gap this closes
  *
- * Every app in this workspace resolves `@nuxeo-satori/platform/*` through
+ * Every app in this workspace resolves `@nuxeo/satori-platform/*` through
  * `tsconfig.base.json` paths, straight to the sources under `libs/shared`. That is right for the
  * inner loop, and it means the template's green build proves the template compiles
  * against **our source tree** — which is not what a customer has. A customer has the

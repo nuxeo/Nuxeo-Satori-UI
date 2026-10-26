@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
@@ -14,7 +14,7 @@ describe('BrowseService', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: NUXEO_API_ORIGIN, useValue: '' },
       ],
@@ -91,6 +91,41 @@ describe('BrowseService', () => {
     const result = await result$;
     expect(result.entries.map((e) => e.uid)).toEqual(['d1', 'd2', 'd3']);
     expect(result.totalSize).toBe(3);
+  });
+
+  it('getByPath asks for the breadcrumb enricher, so a trail has its ancestors’ titles', async () => {
+    const result$ = firstValueFrom(service.getByPath('/default-domain/workspaces'));
+
+    const req = httpMock.expectOne(
+      (r) => r.url === '/nuxeo/api/v1/path/default-domain/workspaces' && r.method === 'GET',
+    );
+    expect((req.request.headers.get('enrichers.document') ?? '').split(',')).toContain(
+      'breadcrumb',
+    );
+    req.flush({
+      uid: 'wsr',
+      title: 'Workspaces',
+      type: 'WorkspaceRoot',
+      path: '/default-domain/workspaces',
+      lastModified: '2026-01-01T00:00:00.000Z',
+      properties: {},
+      contextParameters: {
+        breadcrumb: {
+          entries: [
+            {
+              uid: 'dom',
+              title: 'Domain',
+              type: 'Domain',
+              path: '/default-domain',
+              lastModified: '2026-01-01T00:00:00.000Z',
+              properties: {},
+            },
+          ],
+        },
+      },
+    });
+
+    expect((await result$).contextParameters?.breadcrumb?.entries?.[0].title).toBe('Domain');
   });
 
   it('getRepositoryRoot returns the root document when path access succeeds', async () => {
@@ -458,7 +493,7 @@ describe('BrowseService', () => {
     });
   });
 
-  describe('a domain listing, which keeps only folders', () => {
+  describe('a domain listing, which lists every child, as Nuxeo Web UI’s domain view does', () => {
     const domain = {
       uid: 'dom-uid',
       title: 'Domain',
@@ -499,42 +534,40 @@ describe('BrowseService', () => {
         });
     }
 
-    it('counts the folders it shows, not every child Nuxeo counted', async () => {
-      // Nuxeo counted five children; three are folders. Passing its 5 through beside three rows
-      // is what showed "1–3 of 5" in the adf-hx pager.
+    it('lists the files beside the folders, with Nuxeo’s own count', async () => {
+      // Keeping only the folders after Nuxeo had paged the children left a page short, or empty
+      // where files came first; Web UI's domain view (advanced_document_content) lists them all.
       const result$ = firstValueFrom(service.getBrowseFolderContents('/default-domain'));
       flushDomain({ isNextPageAvailable: false });
 
       const result = await result$;
-      expect(result.entries.map((e) => e.uid)).toEqual(['sections', 'templates', 'workspaces']);
-      expect(result.totalSize).toBe(3);
+      expect(result.entries.map((e) => e.uid)).toEqual([
+        'sections',
+        'templates',
+        'workspaces',
+        'tour.pdf',
+        'csx.pdf',
+      ]);
+      expect(result.totalSize).toBe(5);
+      expect(result.hasNextPage).toBe(false);
     });
 
-    it('reports the total as unknown when Nuxeo has more pages to filter', async () => {
+    it('reports more to come, with no total, when Nuxeo has another page and did not count', async () => {
       const result$ = firstValueFrom(service.getBrowseFolderContents('/default-domain'));
-      flushDomain({ isNextPageAvailable: true });
+      flushDomain({ isNextPageAvailable: true, totalSize: -2, resultsCount: -2 });
 
       const result = await result$;
-      expect(result.entries).toHaveLength(3);
+      expect(result.entries).toHaveLength(5);
       expect(result.totalSize).toBeLessThan(0);
       expect(result.hasNextPage).toBe(true);
     });
 
-    it('keeps a count Nuxeo declined to compute unknown, even without a next page', async () => {
-      const result$ = firstValueFrom(service.getBrowseFolderContents('/default-domain'));
-      flushDomain({ isNextPageAvailable: false, resultsCount: -2 });
-
-      const result = await result$;
-      expect(result.entries).toHaveLength(3);
-      expect(result.totalSize).toBeLessThan(0);
-    });
-
-    it('keeps the total unknown when Nuxeo reports neither the next-page flag nor a count', async () => {
+    it('keeps the total unknown when Nuxeo reports no count at all', async () => {
       const result$ = firstValueFrom(service.getBrowseFolderContents('/default-domain'));
       flushDomain({ totalSize: undefined, resultsCount: undefined });
 
       const result = await result$;
-      expect(result.entries).toHaveLength(3);
+      expect(result.entries).toHaveLength(5);
       expect(result.totalSize).toBeLessThan(0);
     });
   });
@@ -626,6 +659,41 @@ describe('BrowseService', () => {
     expect(result.folder.title).toBe('user readonly');
     expect(result.entries).toHaveLength(1);
     expect(result.entries[0].title).toBe('My Favorites');
+  });
+
+  it.each([403, 404, 500])(
+    'getBrowseFolderContents keeps Nuxeo’s %i when a folder below the root fails to load',
+    async (status) => {
+      const result$ = firstValueFrom(service.getBrowseFolderContents('/default-domain/private'));
+
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/path/default-domain/private')
+        .flush('refused', { status, statusText: 'refused' });
+
+      await expect(result$).rejects.toMatchObject({ status });
+      httpMock.expectNone((r) => r.url.includes('@children'));
+    },
+  );
+
+  it('getBrowseFolderContents keeps the status when the folder loads but its children fail', async () => {
+    const result$ = firstValueFrom(
+      service.getBrowseFolderContents('/default-domain/workspaces/ws'),
+    );
+
+    httpMock
+      .expectOne((r) => r.url === '/nuxeo/api/v1/path/default-domain/workspaces/ws')
+      .flush({
+        uid: 'ws-uid',
+        title: 'ws',
+        type: 'Workspace',
+        path: '/default-domain/workspaces/ws',
+        properties: {},
+      });
+    httpMock
+      .expectOne((r) => r.url === '/nuxeo/api/v1/path/default-domain/workspaces/ws/@children')
+      .flush('refused', { status: 403, statusText: 'Forbidden' });
+
+    await expect(result$).rejects.toMatchObject({ status: 403 });
   });
 
   it('getNavTreeChildren loads user workspace children via @children (Favorites + Collections)', async () => {

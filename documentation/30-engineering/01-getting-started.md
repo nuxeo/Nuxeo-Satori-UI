@@ -2,14 +2,19 @@
 title: Developer Getting Started
 parent: Engineering
 order: 1
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Developer Getting Started — zero to productive
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-14 at `d36176c` (`feature/nxsat-308-remove-adf-packages`):
+> Only the registry guidance (the token row and install snippet, `.npmrc` and the `E404` row) was re-verified at that commit,
+> for NXSAT-637; the gate guidance (the lockfile trap) on 2026-10-08 at `fb97d44`; the rest of the
+> page was last reviewed on 2026-08-24 at `77265f9`.
 
 The goal of this page is that you reach a running application, a green gate and your first
 commit **without asking anyone**. If you get stuck on something not covered here, that is
@@ -27,7 +32,7 @@ Budget about two hours, most of which is Docker pulling Nuxeo.
 | npm                        | 10.x (ships with Node 20)         | The lockfile is `lockfileVersion` 3                                                                                            |
 | Docker + Docker Compose    | any current                       | Runs Nuxeo, OpenSearch, and optionally ARender and Mailpit                                                                     |
 | Java + Maven               | 17+, Maven 3.9+                   | Only if you need to build the marketplace package ([`pom.xml`](../../pom.xml))                                                 |
-| `SATORI_GH_READONLY_TOKEN` | a GitHub PAT with `read:packages` | Required to install `@hylandsoftware` **and** `@alfresco` packages                                                             |
+| `SATORI_GH_READONLY_TOKEN` | a GitHub PAT with `read:packages` | Required to install the `@hylandsoftware` packages                                                                             |
 
 ### The Node version will bite you
 
@@ -55,7 +60,7 @@ and exists precisely because this cost someone a day.
 ```bash
 git clone <repo-url> agentic-ui-poc
 cd agentic-ui-poc
-export SATORI_GH_READONLY_TOKEN=<your-pat>   # needs read:packages on Hyland AND Alfresco
+export SATORI_GH_READONLY_TOKEN=<your-pat>   # needs read:packages on the Hyland org
 npm ci
 ```
 
@@ -82,12 +87,9 @@ looks at the pruned Linux subtree and passes.
 
 ### Why `.npmrc` matters and is not enough
 
-[`.npmrc`](../../.npmrc) maps both `@alfresco` and `@hylandsoftware` to GitHub Packages.
-All four Alfresco packages we need download from there, verified twice by fetching the
-tarballs with only that mapping present.
-
-**Do not repoint `@alfresco` at public npm.** `@alfresco/adf-hx-content-services` is
-GitHub-Packages-exclusive and the adf-hx work would break.
+[`.npmrc`](../../.npmrc) maps `@hylandsoftware` to GitHub Packages, where
+`@hylandsoftware/satori-ui` and the fonts, icons and tokens it depends on are published. The
+`@alfresco` mapping went in NXSAT-637 with the last `@alfresco` package.
 
 And note: `npm ci` installs from each lock entry's `resolved` URL and **ignores** the
 registry mapping. If you change a scope's registry you must regenerate the lock, or CI
@@ -151,12 +153,17 @@ than hitting :8080 directly.
 
 Credentials come from the environment only — never hardcoded, never in a URL query string.
 That rule is enforced by `checkHardcodedSecrets` in
-[`scripts/review-guardrails.mjs`](../../scripts/review-guardrails.mjs).
+[`scripts/review-guardrails.mjs`](../../scripts/review-guardrails.mjs). For the Nuxeo pair,
+`checkNoNuxeoCredentialDefaults` fails the common shapes of a read defaulted to a literal under
+`scripts/`, `tools/` and `a11y/` — a fallback to another variable or a command is not one.
+`NUXEO_USER` and `NUXEO_PASS` have **no default**: a harness, preflight or tool that talks to
+Nuxeo refuses to run without them, and a steps or scenes file that needs no backend opts out with
+`skipHttpCredentials = true`.
 
 | Variable                              | Default                         | Used by                                                          |
 | ------------------------------------- | ------------------------------- | ---------------------------------------------------------------- |
-| `NUXEO_USER`                          | `Administrator`                 | Evidence harness, E2E, preflights                                |
-| `NUXEO_PASS`                          | `Administrator`                 | as above                                                         |
+| `NUXEO_USER`                          | — (required)                    | Evidence harness, E2E, preflights                                |
+| `NUXEO_PASS`                          | — (required)                    | as above                                                         |
 | `SATORI_GH_READONLY_TOKEN`            | —                               | `npm ci`, CI package installs                                    |
 | `E2E_BASE_URL`                        | `http://localhost:4200`         | E2E suite                                                        |
 | `AGENTIC_UI_EVIDENCE_DIR`             | `~/Desktop/agentic-ui-evidence` | Where evidence is written                                        |
@@ -191,8 +198,8 @@ exists.
 1. **`test` does not typecheck.** Vitest strips types through esbuild. Only `build` and
    `typecheck` catch a TypeScript error, and they run late. A green `test` is not type
    safety.
-2. **Nothing except the `lockfile` gate reads `package-lock.json`.** CI was red for the
-   whole of Phase 2 while every local gate was green.
+2. **Nothing except the `lockfile` gate checks that `package-lock.json` will install.** CI
+   was red for the whole of Phase 2 while every local gate was green.
 
 ### The E2E suite needs the live stack
 
@@ -253,7 +260,8 @@ From [`CLAUDE.md`](../../CLAUDE.md), each one enforced or hard-won:
 - Never cross-feature imports — shared logic goes in `libs/shared/`. Enforced by real
   `depConstraints` in [`eslint.config.mjs`](../../eslint.config.mjs); **an untagged project
   cannot depend on anything**, so a new library needs `scope:` and `type:` tags
-- adf-hx types must never appear in our public API — wrap them in `adf-hx-bridge`
+- adf-hx types must never appear in our public API — nothing imports adf-hx since its bridge was
+  removed with the POC routes (NXSAT-635); do not reintroduce it
 - Anything a customer might want to change goes through Layer 0 or 1, not a hardcoded value
 
 ---
@@ -288,7 +296,7 @@ From [`CLAUDE.md`](../../CLAUDE.md), each one enforced or hard-won:
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SecurityError` on `localStorage` in specs                            | Node 22+ shadows jsdom's `localStorage`                                                                | Use Node 20, or run via `npm run beta:gate`                                                                                                                                        |
 | `npm ci` fails on CI, green locally                                   | A bare `npm install` pruned Linux-only optional entries                                                | Restore a known-good lock, merge new entries only                                                                                                                                  |
-| `E404` installing `@alfresco/*`                                       | `SATORI_GH_READONLY_TOKEN` missing or lacks `read:packages` on the **Alfresco** org                    | Token needs both orgs, not just Hyland                                                                                                                                             |
+| `E404` installing `@hylandsoftware/*`                                 | `SATORI_GH_READONLY_TOKEN` missing or lacks `read:packages` on the **Hyland** org                      | Set the token; it needs `read:packages` on the Hyland org                                                                                                                          |
 | `NG0201: No provider for …` after adopting an adf-hx component        | Upstream services are `providedIn: 'root'` and resolve ports from the root injector                    | Provide the port in the **root** injector, not on the component. See the long comment in [`apps/nuxeo-ui/src/app/app.config.ts:37`](../../apps/nuxeo-ui/src/app/app.config.ts#L37) |
 | adf-hx components render raw keys like `MANAGE_VERSIONS.DIALOG.TITLE` | An i18n catalogue is missing from the bundle; the loader catches the 404 and returns `{}` **silently** | `npm run beta:bundle` — it asserts the catalogues are present _and non-empty_                                                                                                      |
 | HTTP 500 from an `AI.*` operation                                     | The AI backend is a **separate marketplace package not in this repo**                                  | Expected, not a client defect. See [Runtime AI Features](10-runtime-ai-features.md)                                                                                                |

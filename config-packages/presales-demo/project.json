@@ -1,0 +1,18 @@
+{
+  "name": "presales-demo",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "tags": ["scope:customer", "type:config"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["{projectRoot}/**/*"],
+      "outputs": ["{workspaceRoot}/dist/config-packages/presales-demo"],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "node config-packages/presales-demo/build.mjs --out dist/config-packages/presales-demo"
+      }
+    }
+  }
+}

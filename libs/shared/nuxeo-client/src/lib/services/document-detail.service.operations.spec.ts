@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -29,7 +29,7 @@ describe('DocumentDetailService', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: NUXEO_API_ORIGIN, useValue: '' },
         { provide: CURRENT_USERNAME, useValue: () => 'satori-admin' },
@@ -63,6 +63,19 @@ describe('DocumentDetailService', () => {
       }
       req.flush(doc());
       expect((await pending).uid).toBe('doc-1');
+    });
+
+    it('asks for the lock, which Nuxeo otherwise leaves out of the response', async () => {
+      // Without `fetch-document: lock` a locked document arrives with no `lockOwner` and
+      // no `lockCreated`, and every page reading it shows the document as unlocked.
+      const pending = firstValueFrom(service.getFullDocument('doc-1'));
+      const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1');
+      expect(req.request.headers.get('fetch-document')).toBe('lock');
+      req.flush(doc({ lockOwner: 'alice', lockCreated: '2026-10-09T06:27:22.039Z' }));
+      expect(await pending).toMatchObject({
+        lockOwner: 'alice',
+        lockCreated: '2026-10-09T06:27:22.039Z',
+      });
     });
 
     it('propagates a 404 rather than emitting an empty document', async () => {
@@ -176,6 +189,8 @@ describe('DocumentDetailService', () => {
       expect(query).toContain('ecm:proxyVersionableId = "doc-1"');
       // Newest first, and version-ordered within a day.
       expect(req.request.params.get('sortOrder')).toBe('desc,desc,desc');
+      // Unpublish and Republish are gated on each proxy's own WriteVersion.
+      expect(req.request.headers.get('enrichers.document')).toBe('permissions');
       req.flush({ entries: [], resultsCount: 0 });
       await pending;
     });
@@ -341,6 +356,22 @@ describe('DocumentDetailService', () => {
       });
     }
 
+    it('asks for the lock on Lock, so the caller learns the owner and date the server recorded', async () => {
+      const pending = firstValueFrom(service.lockDocument('doc-1'));
+      const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1/@op/Document.Lock');
+      expect(req.request.headers.get('fetch-document')).toBe('lock');
+      req.flush(doc({ lockOwner: 'satori-admin', lockCreated: '2026-10-09T06:27:22.039Z' }));
+      expect(await pending).toMatchObject({ lockOwner: 'satori-admin' });
+    });
+
+    it('asks for the lock on Unlock too, so the response says the lock is gone', async () => {
+      const pending = firstValueFrom(service.unlockDocument('doc-1'));
+      const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1/@op/Document.Unlock');
+      expect(req.request.headers.get('fetch-document')).toBe('lock');
+      req.flush(doc({ lockOwner: null, lockCreated: null }));
+      expect(await pending).toMatchObject({ lockOwner: null });
+    });
+
     it('subscribes with the default notification set', async () => {
       const pending = firstValueFrom(service.subscribe('doc-1'));
       const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1/@op/Document.Subscribe');
@@ -403,10 +434,13 @@ describe('DocumentDetailService', () => {
       await pending;
     });
 
-    it('checks the document out when restoring a version, so it stays editable', async () => {
+    it('restores a version checked in, not checked out', async () => {
+      // NXSAT-332. `checkout: true` left the restored document reading `0.2+` — unversioned
+      // changes the user never made — where Web UI leaves it at the restored `0.1`. It stays
+      // editable either way: Nuxeo checks a checked-in document out on its next save.
       const pending = firstValueFrom(service.restoreVersion('ver-1'));
       const req = httpMock.expectOne('/nuxeo/api/v1/id/ver-1/@op/Document.RestoreVersion');
-      expect(req.request.body.params).toEqual({ checkout: true });
+      expect(req.request.body.params).toEqual({ checkout: false });
       req.flush(doc());
       await pending;
     });
@@ -580,6 +614,40 @@ describe('DocumentDetailService', () => {
       expect(req.request.body.params.acl).toBe('inherited');
       req.flush(doc());
       await pending;
+    });
+
+    it('removePermissionById addresses one ACE by id and sends no user', async () => {
+      // With `user`, Nuxeo removes every ACE that principal holds; only `id` removes one.
+      const pending = firstValueFrom(
+        service.removePermissionById('doc-1', 'jdoe:WriteVersion:true:Administrator::'),
+      );
+      const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1/@op/Document.RemovePermission');
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body.params).toEqual({
+        id: 'jdoe:WriteVersion:true:Administrator::',
+        acl: 'local',
+      });
+      req.flush(doc());
+      await pending;
+    });
+
+    it('removePermissionById honours an explicit acl name', async () => {
+      const pending = firstValueFrom(service.removePermissionById('doc-1', 'ace-1', 'custom'));
+      const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1/@op/Document.RemovePermission');
+      expect(req.request.body.params.acl).toBe('custom');
+      req.flush(doc());
+      await pending;
+    });
+
+    it('removePermissionById surfaces the server refusal', async () => {
+      const pending = firstValueFrom(service.removePermissionById('doc-1', 'ace-1'));
+      httpMock
+        .expectOne('/nuxeo/api/v1/id/doc-1/@op/Document.RemovePermission')
+        .flush(
+          { status: 403, message: "Privilege 'WriteSecurity' is not granted to 'jdoe'" },
+          { status: 403, statusText: 'Forbidden' },
+        );
+      await expect(pending).rejects.toMatchObject({ status: 403 });
     });
 
     it('replacePermission seeds an empty users array before the caller params', async () => {
@@ -1163,6 +1231,61 @@ describe('DocumentDetailService', () => {
         .expectOne('/nuxeo/api/v1/automation/UserGroup.Suggestion')
         .flush({}, { status: 500, statusText: 'Server Error' });
       await expect(pending).rejects.toBeDefined();
+    });
+  });
+
+  describe('getAuditLog', () => {
+    it('asks for one page and nothing else when there is no query', () => {
+      service.getAuditLog('doc-1', 20, 2).subscribe();
+      const req = httpMock.expectOne((r) => r.url === '/nuxeo/api/v1/id/doc-1/@audit');
+      expect(req.request.method).toBe('GET');
+      expect(req.request.params.keys().sort()).toEqual(['currentPageIndex', 'pageSize']);
+      expect(req.request.params.get('pageSize')).toBe('20');
+      expect(req.request.params.get('currentPageIndex')).toBe('2');
+      req.flush({ entries: [], resultsCount: 0 });
+    });
+
+    it('sends the filters and the sort to the server, as Web UI’s audit search does', () => {
+      service
+        .getAuditLog('doc-1', 20, 0, {
+          principalName: '  jdoe ',
+          eventIds: ['documentModified', 'documentLocked'],
+          eventCategory: 'eventDocumentCategory',
+          startDate: new Date('2026-10-12T18:30:00.000Z'),
+          endDate: new Date('2026-10-13T18:30:00.000Z'),
+          sortBy: 'principalName',
+          sortOrder: 'asc',
+        })
+        .subscribe();
+      const req = httpMock.expectOne((r) => r.url === '/nuxeo/api/v1/id/doc-1/@audit');
+      expect(req.request.params.get('principalName')).toBe('jdoe');
+      expect(req.request.params.getAll('eventId')).toEqual(['documentModified', 'documentLocked']);
+      expect(req.request.params.get('eventCategory')).toBe('eventDocumentCategory');
+      expect(req.request.params.get('startEventDate')).toBe('2026-10-12T18:30:00.000Z');
+      expect(req.request.params.get('endEventDate')).toBe('2026-10-13T18:30:00.000Z');
+      expect(req.request.params.get('sortBy')).toBe('principalName');
+      expect(req.request.params.get('sortOrder')).toBe('asc');
+      req.flush({ entries: [], resultsCount: 0 });
+    });
+
+    it('leaves out a blank user and sorts newest first by default', () => {
+      service
+        .getAuditLog('doc-1', 20, 0, { principalName: '   ', sortBy: 'eventDate' })
+        .subscribe();
+      const req = httpMock.expectOne((r) => r.url === '/nuxeo/api/v1/id/doc-1/@audit');
+      expect(req.request.params.has('principalName')).toBe(false);
+      expect(req.request.params.get('sortOrder')).toBe('desc');
+      req.flush({ entries: [], resultsCount: 0 });
+    });
+
+    it('passes a refusal through to the caller', async () => {
+      const pending = firstValueFrom(service.getAuditLog('doc-1')).catch(
+        (err: { status: number }) => err.status,
+      );
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/id/doc-1/@audit')
+        .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+      expect(await pending).toBe(403);
     });
   });
 

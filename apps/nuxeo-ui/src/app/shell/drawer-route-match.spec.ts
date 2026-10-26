@@ -7,7 +7,7 @@ function item(path: string, hasDrawer: boolean): AppNavItem {
 
 const NAV_ITEMS: readonly AppNavItem[] = [
   item('/browse', true),
-  item('/browse-adf-hx', true),
+  item('/browse-archive', true),
   item('/search', false),
 ];
 
@@ -21,10 +21,12 @@ describe('drawerItemForPath', () => {
   });
 
   it('does not match a sibling route that merely shares a prefix', () => {
-    // The regression this guards: a bare `startsWith` gave `/browse-adf-hx` the `/browse`
-    // drawer, because the two routes differ only by suffix.
-    expect(drawerItemForPath(NAV_ITEMS, '/browse-adf-hx')?.path).toBe('/browse-adf-hx');
-    expect(drawerItemForPath(NAV_ITEMS, '/browse-adf-hx/some-folder')?.path).toBe('/browse-adf-hx');
+    // The regression this guards: a bare `startsWith` gave the retired `/browse-adf-hx` the
+    // `/browse` drawer, because the two routes differed only by suffix.
+    expect(drawerItemForPath(NAV_ITEMS, '/browse-archive')?.path).toBe('/browse-archive');
+    expect(drawerItemForPath(NAV_ITEMS, '/browse-archive/some-folder')?.path).toBe(
+      '/browse-archive',
+    );
   });
 
   it('returns null for a route whose nav item has no drawer', () => {

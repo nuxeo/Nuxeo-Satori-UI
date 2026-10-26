@@ -1,0 +1,227 @@
+@if (loading()) {
+  <div class="nxs-document-list__state">
+    <nxs-spinner diameter="36" [label]="'satori-components.document-list.loading' | translate" />
+  </div>
+} @else if (error(); as status) {
+  <nxs-error-state
+    [status]="status"
+    [heading]="status === 500 ? errorHeading() : ''"
+    [headingLevel]="stateHeadingLevel()"
+    retryable
+    (retry)="retry.emit()"
+  />
+} @else if (documents().length === 0) {
+  <!-- An empty page past the first is not an empty folder: the pager says there is nothing more. -->
+  @if (pageIndex() === 0) {
+    <nxs-empty-state
+      icon="folder_open"
+      [heading]="emptyHeading().trim() || ('satori-components.document-list.empty' | translate)"
+      [message]="emptyMessage()"
+      [headingLevel]="stateHeadingLevel()"
+    />
+  }
+} @else {
+  <span class="cdk-visually-hidden" [id]="hintId">{{
+    (selectable()
+      ? 'satori-components.document-list.keyboard-hint'
+      : 'satori-components.document-list.keyboard-hint-no-selection'
+    ) | translate
+  }}</span>
+  <div class="nxs-document-list__scroller">
+    <table
+      mat-table
+      class="nxs-document-list__table"
+      [dataSource]="documents()"
+      matSort
+      [matSortActive]="matSortActive()"
+      [matSortDirection]="matSortDirection()"
+      (matSortChange)="onSortChange($event)"
+      [attr.aria-label]="label()"
+      [attr.aria-rowcount]="rowCount()"
+    >
+      <ng-container [matColumnDef]="selectColumn">
+        <th mat-header-cell *matHeaderCellDef class="nxs-document-list__select">
+          <span class="cdk-visually-hidden">{{
+            'satori-components.document-list.selection' | translate
+          }}</span>
+          <mat-checkbox
+            [checked]="allOnPageSelected()"
+            [indeterminate]="someOnPageSelected()"
+            [aria-label]="'satori-components.document-list.select-page' | translate"
+            (change)="onSelectPage($event)"
+          />
+        </th>
+        <td mat-cell *matCellDef="let doc; let i = index" class="nxs-document-list__select">
+          <mat-checkbox
+            [checked]="isSelected(doc)"
+            [tabIndex]="-1"
+            [aria-label]="
+              'satori-components.document-list.select' | translate: { name: accessibleName(doc) }
+            "
+            (mousedown)="noteModifiers($event)"
+            (keydown)="noteModifiers($event)"
+            (change)="onCheckboxChange($event, i)"
+          />
+        </td>
+      </ng-container>
+
+      @for (column of sortableColumns(); track column.key) {
+        <ng-container [matColumnDef]="column.key">
+          <th
+            mat-header-cell
+            *matHeaderCellDef
+            mat-sort-header
+            [sortActionDescription]="
+              'satori-components.document-list.sort-by' | translate: { column: column.label }
+            "
+          >
+            {{ column.label }}
+          </th>
+          <td mat-cell *matCellDef="let doc; let i = index">
+            <ng-container
+              *ngTemplateOutlet="cell; context: { $implicit: doc, key: column.key, index: i }"
+            />
+          </td>
+        </ng-container>
+      }
+
+      @for (column of plainColumns(); track column.key) {
+        <ng-container [matColumnDef]="column.key">
+          <th mat-header-cell *matHeaderCellDef>{{ column.label }}</th>
+          <td mat-cell *matCellDef="let doc; let i = index">
+            <ng-container
+              *ngTemplateOutlet="cell; context: { $implicit: doc, key: column.key, index: i }"
+            />
+          </td>
+        </ng-container>
+      }
+
+      <ng-container [matColumnDef]="actionsColumn">
+        <th mat-header-cell *matHeaderCellDef class="nxs-document-list__actions">
+          <span class="cdk-visually-hidden">{{
+            'satori-components.document-list.actions' | translate
+          }}</span>
+        </th>
+        <td mat-cell *matCellDef="let doc" class="nxs-document-list__actions">
+          @let entries = actionsFor(doc);
+          @if (entries.length > 0) {
+            <nxs-action-menu
+              [actions]="entries"
+              [label]="
+                'satori-components.document-list.row-actions'
+                  | translate: { name: accessibleName(doc) }
+              "
+              (selected)="onRowAction($event, doc)"
+            />
+          }
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns()" aria-rowindex="1"></tr>
+      <tr
+        mat-row
+        *matRowDef="let doc; columns: displayedColumns(); let i = index"
+        class="nxs-document-list__row"
+        [class.nxs-document-list__row--selected]="isSelected(doc)"
+        [class.nxs-document-list__row--folder]="isFolder(doc)"
+        [attr.data-row]="i"
+        [attr.data-uid]="doc.uid"
+        [attr.tabindex]="i === activeIndex() ? 0 : -1"
+        [attr.aria-label]="accessibleName(doc)"
+        [attr.aria-selected]="selectable() ? isSelected(doc) : null"
+        [attr.aria-rowindex]="rowIndex(i)"
+        [attr.aria-describedby]="hintId"
+        (focusin)="onRowFocusIn(i)"
+        (click)="onRowClick($event, doc, i)"
+        (keydown)="onRowKeydown($event, doc, i)"
+      ></tr>
+    </table>
+  </div>
+}
+
+@if (!error()) {
+  <nxs-pager
+    [pageIndex]="pageIndex()"
+    [pageSize]="pageSize()"
+    [itemCount]="documents().length"
+    [totalSize]="totalSize()"
+    [hasNextPage]="hasNextPage()"
+    [disabled]="loading()"
+    (pageChange)="onPageChange($event)"
+  />
+}
+
+@if (drop.over()) {
+  <div class="nxs-document-list__drop" aria-hidden="true">
+    <span class="nxs-document-list__drop-label">
+      {{ dropLabel().trim() || ('satori-components.document-list.drop' | translate) }}
+    </span>
+  </div>
+}
+
+<ng-template #cell let-doc let-key="key" let-i="index">
+  @switch (key) {
+    @case ('title') {
+      <span class="nxs-document-list__title">
+        <ng-template #typeIcon>
+          <mat-icon
+            class="nxs-document-list__icon"
+            [class.nxs-document-list__icon--folder]="isFolder(doc)"
+            aria-hidden="true"
+            [svgIcon]="icon(doc)"
+          />
+        </ng-template>
+        @if (hasThumbnail(doc)) {
+          <nxs-thumbnail class="nxs-document-list__thumb" [documentId]="doc.uid">
+            <ng-container *ngTemplateOutlet="typeIcon" />
+          </nxs-thumbnail>
+        } @else {
+          <ng-container *ngTemplateOutlet="typeIcon" />
+        }
+        <button
+          type="button"
+          class="nxs-document-list__open"
+          tabindex="-1"
+          [attr.title]="doc.path"
+          (click)="onOpenClick($event, doc, i)"
+        >
+          {{ rowName(doc) }}
+        </button>
+      </span>
+    }
+    @case ('type') {
+      @let typeLabel = doc.type | docTypeLabel;
+      <lib-extension-outlet
+        #tagOutlet
+        [componentId]="tagId"
+        [componentInputs]="{ label: typeLabel, color: 'blue' }"
+      />
+      @if (tagOutlet.unresolved()) {
+        <nxs-tag [label]="typeLabel" color="blue" />
+      }
+    }
+    @case ('modified') {
+      {{ doc.lastModified | date: 'mediumDate' }}
+    }
+    @case ('created') {
+      {{ createdDate(doc) | date: 'mediumDate' }}
+    }
+    @case ('lastContributor') {
+      @let person = contributor(doc);
+      <span class="nxs-document-list__person">
+        <lib-extension-outlet
+          #avatarOutlet
+          [componentId]="avatarId"
+          [componentInputs]="{ initials: initials(person), color: avatarColor(person), size: '24' }"
+        />
+        @if (avatarOutlet.unresolved()) {
+          <nxs-avatar [initials]="initials(person)" [color]="avatarColor(person)" size="24" />
+        }
+        <span>{{ person }}</span>
+      </span>
+    }
+    @default {
+      {{ cellText(doc, key) }}
+    }
+  }
+</ng-template>

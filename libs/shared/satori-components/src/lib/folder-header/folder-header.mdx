@@ -1,0 +1,74 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as FolderHeaderStories from './folder-header.stories';
+
+<Meta of={FolderHeaderStories} name="Overview" />
+
+# Folder header
+
+The folder header sits above a folder's — or any container's — contents. It shows the container's
+type icon, its title as the page heading, an optional second line, and the container's actions on
+the right. Use it at the top of a page that lists what a container holds.
+
+## Key features
+
+- **Title as the page heading.** The title is a native heading, level one by default.
+- **Type icon.** `documentType` picks the icon from the same table as the document type icon.
+- **Your actions.** Buttons and menus placed inside the component appear on the right, and their
+  handlers stay yours.
+- **A detail line.** Anything marked with the `nxsFolderHeaderDetail` attribute — a breadcrumb trail,
+  say — appears under the title.
+- **Narrow screens.** On a narrow screen the actions move below the title.
+- **Loading.** Leave `heading` blank while the container loads; the header then shows no heading
+  rather than an empty one.
+
+## Demo showcase
+
+<Canvas of={FolderHeaderStories.WithActions} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsFolderHeaderComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-folder-header [heading]="title()" [subheading]="typeName()" [documentType]="type()">
+  <nxs-breadcrumbs
+    nxsFolderHeaderDetail
+    [items]="trail()"
+    [label]="'acme.breadcrumbs' | translate"
+  />
+  <button mat-stroked-button type="button" (click)="share()">{{ 'acme.share' | translate }}</button>
+</nxs-folder-header>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+Every input is optional. Pass text already translated. Used directly, the folder header needs no
+providers.
+
+## Examples
+
+### With a detail line
+
+<Canvas of={FolderHeaderStories.WithDetail} />
+
+### Loading
+
+With a blank `heading`, `subheading` and `documentType`, only the actions show.
+
+<Canvas of={FolderHeaderStories.Loading} />
+
+## Accessibility
+
+- **Heading.** The title is a native `<h1>` by default. Lower `headingLevel` where the header sits
+  inside a section that already has a heading, so heading navigation stays in order.
+- **No empty heading.** A blank `heading` renders no heading element at all.
+- **Icon.** The type icon is decorative; the title and subheading say what the container is.
+- **Actions.** Give every icon-only button its own accessible name, as the "More actions" button in
+  the demo has. **Tab** reaches the actions in the order you place them.

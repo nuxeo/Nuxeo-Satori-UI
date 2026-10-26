@@ -1,9 +1,9 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { NuxeoAce, DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoAce, DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 
 export interface DeletePermissionDialogData {
@@ -18,6 +18,7 @@ export interface DeletePermissionDialogData {
   standalone: true,
   imports: [TranslatePipe, MatDialogModule, MatButtonModule, MatProgressSpinnerModule],
   templateUrl: './delete-permission-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

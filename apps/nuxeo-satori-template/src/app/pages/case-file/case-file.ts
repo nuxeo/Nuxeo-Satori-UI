@@ -1,4 +1,11 @@
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
@@ -10,7 +17,7 @@ import {
   trustObjectUrl,
   type NuxeoDocument,
   type SearchResultItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   DocumentViewerComponent,
   ExportDialogComponent,
@@ -20,7 +27,7 @@ import {
   type ExportDialogData,
   type ExportType,
   type ShareDialogData,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 
 import {
   formatBytes,
@@ -76,6 +83,7 @@ type ListState =
   standalone: true,
   imports: [WidgetGridComponent, WidgetContainerComponent, DocumentViewerComponent],
   templateUrl: './case-file.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './case-file.scss',
 })
 export class CaseFileComponent {

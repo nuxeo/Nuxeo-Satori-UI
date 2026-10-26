@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { catchError, from, map, of, startWith, switchMap } from 'rxjs';
@@ -8,7 +8,7 @@ import {
   DocumentDetailService,
   parentNuxeoFolderPath,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { formatBytes, formatTimestamp, mainBlob, stringProperty } from './document-fields';
 
@@ -37,6 +37,7 @@ type DetailState =
   standalone: true,
   imports: [RouterLink],
   templateUrl: './document-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './document-detail.scss',
 })
 export class DocumentDetailComponent {

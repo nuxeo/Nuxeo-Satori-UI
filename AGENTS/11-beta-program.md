@@ -16,6 +16,10 @@ permissions, versions, upload and CRUD — built on real `adf-hx` components and
 made customisable through a four-layer extensibility contract. Workflow, users
 and groups, administration and publishing are **out of scope for Beta**.
 
+_Changed by NXSAT-308 (2026-10):_ the slice is now built on our own `nxs-` components in
+`libs/shared/satori-components`. adf-hx, ADF and the adf-hx POC routes were removed
+(NXSAT-635, NXSAT-636, NXSAT-637); the four-layer contract is unchanged.
+
 The governing principle: **the extension contract is the product; AI agents are
 the accelerator.** Customers customise through a documented, versioned API. They
 do not edit our source, and neither do their agents.
@@ -42,6 +46,13 @@ be faked in configuration.
 These were established by first-hand inspection of the published artifact.
 Treat them as settled; if you contradict one, prove it first.
 
+_Changed by NXSAT-635 to NXSAT-638 (2026-10):_ adf-hx and ADF are no longer in the
+product. NXSAT-635 removed the `/#/browse-adf-hx` and `/#/search-adf-hx` POC routes and
+`libs/shared/adf-hx-bridge` (the API ports, `ADF_HX_NUXEO_BRIDGE_PROVIDERS` and its `providers`
+entry point); NXSAT-637 removed the packages, and NXSAT-638 made the `dependency-tree` gate
+blocking, which keeps them out. The adf-hx facts below are kept as the record of what was established. Where one names the
+bridge, its providers or a POC route as present, that code no longer exists.
+
 - **CI runs on this branch and passes.** `ci.yml` triggers on `push` as well as on
   `pull_request`, so a long-lived feature branch is validated without a PR. Run
   32480243192 is `completed success` on Node 20. Two phase reviews disagreed about
@@ -55,6 +66,8 @@ Treat them as settled; if you contradict one, prove it first.
 - **Only a CI run is authoritative.** Local gates here run on Node 25 with a
   `--no-experimental-webstorage` workaround; the repo pins Node 20 and CI uses it.
   A local green is necessary, not sufficient.
+  _Changed by NXSAT-669 (2026-10):_ the pin is now Node 24, because Angular 22 refuses Node 20,
+  and CI runs Node 24. The rule itself stands: only the CI run is authoritative.
 
   **So check it, every time you push.** This rule was stated here and then broken over
   twenty consecutive pushes while "CI green" was reported from local gates alone; CI was
@@ -109,16 +122,17 @@ Treat them as settled; if you contradict one, prove it first.
   upstream's would put ACS types in the signature every customer rule is written
   against. Its domain-neutral parts — `mergeObjects`, `mergeArrays`,
   `filterEnabled`, `sortByOrder`, `getValue` — are used directly.
-- **One registry serves every `@alfresco` package we need.** `@alfresco:registry`
-  points at GitHub Packages, and all four — `adf-extensions`, `js-api`,
-  `adf-core` and `adf-hx-content-services` — download from it. Verified twice by
-  fetching the tarballs with only that mapping present. adf-extensions, adf-core
-  and js-api are _also_ on public npm, which makes a two-registry split look
-  necessary; it is not. **Do not repoint this scope at public npm** — adf-hx is
-  GitHub-Packages-exclusive and Phase 3 would break.
-- Because `@alfresco/adf-extensions` is now a production dependency, CI requires
-  `SATORI_GH_READONLY_TOKEN` to carry `read:packages` for the **Alfresco** org,
-  not only `@hylandsoftware`.
+- **~~One registry serves every `@alfresco` package we need~~ — superseded by
+  NXSAT-637**, which removed the last `@alfresco` package and the `@alfresco:registry`
+  line from `.npmrc`. True when written: `@alfresco:registry` pointed at GitHub
+  Packages, and all four — `adf-extensions`, `js-api`, `adf-core` and
+  `adf-hx-content-services` — downloaded from it, verified twice by fetching the
+  tarballs with only that mapping present. adf-extensions, adf-core and js-api were
+  _also_ on public npm, which made a two-registry split look necessary; it was not.
+- **~~CI requires the token to carry `read:packages` for the Alfresco org~~ —
+  superseded by NXSAT-637.** It did while `@alfresco/adf-extensions` was a production
+  dependency. With no `@alfresco` package left, `SATORI_GH_READONLY_TOKEN` needs
+  `read:packages` on the Hyland org only.
 - **`.npmrc` alone does not decide where CI fetches from — `package-lock.json`
   does.** `npm ci` installs from each entry's `resolved` URL and ignores the
   registry mapping. After changing a scope's registry you must regenerate the
@@ -142,7 +156,10 @@ Treat them as settled; if you contradict one, prove it first.
   `provide-app-extensions.ts` and resolved by **both** browse routes. As of NXSAT-316,
   nine slots and none reserved: `navbar`, `bulk-actions`, `documentList`, `toolbar`,
   `contextMenu` and `tabs` have packaged descriptors and a host; `sidebar`, `routes` and
-  `documentView` are resolved but have no packaged descriptor. The earlier "`routes`,
+  `documentView` are resolved but have no packaged descriptor. NXSAT-630 added three more,
+  one per layout mode, each resolved with no packaged descriptor: `documentMetadata`,
+  `documentEdit` and `documentCreate` — the last read only by the create form, which no
+  screen opens yet. The earlier "`routes`,
   `toolbar`, `contextMenu` and `tabs` are reserved" was stale long before that — each had
   gained a host. Do not describe a reserved id as an extension point — and do not
   trust this list either: `npm run beta:reference` checks every slot-state claim in
@@ -301,6 +318,9 @@ DocumentService`. The chain, read from the published bundle:
   and override `getTranslation`. Note the base declares a **private** `http`, so a
   subclass field of that name fails `TS2415`/`TS4114`. adf-core also fetches
   `assets/adf-core/i18n/<lang>.json`, which has to be added to the build's asset globs.
+  _Changed by NXSAT-636 (2026-10):_ with adf-core's wiring removed, `AppTranslateLoader` is a
+  plain `TranslateLoader` again and the adf-core asset glob is gone (W2 in
+  `docs/adf-hx-workarounds.md`).
 - **`nuxeo-ui` has no `typecheck` target, so the `typecheck` gate does not cover the
   app.** Two real `TS` errors in `app.config.ts`-adjacent app code passed
   `nx affected -t typecheck` and were caught only by `build`. This is the same trap as
@@ -311,11 +331,18 @@ DocumentService`. The chain, read from the published bundle:
     awaiting one. It must survive every adf-hx bump; the `bundle` gate goes red if the
     real library returns, and a future release importing a _different_ test helper shows
     up as a new fingerprint rather than as a silent regression.
+    _Changed by NXSAT-672 (2026-10):_ the new information is that adf-hx is gone (NXSAT-637,
+    held out by the blocking `dependency-tree` gate), so nothing imports `ng-mocks` and the stub
+    stood in for nothing. It was removed; the `bundle` gate stays and still fails on the real
+    library's fingerprints.
   - **`angular-oauth2-oidc` is kept**, unused, on the basis that it causes no issue
     today — `pdfjs-dist` tree-shakes out entirely, this does not. Not a blocker; revisit
     only if something breaks or the SCA position changes. `cropperjs` was kept on the same
     basis until NXSAT-290, which made it used: its stylesheet is a global style, because
     adf-core's image viewer renders every image twice without it.
+    _Changed by NXSAT-672 (2026-10):_ all three were removed. adf-core and its image viewer
+    left in NXSAT-637, so `cropperjs`'s global stylesheet styled nothing (no `cropper-` class in
+    any template or style), and no source imports `angular-oauth2-oidc` or `pdfjs-dist`.
   - **The initial-bundle cost of adf-hx is accepted.** It stopped being a deferrable
     question the moment the ports had to go in the root injector, so the budget was
     raised deliberately: `maximumWarning` 1.5 → 2.5 MB, `maximumError` 2.0 → 3.5 MB.
@@ -339,6 +366,10 @@ DocumentService`. The chain, read from the published bundle:
     first page load over a slow link. The alternatives, if the figure is ever refused,
     are trimming existing weight out of the startup bundle (real work, uncertain payoff)
     or not adopting adf-hx at all, which abandons the premise of the Beta.
+
+    _Changed by NXSAT-638 (2026-10):_ with adf-hx removed, the uncached production initial
+    bundle measured 2.96 MB, down from 4.07 MB on integration (PR #418). `maximumError` is back
+    at 4 MB; `maximumWarning` stays at 2.5 MB, which the build still exceeds.
 - **~~THE CURRENT PHASE 3 BLOCKER~~ RESOLVED — kept because the measurements are the fact.**
   A bundle-boundary problem, not a port problem, closed by the secondary entry point
   `@agentic-ui/shared/adf-hx-bridge/providers`.
@@ -358,6 +389,8 @@ DocumentService`. The chain, read from the published bundle:
   pull adf-hx into the initial bundle on purpose — `provideAdfHxNuxeoBridge()` in
   `app.config.ts` and `HxpBrowseNavDrawerComponent` in the shell nav drawer (see the guardrail
   allowlist in `scripts/review-guardrails.mjs`).
+  _Changed by NXSAT-635 (2026-10):_ the bridge, its `providers` entry point and the POC routes
+  are removed, so nothing in the shell imports adf-hx and none of this applies.
 - **Configuration is contributed by Marketplace packages and served by a servlet; the package
   installs no configuration file (NXSAT-312).** The `nuxeo-agentic-core` bundle declares
   `org.nuxeo.agentic.ui.config` with the extension point `configuration`
@@ -383,12 +416,16 @@ DocumentService`. The chain, read from the published bundle:
   under `nxserver/nuxeo.war`** — the Tomcat docBase for the `/nuxeo` context; `nxserver/web` is
   not a docBase. Everything served at `/nuxeo/agentic-ui-config/` is **anonymous**. Not
   rehearsed: the Admin Center / Update Center path, which runs the same package tasks.
-- **Configuration is loaded, not compiled.** `libs/shared/app-config` reads a
-  static bootstrap file pre-auth and a runtime manifest from the Nuxeo document
-  at `/default-domain/config/agentic-ui` post-auth. Eleven `InjectionToken`
-  factories resolve from it. Both loads are tolerant: a missing file, absent
-  document, 403 or malformed JSON falls back to the packaged defaults, and the
-  packaged defaults reproduce the pre-Phase-1 compiled values exactly.
+- **Configuration is loaded, not compiled.** `libs/shared/app-config` fetches
+  `agentic-ui-config/bootstrap.json` and `manifest.json` together, pre-auth,
+  from the configuration servlet, and folds their ordered fragments over the
+  packaged defaults. Eleven `InjectionToken` factories resolve from it. Both
+  loads are tolerant: a 404, an unreachable server or a response that is not
+  the `nuxeo-agentic-ui-config/1` envelope falls back to the packaged defaults,
+  and the packaged defaults reproduce the pre-Phase-1 compiled values exactly.
+  _Changed by NXSAT-312 (2026-10):_ until then the manifest was a Nuxeo Note at
+  `/default-domain/config/agentic-ui`, read post-auth; nothing reads it now, and
+  nothing is re-fetched on sign-in.
 - **Angular's hash routing hides configuration reloads from evidence captures.**
   `withHashLocation()` makes route changes same-document, so `page.goto('/#/x')`
   does not re-run `APP_INITIALIZER`. Any capture that changes configuration must
@@ -409,6 +446,12 @@ DocumentService`. The chain, read from the published bundle:
   `MANAGE_VERSIONS.DIALOG.TITLE` as its heading. Both adf-hx catalogues are now **seeded**
   alongside adf-core's in `SEEDED_FOLDERS`, and the `bundle` gate asserts all three ship.
   **Adopting a new adf-hx component means checking its keys resolve, not just that it renders.**
+  _Changed by NXSAT-636 (2026-10):_ the seeding is removed (W6); the loader's `UPSTREAM_FOLDERS`
+  holds satori-ui's catalogue alone.
+  _Changed by NXSAT-638 and NXSAT-697 (2026-10):_ the `bundle` gate asserts none of the three
+  catalogues; with adf-hx removed, none ships. Its `REQUIRED_FILES` are the two catalogues
+  `AppTranslateLoader` fetches at runtime, the app's `i18n/en.json` and satori-ui's
+  `assets/satori-ui/i18n/en.json`, each checked by a key the app renders (PR #419).
 - **`AsyncPipe` must be provided for any adf-hx component that renders a user.**
   `UserResolverPipe` calls `inject(AsyncPipe)` in its constructor and `AsyncPipe` carries no
   `providedIn`. Missing, it throws `NG0201` **while rendering** — the component's shell appears
@@ -570,7 +613,7 @@ completion is not completion; see section 6.
 ### The gates
 
 1. **Quality gate** — `npm run beta:gate -- --phase <id>` is green with
-   `verdict: "pass"`, **not** `pass-partial` (node, lockfile, guardrails,
+   `verdict: "pass"`, **not** `pass-partial` or `pass-incomplete` (node, lockfile, guardrails,
    assertions, affected lint, test, build, typecheck).
 2. **Evidence gate** — `npm run beta:evidence -- <id>` exits 0, meaning every
    step recorded at least one check and every check passed. Exit 2 is
@@ -638,15 +681,17 @@ and the evidence manifest are the only acceptable proof.
 
 Beyond the standing rules in `AGENTS.md`:
 
-- **adf-hx types never appear in our public API signatures.** Wrap them in
-  `libs/shared/adf-hx-bridge`. Their instability must not become the customer's.
-- **Pin exact adf-hx versions**, never a range or dist-tag.
+- **adf-hx types never appear in our public API signatures.** Their instability must not
+  become the customer's. Nothing imports adf-hx since the ADF removal (PR #418); the blocking
+  `dependency-tree` gate fails on any of the five ADF packages in the lockfile, the installed
+  tree, a manifest, `.npmrc` or an import. `libs/shared/adf-hx-bridge`, which wrapped them, was
+  removed by NXSAT-635.
+- ~~**Pin exact adf-hx versions**, never a range or dist-tag.~~ adf-hx is removed (NXSAT-637).
 - **Anything a customer might want to change goes through Layer 0 or 1.** No new
   hardcoded action lists, nav entries, or theme values.
 - **No configuration inside the packaged web directory.** It will be destroyed on
   upgrade.
-- **Every new service method gets a unit test including its error path.** The
-  bridge currently has 11 tests for 2,949 lines; do not add to that debt.
+- **Every new service method gets a unit test including its error path.**
 - **Credentials from the environment only**, per `AGENTS/07-security.md`.
 
 ---
@@ -659,6 +704,7 @@ Beyond the standing rules in `AGENTS.md`:
 | Verification gate       | `scripts/beta-harness/verify-gate.mjs`                      |
 | Node runtime preflight  | `scripts/beta-harness/node-version.mjs`                     |
 | Lockfile integrity gate | `scripts/beta-harness/lockfile-integrity.mjs`               |
+| Dependency-tree gate    | `scripts/beta-harness/dependency-tree.mjs` (blocking)       |
 | Assertion audit         | `scripts/beta-harness/assertion-audit.mjs`                  |
 | Coverage ratchet        | `scripts/beta-harness/coverage-gate.mjs`                    |
 | Phase state check       | `scripts/beta-harness/state-check.mjs`                      |
@@ -669,7 +715,8 @@ Beyond the standing rules in `AGENTS.md`:
 | Phase steps files       | `scripts/beta-harness/steps/<phase-id>.mjs`                 |
 | Evidence output         | `$AGENTIC_UI_EVIDENCE_DIR/beta/<phase-id>/<timestamp>/`     |
 | Gate reports            | `$AGENTIC_UI_EVIDENCE_DIR/beta/gates/`                      |
-| Bridge (adf-hx wrapper) | `libs/shared/adf-hx-bridge/`                                |
+| `nxs-` components       | `libs/shared/satori-components/`                            |
+| Retired-route redirects | `apps/nuxeo-ui/src/app/retired-routes.ts`                   |
 | Action plan             | `docs/adf-hx-poc-action-plan.md`                            |
 | Extension reference     | `docs/extension-reference.md`                               |
 | Extension registry      | `libs/shared/extensions/`                                   |

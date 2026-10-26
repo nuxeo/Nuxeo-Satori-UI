@@ -1,0 +1,151 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as BreadcrumbsStories from './breadcrumbs.stories';
+
+<Meta of={BreadcrumbsStories} name="Overview" />
+
+# Breadcrumbs
+
+Breadcrumbs show where the current page sits in a hierarchy, such as a document's folders, and let
+the user go back up it in one click. Use them at the top of a page whose location matters, under
+the page title.
+
+## Key features
+
+- **Three kinds of item.** An item with `routerLink` navigates inside the application, an item with
+  `href` is a plain link, and an item with neither is text.
+- **Current page.** When the last item is text, it is marked as the current page for assistive
+  technology.
+- **Navigation landmark.** The trail is a named `nav` region, so screen reader users can jump to
+  it.
+- **Folds when long.** It stays on one line. When the trail is wider than its box, the items after
+  the first fold into a "…" menu, furthest from the current page first. The first item stays while
+  it fits beside the "…" and the current page; in a box too narrow for that, it goes into the menu
+  too. The current page always stays, its name cut short rather than hidden. It unfolds again when
+  the box grows, and it measures the whole trail, so it also unfolds in a box sized by its content.
+- **Replaceable by ID.** It is registered as `nxs.primitives.breadcrumbs`, so Satori's breadcrumbs
+  or your own can take its place.
+
+## Demo showcase
+
+<Canvas of={BreadcrumbsStories.Trail} />
+
+## Usage
+
+export const usageTs = `import { NxsBreadcrumbsComponent, type NxsBreadcrumbItem } from '@nuxeo/satori-platform/components';
+
+protected readonly trail: NxsBreadcrumbItem[] = [
+  { label: 'Domain', routerLink: ['/browse'], queryParams: { path: '/default-domain' } },
+  {
+    label: 'Workspaces',
+    routerLink: ['/browse'],
+    queryParams: { path: '/default-domain/workspaces' },
+  },
+  { label: 'Contracts' },
+];`;
+
+<Source
+  language="typescript"
+  dark
+  code={usageTs}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-breadcrumbs [items]="trail" [label]="'acme.breadcrumbs' | translate" />`}
+/>
+
+Only `items` is required. An item with `routerLink` needs the Angular router, which an application
+already provides. Pass labels already translated.
+
+### By registered ID
+
+`provideNxsComponents()` registers the breadcrumbs as `nxs.primitives.breadcrumbs`, exported as
+`NXS_PRIMITIVE_IDS.breadcrumbs`. Render the ID with the same inputs:
+
+export const byRegisteredIdHtml = `<lib-extension-outlet
+  [componentId]="breadcrumbsId"
+  [componentInputs]="{ items: trail, label: 'Breadcrumbs' }"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={byRegisteredIdHtml}
+/>
+
+## Examples
+
+### Plain links
+
+Items with `href` render as ordinary links, for pages outside the application.
+
+<Canvas of={BreadcrumbsStories.PlainLinks} />
+
+### A single item
+
+<Canvas of={BreadcrumbsStories.SingleItem} />
+
+### A long trail
+
+In a box wide enough, every item shows on one line.
+
+<Canvas of={BreadcrumbsStories.LongTrail} />
+
+### A trail that does not fit
+
+In a 360-pixel box the middle folds into "…". Open it to reach the folders it holds.
+
+<Canvas of={BreadcrumbsStories.CollapsedTrail} />
+
+### Very narrow
+
+Only "…" and the current page remain: the first item is in the menu with the rest, and the page's
+name is cut short with "…" and shown in full on hover.
+
+<Canvas of={BreadcrumbsStories.VeryNarrow} />
+
+### By registered ID
+
+<Canvas of={BreadcrumbsStories.ByRegisteredId} />
+
+## Accessibility
+
+- **Landmark.** The trail is a `nav` element named by `label`. Give it a short name such as
+  "Breadcrumbs", translated. Without a label the landmark has no name.
+- **Structure.** The items are an ordered list, so a screen reader announces how many there are and
+  where each one sits.
+- **Current page.** A last item without a link has `aria-current="page"`.
+- **Separators.** The chevrons between items are hidden from assistive technology.
+- **Keyboard.** Every link is a native link: **Tab** reaches it and **Enter** follows it. Text items
+  are not focusable. The "…" button is reached the same way and opens a menu: **Up** and **Down**
+  move through the folded items, **Enter** follows one and **Escape** closes the menu.
+- **Folded items.** The "…" button is named "Show more breadcrumbs" (translated under
+  `satori-components.breadcrumbs.show-more`) and says it opens a menu. A folded item is still a link,
+  in the menu, so nothing on the trail is out of reach. A current page cut short keeps its full name
+  for assistive technology, and as a tooltip.
+
+## Satori and the built-in breadcrumbs
+
+The same ID, `nxs.primitives.breadcrumbs`, renders **Satori's breadcrumbs** when
+`@nuxeo/satori-platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
+after `provideNxsComponents()`. Otherwise it renders the **built-in breadcrumbs** shown on this page.
+Both take the same inputs.
+
+What looks and behaves differently:
+
+- **Long trails.** Both fold the middle of a trail that does not fit into a "…" menu. In a box of
+  about 110 pixels or less Satori's breadcrumbs hide every item, the current page included; the
+  built-in breadcrumbs keep the first item and the current page, its name cut short.
+- **Landmark name.** Both name the landmark from `label`. Without one, Satori's breadcrumbs use
+  Satori's own translation and the built-in breadcrumbs leave the landmark unnamed.
+- **Styling.** Satori's breadcrumbs use Satori's type, colours and chevron icon. The built-in
+  breadcrumbs use your Material theme.
+
+Satori's breadcrumbs need `provideSatori()` for their icon and Satori's translations loaded in
+ngx-translate; without the translations the "Show more breadcrumbs" button's name, and the
+landmark's name when `label` is blank, show as raw keys.
+
+This Storybook is built without access to GitHub Packages, so every example here shows the built-in
+breadcrumbs. Satori's breadcrumbs are shown in Satori's documentation.

@@ -4,6 +4,11 @@
   "projectType": "library",
   "root": "tools/satori-generators",
   "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": { "reportsDirectory": "coverage/tools/satori-generators" }
+    },
     "lint": {
       "executor": "@nx/eslint:lint",
       "$comment": "@nx/eslint/plugin infers a target named `eslint:lint`, which `nx affected -t lint` does NOT match \u2014 so neither the gate nor CI ever linted this project. An `nx.targets` block in package.json is not read for a package.json-inferred project, so the target is declared here instead."

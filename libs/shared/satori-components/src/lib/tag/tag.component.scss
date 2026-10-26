@@ -1,0 +1,74 @@
+// Each named colour is a hue the component binds on its host (`named-colors.ts`), tinted as the
+// avatar's are; `gray` keeps the theme's neutral container roles. `named-colors.spec.ts` holds
+// every pair at 4.5:1 or more.
+:host {
+  --nxs-tag-named-background: color-mix(
+    in srgb,
+    var(--nxs-named-hue) var(--nxs-named-background-mix),
+    var(--mat-sys-surface)
+  );
+  --nxs-tag-named-foreground: color-mix(
+    in srgb,
+    var(--nxs-named-hue) var(--nxs-named-foreground-mix),
+    var(--mat-sys-on-surface)
+  );
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  max-inline-size: 100%;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font: var(--mat-sys-label-medium);
+  background: var(--nxs-tag-background, var(--mat-sys-surface-container-high));
+  color: var(--nxs-tag-foreground, var(--mat-sys-on-surface-variant));
+}
+
+.nxs-tag__label {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+:host(.nxs-tag--gray) {
+  --nxs-tag-background: var(--nxs-tag-gray-background, var(--mat-sys-surface-container-high));
+  --nxs-tag-foreground: var(--nxs-tag-gray-foreground, var(--mat-sys-on-surface-variant));
+}
+
+:host(.nxs-tag--purple) {
+  --nxs-tag-background: var(--nxs-tag-purple-background, var(--nxs-tag-named-background));
+  --nxs-tag-foreground: var(--nxs-tag-purple-foreground, var(--nxs-tag-named-foreground));
+}
+
+:host(.nxs-tag--blue) {
+  --nxs-tag-background: var(--nxs-tag-blue-background, var(--nxs-tag-named-background));
+  --nxs-tag-foreground: var(--nxs-tag-blue-foreground, var(--nxs-tag-named-foreground));
+}
+
+:host(.nxs-tag--pink) {
+  --nxs-tag-background: var(--nxs-tag-pink-background, var(--nxs-tag-named-background));
+  --nxs-tag-foreground: var(--nxs-tag-pink-foreground, var(--nxs-tag-named-foreground));
+}
+
+:host(.nxs-tag--teal) {
+  --nxs-tag-background: var(--nxs-tag-teal-background, var(--nxs-tag-named-background));
+  --nxs-tag-foreground: var(--nxs-tag-teal-foreground, var(--nxs-tag-named-foreground));
+}
+
+:host(.nxs-tag--yellow) {
+  --nxs-tag-background: var(--nxs-tag-yellow-background, var(--nxs-tag-named-background));
+  --nxs-tag-foreground: var(--nxs-tag-yellow-foreground, var(--nxs-tag-named-foreground));
+}
+
+:host(.nxs-tag--green) {
+  --nxs-tag-background: var(--nxs-tag-green-background, var(--nxs-tag-named-background));
+  --nxs-tag-foreground: var(--nxs-tag-green-foreground, var(--nxs-tag-named-foreground));
+}
+
+:host(.nxs-tag--red) {
+  --nxs-tag-background: var(--nxs-tag-red-background, var(--nxs-tag-named-background));
+  --nxs-tag-foreground: var(--nxs-tag-red-foreground, var(--nxs-tag-named-foreground));
+}
+
+:host(.nxs-tag--orange) {
+  --nxs-tag-background: var(--nxs-tag-orange-background, var(--nxs-tag-named-background));
+  --nxs-tag-foreground: var(--nxs-tag-orange-foreground, var(--nxs-tag-named-foreground));
+}

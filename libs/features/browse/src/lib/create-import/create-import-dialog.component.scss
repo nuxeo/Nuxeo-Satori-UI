@@ -273,9 +273,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 .doctype-icon {
-  font-size: 32px;
-  width: 32px;
-  height: 32px;
+  --nxs-icon-size: 32px;
   color: var(--mat-sys-on-surface-variant, #4b5563);
 }
 
@@ -294,16 +292,16 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
   min-height: 0;
   padding-top: 24px;
 
-  .dropzone--import {
-    flex: 1 1 auto;
-    min-height: 320px;
-    margin: 0 24px 24px;
-    display: flex;
-    flex-direction: column;
+  .import-dropzone {
+    margin: 0 24px 16px;
+    min-height: 160px;
   }
 
-  .import-error--staged,
-  .upload-progress--staged {
+  .import-queue {
+    margin: 0 24px 16px;
+  }
+
+  .import-error--staged {
     margin: -8px 24px 16px;
   }
 }
@@ -389,96 +387,6 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
   color: var(--mat-sys-on-surface-variant, #6b7280);
   text-align: center;
   line-height: 1.5;
-}
-
-.import-staged-files {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
-}
-
-.import-staged-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  flex: 1 1 auto;
-  min-height: 0;
-  align-content: start;
-  overflow-y: auto;
-
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.import-staged-card {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 8px 12px 12px;
-  border: 1px solid var(--mat-sys-outline-variant, #e5e7eb);
-  border-radius: 4px;
-  background: var(--mat-sys-surface, #fff);
-  min-width: 0;
-}
-
-.import-staged-card__info {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.import-staged-card__name {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--mat-sys-on-surface, #1a1c1e);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.import-staged-card__size {
-  font-size: 0.8125rem;
-  color: var(--mat-sys-on-surface-variant, #6b7280);
-  white-space: nowrap;
-}
-
-.import-staged-card__remove {
-  flex-shrink: 0;
-}
-
-.import-add-more {
-  flex-shrink: 0;
-  margin-top: auto;
-  padding-top: 16px;
-  align-self: flex-start;
-  border: none;
-  background: none;
-  padding-left: 0;
-  padding-right: 0;
-  padding-bottom: 0;
-  font: inherit;
-  font-size: 0.875rem;
-  color: $primary-blue;
-  cursor: pointer;
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  &:hover:not(:disabled) {
-    text-decoration: underline;
-  }
 }
 
 .import-error--staged,
@@ -678,9 +586,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 .type-form-icon {
-  font-size: 22px;
-  width: 22px;
-  height: 22px;
+  --nxs-icon-size: 22px;
   color: var(--mat-sys-on-surface-variant, #4b5563);
 }
 
@@ -784,6 +690,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
   border-radius: 2px;
 
   &--complete {
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     ::ng-deep .mdc-linear-progress__bar-inner {
       border-color: var(--mat-sys-primary, #0066ff);
     }
@@ -807,6 +714,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 .vocab-field {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-select-trigger {
     height: auto;
     min-height: 24px;
@@ -822,12 +730,14 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
     box-sizing: border-box;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-chip-set .mdc-evolution-chip {
     margin: 2px 4px 2px 0;
   }
 }
 
 .expires-field-invalid {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mdc-notched-outline__leading,
   ::ng-deep .mdc-notched-outline__notch,
   ::ng-deep .mdc-notched-outline__trailing {
@@ -840,6 +750,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 // Mat-select panels render in a CDK overlay outside :host — use unscoped ::ng-deep.
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .mat-mdc-select-panel.vocab-select-panel {
   display: flex;
   flex-direction: column;
@@ -880,6 +791,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 ::ng-deep .vocab-grouped-select-panel {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-optgroup-label,
   .mat-mdc-optgroup .mdc-list-group__subheader {
     font-weight: 700;
@@ -894,12 +806,15 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 ::ng-deep .subjects-select-panel {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-option {
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     .mat-pseudo-checkbox,
     mat-pseudo-checkbox {
       display: none;
     }
 
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     .mdc-list-item__primary-text {
       margin-left: 0;
     }

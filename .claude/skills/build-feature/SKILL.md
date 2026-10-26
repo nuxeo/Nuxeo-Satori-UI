@@ -34,7 +34,7 @@ Do not re-derive these — follow `fix-bug` exactly:
 | ------------------------------------------ | ----------------------------------------------------------------------------------- |
 | Setup check                                | Same prerequisites, including Playwright in the primary checkout                    |
 | 1.5 Ticket workspace                       | Same script, same `--nuxeo shared` default                                          |
-| 5 Local gate (`beta:gate`) + 5a coverage   | Same 21 gates. Features add code, so coverage matters more                          |
+| 5 Local gate (`beta:gate`) + 5a coverage   | Same gates. Features add code, so coverage matters more                             |
 | 5b `validate-fix`                          | A new surface is a new accessibility surface                                        |
 | 6 Commit + PR                              | `feat(` not `fix(`, branch `feature/<desc>`                                         |
 | 7 CI + review loop · 7.5 Jira · 10 Cleanup | Identical, including looping the review to a zero round and publishing the analysis |
@@ -155,7 +155,8 @@ manifest wiring. Not "all the services, then all the components" — that leaves
 - The feature cannot be placed in a layer, or spans Layer 2 and our own source.
 - It needs a **new** public API on the platform package, or a new registered extension ID that
   is not obviously permanent — a registered ID is a published contract you cannot rename.
-- It needs an adf-hx type in a public signature (wrap it in `adf-hx-bridge`, or stop).
+- It needs an adf-hx type in a public signature (stop: nothing imports adf-hx since its bridge was
+  removed with the POC routes, NXSAT-635).
 - It touches `install.xml`, marketplace packaging, or customer-facing config inside the packaged
   web directory — `install.xml` copies that with `overwrite="true"` and destroys it on upgrade.
 - It would take more than a day and you cannot find slice boundaries.
@@ -172,8 +173,9 @@ manifest wiring. Not "all the services, then all the components" — that leaves
 - **Close each slice before opening the next**: its tests pass, `beta:gate --gates guardrails,lint`
   is green, nothing is left referencing something that does not exist yet.
 - **No new hardcoded action lists, nav entries or theme values.** Route them through Layer 0/1.
-- **adf-hx types must never appear in our public API** — wrap them in `adf-hx-bridge`. Pin exact
-  adf-hx versions, never a range or a dist-tag.
+- **adf-hx types must never appear in our public API** — nothing imports adf-hx since its bridge
+  was removed with the POC routes (NXSAT-635); do not reintroduce it. If adf-hx is ever
+  reintroduced, pin exact versions, never a range or a dist-tag.
 
 ### 4a — Demo capture _(overrides)_
 

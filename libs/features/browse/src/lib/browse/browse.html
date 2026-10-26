@@ -1,15 +1,11 @@
 <div class="browse-container">
   <!-- Header row: doc icon/title + actions -->
-  <div class="browse-header">
-    <div class="header-left">
-      @if (currentDoc(); as doc) {
-        <mat-icon class="header-doc-icon">{{ docIcon(doc) }}</mat-icon>
-        <div class="header-doc-info">
-          <div class="header-doc-title" role="heading" aria-level="1">{{ doc.title }}</div>
-          <span class="header-doc-type">{{ doc.type | docTypeLabel }}</span>
-        </div>
-      }
-    </div>
+  <nxs-folder-header
+    class="browse-header"
+    [heading]="currentDoc()?.title ?? ''"
+    [subheading]="currentDoc()?.type | docTypeLabel"
+    [documentType]="currentDoc()?.type ?? ''"
+  >
     <div class="header-actions">
       @if (canCreateContentHere()) {
         <button
@@ -19,7 +15,7 @@
           [disabled]="!isCurrentFolderish()"
           (click)="openCreateImportDialog()"
         >
-          <mat-icon>add</mat-icon>
+          <mat-icon svgIcon="plus_large" />
           {{ 'browse.browse.create-import' | translate }}
         </button>
       }
@@ -29,7 +25,7 @@
         [attr.aria-label]="'browse.browse.upload-with-nuxeo-drive' | translate"
         (click)="openDriveDialog()"
       >
-        <mat-icon>cloud_upload</mat-icon>
+        <mat-icon svgIcon="cloud_upload" />
       </button>
       @if (showHeaderEdit()) {
         <button
@@ -38,7 +34,7 @@
           [attr.aria-label]="'browse.browse.edit' | translate"
           (click)="openEditDialog()"
         >
-          <mat-icon>edit</mat-icon>
+          <mat-icon svgIcon="pencil" />
         </button>
       }
       @if (showHeaderDelete()) {
@@ -48,7 +44,7 @@
           [attr.aria-label]="'browse.browse.delete' | translate"
           (click)="deleteDocument()"
         >
-          <mat-icon>delete</mat-icon>
+          <mat-icon svgIcon="trash" />
         </button>
       }
       <button
@@ -57,45 +53,31 @@
         [attr.aria-label]="'browse.browse.download-all' | translate"
         (click)="downloadAll()"
       >
-        <mat-icon>download</mat-icon>
+        <mat-icon svgIcon="download" />
       </button>
-      <button
-        mat-icon-button
-        [matMenuTriggerFor]="moreMenu"
-        [matTooltip]="'browse.browse.more-actions' | translate"
-        [attr.aria-label]="'browse.browse.more-actions' | translate"
-      >
-        <mat-icon>more_vert</mat-icon>
-      </button>
-      <mat-menu #moreMenu="matMenu">
-        @for (action of contextMenuActions(); track action.id) {
-          <button
-            mat-menu-item
-            type="button"
-            [attr.data-action-id]="action.id"
-            [disabled]="!isContextMenuActionEnabled(action)"
-            (click)="runContextMenuAction(action)"
-          >
-            @if (action.icon) {
-              <mat-icon>{{ action.icon }}</mat-icon>
-            }
-            <span>{{ action | descriptorLabel }}</span>
-          </button>
-        }
-      </mat-menu>
+      <nxs-action-menu
+        [actions]="contextMenuItems()"
+        [label]="'browse.browse.more-actions' | translate"
+        (selected)="runContextMenuItem($event)"
+      />
     </div>
-  </div>
+  </nxs-folder-header>
 
   <!-- Breadcrumbs -->
   @if (showBreadcrumbs()) {
-    <sat-breadcrumbs [items]="breadcrumbs()" (click)="onBreadcrumbClick($event)"></sat-breadcrumbs>
+    @let trailLabel = 'browse.breadcrumb.label' | translate;
+    <lib-extension-outlet
+      #breadcrumbsOutlet
+      class="browse-breadcrumbs"
+      [componentId]="breadcrumbsId"
+      [componentInputs]="{ items: breadcrumbs(), label: trailLabel }"
+    />
+    @if (breadcrumbsOutlet.unresolved()) {
+      <nxs-breadcrumbs class="browse-breadcrumbs" [items]="breadcrumbs()" [label]="trailLabel" />
+    }
   }
 
-  @if (isDomainBrowse() || isRepositoryRootBrowse()) {
-    <p class="browse-domain-hint" role="note">
-      {{ domainContainerGuidanceKey | translate }}
-    </p>
-  }
+  <nxs-domain-hint [documentType]="currentDoc()?.type" [path]="browsePath()" />
 
   <!-- Main body: tabs on left, details panel on right -->
   <div class="browse-body">
@@ -111,12 +93,13 @@
           <mat-tab [label]="'browse.tab.view' | translate">
             <!-- Toolbar: result count + filters + view toggle + column settings + export CSV -->
             <div class="view-toolbar">
-              <span class="result-count">{{
-                (filteredEntries().length === 1
-                  ? 'common.count.result-one'
-                  : 'common.count.result-many'
-                ) | translate: { count: filteredEntries().length }
-              }}</span>
+              @let count = resultCount();
+              @if (count !== null) {
+                <span class="result-count">{{
+                  (count === 1 ? 'common.count.result-one' : 'common.count.result-many')
+                    | translate: { count }
+                }}</span>
+              }
               <div class="toolbar-spacer"></div>
 
               <mat-form-field
@@ -134,7 +117,7 @@
                     (click)="filterText.set('')"
                     class="filter-clear-btn"
                   >
-                    <mat-icon>close</mat-icon>
+                    <mat-icon svgIcon="x_large" />
                   </button>
                 }
               </mat-form-field>
@@ -180,7 +163,7 @@
                     (click)="filterContributor.set('')"
                     class="filter-clear-btn"
                   >
-                    <mat-icon>close</mat-icon>
+                    <mat-icon svgIcon="x_large" />
                   </button>
                 }
               </mat-form-field>
@@ -199,6 +182,17 @@
               </mat-form-field>
 
               <div class="toolbar-actions">
+                @if (viewMode() === 'list') {
+                  <button
+                    mat-icon-button
+                    class="gear-btn"
+                    [matTooltip]="'browse.browse.manage-columns' | translate"
+                    [attr.aria-label]="'browse.browse.manage-columns' | translate"
+                    (click)="openColumnPanel()"
+                  >
+                    <mat-icon svgIcon="settings" />
+                  </button>
+                }
                 <button
                   mat-icon-button
                   [matTooltip]="'browse.browse.export-csv' | translate"
@@ -212,7 +206,7 @@
                       [attr.aria-label]="'browse.browse.loading' | translate"
                     />
                   } @else {
-                    <mat-icon>download</mat-icon>
+                    <mat-icon svgIcon="download" />
                   }
                 </button>
                 <button
@@ -222,7 +216,7 @@
                   [class.active-view]="viewMode() === 'list'"
                   (click)="setViewMode('list')"
                 >
-                  <mat-icon>view_list</mat-icon>
+                  <mat-icon svgIcon="bullet_list" />
                 </button>
                 <button
                   mat-icon-button
@@ -231,201 +225,71 @@
                   [class.active-view]="viewMode() === 'card'"
                   (click)="setViewMode('card')"
                 >
-                  <mat-icon>grid_view</mat-icon>
+                  <mat-icon svgIcon="grid_view" />
                 </button>
               </div>
             </div>
 
-            @if (loading()) {
-              <div class="browse-loading">
-                <mat-spinner
-                  diameter="36"
-                  [attr.aria-label]="'browse.browse.loading' | translate"
-                />
-              </div>
-            } @else if (error()) {
-              <div class="browse-error">
-                <mat-icon class="error-icon">error_outline</mat-icon>
-                <p>{{ error() }}</p>
-                <button mat-stroked-button (click)="loadContent()">
-                  <mat-icon>refresh</mat-icon> {{ 'browse.browse.retry' | translate }}
-                </button>
-              </div>
-            } @else if (filteredEntries().length === 0) {
-              <div class="browse-empty">
-                <mat-icon class="empty-icon">folder_open</mat-icon>
-                <p>{{ 'browse.browse.this-folder-is-empty' | translate }}</p>
-              </div>
-            } @else if (viewMode() === 'list') {
-              <!-- List view -->
+            @if (viewMode() === 'list') {
               <div class="browse-list-container">
                 @if (columnPanelOpen()) {
-                  <button
-                    type="button"
-                    class="col-panel-backdrop"
-                    [attr.aria-label]="'browse.browse.close-column-picker' | translate"
-                    (click)="closeColumnPanel()"
-                  ></button>
-                  <div
-                    #columnPanel
-                    class="col-panel"
-                    role="dialog"
-                    aria-modal="true"
-                    [attr.aria-label]="'browse.browse.column-settings' | translate"
-                    tabindex="-1"
-                    (keydown.escape)="closeColumnPanel()"
-                  >
-                    <p class="col-panel-title">{{ 'browse.browse.column-settings' | translate }}</p>
-                    <div class="col-panel-list">
-                      @for (col of pendingColumns(); track col.key) {
-                        <mat-checkbox
-                          class="col-panel-option"
-                          [checked]="isPendingColumn(col.key)"
-                          [disabled]="col.key === 'title'"
-                          (change)="togglePendingColumn(col.key)"
-                          >{{ col | descriptorLabel }}</mat-checkbox
-                        >
-                      }
-                    </div>
-                    <div class="col-panel-actions">
-                      <button mat-button (click)="resetColumns()">
-                        {{ 'browse.browse.reset' | translate }}
-                      </button>
-                      <button mat-flat-button color="primary" (click)="applyColumns()">
-                        {{ 'browse.browse.done' | translate }}
-                      </button>
-                    </div>
-                  </div>
+                  <nxs-column-picker
+                    [columns]="pickerColumns()"
+                    [required]="requiredColumnKeys"
+                    [defaults]="defaultColumnKeys()"
+                    (apply)="applyColumns($event)"
+                    (dismiss)="closeColumnPanel()"
+                  />
                 }
-                <div class="browse-table-wrapper">
-                  <table class="browse-table">
-                    <thead>
-                      <tr>
-                        <th class="col-checkbox">
-                          <span class="cdk-visually-hidden">{{
-                            'browse.browse.selection' | translate
-                          }}</span>
-                        </th>
-                        @for (col of visibleColumns(); track col.key) {
-                          <th class="sortable-th" (click)="toggleBrowseSort(col.key)">
-                            <span class="th-label">{{ col | descriptorLabel }}</span>
-                            @if (browseSortKey() === col.key) {
-                              <mat-icon class="sort-arrow">
-                                {{ browseSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
-                              </mat-icon>
-                            }
-                          </th>
-                        }
-                        @if (hasCollectionEntries()) {
-                          <th class="col-actions">
-                            <span class="cdk-visually-hidden">{{
-                              'browse.browse.actions' | translate
-                            }}</span>
-                          </th>
-                        }
-                        <th class="col-gear">
-                          <button
-                            mat-icon-button
-                            class="gear-btn"
-                            [matTooltip]="'browse.browse.manage-columns' | translate"
-                            [attr.aria-label]="'browse.browse.manage-columns' | translate"
-                            (click)="openColumnPanel()"
-                          >
-                            <mat-icon>tune</mat-icon>
-                          </button>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (doc of filteredEntries(); track doc.uid) {
-                        <tr
-                          class="browse-row"
-                          [class.browse-row--selected]="isSelected(doc.uid)"
-                          [class.browse-row--folder]="isFolderish(doc)"
-                          (click)="onRowClick(doc)"
-                        >
-                          <td class="cell-checkbox">
-                            <mat-checkbox
-                              [checked]="isSelected(doc.uid)"
-                              [aria-label]="selectionAriaLabel(doc)"
-                              (change)="toggleSelection(doc.uid)"
-                              (click)="$event.stopPropagation()"
-                            ></mat-checkbox>
-                          </td>
-                          @for (col of visibleColumns(); track col.key) {
-                            <td [ngClass]="'cell-' + col.key">
-                              @if (col.key === 'title') {
-                                <div class="cell-name-inner">
-                                  @if (thumbnailMap()[doc.uid]; as thumb) {
-                                    <img [src]="thumb" alt="" class="doc-thumb" />
-                                  } @else {
-                                    <mat-icon
-                                      class="doc-icon"
-                                      [class.folder-icon]="isFolderish(doc)"
-                                    >
-                                      {{ docIcon(doc) }}
-                                    </mat-icon>
-                                  }
-                                  <span class="doc-title" [title]="doc.path">{{ doc.title }}</span>
-                                </div>
-                              } @else if (col.key === 'type') {
-                                <sat-category-tag category="blue">{{
-                                  doc.type | docTypeLabel
-                                }}</sat-category-tag>
-                              } @else if (col.key === 'modified') {
-                                {{ doc.lastModified | date: 'mediumDate' }}
-                              } @else if (col.key === 'lastContributor') {
-                                <span class="contributor-cell">
-                                  <sat-avatar
-                                    [initials]="avatarInitials(lastContributor(doc))"
-                                    [category]="avatarColor(lastContributor(doc))"
-                                    size="24"
-                                    [borderless]="true"
-                                    aria-hidden="true"
-                                  />
-                                  {{ lastContributor(doc) }}
-                                </span>
-                              } @else {
-                                {{ getCellValue(doc, col.key) }}
-                              }
-                            </td>
-                          }
-                          @if (hasCollectionEntries()) {
-                            <td class="cell-actions">
-                              @if (isCollectionEntry(doc) && hasCollectionEntryActions(doc)) {
-                                <button
-                                  mat-icon-button
-                                  type="button"
-                                  [matMenuTriggerFor]="collectionRowMenu"
-                                  [attr.aria-label]="'browse.browse.collection-actions' | translate"
-                                  (click)="$event.stopPropagation()"
-                                >
-                                  <mat-icon>more_vert</mat-icon>
-                                </button>
-                                <mat-menu #collectionRowMenu="matMenu">
-                                  @if (canEditCollectionEntry(doc)) {
-                                    <button mat-menu-item (click)="openEditCollectionDialog(doc)">
-                                      <mat-icon>edit</mat-icon>
-                                      <span>{{ 'browse.browse.edit' | translate }}</span>
-                                    </button>
-                                  }
-                                  @if (canDeleteCollectionEntry(doc)) {
-                                    <button mat-menu-item (click)="deleteCollectionEntry(doc)">
-                                      <mat-icon>delete</mat-icon>
-                                      <span>{{ 'browse.browse.delete' | translate }}</span>
-                                    </button>
-                                  }
-                                </mat-menu>
-                              }
-                            </td>
-                          }
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
+                <nxs-document-list
+                  class="browse-document-list"
+                  [documents]="filteredEntries()"
+                  [columns]="listColumns()"
+                  [label]="
+                    'browse.browse.contents-of' | translate: { name: currentDoc()?.title ?? '' }
+                  "
+                  [sort]="listSort()"
+                  [selectedIds]="listSelectedIds()"
+                  [pageIndex]="pageIndex()"
+                  [pageSize]="pageSize"
+                  [totalSize]="totalSize()"
+                  [hasNextPage]="hasNextPage()"
+                  [loading]="loading()"
+                  [error]="error() ? errorStatus() : null"
+                  [errorHeading]="error() ?? ''"
+                  [emptyHeading]="'browse.browse.this-folder-is-empty' | translate"
+                  [rowActions]="rowMenus()"
+                  (selectedIdsChange)="onListSelectionChange($event)"
+                  (sortChange)="onListSortChange($event)"
+                  (pageChange)="goToPage($event)"
+                  (open)="onRowClick($event)"
+                  (rowAction)="onRowAction($event)"
+                  (retry)="loadContent()"
+                  [dropEnabled]="canCreateContentHere()"
+                  [dropLabel]="
+                    'browse.browse.drop-to-upload' | translate: { name: currentDoc()?.title ?? '' }
+                  "
+                  (filesDropped)="uploadDropped($event)"
+                />
               </div>
+            } @else if (loading()) {
+              <div class="browse-loading">
+                <nxs-spinner diameter="36" [label]="'browse.browse.loading' | translate" />
+              </div>
+            } @else if (error(); as message) {
+              <nxs-error-state
+                [status]="errorStatus()"
+                [heading]="errorStatus() === 500 ? message : ''"
+                retryable
+                (retry)="loadContent()"
+              />
             } @else {
+              @if (filteredEntries().length === 0 && pageIndex() === 0) {
+                <div class="browse-empty">
+                  <mat-icon class="empty-icon" svgIcon="folder_open" />
+                  <p>{{ 'browse.browse.this-folder-is-empty' | translate }}</p>
+                </div>
+              }
               <!-- Card view -->
               <div class="card-grid">
                 @for (doc of filteredEntries(); track doc.uid) {
@@ -443,11 +307,9 @@
                     </div>
                     <button class="doc-card" type="button" (click)="onRowClick(doc)">
                       <div class="card-thumb">
-                        @if (thumbnailMap()[doc.uid]; as thumb) {
-                          <img [src]="thumb" alt="" class="card-thumb-img" />
-                        } @else {
-                          <mat-icon class="card-thumb-icon">{{ docIcon(doc) }}</mat-icon>
-                        }
+                        <nxs-thumbnail class="card-thumb-img" [documentId]="doc.uid">
+                          <mat-icon class="card-thumb-icon" [svgIcon]="docIcon(doc)" />
+                        </nxs-thumbnail>
                       </div>
                       <div class="card-body">
                         <span class="card-title">{{ doc.title }}</span>
@@ -463,18 +325,18 @@
                         [attr.aria-label]="'browse.browse.collection-actions' | translate"
                         (click)="$event.stopPropagation()"
                       >
-                        <mat-icon>more_vert</mat-icon>
+                        <mat-icon svgIcon="more_vert" />
                       </button>
                       <mat-menu #collectionCardMenu="matMenu">
                         @if (canEditCollectionEntry(doc)) {
                           <button mat-menu-item (click)="openEditCollectionDialog(doc)">
-                            <mat-icon>edit</mat-icon>
+                            <mat-icon svgIcon="pencil" />
                             <span>{{ 'browse.browse.edit' | translate }}</span>
                           </button>
                         }
                         @if (canDeleteCollectionEntry(doc)) {
                           <button mat-menu-item (click)="deleteCollectionEntry(doc)">
-                            <mat-icon>delete</mat-icon>
+                            <mat-icon svgIcon="trash" />
                             <span>{{ 'browse.browse.delete' | translate }}</span>
                           </button>
                         }
@@ -483,178 +345,69 @@
                   </div>
                 }
               </div>
+              <nxs-pager
+                [pageIndex]="pageIndex()"
+                [pageSize]="pageSize"
+                [itemCount]="filteredEntries().length"
+                [totalSize]="totalSize()"
+                [hasNextPage]="hasNextPage()"
+                (pageChange)="goToPage($event)"
+              />
+            }
+            @if (droppedUploads.items().length > 0) {
+              <section
+                class="browse-uploads"
+                [attr.aria-label]="'browse.browse.uploads' | translate"
+              >
+                <div class="browse-uploads__header">
+                  <span class="browse-uploads__title">{{
+                    'browse.browse.uploads' | translate
+                  }}</span>
+                  <button
+                    mat-button
+                    type="button"
+                    [disabled]="droppedUploads.busy()"
+                    (click)="droppedUploads.clear()"
+                  >
+                    {{ 'browse.browse.clear-uploads' | translate }}
+                  </button>
+                </div>
+                <nxs-upload-queue
+                  [items]="droppedUploads.items()"
+                  [label]="'browse.browse.uploads' | translate"
+                  (remove)="droppedUploads.remove($event)"
+                  (retry)="runDroppedUploads()"
+                />
+              </section>
             }
           </mat-tab>
 
           <!-- ═══════ PERMISSIONS TAB ═══════ -->
           <mat-tab [label]="'browse.tab.permissions' | translate">
             <div class="permissions-container">
+              <!-- Local and inherited permissions: the nxs- panel, resolved by its registered ID so a
+                   customer library can re-register a replacement. -->
+              @if (currentDoc(); as folder) {
+                <lib-extension-outlet
+                  #permissionsPanelOutlet
+                  [componentId]="permissionsPanelId"
+                  [componentInputs]="{
+                    documentId: folder.uid,
+                    permissionsChanged: onPermissionsChanged,
+                  }"
+                />
+                @if (permissionsPanelOutlet.unresolved()) {
+                  <nxs-permissions-panel
+                    [documentId]="folder.uid"
+                    [permissionsChanged]="onPermissionsChanged"
+                  />
+                }
+              }
               @if (permissionsLoading()) {
                 <div class="browse-loading">
-                  <mat-spinner
-                    diameter="24"
-                    [attr.aria-label]="'browse.browse.loading' | translate"
-                  />
+                  <nxs-spinner diameter="24" [label]="'browse.browse.loading' | translate" />
                 </div>
               } @else {
-                <!-- Permissions defined locally -->
-                <section class="perm-section">
-                  <div class="perm-section-header">
-                    <div class="perm-section-title" role="heading" aria-level="3">
-                      {{ 'browse.browse.permissions-defined-locally' | translate }}
-                    </div>
-                    @if (canManageCurrentPermissions()) {
-                      <button
-                        mat-button
-                        color="primary"
-                        class="perm-action-btn"
-                        (click)="addPermission()"
-                      >
-                        {{ 'browse.browse.new' | translate }}
-                      </button>
-                    }
-                  </div>
-                  @if (localAces().length === 0) {
-                    <div class="perm-empty">
-                      {{ 'browse.browse.there-are-no-local-permissions' | translate }}
-                    </div>
-                  } @else {
-                    <table class="perm-table">
-                      <thead>
-                        <tr>
-                          <th>{{ 'browse.browse.user-group' | translate }}</th>
-                          <th>{{ 'browse.browse.right' | translate }}</th>
-                          <th>{{ 'browse.browse.time-frame' | translate }}</th>
-                          <th>{{ 'browse.browse.granted-by' | translate }}</th>
-                          @if (canManageCurrentPermissions()) {
-                            <th>
-                              <span class="cdk-visually-hidden">{{
-                                'browse.browse.actions' | translate
-                              }}</span>
-                            </th>
-                          }
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (ace of localAces(); track ace.id) {
-                          <tr>
-                            <td>
-                              <span class="perm-user">
-                                <sat-avatar
-                                  [initials]="avatarInitials(displayUsername(ace))"
-                                  [category]="avatarColor(displayUsername(ace))"
-                                  size="24"
-                                  [borderless]="true"
-                                  aria-hidden="true"
-                                />
-                                {{ displayUsername(ace) }}
-                              </span>
-                            </td>
-                            <td>{{ permissionLabel(ace.permission) }}</td>
-                            <td>{{ aceTimeFrame(ace) }}</td>
-                            <td>{{ aceGrantedBy(ace) }}</td>
-                            @if (canManageCurrentPermissions()) {
-                              <td class="perm-row-actions">
-                                <button
-                                  mat-icon-button
-                                  [matTooltip]="'browse.browse.edit' | translate"
-                                  [attr.aria-label]="'browse.browse.edit' | translate"
-                                  type="button"
-                                  (click)="editPermission(ace)"
-                                >
-                                  <mat-icon>edit</mat-icon>
-                                </button>
-                                <button
-                                  mat-icon-button
-                                  [matTooltip]="'browse.browse.delete' | translate"
-                                  [attr.aria-label]="'browse.browse.delete' | translate"
-                                  type="button"
-                                  (click)="deletePermission(ace)"
-                                >
-                                  <mat-icon>delete</mat-icon>
-                                </button>
-                              </td>
-                            }
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
-                  }
-                </section>
-
-                <!-- Permissions inherited from upper levels -->
-                <section class="perm-section">
-                  <div class="perm-section-header">
-                    <div class="perm-section-title" role="heading" aria-level="3">
-                      {{ 'browse.browse.permissions-inherited-from-upper-levels' | translate }}
-                    </div>
-                    @if (canManageCurrentPermissions()) {
-                      <button
-                        mat-button
-                        color="primary"
-                        class="perm-action-btn"
-                        (click)="toggleInheritance()"
-                        [disabled]="actionInProgress() === 'inheritance'"
-                      >
-                        {{
-                          isInheritanceBlocked()
-                            ? ('browse.unblock' | translate)
-                            : ('browse.block' | translate)
-                        }}
-                      </button>
-                    }
-                  </div>
-                  @if (!isInheritanceBlocked()) {
-                    <div class="perm-info-bar">
-                      <span class="perm-info-accent"></span>
-                      <p>
-                        {{ 'browse.browse.if-you-want-to-explicitly-control' | translate }}
-                      </p>
-                    </div>
-                  }
-                  @if (isInheritanceBlocked()) {
-                    <div class="perm-empty">
-                      {{ 'browse.browse.permissions-inheritance-is-blocked' | translate }}
-                    </div>
-                  } @else if (inheritedAces().length === 0) {
-                    <div class="perm-empty">
-                      {{ 'browse.browse.no-inherited-permissions' | translate }}
-                    </div>
-                  } @else {
-                    <table class="perm-table">
-                      <thead>
-                        <tr>
-                          <th>{{ 'browse.browse.user-group' | translate }}</th>
-                          <th>{{ 'browse.browse.right' | translate }}</th>
-                          <th>{{ 'browse.browse.time-frame' | translate }}</th>
-                          <th>{{ 'browse.browse.granted-by' | translate }}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (ace of inheritedAces(); track ace.id) {
-                          <tr>
-                            <td>
-                              <span class="perm-user">
-                                <sat-avatar
-                                  [initials]="avatarInitials(displayUsername(ace))"
-                                  [category]="avatarColor(displayUsername(ace))"
-                                  size="24"
-                                  [borderless]="true"
-                                  aria-hidden="true"
-                                />
-                                {{ displayUsername(ace) }}
-                              </span>
-                            </td>
-                            <td>{{ permissionLabel(ace.permission) }}</td>
-                            <td>{{ aceTimeFrame(ace) }}</td>
-                            <td>{{ aceGrantedBy(ace) }}</td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
-                  }
-                </section>
-
                 <!-- Permissions Assigned to External Users -->
                 <section class="perm-section">
                   <div class="perm-section-header">
@@ -711,7 +464,7 @@
                                   type="button"
                                   (click)="editExternalPermission(ace)"
                                 >
-                                  <mat-icon>edit</mat-icon>
+                                  <mat-icon svgIcon="pencil" />
                                 </button>
                                 <button
                                   mat-icon-button
@@ -723,7 +476,7 @@
                                   [disabled]="actionInProgress() === 'notify-' + ace.id"
                                   (click)="sendNotificationEmail(ace)"
                                 >
-                                  <mat-icon>email</mat-icon>
+                                  <mat-icon svgIcon="emails" />
                                 </button>
                                 <button
                                   mat-icon-button
@@ -732,7 +485,7 @@
                                   type="button"
                                   (click)="deletePermission(ace)"
                                 >
-                                  <mat-icon>delete</mat-icon>
+                                  <mat-icon svgIcon="trash" />
                                 </button>
                               </td>
                             }
@@ -757,7 +510,7 @@
                     [ngModel]="filterUsername()"
                     (ngModelChange)="filterUsername.set($event)"
                   />
-                  <mat-icon matPrefix>person_search</mat-icon>
+                  <mat-icon matPrefix svgIcon="user" />
                 </mat-form-field>
                 <mat-form-field appearance="outline" class="filter-field" subscriptSizing="dynamic">
                   <mat-label>{{ 'browse.browse.from' | translate }}</mat-label>
@@ -806,10 +559,7 @@
 
               @if (auditLoading()) {
                 <div class="browse-loading">
-                  <mat-spinner
-                    diameter="24"
-                    [attr.aria-label]="'browse.browse.loading' | translate"
-                  />
+                  <nxs-spinner diameter="24" [label]="'browse.browse.loading' | translate" />
                 </div>
               } @else if (filteredAuditEntries().length === 0) {
                 <div class="history-empty">
@@ -932,7 +682,7 @@
                 </div>
               } @else if (trashedDocs().length === 0) {
                 <div class="browse-empty">
-                  <mat-icon class="empty-icon">delete_outline</mat-icon>
+                  <mat-icon class="empty-icon" svgIcon="trash" />
                   <p>{{ 'browse.browse.trash-is-empty' | translate }}</p>
                 </div>
               } @else {
@@ -950,11 +700,9 @@
                       @for (doc of trashedDocs(); track doc.uid) {
                         <tr class="browse-row">
                           <td class="cell-name-inner">
-                            @if (thumbnailMap()[doc.uid]; as thumb) {
-                              <img [src]="thumb" alt="" class="doc-thumb" />
-                            } @else {
-                              <mat-icon class="doc-icon">{{ docIcon(doc) }}</mat-icon>
-                            }
+                            <nxs-thumbnail class="doc-thumb" [documentId]="doc.uid">
+                              <mat-icon class="doc-icon" [svgIcon]="docIcon(doc)" />
+                            </nxs-thumbnail>
                             <span class="doc-title">{{ doc.title }}</span>
                           </td>
                           <td>
@@ -969,7 +717,7 @@
                               class="restore-btn"
                               (click)="restoreDocument(doc)"
                             >
-                              <mat-icon>restore_from_trash</mat-icon>
+                              <mat-icon svgIcon="restore" />
                               {{ 'browse.browse.restore' | translate }}
                             </button>
                           </td>
@@ -993,7 +741,7 @@
           "
           [attr.aria-label]="'browse.browse.toggle-details-panel' | translate"
         >
-          <mat-icon>{{ panelOpen() ? 'info' : 'info_outline' }}</mat-icon>
+          <mat-icon [svgIcon]="panelOpen() ? 'info' : 'info'" />
         </button>
       </div>
     </div>
@@ -1008,7 +756,7 @@
             (click)="closePanel()"
             [attr.aria-label]="'browse.browse.close-panel' | translate"
           >
-            <mat-icon>close</mat-icon>
+            <mat-icon svgIcon="x_large" />
           </button>
         </div>
 
@@ -1119,7 +867,7 @@
                     (click)="removeTag(tag)"
                     [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
                   >
-                    <mat-icon>close</mat-icon>
+                    <mat-icon svgIcon="x_large" />
                   </button>
                 </span>
               }
@@ -1136,7 +884,7 @@
                 (ngModelChange)="onTagSearch($event)"
                 [matAutocomplete]="tagAuto"
               />
-              <mat-icon matSuffix>arrow_drop_down</mat-icon>
+              <mat-icon matSuffix svgIcon="chevron_down" />
               <mat-autocomplete
                 #tagAuto="matAutocomplete"
                 (optionSelected)="selectTag($event.option.value)"
@@ -1160,10 +908,7 @@
           <div class="panel-body">
             @if (activityLoading()) {
               <div class="panel-loading">
-                <mat-spinner
-                  diameter="20"
-                  [attr.aria-label]="'browse.browse.loading' | translate"
-                />
+                <nxs-spinner diameter="20" [label]="'browse.browse.loading' | translate" />
               </div>
             } @else {
               @for (entry of activityEntries(); track entry.id) {

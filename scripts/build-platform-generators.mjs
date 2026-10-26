@@ -10,13 +10,13 @@
  *     npx nx g ./tools/satori-generators:extension-library acme-extensions --owner=acme
  *
  * `./tools/satori-generators` is a path in **our** repository. A customer who installs
- * `@nuxeo-satori/platform` has no such directory, so the very first instruction in the
+ * `@nuxeo/satori-platform` has no such directory, so the very first instruction in the
  * guide could not be run by its audience. Layer 3 — "the differentiator", per the plan —
  * was documented and not distributed.
  *
  * With this, the generators ship at the package root and the command becomes
  *
- *     npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
+ *     npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
  *
  * which is what an Nx plugin consumer expects: `generators.json` at the package root,
  * named in `package.json`.
@@ -88,12 +88,24 @@ mkdirSync(OUT, { recursive: true });
 // Run tsc's own entry script with this Node, not `npx`: `npx` is `npx.cmd` on Windows, which
 // Node only starts through a shell, and a shell re-splits any argument containing a space —
 // every path below, in a checkout under a directory such as `C:\work\Agentic UI`.
+//
+// TypeScript 6 refuses explicit files while a tsconfig.json sits in the working directory
+// (TS5112) and makes `--moduleResolution node` a deprecation error, so `--ignoreConfig` keeps
+// the flags-only configuration and `--ignoreDeprecations 6.0` keeps the emitted CommonJS
+// exactly as it was, the same allowance tsconfig.base.json makes. Both go with TypeScript 7.
+// TypeScript 6 also stopped loading every `@types` package by default; the generators need
+// Node's, so `--types node` names it.
 const TSC = createRequire(import.meta.url).resolve('typescript/bin/tsc');
 try {
   execFileSync(
     process.execPath,
     [
       TSC,
+      '--ignoreConfig',
+      '--ignoreDeprecations',
+      '6.0',
+      '--types',
+      'node',
       '--outDir',
       OUT,
       '--rootDir',
@@ -115,7 +127,8 @@ try {
       '--esModuleInterop',
       'true',
       ...readdirSync(join(SRC, 'src'), { recursive: true })
-        .filter((f) => typeof f === 'string' && f.endsWith('.ts'))
+        // Specs run in this repository only; they would not compile without vitest's types.
+        .filter((f) => typeof f === 'string' && f.endsWith('.ts') && !f.endsWith('.spec.ts'))
         .map((f) => join(SRC, 'src', f)),
     ],
     {
@@ -145,6 +158,16 @@ for (const asset of assets(join(SRC, 'src'))) {
  * would drift from the first the moment a generator is added.
  */
 const manifest = JSON.parse(readFileSync(join(SRC, 'generators.json'), 'utf8'));
+// `x-satori-internal` generators add to the platform's own source — `satori-component` writes
+// `nxs-` components into `libs/shared/satori-components` — so a customer's workspace has nothing
+// for them to act on, and they are not shipped. Their compiled output is removed below too.
+const internal = Object.entries(manifest.generators ?? {})
+  .filter(([, generator]) => generator['x-satori-internal'] === true)
+  .map(([name]) => name);
+for (const name of internal) {
+  delete manifest.generators[name];
+  rmSync(join(OUT, name), { recursive: true, force: true });
+}
 for (const generator of Object.values(manifest.generators ?? {})) {
   for (const key of ['factory', 'schema']) {
     if (typeof generator[key] === 'string') {
@@ -171,7 +194,7 @@ writeFileSync(
   join(OUT, 'README.md'),
   `${BANNER.replace(/^\/\/ ?/gm, '')}\nRun them with:\n\n` +
     '```bash\n' +
-    'npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme\n' +
+    'npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme\n' +
     '```\n\nSource: `tools/satori-generators` in the platform repository.\n',
 );
 

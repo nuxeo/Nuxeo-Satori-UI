@@ -17,6 +17,15 @@ function notBusy(operation: string): ExtensionRuleRef {
 }
 
 /**
+ * Nuxeo Web UI never offers locking on a version, an immutable document or the repository
+ * root. Versions carry the `Immutable` facet, so the facet covers both.
+ */
+const LOCKABLE: readonly ExtensionRule[] = [
+  not({ type: 'app.rules.hasFacet', parameters: ['Immutable'] }),
+  not({ type: 'app.rules.isType', parameters: ['Root'] }),
+];
+
+/**
  * The bulk actions the product ships with.
  *
  * The same six controls, in the same order, with the same icons and tooltips
@@ -44,7 +53,7 @@ export const PACKAGED_BULK_ACTIONS: readonly ExtensionActionDescriptor[] = [
     id: 'app.bulkActions.addToCollection',
     labelKey: 'action.bulk-actions-add-to-collection',
     label: 'Add to Collection',
-    icon: 'library_add',
+    icon: 'add_list',
     order: 20,
   },
   {
@@ -75,7 +84,7 @@ export const PACKAGED_BULK_ACTIONS: readonly ExtensionActionDescriptor[] = [
     id: 'app.bulkActions.delete',
     labelKey: 'action.bulk-actions-delete',
     label: 'Delete selected',
-    icon: 'delete',
+    icon: 'trash',
     order: 60,
   },
 ];
@@ -87,7 +96,8 @@ export const PACKAGED_BULK_ACTIONS: readonly ExtensionActionDescriptor[] = [
  * gating that `document-detail.html` held as fixed markup — the `@if`
  * conditions that wrapped each button are now `rule`s, and the `[disabled]`
  * bindings that read `actionInProgress()` are now `enabledRule`s over
- * `app.rules.isNotBusy`.
+ * `app.rules.isNotBusy`. The lock pair has since moved to Web UI's behaviour:
+ * its icon shows the document's state and Unlock is shown to every reader.
  *
  * `overflow: true` puts an entry behind the "More actions" menu. A manifest
  * promotes one to the toolbar by restating its id with `"overflow": false`.
@@ -105,9 +115,16 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     id: 'app.toolbar.edit',
     labelKey: 'action.toolbar-edit',
     label: 'Edit',
-    icon: 'edit',
+    icon: 'pencil',
     order: 10,
-    rule: every('app.rules.isNotTrashed', 'app.rules.canWrite', not('app.rules.isNote')),
+    // Not `Immutable`: Nuxeo marks versions and publications so, and a version's `permissions`
+    // enricher still lists `Write` while the server refuses the edit. Web UI hides Edit on both.
+    rule: every(
+      'app.rules.isNotTrashed',
+      'app.rules.canWrite',
+      not({ type: 'app.rules.hasFacet', parameters: ['Immutable'] }),
+      not('app.rules.isNote'),
+    ),
   },
   {
     // A Note's body belongs to the inline editor in the View tab, so this pencil
@@ -116,15 +133,20 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     id: 'app.toolbar.editProperties',
     labelKey: 'action.toolbar-edit-properties',
     label: 'Edit properties',
-    icon: 'edit',
+    icon: 'pencil',
     order: 10,
-    rule: every('app.rules.isNotTrashed', 'app.rules.canWrite', 'app.rules.isNote'),
+    rule: every(
+      'app.rules.isNotTrashed',
+      'app.rules.canWrite',
+      not({ type: 'app.rules.hasFacet', parameters: ['Immutable'] }),
+      'app.rules.isNote',
+    ),
   },
   {
     id: 'app.toolbar.addToCollection',
     labelKey: 'action.toolbar-add-to-collection',
     label: 'Add to collection',
-    icon: 'library_add',
+    icon: 'add_list',
     order: 20,
     rule: 'app.rules.isNotTrashed',
   },
@@ -132,34 +154,43 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     id: 'app.toolbar.delete',
     labelKey: 'action.toolbar-delete',
     label: 'Delete',
-    icon: 'delete',
+    icon: 'trash',
     order: 30,
     rule: every('app.rules.isNotTrashed', 'app.rules.canRemove'),
     enabledRule: notBusy('trash'),
   },
   {
+    // The icon shows the document's state, as Web UI's does: open padlock while unlocked.
     id: 'app.toolbar.lock',
     labelKey: 'action.toolbar-lock',
     label: 'Lock',
-    icon: 'lock',
+    icon: 'unlocked',
     order: 40,
-    rule: every('app.rules.isNotTrashed', 'app.rules.canWrite', not('app.rules.isLocked')),
+    rule: every(
+      'app.rules.isNotTrashed',
+      'app.rules.canWrite',
+      not('app.rules.isLocked'),
+      ...LOCKABLE,
+    ),
     enabledRule: notBusy('lock'),
   },
   {
+    // Shown to anyone who can read a locked document, so they can see who holds it. Nuxeo's
+    // default lock policy takes Write on a locked document away from everyone but its owner and
+    // administrators, so `canWrite` enables it for exactly them; the server still decides.
     id: 'app.toolbar.unlock',
     labelKey: 'action.toolbar-unlock',
     label: 'Unlock',
-    icon: 'lock_open',
+    icon: 'lock',
     order: 40,
-    rule: every('app.rules.isNotTrashed', 'app.rules.canWrite', 'app.rules.isLocked'),
-    enabledRule: notBusy('lock'),
+    rule: every('app.rules.isNotTrashed', 'app.rules.isLocked', ...LOCKABLE),
+    enabledRule: every(notBusy('lock'), 'app.rules.canWrite'),
   },
   {
     id: 'app.toolbar.addToFavorites',
     labelKey: 'action.toolbar-add-to-favorites',
     label: 'Add to Favorites',
-    icon: 'star_border',
+    icon: 'star',
     order: 50,
     overflow: true,
     rule: every('app.rules.isNotTrashed', not('app.rules.isFavorite')),
@@ -191,13 +222,15 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     icon: 'publish',
     order: 70,
     overflow: true,
-    rule: every('app.rules.isNotTrashed', 'app.rules.hasVersion', 'app.rules.canWrite'),
+    // Web UI's `isPublishable`, which offers a version too: `canWrite` would read the live
+    // document's `Write` off a version's enricher, and `hasVersion` is not Web UI's condition.
+    rule: every('app.rules.isNotTrashed', 'app.rules.canPublish'),
   },
   {
     id: 'app.toolbar.subscribe',
     labelKey: 'action.toolbar-subscribe',
     label: 'Notify Me',
-    icon: 'notifications',
+    icon: 'bell',
     order: 80,
     overflow: true,
     rule: every('app.rules.isNotTrashed', not('app.rules.isSubscribed')),
@@ -207,7 +240,7 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     id: 'app.toolbar.unsubscribe',
     labelKey: 'action.toolbar-unsubscribe',
     label: 'Unsubscribe',
-    icon: 'notifications_active',
+    icon: 'bell',
     order: 80,
     overflow: true,
     rule: every('app.rules.isNotTrashed', 'app.rules.isSubscribed'),
@@ -246,7 +279,7 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     id: 'app.toolbar.startProcess',
     labelKey: 'action.toolbar-start-process',
     label: 'Start Process',
-    icon: 'play_circle',
+    icon: 'replay',
     order: 110,
     overflow: true,
     rule: 'app.rules.isNotTrashed',
@@ -275,7 +308,7 @@ export const PACKAGED_BROWSE_CONTEXT_MENU: readonly ExtensionActionDescriptor[] 
     id: 'app.contextMenu.subscribe',
     labelKey: 'action.context-menu-subscribe',
     label: 'Notify Me',
-    icon: 'notifications',
+    icon: 'bell',
     order: 20,
     rule: not('app.rules.isSubscribed'),
   },
@@ -283,7 +316,7 @@ export const PACKAGED_BROWSE_CONTEXT_MENU: readonly ExtensionActionDescriptor[] 
     id: 'app.contextMenu.unsubscribe',
     labelKey: 'action.context-menu-unsubscribe',
     label: 'Unsubscribe',
-    icon: 'notifications_off',
+    icon: 'bell_off',
     order: 20,
     rule: 'app.rules.isSubscribed',
   },
@@ -291,7 +324,67 @@ export const PACKAGED_BROWSE_CONTEXT_MENU: readonly ExtensionActionDescriptor[] 
     id: 'app.contextMenu.export',
     labelKey: 'action.context-menu-export',
     label: 'Export',
-    icon: 'ios_share',
+    icon: 'import_export',
     order: 30,
+  },
+];
+
+/**
+ * The menu on each row of browse's document list, acting on that row's document.
+ *
+ * Each row resolves this slot with the row's document as the focused one, so `rule` and
+ * `enabledRule` read that document's own permissions and properties, not the folder's. Rename
+ * changes `dc:title`, as Web UI's title edit does; Copy to and Move to choose a destination folder
+ * and run `Document.Copy` and `Document.Move`; Delete moves the document to the trash.
+ *
+ * As everywhere, these rules decide what the interface offers. Nuxeo checks the permission on the
+ * request itself.
+ */
+export const PACKAGED_ROW_ACTIONS: readonly ExtensionActionDescriptor[] = [
+  {
+    id: 'app.rowActions.download',
+    labelKey: 'action.row-actions-download',
+    label: 'Download',
+    icon: 'download',
+    order: 10,
+    rule: every('app.rules.isNotTrashed', 'app.rules.hasFile'),
+  },
+  {
+    id: 'app.rowActions.rename',
+    labelKey: 'action.row-actions-rename',
+    label: 'Rename',
+    icon: 'note_edit',
+    order: 20,
+    // Not `Immutable`, as Edit: a version's or publication's `permissions` still list `Write`
+    // while the server refuses to change its title.
+    rule: every(
+      'app.rules.isNotTrashed',
+      'app.rules.canWrite',
+      not({ type: 'app.rules.hasFacet', parameters: ['Immutable'] }),
+    ),
+  },
+  {
+    id: 'app.rowActions.copyTo',
+    labelKey: 'action.row-actions-copy-to',
+    label: 'Copy to…',
+    icon: 'copy',
+    order: 30,
+    rule: 'app.rules.isNotTrashed',
+  },
+  {
+    id: 'app.rowActions.moveTo',
+    labelKey: 'action.row-actions-move-to',
+    label: 'Move to…',
+    icon: 'add_to_drive',
+    order: 40,
+    rule: every('app.rules.isNotTrashed', 'app.rules.canRemove'),
+  },
+  {
+    id: 'app.rowActions.delete',
+    labelKey: 'action.row-actions-delete',
+    label: 'Delete',
+    icon: 'trash',
+    order: 50,
+    rule: every('app.rules.isNotTrashed', 'app.rules.canRemove'),
   },
 ];

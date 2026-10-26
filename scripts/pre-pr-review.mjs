@@ -430,22 +430,115 @@ function brokenReference(file) {
  * the tree, including a PR body citing a file that had never been changed.
  */
 let pkgScripts = null;
+
+/** npm options that take no value, so the next word is still a candidate script name. */
+const NPM_FLAG_OPTIONS = new Set([
+  '-s',
+  '--silent',
+  '-q',
+  '--quiet',
+  '-d',
+  '--verbose',
+  '--if-present',
+  '--ignore-scripts',
+  '--foreground-scripts',
+  '--json',
+  '--parseable',
+]);
+/** npm options that take the next word as their value when written without `=`. */
+const NPM_VALUE_OPTIONS = new Set([
+  '--script-shell',
+  '--loglevel',
+  '--userconfig',
+  '--registry',
+  '--cache',
+]);
+/** npm options that change which `package.json` the script is looked up in. */
+const NPM_MANIFEST_OPTIONS = new Set([
+  '-w',
+  '--workspace',
+  '-ws',
+  '--workspaces',
+  '--include-workspace-root',
+  '--prefix',
+  '-C',
+]);
+
+/**
+ * The script name in the words after `npm run`, skipping the options before it —
+ * `--silent config:dev`, `--registry https://r.example test`.
+ *
+ * Returns `null`, so the command goes unchecked, for an option that points npm at another
+ * manifest — this check reads only the root `package.json` — and for an option it does not
+ * recognise. Guessing an unknown option's arity would either name the wrong word as the script or
+ * skip past a missing one, and npm's own option table is not a dependency of this repository.
+ */
+function npmRunScript(words) {
+  const tokens = words.split(/\s+/).filter(Boolean);
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (!token.startsWith('-')) return /^[a-z0-9:._-]+/i.exec(token)?.[0] ?? null;
+    const name = token.split('=')[0];
+    if (NPM_MANIFEST_OPTIONS.has(name)) return null;
+    if (NPM_FLAG_OPTIONS.has(token)) continue;
+    if (token.includes('=') && (NPM_FLAG_OPTIONS.has(name) || NPM_VALUE_OPTIONS.has(name)))
+      continue;
+    if (NPM_VALUE_OPTIONS.has(token)) {
+      i += 1;
+      continue;
+    }
+    return null;
+  }
+  return null;
+}
+
+// Regression cases for the parser, run on every invocation so it cannot regress unnoticed.
+for (const [words, want] of [
+  ['beta:gate', 'beta:gate'],
+  ['--silent config:dev -- --manifest x', 'config:dev'],
+  ['--workspace docs test', null],
+  ['--workspace=docs test', null],
+  ['-w docs test', null],
+  ['--workspaces test', null],
+  ['--prefix=sub test', null],
+  ['--loglevel=warn test', 'test'],
+  ['--registry https://registry.example/ test', 'test'],
+  ['--cache /tmp/npm-cache test', 'test'],
+  ['--some-future-option value test', null],
+  ['--some-future-option=value test', null],
+  ['--json=false test', 'test'],
+  ['beta:api -- --update', 'beta:api'],
+  ['--silent', null],
+]) {
+  const got = npmRunScript(words);
+  if (got !== want) {
+    throw new Error(`pre-pr-review: npmRunScript(${JSON.stringify(words)}) is ${got}, not ${want}`);
+  }
+}
+
 function falseClaim(file) {
   if (!/\.(md|mdc)$/.test(file)) return;
   const text = read(file);
   pkgScripts ??= Object.keys(JSON.parse(read('package.json')).scripts ?? {});
 
-  for (const m of text.matchAll(/npm run ([a-z0-9:._-]+)/gi)) {
-    if (!pkgScripts.includes(m[1])) {
+  for (const m of text.matchAll(/npm run((?:[ \t]+[^\s`'"|;&)]+)+)/gi)) {
+    const script = npmRunScript(m[1]);
+    if (script && !pkgScripts.includes(script)) {
       report(
         file,
         lineOf(text, m.index),
         'false-claim',
-        `\`npm run ${m[1]}\` is not a script in package.json`,
+        `\`npm run ${script}\` is not a script in package.json`,
       );
     }
   }
-  for (const m of text.matchAll(/(?:^|[\s`(])(scripts\/[A-Za-z0-9/._-]+\.(?:mjs|sh|js))/g)) {
+  // The extension has to be the end of the path, not a prefix of it: without the boundary,
+  // `…/proxy.parity.json` matched as far as `.js` and was then reported as a file that does not
+  // exist, naming a path nobody had written. Anchored on a non-path character so a longer
+  // extension is left to the next iteration rather than truncated into a false claim.
+  for (const m of text.matchAll(
+    /(?:^|[\s`(])(scripts\/[A-Za-z0-9/._-]+\.(?:mjs|sh|js))(?![A-Za-z0-9])/g,
+  )) {
     if (!existsSync(resolve(repoRoot, m[1]))) {
       report(
         file,

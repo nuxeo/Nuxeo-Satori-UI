@@ -1,0 +1,7 @@
+{
+  "$comment": "What the template dev server answers at agentic-ui-config/manifest.json: the configuration servlet's response with no manifest fragments, so the template runs on its compiled registrations. Add a fragment here — manifest.example.json is one — to try a manifest without a server.",
+  "format": "nuxeo-agentic-ui-config/1",
+  "layer": "manifest",
+  "fragments": [],
+  "diagnostics": []
+}

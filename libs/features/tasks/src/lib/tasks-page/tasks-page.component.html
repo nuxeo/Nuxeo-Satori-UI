@@ -1,9 +1,9 @@
 <div class="tasks-page">
   <!-- Task list lives in the shell nav drawer only (single inbox). -->
-  <main class="detail-area">
+  <div class="detail-area">
     @if (!hasSelection()) {
       <div class="empty-detail">
-        <mat-icon>assignment</mat-icon>
+        <mat-icon svgIcon="tasks" />
         <p>
           {{ 'tasks.tasks-page.select-a-task' | translate }}
         </p>
@@ -17,26 +17,21 @@
       </div>
     } @else {
       <!-- Document Header Bar (title + breadcrumb) — spans full width -->
-      <div class="doc-header-bar">
-        <div class="doc-header-top">
-          <mat-icon class="doc-header-type-icon">description</mat-icon>
-          <div class="doc-header-titles">
-            @if (targetDoc()) {
-              <div class="doc-main-title" role="heading" aria-level="1">
-                {{ targetDoc()!.title }}
-              </div>
-              <sat-breadcrumbs
-                [items]="breadcrumbItems()"
-                (click)="onBreadcrumbClick($event)"
-              ></sat-breadcrumbs>
-            } @else {
-              <div class="doc-main-title" role="heading" aria-level="1">
-                {{ selectedTask()!.targetDocTitle || ('tasks.document' | translate) }}
-              </div>
-            }
-          </div>
-        </div>
-      </div>
+      <sat-header-bar class="doc-header-bar" variant="one-row">
+        <mat-icon sat-header-bar-leading class="doc-header-type-icon" svgIcon="page" />
+        @if (targetDoc()) {
+          {{ targetDoc()!.title }}
+        } @else {
+          {{ selectedTask()!.targetDocTitle || ('tasks.document' | translate) }}
+        }
+        @if (targetDoc()) {
+          <sat-breadcrumbs
+            sat-header-bar-trailing
+            [items]="breadcrumbItems()"
+            (click)="onBreadcrumbClick($event)"
+          ></sat-breadcrumbs>
+        }
+      </sat-header-bar>
 
       <!-- Two-panel split: Task Form (left) + Document Preview (right) -->
       <div class="task-content-area">
@@ -76,7 +71,7 @@
                     [matTooltip]="'tasks.tasks-page.close' | translate"
                     [attr.aria-label]="'tasks.tasks-page.close' | translate"
                   >
-                    <mat-icon>close</mat-icon>
+                    <mat-icon svgIcon="x_large" />
                   </button>
                 </div>
                 <p class="action-panel-hint">
@@ -86,12 +81,13 @@
                 <div class="action-panel-chips">
                   @for (actor of delegateActors; track actor) {
                     <span class="participant-chip">
-                      <mat-icon class="chip-type-icon">{{
-                        actor.startsWith('group:') ? 'group' : 'person'
-                      }}</mat-icon>
+                      <mat-icon
+                        class="chip-type-icon"
+                        [svgIcon]="actor.startsWith('group:') ? 'user_group' : 'user'"
+                      />
                       {{ formatParticipant(actor) }}
                       <button class="chip-x" (click)="removeDelegateActor(actor)">
-                        <mat-icon>close</mat-icon>
+                        <mat-icon svgIcon="x_large" />
                       </button>
                     </span>
                   }
@@ -115,7 +111,7 @@
                         class="dropdown-item"
                         (click)="addDelegateActor('user:' + user.id)"
                       >
-                        <mat-icon>person</mat-icon>
+                        <mat-icon svgIcon="user" />
                         <span>{{ user.properties.firstName }} {{ user.properties.lastName }}</span>
                         <span class="dropdown-id">{{ user.id }}</span>
                       </button>
@@ -126,7 +122,7 @@
                         class="dropdown-item"
                         (click)="addDelegateActor('group:' + group.groupname)"
                       >
-                        <mat-icon>group</mat-icon>
+                        <mat-icon svgIcon="user_group" />
                         <span>{{ group.grouplabel || group.groupname }}</span>
                         <span class="dropdown-id">{{ group.groupname }}</span>
                       </button>
@@ -167,7 +163,7 @@
                     [matTooltip]="'tasks.tasks-page.close' | translate"
                     [attr.aria-label]="'tasks.tasks-page.close' | translate"
                   >
-                    <mat-icon>close</mat-icon>
+                    <mat-icon svgIcon="x_large" />
                   </button>
                 </div>
                 <p class="action-panel-hint">
@@ -177,12 +173,13 @@
                 <div class="action-panel-chips">
                   @for (actor of reassignActors; track actor) {
                     <span class="participant-chip">
-                      <mat-icon class="chip-type-icon">{{
-                        actor.startsWith('group:') ? 'group' : 'person'
-                      }}</mat-icon>
+                      <mat-icon
+                        class="chip-type-icon"
+                        [svgIcon]="actor.startsWith('group:') ? 'user_group' : 'user'"
+                      />
                       {{ formatParticipant(actor) }}
                       <button class="chip-x" (click)="removeReassignActor(actor)">
-                        <mat-icon>close</mat-icon>
+                        <mat-icon svgIcon="x_large" />
                       </button>
                     </span>
                   }
@@ -206,7 +203,7 @@
                         class="dropdown-item"
                         (click)="addReassignActor('user:' + user.id)"
                       >
-                        <mat-icon>person</mat-icon>
+                        <mat-icon svgIcon="user" />
                         <span>{{ user.properties.firstName }} {{ user.properties.lastName }}</span>
                         <span class="dropdown-id">{{ user.id }}</span>
                       </button>
@@ -217,7 +214,7 @@
                         class="dropdown-item"
                         (click)="addReassignActor('group:' + group.groupname)"
                       >
-                        <mat-icon>group</mat-icon>
+                        <mat-icon svgIcon="user_group" />
                         <span>{{ group.grouplabel || group.groupname }}</span>
                         <span class="dropdown-id">{{ group.groupname }}</span>
                       </button>
@@ -258,7 +255,7 @@
                     [matTooltip]="'tasks.tasks-page.close' | translate"
                     [attr.aria-label]="'tasks.tasks-page.close' | translate"
                   >
-                    <mat-icon>close</mat-icon>
+                    <mat-icon svgIcon="x_large" />
                   </button>
                 </div>
 
@@ -279,11 +276,11 @@
                       >
                         <div class="graph-node-marker">
                           @if (node.state === 'done') {
-                            <mat-icon class="node-icon done">check_circle</mat-icon>
+                            <mat-icon class="node-icon done" svgIcon="circle_check" />
                           } @else if (node.isCurrent) {
-                            <mat-icon class="node-icon current">radio_button_checked</mat-icon>
+                            <mat-icon class="node-icon current" svgIcon="radio_button" />
                           } @else {
-                            <mat-icon class="node-icon pending">radio_button_unchecked</mat-icon>
+                            <mat-icon class="node-icon pending" svgIcon="radio_button" />
                           }
                         </div>
                         <span class="graph-node-title">{{ node.title }}</span>
@@ -295,7 +292,7 @@
                   </div>
                 } @else {
                   <div class="graph-empty">
-                    <mat-icon>account_tree</mat-icon>
+                    <mat-icon svgIcon="tree" />
                     <span>{{ 'tasks.tasks-page.no-graph-data-available' | translate }}</span>
                   </div>
                 }
@@ -352,12 +349,13 @@
                 <div class="participant-chips">
                   @for (p of participants; track p) {
                     <span class="participant-chip">
-                      <mat-icon class="chip-type-icon">{{
-                        p.startsWith('group:') ? 'group' : 'person'
-                      }}</mat-icon>
+                      <mat-icon
+                        class="chip-type-icon"
+                        [svgIcon]="p.startsWith('group:') ? 'user_group' : 'user'"
+                      />
                       {{ formatParticipant(p) }}
                       <button class="chip-x" (click)="removeParticipant(p)">
-                        <mat-icon>close</mat-icon>
+                        <mat-icon svgIcon="x_large" />
                       </button>
                     </span>
                   }
@@ -372,7 +370,7 @@
                     [placeholder]="'tasks.tasks-page.type-to-search' | translate"
                   />
                   @if (searching()) {
-                    <mat-icon matSuffix>hourglass_empty</mat-icon>
+                    <mat-icon matSuffix svgIcon="progress_activity" />
                   }
                 </mat-form-field>
 
@@ -384,7 +382,7 @@
                         class="dropdown-item"
                         (click)="addParticipant('user:' + user.id)"
                       >
-                        <mat-icon>person</mat-icon>
+                        <mat-icon svgIcon="user" />
                         <span>{{ user.properties.firstName }} {{ user.properties.lastName }}</span>
                         <span class="dropdown-id">{{ user.id }}</span>
                       </button>
@@ -395,7 +393,7 @@
                         class="dropdown-item"
                         (click)="addParticipant('group:' + group.groupname)"
                       >
-                        <mat-icon>group</mat-icon>
+                        <mat-icon svgIcon="user_group" />
                         <span>{{ group.grouplabel || group.groupname }}</span>
                         <span class="dropdown-id">{{ group.groupname }}</span>
                       </button>
@@ -465,7 +463,8 @@
                   [disabled]="submitting()"
                   (click)="abandonWorkflow()"
                 >
-                  <mat-icon>cancel</mat-icon> {{ 'tasks.tasks-page.abandon-workflow' | translate }}
+                  <mat-icon svgIcon="circle_x" />
+                  {{ 'tasks.tasks-page.abandon-workflow' | translate }}
                 </button>
               </div>
             }
@@ -506,7 +505,7 @@
               [matTooltip]="'tasks.tasks-page.collapse' | translate"
               [attr.aria-label]="'tasks.tasks-page.collapse' | translate"
             >
-              <mat-icon>chevron_left</mat-icon>
+              <mat-icon svgIcon="chevron_left" />
             </button>
           </div>
         </section>
@@ -526,12 +525,12 @@
             />
           } @else {
             <div class="preview-placeholder">
-              <mat-icon>insert_drive_file</mat-icon>
+              <mat-icon svgIcon="page" />
               <span>{{ docLoading() ? 'Loading...' : ('tasks.no-document' | translate) }}</span>
             </div>
           }
         </section>
       </div>
     }
-  </main>
+  </div>
 </div>

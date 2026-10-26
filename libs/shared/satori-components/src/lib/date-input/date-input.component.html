@@ -1,0 +1,43 @@
+<mat-form-field appearance="outline" class="nxs-picker__field" subscriptSizing="dynamic">
+  <mat-label>{{ label() }}</mat-label>
+  <input
+    matInput
+    autocomplete="off"
+    [matDatepicker]="picker"
+    [min]="min()"
+    [max]="max()"
+    [required]="required()"
+    [disabled]="isDisabled()"
+    [errorStateMatcher]="errorState"
+    (input)="typing($event)"
+    (dateInput)="changed($event)"
+    (blur)="blurred()"
+  />
+  <mat-datepicker-toggle matIconSuffix [for]="picker" />
+  <mat-datepicker #picker />
+  @switch (problem()) {
+    @case ('parse') {
+      <mat-error>{{
+        'satori-components.date-input.invalid' | translate: { example: example() }
+      }}</mat-error>
+    }
+    @case ('min') {
+      <mat-error>{{
+        'satori-components.date-input.too-early' | translate: { date: formatted(min()) }
+      }}</mat-error>
+    }
+    @case ('max') {
+      <mat-error>{{
+        'satori-components.date-input.too-late' | translate: { date: formatted(max()) }
+      }}</mat-error>
+    }
+    @default {
+      @if (missing()) {
+        <mat-error>{{ 'satori-components.pickers.required' | translate }}</mat-error>
+      }
+    }
+  }
+  @if (hint()) {
+    <mat-hint>{{ hint() }}</mat-hint>
+  }
+</mat-form-field>

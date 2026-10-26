@@ -12,22 +12,22 @@ import {
   SelectionService,
   readClipboardDocs,
   writeClipboardDocs,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   ConfirmDialogComponent,
   openDocumentCompareDialog,
   trashSelectedDocumentsConfirmData,
-} from '@nuxeo-satori/platform/ui';
-import type { ExtensionActionHandler } from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/ui';
+import type { ExtensionActionHandler } from '@nuxeo/satori-platform/extensions';
 
 /**
  * The packaged bulk actions, one service per action.
  *
  * The shape is adf-hx's — `ContentDeleteActionService`, `ContentShareActionService`,
  * `SingleItemDownloadActionService` and friends in the published package's `/ui`
- * entry point are each an injectable service performing one action. Phase 3
- * adopts those components, so a handler registered here can be replaced by the
- * upstream service under the same descriptor id without touching the topbar.
+ * entry point are each an injectable service performing one action. It was
+ * matched so the upstream services could replace these under the same
+ * descriptor id without touching the topbar; adf-hx was removed instead.
  *
  * Before this, each of these was a method on `AppShellComponent` reached through
  * a named `@Output()` on `SelectionTopbarComponent`. The shell no longer knows

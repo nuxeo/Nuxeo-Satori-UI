@@ -1,0 +1,68 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DropzoneStories from './dropzone.stories';
+
+<Meta of={DropzoneStories} name="Overview" />
+
+# Dropzone
+
+The dropzone is where files are dropped from the computer, or chosen with its button. Use it wherever
+a page takes files: the Create / Import dialog's import and its CSV import use it.
+
+## Key features
+
+- **Drop or choose — the same files.** Both emit `files`. The button is the way in for the keyboard and
+  for anyone who cannot drag.
+- **Only files.** A drag of text or a link is left to the browser, and the zone does not light up for
+  it.
+- **One or several.** With `multiple` off it takes one file, the first of a drop. `accept` limits what
+  the chooser offers.
+- **Disabled while busy.** With `disabled`, neither the drop nor the button takes anything.
+
+## Demo showcase
+
+<Canvas of={DropzoneStories.SeveralFiles} />
+
+## Usage
+
+<Source language="typescript" dark code={`import { NxsDropzoneComponent } from '@nuxeo/satori-platform/components';`} />
+
+export const usageHtml = `<nxs-dropzone
+  multiple
+  [label]="'acme.drop-files' | translate"
+  [disabled]="uploading()"
+  (files)="stage($event)"
+/>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`label` is required, already translated. The default button text is translated with ngx-translate
+under `satori-components.dropzone.*`. The dropzone reads nothing and uploads nothing: it hands the
+files to your component.
+
+## Where its data comes from
+
+From the user's computer only. Uploading is your component's: hand the files to an `NxsUploadQueue`
+and `DocumentImportService`, or to whatever your page uploads with.
+
+**In these stories** the files chosen or dropped are recorded in the Actions panel.
+
+## Examples
+
+### One CSV file
+
+<Canvas of={DropzoneStories.OneCsvFile} />
+
+### Disabled
+
+<Canvas of={DropzoneStories.Disabled} />
+
+## Accessibility
+
+- **The button** is a real, named button: **Tab** reaches it and **Enter** or **Space** opens the
+  computer's file chooser. The file input behind it is out of the Tab sequence and hidden from
+  assistive technology, so it is not announced twice. It still takes its name from that button
+  through `aria-labelledby`; each dropzone's button has an id of its own, so two on a page do not
+  name each other's input.
+- **The text** says what to do; the icon is decorative.
+- **Dragging** has no keyboard equivalent of its own, which is why the button is always there.

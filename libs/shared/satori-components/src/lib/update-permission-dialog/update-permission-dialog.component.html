@@ -1,0 +1,110 @@
+<h2 mat-dialog-title>{{ 'satori-components.permission-dialogs.update.title' | translate }}</h2>
+
+<mat-dialog-content class="nxs-update-permission-dialog__content">
+  <p class="nxs-update-permission-dialog__principal">
+    {{ 'satori-components.permission-dialogs.update.for' | translate: { principal } }}
+  </p>
+
+  <mat-form-field appearance="outline">
+    <mat-label>{{ 'satori-components.permission-dialogs.right' | translate }}</mat-label>
+    <mat-select [value]="right()" (valueChange)="right.set($event)">
+      @for (permission of rights; track permission) {
+        <mat-option [value]="permission">{{ label(permission) }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  @if (!external) {
+    <span class="nxs-update-permission-dialog__label" [id]="id + '-time-frame'">{{
+      'satori-components.permission-dialogs.time-frame' | translate
+    }}</span>
+    <mat-radio-group
+      class="nxs-update-permission-dialog__time-frame"
+      [attr.aria-labelledby]="id + '-time-frame'"
+      [value]="dated() ? 'dated' : 'permanent'"
+      (change)="dated.set($event.value === 'dated')"
+    >
+      <mat-radio-button value="permanent">{{
+        'satori-components.permission-dialogs.permanent' | translate
+      }}</mat-radio-button>
+      <mat-radio-button value="dated">{{
+        'satori-components.permission-dialogs.date-based' | translate
+      }}</mat-radio-button>
+    </mat-radio-group>
+  }
+
+  <div class="nxs-update-permission-dialog__dates">
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'satori-components.permission-dialogs.from' | translate }}</mat-label>
+      <input
+        matInput
+        [matDatepicker]="beginPicker"
+        [disabled]="!dated()"
+        [value]="beginField()"
+        (dateChange)="begin.set(fieldDay($event.value))"
+      />
+      <mat-datepicker-toggle matIconSuffix [for]="beginPicker" />
+      <mat-datepicker #beginPicker />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'satori-components.permission-dialogs.to' | translate }}</mat-label>
+      <input
+        matInput
+        [matDatepicker]="endPicker"
+        [required]="external"
+        [disabled]="!dated()"
+        [value]="endField()"
+        (dateChange)="end.set(fieldDay($event.value))"
+      />
+      <mat-datepicker-toggle matIconSuffix [for]="endPicker" />
+      <mat-datepicker #endPicker />
+    </mat-form-field>
+  </div>
+  @if (endBeforeBegin()) {
+    <p class="nxs-update-permission-dialog__error" role="alert">
+      {{ 'satori-components.permission-dialogs.end-before-begin' | translate }}
+    </p>
+  }
+
+  @if (!external) {
+    <mat-checkbox [checked]="notify()" (change)="notify.set($event.checked)">
+      {{ 'satori-components.permission-dialogs.update.notify' | translate }}
+    </mat-checkbox>
+  }
+  @if (notify()) {
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'satori-components.permission-dialogs.comment' | translate }}</mat-label>
+      <textarea
+        #commentBox
+        matInput
+        rows="2"
+        [placeholder]="'satori-components.permission-dialogs.comment-placeholder' | translate"
+        [value]="comment()"
+        (input)="comment.set(commentBox.value)"
+      ></textarea>
+      <mat-hint>{{ mailHint | translate }}</mat-hint>
+    </mat-form-field>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" mat-dialog-close [disabled]="saving()">
+    {{ 'satori-components.permission-dialogs.cancel' | translate }}
+  </button>
+  <button
+    mat-flat-button
+    type="button"
+    class="nxs-update-permission-dialog__update"
+    [disabled]="!valid() || saving()"
+    (click)="update()"
+  >
+    @if (saving()) {
+      <nxs-spinner
+        diameter="18"
+        [label]="'satori-components.permission-dialogs.update.saving' | translate"
+      />
+    } @else {
+      {{ 'satori-components.permission-dialogs.update.update' | translate }}
+    }
+  </button>
+</mat-dialog-actions>

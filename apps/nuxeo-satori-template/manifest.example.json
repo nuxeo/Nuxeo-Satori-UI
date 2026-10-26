@@ -1,5 +1,5 @@
 {
-  "$comment": "Layer 1 runtime manifest — EXAMPLE, not loaded by the build. In production this JSON is the payload of a Nuxeo document (default `note:note` on the document named by `manifestDocumentPath`), NOT a file in the bundle. That is deliberate: a Nuxeo document inherits the repository's versioning, audit trail and ACLs, and it survives a marketplace upgrade. To try it, create the document and paste this in.",
+  "$comment": "Layer 1 manifest fragment — EXAMPLE, not loaded by the build. On a server, this JSON is a manifest fragment in your own configuration package: put it in the package's bundle and contribute it to org.nuxeo.agentic.ui.config, and the server serves it at agentic-ui-config/manifest.json with every other package's fragments, in dependency order. Like everything there it is read before sign-in, so it must never hold anything sensitive. To try it under nx serve, wrap it as a fragment in public/agentic-ui-config/manifest.json.",
 
   "version": 1,
 

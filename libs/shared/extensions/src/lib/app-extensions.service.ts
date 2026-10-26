@@ -1,10 +1,9 @@
 import { Injectable, computed, inject } from '@angular/core';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import {
-  readExtensionConfig,
-  resolveExtensionConfig,
+  resolveExtensionLayers,
   type ExtensionConfig,
   type ResolvedExtensionConfig,
 } from './extension-config';
@@ -48,7 +47,7 @@ export class AppExtensionsService {
 
   /** The merged Layer 1 config, recomputed when the manifest signal changes. */
   private readonly resolved = computed<ResolvedExtensionConfig>(() =>
-    resolveExtensionConfig(readExtensionConfig(this.appConfig.manifest().extensions)),
+    resolveExtensionLayers(this.appConfig.manifest().extensionLayers),
   );
 
   readonly config = computed<ExtensionConfig>(() => this.resolved().config);

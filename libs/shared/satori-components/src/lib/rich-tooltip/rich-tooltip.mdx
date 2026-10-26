@@ -1,0 +1,130 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as RichTooltipStories from './rich-tooltip.stories';
+
+<Meta of={RichTooltipStories} name="Overview" />
+
+# Rich tooltip
+
+A rich tooltip is a small icon button that opens a short explanation with a title. Use it beside a
+field, a column header or a setting whose meaning needs a sentence or two, when that text would
+clutter the page if it were always shown. For one word or a short phrase, a plain tooltip is enough.
+
+## Key features
+
+- **A title and a sentence or two.** `heading` is the title and `content` the explanation, both
+  plain text.
+- **Opens on hover, focus or a tap.** The panel opens when the pointer rests on the button or
+  keyboard focus reaches it, as Satori's does, and on a click or tap, because a touch screen has
+  neither. **Escape** or moving focus away closes it. The panel does not cover the page or trap
+  focus.
+- **Announced when it opens.** The panel opens inside a live region, so a screen reader reads it
+  without the user moving to it.
+- **Stays on screen.** The panel is never wider than the window, and moves sideways to stay inside
+  it when the button sits near either edge, in left-to-right and right-to-left layouts alike.
+- **Any icon.** `info` by default; any Material Icons ligature through `icon`.
+- **Replaceable by ID.** It is registered as `nxs.primitives.richTooltip`, so Satori's rich tooltip
+  or your own can take its place.
+
+## Demo showcase
+
+Rest the pointer on the button, Tab to it, or select it to open the panel. The **Open**, **Opens On
+Hover** and **Opens On Focus** stories in the sidebar show it opened each way.
+
+<Canvas of={RichTooltipStories.Closed} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsRichTooltipComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-rich-tooltip
+  [heading]="'acme.versioning.title' | translate"
+  [content]="'acme.versioning.help' | translate"
+  [triggerLabel]="'acme.versioning.about' | translate"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`heading`, `content` and `triggerLabel` are required, already translated. Used directly, the rich
+tooltip needs no providers.
+
+### By registered ID
+
+`provideNxsComponents()` registers the rich tooltip as `nxs.primitives.richTooltip`, exported as
+`NXS_PRIMITIVE_IDS.richTooltip`:
+
+export const byRegisteredIdHtml = `<lib-extension-outlet
+  [componentId]="tooltipId"
+  [componentInputs]="{
+    heading: 'Versioning',
+    content: 'A new version is created each time you check in.',
+    triggerLabel: 'About versioning',
+  }"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={byRegisteredIdHtml}
+/>
+
+## Examples
+
+### Another icon
+
+Use `help_outline` for help text and keep `info` for background information. Name the button for
+what it explains, not for the icon.
+
+<Canvas of={RichTooltipStories.OtherIcon} />
+
+### By registered ID
+
+<Canvas of={RichTooltipStories.ByRegisteredId} />
+
+## Accessibility
+
+- **Name.** The button shows only an icon, so `triggerLabel` is its accessible name. Say what the
+  explanation is about, such as "About versioning", not "Info".
+- **State.** The button reports whether the panel is open (`aria-expanded`) and which element it
+  controls (`aria-controls`).
+- **Keyboard.** **Tab** reaches the button and opens the panel after 200 ms. **Enter** or **Space**
+  then closes it, and pressed again opens it again. **Escape** closes it wherever focus is, and
+  leaves focus where it is. Moving focus out of the component closes it.
+- **Pointer and touch.** Resting the pointer on the button opens the panel after 200 ms. It stays
+  open while the pointer is on the button or the panel, and closes 1.5 s after the pointer leaves,
+  so the pointer can cross to the panel. A click keeps it open after the pointer leaves, until a
+  second click, **Escape** or focus moving away. A tap opens it and a second tap closes it.
+- **Announcement.** The panel opens inside a `status` live region, so a screen reader reads the title
+  and text while focus stays on the button. It is not a dialog: a dialog takes focus when it opens.
+- **Content.** Keep the text short and plain. The panel holds no links or buttons.
+
+## Satori and the built-in rich tooltip
+
+The same ID, `nxs.primitives.richTooltip`, renders **Satori's rich tooltip** when
+`@nuxeo/satori-platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
+after `provideNxsComponents()`. Otherwise it renders the **built-in rich tooltip** shown on this page.
+Both take the same four inputs.
+
+What behaves differently:
+
+- **How it opens.** Both open when the pointer rests on the button or keyboard focus reaches it,
+  after 200 ms, and close 1.5 s after the pointer leaves. The built-in one also opens on a click, a
+  tap, **Enter** or **Space**, which Satori's ignores. It closes as soon as focus leaves; Satori's
+  waits 1.5 s. Escape closes the built-in one wherever focus is; Satori's only while focus is on its
+  button.
+- **Styling.** Satori's panel uses Satori's surface, type and close hint. The built-in panel uses your
+  Material theme.
+
+Satori's rich tooltip needs `provideSatori()` and Satori's translations loaded in ngx-translate;
+without the translations its close hint shows as a raw key.
+
+This Storybook is built without access to GitHub Packages, so every example here shows the built-in
+rich tooltip. Satori's rich tooltip is shown in Satori's documentation.

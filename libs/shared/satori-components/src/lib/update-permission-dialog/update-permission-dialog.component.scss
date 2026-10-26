@@ -1,0 +1,49 @@
+:host {
+  display: block;
+  --nxs-update-permission-dialog-muted: var(--mat-sys-on-surface-variant);
+  --nxs-update-permission-dialog-error: var(--mat-sys-error);
+}
+
+.nxs-update-permission-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(460px, 80vw);
+}
+
+// Paragraph margins are scoped to the host: the theme's `.mat-typography p` outranks one class.
+:host .nxs-update-permission-dialog__principal {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--nxs-update-permission-dialog-muted);
+}
+
+.nxs-update-permission-dialog__label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.nxs-update-permission-dialog__time-frame {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 8px;
+}
+
+// Side by side while both dates fit, one above the other when they do not, as at 320 px: a field
+// narrower than its basis cut the date off ("2/1/2031" showed as "2/1/2"). The basis is a full date
+// beside the field's padding and its datepicker toggle.
+.nxs-update-permission-dialog__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+
+  mat-form-field {
+    flex: 1 1 11rem;
+  }
+}
+
+:host .nxs-update-permission-dialog__error {
+  margin: -4px 0 8px;
+  font-size: 12px;
+  color: var(--nxs-update-permission-dialog-error);
+}

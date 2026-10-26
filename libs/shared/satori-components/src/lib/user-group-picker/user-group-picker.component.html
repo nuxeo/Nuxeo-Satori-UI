@@ -1,0 +1,88 @@
+<mat-form-field appearance="outline" class="nxs-picker__field" subscriptSizing="dynamic">
+  <mat-label>{{ label() }}</mat-label>
+  <input
+    matInput
+    type="text"
+    autocomplete="off"
+    [matAutocomplete]="auto"
+    [value]="text()"
+    [required]="required()"
+    [disabled]="isDisabled()"
+    [errorStateMatcher]="errorState"
+    (input)="onInput($event)"
+    (blur)="blurred()"
+  />
+  @if (value() && !isDisabled()) {
+    <button
+      matIconSuffix
+      mat-icon-button
+      type="button"
+      class="nxs-picker__clear"
+      [attr.aria-label]="'satori-components.pickers.clear' | translate"
+      (click)="clear()"
+    >
+      <mat-icon aria-hidden="true" svgIcon="x_large" />
+    </button>
+  }
+  @if (unmatched()) {
+    <mat-error>{{ 'satori-components.pickers.choose-from-list' | translate }}</mat-error>
+  } @else if (missing()) {
+    <mat-error>{{ 'satori-components.pickers.required' | translate }}</mat-error>
+  }
+  @if (finder.state().status === 'short') {
+    <mat-hint>{{
+      (minChars() === 1
+        ? 'satori-components.pickers.min-chars-one'
+        : 'satori-components.pickers.min-chars-many'
+      ) | translate: { count: minChars() }
+    }}</mat-hint>
+  } @else if (hint()) {
+    <mat-hint>{{ hint() }}</mat-hint>
+  }
+  <mat-autocomplete
+    #auto="matAutocomplete"
+    class="nxs-picker__panel"
+    [displayWith]="displayWith"
+    (optionSelected)="choose($event.option.value)"
+  >
+    @switch (finder.state().status) {
+      @case ('searching') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.searching' | translate
+        }}</mat-option>
+      }
+      @case ('none') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.no-results' | translate
+        }}</mat-option>
+      }
+      @case ('failed') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.failed' | translate
+        }}</mat-option>
+      }
+      @case ('found') {
+        @for (principal of finder.state().results; track principal.prefixedId) {
+          <mat-option [value]="principal" [attr.data-principal]="principal.prefixedId">
+            <mat-icon
+              aria-hidden="true"
+              [svgIcon]="principal.kind === 'group' ? 'user_group' : 'user'"
+            />
+            <span class="nxs-picker__option">
+              <span class="nxs-picker__option-label">{{ principal.label }}</span
+              >&ngsp;
+              <span class="nxs-picker__option-detail"
+                >{{
+                  (principal.kind === 'group'
+                    ? 'satori-components.user-group-picker.group'
+                    : 'satori-components.user-group-picker.user'
+                  ) | translate
+                }}{{ principal.email ? ' · ' + principal.email : '' }}</span
+              >
+            </span>
+          </mat-option>
+        }
+      }
+    }
+  </mat-autocomplete>
+</mat-form-field>

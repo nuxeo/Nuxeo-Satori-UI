@@ -1,5 +1,13 @@
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
-import { Component, DestroyRef, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  inject,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -14,7 +22,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { Subject, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
 
-import { NuxeoGroup, NuxeoUser, UserService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoGroup, NuxeoUser, UserService } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 
 export interface GroupFormDialogData {
@@ -46,6 +54,7 @@ export interface GroupFormDialogResult {
     MatIconModule,
   ],
   templateUrl: './group-form-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

@@ -1,0 +1,110 @@
+:host {
+  display: block;
+}
+
+.nxs-drive-dialog__body {
+  box-sizing: border-box;
+  // Never wider than the pane MatDialog gives the dialog: below 600 px that is `100vw - 32px`,
+  // narrower than the `95vw` this once was, which scrolled sideways at 320 px.
+  width: 460px;
+  max-width: 100%;
+  padding: 28px 32px;
+}
+
+// `mat-dialog-title` is here for the dialog's accessible name; the layout is this dialog's own.
+.nxs-drive-dialog__title.nxs-drive-dialog__title {
+  margin: 0 0 24px;
+  padding: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: normal;
+  color: var(--mat-sys-on-surface);
+
+  &::before {
+    display: none;
+  }
+}
+
+// Names the dialog while the check runs, when the visible status line is all it shows.
+.nxs-drive-dialog__name.nxs-drive-dialog__name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.nxs-drive-dialog__checking {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+}
+
+.nxs-drive-dialog__checking-text {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-drive-dialog__table {
+  width: 100%;
+  margin-bottom: 24px;
+  border-collapse: collapse;
+
+  th {
+    padding: 0 16px 12px 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--mat-sys-on-surface-variant);
+    text-align: left;
+  }
+
+  td {
+    padding: 12px 16px 12px 0;
+    border-top: 1px solid var(--mat-sys-outline-variant);
+    vertical-align: middle;
+  }
+}
+
+.nxs-drive-dialog__platform {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 3px;
+  background: var(--mat-sys-inverse-surface);
+  color: var(--mat-sys-inverse-on-surface);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.nxs-drive-dialog__package {
+  font-size: 14px;
+  color: var(--mat-sys-on-surface);
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--mat-sys-primary);
+    text-decoration: underline;
+  }
+}
+
+.nxs-drive-dialog__close {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--mat-sys-primary);
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}

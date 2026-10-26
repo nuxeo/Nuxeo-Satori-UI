@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { fullAdministratorGuard } from '@nuxeo-satori/platform/nuxeo-client';
+import { fullAdministratorGuard } from '@nuxeo/satori-platform/nuxeo-client';
 import { administrationRoutes } from './lib.routes';
 import { AdministrationShellComponent } from './administration-shell/administration-shell.component';
 import { AdminAnalyticsPageComponent } from './admin-analytics-page/admin-analytics-page.component';

@@ -1,10 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import { provideZonelessChangeDetection } from '@angular/core';
-import { provideHttpClient } from '@angular/common/http';
+import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { AI_BACKEND_URL } from './ai.config';
+import { AiFeatureFlagService } from './ai-feature-flag.service';
 import { AiGatewayService } from './ai-gateway.service';
 
 /**
@@ -22,6 +23,10 @@ import { AiGatewayService } from './ai-gateway.service';
  * path, and the `params` envelope the Automation API requires. A typo in either produces an HTTP 500
  * that looks exactly like the absent-package case, which is why it needs pinning here rather than
  * being left to integration testing.
+ *
+ * The real `AiFeatureFlagService` reports AI as disabled for every user, and the gateway refuses to
+ * send while it does. These cases stub the flag on so the request-shaping contract stays covered
+ * while the feature is switched off; the refusal itself is asserted separately at the bottom.
  */
 describe('AiGatewayService', () => {
   let service: AiGatewayService;
@@ -30,19 +35,25 @@ describe('AiGatewayService', () => {
   /** A trailing slash on purpose: `op()` has to strip it rather than emit a double slash. */
   const backend = 'https://nuxeo.example.com/nuxeo/';
 
-  beforeEach(() => {
+  function configure(aiEnabled: boolean): void {
+    TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: AI_BACKEND_URL, useValue: backend },
+        { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(aiEnabled) } },
         AiGatewayService,
       ],
     });
 
     service = TestBed.inject(AiGatewayService);
     http = TestBed.inject(HttpTestingController);
+  }
+
+  beforeEach(() => {
+    configure(true);
   });
 
   afterEach(() => {
@@ -71,9 +82,10 @@ describe('AiGatewayService', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: AI_BACKEND_URL, useValue: 'https://nuxeo.example.com/nuxeo' },
+        { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(true) } },
         AiGatewayService,
       ],
     });
@@ -252,6 +264,52 @@ describe('AiGatewayService', () => {
         .flush({ message: 'Unknown operation' }, { status: 500, statusText: 'Server Error' });
 
       expect(status).toBe(500);
+    });
+  });
+
+  describe('when AI features are disabled', () => {
+    beforeEach(() => {
+      configure(false);
+    });
+
+    /**
+     * The backstop that makes "AI is disabled" true of the network and not only of the UI.
+     * Components gate their own templates, but two of them were issuing requests from `ngOnInit`
+     * while their templates were correctly hidden, so the guard cannot live only at the call sites.
+     *
+     * `http.verify()` in the outer `afterEach` is what actually fails this if a request escapes.
+     */
+    it('sends no request for any operation', () => {
+      service.nlToNxql('every pdf').subscribe({ error: () => undefined });
+      service.nlToNxqlSuggestions('every pdf').subscribe({ error: () => undefined });
+      service.summarize('doc-1').subscribe({ error: () => undefined });
+      service.suggestTags('doc-1').subscribe({ error: () => undefined });
+      service.classify('doc-1').subscribe({ error: () => undefined });
+      service.findSimilar('doc-1').subscribe({ error: () => undefined });
+      service.chat({ message: 'hello' }).subscribe({ error: () => undefined });
+      service.analyzeSentiment([]).subscribe({ error: () => undefined });
+      service.getInsights('jdoe').subscribe({ error: () => undefined });
+      service.detectAnomalies().subscribe({ error: () => undefined });
+      service.queryPermissions('who can read this?').subscribe({ error: () => undefined });
+      service.auditNlFilter('deletions yesterday').subscribe({ error: () => undefined });
+      service.auditSummarize([]).subscribe({ error: () => undefined });
+
+      http.expectNone(() => true);
+    });
+
+    it('errors rather than completing silently, so callers clear their loading state', () => {
+      // Returning `EMPTY` would leave every caller's `loading` signal set forever, because neither
+      // their `next` nor their `error` handler would run.
+      let message: string | undefined;
+      let completed = false;
+
+      service.summarize('doc-1').subscribe({
+        error: (e: Error) => (message = e.message),
+        complete: () => (completed = true),
+      });
+
+      expect(completed).toBe(false);
+      expect(message).toContain('AI.Summarize');
     });
   });
 });

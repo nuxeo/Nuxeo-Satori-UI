@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { DOCUMENT_RULE_EVALUATORS } from './document-rules';
+import { SURFACE_RULE_EVALUATORS } from './surface-rules';
 import {
   EMPTY_EXTENSION_RULE_CONTEXT,
   ExtensionRuleRegistry,
@@ -45,6 +46,7 @@ describe('document type rules', () => {
     TestBed.configureTestingModule({});
     registry = TestBed.inject(ExtensionRuleRegistry);
     registry.registerRules(DOCUMENT_RULE_EVALUATORS);
+    registry.registerRules(SURFACE_RULE_EVALUATORS);
   });
 
   describe('app.rules.isType', () => {
@@ -98,6 +100,39 @@ describe('document type rules', () => {
     });
   });
 
+  describe('app.rules.isNote', () => {
+    const withFlags = (document: NuxeoDocument | null, flags: Record<string, boolean>) => ({
+      ...on(document),
+      flags,
+    });
+
+    it.each<[string, NuxeoDocument | null]>([
+      ['a Note', doc('Note')],
+      ['a File', doc('File')],
+      ['a type named like it in another case', doc('note')],
+      ['a subtype-looking name', doc('NoteTemplate')],
+      ['no document', null],
+    ])('answers as isType(["Note"]) for %s', (_label, document) => {
+      expect(registry.evaluate('app.rules.isNote', on(document))).toBe(
+        registry.evaluate(isType('Note'), on(document)),
+      );
+    });
+
+    it('is true for a Note and false otherwise', () => {
+      expect(registry.evaluate('app.rules.isNote', on(doc('Note')))).toBe(true);
+      expect(registry.evaluate('app.rules.isNote', on(doc('File')))).toBe(false);
+      expect(registry.evaluate('app.rules.isNote', on(null))).toBe(false);
+    });
+
+    // The rule used to read `flags.note`; a stale or forged flag must not decide it now.
+    it('reads the document, not a note flag', () => {
+      expect(registry.evaluate('app.rules.isNote', withFlags(doc('File'), { note: true }))).toBe(
+        false,
+      );
+      expect(registry.evaluate('app.rules.isNote', withFlags(doc('Note'), {}))).toBe(true);
+    });
+  });
+
   it('composes inside core.every, core.some and core.not like any other rule', () => {
     const claim = on(doc('Claim', ['Versionable']));
 
@@ -117,5 +152,38 @@ describe('document type rules', () => {
       false,
     );
     expect(registry.evaluate({ type: 'core.not', parameters: [isType('Case')] }, claim)).toBe(true);
+  });
+});
+
+describe('app.rules.hasFile', () => {
+  let registry: ExtensionRuleRegistry;
+  const withContent = (content: unknown): NuxeoDocument => ({
+    ...doc('File'),
+    properties: { 'file:content': content },
+  });
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({});
+    registry = TestBed.inject(ExtensionRuleRegistry);
+    registry.registerRules(DOCUMENT_RULE_EVALUATORS);
+  });
+
+  it('is true for a document holding a main file, whatever its facets', () => {
+    // A Picture holds a file and has no `Downloadable` facet, which is why the facet is not the test.
+    const picture = { ...withContent({ name: 'photo.jpg' }), type: 'Picture', facets: ['Picture'] };
+    expect(registry.evaluate('app.rules.hasFile', on(picture))).toBe(true);
+  });
+
+  it.each([
+    ['no file', withContent(null)],
+    ['no file property at all', doc('Note')],
+    ['a string where the blob should be', withContent('photo.jpg')],
+    ['a list where the blob should be', withContent([{ name: 'photo.jpg' }])],
+  ])('is false with %s', (_case, document) => {
+    expect(registry.evaluate('app.rules.hasFile', on(document))).toBe(false);
+  });
+
+  it('is false with no document in focus', () => {
+    expect(registry.evaluate('app.rules.hasFile', on(null))).toBe(false);
   });
 });

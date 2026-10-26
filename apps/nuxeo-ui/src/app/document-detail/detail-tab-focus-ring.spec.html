@@ -1,0 +1,9 @@
+<!--
+  Fixture for detail-tab-focus-ring.spec.ts. Renders the real nxs-tabs the document page uses,
+  with the page's .detail-tabs token overrides from document-detail.scss.
+-->
+<div class="tabs-header-row detail-tab-focus-ring-host">
+  <nxs-tabs class="detail-tabs" [tabs]="tabs">
+    <ng-template nxsTabBody let-tab>{{ tab.label }}</ng-template>
+  </nxs-tabs>
+</div>

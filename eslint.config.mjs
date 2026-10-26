@@ -1,9 +1,22 @@
+import { createRequire } from 'node:module';
 import nx from '@nx/eslint-plugin';
+
+const require = createRequire(import.meta.url);
+const satoriLint = require('@hylandsoftware/satori-lint/eslint');
 
 export default [
   ...nx.configs['flat/base'],
   ...nx.configs['flat/typescript'],
   ...nx.configs['flat/javascript'],
+  ...satoriLint.configs['flat/recommended'],
+  {
+    files: ['**/*.html'],
+    rules: {
+      // 513 Material font icons → Satori SVG icons is a separate migration tracked by
+      // `npm run satori:icons`. Warn so lint stays green while SDSC tracks progress.
+      '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
+    },
+  },
   {
     ignores: [
       '**/dist',
@@ -19,7 +32,13 @@ export default [
         'error',
         {
           enforceBuildableLibDependency: true,
-          allow: ['^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$'],
+          // The identity guard is one `.mjs` module shared by the Node harnesses and the e2e
+          // fixtures (NXSAT-643), so both sides reject the same answers. `scripts/` is not an Nx
+          // project, so the e2e import is "external"; allowed by exact path, not by directory.
+          allow: [
+            '^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$',
+            '^(\\.\\./)+scripts/beta-harness/identity-guard\\.mjs$',
+          ],
           // `sourceTag: '*'` -> `onlyDependOnLibsWithTags: ['*']` — Nx's scaffolded
           // default — was here until 2026-08-24. The rule was `error` the whole time and
           // could not reject a single edge, so CLAUDE.md's "Never cross-feature imports —
@@ -88,7 +107,7 @@ export default [
             // published platform entry points. **This rule cannot enforce that**, and the
             // limitation is worth stating rather than papering over.
             //
-            // `tsconfig.base.json` maps `@nuxeo-satori/platform/extensions` to
+            // `tsconfig.base.json` maps `@nuxeo/satori-platform/extensions` to
             // `libs/shared/extensions/src/index.ts`, so in the project graph the supported
             // specifier and a raw `@agentic-ui/shared-extensions` are the *same edge* to
             // the *same* project. A tag constraint sees projects, not specifiers, so it
@@ -97,7 +116,7 @@ export default [
             //
             // What does enforce it is `libs/platform/guardrails/check-extension-library.mjs`
             // check 2, which works on the specifier text and fails any import that is not
-            // one of the five published entry points. It runs against this very library in
+            // one of the six published entry points. It runs against this very library in
             // the `customer-guardrails` gate. So the guarantee holds; it is just not this
             // rule's to make.
             {
@@ -133,6 +152,12 @@ export default [
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       eqeqeq: ['error', 'always'],
       'no-duplicate-imports': 'error',
+      // Angular 22 made OnPush the default. NXSAT-670 gave every component an explicit Eager
+      // strategy to preserve Angular 21 behaviour, which is exactly what this rule forbids —
+      // 126 errors across 11 projects, and no other error class. Adopting OnPush is separate
+      // work, one surface at a time with tests (docs/angular-22-migration.md). Revisit by
+      // 2027-06-30: delete this line and the rule reports every component still to convert.
+      '@angular-eslint/prefer-on-push-component-change-detection': 'off',
     },
   },
 ];

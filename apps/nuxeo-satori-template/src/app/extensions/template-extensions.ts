@@ -5,7 +5,7 @@ import {
   provideSatoriExtensions,
   type NavItemDescriptor,
   type SatoriExtensionContributions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { TemplateSessionService } from '../template-session.service';
 
@@ -26,7 +26,7 @@ import { TemplateSessionService } from '../template-session.service';
  *
  * The **factory form** is used rather than a plain object because the rule needs
  * `inject()`. That is not a contrived example: two of the product's own rules
- * close over `AuthService` and all six of its bulk handlers close over an
+ * read `AuthService` and all six of its bulk handlers close over an
  * `Injector`, so a real customer hits this on the first non-trivial rule.
  */
 /**
@@ -71,7 +71,7 @@ const NAV_ITEMS: readonly NavItemDescriptor[] = [
     id: 'template.navbar.caseFile',
     label: 'Case File',
     path: '/case-file',
-    icon: 'folder_special',
+    icon: 'folder_shortcut',
     order: 15,
     rule: 'template.rules.isSignedIn',
   },
@@ -79,7 +79,7 @@ const NAV_ITEMS: readonly NavItemDescriptor[] = [
     id: 'template.navbar.components',
     label: 'UI Components',
     path: '/components',
-    icon: 'widgets',
+    icon: 'components',
     order: 25,
   },
   {
@@ -100,7 +100,7 @@ const NAV_ITEMS: readonly NavItemDescriptor[] = [
     id: 'template.navbar.reports',
     label: 'Reports',
     path: '/reports',
-    icon: 'assessment',
+    icon: 'table_chart',
     order: 40,
     // Gated in code. A manifest can still hide it outright, reorder it or
     // relabel it without this file changing.

@@ -1,4 +1,4 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import {
   type ApplicationConfig,
   DestroyRef,
@@ -13,9 +13,9 @@ import { NavigationEnd, Router, provideRouter, withComponentInputBinding } from 
 import { filter } from 'rxjs/operators';
 
 import { provideAcmeExtensions } from '@agentic-ui/acme-extensions';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { ExtensionRuleContextService } from '@nuxeo-satori/platform/extensions';
-import { CURRENT_USERNAME, NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { ExtensionRuleContextService } from '@nuxeo/satori-platform/extensions';
+import { CURRENT_USERNAME, NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { routes } from './app.routes';
 import { provideTemplateExtensions } from './extensions/template-extensions';
@@ -31,15 +31,17 @@ export const appConfig: ApplicationConfig = {
     // Every Nuxeo request this application makes is signed by one interceptor.
     // The platform's services never build an auth header themselves — they cannot,
     // because only a host knows whether it is doing Basic, SSO or a token.
-    provideHttpClient(withInterceptors([templateNuxeoAuthInterceptor])),
+    provideHttpClient(withXhr(), withInterceptors([templateNuxeoAuthInterceptor])),
     provideRouter(routes, withComponentInputBinding()),
 
     /**
      * Layer 0 decides where Nuxeo is.
      *
-     * A one-shot read of the loaded configuration, which is safe only because
-     * `NuxeoApiBase` — the sole consumer — is constructed on first use by a page,
-     * long after `provideAppInitializer` has awaited the load. A *reactive* reader
+     * A one-shot read of the loaded configuration, kept for the life of the
+     * application, so nothing may resolve it before the load completes. Its readers
+     * here do not: `NuxeoApiBase` is constructed on first use by a page, the
+     * interceptor never sees the configuration requests (they skip interceptors),
+     * and `TemplateSessionService` reads it at sign-in. A *reactive* reader
      * would be wrong here anyway: an API origin that changed under a live
      * `HttpClient` would leave in-flight requests pointing somewhere else.
      *
@@ -137,44 +139,6 @@ export const appConfig: ApplicationConfig = {
           takeUntilDestroyed(destroyRef),
         )
         .subscribe((event) => ruleContext.url.set(event.urlAfterRedirects.split('?')[0]));
-    }),
-
-    // 4. Refresh the Layer 1 manifest when a session appears.
-    //
-    //    `config.load()` at bootstrap runs before a user signs in, so the manifest request
-    //    is anonymous and falls back to packaged defaults. Without this refresh, Layer 1
-    //    configuration does not apply until a manual reload — the product app has the same
-    //    pattern, mirrored here so the template demonstrates a working first sign-in.
-    provideAppInitializer(() => {
-      const config = inject(AppConfigService);
-      const session = inject(TemplateSessionService);
-      const injector = inject(Injector);
-      let attemptedForSession = false;
-
-      effect(
-        () => {
-          if (!session.isSignedIn()) {
-            config.resetManifest();
-            attemptedForSession = false;
-            return;
-          }
-
-          if (attemptedForSession) {
-            return;
-          }
-
-          // If bootstrap already loaded the manifest successfully, don't race it.
-          const outcome = config.diagnostics().manifestAttempt;
-          if (outcome === 'applied' || outcome === 'unavailable') {
-            attemptedForSession = true;
-            return;
-          }
-
-          attemptedForSession = true;
-          void config.loadManifest();
-        },
-        { injector },
-      );
     }),
   ],
 };

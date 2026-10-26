@@ -126,10 +126,11 @@ npx nx serve nuxeo-ui                                             # :4200
 npx nx serve nuxeo-satori-template --port 4310                    # :4310, --port is required
 ```
 
-The manifest document at `/default-domain/config/agentic-ui` must exist. The harness applies and
-**resets** it per shot, and leaves it at `{"version": 1}` — it was found holding a previous run's
-column overrides, which would have made the baseline slide a customised screen with a baseline
-caption.
+Run `npm run config:dev` before `nx serve`: the harness applies each shot's manifest and branding
+as a `demo-deck` fragment in the dev server's `agentic-ui-config/` files and **restores** them
+afterwards. The reset matters — the manifest (then a Nuxeo Note, read no longer since NXSAT-312)
+was once found holding a previous run's column overrides, which would have made the baseline
+slide a customised screen with a baseline caption.
 
 ---
 

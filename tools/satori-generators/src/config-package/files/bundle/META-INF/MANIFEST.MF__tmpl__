@@ -1,0 +1,6 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: <%= name %>
+Bundle-SymbolicName: <%= component %>;singleton:=true
+Bundle-Version: <%= version %>
+Nuxeo-Component: OSGI-INF/<%= name %>-config.xml

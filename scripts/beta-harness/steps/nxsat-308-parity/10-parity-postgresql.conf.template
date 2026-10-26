@@ -1,0 +1,11 @@
+# Appended to nuxeo.conf by the image entrypoint on first start (mounted at /etc/nuxeo/conf.d/).
+# PostgreSQL rather than the stock H2: the H2 template hard-codes fulltext searchDisabled="true",
+# and /search-adf-hx queries ecm:fulltext. Replace @PGPASS@ with the throwaway database password.
+nuxeo.templates=postgresql
+nuxeo.db.host=nxsat308-parity-pg
+nuxeo.db.port=5432
+nuxeo.db.name=nuxeo
+nuxeo.db.user=nuxeo
+nuxeo.db.password=@PGPASS@
+nuxeo.vcs.fulltext.search.disabled=false
+nuxeo.fulltext.search.disabled=false

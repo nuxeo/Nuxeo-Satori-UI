@@ -4,13 +4,8 @@
     "outDir": "../../dist/out-tsc",
     "importHelpers": false,
     "useDefineForClassFields": false,
-    "types": [
-      "vitest/globals",
-      "vitest/importMeta",
-      "vite/client",
-      "node",
-      "vitest"
-    ]
+    "types": ["vitest/globals", "vitest/importMeta", "vite/client", "node", "vitest"],
+    "rootDir": "."
   },
   "include": [
     "vite.config.ts",
@@ -27,7 +22,5 @@
     "src/**/*.spec.jsx",
     "src/**/*.d.ts"
   ],
-  "files": [
-    "src/test-setup.ts"
-  ]
+  "files": ["src/test-setup.ts"]
 }

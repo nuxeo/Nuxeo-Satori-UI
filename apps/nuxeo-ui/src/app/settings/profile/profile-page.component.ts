@@ -9,6 +9,7 @@ import {
   inject,
   signal,
   viewChild,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
@@ -24,7 +25,7 @@ import {
   type LocalPermissionRow,
   type NuxeoGroup,
   type PrincipalPermissionPage,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AuthService } from '../../auth/auth.service';
 import { ChangePasswordDialogComponent } from './change-password-dialog/change-password-dialog.component';
@@ -43,6 +44,7 @@ const GROUP_PERM_PAGE_SIZE = 25;
     GroupPermLazyLoadDirective,
   ],
   templateUrl: './profile-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './profile-page.component.scss',
 })
 export class ProfilePageComponent {
@@ -51,7 +53,7 @@ export class ProfilePageComponent {
   /** The active language as a signal, so a `computed` that calls `instant()` recomputes on a switch. */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.getCurrentLang() },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
   private readonly locale = inject(LOCALE_ID);
   private readonly destroyRef = inject(DestroyRef);

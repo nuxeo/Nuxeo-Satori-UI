@@ -33,7 +33,7 @@
                 "
                 (click)="$event.stopPropagation(); clearNature()"
               >
-                <mat-icon>cancel</mat-icon>
+                <mat-icon svgIcon="circle_x" />
               </button>
             </mat-chip>
           </mat-chip-set>
@@ -77,7 +77,7 @@
                 [attr.aria-label]="'shared.remove-item' | translate: { name: subjectPillLabel(id) }"
                 (click)="$event.stopPropagation()"
               >
-                <mat-icon>cancel</mat-icon>
+                <mat-icon svgIcon="circle_x" />
               </button>
             </mat-chip>
           }
@@ -128,7 +128,7 @@
                 "
                 (click)="$event.stopPropagation(); clearCoverage()"
               >
-                <mat-icon>cancel</mat-icon>
+                <mat-icon svgIcon="circle_x" />
               </button>
             </mat-chip>
           </mat-chip-set>
@@ -173,7 +173,7 @@
       (ngModelChange)="onExpiresChange($event)"
       (input)="onExpiresInput($event)"
       #expiresInput="ngModel"
-      [placeholder]="'common.date-mask' | translate"
+      [placeholder]="'common.date-mask' | translate | dateMask"
     />
     <mat-datepicker-toggle matIconSuffix [for]="picker" />
     <mat-datepicker #picker />

@@ -14,6 +14,8 @@
  */
 
 import { resolve } from 'node:path';
+import { requireNuxeoCredentials } from './nuxeo-credentials.mjs';
+import { sameUser, strayRequests } from './identity-guard.mjs';
 
 const DEFAULT_BASE_URL = 'http://localhost:4200';
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
@@ -43,6 +45,26 @@ export class PreconditionError extends Error {
 }
 
 /**
+ * `NUXEO_USER` / `NUXEO_PASS` for a steps file, or a `PreconditionError` naming what is missing.
+ *
+ * There is no default (NXSAT-649) — see `nuxeo-credentials.mjs`. A `PreconditionError` rather
+ * than a plain `Error`, because both runners key their verdict on it — `precondition-not-met`,
+ * not `error`: a missing pair is the environment, and reporting it as `[error] steps aborted`
+ * invites someone to change working code. Their exit codes differ: `phase-runner.mjs` exits 2,
+ * while `story-runner.mjs` exits 1 for every `precondition-not-met` capture.
+ *
+ * Under either runner this rarely fires for `NUXEO_USER` / `NUXEO_PASS` themselves. Both refuse
+ * a missing pair with exit 2 before any step runs, unless the file exported
+ * `skipHttpCredentials = true`.
+ *
+ * @param {string} purpose completes "must both be set to …"
+ * @returns {import('./nuxeo-credentials.mjs').NuxeoCredentials}
+ */
+export function requireStepCredentials(purpose) {
+  return requireNuxeoCredentials(purpose, { errorClass: PreconditionError });
+}
+
+/**
  * Build the helpers object handed to a steps file.
  *
  * @param {import('@playwright/test').Page} page
@@ -50,30 +72,308 @@ export class PreconditionError extends Error {
  * @param {object} recorder
  * @param {StepRecord[]} recorder.steps accumulating step records
  * @param {string[]} recorder.consoleErrors captured browser console errors
+ * @param {object} [options]
+ * @param {ReturnType<import('./identity-guard.mjs').createIdentityMonitor> | null} [options.identity]
+ *   the identity guard (`phase-runner.mjs` passes one whenever the run sends credentials). With
+ *   it, every step boundary asks Nuxeo who the previous step ran as; see `step`.
  */
-export function createHelpers(page, outDir, recorder) {
+export function createHelpers(page, outDir, recorder, { identity = null } = {}) {
+  const baseUrl = process.env['APP_URL'] ?? DEFAULT_BASE_URL;
   let current = null;
+  /**
+   * Every step boundary's identity check, in order, so `finish` can drain them all — not only the
+   * latest. `awaited` is set when an `await` reads the boundary in time (see `step`).
+   * @type {{ step: StepRecord, promise: Promise<void>, awaited: boolean, reported: boolean }[]}
+   */
+  const boundaries = [];
+  /** A boundary that failed while nobody was awaiting it; thrown at the next step or at `finish`. */
+  let identityFailure = null;
+  /** A boundary that was not awaited, so it proves nothing about its step; thrown by `finish`. */
+  let unawaitedFailure = null;
 
   function ensureStep() {
     if (!current) {
-      current = { index: recorder.steps.length + 1, label: 'unlabelled', screenshots: [], checks: [], notes: [] };
+      current = {
+        index: recorder.steps.length + 1,
+        label: 'unlabelled',
+        screenshots: [],
+        checks: [],
+        notes: [],
+      };
       recorder.steps.push(current);
     }
     return current;
   }
 
+  /**
+   * Ask Nuxeo who `step`'s results were obtained as. A rejection is recorded on that step as a
+   * failed precondition and thrown as a `PreconditionError`: the result is invalid, and the cause
+   * is the environment or the harness, not the product.
+   *
+   * @param {StepRecord} step
+   * @param {string} at
+   */
+  async function verifyIdentity(step, at) {
+    if (!identity) return;
+    const entry = await identity.verify(at);
+    if (entry.ok) return;
+    const detail = entry.reports
+      .filter((r) => !r.ok)
+      .map((r) => `[${r.channel}] ${r.problem}`)
+      .join('; ');
+    step.checks.push({ name: `precondition: identity guard ${at}`, passed: false, detail });
+    console.log(`  [FAIL] precondition: identity guard ${at} - ${detail}`);
+    throw new PreconditionError(
+      `identity guard ${at}: the results were not obtained as the expected user, so they are invalid — ${detail}`,
+    );
+  }
+
+  /**
+   * Judge the identity the run is leaving, before anything moves the request window.
+   *
+   * Every transition — `h.login()`, `h.signedInAs()`, `h.signedOut()` — restarts that window, so
+   * what the outgoing session sent is no longer in the next boundary's. Without this, a completed
+   * headerless request followed by a declared transition and a valid replacement session is judged
+   * by nothing at all, and the run still ends `identity.valid: true`: a guest-read result, asserted
+   * on, and certified. That is worse than the hardcoded fallback this guard replaced, so a
+   * transition refuses rather than discards.
+   *
+   * Only when a session is currently required (`'user' in appPolicy`), or the page is on the app
+   * with one to read: before the run has signed in, and after a declared sign-out, there is no
+   * outgoing identity to hold anything against.
+   *
+   * A request still **in flight** escapes that verification: it has no `Authorization` to read
+   * yet, so `strayRequests` cannot judge it, and the window restart that follows puts it behind
+   * `since` where no later boundary will either. So a transition with one outstanding **refuses**,
+   * naming it, rather than letting it through unjudged.
+   *
+   * Refusing and not waiting is the deliberate choice. Discarding traffic the guard could not
+   * read is worse than the hardcoded fallback this guard replaced: the run reports
+   * `identity.valid: true` over a result that may have been read as the guest, which is false
+   * evidence rather than a missing check. Refusing is noisy and correct. A bounded wait needs a
+   * deadline *and* an expiry policy, and admits a harness that hangs instead of reporting — its
+   * own failure mode. See `pendingRequests` in `identity-guard.mjs` for the full trade-off; the
+   * design question is NXSAT-703, not settled here.
+   *
+   * @param {string} what names the transition, e.g. `h.signedOut()`
+   * @param {string} [where] distinguishes a second verification of the same transition, e.g.
+   *   `h.login()`'s boot navigation; it becomes part of the `at` label so the manifest does not
+   *   carry two checks a reviewer cannot tell apart
+   */
+  async function verifyBeforeTransition(what, where) {
+    if (!identity) return;
+    const onApp = page.url().startsWith(baseUrl);
+    const required = 'user' in identity.appPolicy;
+    if (!onApp && !required) return;
+    const step = ensureStep();
+    const at = `before ${what} at step ${step.index}${where ? `, ${where}` : ''}`;
+    await verifyIdentity(step, at);
+    // After the verification, so a request that finished during it has been judged on its merits
+    // rather than refused for being slow, and so an outgoing session that is already stray is
+    // reported as that rather than as a timing problem. Only while a session is required: the
+    // signed-out page's requests carry no header by right, and have no outgoing identity to be
+    // held against.
+    //
+    // Read again rather than reusing `required` above: the verification itself can recognise a
+    // first form sign-in and promote the policy, and a request the app started *during* that
+    // probe sits past the promotion's mark — so `pendingAcrossSignIn` leaves it in the window,
+    // correctly, for a boundary to judge later. The stale `required` skipped this check, and the
+    // restart below then discarded it. It is the same request either way; only the window it is
+    // read from differs.
+    if (!('user' in identity.appPolicy)) return;
+    const pending = identity.pendingRequests?.() ?? [];
+    if (!pending.length) return;
+    const named = pending.map((r) => `${r.method} ${r.path}`).join(', ');
+    // A distinct label from the verification above, which passed: the manifest would otherwise
+    // carry two checks with the same `at` disagreeing, and a reviewer could not tell which is which.
+    const inFlightAt = `${at}, with requests in flight`;
+    const detail =
+      `${pending.length} Nuxeo request(s) the app sent as the outgoing session were still in ` +
+      `flight: ${named}. Nothing can say who they ran as — they carry no readable ` +
+      `Authorization yet, and ${what} ends the window anything would judge them in. Let the app ` +
+      `settle before declaring the transition (await the work that issued them, or ` +
+      `\`page.waitForLoadState('networkidle')\`), then declare it.`;
+    step.checks.push({
+      name: `precondition: identity guard ${inFlightAt}`,
+      passed: false,
+      detail,
+    });
+    console.log(`  [FAIL] precondition: identity guard ${inFlightAt} - ${detail}`);
+    identity.reject(inFlightAt, detail);
+    throw new PreconditionError(`identity guard ${inFlightAt}: ${detail}`);
+  }
+
+  /**
+   * Before a step opens, and in `finish`: record every boundary that was not awaited, then throw
+   * a boundary failure nobody awaited.
+   *
+   * Not awaited, a boundary's check ran alongside the next step's work, so it may have judged
+   * that work's identity instead of its own step's. Whether it has finished by now says nothing:
+   * one that finished quickly ran alongside the next step just the same. So the step records a
+   * failed check, the run's identity is rejected (`manifest.identity.valid: false`), and `finish`
+   * makes the run `precondition-not-met`.
+   */
+  function closeBoundaries({ throwHeld = true } = {}) {
+    for (const b of boundaries) {
+      if (b.awaited || b.reported) continue;
+      b.reported = true;
+      const at = `after step ${b.step.index}`;
+      const detail =
+        `h.step(...) was not awaited, so the identity check ${at} ran alongside the next step and ` +
+        'may have judged that step instead — write `await h.step(...)`';
+      b.step.checks.push({
+        name: 'the identity guard ran between this step and the next',
+        passed: false,
+        detail,
+      });
+      identity?.reject(at, detail);
+      unawaitedFailure ??= new PreconditionError(`identity guard ${at}: ${detail}`);
+    }
+    if (throwHeld && identityFailure) throw identityFailure;
+  }
+
+  /**
+   * `promise` as a thenable that marks `boundary` awaited when an `await` reads it in time.
+   *
+   * `await` reads `then` from a job of its own, after the caller's statement and before any timer
+   * or I/O callback. So a read that comes while `sync.now` is set is a chained `.then()` /
+   * `.catch()` — the boundary stays unawaited unless the chain itself is awaited, which is why
+   * the chain is tracked too — and one after `sync.late` is set came after the next step's work
+   * could start.
+   *
+   * Timing cannot tell an `await` from a discarded `Promise.all([h.step(...)])`, which reads `then`
+   * from a job too. That is why the assertion audit requires every call to be `await h.step(...);`.
+   *
+   * @param {Promise<void>} promise
+   * @param {{ awaited: boolean }} boundary
+   * @param {{ now: boolean, late: boolean }} sync
+   * @returns {PromiseLike<void> & Pick<Promise<void>, 'catch' | 'finally'>}
+   */
+  function tracked(promise, boundary, sync) {
+    return {
+      then(onFulfilled, onRejected) {
+        if (!sync.now && !sync.late) boundary.awaited = true;
+        const derived = promise.then(onFulfilled, onRejected);
+        // Observed, not swallowed: an awaited chain still receives the rejection.
+        derived.catch(() => undefined);
+        return tracked(derived, boundary, sync);
+      },
+      catch(onRejected) {
+        return this.then(undefined, onRejected);
+      },
+      finally(onFinally) {
+        return this.then(
+          (value) => Promise.resolve(onFinally?.()).then(() => value),
+          (err) => Promise.resolve(onFinally?.()).then(() => Promise.reject(err)),
+        );
+      },
+    };
+  }
+
   return {
-    baseUrl: process.env['APP_URL'] ?? DEFAULT_BASE_URL,
+    baseUrl,
 
     /**
      * Open a new named step. Everything captured or asserted afterwards is
      * attributed to it, so the manifest reads as a narrative.
+     *
+     * Under the identity guard, opening a step is also where the previous one is judged: Nuxeo is
+     * asked who it ran as before this step does anything (NXSAT-643). That check is asynchronous,
+     * so a steps file must `await h.step(...)` — directly, or by awaiting a `.then()` chained on
+     * it. Not awaited, the step still opens and the check runs alongside it, so it cannot speak
+     * for the previous step: that step records a failed check, and the run ends
+     * `precondition-not-met`. `finish` waits for every check either way.
+     *
      * @param {string} msg
+     * @returns {PromiseLike<void> & Pick<Promise<void>, 'catch' | 'finally'>}
      */
     step(msg) {
-      current = { index: recorder.steps.length + 1, label: msg, screenshots: [], checks: [], notes: [] };
+      closeBoundaries();
+      const previous = current;
+      current = {
+        index: recorder.steps.length + 1,
+        label: msg,
+        screenshots: [],
+        checks: [],
+        notes: [],
+      };
       recorder.steps.push(current);
       console.log(`\n[step ${current.index}] ${msg}`);
+      if (!identity || !previous) return Promise.resolve();
+      const promise = verifyIdentity(previous, `after step ${previous.index}`);
+      const entry = { step: previous, promise, awaited: false, reported: false };
+      boundaries.push(entry);
+      // Held, so it is never an unhandled rejection: a failure nobody awaited is thrown at the next
+      // boundary, or by `finish`. An `await` still receives it, through `tracked`.
+      promise.catch((err) => {
+        identityFailure ??= err;
+      });
+      const sync = { now: true, late: false };
+      queueMicrotask(() => {
+        sync.now = false;
+      });
+      setImmediate(() => {
+        sync.late = true;
+      });
+      return tracked(promise, entry, sync);
+    },
+
+    /**
+     * The guard's last word on a run whose steps all returned: the final step is judged the way
+     * every earlier one was at its successor's `step` call. `phase-runner.mjs` calls this; a
+     * steps file does not need to.
+     */
+    async finish() {
+      // Every boundary drained before any failure is rethrown, so none is still running when the
+      // runner closes the browser and writes the manifest.
+      closeBoundaries({ throwHeld: false });
+      await Promise.allSettled(boundaries.map((b) => b.promise));
+      if (identityFailure) throw identityFailure;
+      if (unawaitedFailure) throw unawaitedFailure;
+      if (identity && current) await verifyIdentity(current, `after step ${current.index}`);
+    },
+
+    /**
+     * Declare that from here on the browser is deliberately signed in as `username` — the
+     * permission-denied steps sign in as a restricted user. Recorded in the manifest, so the
+     * switch is part of the evidence. Without it the guard rejects the next boundary, which is
+     * the point: an unannounced change of identity is exactly what it exists to catch.
+     *
+     * Only the app channel moves. `page.request` keeps the run's own credentials.
+     *
+     * Declare the switch **before** installing the new session or rewriting the header: this
+     * judges the identity being left first, and rejects a step that read anything headerless
+     * rather than discarding it with the request window. So the new session must not be in place
+     * yet, or it is what gets judged — against the user it is replacing.
+     *
+     * Await it. The verification is a request to Nuxeo, and `assertion-audit.mjs` requires
+     * `await h.signedInAs(...);` so a floating promise cannot skip the check in silence.
+     *
+     * @param {string} username
+     * @param {string} reason
+     */
+    async signedInAs(username, reason) {
+      await verifyBeforeTransition(`h.signedInAs(${username})`);
+      identity?.expectApp(username, reason, `step ${ensureStep().index}`);
+      this.note(`identity: the browser is signed in as ${username} from here — ${reason}`);
+    },
+
+    /**
+     * Declare that from here on the app may be signed out — a steps file that signs out to drive
+     * the sign-in form. Recorded like `signedInAs`. Without it, a run that signed in and is found
+     * signed out at a boundary is rejected: losing the session is one way to hide a result that was
+     * obtained as someone else. A session the app still holds must be the run's own user.
+     *
+     * Declare it before signing out, and await it, for the reasons on `signedInAs`: a sign-out
+     * that is accepted ends the window the outgoing session's requests were in, and nothing
+     * afterwards can judge them.
+     *
+     * @param {string} reason
+     */
+    async signedOut(reason) {
+      await verifyBeforeTransition('h.signedOut()');
+      identity?.expectSignedOut(reason, `step ${ensureStep().index}`);
+      this.note(`identity: the app may be signed out from here — ${reason}`);
     },
 
     /**
@@ -127,6 +427,7 @@ export function createHelpers(page, outDir, recorder) {
       const s = ensureStep();
       const slug = `${String(s.index).padStart(2, '0')}-${name}`;
       if (locator) {
+        // Best effort: a locator that cannot scroll still gets the viewport shot below.
         await locator.scrollIntoViewIfNeeded().catch(() => {});
       }
       const file = resolve(outDir, `${slug}.png`);
@@ -148,7 +449,9 @@ export function createHelpers(page, outDir, recorder) {
       const s = ensureStep();
       const passed = Boolean(condition);
       s.checks.push({ name, passed, ...(detail && !passed ? { detail } : {}) });
-      console.log(`  [${passed ? 'pass' : 'FAIL'}] ${name}${passed || !detail ? '' : ` - ${detail}`}`);
+      console.log(
+        `  [${passed ? 'pass' : 'FAIL'}] ${name}${passed || !detail ? '' : ` - ${detail}`}`,
+      );
       return passed;
     },
 
@@ -248,11 +551,20 @@ export function createHelpers(page, outDir, recorder) {
 
       let results;
       try {
-        let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
+        let builder = new AxeBuilder({ page }).withTags([
+          'wcag2a',
+          'wcag2aa',
+          'wcag21a',
+          'wcag21aa',
+        ]);
         if (include) builder = builder.include(include);
         results = await builder.analyze();
       } catch (err) {
-        return this.check(name, false, `axe scan failed: ${err instanceof Error ? err.message : String(err)}`);
+        return this.check(
+          name,
+          false,
+          `axe scan failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
 
       const violations = results.violations.filter((v) => !ignore.includes(v.id));
@@ -267,13 +579,17 @@ export function createHelpers(page, outDir, recorder) {
           .slice(0, 3)
           .map((n) => n.target.join(' '))
           .join(' | ');
-        (s.notes ??= []).push(`a11y ${v.impact}: ${v.id} — ${v.help} (${v.nodes.length} node(s): ${where})`);
+        (s.notes ??= []).push(
+          `a11y ${v.impact}: ${v.id} — ${v.help} (${v.nodes.length} node(s): ${where})`,
+        );
       }
       for (const v of ignored) {
         (s.notes ??= []).push(`a11y ignored by rule id: ${v.id} (${v.nodes.length} node(s))`);
       }
       if (violations.length) {
-        console.log(`  [note] ${violations.length} a11y violation(s); ${blocking.length} at ${failOn.join('/')}`);
+        console.log(
+          `  [note] ${violations.length} a11y violation(s); ${blocking.length} at ${failOn.join('/')}`,
+        );
       }
 
       return this.check(
@@ -285,7 +601,7 @@ export function createHelpers(page, outDir, recorder) {
     },
 
     /**
-     * Navigate to an app route, e.g. `/#/browse-adf-hx?path=%2Fdefault-domain`.
+     * Navigate to an app route, e.g. `/#/browse/default-domain`.
      * @param {string} route
      */
     async goTo(route) {
@@ -305,19 +621,50 @@ export function createHelpers(page, outDir, recorder) {
     /**
      * Authenticate by injecting the session `AuthService` writes after a
      * successful login, avoiding the SSO UI. Credentials come from the
-     * environment and are never hardcoded.
+     * environment, with no default: unset, this throws a `PreconditionError`
+     * rather than signing in as an identity nobody asked for. The comment here
+     * said "never hardcoded" for as long as the two lines below it defaulted to
+     * the local Docker administrator pair (NXSAT-649).
      *
-     * This satisfies the **route guard** only. XHRs are authenticated by the
-     * browser context's `httpCredentials`, set in the runner — without that,
-     * `/nuxeo/api` calls intermittently return 403 even though pages render.
-     * Both mechanisms are required.
+     * The injected session is what the app's interceptor reads to put a Basic
+     * header on its `/nuxeo` requests, so it authenticates the app's XHRs, not
+     * only the route guard. The runner's `httpCredentials` reach `page.request`
+     * and nothing in the browser: Nuxeo never challenges, so a challenge-based
+     * credential is never sent (NXSAT-643; measured in `identity-guard.mjs`).
+     *
+     * The first navigation boots the app with no session, and on a server that
+     * allows guests the app then stores `Anonymous` as a cookie session and
+     * picks up a guest `JSESSIONID`. So the cookies are cleared, and the
+     * storage overwritten, before the reload that signs in — a guest session
+     * cannot be adopted. The identity guard checks the outcome at the next step
+     * boundary.
      */
     async login() {
-      const user = process.env['NUXEO_USER'] ?? 'Administrator';
-      const pass = process.env['NUXEO_PASS'] ?? 'Administrator';
+      const { username: user, password: pass } = requireStepCredentials('sign the evidence run in');
+
+      // Before the cookies and storage below are cleared, so the session being replaced is still
+      // there to be judged; an off-app navigation cannot bypass it either.
+      await verifyBeforeTransition('h.login()');
+
+      // Whether this call is replacing a session or installing the run's first one. Read before
+      // the navigation below, because only one of the two boots signed out.
+      const replacing = Boolean(identity && 'user' in identity.appPolicy);
 
       await page.goto(this.baseUrl, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(800);
+
+      // On a repeated login the boot above ran under the session being replaced — it is still
+      // installed, and the app it booted talked to Nuxeo as it. Both `expectApp` and
+      // `sessionInstalled` below move the request window past that traffic, so this is the last
+      // point at which anything can judge it; without this, a headerless request emitted and
+      // completed here was discarded as though it were the initial signed-out boot's, and the
+      // verification above had already passed before it was sent. One still in flight is refused
+      // for the same reason it is at any other transition.
+      //
+      // Only when a session was in place: the run's first login boots a genuinely signed-out
+      // page, whose requests carry no header by right and have no outgoing identity to be held
+      // against.
+      if (replacing) await verifyBeforeTransition('h.login()', 'after its boot navigation');
 
       const session = {
         kind: 'basic',
@@ -327,13 +674,115 @@ export function createHelpers(page, outDir, recorder) {
         groups: [],
       };
 
+      // Gap 2: For cross-user re-logins, capture the outgoing session BEFORE clearing cookies/storage.
+      // expectApp will restart the window, putting the clearCookies/storage interval behind `since`.
+      let outgoingSnapshot = null;
+      if (replacing && identity) {
+        const beforeUser = identity.expectedApp;
+        const crossUser = !sameUser(user, beforeUser);
+        if (crossUser) {
+          // Capture the complete outgoing session state before clearing cookies/storage
+          outgoingSnapshot = await identity.captureOutgoingSession();
+        }
+      }
+
+      await page.context().clearCookies();
       await page.evaluate(
         ({ key, value, signedOutKey }) => {
+          localStorage.removeItem(key);
           sessionStorage.setItem(key, value);
           sessionStorage.removeItem(signedOutKey);
         },
         { key: SESSION_KEY, value: JSON.stringify(session), signedOutKey: SIGNED_OUT_KEY },
       );
+
+      // Now check if the clearCookies/storage interval produced unjudged traffic (after clearing, before restart)
+      if (outgoingSnapshot && identity) {
+        const beforeUser = identity.expectedApp;
+        const at = `before h.login() completes (cross-user re-login, after clearCookies interval)`;
+
+        // Validate the captured outgoing session. If unavailable, invalid, or wrong user, refuse.
+        const { stored, expectedCookie } = outgoingSnapshot;
+        if (!stored) {
+          const problem =
+            `h.login() cannot complete: the outgoing session disappeared during the clearCookies interval, ` +
+            `and this is a cross-user re-login that would restart the window over any traffic from it, leaving it unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+        if ('problem' in stored) {
+          const problem =
+            `h.login() cannot complete: the outgoing session could not be verified (${stored.problem}), ` +
+            `and this is a cross-user re-login that would restart the window over any traffic from it, leaving it unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+        if (!sameUser(stored.username, beforeUser)) {
+          const problem =
+            `h.login() cannot complete: the outgoing session is for ${stored.username ?? '(no user)'}, ` +
+            `not for ${beforeUser} as expected, and this is a cross-user re-login that would restart the ` +
+            `window over any traffic from it, leaving it unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+
+        // Drain pending header collections before checking traffic (P2). A correctly authenticated
+        // request can emit requestfinished during this interval but still have finished: false while
+        // allHeaders() resolves. Checking before draining can reject a clean re-login as in-flight.
+        const traffic = identity._traffic;
+        if (traffic && 'drainPendingHeaders' in traffic) {
+          const { unreadRequests } = await traffic.drainPendingHeaders();
+          if (unreadRequests.length > 0) {
+            const listed = unreadRequests.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+            const suffix = unreadRequests.length > 3 ? `, and ${unreadRequests.length - 3} more` : '';
+            const problem =
+              `h.login() cannot complete: ${unreadRequests.length} request(s) completed but their headers ` +
+              `remain unread at the identity check deadline (${listed}${suffix}). Cannot determine who they ran as.`;
+            identity.reject(at, problem);
+            throw new PreconditionError(`identity guard ${at}: ${problem}`);
+          }
+        }
+
+        // Check for pending requests
+        const pending = identity.pendingRequests();
+        if (pending.length) {
+          const listed = pending.map((r) => `${r.method} ${r.path}`).join(', ');
+          const s = pending.length === 1 ? '' : 's';
+          const problem =
+            `h.login() cannot complete: ${pending.length} request${s} still in flight (${listed}), ` +
+            `and this is a cross-user re-login that would restart the window over them, leaving them unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+
+        // Check for stray requests against the captured outgoing session (traffic already drained above)
+        const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie });
+        if (stray.length) {
+          const listed = stray.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+          const suffix = stray.length > 3 ? `, and ${stray.length - 3} more` : '';
+          const problem =
+            `h.login() cannot complete: ${stray.length} request(s) were sent during the clearCookies interval ` +
+            `without the ${beforeUser} session's credential (${listed}${suffix}), and this is a cross-user re-login ` +
+            `that would restart the window over them, leaving them unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+      }
+
+      identity?.expectApp(user, 'h.login()', `step ${ensureStep().index}`);
+      // Only the run's first login booted a signed-out page, so only it has requests to excuse:
+      // its session's start at the reload. A repeated login has no signed-out boot, so it does
+      // not take the exemption at all, and everything the page sent since the last restart —
+      // the boot above, and anything emitted while the cookies and storage were rewritten, which
+      // runs after the verification above and cannot be covered by it — stays in the window for
+      // the next boundary to judge against the session being installed.
+      //
+      // That boundary is the right judge here because `h.login()` always signs in as the run's
+      // own credentials: the header it installs is the one the replaced session carried, so
+      // traffic from the interval is held to the same standard either way. Where it is *not* the
+      // same user — a login after `h.signedInAs(...)` — the verification above (Gap 2, NXSAT-707)
+      // checks the interval before `expectApp` restarts the window.
+      if (!replacing) identity?.sessionInstalled();
 
       await page.reload({ waitUntil: 'networkidle' });
       await page.waitForTimeout(1200);

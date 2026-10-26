@@ -1,0 +1,65 @@
+<!-- ccr-overview-v2 -->
+
+### 🟡 Changes recommended
+
+The scanner can falsely report a clean tree for valid stylesheet imports and malformed JSON document shapes.
+
+<details open>
+<summary><strong>2 open findings</strong></summary>
+
+- <picture><source media="(prefers-color-scheme: dark)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/high-v2-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/high-v2-light.svg"><img src="https://github.githubassets.com/static/images/icons/copilot-code-review/high-v2-light.png" alt="High severity" width="62" height="18" align="texttop"></picture> [Import scanner misses comma-separated and unquoted URL targets](#discussion_r4216953011) · New
+- <picture><source media="(prefers-color-scheme: dark)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-light.svg"><img src="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-light.png" alt="Low severity" width="62" height="18" align="texttop"></picture> [Update stale verify-gate.mjs line-count metadata](#discussion_r4216835704)
+</details>
+
+<details>
+<summary><strong>4 resolved since last review</strong></summary>
+
+- <picture><source media="(prefers-color-scheme: dark)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-light.svg"><img src="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-light.png" alt="Medium severity" width="62" height="18" align="texttop"></picture> [Scan nested npm alias values under the special dot key](#discussion_r4216835636)
+- <picture><source media="(prefers-color-scheme: dark)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-light.svg"><img src="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-light.png" alt="Medium severity" width="62" height="18" align="texttop"></picture> [Handle unreadable .npmrc with fail-closed gap reporting](#discussion_r4216835555)
+- <picture><source media="(prefers-color-scheme: dark)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-light.svg"><img src="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-light.png" alt="Medium severity" width="62" height="18" align="texttop"></picture> [Avoid UID-0 permission gate failure in root CI](#discussion_r4216770823)
+- <picture><source media="(prefers-color-scheme: dark)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-light.svg"><img src="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-light.png" alt="Low severity" width="62" height="18" align="texttop"></picture> [Update PR selftest counts to reflect 32 controls](#discussion_r4216770869)
+</details>
+
+<details>
+<summary><strong>Previously missed (4)</strong></summary>
+
+In code that hasn't changed since last review
+
+<details>
+<summary><picture><source media="(prefers-color-scheme: dark)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-light.svg"><img src="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-light.png" alt="Medium severity" width="62" height="18" align="texttop"></picture> Missing --root causes exit 1 instead of documented exit 2</summary>
+
+`scripts/​beta-harness/​dependency-tree.mjs:131`
+
+The documented exit-code contract is not honored for `--root`: `realpathSync` runs before gap handling, so a missing or inaccessible root throws a stack trace and exits 1 (the code reserved for findings) rather than exit 2 for an inspection failure. Catch root resolution errors and terminate with the same CANNOT INSPECT/exit-2 behavior as other unreadable locations.
+</details>
+
+<details>
+<summary><picture><source media="(prefers-color-scheme: dark)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-light.svg"><img src="https://github.githubassets.com/static/images/icons/copilot-code-review/medium-v2-light.png" alt="Medium severity" width="62" height="18" align="texttop"></picture> readJson accepts null or arrays without recording an inspection gap</summary>
+
+`scripts/​beta-harness/​dependency-tree.mjs:645`
+
+`JSON.parse()` may succeed with `null`, but `readJson` then returns `null` without recording a gap. Both the lockfile and manifest callers silently skip that file, so an invalid-but-readable `package-lock.json`/`package.json` can produce a clean verdict instead of the promised exit 2. Validate that the parsed value is a non-array object and add a gap otherwise; add a negative control for this valid-JSON/wrong-shape case.
+</details>
+
+<details>
+<summary><picture><source media="(prefers-color-scheme: dark)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-light.svg"><img src="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-light.png" alt="Low severity" width="62" height="18" align="texttop"></picture> Update documentation provenance for the new 26-gate inventory</summary>
+
+`documentation/​30-engineering/​08-dev-harness-and-gates.md:14`
+
+The newly documented 26-gate inventory is dated 2026-10-08, but this page's required `last_reviewed`/`repo_commit` frontmatter still identifies 2026-10-05 and `b32d4c8`. Update the provenance fields for this revision; otherwise readers and freshness checks attribute the new gate documentation to the older 24-gate revision (see `documentation/40-governance/01-documentation-governance.md:63-64`).
+</details>
+
+<details>
+<summary><picture><source media="(prefers-color-scheme: dark)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-light.svg"><img src="https://github.githubassets.com/static/images/icons/copilot-code-review/low-v2-light.png" alt="Low severity" width="62" height="18" align="texttop"></picture> Selftest misclassifies report-only controls as must-stay-quiet</summary>
+
+`scripts/​beta-harness/​dependency-tree.selftest.mjs:614`
+
+This split mislabels two controls: “report-only with findings” and the configured real-repository run both intentionally print findings, yet they are counted as `positive (must stay quiet)` solely because their expected exit is 0. That overstates the no-false-positive evidence in the final selftest verdict. Track control purpose separately and report clean/noise controls independently from report-only and integration controls.
+</details>
+</details>
+
+🧠 **Review effort:** Balanced
+
+---
+
+Give feedback about Copilot approvals in [this survey](https://survey.alchemer.com/s3/9011660/CCR-Public-Preview-Autoapprove-feedback-survey) to enter a drawing for a $150 gift card.

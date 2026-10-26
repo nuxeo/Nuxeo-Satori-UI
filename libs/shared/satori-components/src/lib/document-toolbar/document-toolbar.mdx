@@ -1,0 +1,124 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DocumentToolbarStories from './document-toolbar.stories';
+
+<Meta of={DocumentToolbarStories} name="Overview" />
+
+# Document toolbar
+
+The document toolbar is the row of actions in a document page's header: Edit, Lock, Share, Delete as
+icon buttons, and Export, Publish and the rest behind a "More actions" button. It is the counterpart
+of Web UI's document actions menu. It shows the entries you give it and tells you which one was run;
+your component runs it.
+
+## Key features
+
+- **Entries you resolve.** Each entry is an `NxsToolbarAction`: the action's registered ID, its label
+  already translated, an icon, an optional tooltip, and whether it is disabled, drawn as on, or sent
+  to the overflow menu.
+- **Reports, does not run.** Running an entry emits `selected` with it. Your component looks up the
+  action behind the ID and runs it, so the library needs no extension registry of its own.
+- **Disabled, still explained.** A disabled inline button stays focusable, so its tooltip, such as
+  "Locked by Jane Doe on May 3, 2026", is reachable from the keyboard; a click on it is refused.
+- **On state.** `active` draws an entry in the primary colour, as Web UI draws the padlock of a
+  locked document. A disabled entry is never drawn as on.
+- **No empty menu.** With nothing to overflow, no "More actions" button renders.
+- **Room for your own controls.** Content you project renders inside the group, before the actions.
+- **Addressable entries.** Each control carries its ID as `data-action-id`.
+
+## Demo showcase
+
+Press a button or open "More actions": the Actions panel records `selected`.
+
+<Canvas of={DocumentToolbarStories.FileLockedByAnotherUser} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsDocumentToolbarComponent,
+  type NxsToolbarAction,
+} from '@nuxeo/satori-platform/components';
+import {
+  EXTENSION_SLOTS,
+  descriptorLabel,
+  type ExtensionActionDescriptor,
+} from '@nuxeo/satori-platform/extensions';
+
+readonly descriptors = computed(() =>
+  this.extensions.resolve<ExtensionActionDescriptor>(
+    EXTENSION_SLOTS.toolbar,
+    this.ruleContext.context(),
+  ),
+);
+
+readonly toolbar = computed<readonly NxsToolbarAction[]>(() =>
+  this.descriptors().map((action) => ({
+    id: action.id,
+    label: descriptorLabel(action, (key) => this.translate.instant(key)),
+    icon: action.icon,
+    tooltip: action.tooltip,
+    overflow: action.overflow,
+    disabled: !this.extensions.evaluateRule(action.enabledRule, this.ruleContext.context()),
+  })),
+);
+
+run(entry: NxsToolbarAction): void {
+  const action = this.descriptors().find((candidate) => candidate.id === entry.id);
+  if (action) this.registry.execute(action, this.ruleContext.context());
+}`;
+
+<Source language="typescript" dark code={usageTs} />
+
+export const usageHtml = `<nxs-document-toolbar [actions]="toolbar()" (selected)="run($event)">
+  <button mat-stroked-button type="button">Classify</button>
+</nxs-document-toolbar>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`actions` is required. `label` names the group and `moreLabel` names the menu button; both are
+optional and fall back to the library's own "Document actions" and "More actions", translated under
+`satori-components.document-toolbar.*` with English from `providePlatformEnglishFallback()`. The
+toolbar needs no providers and has no registered ID: place it in a template by its selector.
+
+## Where its data comes from
+
+The toolbar reads nothing. Your component supplies the entries, usually from the `toolbar` slot of
+the extension manifest. Whatever the toolbar shows, Nuxeo still checks the request an action makes:
+hiding or disabling an entry is not a permission.
+
+**In these stories** the entries are a fixed list, a File locked by another user, and running one
+only records it in the Actions panel.
+
+## Examples
+
+### A user with Read only
+
+Edit, Unlock and Delete are disabled: shown, focusable for their tooltip, and inert.
+
+<Canvas of={DocumentToolbarStories.ReadOnlyUser} />
+
+### More actions open
+
+The **More actions open** story in the sidebar opens the menu from the keyboard. It runs only on its
+own story page, because opening a menu here would move this page's focus.
+
+### Nothing overflows
+
+No overflow entries: no menu button.
+
+<Canvas of={DocumentToolbarStories.NothingOverflows} />
+
+## Accessibility
+
+- **A named group.** The row is a `group` named "Document actions" (or `label`). It is not an ARIA
+  `toolbar`, so **Tab** moves between its buttons as it does everywhere else on the page.
+- **Named icon buttons.** Each inline button is named by its label, followed by its tooltip when
+  the tooltip says more — "Unlock. Locked by Jane on May 3, 2026" — so a screen-reader user hears
+  what a mouse user reads. The name is visually hidden text rather than `aria-label`, and the icon
+  is hidden from assistive technology, so the icon's ligature never reads as a visible label the
+  name lacks (WCAG 2.5.3). The tooltip shows on hover and keyboard focus.
+- **Disabled controls.** An inline disabled button is announced as unavailable
+  (`aria-disabled="true"`) and keeps focus so its tooltip can be read. A disabled menu entry is
+  skipped by the arrow keys.
+- **Menu.** "More actions" says it opens a menu; **Enter** opens it with focus on the first entry,
+  **Up** and **Down** move, **Escape** closes it and returns focus to the button.

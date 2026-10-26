@@ -21,13 +21,20 @@ const BASE = process.env['E2E_BASE_URL'] ?? 'http://localhost:4200';
 const { parseAllowedHosts, isHostAllowed, ALLOWED_HOSTS_ENV } = await import(
   new URL('../../libs/integration-tests/src/lib/integration-preflight.ts', import.meta.url).href,
 );
+const { checkFetchIdentity, ME_PATH } = await import(new URL('./identity-guard.mjs', import.meta.url).href);
 
 const E2E_ALLOWED_HOSTS_ENV = 'E2E_ALLOWED_HOSTS';
 
 const problems = [];
 const ok = [];
 
-/** 0a. The app origin is named before any Basic header is built or sent. */
+/**
+ * 0a. The app origin is named before any Basic header is built or sent.
+ *
+ * Enforced by `hostAllowed` on every check that sends the header (3a, 3). Until NXSAT-643 the
+ * refusal was only reported: check 3 still sent the pair to a host this check had just refused.
+ */
+let hostAllowed = false;
 const allowedHosts = parseAllowedHosts(
   process.env[E2E_ALLOWED_HOSTS_ENV] ?? process.env[ALLOWED_HOSTS_ENV],
 );
@@ -48,6 +55,7 @@ if (allowedHosts.length === 0) {
           '  unintended host.',
       );
     } else {
+      hostAllowed = true;
       ok.push(`E2E_BASE_URL host is named in ${E2E_ALLOWED_HOSTS_ENV} / ${ALLOWED_HOSTS_ENV}`);
     }
   } catch (error) {
@@ -151,15 +159,39 @@ try {
 }
 
 /**
+ * 3a. Nuxeo answers the header **as NUXEO_USER**, through the same proxy.
+ *
+ * Check 3 cannot tell: measured on a Nuxeo with guests enabled, the File query below returns
+ * one row to `Anonymous` and 1154 to the administrator, so it passes either way. Only `/me`
+ * names the principal (NXSAT-643, `identity-guard.mjs`).
+ */
+let identityOk = false;
+if (appStatus !== null && auth && hostAllowed) {
+  const identity = await checkFetchIdentity(new URL(ME_PATH, BASE).href, auth, USER);
+  if (identity.ok) {
+    identityOk = true;
+    ok.push(`Nuxeo answers the credentials as ${identity.user} through the dev proxy`);
+  } else {
+    problems.push(
+      `${identity.problem}.\n` +
+        '  The suite would run as the wrong user and still pass its render assertions, because a\n' +
+        '  guest-enabled Nuxeo answers 200 either way. Fix NUXEO_USER / NUXEO_PASS, or whatever\n' +
+        '  between here and Nuxeo drops the Authorization header.',
+    );
+  }
+}
+
+/**
  * 3. Nuxeo, through the app's own proxy, **with documents in it**.
  *
  * Reached via the proxy rather than :8080 directly, because the proxy is what the specs
  * use — testing :8080 would pass while a broken `proxy.conf.json` failed every spec.
  *
  * The document count is the load-bearing part. Every critical-path spec asserts repository
- * data, so an empty repository is not a pass, it is an untested run.
+ * data, so an empty repository is not a pass, it is an untested run. Asked only once 3a has
+ * shown the header runs as the right user, or the count would be the guest's.
  */
-if (appStatus !== null && auth) {
+if (appStatus !== null && auth && identityOk) {
   try {
     const url = new URL('/nuxeo/api/v1/search/lang/NXQL/execute', BASE);
     url.searchParams.set(

@@ -1,0 +1,51 @@
+<h2 mat-dialog-title>{{ 'satori-components.permission-dialogs.delete.title' | translate }}</h2>
+
+<mat-dialog-content>
+  @if (narrow()) {
+    <dl class="nxs-delete-permission-dialog__rows">
+      @for (field of fields; track field.label) {
+        <div>
+          <dt>{{ field.label | translate }}</dt>
+          <dd>{{ field.value }}</dd>
+        </div>
+      }
+    </dl>
+  } @else {
+    <table class="nxs-delete-permission-dialog__entry">
+      <thead>
+        <tr>
+          @for (field of fields; track field.label) {
+            <th scope="col">{{ field.label | translate }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          @for (field of fields; track field.label) {
+            <td>{{ field.value }}</td>
+          }
+        </tr>
+      </tbody>
+    </table>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" mat-dialog-close [disabled]="deleting()">
+    {{ 'satori-components.permission-dialogs.cancel' | translate }}
+  </button>
+  <button
+    mat-flat-button
+    type="button"
+    class="nxs-delete-permission-dialog__delete"
+    [disabled]="deleting()"
+    (click)="confirm()"
+  >
+    @if (deleting()) {
+      <mat-icon class="nxs-spinning" aria-hidden="true" svgIcon="autorenew" />
+      {{ 'satori-components.permission-dialogs.delete.deleting' | translate }}
+    } @else {
+      {{ 'satori-components.permission-dialogs.delete.delete' | translate }}
+    }
+  </button>
+</mat-dialog-actions>

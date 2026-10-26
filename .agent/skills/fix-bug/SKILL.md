@@ -141,7 +141,7 @@ walk the user through it** — do not silently continue past a missing prerequis
 - **GitHub CLI**: `gh auth status` logged in with push access to `nuxeo/agentic-ui-poc`.
 - **Signed commits**: `git config commit.gpgsign` is `true`, `gpg.format=ssh`, key registered on
   GitHub as a **Signing Key** (distinct from an Authentication key).
-- **Node 20** (`.nvmrc`) and `npm ci` done. On Node 22+ a built-in `localStorage` shadows jsdom's
+- **Node 24** (`.nvmrc`) and `npm ci` done. On Node 25+ a built-in `localStorage` shadows jsdom's
   and a bare `nx test` fails on correct code — route verification through the gate.
 - **Docker running**, with the shared `nuxeo` container present: the workspace script reads its
   image and licence from it.
@@ -390,9 +390,11 @@ own callouts on annotated _copies_ afterwards.
 
 Gotchas:
 
-- **Auth needs both mechanisms.** `h.login()` injects the session the route guard reads; the
-  runner's `httpCredentials` authenticates the XHRs. Without both, `/nuxeo/api` calls
-  intermittently 403 and you photograph empty states that read as component defects.
+- **Auth needs both mechanisms.** `h.login()` injects the session the route guard reads and the
+  app's interceptor turns into the Basic header on its XHRs; the runner's `httpCredentials`
+  (`send: 'always'`) authenticate `page.request`. Nuxeo with guests enabled never challenges, so
+  a missing half does not 403 — it runs as `Anonymous` and looks green. The phase runner's
+  identity guard rejects that at every step boundary (NXSAT-643); `await h.step(...)`.
 - **Hash routing.** `withHashLocation()` makes `goto('/#/x')` same-document, so anything asserting
   a **reloaded** app needs an explicit `page.reload()` or `APP_INITIALIZER` never re-runs.
 - **Probe the DOM, not the pixels.** A change inheriting theme colours makes before/after stills
@@ -456,7 +458,8 @@ rarely "minimal" just because the diff is small.
   `as unknown as` / `as never`, and any new `@nx/vitest:test` project has a config + specs.
 - **Never cross-feature imports** — shared logic goes in `libs/shared/`, and a new library needs
   `scope:`/`type:` tags before it can import anything.
-- **adf-hx types must never appear in our public API** — wrap them in `adf-hx-bridge`.
+- **adf-hx types must never appear in our public API** — nothing imports adf-hx since its bridge
+  was removed with the POC routes (NXSAT-635); do not reintroduce it.
 - Keep the diff focused — do not bundle unrelated files.
 
 ### 4a — Verify against the evidence, and loop if it is not fixed
@@ -525,22 +528,25 @@ npm run beta:gate -- --gates guardrails,lint      # seconds — after every mean
 npm run beta:gate                                 # full run before pushing
 ```
 
-An unfiltered run executes **all 21 gates** cheapest-first — `node`, `lockfile`, `supply-chain`,
+An unfiltered run executes **every gate in `ALL_GATES`** (26 today; the verdict line prints the
+count) cheapest-first — `node`, `lockfile` and the dependency-tree pair, `supply-chain`,
 `code-scanning`, `guardrails`, sanitizers, `assertions`, then affected `lint`, `test`, `build`,
 `typecheck`, `spec-types`, `bundle`, `api-surface`, the packaging gates and the drift gates
-(`reference-drift`, `agent-mirror`). It stops at the first
-failure. Expect it to take a while; that is the cost of the two traps it catches that
-`review:preflight` does not:
+(`reference-drift`, `agent-mirror`), with each gate's self-test beside it. It stops at the first
+failure. `dependency-tree` passes while listing the ADF packages still in the tree — that list is
+the NXSAT-308 removal backlog, not something your fix introduced. Expect the run to take a while;
+that is the cost of the two traps it catches that `review:preflight` does not:
 
 - **`test` does not typecheck.** Vitest strips types through esbuild, so a green test run is not
   type safety. Only `build` and `typecheck` catch a `TS` error, and they run late.
-- **Nothing except the `lockfile` gate reads `package-lock.json`.** CI was red for the whole of
-  Phase 2 while every local gate was green. Revert incidental lockfile churn, and **never run a
+- **Nothing except the `lockfile` gate checks that `package-lock.json` will install.** CI was red
+  for the whole of Phase 2 while every local gate was green. Revert incidental lockfile churn, and **never run a
   bare `npm install` and commit the result** — on macOS it prunes optional platform entries Linux
   needs and `npm ci` then refuses the tree.
 
 Only a run with **no** `--gates` filter can be cited. A filtered run reports `pass-partial`; read
-`gates.notRequested` before quoting anything. Use [`verify-gate`](../verify-gate/SKILL.md) to
+`gates.notRequested` before quoting anything. A run in which a gate did not run reports
+`pass-incomplete`; read `gates.notRun`. Use [`verify-gate`](../verify-gate/SKILL.md) to
 iterate: fix only the first reported failure, no speculative batching, three attempts then stop.
 
 ### 5a — Coverage

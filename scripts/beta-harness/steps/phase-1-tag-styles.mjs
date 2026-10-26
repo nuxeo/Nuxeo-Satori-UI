@@ -32,8 +32,8 @@
 const ENVIRONMENTAL_ERRORS = [
   /automation\/AI\./,
   '/nuxeo/logout',
-  '/nuxeo/api/v1/path/default-domain/config/agentic-ui',
   '/agentic-ui-config/bootstrap.json',
+  '/agentic-ui-config/manifest.json',
 ];
 
 /** Material's unstyled dialog title is display-medium, about 2rem. */
@@ -140,7 +140,7 @@ async function openDetailsPanel(page) {
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
 export default async function run(page, h) {
-  h.step('Tags on the browse details panel');
+  await h.step('Tags on the browse details panel');
   await h.login();
   await h.goTo('/#/browse/default-domain');
   await h.expectVisible('browse page rendered', 'lib-browse');
@@ -152,14 +152,14 @@ export default async function run(page, h) {
     await h.screenshot('tags-browse-closeup', firstTag);
   }
 
-  h.step('Tags on a populated folder');
+  await h.step('Tags on a populated folder');
   await h.goTo('/#/browse/default-domain/workspaces');
   await h.expectVisible('workspaces folder rendered', 'lib-browse');
   await openDetailsPanel(page);
   assertStillATag(h, 'workspaces', await measureTag(page));
   await h.screenshot('tags-workspaces');
 
-  h.step('Shared dialog title');
+  await h.step('Shared dialog title');
   await h.goTo('/#/browse/default-domain');
   const edit = page.locator('button[mattooltip="Edit"]').first();
   h.check('an action that opens a shared dialog is available', (await edit.count()) > 0);
@@ -192,6 +192,6 @@ export default async function run(page, h) {
   }
   await h.screenshot('dialog-title');
 
-  h.step('Health');
+  await h.step('Health');
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
 }

@@ -1,10 +1,11 @@
 name: A11y
 
 on:
+  # PRs into an `integration/<ticket>` branch get the same gate as PRs into `main`.
   pull_request:
-    branches: [main]
+    branches: [main, 'integration/**']
   push:
-    branches: [main, 'feature/**', 'fix/**']
+    branches: [main, 'feature/**', 'fix/**', 'integration/**']
   # Reusable, so a release or nightly workflow can call this rather than duplicating it.
   # Modelled on nuxeo-web-ui's a11y.yaml, which exposes the same entry point.
   workflow_call:
@@ -15,8 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 # Least privilege. This job reads the tree and writes a job summary; it needs nothing else.
-# `packages: read` is required because `npm ci` resolves @hylandsoftware and @alfresco from
-# GitHub Packages.
+# `packages: read` is required because `npm ci` resolves @hylandsoftware from GitHub Packages.
 permissions:
   contents: read
   packages: read
@@ -33,7 +33,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           registry-url: https://npm.pkg.github.com
           scope: '@hylandsoftware'
@@ -94,5 +94,6 @@ jobs:
   # Until then it is run locally:
   #
   #   npm install --no-save @playwright/test @axe-core/playwright
+  #   export NUXEO_USER=<user> NUXEO_PASS=<password>   # required, no default (NXSAT-649)
   #   npm run beta:backend && npx nx serve nuxeo-ui
   #   npm run beta:evidence -- phase-6-a11y

@@ -1,0 +1,62 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DomainHintStories from './domain-hint.stories';
+
+<Meta of={DomainHintStories} name="Overview" />
+
+# Domain hint
+
+The domain hint is a one-line note shown where content cannot be created directly: inside a Domain,
+or at the repository root. It tells the user to open Sections, Templates or Workspaces and create
+content there instead. Place it above a listing whose location may be one of those.
+
+## Key features
+
+- **Decides for itself.** Pass what the page is showing; the hint appears only inside a Domain or at
+  the root, and renders nothing anywhere else. A page can place it unconditionally.
+- **The same rule as Create and Import.** It uses the rule the platform's Create and Import checks use
+  to refuse those locations — a document of type `Domain`, or the path `/`.
+- **The same sentence.** It shows the translated message those checks show, from the application's
+  catalogue.
+
+## Demo showcase
+
+<Canvas of={DomainHintStories.InsideADomain} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsDomainHintComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-domain-hint [documentType]="folder.type" [path]="folder.path" />`}
+/>
+
+Both inputs are optional. The hint needs ngx-translate for its sentence, under the key
+`browse.message.domain-container-guidance`; `providePlatformEnglishFallback()` supplies the English
+when your catalogue does not.
+
+## Examples
+
+### At the repository root
+
+<Canvas of={DomainHintStories.AtTheRepositoryRoot} />
+
+### Inside a workspace
+
+Anywhere else the hint renders nothing, so this preview is empty.
+
+<Canvas of={DomainHintStories.InsideAWorkspace} />
+
+## Accessibility
+
+- **Role.** The sentence is a paragraph with the `note` role, read in place as the user moves
+  through the page.
+- **Not announced.** It is not a live region, so it is not read out when it appears; it is part of
+  the page's content.
+- **Keyboard.** It is not interactive and takes no focus.

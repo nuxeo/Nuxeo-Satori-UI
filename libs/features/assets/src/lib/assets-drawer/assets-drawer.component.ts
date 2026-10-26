@@ -1,5 +1,13 @@
-import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo-satori/platform/extensions';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -16,8 +24,8 @@ import {
   type AssetAggregations,
   type AssetQueueItem,
   type SavedSearchOption,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import { SavedSearchDialogComponent } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { SavedSearchDialogComponent } from '@nuxeo/satori-platform/ui';
 import { AssetsQueueComponent } from '../assets-queue/assets-queue.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
@@ -86,6 +94,7 @@ function toMimeType(value: string): string {
     AssetsQueueComponent,
   ],
   templateUrl: './assets-drawer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './assets-drawer.component.scss',
 })
 export class AssetsDrawerComponent {

@@ -1,0 +1,36 @@
+:host {
+  display: block;
+  --nxs-share-external-dialog-error: var(--mat-sys-error);
+}
+
+.nxs-share-external-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(480px, 80vw);
+}
+
+// Side by side while both dates fit, one above the other when they do not, as at 320 px: a field
+// narrower than its basis cut the date off ("2/1/2031" showed as "2/1/2"). The basis is a full date
+// beside the field's padding and its datepicker toggle.
+.nxs-share-external-dialog__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+
+  mat-form-field {
+    flex: 1 1 11rem;
+  }
+}
+
+// Material gives content under a title no top padding, which clips the first outlined field's label.
+:host .nxs-share-external-dialog__content {
+  padding-top: 8px;
+}
+
+// Scoped to the host: the theme's `.mat-typography p` margin outranks a single class.
+:host .nxs-share-external-dialog__error {
+  margin: -4px 0 8px;
+  font-size: 12px;
+  color: var(--nxs-share-external-dialog-error);
+}

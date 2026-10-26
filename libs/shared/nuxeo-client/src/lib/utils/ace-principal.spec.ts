@@ -75,6 +75,58 @@ describe('ace-principal', () => {
     expect(ace?.creator).toBe('Administrator');
   });
 
+  it('normalizeDocumentAcls keeps a user or group display name beside the id', () => {
+    // The wire shape of `fetch-acls: extended`, which the declared type does not describe.
+    const aces: NuxeoAce[] = JSON.parse(
+      JSON.stringify([
+        {
+          id: 'a',
+          username: {
+            'entity-type': 'user',
+            id: 'parity-user',
+            properties: { username: 'parity-user', firstName: 'Parity', lastName: 'User' },
+          },
+        },
+        {
+          id: 'b',
+          username: {
+            'entity-type': 'group',
+            id: 'members',
+            groupname: 'members',
+            grouplabel: 'Members group',
+          },
+        },
+        { id: 'c', username: 'plain' },
+        {
+          id: 'd',
+          username: {
+            'entity-type': 'user',
+            id: 'Administrator',
+            properties: { username: 'Administrator', firstName: '', lastName: '  ' },
+          },
+        },
+      ]),
+    );
+    const doc: NuxeoDocument = {
+      uid: 'd',
+      title: 'D',
+      type: 'Folder',
+      path: '/d',
+      lastModified: '2026-07-01T00:00:00.000Z',
+      properties: {},
+      contextParameters: { acls: [{ name: 'local', aces }] },
+    };
+
+    const normalized = normalizeDocumentAcls(doc).contextParameters?.['acls']?.[0]?.aces ?? [];
+
+    expect(normalized.map((ace) => [ace.username, ace.usernameLabel])).toEqual([
+      ['parity-user', 'Parity User'],
+      ['members', 'Members group'],
+      ['plain', undefined],
+      ['Administrator', undefined],
+    ]);
+  });
+
   it('mergeDocumentPermissionsContext replaces acls and permissions only', () => {
     const existing: NuxeoDocument = {
       uid: 'doc-1',

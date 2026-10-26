@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { TranslateLoader } from '@ngx-translate/core';
 import { Observable, catchError, forkJoin, map, of } from 'rxjs';
 
@@ -32,126 +32,25 @@ export function flattenCatalogue(
   return target;
 }
 
-/** A translation folder in adf-core's sense: a name and a path under the base href. */
-interface TranslationFolder {
-  readonly name: string;
-  path: string;
-}
-
 /**
- * WORKAROUND(adf-hx): W6 — adf-hx's own i18n catalogues seeded, because its components register
- * them too late for the registration to matter.
+ * Upstream catalogue folders, fetched as `<folder>/i18n/<lang>.json` beneath this app's own.
  *
- * Catalogues seeded at construction, keyed by the name their owner registers under.
+ * `@hylandsoftware/satori-ui` — the `sat.*` keys, copied in by an asset glob in `angular.json`.
+ * Added 2026-08-24, and this one was not a cosmetic omission: it was **the most widespread
+ * accessibility violation in the product**.
  *
- * adf-core's own loader seeds its folder in its constructor, and these are seeded for the same
- * reason: without them adf-hx components render raw keys — `ADF-DATATABLE.ACCESSIBILITY.SELECT_ALL`
- * from adf-core, `MANAGE_VERSIONS.DIALOG.TITLE` from adf-hx. All three are copied in by asset
- * globs in `angular.json`.
+ * `sat-platform-nav` binds `[attr.aria-label]="'sat.platform-nav.expand' | translate"`. With
+ * the catalogue absent the pipe yields an empty string, so the button rendered
+ * `aria-label=""` — an empty accessible name, which axe reports as `button-name`
+ * (**critical**) on *every* surface in the application, seven of seven. Its `matTooltip`
+ * resolved to empty too, so the attribute was not even present in the DOM.
  *
- * The adf-hx folders are seeded rather than left to arrive on their own, and that distinction
- * is the bug this fixes. adf-hx components *do* register their catalogue — `provideTranslations`
- * in each component's own `providers` — but registration happens when the component is
- * constructed, which is long after the language has loaded, and `init` below is a no-op. So the
- * registration landed and the strings still never arrived. The versions panel rendered
- * `MANAGE_VERSIONS.DIALOG.TITLE` as its heading.
- *
- * The names match upstream's exactly so `providerRegistered` recognises its own registration
- * and `registerProvider` updates the path in place instead of adding a duplicate folder.
+ * Upstream ships `provideAndConfigureSatoriTranslations`, and we deliberately do not use it:
+ * it calls `provideTranslateService` with its own `MultiTranslateHttpLoader`, which would
+ * replace this loader and take the manifest `labels` layering — a shipped Layer 0 capability —
+ * with it. Fetching the folder here gets the strings with no such trade.
  */
-const SEEDED_FOLDERS: readonly TranslationFolder[] = [
-  { name: 'adf-core', path: 'assets/adf-core' },
-  {
-    name: 'adf-enterprise-adf-hx-content-services-ui',
-    path: 'assets/adf-enterprise-adf-hx-content-services-ui',
-  },
-  {
-    name: 'adf-enterprise-adf-hx-content-services-services',
-    path: 'assets/adf-enterprise-adf-hx-content-services-services',
-  },
-  /**
-   * `@hylandsoftware/satori-ui` — the `sat.*` keys. Added 2026-08-24, and this one was not a
-   * cosmetic omission: it was **the most widespread accessibility violation in the product**.
-   *
-   * `sat-platform-nav` binds `[attr.aria-label]="'sat.platform-nav.expand' | translate"`. With
-   * the catalogue absent the pipe yields an empty string, so the button rendered
-   * `aria-label=""` — an empty accessible name, which axe reports as `button-name`
-   * (**critical**) on *every* surface in the application, seven of seven. Its `matTooltip`
-   * resolved to empty too, so the attribute was not even present in the DOM.
-   *
-   * Untranslated adf strings were visible as raw keys and got noticed. An empty `aria-label` is
-   * invisible to anyone not using a screen reader, which is why it survived to a WCAG audit.
-   *
-   * Upstream ships `provideAndConfigureSatoriUITranslations`, and we deliberately do not use it:
-   * it calls `provideTranslateService` with its own `MultiTranslateHttpLoader`, which would
-   * replace this loader and take the manifest `labels` layering — a shipped Layer 0 capability —
-   * with it. Seeding the folder gets the strings with no such trade.
-   *
-   * The name matches upstream's own `satoriUITranslationPath` constant.
-   */
-  { name: '@hylandsoftware/satori-ui', path: 'assets/satori-ui' },
-];
-
-/**
- * Upstream's key literal ends in a space.
- *
- * Named rather than written inline for two reasons: a bare `'…LABEL '` reads as a typo and
- * invites a well-meaning cleanup, and a formatter or editor that trims string contents would
- * delete the one character this workaround is about without changing anything visible.
- * `app-translate-loader.spec.ts` asserts the alias still differs from its canonical key, which
- * is what makes that deletion loud instead of silent.
- */
-const TRAILING_SPACE = ' ';
-
-/**
- * WORKAROUND(adf-hx): W13 — upstream asks for a translation key it does not ship, because its
- * own key literal carries stray trailing whitespace.
- *
- * `HxpDocumentTreeComponent` binds the node toggle's accessible name to
- * `('DOCUMENT_TREE.TOGGLE_ARIA-LABEL ' | translate) + node.name`. Its catalogue ships
- * `DOCUMENT_TREE.TOGGLE_ARIA-LABEL` with no trailing space, so the lookup misses a key that is
- * present and ngx-translate falls through to its key passthrough.
- *
- * The accessible name was therefore `DOCUMENT_TREE.TOGGLE_ARIA-LABEL undefined`, on every surface
- * — the tree is the app shell's nav drawer. **`undefined`, not the folder name**: `node` is a
- * wrapper carrying `node.document`, `node.isLoading` and `node.isSelectable`, with no `name` on it
- * at all. This comment said `… Home` for two review rounds, and that one word is what made the
- * alias look sufficient. It is not: with the key resolved the name became `Toggleundefined`, and
- * the folder name needs W15 — see `hxp-document-tree-toggle-name.directive.ts`.
- *
- * **This is not W6 and seeding did not fix it.** W6 was a catalogue that never loaded; here the
- * catalogue loads and the key resolves, and upstream asks for a different key. Aliasing is the
- * only host-side fix short of patching another library's compiled template.
- *
- * Note for whoever removes this: upstream also **concatenates** the node name onto the
- * translated string, which INFO-144 forbids because no translator can reorder the result. The
- * alias fixes the key, not the concatenation. Both are finding 1.3 in
- * `docs/adf-hx-upstream-findings.md`.
- */
-const UPSTREAM_KEY_ALIASES: readonly (readonly [alias: string, canonical: string])[] = [
-  [`DOCUMENT_TREE.TOGGLE_ARIA-LABEL${TRAILING_SPACE}`, 'DOCUMENT_TREE.TOGGLE_ARIA-LABEL'],
-];
-
-/**
- * Copies each aliased key's **resolved** value onto the key upstream actually asks for, so a
- * French catalogue yields a French accessible name rather than a hardcoded English one.
- *
- * Applied to the folder catalogues alone, which keeps it below this app's own catalogue and
- * below the manifest's `labels` — a customer can still override it, as with any other key.
- *
- * An alias that already carries a value is left alone. If upstream ever ships the stray-
- * whitespace key itself, its string wins and this becomes inert rather than authoritative.
- */
-export function applyUpstreamKeyAliases(catalogue: Record<string, string>): Record<string, string> {
-  for (const [alias, canonical] of UPSTREAM_KEY_ALIASES) {
-    const resolved = catalogue[canonical];
-    if (resolved !== undefined && catalogue[alias] === undefined) catalogue[alias] = resolved;
-  }
-  return catalogue;
-}
-
-/** Exported for the spec, which asserts the aliases are still distinct from their canonicals. */
-export const UPSTREAM_KEY_ALIAS_PAIRS = UPSTREAM_KEY_ALIASES;
+const UPSTREAM_FOLDERS: readonly string[] = ['assets/satori-ui'];
 
 /**
  * Loads the shipped translation catalogue and layers the manifest's `labels` over it.
@@ -160,31 +59,7 @@ export const UPSTREAM_KEY_ALIAS_PAIRS = UPSTREAM_KEY_ALIASES;
  * customer is a manifest edit, not a rebuild. The English catalogue is also compiled in
  * as a fallback, so a failed fetch degrades to English rather than to raw keys.
  *
- * WORKAROUND(adf-hx): W2 — five undocumented loader methods duck-typed without importing adf-core.
- *
- * ## Why it implements five methods that are not on `TranslateLoader`
- *
- * adf-core's `TranslationService` does not treat the ngx-translate loader as a
- * `TranslateLoader`. It takes `translate.currentLoader` and calls `setDefaultLang`,
- * `providerRegistered`, `registerProvider`, `getFullTranslationJSON` and `init` on it.
- * With a plain `TranslateLoader` in place, every adf-hx component dies with
- * `TypeError: this.customLoader.setDefaultLang is not a function`.
- *
- * There are three ways to satisfy that, and only one works here:
- *
- * - Replace this class with adf-core's `TranslateLoaderService`. Deletes the
- *   manifest-labels layering, which is a shipped Layer 0 capability.
- * - Extend adf-core's `TranslateLoaderService`. Works, and puts `@alfresco/adf-core` on
- *   an import chain from `app.config.ts`, moving adf-core into the **initial** bundle —
- *   measured at 1.71 MB → 2.86 MB, past the 2 MB budget error.
- * - Implement the contract here, importing nothing from adf-core. Costs the forty lines
- *   below and keeps adf-core in the lazily-loaded POC chunk.
- *
- * This is the third. It is a duck-typed implementation of an **undocumented** contract,
- * so an adf-core upgrade could add a method and break it — which surfaces as the same
- * `TypeError` on a different name rather than as a silent failure.
- *
- * Precedence, lowest to highest: registered folders, this app's catalogue, the manifest's
+ * Precedence, lowest to highest: upstream folders, this app's catalogue, the manifest's
  * `labels`. A customer's relabelling wins over both, which is the point of Layer 0.
  */
 @Injectable({ providedIn: 'root' })
@@ -192,15 +67,10 @@ export class AppTranslateLoader implements TranslateLoader {
   private readonly http = inject(HttpClient);
   private readonly config = inject(AppConfigService);
 
-  private defaultLang = 'en';
-  private readonly folders: TranslationFolder[] = SEEDED_FOLDERS.map((folder) => ({ ...folder }));
-  /** Last merged folder catalogue per language, for the synchronous read below. */
-  private readonly folderCache = new Map<string, Record<string, string>>();
-
   getTranslation(lang: string): Observable<Record<string, string>> {
-    const folders$ = this.folders.map((folder) =>
+    const folders$ = UPSTREAM_FOLDERS.map((folder) =>
       this.http
-        .get<unknown>(`${folder.path}/${TRANSLATION_DIRECTORY}/${encodeURIComponent(lang)}.json`)
+        .get<unknown>(`${folder}/${TRANSLATION_DIRECTORY}/${encodeURIComponent(lang)}.json`)
         .pipe(catchError(() => of({}))),
     );
     const app$ = this.http
@@ -210,52 +80,12 @@ export class AppTranslateLoader implements TranslateLoader {
     return forkJoin([...folders$, app$]).pipe(
       map((catalogues) => {
         const app = catalogues.pop();
-        const folders = applyUpstreamKeyAliases(
-          catalogues.reduce<Record<string, string>>(
-            (acc, catalogue) => ({ ...acc, ...flattenCatalogue(catalogue) }),
-            {},
-          ),
+        const folders = catalogues.reduce<Record<string, string>>(
+          (acc, catalogue) => ({ ...acc, ...flattenCatalogue(catalogue) }),
+          {},
         );
-        this.folderCache.set(lang, folders);
         return { ...folders, ...flattenCatalogue(app), ...this.config.manifest().labels };
       }),
     );
-  }
-
-  /* ---- the adf-core loader contract ---- */
-
-  setDefaultLang(value: string): void {
-    this.defaultLang = value || 'en';
-  }
-
-  providerRegistered(name: string): boolean {
-    return this.folders.some((folder) => folder.name === name);
-  }
-
-  registerProvider(name: string, path: string): void {
-    const existing = this.folders.find((folder) => folder.name === name);
-    if (existing) existing.path = path;
-    else this.folders.push({ name, path });
-  }
-
-  /**
-   * adf-core reads translations synchronously here. It returns whatever the last
-   * `getTranslation` cached rather than fetching: a synchronous method cannot honestly
-   * perform a network request, and an empty object is the correct answer for a language
-   * that has not loaded — a fabricated one would render wrong strings.
-   */
-  getFullTranslationJSON(lang: string): Record<string, string> {
-    return this.folderCache.get(lang) ?? this.folderCache.get(this.defaultLang) ?? {};
-  }
-
-  /**
-   * A no-op on purpose. adf-core's loader uses `init` to prime a fetch queue; here
-   * `getTranslation` loads every registered folder in one pass, so there is nothing to
-   * queue. A folder registered *after* the current language has loaded is picked up on
-   * the next language load rather than immediately — acceptable because the only
-   * registrations happen at bootstrap.
-   */
-  init(_lang: string): void {
-    /* nothing to prime */
   }
 }

@@ -10,6 +10,8 @@ import {
   DestroyRef,
   untracked,
   LOCALE_ID,
+  viewChild,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { NgTemplateOutlet, DatePipe, formatDate } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
@@ -29,8 +31,6 @@ import {
   CollectionService,
   AssetService,
   AssetAggregationService,
-  SearchService,
-  SearchAggregationService,
   DocumentService,
   DocumentDetailService,
   TaskService,
@@ -39,16 +39,12 @@ import {
   docTypeIcon,
   isFolderishDocument,
   isBrowsableNavNode,
-  isRepositoryRootPath,
-  cumulativeNuxeoPathPrefixes,
   normalizeNuxeoPath,
   nuxeoPathsEqualFlexible,
   nuxeoPathSegments,
   toBrowseRouterUrl,
-  topLevelNuxeoFolderPath,
   documentNavigationUrl,
   isCollectionDocument,
-  type SearchQueryParams,
   type AssetAggregations,
   canPasteClipboard,
   readClipboardDocs,
@@ -57,9 +53,7 @@ import {
   formatRelativeTime,
   DocTypeLabelPipe,
   taskDueDistance,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import { toAdfHxBrowseRouterUrl } from '@agentic-ui/shared/adf-hx-bridge';
-import { HxpBrowseNavDrawerComponent } from '@agentic-ui/shared/adf-hx-bridge/providers';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AppExtensionsService,
   DescriptorLabelPipe,
@@ -68,7 +62,7 @@ import {
   ExtensionOutletComponent,
   ExtensionRuleContextService,
   type ExtensionElement,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import { AuthService } from '../../auth/auth.service';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import {
@@ -79,6 +73,7 @@ import {
 } from '../../platform-nav-items';
 import { ThemingFeatureFlagService } from '../../theme/theming-feature-flag.service';
 import { drawerDueKey } from './nav-drawer-due';
+import { NxsDocumentTreeComponent } from '@nuxeo/satori-platform/components';
 
 export interface FolderNode {
   doc: NuxeoDocument;
@@ -86,7 +81,6 @@ export interface FolderNode {
   expanded: boolean;
   loaded: boolean;
   loading: boolean;
-  isRoot?: boolean;
 }
 
 @Component({
@@ -106,9 +100,10 @@ export interface FolderNode {
     MatSnackBarModule,
     TranslatePipe,
     ExtensionOutletComponent,
-    HxpBrowseNavDrawerComponent,
+    NxsDocumentTreeComponent,
   ],
   templateUrl: './nav-drawer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nav-drawer.component.scss',
 })
 export class NavDrawerComponent {
@@ -121,8 +116,6 @@ export class NavDrawerComponent {
   private readonly collectionService = inject(CollectionService);
   private readonly assetService = inject(AssetService);
   private readonly assetAggregationService = inject(AssetAggregationService);
-  private readonly searchService = inject(SearchService);
-  private readonly searchAggregationService = inject(SearchAggregationService);
   private readonly detailService = inject(DocumentDetailService);
   private readonly docService = inject(DocumentService);
   private readonly authService = inject(AuthService);
@@ -145,34 +138,10 @@ export class NavDrawerComponent {
       : POWERUSER_ADMINISTRATION_DRAWER_ITEMS,
   );
 
-  readonly rootNodes = signal<FolderNode[]>([]);
-  readonly rootLoading = signal(false);
-  private pendingBrowseSyncPath: string | null = null;
-
-  /** Web UI pattern: at repository root show all domains; inside a domain show only that branch. */
-  readonly browseDisplayNodes = computed((): FolderNode[] => {
-    const roots = this.rootNodes();
-    if (roots.length === 0) return [];
-
-    const activePath = normalizeNuxeoPath(this.browseContext.contextPath());
-    if (isRepositoryRootPath(activePath)) {
-      return roots;
-    }
-
-    const domainPath = topLevelNuxeoFolderPath(activePath);
-    if (!domainPath) return roots;
-
-    const domainNode = roots[0].children.find((child) =>
-      nuxeoPathsEqualFlexible(child.doc.path, domainPath),
-    );
-    return domainNode ? [domainNode] : roots;
-  });
-
-  readonly browseTreeShowRootBack = computed(
-    () =>
-      !isRepositoryRootPath(normalizeNuxeoPath(this.browseContext.contextPath())) &&
-      this.rootNodes().length > 0,
-  );
+  /** The browse tree, which loads and follows the browsed folder itself. */
+  private readonly browseTree = viewChild(NxsDocumentTreeComponent);
+  /** The folder browse shows, which the tree expands to and marks. */
+  readonly browseTreePath = computed(() => this.browseContext.contextPath());
 
   readonly personalSpaceNodes = signal<FolderNode[]>([]);
   readonly personalSpaceLoading = signal(false);
@@ -234,9 +203,6 @@ export class NavDrawerComponent {
   private readonly destroyRef = inject(DestroyRef);
   /** Tracks which user the drawer caches belong to — cleared on sign-out or user switch. */
   private drawerSessionUser: string | null = null;
-  private browseTreeLoadedForUser: string | null = null;
-  /** Bumped on user switch / refresh so stale HTTP responses cannot overwrite the tree. */
-  private browseTreeLoadGen = 0;
 
   constructor() {
     this.taskService.tasksChanged$
@@ -255,11 +221,8 @@ export class NavDrawerComponent {
       const refreshTick = this.browseContext.treeRefreshTick();
       if (refreshTick > 0) {
         untracked(() => {
-          this.browseTreeLoadedForUser = null;
-          this.rootNodes.set([]);
           const item = this.activeItem();
-          const username = this.authService.username();
-          if (item?.id === 'app.navbar.browse' && username) {
+          if (item?.id === 'app.navbar.browse') {
             this.refreshBrowseTree();
           }
           if (item?.path === '/personal-space') {
@@ -271,30 +234,11 @@ export class NavDrawerComponent {
 
     effect(() => {
       const item = this.activeItem();
-      const contextPath = this.browseContext.contextPath();
-      const username = this.authService.username();
-
-      if (item?.id === 'app.navbar.browse' && username) {
-        untracked(() => {
-          const needsReload =
-            this.browseTreeLoadedForUser !== username || this.rootNodes().length === 0;
-          if (needsReload) {
-            this.pendingBrowseSyncPath = contextPath;
-            this.browseTreeLoadedForUser = username;
-            this.loadRootTree();
-            return;
-          }
-          this.syncBrowseTreeToPath(contextPath);
-        });
-      }
       if (item?.id === 'app.navbar.collections' && !this.collectionsLoaded) {
         this.loadCollections();
       }
       if (item?.id === 'app.navbar.assets') {
         this.loadAssetAggregations();
-      }
-      if (item?.id === 'app.navbar.search') {
-        this.loadSearchAggregations();
       }
       if (item?.id === 'app.navbar.tasks') {
         this.loadTasks();
@@ -326,33 +270,6 @@ export class NavDrawerComponent {
       window.removeEventListener('clipboard-changed', onClipboardChanged);
       window.removeEventListener('favorites-changed', onFavoritesChanged);
       this.revokeThumbnails();
-    });
-  }
-
-  private loadSearchAggregations(): void {
-    const filters = this.searchAggregationService.drawerFilters();
-    const request: SearchQueryParams = {
-      q: (filters['q'] ?? '').trim() || undefined,
-      ecmFulltext: (filters['ecm_fulltext'] ?? '').trim() || undefined,
-      modifiedDate: (filters['modifiedDate'] ?? '').trim() || undefined,
-      author: (filters['author'] ?? '').trim() || undefined,
-      collection: (filters['collection'] ?? '').trim() || undefined,
-      tag: (filters['tag'] ?? '').trim() || undefined,
-      nature: (filters['nature'] ?? '').trim() || undefined,
-      subjects: (filters['subjects'] ?? '').trim() || undefined,
-      coverage: (filters['coverage'] ?? '').trim() || undefined,
-      size: (filters['size'] ?? '').trim() || undefined,
-    };
-
-    this.searchService.search(request).subscribe({
-      next: (res) => {
-        this.searchAggregationService.aggregations.set(res.aggregations);
-        this.searchAggregationService.items.set(res.items);
-      },
-      error: () => {
-        this.searchAggregationService.aggregations.set({});
-        this.searchAggregationService.items.set([]);
-      },
     });
   }
 
@@ -411,14 +328,6 @@ export class NavDrawerComponent {
 
   get isBrowse(): boolean {
     return this.activeItem()?.id === 'app.navbar.browse';
-  }
-
-  get isBrowseAdfHx(): boolean {
-    return this.activeItem()?.id === 'app.navbar.browseAdfHx';
-  }
-
-  onAdfHxBrowseNavigate(nuxeoPath: string): void {
-    this.navigateKeepDrawer.emit(toAdfHxBrowseRouterUrl(nuxeoPath));
   }
 
   get isPersonalSpace(): boolean {
@@ -577,7 +486,7 @@ export class NavDrawerComponent {
    * word order. See `formatRelativeTime`.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang);
+    return formatRelativeTime(dateStr, this.translate.getCurrentLang() ?? 'en');
   }
 
   // ── Collections ──
@@ -612,78 +521,19 @@ export class NavDrawerComponent {
 
   // ── Browse tree ──
 
-  private loadRootTree(): void {
-    // The effect that calls this can fire again before the request settles, and a second
-    // load would race the first for `rootNodes`.
-    if (this.rootLoading()) {
-      return;
-    }
-
-    const loadGen = ++this.browseTreeLoadGen;
-    const username = this.authService.username();
-    this.rootLoading.set(true);
-
-    this.browseService
-      .getNavTreeBootstrap()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: ({ root: rootDoc, entries }) => {
-          if (loadGen !== this.browseTreeLoadGen || username !== this.authService.username()) {
-            return;
-          }
-          const rootNode: FolderNode = {
-            doc: rootDoc,
-            children: [],
-            expanded: true,
-            loaded: false,
-            loading: true,
-            isRoot: true,
-          };
-          this.rootNodes.set([rootNode]);
-          this.rootLoading.set(false);
-
-          const topNodes = this.toFolderNodes(entries);
-          rootNode.children = topNodes;
-          rootNode.loaded = true;
-          rootNode.loading = false;
-          this.rootNodes.update((n) => [...n]);
-          this.prefetchChildStatus(topNodes);
-
-          const syncPath = this.pendingBrowseSyncPath ?? this.browseContext.contextPath();
-          this.pendingBrowseSyncPath = null;
-          this.syncBrowseTreeToPath(syncPath);
-        },
-        error: (error) => {
-          // The only signal this failed: the handler clears the spinner and leaves an empty
-          // tree, which is indistinguishable from a user with no accessible folders.
-          console.error('Failed to load the browse navigation tree', error);
-
-          if (loadGen !== this.browseTreeLoadGen || username !== this.authService.username()) {
-            return;
-          }
-          this.rootLoading.set(false);
-        },
-      });
+  /** Reads the browse tree again, as after a paste, a create or a delete. */
+  refreshBrowseTree(): void {
+    this.browseTree()?.reload();
   }
 
-  refreshBrowseTree(): void {
-    this.pendingBrowseSyncPath = this.browseContext.contextPath();
-    this.browseTreeLoadGen++;
-    this.browseTreeLoadedForUser = null;
-    this.rootNodes.set([]);
-    const username = this.authService.username();
-    if (username) {
-      this.browseTreeLoadedForUser = username;
-    }
-    this.loadRootTree();
+  onBrowseTreeNavigate(doc: NuxeoDocument): void {
+    const path = doc.path || '/';
+    this.browseContext.setFromNuxeoPath(path);
+    this.navigateKeepDrawer.emit(path === '/' ? '/browse' : documentNavigationUrl(doc));
   }
 
   isNodeActive(node: FolderNode): boolean {
     const activePath = normalizeNuxeoPath(this.browseContext.contextPath());
-    if (node.isRoot) {
-      return isRepositoryRootPath(activePath);
-    }
-
     const nodePath = node.doc.path;
     if (nuxeoPathsEqualFlexible(nodePath, activePath)) {
       return true;
@@ -718,176 +568,8 @@ export class NavDrawerComponent {
     return nodeSegments.every((segment, index) => segment === activeSegments[index]);
   }
 
-  private findTreeNodeByPath(nodes: FolderNode[], targetPath: string): FolderNode | undefined {
-    return nodes.find((n) => nuxeoPathsEqualFlexible(n.doc.path, targetPath));
-  }
-
-  private syncBrowseTreeToPath(nuxeoPath: string): void {
-    const normalized = normalizeNuxeoPath(nuxeoPath);
-    const roots = this.rootNodes();
-    if (roots.length === 0) {
-      this.pendingBrowseSyncPath = normalized;
-      return;
-    }
-
-    const rootNode = roots[0];
-    rootNode.expanded = true;
-
-    if (normalized === '/') {
-      for (const child of rootNode.children) {
-        this.collapseTreeNodes(child);
-      }
-      this.notifyActiveTreeChanged();
-      return;
-    }
-
-    this.collapseSiblingsNotOnActivePath(rootNode.children, normalized);
-
-    const pathsToExpand = cumulativeNuxeoPathPrefixes(normalized);
-    if (pathsToExpand.length === 0) {
-      this.notifyActiveTreeChanged();
-      return;
-    }
-
-    this.expandAlongPrefixes(rootNode.children, pathsToExpand, 0, normalized);
-  }
-
-  navigateToBrowseRoot(): void {
-    this.browseContext.setFromNuxeoPath('/');
-    this.navigateKeepDrawer.emit('/browse');
-  }
-
-  private isAncestorOfActivePath(nodePath: string, activePath: string): boolean {
-    const nodeSegments = nuxeoPathSegments(nodePath);
-    const activeSegments = nuxeoPathSegments(activePath);
-    if (nodeSegments.length >= activeSegments.length) {
-      return false;
-    }
-    return nodeSegments.every((segment, index) => segment === activeSegments[index]);
-  }
-
-  private collapseSiblingsNotOnActivePath(nodes: FolderNode[], activePath: string): void {
-    for (const node of nodes) {
-      const nodePath = node.doc.path;
-      const isOnPath =
-        nuxeoPathsEqualFlexible(nodePath, activePath) ||
-        this.isAncestorOfActivePath(nodePath, activePath);
-      if (!isOnPath) {
-        this.collapseTreeNodes(node);
-      }
-    }
-  }
-
-  private collapseTreeNodes(node: FolderNode): void {
-    node.expanded = false;
-    for (const child of node.children) {
-      this.collapseTreeNodes(child);
-    }
-  }
-
-  private expandAlongPrefixes(
-    nodes: FolderNode[],
-    prefixes: string[],
-    index: number,
-    activePath: string,
-  ): void {
-    if (index >= prefixes.length) {
-      this.finishTreeSync(activePath);
-      return;
-    }
-
-    const targetPath = normalizeNuxeoPath(prefixes[index]);
-    const node = this.findTreeNodeByPath(nodes, targetPath);
-    if (!node) {
-      if (index === 0 && !this.rootLoading()) {
-        this.pendingBrowseSyncPath = activePath;
-        this.refreshBrowseTree();
-        return;
-      }
-      this.finishTreeSync(activePath);
-      return;
-    }
-
-    this.collapseSiblingsNotOnActivePath(nodes, activePath);
-
-    const continueExpansion = () => {
-      node.expanded = true;
-      this.expandAlongPrefixes(node.children, prefixes, index + 1, activePath);
-    };
-
-    const needsChildLoad = !node.loaded;
-
-    if (needsChildLoad) {
-      node.loading = true;
-      this.notifyActiveTreeChanged();
-
-      this.browseService
-        .getNavTreeChildren(node.doc)
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe({
-          next: (res) => {
-            node.children = this.toFolderNodes(res.entries);
-            node.loaded = true;
-            node.loading = false;
-            continueExpansion();
-          },
-          error: () => {
-            node.loading = false;
-            node.loaded = true;
-            node.children = [];
-            this.finishTreeSync(activePath);
-          },
-        });
-      return;
-    }
-
-    continueExpansion();
-  }
-
-  /** Collapse nested folders that are deeper than the current browse location. */
-  private finishTreeSync(activePath: string): void {
-    const roots = this.rootNodes();
-    if (roots.length === 0) {
-      this.notifyActiveTreeChanged();
-      return;
-    }
-
-    const domainPath = topLevelNuxeoFolderPath(activePath);
-    if (domainPath) {
-      const domainNode = this.findTreeNodeByPath(roots[0].children, domainPath);
-      if (domainNode) {
-        this.collapseDescendantsOffActivePath(domainNode, activePath);
-      }
-    }
-
-    this.notifyActiveTreeChanged();
-  }
-
-  private collapseDescendantsOffActivePath(node: FolderNode, activePath: string): void {
-    if (!node.expanded) {
-      return;
-    }
-
-    for (const child of node.children) {
-      const childPath = child.doc.path;
-      const isOnPath =
-        nuxeoPathsEqualFlexible(childPath, activePath) ||
-        this.isAncestorOfActivePath(childPath, activePath);
-
-      if (!isOnPath) {
-        this.collapseTreeNodes(child);
-      } else {
-        this.collapseDescendantsOffActivePath(child, activePath);
-      }
-    }
-  }
-
   private clearUserScopedDrawerCaches(): void {
-    this.pendingBrowseSyncPath = null;
-    this.browseTreeLoadGen++;
-    this.browseTreeLoadedForUser = null;
-    this.rootNodes.set([]);
-    this.rootLoading.set(false);
+    this.browseTree()?.reload();
     this.collectionsLoaded = false;
     this.collections.set([]);
     this.collectionsLoading.set(false);
@@ -968,11 +650,7 @@ export class NavDrawerComponent {
   }
 
   private notifyActiveTreeChanged(): void {
-    if (this.isPersonalSpace) {
-      this.personalSpaceNodes.update((nodes) => [...nodes]);
-    } else {
-      this.rootNodes.update((nodes) => [...nodes]);
-    }
+    this.personalSpaceNodes.update((nodes) => [...nodes]);
   }
 
   private toFolderNodes(entries: NuxeoDocument[]): FolderNode[] {
@@ -1046,24 +724,12 @@ export class NavDrawerComponent {
   }
 
   navigateToFolder(node: FolderNode): void {
-    if (node.isRoot) {
-      const soleChild = node.children.length === 1 ? node.children[0] : null;
-      if (soleChild && !soleChild.isRoot) {
-        this.browseContext.setFromNuxeoPath(soleChild.doc.path);
-        this.navigateKeepDrawer.emit(documentNavigationUrl(soleChild.doc));
-        return;
-      }
-      this.browseContext.setFromNuxeoPath('/');
-      this.navigateKeepDrawer.emit('/browse');
-      return;
-    }
     const nuxeoPath = node.doc.path;
     this.browseContext.setFromNuxeoPath(nuxeoPath);
     this.navigateKeepDrawer.emit(documentNavigationUrl(node.doc));
   }
 
   nodeLabel(node: FolderNode): string {
-    if (node.isRoot) return this.translate.instant('nav.tree.root');
     return node.doc.title;
   }
 
@@ -1078,7 +744,7 @@ export class NavDrawerComponent {
       return true;
     }
     // Nuxeo Web UI keeps disclosure triangles on folderish nodes even when empty.
-    return isFolderishDocument(node.doc) || !!node.isRoot;
+    return isFolderishDocument(node.doc);
   }
 
   // ── Tasks panel ──
@@ -1304,9 +970,6 @@ export class NavDrawerComponent {
             action,
           });
           this.browseContext.requestTreeRefresh();
-          if (this.browseTreeLoadedForUser) {
-            this.refreshBrowseTree();
-          }
           const verb = action === 'copy' ? 'Copied' : 'Moved';
           this.snackBar.open(
             `${verb} ${count} item${count === 1 ? '' : 's'} to ${target.title ?? 'folder'}.`,

@@ -34,6 +34,7 @@ import {
   sentinelPresent,
   servePseudoLocale,
 } from './pseudo-locale-page.mjs';
+import { nuxeoCredentialsOrExit } from '../../scripts/beta-harness/nuxeo-credentials.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -110,6 +111,9 @@ const INSTANCE_DATA = new Set([
 const FORMATTED_DATE = /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/;
 
 
+// Before anything is written or launched: the walk signs in, and NUXEO_USER / NUXEO_PASS have no
+// default (NXSAT-649). Exits 2 — the environment, not the audit — when either is unset.
+nuxeoCredentialsOrExit('run the pseudo-locale audit');
 mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });

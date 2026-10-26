@@ -1,0 +1,35 @@
+@if (showSaveAs()) {
+  <button mat-flat-button color="primary" type="button" (click)="saveAs.emit()">
+    <mat-icon aria-hidden="true" svgIcon="bookmark" />
+    {{ 'satori-components.saved-search-actions.save-as' | translate }}
+  </button>
+}
+@if (showSave()) {
+  <button mat-stroked-button type="button" (click)="save.emit()">
+    {{ 'satori-components.saved-search-actions.save' | translate }}
+  </button>
+}
+@if (showMenu()) {
+  <button
+    mat-icon-button
+    type="button"
+    [matMenuTriggerFor]="menu"
+    [attr.aria-label]="'satori-components.saved-search-actions.more' | translate"
+  >
+    <mat-icon aria-hidden="true" svgIcon="more_vert" />
+  </button>
+  <mat-menu #menu="matMenu">
+    <button mat-menu-item type="button" (click)="rename.emit()">
+      <mat-icon aria-hidden="true" svgIcon="pencil" />
+      <span>{{ 'satori-components.saved-search-actions.rename' | translate }}</span>
+    </button>
+    <button mat-menu-item type="button" (click)="share.emit()">
+      <mat-icon aria-hidden="true" svgIcon="share" />
+      <span>{{ 'satori-components.saved-search-actions.share' | translate }}</span>
+    </button>
+    <button mat-menu-item type="button" (click)="remove.emit()">
+      <mat-icon aria-hidden="true" svgIcon="trash" />
+      <span>{{ 'satori-components.saved-search-actions.delete' | translate }}</span>
+    </button>
+  </mat-menu>
+}
