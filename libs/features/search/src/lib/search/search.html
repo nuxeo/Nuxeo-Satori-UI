@@ -316,13 +316,15 @@
                 (click)="sortBy(col.key)"
               >
                 {{ col | descriptorLabel }}
-                <mat-icon class="sort-icon" [class.sort-active]="sortColumn() === col.key">
-                  {{
+                <mat-icon
+                  class="sort-icon"
+                  [class.sort-active]="sortColumn() === col.key"
+                  [svgIcon]="
                     sortColumn() === col.key && sortDirection() === 'desc'
-                      ? 'arrow_downward'
-                      : 'arrow_upward'
-                  }}
-                </mat-icon>
+                      ? 'arrow_down'
+                      : 'arrow_up'
+                  "
+                />
               </button>
             } @else {
               <span>{{ col | descriptorLabel }}</span>

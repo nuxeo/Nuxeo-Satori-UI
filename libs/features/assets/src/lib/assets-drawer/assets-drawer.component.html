@@ -107,9 +107,10 @@
       <div class="filter-group">
         <button class="filter-btn" type="button" (click)="toggleFilter(group.id)">
           <span class="filter-btn-label">{{ group | descriptorLabel }}</span>
-          <mat-icon class="filter-btn-icon">
-            {{ isExpanded(group.id) ? 'expand_less' : 'expand_more' }}
-          </mat-icon>
+          <mat-icon
+            class="filter-btn-icon"
+            [svgIcon]="isExpanded(group.id) ? 'chevron_up' : 'chevron_down'"
+          />
         </button>
 
         @if (isExpanded(group.id)) {

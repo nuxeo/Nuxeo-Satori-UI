@@ -92,9 +92,11 @@
                     class="nxs-document-tree__row nxs-document-tree__row--error"
                     [style.padding-inline-start.px]="8 + depth * 16"
                   >
-                    <mat-icon class="nxs-document-tree__toggle" aria-hidden="true"
-                      >error_outline</mat-icon
-                    >
+                    <mat-icon
+                      class="nxs-document-tree__toggle"
+                      aria-hidden="true"
+                      svgIcon="error"
+                    />
                     <span class="nxs-document-tree__label">{{
                       (node.error === 403
                         ? 'satori-components.document-tree.children-forbidden-row'

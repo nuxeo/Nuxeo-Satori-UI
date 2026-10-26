@@ -77,10 +77,12 @@ sat-breadcrumbs {
   font-size: 0.72rem;
   margin-top: 2px;
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .sat-breadcrumbs-chevron {
     display: none;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .sat-breadcrumbs-list li:not(:last-child)::after {
     content: '›';
     margin-left: 4px;

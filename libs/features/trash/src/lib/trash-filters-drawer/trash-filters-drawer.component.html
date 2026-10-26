@@ -161,9 +161,10 @@
     <div class="filter-group">
       <button class="filter-btn" type="button" (click)="toggleSizeExpanded()">
         <span class="filter-btn-label">{{ 'trash.trash-filters-drawer.size' | translate }}</span>
-        <mat-icon class="filter-btn-icon">
-          {{ sizeExpanded() ? 'expand_less' : 'expand_more' }}
-        </mat-icon>
+        <mat-icon
+          class="filter-btn-icon"
+          [svgIcon]="sizeExpanded() ? 'chevron_up' : 'chevron_down'"
+        />
       </button>
       @if (sizeExpanded()) {
         <div class="filter-options">

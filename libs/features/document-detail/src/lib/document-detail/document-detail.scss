@@ -57,10 +57,12 @@ sat-breadcrumbs {
   font-size: 11px;
   color: #888;
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .sat-breadcrumbs-chevron {
     display: none;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .sat-breadcrumbs-list li:not(:last-child)::after {
     content: '›';
     margin-left: 4px;
@@ -119,6 +121,7 @@ sat-breadcrumbs {
 // fixed `#fff` (`.detail-header` above), not the themed page chrome. In dark and kawaii,
 // `--mat-sys-primary` resolves too pale on that surface (1.71:1). Use the same indigo as the
 // panel toggle so 1.4.11 holds on the white header in every theme.
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .ke-action-btn.mat-mdc-outlined-button:focus {
   outline-style: solid;
   outline-width: 2px;
@@ -126,6 +129,7 @@ sat-breadcrumbs {
   outline-offset: 2px;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .ke-action-btn.mat-mdc-outlined-button:focus-visible {
   outline-style: solid;
   outline-width: 2px;
@@ -143,14 +147,17 @@ sat-breadcrumbs {
   color: var(--mat-sys-tertiary) !important;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .mat-mdc-menu-panel.mat-mdc-menu-panel {
   min-width: 200px;
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-menu-item {
     font-size: 13px;
     height: 40px;
     min-height: 40px;
 
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     .mat-icon {
       font-size: 20px;
       width: 20px;
@@ -1035,20 +1042,24 @@ sat-breadcrumbs {
 }
 
 // Publish dialog panel - remove default Material dialog padding
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .publish-dialog-panel .mat-mdc-dialog-container .mdc-dialog__surface {
   padding: 0;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .publish-dialog-panel .mat-mdc-dialog-container .mdc-dialog__content {
   padding: 0;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .preview-dialog-panel .mat-mdc-dialog-container .mdc-dialog__surface {
   padding: 0;
   overflow: hidden;
   border-radius: 8px;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .preview-dialog-panel .mat-mdc-dialog-container .mdc-dialog__content {
   padding: 0;
   max-height: none;

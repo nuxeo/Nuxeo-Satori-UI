@@ -1,9 +1,10 @@
 <div class="collection-page">
   @if (loadState() === 'not-found' || loadState() === 'error') {
     <div class="collection-unavailable" role="status">
-      <mat-icon class="unavailable-icon">
-        {{ loadState() === 'not-found' ? 'search_off' : 'error_outline' }}
-      </mat-icon>
+      <mat-icon
+        class="unavailable-icon"
+        [svgIcon]="loadState() === 'not-found' ? 'search' : 'error'"
+      />
       <div class="unavailable-title" role="heading" aria-level="1">
         {{
           loadState() === 'not-found'

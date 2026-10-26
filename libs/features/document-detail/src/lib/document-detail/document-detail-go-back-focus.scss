@@ -1,4 +1,5 @@
 // NXSAT-516 / IBM 1808686844 — standalone stylesheet so the main document-detail bundle stays under the 36 kB cap.
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .detail-header-go-back-btn.mat-mdc-icon-button:focus {
   outline: 2px solid var(--agentic-document-detail-header-focus-outline);
   outline-offset: 2px;

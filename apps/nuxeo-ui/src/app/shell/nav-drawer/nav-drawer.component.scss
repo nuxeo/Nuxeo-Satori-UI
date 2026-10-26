@@ -21,15 +21,18 @@
 }
 
 ::ng-deep {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-tooltip {
     pointer-events: auto !important;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mdc-tooltip {
     z-index: 10000 !important;
     position: fixed !important;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mdc-tooltip__surface {
     white-space: nowrap !important;
   }

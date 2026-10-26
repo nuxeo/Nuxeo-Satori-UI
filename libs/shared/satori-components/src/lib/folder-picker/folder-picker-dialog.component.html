@@ -54,9 +54,11 @@
       @for (doc of folders(); track doc.uid) {
         <li>
           <button type="button" class="nxs-folder-picker-dialog__folder" (click)="open(doc)">
-            <mat-icon class="nxs-folder-picker-dialog__folder-icon" aria-hidden="true"
-              >folder</mat-icon
-            >
+            <mat-icon
+              class="nxs-folder-picker-dialog__folder-icon"
+              aria-hidden="true"
+              svgIcon="folder"
+            />
             <span class="nxs-folder-picker-dialog__folder-title">{{ doc.title }}</span>
             <mat-icon
               class="nxs-folder-picker-dialog__chevron"

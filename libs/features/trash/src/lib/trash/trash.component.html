@@ -261,11 +261,13 @@
             @if (SORTABLE_COLUMNS.has(col.key)) {
               <button type="button" class="col-sortable" (click)="sortByColumn(col.key)">
                 {{ col | descriptorLabel }}
-                <mat-icon class="sort-icon" [class.sort-active]="sortBy() === col.key">
-                  {{
-                    sortBy() === col.key && sortDir() === 'desc' ? 'arrow_downward' : 'arrow_upward'
-                  }}
-                </mat-icon>
+                <mat-icon
+                  class="sort-icon"
+                  [class.sort-active]="sortBy() === col.key"
+                  [svgIcon]="
+                    sortBy() === col.key && sortDir() === 'desc' ? 'arrow_down' : 'arrow_up'
+                  "
+                />
               </button>
             } @else {
               <span>{{ col | descriptorLabel }}</span>

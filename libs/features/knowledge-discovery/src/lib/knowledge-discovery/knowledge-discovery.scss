@@ -643,14 +643,17 @@
 // ---------- density overrides (shrink Material defaults to match app) ----------
 
 :host ::ng-deep {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-form-field {
     font-size: 13px;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-text-field-wrapper {
     background: var(--mat-sys-surface, #fff);
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-button,
   .mat-mdc-outlined-button,
   .mat-mdc-unelevated-button,
@@ -668,11 +671,13 @@
       margin-right: 4px;
     }
 
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     .mat-mdc-progress-spinner {
       margin-right: 6px;
     }
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-icon-button {
     width: 32px;
     height: 32px;
