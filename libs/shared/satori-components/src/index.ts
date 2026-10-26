@@ -129,6 +129,7 @@ export {
 export { NxsAvatarComponent } from './lib/avatar/avatar.component';
 export { NxsBreadcrumbsComponent } from './lib/breadcrumbs/breadcrumbs.component';
 export { NxsTagComponent } from './lib/tag/tag.component';
+export { NxsStatusTagComponent } from './lib/status-tag/status-tag.component';
 export {
   NxsUploadQueue,
   type NxsUploadItem,
@@ -146,8 +147,10 @@ export {
   type NxsBreadcrumbsInputs,
   type NxsErrorStateInputs,
   type NxsRichTooltipInputs,
+  type NxsStatusTagInputs,
   type NxsTagColor,
   type NxsTagInputs,
+  type NxsTagStatus,
 } from './lib/primitives';
 export { provideNxsComponents } from './lib/provide-nxs-components';
 export { nxsInitials, nxsVisibleText } from './lib/visible-text';

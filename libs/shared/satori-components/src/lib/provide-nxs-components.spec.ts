@@ -20,6 +20,7 @@ import { NxsErrorStateComponent } from './error-state/error-state.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { provideNxsComponents } from './provide-nxs-components';
 import { NxsRichTooltipComponent } from './rich-tooltip/rich-tooltip.component';
+import { NxsStatusTagComponent } from './status-tag/status-tag.component';
 import { NxsTagComponent } from './tag/tag.component';
 
 @Component({
@@ -41,9 +42,10 @@ describe('provideNxsComponents', () => {
     expect(components.peek(NXS_PRIMITIVE_IDS.avatar)).toBe(NxsAvatarComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.breadcrumbs)).toBe(NxsBreadcrumbsComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.tag)).toBe(NxsTagComponent);
+    expect(components.peek(NXS_PRIMITIVE_IDS.statusTag)).toBe(NxsStatusTagComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.richTooltip)).toBe(NxsRichTooltipComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.errorState)).toBe(NxsErrorStateComponent);
-    expect(Object.keys(NXS_PRIMITIVE_IDS)).toHaveLength(5);
+    expect(Object.keys(NXS_PRIMITIVE_IDS)).toHaveLength(6);
   });
 
   it('registers nothing under those IDs when it is not provided', () => {
