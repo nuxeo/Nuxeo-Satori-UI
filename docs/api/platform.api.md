@@ -460,6 +460,7 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     readonly min: import("@angular/core").InputSignal<Date | null>;
     readonly max: import("@angular/core").InputSignal<Date | null>;
     readonly hint: import("@angular/core").InputSignal<string>;
+    readonly error: import("@angular/core").InputSignal<string>;
     readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly value: import("@angular/core").ModelSignal<Date | null>;
@@ -503,6 +504,11 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     };
     "hint": {
     "alias": "hint";
+    "required": false;
+    "isSignal": true;
+    };
+    "error": {
+    "alias": "error";
     "required": false;
     "isSignal": true;
     };
@@ -2406,6 +2412,7 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     readonly label: import("@angular/core").InputSignal<string>;
     readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly hint: import("@angular/core").InputSignal<string>;
+    readonly error: import("@angular/core").InputSignal<string>;
     readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly value: import("@angular/core").ModelSignal<string | readonly string[] | null>;
@@ -2454,6 +2461,11 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     };
     "hint": {
     "alias": "hint";
+    "required": false;
+    "isSignal": true;
+    };
+    "error": {
+    "alias": "error";
     "required": false;
     "isSignal": true;
     };

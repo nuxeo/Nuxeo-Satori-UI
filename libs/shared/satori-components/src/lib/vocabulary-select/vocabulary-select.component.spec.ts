@@ -59,13 +59,19 @@ const COVERAGE = [
         [formControl]="many"
       />
     } @else {
-      <nxs-vocabulary-select label="Nature" [directory]="directory()" [formControl]="one" />
+      <nxs-vocabulary-select
+        label="Nature"
+        [directory]="directory()"
+        [error]="message()"
+        [formControl]="one"
+      />
     }
   `,
 })
 class HostComponent {
   readonly directory = signal('nature');
   readonly multiple = signal(false);
+  readonly message = signal('');
   readonly one = new FormControl<string | null>(null, Validators.required);
   readonly many = new FormControl<readonly string[]>([]);
 }
@@ -222,6 +228,20 @@ describe('NxsVocabularySelectComponent', () => {
     expect(root().querySelector('mat-error')?.textContent?.trim()).toBe('Required');
   });
 
+  it('shows a host’s message on a value the form refuses, tied to the input', async () => {
+    host.message.set('Refused by the server.');
+    host.one.setValue('memo');
+    host.one.markAsTouched();
+    await render();
+    expect(root().querySelector('mat-error')).toBeNull();
+    host.one.addValidators(() => ({ server: 'Refused by the server.' }));
+    host.one.updateValueAndValidity();
+    await render();
+    const message = root().querySelector('mat-error');
+    expect(message?.textContent?.trim()).toBe('Refused by the server.');
+    expect(input().getAttribute('aria-describedby')).toContain(message?.id);
+  });
+
   describe('a hierarchical vocabulary, several entries', () => {
     beforeEach(async () => {
       host.multiple.set(true);
@@ -335,6 +355,25 @@ describe('NxsVocabularySelectComponent', () => {
       host.many.setValue(['europe/France']);
       await render();
       expect(chips()).toEqual(['Europe/France']);
+    });
+
+    it('reads a child stored without its parent as that entry, and keeps the value as stored', async () => {
+      host.many.setValue(['France']);
+      await render();
+      expect(chips()).toEqual(['Europe/France']);
+      await type('eur');
+      expect(options()).toEqual(['Spain']);
+      option('europe/Spain').click();
+      await render();
+      expect(host.many.value).toEqual(['France', 'europe/Spain']);
+    });
+
+    it('leaves a bare id two parents share as it is, and offers both entries', async () => {
+      host.many.setValue(['Georgia']);
+      await render();
+      expect(chips()).toEqual(['Georgia']);
+      await type('georgia');
+      expect(options()).toEqual(['Georgia', 'Georgia']);
     });
 
     it('removes a chip with its named button', async () => {

@@ -262,6 +262,47 @@ describe('NxsMetadataEditorComponent', () => {
     ]);
   });
 
+  it('asks once for a directory every row of a repeatable group uses, and again in a new editor', async () => {
+    const asked = (directory: string) =>
+      directories.getEntries.mock.calls.filter(([name]) => name === directory).length;
+    host.sections.set([
+      {
+        id: 'topics',
+        heading: 'Topics',
+        fields: [
+          {
+            xpath: 'tp:rows',
+            label: 'Rows',
+            definition: {
+              type: 'complex[]',
+              fields: { topic: { type: 'string', directory: 'topics' } },
+            },
+          },
+        ],
+      },
+    ]);
+    host.values.set({ 'tp:rows': [{ topic: 'report' }, { topic: 'invoice' }, { topic: null }] });
+    await settle();
+    expect(element.querySelectorAll('nxs-vocabulary-select[data-xpath^="tp:rows/"]')).toHaveLength(
+      3,
+    );
+    field<HTMLFieldSetElement>('tp:rows')
+      .querySelector<HTMLButtonElement>('.nxs-metadata-editor__add')
+      ?.click();
+    await settle();
+    expect(element.querySelectorAll('nxs-vocabulary-select[data-xpath^="tp:rows/"]')).toHaveLength(
+      4,
+    );
+    expect(asked('topics')).toBe(1);
+    expect(asked('nature')).toBe(1);
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(HostComponent);
+    element = fixture.nativeElement;
+    await settle();
+    expect(asked('nature')).toBe(2);
+  });
+
   it('renders a section under a heading at the given level, skipping a field Dublin Core has', () => {
     const heading = element.querySelector('[role="heading"]');
     expect(heading?.textContent?.trim()).toBe('Policy');
@@ -465,6 +506,35 @@ describe('NxsMetadataEditorComponent', () => {
     await type('dc:description', 'Shorter');
     expect(errors()).not.toContain('Too long.');
     expect(host.editor().validate()).toBe(true);
+  });
+
+  it('ties a server message on a date or vocabulary field to its input, which takes focus', async () => {
+    host.editor().showServerErrors({
+      'dc:subjects': 'Not an allowed subject.',
+      'dc:expired': 'Must be in the future.',
+    });
+    await settle();
+    await settle();
+    const describedBy = (input: Element | null | undefined) =>
+      (input?.getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .map((id) => element.querySelector(`[id="${id}"]`)?.textContent?.trim());
+    const subjects = field<HTMLElement>('dc:subjects').querySelector('input');
+    expect(describedBy(subjects)).toContain('Not an allowed subject.');
+    expect(describedBy(field('dc:expired'))).toContain('Must be in the future.');
+    expect(element.querySelectorAll('p.nxs-metadata-editor__error')).toHaveLength(0);
+    expect(document.activeElement).toBe(subjects);
+  });
+
+  it('focuses the text typed into a vocabulary field that already has a chip, not the chip', async () => {
+    const subjects = field<HTMLElement>('dc:subjects').querySelector('input') as HTMLInputElement;
+    subjects.value = 'unlisted';
+    subjects.dispatchEvent(new Event('input'));
+    await settle();
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(field('dc:subjects').querySelector('mat-chip-row')).not.toBeNull();
+    expect(document.activeElement).toBe(subjects);
   });
 
   it('shows a message filed under a complex field on the group, tied to it', async () => {

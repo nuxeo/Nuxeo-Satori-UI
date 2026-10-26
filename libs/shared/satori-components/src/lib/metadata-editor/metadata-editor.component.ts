@@ -1,4 +1,5 @@
 import { NxsVocabularySelectComponent } from '../vocabulary-select/vocabulary-select.component';
+import { NxsVocabularyRequests } from '../vocabulary-select/vocabulary-requests';
 import { NxsDateInputComponent } from '../date-input/date-input.component';
 import { NgTemplateOutlet } from '@angular/common';
 import {
@@ -166,7 +167,7 @@ let nextId = 0;
     NxsTabsComponent,
     NxsTabBodyDirective,
   ],
-  providers: [provideNxsDateAdapter()],
+  providers: [provideNxsDateAdapter(), NxsVocabularyRequests],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-metadata-editor' },
 })
@@ -567,8 +568,13 @@ export class NxsMetadataEditorComponent {
         const target = this.host.nativeElement.querySelector<HTMLElement>(
           '[data-nxs-invalid="true"]',
         );
+        // A chip's remove button comes before the input in the DOM: the input holds the text to fix.
         if (target)
-          (target.querySelector<HTMLElement>('input, textarea, button') ?? target).focus();
+          (
+            target.querySelector<HTMLElement>('input, textarea') ??
+            target.querySelector<HTMLElement>('button') ??
+            target
+          ).focus();
         else if (attempts > 1) this.focusFirstInvalid(attempts - 1);
       },
       { injector: this.injector },

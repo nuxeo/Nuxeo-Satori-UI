@@ -38,6 +38,7 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
+import { NxsVocabularyRequests } from './vocabulary-requests';
 
 let nextId = 0;
 
@@ -61,6 +62,8 @@ type Loaded =
       /** Every selectable entry, by id, with the label the field and its chips show. */
       readonly labels: ReadonlyMap<string, string>;
       readonly filter: (text: string) => readonly EntryGroup[];
+      /** The id an entry is offered under, for an id stored another way; otherwise the id itself. */
+      readonly canonical: (id: string) => string;
     };
 
 /**
@@ -70,10 +73,13 @@ type Loaded =
  * It lists the whole vocabulary on focus and narrows it as the user types. A hierarchical one —
  * `l10nsubjects`, `l10ncoverage` — is listed under its parents, and a chosen child is stored and
  * shown as Web UI stores it: `europe/France`, labelled `Europe/France`. A parent with no children,
- * such as `antarctica`, is chosen as itself. With `multiple` each choice is a chip, removed with its button or
- * Backspace. The value is the entry's id, or a list of ids; an id the vocabulary no longer has is
- * kept and shown as it is, so opening a document never drops a value. Text typed and not chosen is
- * an `nxsChooseFromList` error on the form.
+ * such as `antarctica`, is chosen as itself. A child stored without its parent, `France`, is read as
+ * the one entry of that id, unless two parents share it. With `multiple` each choice is a chip,
+ * removed with its button or Backspace. The value is the entry's id, or a list of ids; an id the
+ * vocabulary no longer has is kept and shown as it is, so opening a document never drops a value.
+ * Text typed and not chosen is an `nxsChooseFromList` error on the form.
+ *
+ * Inside `nxs-metadata-editor`, every field asking for the same directory shares one request.
  */
 @Component({
   selector: 'nxs-vocabulary-select',
@@ -101,6 +107,11 @@ export class NxsVocabularySelectComponent implements ControlValueAccessor, Valid
   readonly multiple = input(false, { transform: booleanAttribute });
   /** Help under the field, already translated. */
   readonly hint = input('');
+  /**
+   * A message under the field, already translated — the server's reason for refusing the value,
+   * say. Shown while the form marks the field invalid and the field has no error of its own.
+   */
+  readonly error = input('');
   /** Marks the field required. With a form, its `Validators.required` does the same. */
   readonly required = input(false, { transform: booleanAttribute });
   /** Shown but not editable. A form's `disable()` does the same. */
@@ -110,7 +121,8 @@ export class NxsVocabularySelectComponent implements ControlValueAccessor, Valid
 
   /** The input's id, in either mode: the form field's label names the input through it. */
   protected readonly inputId = `nxs-vocabulary-select-${nextId++}`;
-  private readonly directories = inject(DirectoryService);
+  private readonly directories: Pick<DirectoryService, 'getEntries' | 'getAllL10nEntries'> =
+    inject(NxsVocabularyRequests, { optional: true }) ?? inject(DirectoryService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly input = viewChild(MatInput);
   private readonly grid = viewChild(MatChipGrid);
@@ -135,7 +147,7 @@ export class NxsVocabularySelectComponent implements ControlValueAccessor, Valid
     // In single mode the input shows the chosen label, which is not a filter.
     const typed = this.text();
     const query = !this.multiple() && typed === this.labelOf(this.chosen()[0] ?? '') ? '' : typed;
-    const taken = new Set(this.multiple() ? this.chosen() : []);
+    const taken = new Set(this.multiple() ? this.chosen().map(loaded.canonical) : []);
     return loaded
       .filter(query)
       .map((group) => ({
@@ -291,6 +303,7 @@ export class NxsVocabularySelectComponent implements ControlValueAccessor, Valid
             return {
               status: 'loaded',
               labels,
+              canonical: (id) => id,
               filter: (text) => [
                 {
                   label: '',
@@ -312,9 +325,15 @@ export class NxsVocabularySelectComponent implements ControlValueAccessor, Valid
  * the value `<parent>/<id>` (`_idFunction` in `nuxeo-directory-suggestion`), and a parent that has no
  * children as an entry of its own. The entries' ids are bare (`France`, parent `europe`), so the
  * parent is what keeps two children of one name apart.
+ *
+ * A child's bare id — what Create/Import stores, `France` — is read as `europe/France` when no other
+ * entry has that id, as the search facets read it. An ambiguous one is left as it is, rather than
+ * shown under the wrong parent.
  */
 function hierarchical(entries: L10nDirectoryEntry[]): Loaded {
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const idCount = new Map<string, number>();
+  for (const entry of entries) idCount.set(entry.id, (idCount.get(entry.id) ?? 0) + 1);
   const parentIds = new Set(entries.map((entry) => entry.properties.parent).filter(Boolean));
   const parentLabel = (id: string) => {
     const parent = byId.get(id);
@@ -337,9 +356,16 @@ function hierarchical(entries: L10nDirectoryEntry[]): Loaded {
         : l10nEntryLabel(entry),
     ]),
   );
+  const aliases = new Map(
+    selectable
+      .filter((entry) => entry.properties.parent && idCount.get(entry.id) === 1)
+      .map((entry) => [entry.id, valueOf(entry)]),
+  );
+  for (const [bare, value] of aliases) labels.set(bare, labels.get(value) ?? bare);
   return {
     status: 'loaded',
     labels,
+    canonical: (id) => aliases.get(id) ?? id,
     filter: (text) => {
       const query = text.trim().toLowerCase();
       const matches = (entry: L10nDirectoryEntry) =>

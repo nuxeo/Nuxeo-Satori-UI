@@ -164,10 +164,8 @@
         [label]="label"
         [formControl]="asControl(control)"
         [required]="isRequired(definition)"
+        [error]="error?.key === 'server' ? errorText(error!, label) : ''"
       />
-      @if (error?.key === 'server') {
-        <p class="nxs-metadata-editor__error" role="alert">{{ errorText(error!, label) }}</p>
-      }
     }
     @case ('boolean') {
       <mat-checkbox
@@ -350,10 +348,10 @@
     [formControl]="asControl(control)"
     [multiple]="multiple"
     [required]="isRequired(definition)"
+    [error]="
+      error && error.key !== 'required' && error.key !== 'invalid' ? errorText(error, label) : ''
+    "
     [attr.data-nxs-invalid]="showError(control) ? 'true' : null"
     [attr.data-xpath]="path"
   />
-  @if (error && error.key !== 'required' && error.key !== 'invalid' && showError(control)) {
-    <p class="nxs-metadata-editor__error" role="alert">{{ errorText(error, label) }}</p>
-  }
 </ng-template>

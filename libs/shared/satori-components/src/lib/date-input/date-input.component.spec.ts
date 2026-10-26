@@ -9,7 +9,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DateAdapter, NativeDateAdapter, provideNativeDateAdapter } from '@angular/material/core';
 import { MatDatepickerIntl } from '@angular/material/datepicker';
 import { TranslateService } from '@ngx-translate/core';
@@ -116,12 +116,14 @@ describe('nxsParseLocaleDate', () => {
     label="Expires"
     [min]="min()"
     [max]="max()"
+    [error]="message()"
     [formControl]="expires"
   />`,
 })
 class HostComponent {
   readonly min = signal<Date | null>(null);
   readonly max = signal<Date | null>(null);
+  readonly message = signal('');
   readonly expires = new FormControl<Date | null>(null);
 }
 
@@ -320,6 +322,36 @@ describe('NxsDateInputComponent', () => {
     expect(input().value).toBe('');
     expect(host.expires.valid).toBe(true);
     expect(error()).toBeUndefined();
+  });
+
+  it('shows a host’s message on a date the form refuses, tied to the input, and its own error first', async () => {
+    await setup('fr');
+    host.message.set('Refused by the server.');
+    host.expires.setValue(new Date(2026, 3, 3));
+    await render();
+    expect(error()).toBeUndefined();
+    host.expires.addValidators(() => ({ server: 'Refused by the server.' }));
+    host.expires.updateValueAndValidity();
+    host.expires.markAsTouched();
+    await render();
+    const message = root().querySelector('mat-error');
+    expect(message?.textContent?.trim()).toBe('Refused by the server.');
+    expect(input().getAttribute('aria-describedby')).toContain(message?.id);
+    await type('31/02/2026');
+    expect(error()).toBe('Enter a date like 31/12/2026');
+  });
+
+  it('says a required date is missing only once the user has left it, under the field and tied to it', async () => {
+    await setup('fr');
+    host.expires.addValidators(Validators.required);
+    host.expires.updateValueAndValidity();
+    await render();
+    expect(error()).toBeUndefined();
+    await leave();
+    const message = root().querySelector('mat-error');
+    expect(message?.textContent?.trim()).toBe('Required');
+    expect(message?.closest('.mat-mdc-form-field-subscript-wrapper')).not.toBeNull();
+    expect(input().getAttribute('aria-describedby')).toContain(message?.id);
   });
 
   it('is disabled when the form disables it', async () => {

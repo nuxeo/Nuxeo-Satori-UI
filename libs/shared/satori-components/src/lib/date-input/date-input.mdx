@@ -23,7 +23,10 @@ it for any date property, such as an expiry date or the start of a permission.
   subclass of it that keeps its `Date.parse`; that subclass's other changes, such as the first day
   of the week, then do not reach the field.
 - **Says what is wrong.** Text that is not a date shows an example in the locale's format, such as
-  "Enter a date like 31/12/2026"; a date outside `min` and `max` says the limit.
+  "Enter a date like 31/12/2026"; a date outside `min` and `max` says the limit. `error` adds a
+  message of the host's — the server's reason for refusing the date — shown while the form marks
+  the field invalid and it has no error of its own. Every message sits under the field, named by
+  the input's `aria-describedby`.
 - **Translated calendar.** The calendar's buttons and labels follow the application's catalogue.
 
 ## Demo showcase

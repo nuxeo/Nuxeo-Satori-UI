@@ -68,6 +68,11 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
   readonly max = input<Date | null>(null);
   /** Help under the field, already translated. */
   readonly hint = input('');
+  /**
+   * A message under the field, already translated — the server's reason for refusing the date,
+   * say. Shown while the form marks the field invalid and the field has no error of its own.
+   */
+  readonly error = input('');
   /** Marks the field required. With a form, its `Validators.required` does the same. */
   readonly required = input(false, { transform: booleanAttribute });
   /** Shown but not editable. A form's `disable()` does the same. */

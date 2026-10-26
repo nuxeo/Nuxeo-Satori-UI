@@ -13,8 +13,8 @@ Create/Import, and permission/share dialogs. Only the wrapper owns Material's ca
 its datepicker module. `TranslatedDatepickerIntl` lives beside that wrapper; the UI entry point
 re-exports it and keeps `provideTranslatedDatepickerIntl()` for screens outside the core slice.
 The two legacy edit dialogs and the generated document editor use `nxs-vocabulary-select`, which
-writes hierarchical values as `parent/child`, retains unknown stored IDs, and handles loading errors
-and retry. The old dropdowns and their duplicated labels, fetching and expiry parsing are removed.
+writes hierarchical values as `parent/child`, reads an unambiguous bare child ID (as Create/Import
+stores it), retains unknown stored IDs, and handles loading errors and retry. The old dropdowns and their duplicated labels, fetching and expiry parsing are removed.
 The historical counts and line numbers below describe the original measurement, before this migration.
 
 ## 1. Read this first
