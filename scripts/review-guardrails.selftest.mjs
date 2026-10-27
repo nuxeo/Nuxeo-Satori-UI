@@ -9437,6 +9437,37 @@ expectRed(
   /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
 );
 
+expectRed(
+  'a literal element-access key is the same registration and still guards its primitive',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '[NXS_PRIMITIVE_IDS.tag]:',
+      "[NXS_PRIMITIVE_IDS['tag']]:",
+    ),
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+);
+
+expectRed(
+  'a key that reads off NXS_PRIMITIVE_IDS without naming an id is reported, not skipped',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // `avatar` stays keyed normally, so `guarded` is non-empty and the "registers nothing" check
+    // is silent. Without its own report the tag primitive would simply be absent from the adopted
+    // set and the direct import below would pass.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '    components: {',
+      '    components: {\n      [NXS_PRIMITIVE_IDS[tagKey]]: NxsSatoriTagComponent,',
+    ).replace('[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,', ''),
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /has a `components` key `\[NXS_PRIMITIVE_IDS\[tagKey\]\]` that reads off `NXS_PRIMITIVE_IDS` without naming one id/,
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',

@@ -9783,6 +9783,33 @@ function fileDeclaringSymbol(path, symbol, seen = new Set()) {
 }
 
 /**
+ * The primitive id a `components` key names: `'tag'`, `null`, or `undefined`.
+ *
+ * Three outcomes, and the difference between the last two is the whole point. `undefined` means
+ * the key has nothing to do with `NXS_PRIMITIVE_IDS` and belongs to some other object literal —
+ * skip it and keep walking. `null` means it *does* read off `NXS_PRIMITIVE_IDS` but does not name
+ * one id, which the caller reports: leaving such a key out of the adopted set silently unguards
+ * that primitive while the rest keep the emptiness check satisfied.
+ *
+ * `[NXS_PRIMITIVE_IDS.tag]` and `[NXS_PRIMITIVE_IDS['tag']]` are the same registration, so both
+ * read. A computed accessor — `[NXS_PRIMITIVE_IDS[key]]` — cannot be resolved here and is `null`.
+ */
+function primitiveIdOfKey(node, source) {
+  if (!ts.isComputedPropertyName(node.name)) return undefined;
+  const key = node.name.expression;
+
+  if (ts.isPropertyAccessExpression(key)) {
+    return key.expression.getText(source) === 'NXS_PRIMITIVE_IDS' ? key.name.text : undefined;
+  }
+  if (ts.isElementAccessExpression(key)) {
+    if (key.expression.getText(source) !== 'NXS_PRIMITIVE_IDS') return undefined;
+    const accessor = key.argumentExpression;
+    return ts.isStringLiteralLike(accessor) ? accessor.text : null;
+  }
+  return undefined;
+}
+
+/**
  * The class name inside a registration, past anything that only annotates or groups it.
  *
  * `(C)`, `C as Type`, `C satisfies Type` and `C!` all register the same class, and a check that
@@ -9862,21 +9889,24 @@ function adoptedSatoriEntryPoints() {
   const adopted = new Map();
   /** Registered, but the implementation is not a name this can follow. Reported, never skipped. */
   const unreadable = new Map();
+  /** Keyed off `NXS_PRIMITIVE_IDS` in a way that does not name one id. Also reported. */
+  const unreadableKeys = [];
   const visit = (node) => {
-    if (
-      ts.isPropertyAssignment(node) &&
-      ts.isComputedPropertyName(node.name) &&
-      ts.isPropertyAccessExpression(node.name.expression) &&
-      node.name.expression.expression.getText(source) === 'NXS_PRIMITIVE_IDS'
-    ) {
-      const primitive = node.name.expression.name.text;
-      const value = unwrapRegistration(node.initializer);
-      if (ts.isIdentifier(value)) {
-        adopted.set(primitive, value.text);
-      } else {
-        unreadable.set(primitive, node.initializer.getText(source));
+    if (ts.isPropertyAssignment(node)) {
+      const primitive = primitiveIdOfKey(node, source);
+      if (primitive === null) {
+        unreadableKeys.push(node.name.getText(source));
+        return;
       }
-      return;
+      if (primitive !== undefined) {
+        const value = unwrapRegistration(node.initializer);
+        if (ts.isIdentifier(value)) {
+          adopted.set(primitive, value.text);
+        } else {
+          unreadable.set(primitive, node.initializer.getText(source));
+        }
+        return;
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -9892,6 +9922,18 @@ function adoptedSatoriEntryPoints() {
         'is not a class name once parentheses, `as`, `satisfies` and `!` are unwrapped, so the ' +
         'Satori entry points it wraps could not be read and new direct use of them would not be ' +
         'caught. Register the class itself, or teach `unwrapRegistration` this shape.',
+    );
+  }
+
+  // Same reasoning one level up, on the key rather than the value: a key that reads off
+  // `NXS_PRIMITIVE_IDS` but does not name one id leaves that primitive out of the adopted set
+  // entirely, and the others keep `guarded` non-empty.
+  for (const text of unreadableKeys) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} has a \`components\` key \`${text}\` that reads off ` +
+        '`NXS_PRIMITIVE_IDS` without naming one id, so which primitive it registers could not be ' +
+        'read and direct use of whatever that one wraps would not be caught. Key it by a literal ' +
+        "id, as `[NXS_PRIMITIVE_IDS.tag]` or `[NXS_PRIMITIVE_IDS['tag']]`.",
     );
   }
 
