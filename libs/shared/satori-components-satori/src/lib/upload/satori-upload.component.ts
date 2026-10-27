@@ -15,6 +15,8 @@ import { SatUploadField, SatUploadFieldInput } from '@hylandsoftware/satori-ui/u
 import { TranslatePipe } from '@ngx-translate/core';
 import type { NxsUploadInputs } from '@nuxeo/satori-platform/components';
 
+let nextId = 0;
+
 /**
  * `nxs.primitives.upload` on Satori's `sat-upload-field`.
  *
@@ -78,6 +80,13 @@ export class NxsSatoriUploadComponent implements NxsUploadInputs {
   /** Files chosen or dropped: one when `multiple` is off, however many were dropped. */
   readonly files = output<readonly File[]>();
 
+  /**
+   * The chooser's id, bound rather than left to the default `SatUploadFieldInput` generates.
+   * Satori's field pairs its `<label for>` with whatever id is on that input either way, so this
+   * changes no behaviour — it puts the association in this template, where a reader (and a static
+   * analyser) can see it, instead of leaving it implied by a directive's default.
+   */
+  protected readonly inputId = `nxs-satori-upload-${nextId++}-input`;
   protected readonly ownButtonLabel = computed(() => this.buttonLabel().trim());
   /** What Satori's own live region announces; empty until something is taken. */
   protected readonly uploaded = signal<File[]>([]);

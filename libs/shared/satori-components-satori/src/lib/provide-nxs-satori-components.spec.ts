@@ -951,7 +951,9 @@ describe('the Satori upload, rendered by nxs.primitives.upload', () => {
     const label = host.querySelector('label.sat-upload-field-label');
     const input = host.querySelector<HTMLInputElement>('input[type="file"]');
     expect(label?.getAttribute('for')).toBe(input?.id);
-    expect(input?.id).toBeTruthy();
+    // Ours, not the id `SatUploadFieldInput` generates by default: the template binds it so the
+    // association is visible there, and this is what catches the binding being dropped.
+    expect(input?.id).toMatch(/^nxs-satori-upload-\d+-input$/);
   });
 
   it('calls the same handler on Material, so a host passes the same inputs either way', async () => {
