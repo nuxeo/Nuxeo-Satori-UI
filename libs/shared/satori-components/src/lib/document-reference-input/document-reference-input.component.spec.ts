@@ -503,6 +503,29 @@ describe('NxsDocumentReferenceInputComponent', () => {
       expect(blurFixture.componentInstance.many.touched).toBe(true);
     });
 
+    it('stays in the field while focus moves on from a chip removed under it', async () => {
+      const cell = pickers()[0].querySelector<HTMLElement>(
+        'mat-chip-row [role="gridcell"]',
+      ) as HTMLElement;
+      cell.focus();
+      // Chromium reports a focused chip's removal as focus leaving for nowhere, then Material
+      // focuses its neighbour; here focus simply stays inside.
+      cell.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+      vi.advanceTimersByTime(0);
+      await settleBlur();
+      expect(blurFixture.componentInstance.many.touched).toBe(false);
+    });
+
+    it('counts focus leaving for nowhere as leaving, once it has not come back', async () => {
+      const field = pickers()[0].querySelector('input') as HTMLInputElement;
+      field.focus();
+      field.blur();
+      expect(blurFixture.componentInstance.many.touched).toBe(false);
+      vi.advanceTimersByTime(0);
+      await settleBlur();
+      expect(blurFixture.componentInstance.many.touched).toBe(true);
+    });
+
     it('returns focus to the input after the x button, so leaving then takes the cleared value', async () => {
       const field = pickers()[1];
       const clear = field.querySelector<HTMLButtonElement>(

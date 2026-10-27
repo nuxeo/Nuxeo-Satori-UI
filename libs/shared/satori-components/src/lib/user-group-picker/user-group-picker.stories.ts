@@ -243,24 +243,29 @@ function press(key: keyof typeof KEY_CODES, target = document.activeElement as H
   fireEvent.keyDown(target, { key, code: key, keyCode: KEY_CODES[key] });
 }
 
-/** What has focus: `input`, or a chip's principal and which of its two parts, `cell` or `remove`. */
+/**
+ * What has focus: `input`, or a chip's principal and which of its two parts — `cell`, its gridcell,
+ * or `remove`, its remove button. Anything else in the chip is `other`, so it cannot pass as either.
+ */
 function focusOf(field: HTMLElement): string {
   const active = document.activeElement as HTMLElement | null;
   if (active === field) return 'input';
   const chip = active?.closest('mat-chip-row')?.getAttribute('data-principal');
-  return chip
-    ? `${chip} ${active?.closest('.mat-mdc-chip-remove') ? 'remove' : 'cell'}`
-    : 'elsewhere';
+  if (!active || !chip) return 'elsewhere';
+  if (active.closest('.mat-mdc-chip-remove')) return `${chip} remove`;
+  return `${chip} ${active.getAttribute('role') === 'gridcell' ? 'cell' : 'other'}`;
 }
 
 /**
- * Everything without the mouse. ↓ and Enter choose; Backspace in the empty input reaches the last
- * chip, and does nothing while text is typed; ← and → step through each chip and its remove button,
- * ↑ and ↓ between chips; Backspace or Delete removes the focused chip, Enter on its remove button
- * too; focus then moves to the chip that takes its place, and to the input once none is left.
+ * Everything without the mouse, starting with focus in the input. ↓ and Enter choose; Backspace in
+ * the empty input reaches the last chip, and does not reach the chips while text is typed; ← and →
+ * step through each chip and its remove button, ↑ and ↓ between chips; Backspace or Delete removes
+ * the focused chip, Enter on its remove button too; focus then moves to the chip that takes its
+ * place, and to the input once none is left. The field is required: emptying it from the keyboard
+ * shows no error while focus is still in it, and the error once focus leaves.
  */
 export const MultipleFromTheKeyboard: Story = {
-  args: { multiple: true, value: [] },
+  args: { multiple: true, required: true, value: [] },
   play: async ({ canvasElement }) => {
     const field = within(canvasElement).getByRole('combobox', { name: 'Grant to' });
     const value = () => canvasElement.querySelector('output')?.textContent?.trim();
@@ -308,6 +313,14 @@ export const MultipleFromTheKeyboard: Story = {
     press('Enter');
     await waitFor(() => expect(value()).toBe(''));
     await focus('input');
+
+    // Each removal above took focus off a chip for nowhere; none of it was leaving the field.
+    await new Promise((settled) => setTimeout(settled, 100));
+    await expect(canvasElement.querySelector('mat-error')).toBeNull();
+    field.blur();
+    await waitFor(() =>
+      expect(canvasElement.querySelector('mat-error')).toHaveTextContent('Required'),
+    );
   },
 };
 
