@@ -9841,30 +9841,45 @@ const NXS_PRIMITIVE_ID_VALUE = /^nxs\.primitives\.([A-Za-z][A-Za-z0-9]*)$/;
  * Four spellings register the same thing, because `NXS_PRIMITIVE_IDS.tag` *is* the string
  * `'nxs.primitives.tag'`: `[NXS_PRIMITIVE_IDS.tag]`, `[NXS_PRIMITIVE_IDS['tag']]`,
  * `'nxs.primitives.tag'` and `['nxs.primitives.tag']`. Reading only the first two left a written
- * -out id registering at runtime and absent from the adopted set. A computed accessor —
- * `[NXS_PRIMITIVE_IDS[key]]` — cannot be resolved here and is `null`.
+ * -out id registering at runtime and absent from the adopted set.
+ *
+ * The line between the last two outcomes is *resolved*, not *recognised*. A key this can evaluate
+ * to a string and that is not a primitive id is `undefined`; a key it cannot evaluate at all —
+ * `[tagId]`, `[NXS_PRIMITIVE_IDS[key]]`, `[OTHER_IDS.thing]` — is `null`, because "names no
+ * primitive" and "I cannot tell" are different answers and only the first is safe to skip.
  */
 function primitiveIdOfKey(node, source) {
-  // A string literal, computed or not, carries the id itself.
+  // A string literal, computed or not, carries the id itself. Resolved but not a primitive id —
+  // another extension's component id — is `undefined`: legitimately not an adopted primitive.
   const literal = ts.isComputedPropertyName(node.name) ? node.name.expression : node.name;
   if (ts.isStringLiteralLike(literal)) {
     return NXS_PRIMITIVE_ID_VALUE.exec(literal.text)?.[1];
   }
 
+  // A plain property name is the string of that name, and no id contains a dot, so `components`
+  // or `meta` can never be one.
   if (!ts.isComputedPropertyName(node.name)) return undefined;
   const key = node.name.expression;
 
-  if (ts.isPropertyAccessExpression(key)) {
-    return key.expression.getText(source) === 'NXS_PRIMITIVE_IDS' ? key.name.text : undefined;
+  if (
+    ts.isPropertyAccessExpression(key) &&
+    key.expression.getText(source) === 'NXS_PRIMITIVE_IDS'
+  ) {
+    return key.name.text;
   }
-  if (ts.isElementAccessExpression(key)) {
-    if (key.expression.getText(source) !== 'NXS_PRIMITIVE_IDS') return undefined;
+  if (ts.isElementAccessExpression(key) && key.expression.getText(source) === 'NXS_PRIMITIVE_IDS') {
     const accessor = key.argumentExpression;
     return ts.isStringLiteralLike(accessor)
       ? (NXS_PRIMITIVE_ID_VALUE.exec(accessor.text)?.[1] ?? accessor.text)
       : null;
   }
-  return undefined;
+
+  // Every other computed key is unresolved, not absent, so it is reported rather than skipped.
+  // `[tagId]` with `const tagId = NXS_PRIMITIVE_IDS.tag` registers the tag primitive perfectly
+  // well at runtime; reading it as "names no primitive" dropped it from enforcement while the
+  // others kept the adopted set non-empty. Inside the `components` contribution the honest answer
+  // to a key this cannot evaluate is "I do not know", and the caller fails on that.
+  return null;
 }
 
 /**

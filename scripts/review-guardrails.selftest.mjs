@@ -9571,6 +9571,50 @@ expectRed(
   /has no `components` object inside a `provideSatoriExtensions\(\{ … \}\)` call/,
 );
 
+/**
+ * Computed keys that cannot be evaluated here, each registering a primitive at runtime.
+ *
+ * `avatar` stays plainly keyed in all three, so the adopted set is never empty and the "registers
+ * nothing" check is silent — the per-entry report is the only thing standing between these and a
+ * primitive dropping out of enforcement unnoticed.
+ */
+for (const [shape, preamble, key] of [
+  ['a constant', 'const tagId = NXS_PRIMITIVE_IDS.tag;\n', '[tagId]:'],
+  ['a constant read off another map', 'const OTHER = NXS_PRIMITIVE_IDS;\n', '[OTHER.tag]:'],
+  ['a template literal', 'const part = "tag";\n', '[`nxs.primitives.${part}`]:'],
+]) {
+  expectRed(
+    `a computed key built from ${shape} is reported, not skipped`,
+    'checkAdoptedPatternsNotBypassed',
+    adoption({
+      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: (preamble + ADOPTION_REGISTRY).replace(
+        '[NXS_PRIMITIVE_IDS.tag]:',
+        key,
+      ),
+      [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+    }),
+    null,
+    /has a `components` entry `[\s\S]*` whose primitive could not be read/,
+  );
+}
+
+falsePositiveControls += 1;
+expectGreen(
+  'another extension’s component id is resolved, not a primitive, and is skipped quietly',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // Both spellings evaluate to a string that is simply not a primitive id. `components` is the
+    // contract for every extension component, not only these eight, so these must not be
+    // reported as unreadable — "resolved and not a primitive" is a different answer from
+    // "cannot tell".
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '    components: {',
+      "    components: {\n      'acme.widget': NxsSatoriAvatarComponent,\n" +
+        "      ['acme.other']: NxsSatoriAvatarComponent,",
+    ),
+  }),
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',
