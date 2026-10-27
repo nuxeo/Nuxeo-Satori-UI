@@ -159,8 +159,8 @@ than pushing to a scope we might not own.
 ## 5. Deliberately not done
 
 - **No real-publish CI workflow.** The manual `publish-platform` workflow (NXSAT-666) only
-  dry-runs by default, and its publish job runs only when `dryRun` is false and `private` is
-  removed. Publishing on a tag needs the scope decision first, and a workflow that publishes
+  dry-runs by default. Its publish job runs whenever `dryRun` is false, and while `private` is
+  set npm refuses that publish with `EPRIVATE`. Publishing on a tag needs the scope decision first, and a workflow that publishes
   to the wrong registry is worse than none.
 - **No provenance / signing.** Worth doing at GA; needs a public registry and a trusted
   CI publisher.

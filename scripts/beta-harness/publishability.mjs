@@ -368,8 +368,8 @@ try {
   cpSync(DIST, copy, { recursive: true });
 
   // Stripped in the COPY only. `private: true` stays in dist so an accidental real
-  // publish is refused; npm refuses a dry run of a private package too, which would
-  // make this check unfalsifiable rather than passing.
+  // publish is refused. npm would dry-run a private package anyway, so the copy's flag
+  // is removed only to dry-run the package as a public one would be published.
   const copied = JSON.parse(readFileSync(join(copy, 'package.json'), 'utf8'));
   if (copied.private !== true) {
     fail(
