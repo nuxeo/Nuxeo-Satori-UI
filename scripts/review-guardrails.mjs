@@ -9833,7 +9833,16 @@ function adoptedSatoriEntryPoints() {
     true,
   );
 
-  /** Class name -> the module specifier it was imported from. */
+  /**
+   * Local name in this file -> the module it came from and the name that module exports.
+   *
+   * Both halves are needed. `import { NxsSatoriTagComponent as Tag } from './tag/…'` registers
+   * `Tag` here, but the implementation declares `NxsSatoriTagComponent`, so following the local
+   * name searches that file for something it does not contain and a valid registration reads as
+   * one whose class nothing declares.
+   *
+   * @type {Map<string, { specifier: string, exported: string }>}
+   */
   const importedFrom = new Map();
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
@@ -9842,7 +9851,10 @@ function adoptedSatoriEntryPoints() {
     const bindings = statement.importClause?.namedBindings;
     if (!bindings || !ts.isNamedImports(bindings)) continue;
     for (const element of bindings.elements) {
-      importedFrom.set(element.name.text, statement.moduleSpecifier.text);
+      importedFrom.set(element.name.text, {
+        specifier: statement.moduleSpecifier.text,
+        exported: element.propertyName?.text ?? element.name.text,
+      });
     }
   }
 
@@ -9886,7 +9898,8 @@ function adoptedSatoriEntryPoints() {
   const registryDir = dirname(SATORI_ADOPTION_REGISTRY);
   const guarded = new Map();
   for (const [primitive, className] of adopted) {
-    const specifier = importedFrom.get(className);
+    const origin = importedFrom.get(className);
+    const specifier = origin?.specifier;
 
     // Every failure to reach the implementation is reported, never skipped. Skipping one would
     // leave that primitive's entry points unguarded while the other five still filled `guarded`,
@@ -9918,13 +9931,17 @@ function adoptedSatoriEntryPoints() {
     // and the emptiness check below quiet. Resolving the symbol instead also keeps a mixed barrel
     // honest — one that re-exports an unregistered banner wrapper alongside the tag wrapper must
     // not make `@hylandsoftware/satori-ui/banner` an entry point of the `tag` primitive.
-    const declaring = fileDeclaringSymbol(resolved, className);
+    //
+    // Searched under the name the module exports, not the local one: an aliased registry import
+    // registers `Tag` here while the implementation declares `NxsSatoriTagComponent`, and looking
+    // for `Tag` in that file would reject a registration that is perfectly valid.
+    const declaring = fileDeclaringSymbol(resolved, origin.exported);
     if (declaring === undefined) {
       fail(
         `${SATORI_ADOPTION_REGISTRY} registers \`${className}\` for the \`${primitive}\` primitive, ` +
-          `but neither ${resolved} nor anything it re-exports declares that name, so the entry ` +
-          'points that primitive wraps could not be read and new direct use of them would not be ' +
-          'caught.',
+          `but neither ${resolved} nor anything it re-exports declares \`${origin.exported}\`, so ` +
+          'the entry points that primitive wraps could not be read and new direct use of them ' +
+          'would not be caught.',
       );
       continue;
     }

@@ -9402,6 +9402,41 @@ expectRed(
   /registers the `tag` primitive as `wrapTag\(NxsSatoriTagComponent\)`, which is not a class name once parentheses, `as`, `satisfies` and `!` are unwrapped/,
 );
 
+/**
+ * The registry importing the implementation under an alias.
+ *
+ * `Tag` is the local name the `components` map registers; `NxsSatoriTagComponent` is what the
+ * implementation declares. Searching that file for the local name finds nothing and rejects a
+ * valid registration, so these two controls bracket it: the correct tree must stay green, and the
+ * primitive must still be guarded rather than quietly dropped.
+ */
+const aliasedRegistryImport = (extra) =>
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      "import { NxsSatoriTagComponent } from './tag/satori-tag.component';",
+      "import { NxsSatoriTagComponent as Tag } from './tag/satori-tag.component';",
+    ).replace('[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,', '[NXS_PRIMITIVE_IDS.tag]: Tag,'),
+    ...extra,
+  });
+
+expectGreen(
+  'an aliased registry import is a valid registration, not a missing class',
+  'checkAdoptedPatternsNotBypassed',
+  aliasedRegistryImport({
+    [NOT_BASELINED]: "import { NxsTagComponent } from '@nuxeo/satori-platform/components';\n",
+  }),
+);
+
+expectRed(
+  'an aliased registry import still guards the primitive it registers',
+  'checkAdoptedPatternsNotBypassed',
+  aliasedRegistryImport({
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',
