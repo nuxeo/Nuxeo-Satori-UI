@@ -1,5 +1,5 @@
-import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, inject, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
+import { FormsModule, type NgModel } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -97,6 +97,8 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   readonly suggestions = signal<UserGroupSuggestion[]>([]);
   readonly saving = signal(false);
   readonly rightOptions: readonly { value: string; label: string }[];
+  private readonly fromModel = viewChild<NgModel>('fromModel');
+  private readonly toModel = viewChild<NgModel>('toModel');
 
   searchText = '';
   selectedPrincipal: UserGroupSuggestion | null = null;
@@ -235,8 +237,22 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     this.dialogRef.close(null);
   }
 
+  /**
+   * Whether either date input holds something that is not a date.
+   *
+   * Material answers unparseable input with `null` on the model *and* a parse error on the
+   * control, which looks exactly like a cleared field from the model alone. Without this, a
+   * mistyped expiry read as "the user cleared the date" and the save removed the boundary.
+   * Clearing a date on purpose leaves the control valid, so it still works.
+   */
+  private datesInvalid(): boolean {
+    return [this.fromModel(), this.toModel()].some((model) => model?.invalid === true);
+  }
+
   isSubmitDisabled(): boolean {
-    return !this.selectedPrincipal || this.saving() || !this.rightIsOffered();
+    return (
+      !this.selectedPrincipal || this.saving() || !this.rightIsOffered() || this.datesInvalid()
+    );
   }
 
   private buildResultEntry(): ShareSavedSearchAddPermissionResult {

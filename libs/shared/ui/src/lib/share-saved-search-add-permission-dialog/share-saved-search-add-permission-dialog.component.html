@@ -91,6 +91,7 @@
         matInput
         [matDatepicker]="fromPicker"
         [(ngModel)]="beginDate"
+        #fromModel="ngModel"
         (ngModelChange)="onBeginChanged()"
         [disabled]="timeFrameMode === 'permanent'"
       />
@@ -106,6 +107,7 @@
         matInput
         [matDatepicker]="toPicker"
         [(ngModel)]="endDate"
+        #toModel="ngModel"
         (ngModelChange)="onEndChanged()"
         [disabled]="timeFrameMode === 'permanent'"
       />

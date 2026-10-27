@@ -1,5 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
@@ -26,6 +26,8 @@ const MEMBERS: UserGroupSuggestion = {
 const SAVED_SEARCH_VISIBLE = ['Read', 'ReadWrite', 'Everything'];
 
 describe('ShareSavedSearchAddPermissionDialogComponent', () => {
+  let fixture: ComponentFixture<ShareSavedSearchAddPermissionDialogComponent>;
+
   async function open(data: ShareSavedSearchAddPermissionDialogData) {
     await TestBed.configureTestingModule({
       imports: [ShareSavedSearchAddPermissionDialogComponent],
@@ -36,7 +38,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
         { provide: DocumentDetailService, useValue: { searchUsersGroups: vi.fn(() => of([])) } },
       ],
     }).compileComponents();
-    const fixture = TestBed.createComponent(ShareSavedSearchAddPermissionDialogComponent);
+    fixture = TestBed.createComponent(ShareSavedSearchAddPermissionDialogComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     return fixture.componentInstance;
@@ -273,6 +275,73 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
         d.onEndChanged();
       });
       expect(result).toMatchObject({ begin: BEGIN, end: '2026-03-31' });
+    });
+
+    // Material answers unparseable input with `null` on the model and a parse error on the
+    // control. From the model alone that is indistinguishable from a cleared field, so a typo in
+    // an existing expiry read as "cleared" and the save removed the boundary.
+    describe('invalid date input', () => {
+      /** Types `text` into one of the pickers, the way a user would. */
+      const type = async (which: 'from' | 'to', text: string) => {
+        const host: HTMLElement = fixture.nativeElement;
+        // The two date inputs are the ones bound to a datepicker, in From/To order.
+        const inputs = host.querySelectorAll<HTMLInputElement>('.date-fields input');
+        const input = inputs[which === 'from' ? 0 : 1];
+        if (!input) throw new Error(`no ${which} date input (found ${inputs.length})`);
+        input.value = text;
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        await fixture.whenStable();
+        return input;
+      };
+
+      it('will not submit a mistyped expiry, so the boundary cannot be cleared', async () => {
+        const dialog = await open({
+          permissions: SAVED_SEARCH_VISIBLE,
+          initialData: {
+            userGroup: 'powerusers',
+            right: 'Write',
+            timeFrame: 'x',
+            begin: BEGIN,
+            end: END,
+          },
+        });
+        expect(dialog.isSubmitDisabled()).toBe(false);
+
+        await type('to', 'not a date');
+
+        expect(dialog.endDate).toBeNull();
+        expect(dialog.isSubmitDisabled()).toBe(true);
+
+        dialog.create(false);
+
+        expect(TestBed.inject(MatDialogRef).close).not.toHaveBeenCalled();
+      });
+
+      it('still allows clearing a date on purpose', async () => {
+        const dialog = await open({
+          permissions: SAVED_SEARCH_VISIBLE,
+          initialData: {
+            userGroup: 'powerusers',
+            right: 'Write',
+            timeFrame: 'x',
+            begin: BEGIN,
+            end: END,
+          },
+        });
+
+        await type('to', '');
+
+        expect(dialog.isSubmitDisabled()).toBe(false);
+
+        dialog.create(false);
+
+        const close = TestBed.inject(MatDialogRef).close as unknown as {
+          mock: { calls: unknown[][] };
+        };
+        const result = (close.mock.calls[0]?.[0] as ShareSavedSearchAddPermissionResult[])?.[0];
+        expect(result).toMatchObject({ begin: BEGIN, end: null });
+      });
     });
 
     it('clears both dates when the user makes the entry permanent', async () => {
