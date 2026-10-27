@@ -9611,7 +9611,14 @@ const SATORI_COMPONENT_LIBS = [
 
 const SATORI_PACKAGE = '@hylandsoftware/satori-ui';
 
-const SATORI_ENTRY_POINT = /['"]@hylandsoftware\/satori-ui\/([a-z0-9-]+)['"]/g;
+/**
+ * Anchored at both ends and matched against a specifier, never against source text.
+ *
+ * `^…$` is what keeps `@hylandsoftware/satori-ui/tag-input` from reading as the adopted `tag`
+ * entry point. The old pattern leaned on the surrounding quotes for that, which only worked
+ * because it was matching text.
+ */
+const SATORI_ENTRY_POINT = /^@hylandsoftware\/satori-ui\/([a-z0-9-]+)$/;
 
 /** Specs, stories and mocks ship nothing, so a direct import in one is not a bypass. */
 const ADOPTION_SCAN_SKIP = /(\.spec\.ts|\.stories\.ts|test-setup\.ts|\/__mocks__\/)/;
@@ -9663,9 +9670,74 @@ const ADOPTION_BASELINE = new Map([
   ],
 ]);
 
-/** Every `@hylandsoftware/satori-ui/<entry>` specifier in one file's source. */
-function satoriEntryPointsIn(body) {
-  return new Set([...body.matchAll(SATORI_ENTRY_POINT)].map((match) => match[1]));
+/**
+ * Every `@hylandsoftware/satori-ui/<entry>` module a file really imports, and the line it is on.
+ *
+ * Read from the syntax tree, not matched in the text. A regex over the source counted a mention
+ * in a comment or an ordinary string as an import, which fails both ways: a feature file that
+ * only *names* an entry point in a comment would be reported as a bypass, and a baselined file
+ * whose import was deleted but whose comment still names it would keep its exemption alive
+ * forever — the stale-exemption check is only as good as what counts as an import. Matching text
+ * also missed `import(\`@hylandsoftware/satori-ui/tag\`)`, since the regex wanted a quote.
+ *
+ * Covers static imports and re-exports, bare `import '…'`, dynamic `import()` in value and type
+ * position, and backtick specifiers with no substitution — `ts.isStringLiteralLike` is what makes
+ * that last one work. A specifier built by concatenation is not a literal and is not read; nor is
+ * `require()`, which nothing in this repository uses for these packages.
+ *
+ * @returns {Map<string, number>} entry point name -> 1-based line of its first import
+ */
+function satoriEntryPointsIn(path, body) {
+  const source = ts.createSourceFile(path, body, ts.ScriptTarget.Latest, true);
+  const found = new Map();
+
+  const record = (node) => {
+    if (node === undefined || !ts.isStringLiteralLike(node)) return;
+    const entry = SATORI_ENTRY_POINT.exec(node.text)?.[1];
+    if (entry === undefined || found.has(entry)) return;
+    found.set(entry, source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1);
+  };
+
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      record(node.moduleSpecifier);
+    } else if (ts.isImportTypeNode(node)) {
+      record(ts.isLiteralTypeNode(node.argument) ? node.argument.literal : undefined);
+    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      record(node.arguments[0]);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+/**
+ * The files a module re-exports from, relative ones only, resolved to repository paths.
+ *
+ * Only `export … from './x'`, because the case this exists for is a barrel: a registered class
+ * reached through an `index.ts` that re-exports it. Following plain imports as well would collect
+ * entry points a shared helper happens to use and guard them for the wrong primitive.
+ */
+function relativeReExportsOf(path, body) {
+  const source = ts.createSourceFile(path, body, ts.ScriptTarget.Latest, true);
+  const targets = [];
+  for (const statement of source.statements) {
+    if (!ts.isExportDeclaration(statement)) continue;
+    const specifier = statement.moduleSpecifier;
+    if (specifier === undefined || !ts.isStringLiteralLike(specifier)) continue;
+    if (!specifier.text.startsWith('.')) continue;
+    const resolved = resolveRelativeModule(dirname(path), specifier.text);
+    if (resolved !== undefined) targets.push(resolved);
+  }
+  return targets;
+}
+
+/** `./tag/satori-tag.component` from a directory -> the repository path of its `.ts`, if any. */
+function resolveRelativeModule(fromDir, specifier) {
+  return [`${join(fromDir, specifier)}.ts`, join(fromDir, specifier, 'index.ts')]
+    .map(toPosixRel)
+    .find((candidate) => fileExists(candidate));
 }
 
 /**
@@ -9731,9 +9803,7 @@ function adoptedSatoriEntryPoints() {
     // less than it claims.
     const resolved =
       specifier !== undefined && specifier.startsWith('.')
-        ? [`${join(registryDir, specifier)}.ts`, join(registryDir, specifier, 'index.ts')]
-            .map(toPosixRel)
-            .find((candidate) => fileExists(candidate))
+        ? resolveRelativeModule(registryDir, specifier)
         : undefined;
 
     if (resolved === undefined) {
@@ -9751,7 +9821,37 @@ function adoptedSatoriEntryPoints() {
       continue;
     }
 
-    for (const entry of satoriEntryPointsIn(read(resolved))) {
+    // Walk re-exports, so a class registered through a barrel is followed to the file that
+    // actually imports Satori. `./rich-tooltip` resolving to an `index.ts` that re-exports the
+    // component used to resolve fine and yield nothing, which left that primitive's entry point
+    // unguarded while the other five kept `guarded` non-empty — invisible to the emptiness check
+    // below, so a new direct rich-tooltip import would have passed.
+    const entries = new Set();
+    const seen = new Set();
+    const queue = [resolved];
+    while (queue.length > 0) {
+      const file = queue.shift();
+      if (seen.has(file)) continue;
+      seen.add(file);
+      const body = read(file);
+      for (const entry of satoriEntryPointsIn(file, body).keys()) entries.add(entry);
+      for (const target of relativeReExportsOf(file, body)) {
+        if (!seen.has(target)) queue.push(target);
+      }
+    }
+
+    if (entries.size === 0) {
+      fail(
+        `${SATORI_ADOPTION_REGISTRY} registers \`${className}\` for the \`${primitive}\` primitive, ` +
+          `but neither ${resolved} nor anything it re-exports imports \`${SATORI_PACKAGE}\`, so ` +
+          'that primitive has no guarded entry point and direct use of whatever it wraps would ' +
+          'not be caught. A Satori implementation that imports no Satori is the thing to check ' +
+          'first.',
+      );
+      continue;
+    }
+
+    for (const entry of entries) {
       const specifierFor = `@hylandsoftware/satori-ui/${entry}`;
       if (!guarded.has(specifierFor)) guarded.set(specifierFor, new Set());
       guarded.get(specifierFor).add(primitive);
@@ -9820,32 +9920,31 @@ function checkAdoptedPatternsNotBypassed() {
     if (!fileExists(file)) continue;
     const body = read(file);
     // Almost no file names Satori at all, and this walks every `.ts` in the repository on every
-    // `review:guardrails` run, including the inner loop. One substring test per file beats a
-    // regex per line.
+    // `review:guardrails` run, including the inner loop. One substring test per file is what keeps
+    // the syntax-tree read below off the thousands of files that cannot match. A file that names
+    // the package only in a comment still gets parsed, and correctly yields no import.
     if (!body.includes(SATORI_PACKAGE)) continue;
 
-    for (const [index, line] of body.split('\n').entries()) {
-      for (const entry of satoriEntryPointsIn(line)) {
-        const specifier = `@hylandsoftware/satori-ui/${entry}`;
-        const primitives = guarded.get(specifier);
-        if (primitives === undefined) continue;
+    for (const [entry, line] of satoriEntryPointsIn(file, body)) {
+      const specifier = `@hylandsoftware/satori-ui/${entry}`;
+      const primitives = guarded.get(specifier);
+      if (primitives === undefined) continue;
 
-        if (ADOPTION_BASELINE.get(specifier)?.has(file)) {
-          stillBypassing.add(`${specifier} ${file}`);
-          continue;
-        }
-
-        const names = [...primitives].sort();
-        fail(
-          `${file}:${index + 1} imports \`${specifier}\` directly, outside ` +
-            `${SATORI_COMPONENT_LIBS.join(' and ')}. That entry point is how ` +
-            `${SATORI_ADOPTION_REGISTRY} implements the adopted ` +
-            `${names.length > 1 ? 'primitives' : 'primitive'} ${names.map((name) => `\`${name}\``).join(' and ')}, ` +
-            `so this bypasses ${names.length > 1 ? 'them' : 'it'}: the host loses the Material ` +
-            'fallback and the customer loses the extension id. Consume the primitive from ' +
-            '`@nuxeo/satori-platform/components` instead.',
-        );
+      if (ADOPTION_BASELINE.get(specifier)?.has(file)) {
+        stillBypassing.add(`${specifier} ${file}`);
+        continue;
       }
+
+      const names = [...primitives].sort();
+      fail(
+        `${file}:${line} imports \`${specifier}\` directly, outside ` +
+          `${SATORI_COMPONENT_LIBS.join(' and ')}. That entry point is how ` +
+          `${SATORI_ADOPTION_REGISTRY} implements the adopted ` +
+          `${names.length > 1 ? 'primitives' : 'primitive'} ${names.map((name) => `\`${name}\``).join(' and ')}, ` +
+          `so this bypasses ${names.length > 1 ? 'them' : 'it'}: the host loses the Material ` +
+          'fallback and the customer loses the extension id. Consume the primitive from ' +
+          '`@nuxeo/satori-platform/components` instead.',
+      );
     }
   }
 

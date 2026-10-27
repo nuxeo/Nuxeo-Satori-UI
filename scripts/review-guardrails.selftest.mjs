@@ -9223,6 +9223,74 @@ expectGreen(
   }),
 );
 
+expectRed(
+  'a dynamic import with a backtick specifier is still an import',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [NOT_BASELINED]:
+      'export const lazyTag = () => import(`@hylandsoftware/satori-ui/tag`);\n' +
+      'export class SearchComponent {}\n',
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly/,
+);
+
+expectRed(
+  'a re-exporting barrel is followed, so the primitive it registers is still guarded',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // `./tag` resolves to an index.ts that only re-exports, so the component — and the Satori
+    // import that makes `@hylandsoftware/satori-ui/tag` guarded — are one hop further on.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      "from './tag/satori-tag.component'",
+      "from './tag'",
+    ),
+    [`${SATORI_LIB}/tag/index.ts`]: "export * from './satori-tag.component';\n",
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+);
+
+expectRed(
+  'a registered implementation that imports no Satori at all leaves its primitive unguarded',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/tag/satori-tag.component.ts`]:
+      "// wraps '@hylandsoftware/satori-ui/tag' one day\nexport class NxsSatoriTagComponent {}\n",
+  }),
+  null,
+  /registers `NxsSatoriTagComponent` for the `tag` primitive, but neither [\s\S]*nor anything it re-exports imports `@hylandsoftware\/satori-ui`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an entry point named only in a comment or an ordinary string is not an import',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [NOT_BASELINED]:
+      "// Use `nxs-tag`, never '@hylandsoftware/satori-ui/tag' directly.\n" +
+      '/* see @hylandsoftware/satori-ui/avatar for the sizes */\n' +
+      "export const DOC = 'import from @hylandsoftware/satori-ui/tag';\n" +
+      'export const HINT = `@hylandsoftware/satori-ui/breadcrumbs`;\n' +
+      "import { NxsTagComponent } from '@nuxeo/satori-platform/components';\n",
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a comment naming an entry point the file is not baselined for is not a bypass',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // This file is baselined for `tag` and not for `avatar`, so a text match would read the
+    // comment as an avatar bypass and fail it. Its real `tag` import is what keeps the baseline
+    // entry live, so the stale-exemption check stays quiet and only the comment is under test.
+    [BASELINED]:
+      "// migrated away from '@hylandsoftware/satori-ui/avatar' already\n" +
+      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',

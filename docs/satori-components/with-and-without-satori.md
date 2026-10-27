@@ -17,7 +17,7 @@ On GitHub they show as missing images, by design.
 
 ## Summary
 
-The `nxs-` library renders the same pages whether or not a customer has access to Satori. Six primitives — avatar, tag, status tag, breadcrumbs, rich tooltip and error state — exist twice, under one registered ID each: a built-in version in `@nuxeo/satori-platform/components`, and a thin wrapper around Satori's own component in `@nuxeo/satori-platform/components-satori`. Every other component is the same component in both cases; only the theme differs. The error state was the last to get its Satori version, in NXSAT-673.
+The `nxs-` library renders the same pages whether or not a customer has access to Satori. Six primitives — avatar, tag, status tag, breadcrumbs, rich tooltip and error state — exist twice, under one registered ID each: a built-in version in `@nuxeo/satori-platform/components`, and a thin wrapper around Satori's own component in `@nuxeo/satori-platform/components-satori`. Every other component is the same component in both cases; only the theme differs. The error state was the last to get its Satori version.
 
 > **Note:** the library is not published yet; this page describes the configuration it is built to support.
 
@@ -718,11 +718,11 @@ It follows Web UI's audit search: every filter and the sort go to the server, so
 Storybook's "Primitives/By registered ID" story renders all six registered IDs — avatar, tag, status tag, breadcrumbs, rich tooltip and error state — with one template and the same inputs.
 
 > **The three screenshots below are stale.** They were captured when `nxs.primitives.errorState`
-> had no Satori variant and the story rendered five IDs; NXSAT-673 added the sixth and the story
-> renders it. The captions describe what the images actually show, so they are accurate about the
+> had no Satori variant and the story rendered five IDs; it has one now, and the story renders
+> all six. The captions describe what the images actually show, so they are accurate about the
 > images and wrong about the story. Regenerating them needs a Satori-themed Storybook build and a
-> GitHub Packages token, which NXSAT-676 did not carry — the per-primitive tables in "Detailed
-> differences" below are current and were checked against the registry.
+> GitHub Packages token — the per-primitive tables in "Detailed differences" below are current and
+> were checked against the registry.
 
 ![The five primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
 
