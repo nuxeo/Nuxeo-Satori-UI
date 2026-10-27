@@ -46,11 +46,13 @@ permissions:
 # are plain `node scripts/...` invocations that need `node_modules` and nothing else — so the
 # sum was paid for no reason other than them sharing a runner.
 #
-# Split into five work jobs behind one cheap `base` job, the wall clock becomes the longest
-# chain rather than the total: about 9.5 minutes, bounded by Storybook, against 26. The trade is
-# runner minutes, which go UP by roughly 5 per run, because each job pays its own ~70 s of
-# checkout plus `npm ci`. That is the whole of the cost and it is worth naming rather than
-# discovering.
+# Split into six work jobs behind one cheap `base` job, the wall clock becomes the longest
+# chain rather than the total. Measured at 7.4 min on run 40447149034 against the 26 min
+# baseline, then sharded again: `static-gates` was that run's critical path at 430 s, so the
+# sanitizer pair that accounts for most of it moved to its own job. The trade is runner
+# minutes, which go UP — about 5 per run for the first split and ~1 more for this shard,
+# because each job pays its own ~65 s of checkout plus `npm ci`. That is the whole of the cost
+# and it is worth naming rather than discovering.
 #
 # Second, smaller consequence, and an improvement: a failure no longer short-circuits the steps
 # after it. A red static gate used to mean the Storybook and test steps never ran, so one
@@ -58,15 +60,23 @@ permissions:
 # `integration/**` by exactly that. Each job now reports its own verdict on every run.
 #
 # Two orderings are load-bearing and are preserved INSIDE their jobs, not across them; both are
-# commented where they live. The whole job graph:
+# commented where they live. The whole job graph, with measured times from run 40447149034
+# (a YAML-only change, so `satori-components` was unaffected and `storybook` skipped its two
+# heavy steps — on a run that touches it, expect ~9 min there and the critical path with it):
 #
-#   base ──┬── guardrails     ~5 min   review guardrails and the offline controls
-#          ├── static-gates   ~6.5 min the static beta gates
-#          ├── verify         ~3.5 min lint, build, typecheck, package, bundle size
-#          ├── test           ~6.5 min affected tests
-#          └── storybook      ~9 min   token-free build, publication gate, interactions
+#   base ──┬── guardrails       250 s  review guardrails and the offline controls
+#          ├── static-gates     ~3 min the static beta gates, less the sanitizer pair
+#          ├── sanitizer-gates  ~5 min the sanitizer audit and its controls
+#          ├── verify           122 s  lint, build, typecheck, package, bundle size
+#          ├── test             200 s  affected tests
+#          └── storybook        72 s   token-free build, publication gate, interactions
+#
+# So the floor is no longer this file's shape. With the sanitizer pair on its own runner the
+# two longest things left are `sanitizer-audit.selftest.mjs` at ~190 s and the i18n guardrail
+# controls at ~177 s, each a single script inside a job that cannot be split further. Anything
+# faster than ~4 min means making one of those two cheaper, not adding jobs.
 jobs:
-  # nx-set-shas resolved ONCE and handed to every job, rather than in each of the five.
+  # nx-set-shas resolved ONCE and handed to every job, rather than in each of the six.
   #
   # Not a micro-optimisation: it asks the workflow-runs API for the last successful run of this
   # workflow to diff against, so five concurrent calls can legitimately return different answers
@@ -159,11 +169,28 @@ jobs:
   # different claims and neither said so. A check that only ever runs on one
   # developer's machine is a check that stops running the day they stop running it.
   #
-  # The sanitizer pair below reproduced that hole exactly. Both were registered in
-  # `verify-gate.mjs`'s ALL_GATES and in `review:preflight`, and CI invokes neither — it
-  # runs individual scripts. So "registered as a gate" meant local-only, and review had
-  # to point out that the gate guarding a shipped XSS-adjacent defect could not block a
-  # merge. Registering a check in ALL_GATES is not the same as running it.
+  # The sanitizer pair — now its own `sanitizer-gates` job below — reproduced that hole
+  # exactly. Both were registered in `verify-gate.mjs`'s ALL_GATES and in
+  # `review:preflight`, and CI invokes neither — it runs individual scripts. So
+  # "registered as a gate" meant local-only, and review had to point out that the gate
+  # guarding a shipped XSS-adjacent defect could not block a merge. Registering a check in
+  # ALL_GATES is not the same as running it.
+  #
+  # WHY THE SANITIZER PAIR IS A SEPARATE JOB, and why there are two shards rather than four:
+  # these gates were one 365 s step, and the cost is not spread across them. Timed
+  # individually (local, 2026-10-27, 296 s total): `beta:sanitizers-selftest` alone is 190 s —
+  # 64% of everything here — then dependency-tree 16 s and its controls 17 s, supply-chain
+  # 15 s, customer-guardrails 8 s, sanitizers 7 s, and all thirteen others at 3 s or less.
+  # (`beta:identity-guard-selftest` measured 29 s but exited 1 locally, on the Node 25
+  # built-in `localStorage` that shadows jsdom's; CI pins Node 24 and it passes there, so
+  # that figure is a fail-fast path and not its real cost.)
+  #
+  # One script holding two thirds of the time cannot be sharded, so it sets the floor: the
+  # sanitizer shard lands near 5 min and this one near 3, which puts the critical path at
+  # the sanitizer selftest rather than at a balanced pair. Splitting the remaining eighteen
+  # further would add runner minutes and shorten nothing — the same reason a remote cache was
+  # not worth buying. If this job's 5 min is ever the thing in the way, the work is inside
+  # `sanitizer-audit.selftest.mjs`, not in this file.
   static-gates:
     needs: base
     runs-on: ubuntu-latest
@@ -184,13 +211,11 @@ jobs:
           base: ${{ needs.base.outputs.base }}
           head: ${{ needs.base.outputs.head }}
 
-      - name: Static beta gates (evidence, reference drift, Satori comparison page, customer guardrails, supply chain, sanitizers, lockfile and dependency-tree controls)
-        env:
-          # The sanitizer budget ratchet compares against the merge base with `origin/main` by
-          # default. A PR into an integration branch must be ratcheted against that branch, or a
-          # budget change already accepted there is charged again to every later sub-PR. Empty on
-          # push, where the default applies; `origin/main` on a PR into `main`, as before.
-          SANITIZER_AUDIT_BASE_REF: ${{ github.base_ref && format('origin/{0}', github.base_ref) || '' }}
+      # No `SANITIZER_AUDIT_BASE_REF` here: the only two readers of it are
+      # `sanitizer-audit.mjs` and `sanitizer-audit.selftest.mjs`, and both moved to
+      # `sanitizer-gates`. Setting it on this job as well would read as though something
+      # here depended on it.
+      - name: Static beta gates (evidence, reference drift, Satori comparison page, customer guardrails, supply chain, lockfile and dependency-tree controls)
         run: |
           set -euo pipefail
           # The lockfile gate and its controls. `npm ci` above already proves this lock installs
@@ -260,6 +285,46 @@ jobs:
           # Also fails on a production dependency nothing imports — which is how `cors`
           # and `dotenv` were found, two beyond the two already recorded as debt.
           npm run beta:supply-chain
+
+  # The sanitizer audit and its negative controls, on their own runner.
+  #
+  # Not a thematic split: the controls alone are 190 s of the 296 s all of these static gates
+  # cost together, so leaving them in `static-gates` meant every other gate there waited
+  # behind them. The measurement and what follows from it are above `static-gates`.
+  #
+  # Both scripts stay in ONE job and in this order. `beta:sanitizers` is the audit and
+  # `beta:sanitizers-selftest` is the half that proves the audit can still fail; a run that
+  # reported the first without the second is the state review already caught once, so there is
+  # no version of this split that separates them.
+  sanitizer-gates:
+    needs: base
+    runs-on: ubuntu-latest
+    env:
+      NX_BASE: ${{ needs.base.outputs.base }}
+      NX_HEAD: ${{ needs.base.outputs.head }}
+    steps:
+      # Must precede the local composite action below. The runner resolves
+      # ./.github/actions/setup from the workspace, so the repository has to be on disk
+      # before that step can be loaded at all.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          base: ${{ needs.base.outputs.base }}
+          head: ${{ needs.base.outputs.head }}
+
+      - name: Sanitizer audit and its negative controls
+        env:
+          # The sanitizer budget ratchet compares against the merge base with `origin/main` by
+          # default. A PR into an integration branch must be ratcheted against that branch, or a
+          # budget change already accepted there is charged again to every later sub-PR. Empty on
+          # push, where the default applies; `origin/main` on a PR into `main`, as before.
+          SANITIZER_AUDIT_BASE_REF: ${{ github.base_ref && format('origin/{0}', github.base_ref) || '' }}
+        run: |
+          set -euo pipefail
           # Every `bypassSecurityTrust*` call is registered with a justification, no Safe* value
           # reaches a SecurityContext.NONE binding, trusted HTML traces back to a sanitiser, and
           # the debt budgets have not been raised against the merge base.

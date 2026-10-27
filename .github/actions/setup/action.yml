@@ -4,11 +4,11 @@ description: >-
   checkout. The caller must have run `actions/checkout` first.
 
 # Every job in ci.yml needs all of these before it can do anything, and ci.yml went from one job
-# to six. Five copies of the same steps is the shape where one copy gets a fix and the others do
+# to seven. Six copies of the same steps is the shape where one copy gets a fix and the others do
 # not — the same argument the `agent-mirror` gate makes about `.cursor/`, `.claude/` and
-# `.agent/`. One definition, five callers.
+# `.agent/`. One definition, six callers.
 #
-# `actions/checkout` is deliberately NOT here, even though all five callers need it with
+# `actions/checkout` is deliberately NOT here, even though all six callers need it with
 # `fetch-depth: 0`. A local composite action is loaded from the workspace by path, so the runner
 # cannot resolve `./.github/actions/setup` until the repository is already on disk — putting the
 # checkout inside the thing that needs the checkout to be found fails with "Can't find
