@@ -52,6 +52,18 @@ export const usageHtml = `<nxs-empty-state
 Only `heading` is required, already translated. The library ships no translations for the text you
 give it. Used directly, the empty state needs no providers.
 
+Place it in a template by its selector, as above, or render the ID `nxs.primitives.emptyState`
+(`NXS_PRIMITIVE_IDS.emptyState`) through `lib-extension-outlet` with the same inputs. The outlet
+sets inputs and projects no content, so there the buttons go in as an `actions` template rather than
+as projected content; both arrive in the same place, the template first. With
+`provideNxsSatoriComponents()` the ID renders Satori's `sat-empty-state` instead, through the
+wrapper in `@nuxeo/satori-platform/components-satori` — the same inputs, and the emptiness still
+announced once. A replacement you register under the ID implements `NxsEmptyStateInputs`.
+
+Nothing the platform ships renders this ID yet: `nxs-document-list` and `nxs-document-history` write
+`<nxs-empty-state>` into their own templates, so an override of the ID reaches your own hosts rather
+than those two screens.
+
 ## Examples
 
 ### Heading only

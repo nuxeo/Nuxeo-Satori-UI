@@ -274,7 +274,17 @@ const RAW_KEY = /\b(?:sat|satori-components|browse)\.[a-z][\w-]*(?:\.[\w-]+)+/i;
 async function open(page, url, selector) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 300)));
-  await page.goto(url, { waitUntil: 'networkidle' });
+  // `networkidle` waits for half a second of quiet, which one stalled font or icon request can
+  // deny for longer than the timeout — twice, on different components, under load. Retried once,
+  // so a section is not failed for it; a navigation that succeeds first time is untouched.
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await page.goto(url, { waitUntil: 'networkidle' });
+      break;
+    } catch (error) {
+      if (attempt >= 1) throw error;
+    }
+  }
   await page.waitForSelector(selector, { timeout: 30_000 });
   await page.evaluate(() => document.fonts.ready);
   const iconFont = await page
@@ -412,6 +422,79 @@ async function freeze(page) {
   });
 }
 
+/**
+ * Each selector's own box, viewport-relative as a screenshot's clip is, so a check can assert what
+ * the image holds rather than what the DOM has: a host that is `display: none`, 0x0 or below the
+ * fold is in `querySelectorAll` and not in the picture. The 0x0 host this capture was once stuck
+ * on was exactly that.
+ *
+ * @returns {Promise<Array<{sel: string, ok: boolean, why?: string, top?: number, bottom?: number,
+ *   left?: number, right?: number}>>}
+ */
+function hostBoxes(page, selectors) {
+  return page.evaluate(
+    (sels) =>
+      sels.map((sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return { sel, ok: false, why: 'absent' };
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') {
+          return { sel, ok: false, why: `${cs.display}/${cs.visibility}` };
+        }
+        const r = el.getBoundingClientRect();
+        if (r.width <= 1 || r.height <= 1) {
+          return { sel, ok: false, why: `${Math.round(r.width)}x${Math.round(r.height)}` };
+        }
+        return { sel, ok: true, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+      }),
+    selectors,
+  );
+}
+
+/**
+ * Grow the viewport until every primitive fits in it, because both captures are bounded by it:
+ * `page.screenshot()` takes the viewport, and `crop` clamps its clip to it. Without this a
+ * primitive added to the story would fall below the fold and be missing from the image while every
+ * check still passed.
+ */
+async function fitViewport(page, selectors) {
+  for (let i = 0; i < 4; i += 1) {
+    const boxes = await hostBoxes(page, selectors);
+    const bottom = Math.max(0, ...boxes.filter((b) => b.ok).map((b) => b.bottom));
+    const vp = page.viewportSize();
+    if (bottom + 24 <= vp.height) return boxes;
+    await page.setViewportSize({ width: vp.width, height: Math.ceil(bottom) + 64 });
+    // As `open` does: `sat-breadcrumbs` re-measures through a ResizeObserver debounced by 100 ms.
+    await page.waitForTimeout(800);
+    await freeze(page);
+  }
+  return hostBoxes(page, selectors);
+}
+
+/**
+ * The documented element, plus the siblings a wrapper chooses between by input: the same name with
+ * a different number, which is how the error state's containers differ — `sat-401-error-state`
+ * against `sat-500-error-state`, one per HTTP status. The section can name only one and the story
+ * renders another, so each is allowed.
+ *
+ * Only those. A wrapper's template also renders its own inner helpers —
+ * `h2 satErrorStateHeadline`, `sat-rich-tooltip-content`, `a satNavigationTab` — and accepting any
+ * of them would let the check pass on a headline with no error-state container, or on a tab link
+ * with no `sat-navigation-tabs`. A documented element with no number in it has no alternatives.
+ *
+ * @param {string} documented the element the section names
+ * @param {string[] | null} rendered every element the wrapper's template renders
+ * @returns {string[]}
+ */
+function statusVariants(documented, rendered) {
+  if (!documented) return [];
+  const pattern = documented.replace(/\d+/, '(\\d+)');
+  if (pattern === documented) return [documented];
+  const shape = new RegExp(`^${pattern}$`);
+  const siblings = (rendered ?? []).filter((e) => e !== documented && shape.test(e));
+  return [documented, ...siblings];
+}
+
 async function crop(page, box, file) {
   const pad = 16;
   const vp = page.viewportSize();
@@ -532,9 +615,48 @@ try {
       const url = `${base}/${h.book}/iframe.html?id=${h.story}&viewMode=story`;
       try {
         const { errors, iconFont } = await open(page, url, h.selector);
+        // Grow the viewport until the documented element fits, before anything measures or crops
+        // it. `crop()` clamps to the viewport, so an element below the fold comes out truncated —
+        // or, if it starts below the fold entirely, with a negative clip height. A component whose
+        // story shows it alone already fits, and `fitViewport` returns without touching anything in
+        // that case, so this changes no existing capture; it matters for a section whose story
+        // renders several components, where the documented one can be last. The card's is.
+        const fitted = await fitViewport(page, [h.selector]);
+        // Every edge, not just the bottom. `crop()` clamps to the viewport on both axes, so a
+        // target wider than it comes out cut off horizontally while a bottom-only predicate still
+        // certifies "the whole element" — and a negative `top` or `left`, which is what a target
+        // scrolled partly above the fold has, passed that predicate too. `fitViewport` can only
+        // grow the height, so a width overflow is reported rather than fixed: it means the story
+        // renders the component wider than 1280px and the story is what has to change.
+        const vp = () => page.viewportSize();
+        const clipped = fitted.filter(
+          (b) =>
+            !b.ok ||
+            b.top < 0 ||
+            b.left < 0 ||
+            b.bottom > vp().height + 1 ||
+            b.right > vp().width + 1,
+        );
+        record(
+          subject,
+          `<${h.selector}> fits the viewport, so the crop is the whole element`,
+          fitted.length > 0 && clipped.length === 0,
+          clipped.length
+            ? clipped.map((b) => `${b.sel}: ${b.why ?? 'outside the capture'}`).join(', ')
+            : `viewport ${vp().width}×${vp().height}`,
+        );
         let opened = null;
         if (c.captured === 'Opened from the keyboard')
           opened = await openFromKeyboard(page, h.selector);
+        // Measured and cropped in viewport coordinates, so a component below the fold has to be
+        // scrolled to first. The "By registered ID" story is a grid of every primitive and is
+        // taller than any viewport: without this, its lower entries produced a zero-height clip
+        // and the run reported a failed capture for a component that had rendered perfectly well.
+        await page
+          .locator(h.selector)
+          .first()
+          .scrollIntoViewIfNeeded()
+          .catch(() => undefined); // not every selector is a single element; the box check below reports it
         const seen = await inspect(page, h.selector);
         await isolate(page, h.selector);
         const file = join(OUT, 'raw', `${slug}-${side}.png`);
@@ -571,16 +693,26 @@ try {
           // The element the section documents, not any `sat-*`: a wrapper rendering something else
           // would otherwise pass a check named after Satori's component. By selector, so an element
           // a Satori component is applied to by attribute — `<button satActionBarButton>` — counts.
-          const inside = await page.evaluate(
-            ([host, element]) =>
-              [...document.querySelectorAll(host)].some((t) => t.querySelector(element)),
-            [h.selector, satoriElementSelector(c.satElement)],
-          );
+          const candidates = statusVariants(c.satElement, c.satElements);
+          const found = [];
+          for (const element of candidates) {
+            const inside = await page.evaluate(
+              ([host, el]) => [...document.querySelectorAll(host)].some((t) => t.querySelector(el)),
+              [h.selector, satoriElementSelector(element)],
+            );
+            if (inside) found.push(element);
+          }
           record(
             subject,
-            `Satori's <${c.satElement}> inside <${h.selector}>`,
-            inside,
-            seen.satInside.length ? `rendered: ${seen.satInside.join(', ')}` : 'no sat-* element',
+            candidates.length > 1
+              ? `one of ${c.variant}'s Satori elements inside <${h.selector}>`
+              : `Satori's <${c.satElement}> inside <${h.selector}>`,
+            found.length > 0,
+            found.length
+              ? `rendered: ${found.join(', ')}`
+              : seen.satInside.length
+                ? `rendered: ${seen.satInside.join(', ')}`
+                : 'no sat-* element',
           );
         }
       } catch (error) {
@@ -639,7 +771,12 @@ try {
   // The "Primitives/By registered ID" story in both Storybooks: the whole viewport, as it renders,
   // and a close-up of every primitive together for the side-by-side.
   const full = {};
-  // One host per `NXS_PRIMITIVE_IDS` entry, in the story's order; the story renders each ID once.
+  // One host per ID the "Primitives/By registered ID" story renders, in the story's order — not one
+  // per `NXS_PRIMITIVE_IDS` entry, which is a longer list: `banner` and `chipSet` are registered but
+  // have no Satori twin, so the story leaves them out and this is the set with two sides to compare.
+  // `primitiveCount` below is this length, and the count check further down asserts the story
+  // resolved exactly this many `nxs-satori-*` hosts — so an ID added to the story without being
+  // added here fails that check rather than being quietly cropped out of the screenshots.
   const PRIMITIVE_HOSTS = {
     without: [
       'nxs-avatar',
@@ -650,6 +787,9 @@ try {
       'nxs-error-state',
       'nxs-tabs',
       'nxs-document-toolbar',
+      'nxs-card',
+      'nxs-empty-state',
+      'nxs-dropzone',
     ],
     with: [
       'nxs-satori-avatar',
@@ -660,6 +800,9 @@ try {
       'nxs-satori-error-state',
       'nxs-satori-tabs',
       'nxs-satori-action-bar',
+      'nxs-satori-card',
+      'nxs-satori-empty-state',
+      'nxs-satori-upload',
     ],
   };
   const primitiveCount = PRIMITIVE_HOSTS.with.length;
@@ -676,8 +819,14 @@ try {
     const host = side === 'without' ? 'nxs-avatar' : 'nxs-satori-avatar';
     try {
       const { errors } = await open(page, url, host);
-      const seen = await inspect(page, host);
+      // Selected by every primitive host, so `count` asserts the image holds all of them. The
+      // other fields read are document-wide and do not depend on this selector.
+      const seen = await inspect(page, PRIMITIVE_HOSTS[side].join(', '));
+      const boxes = await fitViewport(page, PRIMITIVE_HOSTS[side]);
+      const shotViewport = page.viewportSize();
       await page.screenshot({ path: join(OUT, FULL_IMAGES[side]), animations: 'disabled' });
+      let closeBoxes = [];
+      let closeViewport = null;
       const close = await browser.newContext({
         viewport: { width: 1440, height: 900 },
         deviceScaleFactor: 2,
@@ -685,6 +834,8 @@ try {
       try {
         const zoomed = await close.newPage();
         await open(zoomed, url, host);
+        closeBoxes = await fitViewport(zoomed, PRIMITIVE_HOSTS[side]);
+        closeViewport = zoomed.viewportSize();
         const all = await inspect(zoomed, PRIMITIVE_HOSTS[side].join(', '));
         full[side] = join(OUT, 'raw', `full-${side}.png`);
         await crop(zoomed, all.box, full[side]);
@@ -697,6 +848,25 @@ try {
         errors.length === 0,
         errors.join(' | '),
       );
+      // Visible and inside the captured area, not merely in the DOM: `count` would pass for a host
+      // that is hidden, 0x0 or below the fold, none of which reach the image.
+      for (const [label, measured, vp] of [
+        ['the viewport screenshot', boxes, shotViewport],
+        ['the close-up', closeBoxes, closeViewport],
+      ]) {
+        const outside = measured.filter(
+          (b) =>
+            !b.ok || b.top < 0 || b.left < 0 || b.bottom > vp.height + 1 || b.right > vp.width + 1,
+        );
+        record(
+          `Full screenshot (${side})`,
+          `all ${primitiveCount} primitives visible in ${label}`,
+          measured.length === primitiveCount && outside.length === 0,
+          outside.length
+            ? outside.map((b) => `${b.sel}: ${b.why ?? 'outside the capture'}`).join(', ')
+            : `${measured.length} of ${primitiveCount} within ${vp.width}x${vp.height}`,
+        );
+      }
       if (side === 'without') {
         record(
           `Full screenshot (${side})`,

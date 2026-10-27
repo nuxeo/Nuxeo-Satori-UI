@@ -6,13 +6,12 @@ import * as ByIdStories from './primitives.stories';
 
 # Primitives by registered ID
 
-Eight components here are also in Satori's own component library: the avatar, the breadcrumbs, the
-tag, the status tag, the rich tooltip, the error state, the tabs and the document toolbar's action
-bar. Each one is registered under an ID. A screen that renders the ID, rather than the component,
-shows whichever version the application registered: Satori's, when
+Eleven components here are also in Satori's own component library: the avatar, the breadcrumbs, the
+tag, the status tag, the rich tooltip, the error state, the tabs, the document toolbar's action bar,
+the card, the empty state and the upload. Each one is registered under an ID. A screen that renders the ID, rather than the
+component, shows whichever version the application registered: Satori's, when
 `@nuxeo/satori-platform/components-satori` is installed and provided, or the built-in version
-otherwise. The card is registered the same way, but nothing wraps Satori's interactive card yet, so
-it renders the built-in version either way for now.
+otherwise.
 
 ## Key features
 
@@ -20,8 +19,9 @@ it renders the built-in version either way for now.
   the same values whichever is registered.
 - **Callbacks and templates are inputs.** A screen renders an ID through `lib-extension-outlet`, which
   sets inputs and nothing else, so the tabs take their body template and selection callback, the
-  action bar its action callback, the error state its retry callback, and the card its open and
-  selection callbacks and its templates, as inputs.
+  action bar its action callback, the error state its retry callback, the card its open and
+  selection callbacks and its templates, the empty state its actions template, and the upload its
+  files callback, as inputs.
 - **Satori when it is available.** The choice is made by the providers your application lists, not
   when the library is built and not by checking at run time.
 - **Works without Satori.** Without access to GitHub Packages, leave Satori out: every ID still
@@ -31,8 +31,9 @@ it renders the built-in version either way for now.
 
 ## Demo showcase
 
-The IDs with a Satori version, rendered through `lib-extension-outlet` as a screen renders them. The
-card, which has none yet, is shown by ID on its own page.
+The nine IDs with a Satori version, rendered through `lib-extension-outlet` as a screen renders
+them. The banner and the chip set are registered too, but have no Satori version yet, so they are
+not in this showcase — their own pages show them.
 
 <Canvas of={ByIdStories.MaterialRegistration} />
 
@@ -174,7 +175,39 @@ card, which has none yet, is shown by ID on its own page.
       <td>
         <code>NxsCardInputs</code>
       </td>
-      <td>None yet: Satori's interactive card is not wrapped</td>
+      <td>
+        Interactive card (<code>sat-interactive-card</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.emptyState</code>
+      </td>
+      <td>
+        <code>heading</code>, <code>headingLevel</code>, <code>message</code>, <code>icon</code>,
+        <code>actions</code>
+      </td>
+      <td>
+        <code>NxsEmptyStateInputs</code>
+      </td>
+      <td>
+        Empty state (<code>sat-empty-state</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.upload</code>
+      </td>
+      <td>
+        <code>label</code>, <code>buttonLabel</code>, <code>multiple</code>, <code>accept</code>,
+        <code>disabled</code>, <code>filesHandler</code>
+      </td>
+      <td>
+        <code>NxsUploadInputs</code>
+      </td>
+      <td>
+        Upload field (<code>sat-upload-field</code>)
+      </td>
     </tr>
   </tbody>
 </table>

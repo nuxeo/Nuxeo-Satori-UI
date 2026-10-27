@@ -17,6 +17,8 @@ import {
   NxsBreadcrumbsComponent,
   NxsCardComponent,
   NxsDocumentToolbarComponent,
+  NxsDropzoneComponent,
+  NxsEmptyStateComponent,
   NxsErrorStateComponent,
   NxsRichTooltipComponent,
   NxsStatusTagComponent,
@@ -33,12 +35,15 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 import { NxsSatoriActionBarComponent } from './action-bar/satori-action-bar.component';
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
 import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.component';
+import { NxsSatoriCardComponent } from './card/satori-card.component';
+import { NxsSatoriEmptyStateComponent } from './empty-state/satori-empty-state.component';
 import { NxsSatoriErrorStateComponent } from './error-state/satori-error-state.component';
 import { provideNxsSatoriComponents } from './provide-nxs-satori-components';
 import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-tooltip.component';
 import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';
 import { NxsSatoriTabsComponent } from './tabs/satori-tabs.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
+import { NxsSatoriUploadComponent } from './upload/satori-upload.component';
 
 const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
   [NXS_PRIMITIVE_IDS.avatar, NxsAvatarComponent, NxsSatoriAvatarComponent],
@@ -49,14 +54,22 @@ const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
   [NXS_PRIMITIVE_IDS.errorState, NxsErrorStateComponent, NxsSatoriErrorStateComponent],
   [NXS_PRIMITIVE_IDS.tabs, NxsTabsComponent, NxsSatoriTabsComponent],
   [NXS_PRIMITIVE_IDS.actionBar, NxsDocumentToolbarComponent, NxsSatoriActionBarComponent],
+  [NXS_PRIMITIVE_IDS.card, NxsCardComponent, NxsSatoriCardComponent],
+  [NXS_PRIMITIVE_IDS.emptyState, NxsEmptyStateComponent, NxsSatoriEmptyStateComponent],
+  [NXS_PRIMITIVE_IDS.upload, NxsDropzoneComponent, NxsSatoriUploadComponent],
 ];
 
 /**
- * Primitives no Satori component re-registers yet, so they keep their Material implementation with
- * or without `provideNxsSatoriComponents()`. The card waits for a wrapper of Satori's interactive
- * card (NXSAT-675), which moves it into `PAIRS`.
+ * Primitives no Satori component re-registers, so they keep their Material implementation with
+ * or without `provideNxsSatoriComponents()`. The banner and chip set are Material-only until their
+ * Satori wrappers are written; `docs/extension-reference.md` §6a says so too. The card, the empty
+ * state and the upload each left this list as NXSAT-675 wrapped Satori's interactive card, empty
+ * state and upload field, and are in `PAIRS` above.
+ *
+ * An ID added here needs its reason beside it, because the list is what tells the check below that
+ * Material-only was the intention and not an omission.
  */
-const MATERIAL_ONLY: readonly string[] = [NXS_PRIMITIVE_IDS.card];
+const MATERIAL_ONLY: readonly string[] = [NXS_PRIMITIVE_IDS.banner, NXS_PRIMITIVE_IDS.chipSet];
 
 function registry(providers: (Provider | EnvironmentProviders)[]): ExtensionComponentRegistry {
   TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection(), ...providers] });
@@ -80,13 +93,6 @@ describe('provideNxsSatoriComponents', () => {
     expect([...PAIRS.map(([id]) => id), ...MATERIAL_ONLY].sort()).toEqual(
       Object.values(NXS_PRIMITIVE_IDS).sort(),
     );
-  });
-
-  // No Satori card is wrapped yet, so `PAIRS` has no card and the ID keeps the Material one. Its
-  // Satori variant replaces this test with a `PAIRS` entry.
-  it('leaves the card on Material, which no Satori component re-registers yet', () => {
-    const components = registry([provideNxsComponents(), provideNxsSatoriComponents()]);
-    expect(components.peek(NXS_PRIMITIVE_IDS.card)).toBe(NxsCardComponent);
   });
 
   it('leaves Material in place for a host that provides only the base registration', () => {
@@ -420,5 +426,543 @@ describe('the Satori primitives, rendered by ID', () => {
     );
     edit?.click();
     expect(ran).toEqual(['app.toolbar.edit']);
+  });
+});
+
+/**
+ * The card is the one primitive whose Satori component acts on a click of its own: `SatInteractiveCard`
+ * listens on itself and, for a target outside `a, input, button, select, textarea`, clicks the
+ * projected selection control if there is one and the title otherwise. The wrapper's whole design is
+ * about what that fall-through reaches, so these are behaviour tests rather than render checks.
+ *
+ * What a click does cannot be read off the Material card in jsdom — there it comes from a
+ * `::after` stretched over a positioned surface, and jsdom lays nothing out — so the parity these
+ * assert is against the Material card's documented behaviour, exercised in its own story's
+ * `play()`: the heading opens it, the media and the background open it, and the checkbox, the corner
+ * control and the footer actions do not.
+ */
+describe('the Satori card, rendered by nxs.primitives.card', () => {
+  let opened: number;
+  let selections: boolean[];
+
+  @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
+    standalone: true,
+    imports: [ExtensionOutletComponent],
+    template: `<ng-template #media
+        ><span class="probe-media" aria-hidden="true">▣</span></ng-template
+      >
+      <ng-template #headerAction>
+        <button class="probe-menu" type="button" aria-label="Document actions">⋯</button>
+      </ng-template>
+      <ng-template #actions>
+        <button class="probe-favorite" type="button" aria-label="Add to Favorites">★</button>
+      </ng-template>
+      <lib-extension-outlet
+        [componentId]="id"
+        [componentInputs]="{
+          heading,
+          subheading,
+          selected,
+          selectionLabel,
+          selectionHandler,
+          openHandler,
+          media: withMedia ? media : null,
+          headerAction: withHeaderAction ? headerAction : null,
+          actions: withActions ? actions : null,
+        }"
+      />`,
+  })
+  class CardHostComponent {
+    readonly id = NXS_PRIMITIVE_IDS.card;
+    heading = 'Claim 42 — water damage.pdf';
+    subheading = 'File';
+    selected = false;
+    selectionLabel = 'Select Claim 42 — water damage.pdf';
+    selectionHandler: ((selected: boolean) => void) | null = (value) => selections.push(value);
+    openHandler: (() => void) | null = () => (opened += 1);
+    withMedia = true;
+    withHeaderAction = false;
+    withActions = false;
+  }
+
+  async function renderCard(
+    patch: Partial<CardHostComponent> = {},
+  ): Promise<{ host: HTMLElement; card: HTMLElement }> {
+    TestBed.configureTestingModule({
+      imports: [CardHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([]),
+        provideSatori(),
+        provideNxsComponents(),
+        provideNxsSatoriComponents(),
+      ],
+    });
+    const fixture = TestBed.createComponent(CardHostComponent);
+    Object.assign(fixture.componentInstance, patch);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const card = host.querySelector<HTMLElement>('sat-interactive-card');
+    expect(card).not.toBeNull();
+    return { host, card: card as HTMLElement };
+  }
+
+  beforeEach(() => {
+    opened = 0;
+    selections = [];
+  });
+
+  it("renders Satori's interactive card, and no Material card", async () => {
+    const { host } = await renderCard();
+    expect(host.querySelector('nxs-satori-card sat-interactive-card')).not.toBeNull();
+    expect(host.querySelector('nxs-card')).toBeNull();
+    expect(host.querySelector('mat-card')).toBeNull();
+  });
+
+  it('opens the item from the heading, which is the control that names it', async () => {
+    const { host } = await renderCard();
+    const heading = host.querySelector<HTMLElement>('button.nxs-satori-card__heading');
+    expect(heading?.textContent?.trim()).toBe('Claim 42 — water damage.pdf');
+    heading?.click();
+    expect(opened).toBe(1);
+  });
+
+  // In a browser the heading's stretched `::after` takes this click, as it does on the Material
+  // card. In jsdom nothing is laid out, so what runs here is Satori's fall-through to the title —
+  // the same `openHandler`, by the other of the two paths. Either way it opens and does not select,
+  // which is the claim.
+  it('opens the item from a click on the card itself, and does not select it', async () => {
+    const { card } = await renderCard();
+    card.click();
+    expect(opened).toBe(1);
+    expect(selections).toEqual([]);
+  });
+
+  it('opens nothing from a background click when there is no openHandler', async () => {
+    const { host, card } = await renderCard({ openHandler: null });
+    expect(host.querySelector('button.nxs-satori-card__heading')).toBeNull();
+    expect(host.querySelector('span.nxs-satori-card__heading')?.textContent?.trim()).toBe(
+      'Claim 42 — water damage.pdf',
+    );
+    card.click();
+    expect(opened).toBe(0);
+  });
+
+  it('toggles selection from the checkbox and calls the handler with the new state', async () => {
+    const { host } = await renderCard();
+    const input = host.querySelector<HTMLInputElement>('mat-checkbox input[type="checkbox"]');
+    expect(input?.getAttribute('aria-label')).toBe('Select Claim 42 — water damage.pdf');
+    input?.click();
+    expect(selections).toEqual([true]);
+  });
+
+  // The trap this wrapper exists to avoid. Material's checkbox puts a `<div>` touch target over its
+  // input, so a real press often lands on an element Satori's early return does not cover — and the
+  // fall-through would then open the document as well as tick the box.
+  it('does not also open the item when the press lands beside the checkbox input', async () => {
+    const { host } = await renderCard();
+    // Found, not optional-chained away: a selector that stopped matching would click nothing, and
+    // `opened === 0` would then be a pass reporting that no press happened at all.
+    const box = host.querySelector<HTMLElement>('mat-checkbox');
+    const touchTarget = host.querySelector<HTMLElement>('.mat-mdc-checkbox-touch-target');
+    expect(box).not.toBeNull();
+    expect(touchTarget, 'Material still renders a div touch target over the input').not.toBeNull();
+    box?.click();
+    touchTarget?.click();
+    expect(opened).toBe(0);
+  });
+
+  it('does not open the item from the corner control or a footer button', async () => {
+    const { host } = await renderCard({ withHeaderAction: true, withActions: true });
+    const menu = host.querySelector<HTMLElement>('.probe-menu');
+    const favorite = host.querySelector<HTMLElement>('.probe-favorite');
+    expect(menu).not.toBeNull();
+    expect(favorite).not.toBeNull();
+    menu?.click();
+    favorite?.click();
+    expect(opened).toBe(0);
+  });
+
+  // The one behaviour difference from the Material card, asserted rather than left to be found: the
+  // padding around those controls opens the item here, where on Material it does nothing. A wider
+  // hit area, never a different action.
+  it('opens the item from the padding around the corner and footer controls', async () => {
+    const { host } = await renderCard({ withHeaderAction: true, withActions: true });
+    host.querySelector<HTMLElement>('.nxs-satori-card__corner')?.click();
+    host.querySelector<HTMLElement>('sat-interactive-card-actions')?.click();
+    expect(opened).toBe(2);
+    expect(selections).toEqual([]);
+  });
+
+  it('renders the media, corner and footer templates the outlet passes', async () => {
+    const { host } = await renderCard({ withHeaderAction: true, withActions: true });
+    expect(host.querySelector('sat-interactive-card-content .probe-media')).not.toBeNull();
+    expect(host.querySelector('.nxs-satori-card__corner .probe-menu')).not.toBeNull();
+    expect(host.querySelector('sat-interactive-card-actions .probe-favorite')).not.toBeNull();
+    expect(host.querySelector('[satInteractiveCardSubtitle]')?.textContent?.trim()).toBe('File');
+  });
+
+  it.each(['', '   ', '\u00a0', '\u200b'])(
+    'renders no checkbox for a selection label of %j, as Material does',
+    async (selectionLabel) => {
+      const { host } = await renderCard({ selectionLabel });
+      expect(host.querySelector('mat-checkbox')).toBeNull();
+    },
+  );
+
+  it('renders no header slot at all when there is neither a checkbox nor a corner control', async () => {
+    const { host } = await renderCard({ selectionLabel: '' });
+    expect(host.querySelector('.nxs-satori-card__corner')).toBeNull();
+  });
+
+  it('nests no control inside another (WCAG 4.1.2)', async () => {
+    const { host } = await renderCard({ withHeaderAction: true, withActions: true });
+    expect(host.querySelectorAll('button button, button a, a button')).toHaveLength(0);
+    expect(host.querySelector('button.nxs-satori-card__heading input')).toBeNull();
+  });
+
+  it("marks a selected card with Satori's own active state", async () => {
+    const { card } = await renderCard({ selected: true });
+    expect(card.classList).toContain('sat-interactive-card-active');
+  });
+
+  // Satori outlines a card it can act on; Material's draws the same distinction as outlined versus
+  // filled.
+  it('outlines a card that opens something', async () => {
+    const { card } = await renderCard();
+    expect(card.classList).toContain('sat-interactive-card-border');
+  });
+
+  it('leaves a card that opens nothing without an outline', async () => {
+    const { card } = await renderCard({ openHandler: null });
+    expect(card.classList).not.toContain('sat-interactive-card-border');
+  });
+
+  it('hides a blank subheading, as Material does', async () => {
+    const { host } = await renderCard({ subheading: '  ' });
+    expect(host.querySelector('[satInteractiveCardSubtitle]')).toBeNull();
+  });
+});
+
+/**
+ * The empty state is announced, so the thing worth asserting is the live region rather than any
+ * particular element: the Material implementation puts `role="status"` on its own host, Satori's
+ * `sat-empty-state` carries it itself, and the wrapper's host deliberately does not add a second.
+ * Both must end up with exactly one.
+ */
+describe('the Satori empty state, rendered by nxs.primitives.emptyState', () => {
+  @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
+    standalone: true,
+    imports: [ExtensionOutletComponent],
+    template: `<lib-extension-outlet [componentId]="id" [componentInputs]="inputs" />`,
+  })
+  class EmptyStateOutletHost {
+    id = NXS_PRIMITIVE_IDS.emptyState as string;
+    inputs: Record<string, unknown> = {};
+  }
+
+  async function renderEmptyState(
+    inputs: Record<string, unknown>,
+    satori = true,
+  ): Promise<HTMLElement> {
+    TestBed.configureTestingModule({
+      imports: [EmptyStateOutletHost],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([]),
+        provideSatori(),
+        provideNxsComponents(),
+        ...(satori ? [provideNxsSatoriComponents()] : []),
+      ],
+    });
+    const fixture = TestBed.createComponent(EmptyStateOutletHost);
+    fixture.componentInstance.inputs = inputs;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  /** Every `role="status"` no `aria-hidden` subtree hides. */
+  const liveRegions = (root: HTMLElement) =>
+    Array.from(root.querySelectorAll('[role="status"]')).filter(
+      (region) => !region.closest('[aria-hidden="true"]'),
+    );
+
+  it("renders Satori's empty state, and no Material one", async () => {
+    const host = await renderEmptyState({ heading: 'No documents here' });
+    expect(host.querySelector('nxs-satori-empty-state sat-empty-state')).not.toBeNull();
+    expect(host.querySelector('nxs-empty-state')).toBeNull();
+  });
+
+  it('announces the emptiness through exactly one live region', async () => {
+    const host = await renderEmptyState({ heading: 'No documents here' });
+    const regions = liveRegions(host);
+    expect(regions).toHaveLength(1);
+    expect(regions[0].tagName.toLowerCase()).toBe('sat-empty-state');
+    expect(regions[0].textContent).toContain('No documents here');
+  });
+
+  it('announces through exactly one live region on Material too, which is the parity that matters', async () => {
+    const host = await renderEmptyState({ heading: 'No documents here' }, false);
+    const regions = liveRegions(host);
+    expect(regions).toHaveLength(1);
+    expect(regions[0].tagName.toLowerCase()).toBe('nxs-empty-state');
+  });
+
+  it('renders the heading at the level the host asked for', async () => {
+    const host = await renderEmptyState({ heading: 'No results', headingLevel: 3 });
+    expect(host.querySelector('h3[satEmptyStateHeadline]')?.textContent?.trim()).toBe('No results');
+    expect(host.querySelector('h2[satEmptyStateHeadline]')).toBeNull();
+  });
+
+  it('defaults the heading to level 2, as Material does', async () => {
+    const host = await renderEmptyState({ heading: 'No results' });
+    expect(host.querySelector('h2[satEmptyStateHeadline]')).not.toBeNull();
+  });
+
+  it('shows the message as the description', async () => {
+    const host = await renderEmptyState({
+      heading: 'No documents here',
+      message: 'Drag a file in to get started.',
+    });
+    expect(host.querySelector('[satEmptyStateDescription]')?.textContent?.trim()).toBe(
+      'Drag a file in to get started.',
+    );
+  });
+
+  it('omits the description when there is no message', async () => {
+    const host = await renderEmptyState({ heading: 'No documents here' });
+    expect(host.querySelector('[satEmptyStateDescription]')).toBeNull();
+  });
+
+  // Satori wraps its illustration slot in `aria-hidden="true"` itself, so the icon is decorative
+  // without the wrapper saying so — the same as Material, which marks it `aria-hidden` directly.
+  it('puts the icon in the illustration slot, hidden from assistive technology', async () => {
+    const host = await renderEmptyState({ heading: 'No documents here', icon: 'folder_open' });
+    const icon = host.querySelector('[satEmptyStateIllustration]');
+    expect(icon).not.toBeNull();
+    expect(icon?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(
+      host.querySelector('[satEmptyStateIllustration]')?.getAttribute('data-mat-icon-name'),
+    ).toBe('folder_open');
+  });
+
+  it('renders the actions template the outlet passes, since the outlet projects no content', async () => {
+    @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
+      standalone: true,
+      imports: [ExtensionOutletComponent],
+      template: `<ng-template #actions
+          ><button class="probe-create" type="button">Create folder</button></ng-template
+        >
+        <lib-extension-outlet
+          [componentId]="id"
+          [componentInputs]="{ heading: 'No documents here', actions }"
+        />`,
+    })
+    class EmptyStateHostComponent {
+      readonly id = NXS_PRIMITIVE_IDS.emptyState;
+    }
+
+    TestBed.configureTestingModule({
+      imports: [EmptyStateHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([]),
+        provideSatori(),
+        provideNxsComponents(),
+        provideNxsSatoriComponents(),
+      ],
+    });
+    const fixture = TestBed.createComponent(EmptyStateHostComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[satEmptyStateAction] .probe-create')).not.toBeNull();
+  });
+});
+
+/**
+ * The upload is the one primitive whose Material implementation has an output, so the ID's contract
+ * needed a `filesHandler` input as well — the outlet binds no outputs. These assert that both
+ * routes fire, and that the rules about what counts as a file reaching the host are the same on
+ * both sides: nothing empty, nothing while disabled, and one file unless `multiple`.
+ */
+describe('the Satori upload, rendered by nxs.primitives.upload', () => {
+  @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
+    standalone: true,
+    imports: [ExtensionOutletComponent],
+    template: `<lib-extension-outlet [componentId]="id" [componentInputs]="inputs" />`,
+  })
+  class UploadOutletHost {
+    readonly id = NXS_PRIMITIVE_IDS.upload as string;
+    inputs: Record<string, unknown> = {};
+  }
+
+  let handled: (readonly File[])[];
+
+  const file = (name: string) => new File(['x'], name, { type: 'text/plain' });
+
+  async function renderUpload(
+    inputs: Record<string, unknown> = {},
+    satori = true,
+  ): Promise<HTMLElement> {
+    TestBed.configureTestingModule({
+      imports: [UploadOutletHost],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([]),
+        provideSatori(),
+        provideNxsComponents(),
+        ...(satori ? [provideNxsSatoriComponents()] : []),
+      ],
+    });
+    const fixture = TestBed.createComponent(UploadOutletHost);
+    fixture.componentInstance.inputs = {
+      label: 'Drag and drop files here',
+      filesHandler: (files: readonly File[]) => handled.push(files),
+      ...inputs,
+    };
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  /**
+   * A drop, with `dataTransfer` faked the way `dropzone.component.spec.ts` fakes it: jsdom's
+   * `DataTransfer` cannot be populated. Deliberately no `items`, because Satori reads those first
+   * and would then need `getAsFile()` stubs — with only `files`, both implementations take the same
+   * path through the same list.
+   */
+  function dropEvent(files: File[]): DragEvent {
+    const event = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent;
+    Object.defineProperty(event, 'dataTransfer', {
+      value: { types: ['Files'], files, dropEffect: 'none' },
+    });
+    return event;
+  }
+
+  /** A drop on Satori's field: `satUpload` sits on the button inside it. */
+  function drop(host: HTMLElement, ...files: File[]): void {
+    const target = host.querySelector('.sat-upload-field-interactive') ?? host;
+    target.dispatchEvent(dropEvent(files));
+  }
+
+  beforeEach(() => {
+    handled = [];
+  });
+
+  it("renders Satori's upload field, and no Material dropzone", async () => {
+    const host = await renderUpload();
+    expect(host.querySelector('nxs-satori-upload sat-upload-field')).not.toBeNull();
+    expect(host.querySelector('nxs-dropzone')).toBeNull();
+  });
+
+  it('shows our label and our chooser text, not Satori’s own fallback', async () => {
+    const host = await renderUpload({ buttonLabel: 'Pick a document' });
+    expect(host.querySelector('mat-label')?.textContent?.trim()).toBe('Drag and drop files here');
+    expect(host.querySelector('.sat-upload-field-interactive')?.textContent).toContain(
+      'Pick a document',
+    );
+    expect(host.querySelector('sat-upload-field')?.textContent).not.toContain('browse-or-drop');
+  });
+
+  // The reason the upload field was wrapped rather than `sat-upload-area`, whose overlay text is a
+  // literal with no catalogue key: every string on screen here is one the caller translated.
+  it('falls back to the same key the Material implementation uses when buttonLabel is blank', async () => {
+    const host = await renderUpload({ multiple: true });
+    expect(host.querySelector('.sat-upload-field-interactive')?.textContent).toContain(
+      'satori-components.dropzone.choose-files',
+    );
+  });
+
+  it('asks for one file when multiple is off', async () => {
+    const host = await renderUpload();
+    expect(host.querySelector<HTMLInputElement>('input[type="file"]')?.multiple).toBe(false);
+  });
+
+  it('asks for several files when multiple is on', async () => {
+    const host = await renderUpload({ multiple: true });
+    expect(host.querySelector<HTMLInputElement>('input[type="file"]')?.multiple).toBe(true);
+  });
+
+  it('passes accept through to the chooser, and omits it when blank', async () => {
+    const host = await renderUpload({ accept: '.csv' });
+    expect(host.querySelector('input[type="file"]')?.getAttribute('accept')).toBe('.csv');
+  });
+
+  it('omits accept entirely when blank, as Material does', async () => {
+    const host = await renderUpload();
+    expect(host.querySelector('input[type="file"]')?.hasAttribute('accept')).toBe(false);
+  });
+
+  it('calls the handler the outlet passed with a dropped file', async () => {
+    const host = await renderUpload();
+    drop(host, file('claim.pdf'));
+    expect(handled).toHaveLength(1);
+    expect(handled[0].map((f) => f.name)).toEqual(['claim.pdf']);
+  });
+
+  it('takes only the first of several dropped files when multiple is off, as Material does', async () => {
+    const host = await renderUpload();
+    drop(host, file('a.pdf'), file('b.pdf'));
+    expect(handled[0].map((f) => f.name)).toEqual(['a.pdf']);
+  });
+
+  it('takes every dropped file when multiple is on', async () => {
+    const host = await renderUpload({ multiple: true });
+    drop(host, file('a.pdf'), file('b.pdf'));
+    expect(handled[0].map((f) => f.name)).toEqual(['a.pdf', 'b.pdf']);
+  });
+
+  it('takes nothing while disabled, as Material does', async () => {
+    const host = await renderUpload({ disabled: true });
+    drop(host, file('claim.pdf'));
+    expect(handled).toEqual([]);
+  });
+
+  it('disables the chooser and says so, while disabled', async () => {
+    const host = await renderUpload({ disabled: true });
+    expect(host.querySelector<HTMLInputElement>('input[type="file"]')?.disabled).toBe(true);
+    expect(
+      host.querySelector<HTMLButtonElement>('button.sat-upload-field-interactive')?.disabled,
+    ).toBe(true);
+  });
+
+  it('takes nothing from an empty drop', async () => {
+    const host = await renderUpload();
+    drop(host);
+    expect(handled).toEqual([]);
+  });
+
+  it('names the chooser from our label, through Satori’s own label pairing', async () => {
+    const host = await renderUpload();
+    const label = host.querySelector('label.sat-upload-field-label');
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(label?.getAttribute('for')).toBe(input?.id);
+    // Ours, not the id `SatUploadFieldInput` generates by default: the template binds it so the
+    // association is visible there, and this is what catches the binding being dropped.
+    expect(input?.id).toMatch(/^nxs-satori-upload-\d+-input$/);
+  });
+
+  it('calls the same handler on Material, so a host passes the same inputs either way', async () => {
+    const host = await renderUpload({}, false);
+    expect(host.querySelector('nxs-dropzone')).not.toBeNull();
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    // Material's dropzone takes a drop on its own host rather than on a projected button.
+    host.querySelector('nxs-dropzone')?.dispatchEvent(dropEvent([file('claim.pdf')]));
+    expect(handled[0]?.map((f) => f.name)).toEqual(['claim.pdf']);
   });
 });

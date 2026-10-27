@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-135 exported symbol(s).
+147 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -202,9 +202,13 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly statusTag: "nxs.primitives.statusTag";
     readonly richTooltip: "nxs.primitives.richTooltip";
     readonly errorState: "nxs.primitives.errorState";
+    readonly banner: "nxs.primitives.banner";
+    readonly chipSet: "nxs.primitives.chipSet";
     readonly tabs: "nxs.primitives.tabs";
     readonly actionBar: "nxs.primitives.actionBar";
     readonly card: "nxs.primitives.card";
+    readonly emptyState: "nxs.primitives.emptyState";
+    readonly upload: "nxs.primitives.upload";
     }>;
 }
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
@@ -214,6 +218,25 @@ interface NxsActionBarInputs {
     readonly label: InputSignal<string>;
     readonly moreLabel: InputSignal<string>;
     readonly actionHandler: InputSignal<((action: NxsToolbarAction) => void) | null>;
+    }
+}
+interface NxsActionBarSource {
+    readonly actions: Signal<readonly NxsToolbarAction[]>;
+    readonly label: Signal<string>;
+    readonly moreLabel: Signal<string>;
+    readonly actionHandler: Signal<((action: NxsToolbarAction) => void) | null>;
+    readonly selected: OutputEmitterRef<NxsToolbarAction>;
+    }
+}
+interface NxsActionBarView {
+    readonly inline: Signal<readonly NxsToolbarAction[]>;
+    readonly overflow: Signal<readonly NxsToolbarAction[]>;
+    readonly ownLabel: Signal<string>;
+    readonly ownMoreLabel: Signal<string>;
+    readonly tooltipOf: (action: NxsToolbarAction) => string;
+    readonly extraOf: (action: NxsToolbarAction) => string;
+    readonly nameOf: (action: NxsToolbarAction) => string;
+    readonly run: (action: NxsToolbarAction) => void;
     }
 }
 class NxsActionMenuComponent {
@@ -286,6 +309,58 @@ interface NxsAvatarInputs {
     }
 }
 type NxsAvatarSize = '128' | '18' | '24' | '28' | '36' | '64' | '80';
+interface NxsBannerAction {
+    readonly label: string;
+    readonly icon?: string;
+    readonly emphasis: 'filled' | 'outlined' | 'text';
+    readonly danger?: boolean;
+    readonly disabled?: boolean;
+    readonly cssClass?: string;
+    readonly press: () => void;
+    }
+}
+type NxsBannerAnnounce = 'alert' | 'none' | 'status';
+class NxsBannerComponent implements NxsBannerInputs {
+    readonly message: import("@angular/core").InputSignal<string>;
+    readonly tone: import("@angular/core").InputSignal<NxsBannerTone>;
+    readonly announce: import("@angular/core").InputSignal<NxsBannerAnnounce>;
+    readonly actions: import("@angular/core").InputSignal<readonly NxsBannerAction[]>;
+    protected readonly icon: import("@angular/core").Signal<string>;
+    protected readonly role: import("@angular/core").Signal<string | null>;
+    protected press(action: NxsBannerAction): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsBannerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsBannerComponent, "nxs-banner", never, {
+    "message": {
+    "alias": "message";
+    "required": false;
+    "isSignal": true;
+    };
+    "tone": {
+    "alias": "tone";
+    "required": false;
+    "isSignal": true;
+    };
+    "announce": {
+    "alias": "announce";
+    "required": false;
+    "isSignal": true;
+    };
+    "actions": {
+    "alias": "actions";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsBannerInputs {
+    readonly message: InputSignal<string>;
+    readonly tone: InputSignal<NxsBannerTone>;
+    readonly announce: InputSignal<NxsBannerAnnounce>;
+    readonly actions: InputSignal<readonly NxsBannerAction[]>;
+    }
+}
+type NxsBannerTone = 'error' | 'info' | 'warning';
 interface NxsBreadcrumbItem {
     readonly label: string;
     readonly routerLink?: string | readonly (string | number)[];
@@ -398,6 +473,47 @@ interface NxsCardInputs {
     readonly media: InputSignal<TemplateRef<unknown> | null>;
     readonly headerAction: InputSignal<TemplateRef<unknown> | null>;
     readonly actions: InputSignal<TemplateRef<unknown> | null>;
+    }
+}
+interface NxsChipItem {
+    readonly id: string;
+    readonly label: string;
+    readonly removeLabel: string;
+    readonly disabled?: boolean;
+    }
+}
+class NxsChipSetComponent implements NxsChipSetInputs {
+    readonly items: import("@angular/core").InputSignal<readonly NxsChipItem[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly removeHandler: import("@angular/core").InputSignal<((item: NxsChipItem) => void) | null>;
+    readonly removed: import("@angular/core").OutputEmitterRef<NxsChipItem>;
+    protected pressRemove(item: NxsChipItem): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsChipSetComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsChipSetComponent, "nxs-chip-set", never, {
+    "items": {
+    "alias": "items";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "removeHandler": {
+    "alias": "removeHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "removed": "removed";
+    }, never, never, true, never>;
+    }
+}
+interface NxsChipSetInputs {
+    readonly items: InputSignal<readonly NxsChipItem[]>;
+    readonly label: InputSignal<string>;
+    readonly removeHandler: InputSignal<((item: NxsChipItem) => void) | null>;
     }
 }
 class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
@@ -1044,14 +1160,7 @@ class NxsDocumentToolbarComponent implements NxsActionBarInputs {
     readonly moreLabel: import("@angular/core").InputSignal<string>;
     readonly actionHandler: import("@angular/core").InputSignal<((action: NxsToolbarAction) => void) | null>;
     readonly selected: import("@angular/core").OutputEmitterRef<NxsToolbarAction>;
-    protected readonly inline: import("@angular/core").Signal<NxsToolbarAction[]>;
-    protected readonly overflow: import("@angular/core").Signal<NxsToolbarAction[]>;
-    protected readonly ownLabel: import("@angular/core").Signal<string>;
-    protected readonly ownMoreLabel: import("@angular/core").Signal<string>;
-    protected tooltipOf(action: NxsToolbarAction): string;
-    protected extraOf(action: NxsToolbarAction): string;
-    protected nameOf(action: NxsToolbarAction): string;
-    protected run(action: NxsToolbarAction): void;
+    protected readonly view: import("@nuxeo/satori-platform/components").NxsActionBarView;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentToolbarComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentToolbarComponent, "nxs-document-toolbar", never, {
     "actions": {
@@ -1148,12 +1257,13 @@ interface NxsDriveDialogData {
     readonly folderPath?: string;
     }
 }
-class NxsDropzoneComponent {
+class NxsDropzoneComponent implements NxsUploadInputs {
     readonly label: import("@angular/core").InputSignal<string>;
     readonly buttonLabel: import("@angular/core").InputSignal<string>;
     readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly accept: import("@angular/core").InputSignal<string>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly filesHandler: import("@angular/core").InputSignal<((files: readonly File[]) => void) | null>;
     readonly files: import("@angular/core").OutputEmitterRef<readonly File[]>;
     protected readonly drop: NxsFileDropTracker;
     protected readonly buttonId: string;
@@ -1184,6 +1294,11 @@ class NxsDropzoneComponent {
     };
     "disabled": {
     "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "filesHandler": {
+    "alias": "filesHandler";
     "required": false;
     "isSignal": true;
     };
@@ -1225,11 +1340,12 @@ interface NxsEditorSection {
     }
 }
 type NxsEditorValues = Readonly<Record<string, unknown>>;
-class NxsEmptyStateComponent {
+class NxsEmptyStateComponent implements NxsEmptyStateInputs {
     readonly heading: InputSignal<string>;
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
     readonly message: InputSignal<string>;
     readonly icon: InputSignal<string>;
+    readonly actions: InputSignal<TemplateRef<unknown> | null>;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsEmptyStateComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsEmptyStateComponent, "nxs-empty-state", never, {
     "heading": {
@@ -1252,7 +1368,20 @@ class NxsEmptyStateComponent {
     "required": false;
     "isSignal": true;
     };
+    "actions": {
+    "alias": "actions";
+    "required": false;
+    "isSignal": true;
+    };
     }, {}, never, ["*"], true, never>;
+    }
+}
+interface NxsEmptyStateInputs {
+    readonly heading: InputSignal<string>;
+    readonly headingLevel: InputSignal<NxsHeadingLevel>;
+    readonly message: InputSignal<string>;
+    readonly icon: InputSignal<string>;
+    readonly actions: InputSignal<TemplateRef<unknown> | null>;
     }
 }
 class NxsErrorStateComponent implements NxsErrorStateInputs {
@@ -1517,6 +1646,8 @@ class NxsMetadataEditorComponent {
     protected groupedOptions(directory: string): ReturnType<typeof groupL10nChildrenByParent>;
     protected usesL10n(directory: string): boolean;
     protected vocabularyLabel(directory: string, id: unknown): string;
+    protected triggerChips(control: AbstractControl, directory: string, multiple: boolean): NxsChipItem[];
+    protected removeTrigger(control: AbstractControl, multiple: boolean, item: NxsChipItem): void;
     protected listValue(control: AbstractControl): readonly unknown[];
     protected panelToggled(): void;
     protected clearValue(control: AbstractControl, multiple: boolean): void;
@@ -1659,6 +1790,8 @@ class NxsPermissionsPanelComponent {
     protected readonly editable: import("@angular/core").Signal<boolean>;
     protected readonly trackItem: (_index: number, item: LocalItem) => string;
     protected readonly pendingCount: import("@angular/core").Signal<number>;
+    protected readonly allPermissions: import("@angular/core").WritableSignal<boolean>;
+    protected readonly offersAll: import("@angular/core").Signal<boolean>;
     protected readonly permissionGroups: import("@angular/core").Signal<{
     label: string;
     permissions: readonly string[];
@@ -2004,6 +2137,7 @@ class NxsSearchFiltersComponent {
     protected clearFulltext(): void;
     protected addChoice(field: ChoiceField, value: string): void;
     protected removeChoice(field: ChoiceField, value: string): void;
+    protected chipItems(field: ChoiceField, values: readonly string[]): NxsChipItem[];
     protected onCollectionsFocus(): void;
     protected onTagInput(value: string): void;
     protected resetFilters(): void;
@@ -2208,8 +2342,8 @@ class NxsTagEditorComponent {
     readonly tagsChange: import("@angular/core").OutputEmitterRef<readonly string[]>;
     protected readonly id: string;
     protected readonly saved: import("@angular/core").WritableSignal<readonly string[]>;
-    protected readonly adding: import("@angular/core").Signal<string[]>;
-    protected readonly removing: import("@angular/core").Signal<ReadonlySet<string>>;
+    protected readonly adding: import("@angular/core").WritableSignal<readonly string[]>;
+    protected readonly removing: import("@angular/core").WritableSignal<ReadonlySet<string>>;
     protected readonly term: import("@angular/core").WritableSignal<string>;
     protected readonly shown: import("@angular/core").Signal<string[]>;
     protected readonly options: import("@angular/core").Signal<readonly NxsTagOption[]>;
@@ -2393,6 +2527,15 @@ interface NxsUpdatePermissionDialogData {
     readonly documentUid: string;
     readonly ace: NuxeoAce;
     readonly permissions?: readonly string[] | null;
+    }
+}
+interface NxsUploadInputs {
+    readonly label: InputSignal<string>;
+    readonly buttonLabel: InputSignal<string>;
+    readonly multiple: InputSignalWithTransform<boolean, unknown>;
+    readonly accept: InputSignal<string>;
+    readonly disabled: InputSignalWithTransform<boolean, unknown>;
+    readonly filesHandler: InputSignal<((files: readonly File[]) => void) | null>;
     }
 }
 interface NxsUploadItem {
@@ -2606,6 +2749,7 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     }
 }
 function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: string, params?: Record<string, unknown>) => string, locale: string): string;
+function nxsActionBarView(bar: NxsActionBarSource): NxsActionBarView;
 function nxsDocumentSuggestionQuery(term: string, types?: readonly string[]): string;
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
@@ -2629,7 +2773,6 @@ function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorite
 function nxsVersionLabel(doc: NuxeoDocument): string;
 function nxsVisibleText(text: string | null | undefined): string;
 function provideNxsComponents(): EnvironmentProviders;
-function provideNxsTagWrites(): Provider;
 function provideNxsThumbnailCache(): Provider;
 function provideNxsToast(): Provider;
 ```
@@ -4737,6 +4880,7 @@ class EditCollectionDialogComponent implements OnInit {
     onNaturePanelOpen(open: boolean): void;
     naturePillLabel(id: string): string;
     subjectPillLabel(id: string): string;
+    subjectChips(): NxsChipItem[];
     coveragePillLabel(id: string): string;
     clearNature(): void;
     clearCoverage(): void;
@@ -4806,6 +4950,9 @@ interface PermissionEntry {
     right: string;
     timeFrame: string;
     grantedBy: string;
+    begin?: string | null;
+    end?: string | null;
+    granted?: boolean;
     }
 }
 interface PictureInfo {
@@ -4916,6 +5063,8 @@ class ShareSavedSearchDialogComponent implements OnInit {
     sendExternalNotification(row: ExternalPermissionEntry): void;
     removeExternalPermission(row: ExternalPermissionEntry): void;
     togglePermissionInheritance(): void;
+    protected isEditable(row: PermissionEntry): boolean;
+    protected permissionLabel(permission: string): string;
     openAddPermissionDialog(): void;
     removeRow(id: string): void;
     editRow(id: string): void;

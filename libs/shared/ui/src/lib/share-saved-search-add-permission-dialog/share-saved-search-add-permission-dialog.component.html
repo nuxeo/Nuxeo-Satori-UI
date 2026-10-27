@@ -33,7 +33,11 @@
     <span class="field-label no-margin">{{
       'shared-ui.share-saved-search-add-permission-dialog.time-frame' | translate
     }}</span>
-    <mat-radio-group [(ngModel)]="timeFrameMode" class="time-frame-radios">
+    <mat-radio-group
+      [(ngModel)]="timeFrameMode"
+      (ngModelChange)="onTimeFrameModeChanged()"
+      class="time-frame-radios"
+    >
       <mat-radio-button value="permanent">{{
         'shared-ui.share-saved-search-add-permission-dialog.permanent' | translate
       }}</mat-radio-button>
@@ -52,6 +56,8 @@
         matInput
         [matDatepicker]="fromPicker"
         [(ngModel)]="beginDate"
+        #fromModel="ngModel"
+        (ngModelChange)="onBeginChanged()"
         [disabled]="timeFrameMode === 'permanent'"
       />
       <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
@@ -66,6 +72,8 @@
         matInput
         [matDatepicker]="toPicker"
         [(ngModel)]="endDate"
+        #toModel="ngModel"
+        (ngModelChange)="onEndChanged()"
         [disabled]="timeFrameMode === 'permanent'"
       />
       <mat-datepicker-toggle matIconSuffix [for]="toPicker" />

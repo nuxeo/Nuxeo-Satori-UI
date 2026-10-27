@@ -40,6 +40,19 @@ export const usageHtml = `<nxs-dropzone
 under `satori-components.dropzone.*`. The dropzone reads nothing and uploads nothing: it hands the
 files to your component.
 
+Place it in a template by its selector, as above, or render the ID `nxs.primitives.upload`
+(`NXS_PRIMITIVE_IDS.upload`) through `lib-extension-outlet` with the same inputs. The outlet binds
+no outputs, so there the files arrive through a `filesHandler` input instead of the `(files)`
+output; both are called for the same files, so a host using the element can keep binding the
+output. With `provideNxsSatoriComponents()` the ID renders Satori's `sat-upload-field` instead,
+through the wrapper in `@nuxeo/satori-platform/components-satori` — one control rather than a
+labelled area with a separate button, and the same rules about which files reach you. A replacement
+you register under the ID implements `NxsUploadInputs`.
+
+Nothing the platform ships renders this ID yet: browse's create-import dialog writes
+`<nxs-dropzone>` into its own template, so an override of the ID reaches your own hosts rather than
+that dialog.
+
 ## Where its data comes from
 
 From the user's computer only. Uploading is your component's: hand the files to an `NxsUploadQueue`

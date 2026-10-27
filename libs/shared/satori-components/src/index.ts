@@ -2,6 +2,8 @@ export {
   NxsActionMenuComponent,
   type NxsMenuAction,
 } from './lib/action-menu/action-menu.component';
+export { NxsBannerComponent } from './lib/banner/banner.component';
+export { NxsChipSetComponent } from './lib/chip-set/chip-set.component';
 export {
   NxsColumnPickerComponent,
   type NxsPickableColumn,
@@ -43,6 +45,11 @@ export {
   NxsDocumentToolbarComponent,
   type NxsToolbarAction,
 } from './lib/document-toolbar/document-toolbar.component';
+export {
+  nxsActionBarView,
+  type NxsActionBarSource,
+  type NxsActionBarView,
+} from './lib/document-toolbar/action-bar-view';
 export { NxsDateInputComponent } from './lib/date-input/date-input.component';
 export { NxsDocTypeIconComponent } from './lib/doc-type-icon/doc-type-icon.component';
 export {
@@ -146,8 +153,15 @@ export {
   type NxsAvatarInputs,
   type NxsAvatarSize,
   type NxsBreadcrumbItem,
+  type NxsBannerAction,
+  type NxsBannerAnnounce,
+  type NxsBannerInputs,
+  type NxsBannerTone,
+  type NxsChipItem,
+  type NxsChipSetInputs,
   type NxsBreadcrumbsInputs,
   type NxsCardInputs,
+  type NxsEmptyStateInputs,
   type NxsErrorStateInputs,
   type NxsRichTooltipInputs,
   type NxsStatusTagInputs,
@@ -155,6 +169,7 @@ export {
   type NxsTagColor,
   type NxsTagInputs,
   type NxsTagStatus,
+  type NxsUploadInputs,
 } from './lib/primitives';
 export { provideNxsComponents } from './lib/provide-nxs-components';
 export { nxsInitials, nxsVisibleText } from './lib/visible-text';

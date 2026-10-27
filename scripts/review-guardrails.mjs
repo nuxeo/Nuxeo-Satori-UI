@@ -9593,6 +9593,571 @@ function checkSatoriPrimitivesRegisteredInOrder() {
   }
 }
 
+const SATORI_ADOPTION_REGISTRY =
+  'libs/shared/satori-components-satori/src/lib/provide-nxs-satori-components.ts';
+
+/** The one function whose contributions decide what is adopted. */
+const PROVIDER_FUNCTION = 'provideNxsSatoriComponents';
+
+/** The provider's body, whether it is written as a function declaration or an arrow. */
+/** Anything with its own `return`: a nested one does not return from the enclosing function. */
+/**
+ * The only two trees allowed to name a Satori entry point for an adopted pattern.
+ *
+ * `/satori-components` holds the Material implementation of every primitive and
+ * `/satori-components-satori` the Satori one; between them they *are* the adoption. Everything
+ * else — features, both applications — consumes the primitive by its `NXS_PRIMITIVE_IDS` id and
+ * gets whichever implementation the host registered.
+ */
+const SATORI_COMPONENT_LIBS = [
+  'libs/shared/satori-components/',
+  'libs/shared/satori-components-satori/',
+];
+
+const SATORI_PACKAGE = '@hylandsoftware/satori-ui';
+
+/**
+ * Import forms that name no symbol. In the baseline's place they would be a blanket exemption, so
+ * none is listed and each fails closed.
+ */
+const SATORI_IMPORT_NAMESPACE = '* (namespace import)';
+const SATORI_IMPORT_SIDE_EFFECT = '(side-effect import)';
+const SATORI_IMPORT_DYNAMIC = '(dynamic import)';
+
+/**
+ * Anchored at both ends and matched against a specifier, never against source text.
+ *
+ * `^…$` is what keeps `@hylandsoftware/satori-ui/tag-input` from reading as the adopted `tag`
+ * entry point. The old pattern leaned on the surrounding quotes for that, which only worked
+ * because it was matching text.
+ */
+const SATORI_ENTRY_POINT = /^@hylandsoftware\/satori-ui\/([a-z0-9-]+)$/;
+
+/** Specs, stories and mocks ship nothing, so a direct import in one is not a bypass. */
+const ADOPTION_SCAN_SKIP = /(\.spec\.ts|\.stories\.ts|test-setup\.ts|\/__mocks__\/)/;
+
+/**
+ * Sites that already bypassed an adopted primitive when this guardrail landed (NXSAT-676).
+ *
+ * The ticket asks for *new* use to fail, and twelve sites predate it: the tag, avatar and
+ * breadcrumbs primitives were adopted in NXSAT-673 after this code was written against Satori
+ * directly. Failing them here would have made the gate red on arrival, which is how a gate gets
+ * demoted to a warning and then deleted.
+ *
+ * Exempt per symbol, not per file. Listing only the file exempted every *future* import from that
+ * entry point there too: adding `SatStatusTag` beside trash's `SatTagModule` collapsed into the
+ * same exempt pair and passed. The legacy symbols are recorded, under the names the module
+ * exports, so a site keeps exactly the imports it already had and a new one fails.
+ *
+ * The list may only shrink, in both directions. A file that no longer imports the entry point is
+ * reported as stale, and so is a listed symbol it no longer imports — migrating a site and
+ * leaving its exemption behind fails too. An allowlist nothing prunes is the thing this repo has
+ * twice found rotting. A baselined path that does not exist at all is ignored rather than
+ * reported: the guardrail runs against fixture trees in `review-guardrails.selftest.mjs` that
+ * contain none of these files, and a missing file imports nothing and so bypasses nothing.
+ *
+ * @type {Map<string, Map<string, Set<string>>>}
+ */
+const ADOPTION_BASELINE = new Map([
+  [
+    '@hylandsoftware/satori-ui/avatar',
+    new Map([
+      [
+        'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
+        new Set(['SatAvatarModule', 'SatAvatarCategory']),
+      ],
+      ['apps/nuxeo-ui/src/app/shell/app-shell.component.ts', new Set(['SatAvatarModule'])],
+      ['libs/features/browse/src/lib/browse/browse.ts', new Set(['SatAvatarModule'])],
+      [
+        'libs/features/collections/src/lib/collection-detail/collection-detail.ts',
+        new Set(['SatAvatarModule']),
+      ],
+      [
+        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+        new Set(['SatAvatarModule']),
+      ],
+    ]),
+  ],
+  [
+    '@hylandsoftware/satori-ui/breadcrumbs',
+    new Map([
+      [
+        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+        new Set(['SatBreadcrumbs', 'SatBreadcrumbsItem']),
+      ],
+      [
+        'libs/features/tasks/src/lib/tasks-page/tasks-page.component.ts',
+        new Set(['SatBreadcrumbs', 'SatBreadcrumbsItem']),
+      ],
+    ]),
+  ],
+  [
+    '@hylandsoftware/satori-ui/tag',
+    new Map([
+      ['apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts', new Set(['SatTagModule'])],
+      ['libs/features/browse/src/lib/browse/browse.ts', new Set(['SatTagModule'])],
+      [
+        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+        new Set(['SatTagModule', 'SatTagCategory']),
+      ],
+      [
+        'libs/features/tasks/src/lib/task-detail/task-detail.component.ts',
+        new Set(['SatTagModule']),
+      ],
+      ['libs/features/trash/src/lib/trash/trash.component.ts', new Set(['SatTagModule'])],
+    ]),
+  ],
+]);
+
+/**
+ * Every `@hylandsoftware/satori-ui/<entry>` module a file really imports, and the line it is on.
+ *
+ * Read from the syntax tree, not matched in the text. A regex over the source counted a mention
+ * in a comment or an ordinary string as an import, which fails both ways: a feature file that
+ * only *names* an entry point in a comment would be reported as a bypass, and a baselined file
+ * whose import was deleted but whose comment still names it would keep its exemption alive
+ * forever — the stale-exemption check is only as good as what counts as an import. Matching text
+ * also missed `import(\`@hylandsoftware/satori-ui/tag\`)`, since the regex wanted a quote.
+ *
+ * Covers static imports and re-exports, bare `import '…'`, dynamic `import()` in value and type
+ * position, and backtick specifiers with no substitution — `ts.isStringLiteralLike` is what makes
+ * that last one work. A specifier built by concatenation is not a literal and is not read; nor is
+ * `require()`, which nothing in this repository uses for these packages.
+ *
+ * The symbols come with it, under the names the module exports, so `ADOPTION_BASELINE` can exempt
+ * the legacy imports of a site without exempting the site forever. A local rename does not change
+ * them. Three import forms name nothing, and each gets a sentinel rather than an empty set: a
+ * namespace import reaches everything, a side-effect import names nothing, and a dynamic import
+ * is resolved at runtime. None is in the baseline, so each fails closed if one appears.
+ *
+ * @returns {Map<string, { line: number, symbols: Set<string> }>} entry point -> first line, symbols
+ */
+function satoriEntryPointsIn(path, body) {
+  const source = ts.createSourceFile(path, body, ts.ScriptTarget.Latest, true);
+  const found = new Map();
+
+  const record = (node, symbols) => {
+    if (node === undefined || !ts.isStringLiteralLike(node)) return;
+    const entry = SATORI_ENTRY_POINT.exec(node.text)?.[1];
+    if (entry === undefined) return;
+    const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+    const existing = found.get(entry);
+    if (existing === undefined) {
+      found.set(entry, { line, symbols: new Set(symbols) });
+      return;
+    }
+    for (const symbol of symbols) existing.symbols.add(symbol);
+  };
+
+  const importedNames = (clause) => {
+    if (clause === undefined) return [SATORI_IMPORT_SIDE_EFFECT];
+    const names = clause.name === undefined ? [] : [clause.name.text];
+    const bindings = clause.namedBindings;
+    if (bindings !== undefined && ts.isNamedImports(bindings)) {
+      // The exported name, not the local one: `{ A as B }` is an import of `A`.
+      for (const element of bindings.elements) {
+        names.push((element.propertyName ?? element.name).text);
+      }
+    } else if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+      names.push(SATORI_IMPORT_NAMESPACE);
+    }
+    return names.length > 0 ? names : [SATORI_IMPORT_SIDE_EFFECT];
+  };
+
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node)) {
+      record(node.moduleSpecifier, importedNames(node.importClause));
+    } else if (ts.isExportDeclaration(node)) {
+      const bindings = node.exportClause;
+      const names =
+        bindings !== undefined && ts.isNamedExports(bindings)
+          ? bindings.elements.map((element) => (element.propertyName ?? element.name).text)
+          : [SATORI_IMPORT_NAMESPACE];
+      record(node.moduleSpecifier, names);
+    } else if (ts.isImportTypeNode(node)) {
+      record(ts.isLiteralTypeNode(node.argument) ? node.argument.literal : undefined, [
+        SATORI_IMPORT_DYNAMIC,
+      ]);
+    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      record(node.arguments[0], [SATORI_IMPORT_DYNAMIC]);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+/** `./tag/satori-tag.component` from a directory -> the repository path of its `.ts`, if any. */
+function resolveRelativeModule(fromDir, specifier) {
+  return [`${join(fromDir, specifier)}.ts`, join(fromDir, specifier, 'index.ts')]
+    .map(toPosixRel)
+    .find((candidate) => fileExists(candidate));
+}
+
+/** Whether a module's own statements declare `name`. No re-export graph, deliberately. */
+function declaresName(path, name) {
+  const source = ts.createSourceFile(path, read(path), ts.ScriptTarget.Latest, true);
+  return source.statements.some((statement) => {
+    if (ts.isVariableStatement(statement)) {
+      return statement.declarationList.declarations.some(
+        (declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === name,
+      );
+    }
+    return (
+      (ts.isClassDeclaration(statement) ||
+        ts.isFunctionDeclaration(statement) ||
+        ts.isInterfaceDeclaration(statement) ||
+        ts.isTypeAliasDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name?.text === name
+    );
+  });
+}
+
+/**
+ * The Satori entry points that implement an adopted primitive, and which primitive each serves.
+ *
+ * Derived, never listed. A hand-written mapping is a second copy of the adopted set, and the copy
+ * is what goes stale; derived, adopting another primitive extends the guardrail by editing
+ * nothing here. It also stays right about `error-state`, which wraps Satori's `empty-state` entry
+ * point rather than one named after it.
+ *
+ * ## One shape, and everything else refused
+ *
+ * This reads exactly one registry shape:
+ *
+ * ```ts
+ * export function provideNxsSatoriComponents(): EnvironmentProviders {
+ *   return provideSatoriExtensions({
+ *     components: { [NXS_PRIMITIVE_IDS.<id>]: <ImportedClass>, … },
+ *   });
+ * }
+ * ```
+ *
+ * every class imported by name from a relative module that declares it. Anything else is refused
+ * with the reason, and nothing is guessed at.
+ *
+ * That is deliberate, and it replaces roughly five hundred lines that tried to read cleverer
+ * shapes. NXSAT-676's review found eleven ways to read them wrong: a discarded
+ * `provideSatoriExtensions` call overriding the installed one, branch returns merged as though
+ * sequential, a nested helper's `return` counted as the provider's, a `let` rebound after its
+ * initializer, a binding shadowed by a helper's, a return shadowed by an inner block's, a barrel
+ * yielding no entry point, a mixed barrel attributing a sibling's, a trailing spread or computed
+ * key replacing the map, a duplicated `components` key, and a local binding shadowing the
+ * registered class. Each fix was sound and each enlarged the surface the next one hid in.
+ *
+ * Refusing instead is smaller and strictly safer: the accepted shape has nowhere for any of them
+ * to live. A single `return` statement means there is no binding to shadow or rebind and no
+ * second contribution to order; one object literal with one `components` key means nothing can
+ * replace or duplicate the map; a bare identifier means no wrapper to unwrap; and requiring the
+ * import's own module to declare the class means no re-export graph to follow.
+ *
+ * The cost is that a legitimate but non-canonical registry fails the gate rather than being read.
+ * That is the intended trade — the registry has had this shape since it was written, the failure
+ * says exactly what it wants, and a deliberate change to it should be a deliberate change here.
+ *
+ * @returns {{ guarded: Map<string, Set<string>>, located: boolean }} entry point -> primitives
+ */
+function adoptedSatoriEntryPoints() {
+  const source = ts.createSourceFile(
+    SATORI_ADOPTION_REGISTRY,
+    read(SATORI_ADOPTION_REGISTRY),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+
+  /** One rule, one failure, with the reason and the shape it wanted. */
+  const refuse = (reason) => {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} is not in the shape this guardrail reads: ${reason}. The ` +
+        'adopted set is derived from that file, so a registry it cannot read means the gate ' +
+        'cannot say which primitives are adopted, and it refuses rather than guard a guess. The ' +
+        `shape it reads is a \`${PROVIDER_FUNCTION}\` function whose whole body is \`return ` +
+        'provideSatoriExtensions({ components: { [NXS_PRIMITIVE_IDS.<id>]: <ImportedClass>, … } ' +
+        '})`, every class imported by name from a relative module that declares it.',
+    );
+    return { guarded: new Map(), located: false };
+  };
+
+  const provider = source.statements.find(
+    (statement) =>
+      ts.isFunctionDeclaration(statement) && statement.name?.text === PROVIDER_FUNCTION,
+  );
+  if (provider?.body === undefined) {
+    return refuse(`it declares no \`function ${PROVIDER_FUNCTION}\` with a body`);
+  }
+  // A parameter is a binding too, and a defaulted one shadowing an imported class registers
+  // whatever it defaults to: `provideNxsSatoriComponents(NxsSatoriTagComponent =
+  // NxsSatoriBannerComponent)` leaves a no-argument call registering the banner wrapper while
+  // this reads the tag import. The real provider takes none, so requiring that is free, and it is
+  // the last place a binding could hide once the body is a single `return`.
+  if (provider.parameters.length !== 0) {
+    return refuse(
+      `\`${PROVIDER_FUNCTION}\` takes ${provider.parameters.length} parameter(s), and a ` +
+        'parameter can shadow a registered class',
+    );
+  }
+  if (provider.body.statements.length !== 1) {
+    return refuse(
+      `\`${PROVIDER_FUNCTION}\` has ${provider.body.statements.length} statements rather than a ` +
+        'single `return`',
+    );
+  }
+
+  const [only] = provider.body.statements;
+  if (!ts.isReturnStatement(only) || only.expression === undefined) {
+    return refuse(`the body of \`${PROVIDER_FUNCTION}\` is not a \`return\``);
+  }
+  const call = only.expression;
+  if (
+    !ts.isCallExpression(call) ||
+    !ts.isIdentifier(call.expression) ||
+    call.expression.text !== 'provideSatoriExtensions'
+  ) {
+    return refuse(
+      `\`${PROVIDER_FUNCTION}\` returns \`${only.expression.getText(source)}\` rather than a ` +
+        'direct `provideSatoriExtensions(…)` call',
+    );
+  }
+  if (call.arguments.length !== 1 || !ts.isObjectLiteralExpression(call.arguments[0])) {
+    return refuse('`provideSatoriExtensions(…)` is not given exactly one object literal');
+  }
+
+  const [contribution] = call.arguments;
+  const [first] = contribution.properties;
+  if (
+    contribution.properties.length !== 1 ||
+    !ts.isPropertyAssignment(first) ||
+    !ts.isIdentifier(first.name) ||
+    first.name.text !== 'components' ||
+    !ts.isObjectLiteralExpression(first.initializer)
+  ) {
+    return refuse('its contribution is not exactly one `components: { … }` object literal');
+  }
+
+  const registrations = [];
+  for (const property of first.initializer.properties) {
+    if (
+      !ts.isPropertyAssignment(property) ||
+      !ts.isComputedPropertyName(property.name) ||
+      !ts.isPropertyAccessExpression(property.name.expression) ||
+      property.name.expression.expression.getText(source) !== 'NXS_PRIMITIVE_IDS' ||
+      !ts.isIdentifier(property.initializer)
+    ) {
+      return refuse(
+        `the \`components\` entry \`${property.getText(source)}\` is not ` +
+          '`[NXS_PRIMITIVE_IDS.<id>]: <ImportedClass>`',
+      );
+    }
+    const primitive = property.name.expression.name.text;
+    // Duplicate keys are legal and the later wins, so collecting both would union the entry
+    // points of a registration the runtime discards — guarding what the overwritten class wraps
+    // and failing legitimate direct imports of it. Refused rather than resolved: taking the last
+    // is the sort of reading this rule exists to stop doing.
+    if (registrations.some((registration) => registration.primitive === primitive)) {
+      return refuse(`it registers \`${primitive}\` more than once`);
+    }
+    registrations.push({ primitive, className: property.initializer.text });
+  }
+  if (registrations.length === 0) {
+    return refuse('its `components` object is empty, so no primitive is adopted');
+  }
+
+  /**
+   * Module-level named imports. A canonical body is one `return`, so it declares nothing — which
+   * is why no shadowing check is needed here: a module-level binding that collided with one of
+   * these names would be a duplicate declaration and would not compile.
+   */
+  const imported = new Map();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    // Type-only bindings name no runtime value, and a registration must be one. Skipped at both
+    // levels — `import type { … }` and `import { type … }` — so a registration naming one is
+    // refused as not imported rather than resolved to the module it annotates.
+    if (statement.importClause?.isTypeOnly === true) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      if (element.isTypeOnly === true) continue;
+      imported.set(element.name.text, {
+        specifier: statement.moduleSpecifier.text,
+        exported: (element.propertyName ?? element.name).text,
+      });
+    }
+  }
+
+  const registryDir = dirname(SATORI_ADOPTION_REGISTRY);
+  const guarded = new Map();
+  for (const { primitive, className } of registrations) {
+    const origin = imported.get(className);
+    if (origin === undefined || !origin.specifier.startsWith('.')) {
+      return refuse(
+        `\`${className}\`, registered for \`${primitive}\`, is not imported by name from a ` +
+          'relative module',
+      );
+    }
+    const file = resolveRelativeModule(registryDir, origin.specifier);
+    if (file === undefined || !declaresName(file, origin.exported)) {
+      return refuse(
+        `\`${origin.specifier}\`, which registers \`${primitive}\`, does not resolve to a file ` +
+          `declaring \`${origin.exported}\``,
+      );
+    }
+    const entries = satoriEntryPointsIn(file, read(file));
+    if (entries.size === 0) {
+      return refuse(
+        `${file}, which declares \`${origin.exported}\` for \`${primitive}\`, imports nothing ` +
+          `from \`${SATORI_PACKAGE}\``,
+      );
+    }
+    for (const entry of entries.keys()) {
+      const specifier = `@hylandsoftware/satori-ui/${entry}`;
+      if (!guarded.has(specifier)) guarded.set(specifier, new Set());
+      guarded.get(specifier).add(primitive);
+    }
+  }
+  return { guarded, located: true };
+}
+
+/**
+ * A pattern adopted onto Satori must be consumed through its `nxs-` primitive (NXSAT-676).
+ *
+ * Once `provideNxsSatoriComponents()` registers a primitive on Satori, reaching past it to
+ * `@hylandsoftware/satori-ui/<entry>` in feature or application code gets the Satori rendering
+ * while losing everything the primitive exists for: the Material fallback a host without GitHub
+ * Packages access falls back to, the extension id a customer overrides through Layer 1, and the
+ * value contract `NxsSatoriValueContract` proves at compile time. The bypass still *looks* right
+ * on screen, which is why it needs a gate rather than review.
+ *
+ * ## What this does not claim
+ *
+ * Not a Material check. NXSAT-676's scope line asks for "direct Material use of an adopted
+ * pattern", and that does not map onto the adopted set: Material has no avatar, breadcrumbs,
+ * status-tag or error-state component at all, and for the two that look mappable
+ * `docs/satori-components/material-inventory.md` section 3 rules both out — chips are recorded as
+ * having no Satori 1.0 target and deliberately stay `mat-chip-*`, and plain `matTooltip` is not
+ * the rich tooltip. Banning either would fail roughly thirty-seven files that the inventory says
+ * are correct. The bypass that is real, and exact, is the Satori one above; it is what the
+ * ticket's goal sentence asks for.
+ *
+ * Not scoped to the diff either. It reads the whole tree, so a bypass that moves between files
+ * in a refactor stays caught; `ADOPTION_BASELINE` carries the twelve pre-existing sites instead.
+ */
+function checkAdoptedPatternsNotBypassed() {
+  if (!fileExists(SATORI_ADOPTION_REGISTRY)) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} does not exist, so no pattern is known to be adopted and direct ` +
+        'Satori use of an adopted primitive was not checked.',
+    );
+    return;
+  }
+
+  const { guarded, located } = adoptedSatoriEntryPoints();
+  // `located` false means the `components` contribution itself was not found, which is already
+  // reported with the reason. Saying "yielded no entry point" after it would be the same failure
+  // twice, in vaguer words.
+  if (!located) return;
+  if (guarded.size === 0) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} yielded no Satori entry point for any adopted primitive, so ` +
+        'this guardrail checked nothing. Either the `components` map of ' +
+        '`provideNxsSatoriComponents()` is empty, or its shape changed and the AST read above no ' +
+        'longer matches it.',
+    );
+    return;
+  }
+
+  const files = git(['ls-files', '--cached', '--others', '--exclude-standard'])
+    .split('\n')
+    .filter(
+      (file) =>
+        file.endsWith('.ts') &&
+        !ADOPTION_SCAN_SKIP.test(file) &&
+        !SATORI_COMPONENT_LIBS.some((lib) => file.startsWith(lib)),
+    );
+
+  /**
+   * `"<entry point> <path>"` -> the symbols that site actually imports, for baselined sites only.
+   * Absent means the site no longer imports the entry point at all; present but missing a listed
+   * symbol means that symbol's exemption is stale. Both make the baseline shrink.
+   *
+   * @type {Map<string, Set<string>>}
+   */
+  const seenSymbols = new Map();
+
+  for (const file of files) {
+    if (!fileExists(file)) continue;
+    const body = read(file);
+    // Almost no file names Satori at all, and this walks every `.ts` in the repository on every
+    // `review:guardrails` run, including the inner loop. One substring test per file is what keeps
+    // the syntax-tree read below off the thousands of files that cannot match. A file that names
+    // the package only in a comment still gets parsed, and correctly yields no import.
+    if (!body.includes(SATORI_PACKAGE)) continue;
+
+    for (const [entry, { line, symbols }] of satoriEntryPointsIn(file, body)) {
+      const specifier = `@hylandsoftware/satori-ui/${entry}`;
+      const primitives = guarded.get(specifier);
+      if (primitives === undefined) continue;
+
+      const names = [...primitives].sort();
+      const describe =
+        `That entry point is how ${SATORI_ADOPTION_REGISTRY} implements the adopted ` +
+        `${names.length > 1 ? 'primitives' : 'primitive'} ` +
+        `${names.map((name) => `\`${name}\``).join(' and ')}, so this bypasses ` +
+        `${names.length > 1 ? 'them' : 'it'}: the host loses the Material fallback and the ` +
+        'customer loses the extension id. Consume the primitive from ' +
+        '`@nuxeo/satori-platform/components` instead.';
+
+      const exempt = ADOPTION_BASELINE.get(specifier)?.get(file);
+      if (exempt !== undefined) {
+        // Seen either way, so a site that still imports the entry point is never also reported as
+        // a stale exemption. The symbols it used are recorded for the per-symbol staleness check.
+        seenSymbols.set(`${specifier} ${file}`, symbols);
+
+        const added = [...symbols].filter((symbol) => !exempt.has(symbol)).sort();
+        if (added.length === 0) continue;
+        fail(
+          `${file}:${line} imports ${added.map((name) => `\`${name}\``).join(', ')} from ` +
+            `\`${specifier}\`, which \`ADOPTION_BASELINE\` does not exempt for this file. The ` +
+            'baseline covers the imports this site already had, not whatever it imports next, ' +
+            `so adding one is new direct use. ${describe}`,
+        );
+        continue;
+      }
+
+      fail(
+        `${file}:${line} imports \`${specifier}\` directly, outside ` +
+          `${SATORI_COMPONENT_LIBS.join(' and ')}. ${describe}`,
+      );
+    }
+  }
+
+  for (const [specifier, files] of ADOPTION_BASELINE) {
+    for (const [path, exempt] of files) {
+      if (!fileExists(path)) continue;
+      const symbols = seenSymbols.get(`${specifier} ${path}`);
+      if (symbols === undefined) {
+        fail(
+          `${path} no longer imports \`${specifier}\`, so its entry in \`ADOPTION_BASELINE\` is ` +
+            'stale. Delete that entry: the baseline records what predates the guardrail and may ' +
+            'only shrink.',
+        );
+        continue;
+      }
+      const gone = [...exempt].filter((symbol) => !symbols.has(symbol)).sort();
+      if (gone.length > 0) {
+        fail(
+          `${path} no longer imports ${gone.map((name) => `\`${name}\``).join(', ')} from ` +
+            `\`${specifier}\`, so that much of its \`ADOPTION_BASELINE\` entry is stale. Delete ` +
+            'those symbols: the baseline may only shrink.',
+        );
+      }
+    }
+  }
+}
+
 const GUARDRAILS = [
   checkThemeTokens,
   checkDocsNumbering,
@@ -9644,6 +10209,7 @@ const GUARDRAILS = [
   checkSatoriFallbackDependencies,
   checkSatoriFallbackEntryPoint,
   checkSatoriPrimitivesRegisteredInOrder,
+  checkAdoptedPatternsNotBypassed,
 ];
 
 /**
