@@ -40,7 +40,15 @@ import {
     TranslatePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'nxs-satori-error-state', role: 'alert', '[attr.data-status]': 'status()' },
+  // `display: block` as every other wrapper in this entry point sets one: a bare custom element is
+  // `display: inline`, and this one wraps a block, so the host's own box came out 0x0 — invisible to
+  // anything that measures it, which left the comparison capture waiting for it to become visible.
+  host: {
+    class: 'nxs-satori-error-state',
+    role: 'alert',
+    style: 'display: block',
+    '[attr.data-status]': 'status()',
+  },
 })
 export class NxsSatoriErrorStateComponent implements NxsErrorStateInputs {
   readonly status = input<NxsErrorStatus>(500);
