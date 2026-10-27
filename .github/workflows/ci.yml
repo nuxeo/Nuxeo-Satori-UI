@@ -120,7 +120,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
-          nx-cache-key: guardrails
           base: ${{ needs.base.outputs.base }}
           head: ${{ needs.base.outputs.head }}
 
@@ -182,7 +181,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
-          nx-cache-key: static-gates
           base: ${{ needs.base.outputs.base }}
           head: ${{ needs.base.outputs.head }}
 
@@ -294,7 +292,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
-          nx-cache-key: verify
           base: ${{ needs.base.outputs.base }}
           head: ${{ needs.base.outputs.head }}
 
@@ -434,7 +431,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
-          nx-cache-key: test
           base: ${{ needs.base.outputs.base }}
           head: ${{ needs.base.outputs.head }}
 
@@ -472,7 +468,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
-          nx-cache-key: storybook
           base: ${{ needs.base.outputs.base }}
           head: ${{ needs.base.outputs.head }}
 
