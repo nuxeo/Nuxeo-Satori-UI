@@ -568,6 +568,8 @@ sat-breadcrumbs {
 }
 
 // ── Card view ──
+// Each card is `nxs-card`, or whatever is registered under its ID; it draws itself. The grid lays
+// out the cards, and the media template's thumbnail is sized here because browse declares it.
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -575,76 +577,10 @@ sat-breadcrumbs {
   padding: 8px 0;
 }
 
-.doc-card-wrapper {
-  position: relative;
-
-  &:hover .grid-card-checkbox,
-  &--selected .grid-card-checkbox,
-  &:hover .grid-card-menu,
-  &:focus-within .grid-card-checkbox,
-  &:focus-within .grid-card-menu {
-    opacity: 1;
-    visibility: visible;
-  }
-
-  &--selected .doc-card {
-    background: var(--mat-sys-primary-container, #e8def8);
-    border-color: var(--mat-sys-primary, #5c6bc0);
-  }
-}
-
-.grid-card-menu {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  z-index: 2;
-  opacity: 0;
-  visibility: hidden;
-  background: var(--mat-sys-surface-container-lowest, #fff);
-}
-
-.doc-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: pointer;
-  transition:
-    box-shadow 0.15s,
-    border-color 0.15s;
-  padding: 0;
-  font: inherit;
-  text-align: left;
-
-  &:hover {
-    border-color: var(--mat-sys-primary);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  }
-}
-
-.grid-card-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.2s ease,
-    visibility 0.2s ease;
-  z-index: 2;
-}
-
-.card-thumb {
-  width: 100%;
-  height: 110px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f5f5f5;
+// No box of its own, so the card it renders is the grid item — and an outlet that resolved nothing
+// takes no cell beside its fallback card.
+.card-outlet {
+  display: contents;
 }
 
 .card-thumb-img {
@@ -657,28 +593,7 @@ sat-breadcrumbs {
   font-size: 40px;
   width: 40px;
   height: 40px;
-  color: #bdbdbd;
-}
-
-.card-body {
-  padding: 10px 12px;
-}
-
-.card-title {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  color: #333;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card-type {
-  display: block;
-  font-size: 11px;
-  color: var(--mat-sys-on-surface-variant, #474551);
-  margin-top: 2px;
+  color: var(--mat-sys-outline-variant);
 }
 
 // ── Permissions tab ──

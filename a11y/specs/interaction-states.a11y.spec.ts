@@ -105,7 +105,7 @@ async function openBrowse(page: Page): Promise<void> {
   await page.goto(BROWSE, { waitUntil: 'networkidle' });
   await expect(page.locator('lib-browse'), 'lib-browse must render').toBeVisible();
   await expect(
-    page.locator('.browse-row, .doc-card-wrapper').first(),
+    page.locator('.browse-row, .card-grid nxs-card').first(),
     'browse must show at least one document, or every state below scans an empty page',
   ).toBeVisible();
   await waitForScreenSettled(page, 'lib-browse', true);

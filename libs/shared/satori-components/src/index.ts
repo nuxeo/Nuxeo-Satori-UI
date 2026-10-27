@@ -141,14 +141,17 @@ export { NxsUploadQueueComponent } from './lib/upload-queue/upload-queue.compone
 export { NxsRichTooltipComponent } from './lib/rich-tooltip/rich-tooltip.component';
 export {
   NXS_PRIMITIVE_IDS,
+  type NxsActionBarInputs,
   type NxsAvatarColor,
   type NxsAvatarInputs,
   type NxsAvatarSize,
   type NxsBreadcrumbItem,
   type NxsBreadcrumbsInputs,
+  type NxsCardInputs,
   type NxsErrorStateInputs,
   type NxsRichTooltipInputs,
   type NxsStatusTagInputs,
+  type NxsTabsInputs,
   type NxsTagColor,
   type NxsTagInputs,
   type NxsTagStatus,
@@ -178,4 +181,5 @@ export {
   type NxsSavedSearchChoice,
 } from './lib/saved-search-select/saved-search-select.component';
 export { NxsSavedSearchActionsComponent } from './lib/saved-search-actions/saved-search-actions.component';
+export { NxsCardComponent } from './lib/card/card.component';
 // satori:export:components — `satori-component` inserts above this line

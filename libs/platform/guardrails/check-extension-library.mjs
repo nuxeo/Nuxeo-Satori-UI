@@ -365,6 +365,7 @@ const PRIMITIVE_CONTRACTS = {
   tag: 'NxsTagInputs',
   richTooltip: 'NxsRichTooltipInputs',
   errorState: 'NxsErrorStateInputs',
+  card: 'NxsCardInputs',
 };
 
 const COMPONENTS_KEY = String.raw`(?:\bcomponents|'components'|"components")\s*:\s*`;
