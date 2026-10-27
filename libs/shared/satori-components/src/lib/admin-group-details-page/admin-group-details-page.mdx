@@ -14,7 +14,7 @@ permission, or deletes the group from here.
 
 - **Members and nesting together.** Members are users; nested groups are groups the group contains.
   Each has its own remove action.
-- **Confirmed deletion.** Deleting asks first, and the page emits `deleted` so the host can return to the list.
+- **Confirmed deletion.** Deleting asks first, and the page calls `deleted` so the host can return to the list.
 - **Outcomes stay visible.** An action reports on a status line; a refusal is an alert.
 
 ## Accessibility
@@ -31,10 +31,10 @@ named with the member or group it removes.
 ```html
 <nxs-admin-group-details-page
   [groupId]="groupName"
-  (deleted)="router.navigate(['/administration/users-groups'])"
-  (userOpened)="router.navigate(['/administration/users-groups/user', $event])"
-  (groupOpened)="router.navigate(['/administration/users-groups/group', $event])"
-  (documentOpened)="router.navigate(['/doc', $event])"
+  [deleted]="backToList"
+  [userChosen]="openUser"
+  [groupChosen]="openGroup"
+  [documentChosen]="openDocument"
 />
 ```
 

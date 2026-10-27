@@ -15,7 +15,7 @@ removes the user from a group, removes a permission, or deletes the account from
 - **Everything for one account.** The profile, groups and every permission table are on one page, so an
   administrator can see why a user can do something.
 - **Each table pages on its own.** The direct permissions and each group's permissions page separately.
-- **Confirmed deletion.** Deleting asks first, and the page emits `deleted` so the host can return to the list.
+- **Confirmed deletion.** Deleting asks first, and the page calls `deleted` so the host can return to the list.
 - **Outcomes stay visible.** An action reports on a status line; a refusal is an alert.
 
 ## Accessibility
@@ -32,9 +32,9 @@ named with what it acts on, such as "Remove Members from this user".
 ```html
 <nxs-admin-user-details-page
   [userId]="username"
-  (deleted)="router.navigate(['/administration/users-groups'])"
-  (groupOpened)="router.navigate(['/administration/users-groups/group', $event])"
-  (documentOpened)="router.navigate(['/doc', $event])"
+  [deleted]="backToList"
+  [groupChosen]="openGroup"
+  [documentChosen]="openDocument"
 />
 ```
 

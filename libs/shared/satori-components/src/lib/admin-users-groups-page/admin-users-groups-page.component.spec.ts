@@ -147,14 +147,14 @@ describe('NxsAdminUsersGroupsPageComponent', () => {
     expect(text()).toContain('a, b, c, +2');
   });
 
-  it('emits the username when a user is chosen', () => {
+  it('calls its callback with the username when a user is chosen', () => {
     const emitted: string[] = [];
     fixture.componentRef.setInput('userChosen', (id: string) => emitted.push(id));
     link('jdoe')?.click();
     expect(emitted).toEqual(['jdoe']);
   });
 
-  it('emits the group name when a group is chosen', async () => {
+  it('calls its callback with the group name when a group is chosen', async () => {
     const emitted: string[] = [];
     fixture.componentRef.setInput('groupChosen', (id: string) => emitted.push(id));
     showGroups();

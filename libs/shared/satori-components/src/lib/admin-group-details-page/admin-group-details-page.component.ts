@@ -18,7 +18,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { filter, switchMap } from 'rxjs';
+import { filter, type Subscription, switchMap } from 'rxjs';
 
 import {
   DocumentDetailService,
@@ -57,16 +57,16 @@ const EMPTY_PAGE: PrincipalPermissionPage = {
   currentPageSize: 0,
 };
 
+/** The ID the host renders this page under, through `lib-extension-outlet`. */
+export const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = 'nxs.components.adminGroupDetailsPage';
+
 /**
  * One group: its label, members, nested groups, and the permissions it holds. An administrator edits
  * the group, removes members or nested groups, or deletes the group from here.
  *
- * It does not navigate. A deletion emits `deleted` so the host can return to the list, and choosing a
- * member, a nested group or a document emits its id for the host to route to.
+ * It does not navigate. A deletion calls `deleted` so the host can return to the list, and choosing a
+ * member, a nested group or a document calls its callback with the id for the host to route to.
  */
-/** The ID the host renders this page under, through `lib-extension-outlet`. */
-export const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = 'nxs.components.adminGroupDetailsPage';
-
 @Component({
   selector: 'nxs-admin-group-details-page',
   standalone: true,
@@ -92,6 +92,9 @@ export class NxsAdminGroupDetailsPageComponent {
   private readonly translate = inject(TranslateService);
   private readonly locale = inject(LOCALE_ID);
   private readonly destroyRef = inject(DestroyRef);
+  private loadRequest?: Subscription;
+  private loadedId?: string;
+  private permissionsRequest?: Subscription;
 
   /** The group name to show. Changing it loads that group. */
   readonly groupId = input.required<string>();
@@ -130,10 +133,20 @@ export class NxsAdminGroupDetailsPageComponent {
     });
   }
 
+  /**
+   * Loads the group and its permissions. Choosing another group while one is still loading drops
+   * that load, and clears the status line, so the old group's answer or message cannot show under
+   * the new one. A reload of the same group keeps the status, which is how a save reports itself.
+   */
   private load(id: string): void {
+    this.loadRequest?.unsubscribe();
+    this.permissionsRequest?.unsubscribe();
+    if (id !== this.loadedId) this.status.set(null);
+    this.loadedId = id;
+    this.permissionsLoading.set(false);
     this.loading.set(true);
     this.loadFailed.set(false);
-    this.userService
+    this.loadRequest = this.userService
       .getGroup(id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -152,8 +165,9 @@ export class NxsAdminGroupDetailsPageComponent {
   }
 
   private loadPermissions(principal: string): void {
+    this.permissionsRequest?.unsubscribe();
     this.permissionsLoading.set(true);
-    this.permissions
+    this.permissionsRequest = this.permissions
       .listLocalPermissionRows(principal, PERMISSIONS_PAGE_SIZE, this.permissionsIndex())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({

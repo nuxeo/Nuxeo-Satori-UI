@@ -151,7 +151,7 @@ describe('NxsAdminGroupDetailsPageComponent', () => {
     );
   });
 
-  it('emits the member, nested group and document when each is chosen', () => {
+  it('calls its callback with the member, nested group and document when each is chosen', () => {
     const users: string[] = [];
     const groups: string[] = [];
     const docs: string[] = [];
@@ -211,7 +211,7 @@ describe('NxsAdminGroupDetailsPageComponent', () => {
     expect(text()).toContain('Group saved');
   });
 
-  it('deletes the group after confirmation and emits deleted', async () => {
+  it('deletes the group after confirmation and calls deleted', async () => {
     dialogResults.push(true);
     const deleted = vi.fn();
     fixture.componentRef.setInput('deleted', deleted);

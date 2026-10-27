@@ -741,7 +741,7 @@ Satori has an interactive card of its own, but nothing wraps it yet, so the ID r
 
 The administration screen for accounts, rendered by `nxs.components.adminUsersGroupsPage` in the administration route: one search across users and groups, the recently created accounts, and the create, edit and delete actions for each kind. Both sides show the same search form, tables, pagers and status line. The theme sets the type, the table chrome and the button styles.
 
-The page does not navigate itself. Choosing a user or group emits its name, and the host routes to the details page. Each action reports on a status line that stays on screen until the next action, so a refusal is still visible after its dialog closes.
+The page does not navigate itself. Choosing a user or group calls its callback with the name, and the host routes to the details page. Each action reports on a status line that stays on screen until the next action, so a refusal is still visible after its dialog closes.
 
 ### User details page
 
@@ -756,7 +756,7 @@ The page does not navigate itself. Choosing a user or group emits its name, and 
 
 One account on one page, rendered by `nxs.components.adminUserDetailsPage`: its profile, the groups it belongs to, and the permissions it holds directly and through each group. Both sides show the same sections and tables. The theme sets the type and the table and button styles.
 
-Each permission table pages on its own. Deleting the account asks first, and the page emits `deleted` so the host can return to the list.
+Each permission table pages on its own. Deleting the account asks first, and the page calls `deleted` so the host can return to the list.
 
 ### Group details page
 
@@ -771,7 +771,7 @@ Each permission table pages on its own. Deleting the account asks first, and the
 
 One group on one page, rendered by `nxs.components.adminGroupDetailsPage`: its label, its members, the groups nested in it, and the permissions it holds. Both sides show the same sections and tables. The theme sets the type and the table and button styles.
 
-Each member and nested group has its own remove action, named with the member it removes. Deleting the group asks first, and the page emits `deleted` so the host can return to the list.
+Each member and nested group has its own remove action, named with the member it removes. Deleting the group asks first, and the page calls `deleted` so the host can return to the list.
 
 ### Change password dialog
 

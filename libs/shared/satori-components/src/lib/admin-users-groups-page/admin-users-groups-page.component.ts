@@ -22,7 +22,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { catchError, filter, forkJoin, map, of, switchMap } from 'rxjs';
+import { catchError, filter, forkJoin, map, of, type Subscription, switchMap } from 'rxjs';
 
 import {
   resolvePaginatedListTotal,
@@ -66,6 +66,9 @@ interface Status {
 /** How many members a group row lists before the rest are counted as "+N". */
 const MEMBERS_SHOWN = 3;
 
+/** The ID the host renders this page under, through `lib-extension-outlet`. */
+export const NXS_ADMIN_USERS_GROUPS_PAGE_ID = 'nxs.components.adminUsersGroupsPage';
+
 /**
  * The administration screen for users and groups: search both, see who was created recently, and
  * create, edit or delete. It writes through `UserService` and asks before deleting.
@@ -74,9 +77,6 @@ const MEMBERS_SHOWN = 3;
  * and the host routes to its details page. Outcomes appear in a status line on the page, which stays
  * on screen until the next action, so a refusal is not lost the way a snackbar's timeout would lose it.
  */
-/** The ID the host renders this page under, through `lib-extension-outlet`. */
-export const NXS_ADMIN_USERS_GROUPS_PAGE_ID = 'nxs.components.adminUsersGroupsPage';
-
 @Component({
   selector: 'nxs-admin-users-groups-page',
   standalone: true,
@@ -137,6 +137,12 @@ export class NxsAdminUsersGroupsPageComponent implements OnInit {
   protected readonly selectedTab = signal(0);
   protected readonly status = signal<Status | null>(null);
 
+  /** The search the user last submitted; paging continues it, whatever is typed since. */
+  private committedQuery = '';
+  private searchRequest?: Subscription;
+  private usersRequest?: Subscription;
+  private groupsRequest?: Subscription;
+
   ngOnInit(): void {
     this.runSearch();
     this.loadRecent();
@@ -144,6 +150,7 @@ export class NxsAdminUsersGroupsPageComponent implements OnInit {
 
   /** Searches users and groups together, from the first page of each. */
   protected runSearch(): void {
+    this.cancelRequests();
     this.usersPage.set(0);
     this.groupsPage.set(0);
     this.usersLoading.set(true);
@@ -151,7 +158,8 @@ export class NxsAdminUsersGroupsPageComponent implements OnInit {
     this.usersError.set(false);
     this.groupsError.set(false);
     const query = this.query();
-    forkJoin({
+    this.committedQuery = query;
+    this.searchRequest = forkJoin({
       users: this.userService.searchUsersPaged(query, this.pageSize, 0).pipe(
         catchError(() => {
           this.usersError.set(true);
@@ -199,30 +207,71 @@ export class NxsAdminUsersGroupsPageComponent implements OnInit {
       });
   }
 
+  /**
+   * Pages users from the search the user last submitted, not the text being typed. A page that
+   * was still loading when another search or page started is dropped, so its answer cannot land
+   * on top of the newer one.
+   */
   protected onUsersPage(event: PageEvent): void {
+    this.cancelRequests();
     this.usersPage.set(event.pageIndex);
     this.usersLoading.set(true);
-    this.userService
-      .searchUsersPaged(this.query(), this.pageSize, event.pageIndex)
+    this.usersError.set(false);
+    this.usersRequest = this.userService
+      .searchUsersPaged(this.committedQuery, this.pageSize, event.pageIndex)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((res) => {
-        this.users.set(res.entries ?? []);
-        this.usersTotal.set(resolvePaginatedListTotal(res, this.pageSize, event.pageIndex));
-        this.usersLoading.set(false);
+      .subscribe({
+        next: (res) => {
+          this.users.set(res.entries ?? []);
+          this.usersTotal.set(resolvePaginatedListTotal(res, this.pageSize, event.pageIndex));
+          this.usersLoading.set(false);
+        },
+        error: () => {
+          this.users.set([]);
+          this.usersTotal.set(0);
+          this.usersError.set(true);
+          this.usersLoading.set(false);
+        },
       });
   }
 
   protected onGroupsPage(event: PageEvent): void {
+    this.cancelRequests();
     this.groupsPage.set(event.pageIndex);
     this.groupsLoading.set(true);
-    this.userService
-      .searchGroupsPaged(this.query(), this.pageSize, event.pageIndex)
+    this.groupsError.set(false);
+    this.groupsRequest = this.userService
+      .searchGroupsPaged(this.committedQuery, this.pageSize, event.pageIndex)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((res) => {
-        this.groups.set(res.entries ?? []);
-        this.groupsTotal.set(resolvePaginatedListTotal(res, this.pageSize, event.pageIndex));
-        this.groupsLoading.set(false);
+      .subscribe({
+        next: (res) => {
+          this.groups.set(res.entries ?? []);
+          this.groupsTotal.set(resolvePaginatedListTotal(res, this.pageSize, event.pageIndex));
+          this.groupsLoading.set(false);
+        },
+        error: () => {
+          this.groups.set([]);
+          this.groupsTotal.set(0);
+          this.groupsError.set(true);
+          this.groupsLoading.set(false);
+        },
       });
+  }
+
+  /**
+   * Drops every list request still in flight. A request that is dropped never clears its loading
+   * flag, so a list left mid-load by another action is cleared here.
+   */
+  private cancelRequests(): void {
+    if (this.searchRequest && !this.searchRequest.closed) {
+      this.usersLoading.set(false);
+      this.groupsLoading.set(false);
+    }
+    if (this.usersRequest && !this.usersRequest.closed) this.usersLoading.set(false);
+    if (this.groupsRequest && !this.groupsRequest.closed) this.groupsLoading.set(false);
+    this.searchRequest?.unsubscribe();
+    this.usersRequest?.unsubscribe();
+    this.groupsRequest?.unsubscribe();
   }
 
   protected onRecentPage(event: PageEvent): void {

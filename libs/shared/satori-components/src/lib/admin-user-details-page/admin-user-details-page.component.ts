@@ -69,17 +69,17 @@ const EMPTY_PAGE: PrincipalPermissionPage = {
   currentPageSize: 0,
 };
 
+/** The ID the host renders this page under, through `lib-extension-outlet`. */
+export const NXS_ADMIN_USER_DETAILS_PAGE_ID = 'nxs.components.adminUserDetailsPage';
+
 /**
  * One user's profile: their details, groups, and the permissions they hold directly and through each
  * group. An administrator edits, changes the password of, removes from groups, or deletes the user here.
  *
- * It does not navigate. A deletion emits `deleted` so the host can return to the list, and choosing a
- * group or a document emits its id for the host to route to. Outcomes appear on a status line that stays
+ * It does not navigate. A deletion calls `deleted` so the host can return to the list, and choosing a
+ * group or a document calls its callback with the id for the host to route to. Outcomes appear on a status line that stays
  * until the next action.
  */
-/** The ID the host renders this page under, through `lib-extension-outlet`. */
-export const NXS_ADMIN_USER_DETAILS_PAGE_ID = 'nxs.components.adminUserDetailsPage';
-
 @Component({
   selector: 'nxs-admin-user-details-page',
   standalone: true,
@@ -321,7 +321,12 @@ export class NxsAdminUserDetailsPageComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          this.finish('satori-components.admin-user-details-page.permission-removed', false);
+          // Reloads each table once, on the page it is showing. `finish` would also reload the
+          // user and reset the direct permissions to their first page.
+          this.status.set({
+            text: 'satori-components.admin-user-details-page.permission-removed',
+            error: false,
+          });
           this.loadLocalPermissions(this.userId());
           const user = this.user();
           if (user) this.loadGroupPermissions(user);

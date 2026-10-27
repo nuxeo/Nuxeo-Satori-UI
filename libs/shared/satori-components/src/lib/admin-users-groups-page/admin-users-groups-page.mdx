@@ -17,7 +17,7 @@ user and group dialogs for each action, and asks before a deletion.
 - **Recently created.** The table above the lists shows the latest accounts, five to a page.
 - **Outcomes stay visible.** Each action reports on a status line that stays until the next action,
   so a refusal is still on screen after its dialog closes. A refusal is an alert.
-- **It does not navigate.** Choosing a user or a group emits its id; the host routes to the details page.
+- **It does not navigate.** Choosing a user or a group calls `userChosen` or `groupChosen` with its id; the host routes to the details page.
 
 ## Accessibility
 
@@ -32,8 +32,8 @@ the user or group it acts on. Refusals use `role="alert"`; results use `role="st
 
 ```html
 <nxs-admin-users-groups-page
-  (userOpened)="router.navigate(['/administration/users-groups/user', $event])"
-  (groupOpened)="router.navigate(['/administration/users-groups/group', $event])"
+  [userChosen]="openUser"
+  [groupChosen]="openGroup"
 />
 ```
 

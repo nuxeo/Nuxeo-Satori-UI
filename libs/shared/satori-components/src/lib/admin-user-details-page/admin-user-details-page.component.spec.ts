@@ -163,14 +163,14 @@ describe('NxsAdminUserDetailsPageComponent', () => {
     );
   });
 
-  it('emits the group when it is chosen', () => {
+  it('calls its callback with the group when it is chosen', () => {
     const emitted: string[] = [];
     fixture.componentRef.setInput('groupChosen', (id: string) => emitted.push(id));
     button('Members')?.click();
     expect(emitted).toEqual(['members']);
   });
 
-  it('emits the document when a permission is chosen', () => {
+  it('calls its callback with the document when a permission is chosen', () => {
     const emitted: string[] = [];
     fixture.componentRef.setInput('documentChosen', (id: string) => emitted.push(id));
     button('Claims')?.click();
@@ -228,7 +228,7 @@ describe('NxsAdminUserDetailsPageComponent', () => {
     expect(text()).toContain('User saved');
   });
 
-  it('deletes the user after confirmation and emits deleted', async () => {
+  it('deletes the user after confirmation and calls deleted', async () => {
     dialogResults.push(true);
     const deleted = vi.fn();
     fixture.componentRef.setInput('deleted', deleted);
