@@ -53,10 +53,12 @@ jobs:
 
       # Bumped in the runner's checkout only. Nothing is committed or tagged, so a real
       # publish must be followed by a reviewed commit that records the version it shipped.
+      # The shallow checkout has no release tags, so --first-release reads the version from
+      # libs/platform/package.json instead of failing to find a tag.
       - name: Bump version
         env:
           VERSION_BUMP: ${{ inputs.version_bump }}
-        run: npx nx release version "$VERSION_BUMP" --projects=platform
+        run: npx nx release version "$VERSION_BUMP" --projects=platform --first-release
 
       # The version is written into dist/ by ng-packagr, so the bump must precede the build.
       - name: Build platform
