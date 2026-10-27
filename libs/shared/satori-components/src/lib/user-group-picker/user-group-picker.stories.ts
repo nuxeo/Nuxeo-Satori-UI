@@ -228,6 +228,89 @@ export const Multiple: Story = {
   },
 };
 
+/** Material reads these keys by `keyCode`, which `userEvent.keyboard` leaves at zero. */
+const KEY_CODES = {
+  ArrowDown: 40,
+  ArrowLeft: 37,
+  ArrowRight: 39,
+  ArrowUp: 38,
+  Backspace: 8,
+  Delete: 46,
+  Enter: 13,
+} as const;
+
+function press(key: keyof typeof KEY_CODES, target = document.activeElement as HTMLElement): void {
+  fireEvent.keyDown(target, { key, code: key, keyCode: KEY_CODES[key] });
+}
+
+/** What has focus: `input`, or a chip's principal and which of its two parts, `cell` or `remove`. */
+function focusOf(field: HTMLElement): string {
+  const active = document.activeElement as HTMLElement | null;
+  if (active === field) return 'input';
+  const chip = active?.closest('mat-chip-row')?.getAttribute('data-principal');
+  return chip
+    ? `${chip} ${active?.closest('.mat-mdc-chip-remove') ? 'remove' : 'cell'}`
+    : 'elsewhere';
+}
+
+/**
+ * Everything without the mouse. ↓ and Enter choose; Backspace in the empty input reaches the last
+ * chip, and does nothing while text is typed; ← and → step through each chip and its remove button,
+ * ↑ and ↓ between chips; Backspace or Delete removes the focused chip, Enter on its remove button
+ * too; focus then moves to the chip that takes its place, and to the input once none is left.
+ */
+export const MultipleFromTheKeyboard: Story = {
+  args: { multiple: true, value: [] },
+  play: async ({ canvasElement }) => {
+    const field = within(canvasElement).getByRole('combobox', { name: 'Grant to' });
+    const value = () => canvasElement.querySelector('output')?.textContent?.trim();
+    const focus = (expected: string) => waitFor(() => expect(focusOf(field)).toBe(expected));
+    field.focus();
+    for (const [term, name] of [
+      ['smi', /Jane Smith/],
+      ['smy', /John Smythe/],
+      ['cla', /Claims team/],
+    ] as const) {
+      await userEvent.type(field, term, { skipClick: true });
+      await within(document.body).findByRole('option', { name });
+      press('ArrowDown', field);
+      press('Enter', field);
+      await waitFor(() => expect(field).toHaveValue(''));
+    }
+    await waitFor(() => expect(value()).toBe('user:jsmith, user:jsmythe, group:claims-team'));
+    await focus('input');
+
+    await userEvent.type(field, 'x', { skipClick: true });
+    press('Backspace', field);
+    await focus('input');
+    await expect(canvasElement.querySelectorAll('mat-chip-row')).toHaveLength(3);
+    await userEvent.clear(field);
+
+    press('Backspace', field);
+    await focus('group:claims-team cell');
+    press('ArrowLeft');
+    await focus('user:jsmythe remove');
+    press('ArrowLeft');
+    await focus('user:jsmythe cell');
+    press('ArrowUp');
+    await focus('user:jsmith cell');
+    press('ArrowDown');
+    await focus('user:jsmythe cell');
+
+    press('Delete');
+    await waitFor(() => expect(value()).toBe('user:jsmith, group:claims-team'));
+    await focus('group:claims-team cell');
+    press('Backspace');
+    await waitFor(() => expect(value()).toBe('user:jsmith'));
+    await focus('user:jsmith cell');
+    press('ArrowRight');
+    await focus('user:jsmith remove');
+    press('Enter');
+    await waitFor(() => expect(value()).toBe(''));
+    await focus('input');
+  },
+};
+
 export const MultipleDisabled: Story = {
   args: {
     multiple: true,

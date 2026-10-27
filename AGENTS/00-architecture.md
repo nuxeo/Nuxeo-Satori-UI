@@ -140,7 +140,10 @@ single mode. Material chip grids own keyboard focus and removal; pending text re
 `nxsChooseFromList` error even alongside selected chips. Principal identity is `prefixedId`;
 document identity follows `idProperty`. Unreadable stored document references remain selected.
 `documentChange` continues to report an individual selection or null; use `valueChange` for
-all ids. The picker stories exercise addition and keyboard removal.
+all ids. Each picker's `MultipleFromTheKeyboard` story runs the keyboard path in Chromium with no
+mouse: choosing with ↓ and Enter, Backspace into the chips, arrows across chips and remove buttons,
+Backspace/Delete/Enter removal, and where focus lands after each removal. A picker reports leaving
+(`onTouched`) when focus leaves its host, not its input, so chip-only edits reach `updateOn: 'blur'`.
 
 **Storybook 10** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
 <https://nuxeo.github.io/agentic-ui-poc/>. Each component has an Overview, an API page and its
