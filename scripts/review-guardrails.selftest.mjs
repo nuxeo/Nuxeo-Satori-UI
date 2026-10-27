@@ -9071,8 +9071,12 @@ const adoption = (extra = {}) => ({
 
 /** A feature that is NOT in `ADOPTION_BASELINE`, so it is held to the rule. */
 const NOT_BASELINED = 'libs/features/search/src/lib/search/search.ts';
-/** A feature that IS in `ADOPTION_BASELINE` for `@hylandsoftware/satori-ui/tag`. */
-const BASELINED = 'libs/features/trash/src/lib/trash/trash.component.ts';
+/**
+ * A feature that IS in `ADOPTION_BASELINE`, for `SatTagCategory` from `@hylandsoftware/satori-ui/tag`
+ * and nothing else. Not the dashboard, which is baselined for two entry points: a fixture holding
+ * only its `tag` import would also leave its `avatar` entry stale.
+ */
+const BASELINED = 'libs/features/document-detail/src/lib/document-detail/document-detail.ts';
 
 expectRed(
   'a feature imports an adopted primitive’s Satori entry point directly',
@@ -9112,10 +9116,10 @@ expectRed(
   'a baselined site that no longer imports the entry point leaves a stale exemption',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    [BASELINED]: 'export class TrashComponent {}\n',
+    [BASELINED]: 'export class DocumentDetailComponent {}\n',
   }),
   null,
-  /trash\.component\.ts no longer imports `@hylandsoftware\/satori-ui\/tag`[\s\S]*stale[\s\S]*may\s+only shrink/,
+  /document-detail\.ts no longer imports `@hylandsoftware\/satori-ui\/tag`[\s\S]*stale[\s\S]*may\s+only shrink/,
 );
 
 expectRed(
@@ -9351,7 +9355,7 @@ expectGreen(
     // entry live, so the stale-exemption check stays quiet and only the comment is under test.
     [BASELINED]:
       "// migrated away from '@hylandsoftware/satori-ui/avatar' already\n" +
-      "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n",
+      "import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';\n",
   }),
 );
 
@@ -9825,29 +9829,30 @@ expectRed(
   'a baselined site importing a symbol the baseline does not list is new direct use',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    // Trash is baselined for `SatTagModule` only. Exempting the file rather than its symbols let
-    // anything else from the same entry point ride along, which is the gap this closes.
+    // Document detail is baselined for `SatTagCategory` only. Exempting the file rather than its
+    // symbols let anything else from the same entry point ride along, which is the gap this closes.
     [BASELINED]:
-      "import { SatTagModule, SatStatusTag } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class TrashComponent {}\n',
+      "import { SatTagCategory, SatStatusTag } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class DocumentDetailComponent {}\n',
   }),
   null,
-  /trash\.component\.ts:1 imports `SatStatusTag` from `@hylandsoftware\/satori-ui\/tag`, which `ADOPTION_BASELINE` does not exempt for this file/,
+  /document-detail\.ts:1 imports `SatStatusTag` from `@hylandsoftware\/satori-ui\/tag`, which `ADOPTION_BASELINE` does not exempt for this file/,
 );
 
 expectRed(
   'a baselined symbol that is no longer imported leaves a stale exemption',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    // `document-detail` is baselined for `SatTagModule` and `SatTagCategory`; dropping the second
-    // must shrink the entry rather than sit there forever.
-    'libs/features/document-detail/src/lib/document-detail/document-detail.ts':
+    // Every entry left in the baseline lists one symbol, so the file keeps importing the entry
+    // point under another name: the dashboard's `SatAvatarCategory` replaced by `SatAvatarModule`.
+    // That is also new direct use, reported on a line of its own; the stale symbol must still be
+    // reported rather than sit there forever. Its `tag` import keeps that entry live.
+    'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts':
       "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n" +
-      "import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';\n" +
-      "import { SatBreadcrumbs, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';\n",
+      "import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';\n",
   }),
   null,
-  /document-detail\.ts no longer imports `SatTagCategory` from `@hylandsoftware\/satori-ui\/tag`, so that much of its `ADOPTION_BASELINE` entry is stale/,
+  /dashboard-page\.component\.ts no longer imports `SatAvatarCategory` from `@hylandsoftware\/satori-ui\/avatar`, so that much of its `ADOPTION_BASELINE` entry is stale/,
 );
 
 falsePositiveControls += 1;
@@ -9858,8 +9863,8 @@ expectGreen(
     // The baseline records the name the module exports, so aliasing it locally is still the same
     // legacy import and must stay exempt.
     [BASELINED]:
-      "import { SatTagModule as Tags } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class TrashComponent {}\n',
+      "import { SatTagCategory as Category } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class DocumentDetailComponent {}\n',
   }),
 );
 
@@ -10089,8 +10094,8 @@ expectGreen(
   'checkAdoptedPatternsNotBypassed',
   adoption({
     [BASELINED]:
-      "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class TrashComponent {}\n',
+      "import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class DocumentDetailComponent {}\n',
   }),
 );
 
