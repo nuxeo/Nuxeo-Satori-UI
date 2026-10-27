@@ -28,6 +28,7 @@ describe('DocumentDetailComponent — detail tab focus ring (NXSAT-488)', () => 
     expect(library).toMatch(/\.mat-mdc-tab:focus\s*\{/);
     expect(library).not.toMatch(/\.mat-mdc-tab:focus,\s/);
     const focusBlock = library.match(/\.mat-mdc-tab:focus\s*\{([^}]*)\}/)?.[1] ?? '';
-    expect(focusBlock).toMatch(/outline:\s*2px\s+solid\s+var\(--nxs-tabs-focus-outline\)/);
+    // The token, with or without the library's default after it.
+    expect(focusBlock).toMatch(/outline:\s*2px\s+solid\s+var\(--nxs-tabs-focus-outline\b[,)]/);
   });
 });

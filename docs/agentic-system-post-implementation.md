@@ -81,7 +81,6 @@ The full agentic development system described in `docs/agentic-development-syste
 | `.github/dependabot.yml`                | Every Monday     | npm vulnerability scanning                      |
 | `.github/workflows/stale.yml`           | Daily 02:00 UTC  | Label + close inactive PRs                      |
 | `.github/workflows/dead-code.yml`       | Monday 06:00 UTC | Run knip, open issue with findings              |
-| `.github/workflows/changelog.yml`       | Every main merge | Auto-generate CHANGELOG.md                      |
 | `.github/workflows/staleness-check.yml` | Monday 07:00 UTC | Detect AGENTS/ drift, open issue                |
 | `.github/workflows/release.yml`         | Manual dispatch  | Version bump, GitHub Release, Marketplace build |
 
@@ -109,7 +108,7 @@ The full agentic development system described in `docs/agentic-development-syste
 | Dependency vulnerabilities   | Manual monitoring                         | Dependabot auto-PRs every Monday                              |
 | Stale PRs                    | Manual triage                             | Auto-labelled after 14 days, closed after 21                  |
 | Dead code detection          | None                                      | Weekly knip scan, GitHub Issue                                |
-| Changelog                    | Manual writing                            | Auto-generated on every main merge                            |
+| Changelog                    | Manual writing                            | Manual writing, in the PR that makes the change               |
 | AGENTS/ drift                | Silent — knowledge base goes stale        | Weekly check, GitHub Issue if drift detected                  |
 | Releasing                    | Multi-step manual                         | One click: patch / minor / major dispatch                     |
 | New developer onboarding     | Needs a colleague to explain architecture | Read AGENTS.md — 10 min to full context                       |
@@ -194,7 +193,7 @@ These are informational — action is optional unless a security vulnerability i
 
 4. **Dependabot may open PRs for Angular major versions.** The `dependabot.yml` is configured to ignore Angular major version bumps, but minor/patch updates will still generate PRs. These should be reviewed carefully before merging.
 
-5. **`changelog.yml` requires Conventional Commits.** If a commit does not follow the `feat:` / `fix:` / `docs:` format, it will not appear in the generated changelog. Teams that have not yet adopted Conventional Commits will see sparse changelogs initially.
+5. **The changelog is not generated.** `changelog.yml` was removed: the repository rules rejected its direct push to `main` on every run, and with no release tags its generator prepended the whole commit history as a `0.0.0` section, again on every run. `CHANGELOG.md` is curated by hand.
 
 ---
 
@@ -219,7 +218,6 @@ Confirm the system is working correctly:
 
 - [ ] Open a new Cursor session — confirm agent reads `AGENTS.md` before starting
 - [ ] Open a PR — confirm `PULL_REQUEST_TEMPLATE.md` pre-fills the description
-- [ ] Merge a PR to `main` — confirm `changelog.yml` runs and updates `CHANGELOG.md`
 - [ ] Wait for Monday — confirm `stale.yml`, `dead-code.yml`, `staleness-check.yml` run
 - [ ] Open a PR with a bad pattern (e.g. direct `<img [src]>`) — confirm Copilot flags it
 - [ ] Ask Cursor: `"fix PR #N comments"` — confirm it fetches and fixes automatically

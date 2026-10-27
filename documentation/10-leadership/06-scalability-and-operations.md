@@ -139,7 +139,7 @@ tracked at the code _and_ in a register, and leadership can read the count.
 | Upgrade of the platform library | Customer's `npm version` bump, then their build                                                                                 |
 | Rollback                        | Nuxeo marketplace package rollback. **Not verified in repository**                                                              |
 | Zero-downtime                   | **Not verified.** Depends on the customer's Nuxeo deployment topology                                                           |
-| Release automation              | `release.yml` (manual dispatch), `build-marketplace.yml`, `changelog.yml`                                                       |
+| Release automation              | `release.yml` (manual dispatch), `build-marketplace.yml`                                                                        |
 
 Not owning the customer's file is the operationally important detail, and its reasoning is
 recorded in `install.xml`. Two earlier designs were wrong. One placed the file in `nxserver/web`,

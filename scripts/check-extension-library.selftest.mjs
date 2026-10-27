@@ -1207,6 +1207,30 @@ expectRed(
   /does not implement `NxsTagInputs` from '@nuxeo\/satori-platform\/components'/,
 );
 
+// A customer may override the card as they may any primitive, so the guardrail has to know it:
+// without an entry it refused the override as "the platform has no `nxs.primitives.card`".
+{
+  const cardOverride = (implementsClause) =>
+    library({
+      'src/lib/extensions.ts': extensions(
+        "'nxs.primitives.card': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
+      ),
+      'src/lib/claims/claims.ts':
+        "import type { NxsCardInputs } from '@nuxeo/satori-platform/components';\n" +
+        panel({ implementsClause }),
+      'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.card'),
+    });
+  expectGreen(
+    'an override of nxs.primitives.card that implements NxsCardInputs',
+    cardOverride(' implements NxsCardInputs'),
+  );
+  expectRed(
+    'an override of nxs.primitives.card that does not implement NxsCardInputs',
+    cardOverride(''),
+    /does not implement `NxsCardInputs`/,
+  );
+}
+
 // ------------------------------------------------------------------- report ----
 
 console.log(
