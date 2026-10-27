@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-142 exported symbol(s).
+145 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -216,6 +216,25 @@ interface NxsActionBarInputs {
     readonly label: InputSignal<string>;
     readonly moreLabel: InputSignal<string>;
     readonly actionHandler: InputSignal<((action: NxsToolbarAction) => void) | null>;
+    }
+}
+interface NxsActionBarSource {
+    readonly actions: Signal<readonly NxsToolbarAction[]>;
+    readonly label: Signal<string>;
+    readonly moreLabel: Signal<string>;
+    readonly actionHandler: Signal<((action: NxsToolbarAction) => void) | null>;
+    readonly selected: OutputEmitterRef<NxsToolbarAction>;
+    }
+}
+interface NxsActionBarView {
+    readonly inline: Signal<readonly NxsToolbarAction[]>;
+    readonly overflow: Signal<readonly NxsToolbarAction[]>;
+    readonly ownLabel: Signal<string>;
+    readonly ownMoreLabel: Signal<string>;
+    readonly tooltipOf: (action: NxsToolbarAction) => string;
+    readonly extraOf: (action: NxsToolbarAction) => string;
+    readonly nameOf: (action: NxsToolbarAction) => string;
+    readonly run: (action: NxsToolbarAction) => void;
     }
 }
 class NxsActionMenuComponent {
@@ -1139,14 +1158,7 @@ class NxsDocumentToolbarComponent implements NxsActionBarInputs {
     readonly moreLabel: import("@angular/core").InputSignal<string>;
     readonly actionHandler: import("@angular/core").InputSignal<((action: NxsToolbarAction) => void) | null>;
     readonly selected: import("@angular/core").OutputEmitterRef<NxsToolbarAction>;
-    protected readonly inline: import("@angular/core").Signal<NxsToolbarAction[]>;
-    protected readonly overflow: import("@angular/core").Signal<NxsToolbarAction[]>;
-    protected readonly ownLabel: import("@angular/core").Signal<string>;
-    protected readonly ownMoreLabel: import("@angular/core").Signal<string>;
-    protected tooltipOf(action: NxsToolbarAction): string;
-    protected extraOf(action: NxsToolbarAction): string;
-    protected nameOf(action: NxsToolbarAction): string;
-    protected run(action: NxsToolbarAction): void;
+    protected readonly view: import("@nuxeo/satori-platform/components").NxsActionBarView;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentToolbarComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentToolbarComponent, "nxs-document-toolbar", never, {
     "actions": {
@@ -2704,6 +2716,7 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     }
 }
 function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: string, params?: Record<string, unknown>) => string, locale: string): string;
+function nxsActionBarView(bar: NxsActionBarSource): NxsActionBarView;
 function nxsDocumentSuggestionQuery(term: string, types?: readonly string[]): string;
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
@@ -4904,6 +4917,9 @@ interface PermissionEntry {
     right: string;
     timeFrame: string;
     grantedBy: string;
+    begin?: string | null;
+    end?: string | null;
+    granted?: boolean;
     }
 }
 interface PictureInfo {
@@ -5014,6 +5030,8 @@ class ShareSavedSearchDialogComponent implements OnInit {
     sendExternalNotification(row: ExternalPermissionEntry): void;
     removeExternalPermission(row: ExternalPermissionEntry): void;
     togglePermissionInheritance(): void;
+    protected isEditable(row: PermissionEntry): boolean;
+    protected permissionLabel(permission: string): string;
     openAddPermissionDialog(): void;
     removeRow(id: string): void;
     editRow(id: string): void;
