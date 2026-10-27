@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-138 exported symbol(s).
+142 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -204,10 +204,20 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly errorState: "nxs.primitives.errorState";
     readonly banner: "nxs.primitives.banner";
     readonly chipSet: "nxs.primitives.chipSet";
+    readonly tabs: "nxs.primitives.tabs";
+    readonly actionBar: "nxs.primitives.actionBar";
+    readonly card: "nxs.primitives.card";
     }>;
 }
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
 const NXS_TOAST_DURATION = 4000;
+interface NxsActionBarInputs {
+    readonly actions: InputSignal<readonly NxsToolbarAction[]>;
+    readonly label: InputSignal<string>;
+    readonly moreLabel: InputSignal<string>;
+    readonly actionHandler: InputSignal<((action: NxsToolbarAction) => void) | null>;
+    }
+}
 class NxsActionMenuComponent {
     readonly actions: import("@angular/core").InputSignal<readonly NxsMenuAction[]>;
     readonly label: import("@angular/core").InputSignal<string>;
@@ -363,6 +373,85 @@ class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
 interface NxsBreadcrumbsInputs {
     readonly items: InputSignal<readonly NxsBreadcrumbItem[]>;
     readonly label: InputSignal<string>;
+    }
+}
+class NxsCardComponent implements NxsCardInputs {
+    readonly heading: import("@angular/core").InputSignal<string>;
+    readonly subheading: import("@angular/core").InputSignal<string>;
+    readonly selected: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly selectionLabel: import("@angular/core").InputSignal<string>;
+    readonly selectionHandler: import("@angular/core").InputSignal<((selected: boolean) => void) | null>;
+    readonly openHandler: import("@angular/core").InputSignal<(() => void) | null>;
+    readonly media: import("@angular/core").InputSignal<TemplateRef<unknown> | null>;
+    readonly headerAction: import("@angular/core").InputSignal<TemplateRef<unknown> | null>;
+    readonly actions: import("@angular/core").InputSignal<TemplateRef<unknown> | null>;
+    protected readonly interactive: import("@angular/core").Signal<boolean>;
+    protected readonly label: import("@angular/core").Signal<string>;
+    protected readonly selectable: import("@angular/core").Signal<boolean>;
+    protected readonly ownSubheading: import("@angular/core").Signal<string>;
+    protected readonly bare: import("@angular/core").Signal<boolean>;
+    protected toggle(selected: boolean): void;
+    protected open(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsCardComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsCardComponent, "nxs-card", never, {
+    "heading": {
+    "alias": "heading";
+    "required": false;
+    "isSignal": true;
+    };
+    "subheading": {
+    "alias": "subheading";
+    "required": false;
+    "isSignal": true;
+    };
+    "selected": {
+    "alias": "selected";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectionLabel": {
+    "alias": "selectionLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectionHandler": {
+    "alias": "selectionHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "openHandler": {
+    "alias": "openHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "media": {
+    "alias": "media";
+    "required": false;
+    "isSignal": true;
+    };
+    "headerAction": {
+    "alias": "headerAction";
+    "required": false;
+    "isSignal": true;
+    };
+    "actions": {
+    "alias": "actions";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsCardInputs {
+    readonly heading: InputSignal<string>;
+    readonly subheading: InputSignal<string>;
+    readonly selected: InputSignalWithTransform<boolean, unknown>;
+    readonly selectionLabel: InputSignal<string>;
+    readonly selectionHandler: InputSignal<((selected: boolean) => void) | null>;
+    readonly openHandler: InputSignal<(() => void) | null>;
+    readonly media: InputSignal<TemplateRef<unknown> | null>;
+    readonly headerAction: InputSignal<TemplateRef<unknown> | null>;
+    readonly actions: InputSignal<TemplateRef<unknown> | null>;
     }
 }
 interface NxsChipItem {
@@ -1044,10 +1133,11 @@ class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Valida
     }, never, never, true, never>;
     }
 }
-class NxsDocumentToolbarComponent {
+class NxsDocumentToolbarComponent implements NxsActionBarInputs {
     readonly actions: import("@angular/core").InputSignal<readonly NxsToolbarAction[]>;
     readonly label: import("@angular/core").InputSignal<string>;
     readonly moreLabel: import("@angular/core").InputSignal<string>;
+    readonly actionHandler: import("@angular/core").InputSignal<((action: NxsToolbarAction) => void) | null>;
     readonly selected: import("@angular/core").OutputEmitterRef<NxsToolbarAction>;
     protected readonly inline: import("@angular/core").Signal<NxsToolbarAction[]>;
     protected readonly overflow: import("@angular/core").Signal<NxsToolbarAction[]>;
@@ -1071,6 +1161,11 @@ class NxsDocumentToolbarComponent {
     };
     "moreLabel": {
     "alias": "moreLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    "actionHandler": {
+    "alias": "actionHandler";
     "required": false;
     "isSignal": true;
     };
@@ -2132,12 +2227,14 @@ class NxsTabBodyDirective {
     static ɵdir: i0.ɵɵDirectiveDeclaration<NxsTabBodyDirective, "ng-template[nxsTabBody]", never, {}, {}, never, never, true, never>;
     }
 }
-class NxsTabsComponent {
+class NxsTabsComponent implements NxsTabsInputs {
     readonly tabs: import("@angular/core").InputSignal<readonly NxsTab[]>;
     readonly label: import("@angular/core").InputSignal<string>;
     readonly selectedIndex: import("@angular/core").ModelSignal<number>;
+    readonly body: import("@angular/core").InputSignal<TemplateRef<NxsTabBodyContext> | null>;
+    readonly selectHandler: import("@angular/core").InputSignal<((tab: NxsTab, index: number) => void) | null>;
     readonly selectedTabChange: import("@angular/core").OutputEmitterRef<NxsTab>;
-    protected readonly body: import("@angular/core").Signal<NxsTabBodyDirective | undefined>;
+    protected readonly bodyTemplate: import("@angular/core").Signal<TemplateRef<NxsTabBodyContext> | null>;
     protected readonly ownLabel: import("@angular/core").Signal<string>;
     constructor();
     protected select(index: number): void;
@@ -2158,10 +2255,28 @@ class NxsTabsComponent {
     "required": false;
     "isSignal": true;
     };
+    "body": {
+    "alias": "body";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectHandler": {
+    "alias": "selectHandler";
+    "required": false;
+    "isSignal": true;
+    };
     }, {
     "selectedIndex": "selectedIndexChange";
     "selectedTabChange": "selectedTabChange";
-    }, ["body"], never, true, never>;
+    }, ["projectedBody"], never, true, never>;
+    }
+}
+interface NxsTabsInputs {
+    readonly tabs: InputSignal<readonly NxsTab[]>;
+    readonly label: InputSignal<string>;
+    readonly selectedIndex: InputSignal<number>;
+    readonly body: InputSignal<TemplateRef<NxsTabBodyContext> | null>;
+    readonly selectHandler: InputSignal<((tab: NxsTab, index: number) => void) | null>;
     }
 }
 type NxsTagColor = NxsAvatarColor | 'gray';

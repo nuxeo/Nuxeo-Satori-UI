@@ -281,7 +281,7 @@ you** — classify it as a surface failure or document why it is not one.
 Be clear on the remaining limit: it proves the surface rendered, is not in a known error
 state, and is not an empty shell. It does **not** prove repository data arrived. Where a route-specific
 success selector is known, assert that instead — `openBrowse()` in
-`interaction-states.a11y.spec.ts` waits for `.browse-row, .doc-card-wrapper`, which only exist
+`interaction-states.a11y.spec.ts` waits for `.browse-row, .card-grid nxs-card`, which only exist
 when the folder request succeeded.
 
 The strongest form is in `journey.a11y.spec.ts`: `captureDataRequest()` waits for the response

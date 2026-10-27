@@ -641,21 +641,25 @@ item whose ID follows the convention picks up a registered component with no fur
 
 ## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
 
-Eight component-registry IDs: six for the primitives Satori also ships, and two Material-only ones (`banner` and `chipSet`, which Satori has no matching wrapper for yet). Each resolves to a Material implementation from `@nuxeo/satori-platform/components`, and all but `errorState`, `banner` and `chipSet` to a Satori-backed one
-when `@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only
+Eleven component-registry IDs for the primitives. Nine are primitives Satori also ships; `banner` and `chipSet` have no Satori wrapper yet, so they stay Material-only. Each resolves to a Material
+implementation from `@nuxeo/satori-platform/components`, and all but `card`, `banner` and `chipSet` to a Satori-backed
+one when `@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only
 one in the package that imports `@hylandsoftware/satori-ui`, an **optional** peer: without GitHub
 Packages access, leave it out and every ID still resolves, on Material.
 
-| Component ID                 | Inputs (all text arrives translated)                             | Satori-backed by                                         |
-| ---------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------- |
-| `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`                             | `sat-avatar`                                             |
-| `nxs.primitives.breadcrumbs` | `items`, `label`                                                 | `sat-breadcrumbs`                                        |
-| `nxs.primitives.tag`         | `label`, `color`                                                 | `sat-category-tag`                                       |
-| `nxs.primitives.statusTag`   | `label`, `status`, `hideIcon`                                    | `sat-status-tag`                                         |
-| `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon`                     | `sat-rich-tooltip`                                       |
-| `nxs.primitives.errorState`  | `status`, `heading`, `headingLevel`, `retryable`, `retryHandler` | — (Material only: Satori's error states need Satori 1.0) |
-| `nxs.primitives.banner`      | `message`, `tone`, `announce`, `actions`                         | — (Material only for now)                                |
-| `nxs.primitives.chipSet`     | `items`, `label`, `removeHandler`                                | — (Material only for now)                                |
+| Component ID                 | Inputs (all text arrives translated)                                                                                         | Material implementation       | Satori-backed by                                                |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | --------------------------------------------------------------- |
+| `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`                                                                                         | `NxsAvatarComponent`          | `sat-avatar`                                                    |
+| `nxs.primitives.breadcrumbs` | `items`, `label`                                                                                                             | `NxsBreadcrumbsComponent`     | `sat-breadcrumbs`                                               |
+| `nxs.primitives.tag`         | `label`, `color`                                                                                                             | `NxsTagComponent`             | `sat-category-tag`                                              |
+| `nxs.primitives.statusTag`   | `label`, `status`, `hideIcon`                                                                                                | `NxsStatusTagComponent`       | `sat-status-tag`                                                |
+| `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon`                                                                                 | `NxsRichTooltipComponent`     | `sat-rich-tooltip`                                              |
+| `nxs.primitives.errorState`  | `status`, `heading`, `headingLevel`, `retryable`, `retryHandler`                                                             | `NxsErrorStateComponent`      | `sat-401-error-state` … `sat-500-error-state`                   |
+| `nxs.primitives.tabs`        | `tabs`, `label`, `selectedIndex`, `body`, `selectHandler`                                                                    | `NxsTabsComponent`            | `sat-navigation-tabs`                                           |
+| `nxs.primitives.actionBar`   | `actions`, `label`, `moreLabel`, `actionHandler`                                                                             | `NxsDocumentToolbarComponent` | Satori's action-bar button, `button[satActionBarButton]`        |
+| `nxs.primitives.card`        | `heading`, `subheading`, `selected`, `selectionLabel`, `selectionHandler`, `openHandler`, `media`, `headerAction`, `actions` | `NxsCardComponent`            | — (Material only: Satori's interactive card is not yet wrapped) |
+| `nxs.primitives.banner`      | `message`, `tone`, `announce`, `actions`                                                                                     | `NxsBannerComponent`          | — (Material only for now)                                       |
+| `nxs.primitives.chipSet`     | `items`, `label`, `removeHandler`                                                                                            | `NxsChipSetComponent`         | — (Material only for now)                                       |
 
 Both implementations of an ID declare the same inputs (`Nxs…Inputs` in `/components`; a spec in
 `/components-satori` compares them), so whoever renders an ID passes the same `componentInputs`
@@ -676,14 +680,32 @@ theme and icons, and Satori's `sat.*` catalogue in ngx-translate (upstream's
 the breadcrumbs' landmark and the tooltip's close hint render as raw keys. An override of yours
 implements the matching `Nxs…Inputs` interface.
 
+**Callbacks and templates are inputs.** A `lib-extension-outlet` sets inputs and does nothing else:
+it projects no content and binds no outputs. So the IDs that need either take it as an input —
+`retryHandler` on the error state; `body`, the template every tab's body renders from, and
+`selectHandler` on the tabs; `actionHandler` on the action bar; on the card, `openHandler`,
+`selectionHandler` and the `media`, `headerAction` and `actions` templates. `selectHandler` is called whenever the
+selection changes, whoever changed it, but not for the first; `actionHandler` never for a disabled
+entry. The Material implementations take the same inputs and keep their outputs
+(`selectedIndexChange`, `selected`) for a template that renders them directly.
+
 **Where packaged screens render them.** Browse and the collection page render their breadcrumb
 trail through `nxs.primitives.breadcrumbs`. Browse, the collection page, document detail and task
-detail render their status tags through `nxs.primitives.statusTag`. `nxs-document-list` renders each
-row's type through `nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`. An
-override of those IDs reaches these screens.
+detail render their status tags through `nxs.primitives.statusTag`. Document detail renders its tab
+strip through `nxs.primitives.tabs` and its header's action row through `nxs.primitives.actionBar`
+(section 8 and 9). Browse's and search's card views render each card through `nxs.primitives.card`,
+passing its open and selection handlers and the templates for its thumbnail and actions as inputs,
+because the outlet binds no outputs. `nxs-document-list` renders each row's type through
+`nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`. An override of those
+IDs reaches these screens.
 
 Other `sat-*` uses in packaged screens are not yet on these IDs, so an override does not reach them.
-Those elements render directly until they move onto the IDs. Where a host resolves an ID through a
+Those elements render directly until they move onto the IDs. Nor does an override of the tabs or the
+action bar reach any other tab group or action row: browse's and the collection page's tabs are
+Material tab groups and their header actions their own markup, the search and trash toolbars are
+their own markup, and the metadata editor writes `nxs-tabs` into its template. Nothing in a packaged screen renders
+`nxs.primitives.errorState` or `nxs.primitives.richTooltip` by ID yet, so an override of those two
+reaches only a host of yours that renders them. Where a host resolves an ID through a
 `lib-extension-outlet` with a `componentId`, and in the library's Storybook, the IDs render as
 described above.
 
@@ -779,7 +801,9 @@ without restating the list.
 
 Registered by `PACKAGED_DOCUMENT_TOOLBAR_ACTIONS` in
 `libs/shared/extensions/src/lib/packaged-actions.ts`, rendered by the header of
-`/#/doc/:uid`. Seventeen descriptors, which is more controls than a customer ever
+`/#/doc/:uid` through whatever is registered as `nxs.primitives.actionBar` (section 6a): Material's
+icon buttons from `provideNxsComponents()`, Satori's action-bar buttons in our app, or a component
+of yours. All three receive the same entries. Seventeen descriptors, which is more controls than a customer ever
 sees at once: the toggles are mutually exclusive pairs, and every entry is gated.
 
 `overflow: true` puts an entry behind the **More actions** menu; the rest are
@@ -863,7 +887,10 @@ Moving `app.toolbar.share` to order 15 reorders it **within the overflow menu**;
 ## 9. `tabs` — the packaged document-detail tabs
 
 Registered by `PACKAGED_DOCUMENT_TABS` in
-`libs/shared/extensions/src/lib/packaged-tabs.ts`.
+`libs/shared/extensions/src/lib/packaged-tabs.ts`, and drawn by whatever is registered as
+`nxs.primitives.tabs` (section 6a) — Material's tab group from `provideNxsComponents()`, Satori's
+navigation tabs in our app, or a component of yours — which is handed the tabs and the one template
+their bodies render from.
 
 | ID                     | Label       | Icon           | Order | Shown when              |
 | ---------------------- | ----------- | -------------- | ----- | ----------------------- |

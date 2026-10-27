@@ -206,6 +206,11 @@ subtitle, header action and actions, which is what each selectable grid tile her
 task-detail panel is named a banner in its class but is a summary of the task's target document, not a
 notice, so it is a card here rather than a `banner`.
 
+**Status, 2026-10-26:** the two NXSAT-308 grid views, browse's and search's, are on `nxs-card`
+(NXSAT-678). Each card renders by `nxs.primitives.card` through `lib-extension-outlet`, with
+`nxs-card` as the fallback when the ID is unregistered. DocumentCards was not promoted: it went with
+the bridge in NXSAT-635. The trash, task-detail, asset and contracts rows are unchanged.
+
 ### 4.6 Banners and inline notices → `banner` → `nxs-banner`
 
 **Migrated under NXSAT-677** (`nxs-banner` now exists, registered as `nxs.primitives.banner`): the two location hints in create-import and search's AI error. The trashed-document and version banners in document detail were first migrated here, but `main` moved them to `sat-banner` (NXSAT-673), so they are not `nxs-banner` on this branch. The rows below that name them are the record as measured on 2026-10-08. Still on

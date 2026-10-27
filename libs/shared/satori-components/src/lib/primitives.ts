@@ -1,19 +1,21 @@
-import type { InputSignal, InputSignalWithTransform } from '@angular/core';
+import type { InputSignal, InputSignalWithTransform, TemplateRef } from '@angular/core';
 
+import type { NxsToolbarAction } from './document-toolbar/document-toolbar.component';
 import type { NxsErrorStatus } from './error-state/error-status';
 import type { NxsHeadingLevel } from './heading-level';
+import type { NxsTab, NxsTabBodyContext } from './tabs/tab-body.directive';
 
 /**
  * The IDs of the primitives this library registers by `provideNxsComponents()`. The first four and
  * `errorState` are primitives Satori also ships; `banner` and `chipSet` have no Satori twin yet.
  *
- * Each ID resolves to a Material implementation from this entry point, and all but `errorState` to a
+ * Each ID resolves to a Material implementation from this entry point, and all but `card` to a
  * Satori-backed one once `provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori`
  * is provided after it. `errorState` stays on Material there: Satori's error states arrive in
- * Satori 1.0, which needs a newer Angular than this package supports. `banner` stays on Material
- * too, until its Satori twin is written. Both implement the same `Nxs…Inputs` contract below, so
- * whoever renders an ID — a `lib-extension-outlet` with `componentInputs` — gets the same inputs
- * whichever is registered.
+ * Satori 1.0, which needs a newer Angular than this package supports. `banner` and `chipSet` stay on
+ * Material too, until their Satori twins are written; `card` has no Satori-backed implementation yet.
+ * Every implementation of an ID implements the same `Nxs…Inputs` contract below, so whoever renders an ID —
+ * a `lib-extension-outlet` with `componentInputs` — gets the same inputs whichever is registered.
  * A customer overriding an ID implements that contract too.
  */
 export const NXS_PRIMITIVE_IDS = Object.freeze({
@@ -25,6 +27,9 @@ export const NXS_PRIMITIVE_IDS = Object.freeze({
   errorState: 'nxs.primitives.errorState',
   banner: 'nxs.primitives.banner',
   chipSet: 'nxs.primitives.chipSet',
+  tabs: 'nxs.primitives.tabs',
+  actionBar: 'nxs.primitives.actionBar',
+  card: 'nxs.primitives.card',
 } as const);
 
 /** Avatar colours. The values Satori's avatar takes, which `/components-satori` asserts. */
@@ -176,4 +181,78 @@ export interface NxsRichTooltipInputs {
   readonly triggerLabel: InputSignal<string>;
   /** A Material icon ligature for the trigger. */
   readonly icon: InputSignal<string>;
+}
+
+/**
+ * `nxs.primitives.tabs`: a tab strip and the selected tab's body. Text inputs arrive already
+ * translated.
+ *
+ * A host rendering the ID through `lib-extension-outlet` passes `body` and `selectHandler`,
+ * because the outlet sets inputs and neither projects content nor binds outputs.
+ */
+export interface NxsTabsInputs {
+  /** The tabs, in display order. */
+  readonly tabs: InputSignal<readonly NxsTab[]>;
+  /** The tab list's accessible name. Optional. */
+  readonly label: InputSignal<string>;
+  /** The selected tab's position. Past the last tab selects the last. */
+  readonly selectedIndex: InputSignal<number>;
+  /**
+   * The template every tab's body renders from, given the tab as `let-tab`. A body once shown is
+   * kept, hidden, while another tab is selected, so what the user left in it is there on return.
+   */
+  readonly body: InputSignal<TemplateRef<NxsTabBodyContext> | null>;
+  /**
+   * Called with the selected tab and its position whenever the selection changes — the user
+   * choosing a tab, or the host moving `selectedIndex` — but not for the first selection.
+   */
+  readonly selectHandler: InputSignal<((tab: NxsTab, index: number) => void) | null>;
+}
+
+/**
+ * `nxs.primitives.actionBar`: a row of actions, some behind a "More actions" menu. Text inputs
+ * arrive already translated.
+ *
+ * A host rendering the ID through `lib-extension-outlet` passes `actionHandler`, because the
+ * outlet sets inputs and binds no outputs.
+ */
+export interface NxsActionBarInputs {
+  /** Every entry, in display order; each one's `overflow` decides which group it is in. */
+  readonly actions: InputSignal<readonly NxsToolbarAction[]>;
+  /** The group's accessible name. Blank falls back to the library's own "Document actions". */
+  readonly label: InputSignal<string>;
+  /** The menu button's accessible name and tooltip. Blank falls back to "More actions". */
+  readonly moreLabel: InputSignal<string>;
+  /** Called with the entry the user ran. Never a disabled one. */
+  readonly actionHandler: InputSignal<((action: NxsToolbarAction) => void) | null>;
+}
+
+/**
+ * `nxs.primitives.card`: one item in a grid of cards, such as a document in browse's or search's
+ * card view. Text inputs arrive already translated.
+ *
+ * A host rendering the ID through `lib-extension-outlet` passes everything as an input — the
+ * handlers and the templates for the media and actions — because the outlet sets inputs and neither
+ * projects content nor binds outputs. A template is rendered where its host declared it, so it reads
+ * the host's own context, such as the document of the loop that renders the card.
+ */
+export interface NxsCardInputs {
+  /** The card's title: for a document, its title. */
+  readonly heading: InputSignal<string>;
+  /** One line under the heading, such as the document's type. Blank shows none. */
+  readonly subheading: InputSignal<string>;
+  /** Whether the item is selected. */
+  readonly selected: InputSignalWithTransform<boolean, unknown>;
+  /** The selection checkbox's accessible name. Blank renders no checkbox: the card is not selectable. */
+  readonly selectionLabel: InputSignal<string>;
+  /** Called with the checkbox's new state when the user toggles it. */
+  readonly selectionHandler: InputSignal<((selected: boolean) => void) | null>;
+  /** Called when the user opens the card. Without it the card opens nothing. */
+  readonly openHandler: InputSignal<(() => void) | null>;
+  /** Rendered at the top of the card: usually the document's thumbnail. */
+  readonly media: InputSignal<TemplateRef<unknown> | null>;
+  /** Rendered in the card's top corner: usually a menu button. */
+  readonly headerAction: InputSignal<TemplateRef<unknown> | null>;
+  /** Rendered at the foot of the card: buttons such as Favorite and Download. */
+  readonly actions: InputSignal<TemplateRef<unknown> | null>;
 }
