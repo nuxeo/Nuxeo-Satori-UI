@@ -274,7 +274,17 @@ const RAW_KEY = /\b(?:sat|satori-components|browse)\.[a-z][\w-]*(?:\.[\w-]+)+/i;
 async function open(page, url, selector) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 300)));
-  await page.goto(url, { waitUntil: 'networkidle' });
+  // `networkidle` waits for half a second of quiet, which one stalled font or icon request can
+  // deny for longer than the timeout — twice, on different components, under load. Retried once,
+  // so a section is not failed for it; a navigation that succeeds first time is untouched.
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await page.goto(url, { waitUntil: 'networkidle' });
+      break;
+    } catch (error) {
+      if (attempt >= 1) throw error;
+    }
+  }
   await page.waitForSelector(selector, { timeout: 30_000 });
   await page.evaluate(() => document.fonts.ready);
   const iconFont = await page
