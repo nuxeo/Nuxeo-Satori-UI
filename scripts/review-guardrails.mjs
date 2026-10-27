@@ -9912,12 +9912,24 @@ function fileDeclaringSymbol(path, symbol, seen = new Set()) {
  * later with the same keys, registers nothing and must not be able to redirect a primitive at
  * another component's entry point.
  *
- * Scoped to `provideNxsSatoriComponents` and to every `provideSatoriExtensions` call inside it,
- * concatenated in source order. Taking the first such call anywhere in the module could read an
- * unrelated helper's contribution, or stop at the first of several and leave a primitive the
- * later one adopts outside the guarded set — with the baselined entry points still present, so
- * nothing looked wrong. Source order is provider order, and the caller's `Map` lets a later
- * contribution override an earlier one exactly as the runtime does.
+ * Scoped to `provideNxsSatoriComponents`, because taking the first `provideSatoriExtensions` call
+ * anywhere in the module could read an unrelated helper's contribution instead.
+ *
+ * Only what the provider **returns** is read. `provideSatoriExtensions` returns providers rather
+ * than installing them, so a call whose result is thrown away registers nothing; such a call, and
+ * a `return` this cannot resolve to one, are reported. A `return` inside a nested helper does not
+ * return from the provider and is not counted.
+ *
+ * More than one installed contribution is **rejected, not merged**. An earlier round read every
+ * call in source order and let a later one override an earlier one, on the reasoning that source
+ * order is provider order. That is unsound twice over: a call may register nothing, and branch
+ * returns are alternatives rather than a sequence, so merging them invents a mapping that never
+ * happens at runtime. Do not reinstate it — `review-guardrails.selftest.mjs` has controls that
+ * reject exactly that behaviour.
+ *
+ * Within one contribution the **last** literal `components` is read, since duplicate keys are
+ * legal and the later wins, and anything after it that could be `components` again — a spread, a
+ * computed name, a shorthand — is reported rather than silently read around.
  *
  * `properties` is `undefined` when the provider or any contribution at all is missing, which the
  * caller reports rather than treating as an empty adopted set. `problems` are shapes that could
