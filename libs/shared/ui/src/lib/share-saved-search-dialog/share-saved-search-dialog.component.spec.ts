@@ -308,6 +308,114 @@ describe('ShareSavedSearchDialogComponent', () => {
     );
   });
 
+  // NXSAT-334: `save()` replays every row, so a lossy permission map rewrote entries nobody
+  // touched. NXSAT-300's second acceptance criterion forbids that.
+  describe('saving', () => {
+    it('writes an untouched entry on the permission it already holds', async () => {
+      await mount(SAVED_SEARCH);
+      documents['replacePermission'] = vi.fn(() => of({}));
+
+      component().save();
+
+      // The legacy map turned `Write` into the broader `ReadWrite`; `WriteVersion` and every other
+      // permission outside its four keys fell through to `perm.right`, so only `Write` regressed.
+      const written = documents['replacePermission'].mock.calls.map(
+        (call) => (call[1] as { username: string; permission: string }).permission,
+      );
+      expect(written).toEqual(['Read', 'WriteVersion']);
+    });
+
+    // The guarantee above — "never rewrite a permission Nuxeo defines" — holds only while no key
+    // of the legacy label map is itself a permission identifier. `Write` was, which is how it came
+    // to be widened. This mirrors the panel's `NXS_STANDARD_PERMISSIONS`, which is internal to
+    // `satori-components`; exporting it to share it here would add a customer-visible export.
+    const GRANTABLE = [
+      'Read',
+      'ReadWrite',
+      'Everything',
+      'Write',
+      'ReadVersion',
+      'WriteVersion',
+      'AddChildren',
+      'RemoveChildren',
+      'Remove',
+      'Version',
+      'WriteSecurity',
+      'Unlock',
+      'SetRetention',
+      'UnsetRetention',
+    ];
+
+    it.each(GRANTABLE)('writes %s to the server unchanged', async (permission) => {
+      await mount(SAVED_SEARCH);
+      documents['replacePermission'] = vi.fn(() => of({}));
+      component().permissions.update((rows) =>
+        rows.map((row, i) => (i === 0 ? { ...row, right: permission } : row)),
+      );
+
+      component().save();
+
+      expect(documents['replacePermission']).toHaveBeenCalledWith(
+        UID,
+        expect.objectContaining({ username: 'members', permission }),
+      );
+    });
+
+    it('writes Write as Write rather than widening it to ReadWrite', async () => {
+      await mount(SAVED_SEARCH);
+      documents['replacePermission'] = vi.fn(() => of({}));
+      component().permissions.update((rows) =>
+        rows.map((row, i) => (i === 0 ? { ...row, right: 'Write' } : row)),
+      );
+
+      component().save();
+
+      expect(documents['replacePermission']).toHaveBeenCalledWith(
+        UID,
+        expect.objectContaining({ username: 'members', permission: 'Write' }),
+      );
+    });
+  });
+
+  describe('the permission column', () => {
+    /** The rendered Right cell of every local row. */
+    const rightCells = () => {
+      const host: HTMLElement = fixture.nativeElement;
+      const rows = host.querySelectorAll<HTMLTableRowElement>(
+        'table.permissions-table:not(.readonly-table) tbody tr',
+      );
+      return Array.from(rows).map((row) => row.cells[1]?.textContent?.trim() ?? '');
+    };
+
+    it('reads a Nuxeo identifier as its label, in the active locale', async () => {
+      await mount(SAVED_SEARCH);
+
+      // This table rendered `row.right` raw, so it alone showed `WriteVersion` in every locale.
+      expect(rightCells()).toEqual(['Read', 'Write versions']);
+    });
+
+    it('shows an unlabelled permission as its identifier, as Web UI does', async () => {
+      await mount(SAVED_SEARCH);
+      component().permissions.update((rows) =>
+        rows.map((row, i) => (i === 0 ? { ...row, right: 'CustomFromMarketplace' } : row)),
+      );
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(rightCells()[0]).toBe('CustomFromMarketplace');
+    });
+
+    it('carries an identifier, not a label, on the row it falls back to without a read', async () => {
+      // No ACL to read, so the dialog synthesises a row from the current user. It used to put the
+      // English "Manage everything" in `right`, which an edit then could not tell from an id.
+      await mount(new Error('no read'));
+
+      expect(component().permissions()).toEqual([expect.objectContaining({ right: 'Everything' })]);
+      // Still reads the same to a person, now through the translation.
+      expect(rightCells()).toEqual(['Manage everything']);
+    });
+  });
+
   it("hands the add and edit dialogs the saved search's own userVisiblePermissions", async () => {
     await mount(SAVED_SEARCH);
 

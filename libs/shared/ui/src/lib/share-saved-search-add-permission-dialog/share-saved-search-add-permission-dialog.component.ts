@@ -138,8 +138,11 @@ export class ShareSavedSearchAddPermissionDialogComponent {
       groupname: undefined,
     } as UserGroupSuggestion;
 
-    // Normalize the right value to match options
-    this.right = this.normalizeRightValue(data.right);
+    // The stored permission, verbatim. Nuxeo Web UI's `nuxeo-popup-permission` does the same
+    // (`_computeParams`: `params.permission = ace.permission`) and defaults to `Read` only for a
+    // *new* entry. Rewriting it here widened `Write` to `ReadWrite` and narrowed every permission
+    // outside a hardcoded four — `WriteSecurity` among them — to `Read` (NXSAT-334).
+    this.right = data.right;
 
     if (data.timeFrame === 'Permanent') {
       this.timeFrameMode = 'permanent';
@@ -163,22 +166,6 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     }
 
     this.sendNotify = false;
-  }
-
-  private normalizeRightValue(value: string): string {
-    // Map various right values to the standardized options
-    const normalizedMap: Record<string, string> = {
-      Read: 'Read',
-      Write: 'ReadWrite',
-      Edit: 'ReadWrite',
-      ReadWrite: 'ReadWrite',
-      Manage: 'Everything',
-      'Manage everything': 'Everything',
-      Everything: 'Everything',
-      'Can collect': 'ReadCanCollect',
-      ReadCanCollect: 'ReadCanCollect',
-    };
-    return normalizedMap[value] || 'Read'; // Default to 'Read' if no match
   }
 
   private parseDate(dateStr: string): Date | null {

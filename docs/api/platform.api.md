@@ -4800,6 +4800,7 @@ class ShareSavedSearchDialogComponent implements OnInit {
     sendExternalNotification(row: ExternalPermissionEntry): void;
     removeExternalPermission(row: ExternalPermissionEntry): void;
     togglePermissionInheritance(): void;
+    protected permissionLabel(permission: string): string;
     openAddPermissionDialog(): void;
     removeRow(id: string): void;
     editRow(id: string): void;
@@ -4853,7 +4854,7 @@ class WidgetContainerComponent {
     readonly title: import("@angular/core").InputSignal<string>;
     readonly icon: import("@angular/core").InputSignal<string | undefined>;
     readonly iconColor: import("@angular/core").InputSignal<string>;
-    readonly headingLevel: import("@angular/core").InputSignal<2 | 3>;
+    readonly headingLevel: import("@angular/core").InputSignal<3 | 2>;
     static ɵfac: i0.ɵɵFactoryDeclaration<WidgetContainerComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<WidgetContainerComponent, "lib-widget-container", never, {
     "title": {

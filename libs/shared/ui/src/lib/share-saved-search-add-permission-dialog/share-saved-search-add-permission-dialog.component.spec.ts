@@ -111,6 +111,61 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     expect(values(dialog)).toEqual(['Read', 'ReadWrite', 'Everything', 'ReadCanCollect']);
   });
 
+  // NXSAT-300: editing an entry must not change the permission it holds. Nuxeo Web UI's
+  // `nuxeo-popup-permission` assigns `params.permission = ace.permission` verbatim and only ever
+  // defaults to `Read` for a *new* entry (`_getResetParams`), never for an edit.
+  describe('an entry holding a permission outside the type’s list', () => {
+    // The nine grants NXSAT-300 added, the retention pair, and the section-root permission Nuxeo
+    // grants `members` by default. None is in a saved search's `userVisiblePermissions`.
+    const OUTSIDE = [
+      'Write',
+      'ReadVersion',
+      'WriteVersion',
+      'AddChildren',
+      'RemoveChildren',
+      'Remove',
+      'Version',
+      'WriteSecurity',
+      'Unlock',
+      'SetRetention',
+      'UnsetRetention',
+      'CanAskForPublishing',
+    ];
+
+    it.each(OUTSIDE)('opens an edit of %s on that permission, not another', async (permission) => {
+      const dialog = await open({
+        permissions: SAVED_SEARCH_VISIBLE,
+        initialData: { userGroup: 'members', right: permission, timeFrame: 'Permanent' },
+      });
+      expect(dialog.right).toBe(permission);
+    });
+
+    it.each(OUTSIDE)('offers %s so the edit can be submitted unchanged', async (permission) => {
+      const dialog = await open({
+        permissions: SAVED_SEARCH_VISIBLE,
+        initialData: { userGroup: 'members', right: permission, timeFrame: 'Permanent' },
+      });
+      expect(values(dialog)).toEqual([...SAVED_SEARCH_VISIBLE, permission]);
+    });
+
+    it.each(OUTSIDE)(
+      'returns %s unchanged when the user edits only the dates',
+      async (permission) => {
+        const dialog = await open({
+          permissions: SAVED_SEARCH_VISIBLE,
+          initialData: { userGroup: 'members', right: permission, timeFrame: 'Permanent' },
+        });
+        const mockDialogRef = TestBed.inject(MatDialogRef);
+
+        dialog.create(false);
+
+        expect(mockDialogRef.close).toHaveBeenCalledWith([
+          expect.objectContaining({ userGroup: 'members', right: permission }),
+        ]);
+      },
+    );
+  });
+
   it('falls back to Read when an empty permissions list is provided', async () => {
     const dialog = await open({ permissions: [] });
     expect(dialog.right).toBe('Read');

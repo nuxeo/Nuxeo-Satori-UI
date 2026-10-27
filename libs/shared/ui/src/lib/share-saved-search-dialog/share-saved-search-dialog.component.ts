@@ -21,6 +21,7 @@ import {
   CURRENT_USERNAME,
   UserService,
   DocumentDetailService,
+  permissionRightLabel,
   type NuxeoUser,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -360,7 +361,10 @@ export class ShareSavedSearchDialogComponent implements OnInit {
       {
         id: String(this.nextId++),
         userGroup: this.toDisplayName(user),
-        right: user.isAdministrator ? 'Manage everything' : 'Read',
+        // A permission identifier, not its label: `right` is also what an edit round-trips and
+        // what `save()` writes, so a label here could not be told from a permission (NXSAT-334).
+        // The table renders it through `permissionLabel`, so it still reads "Manage everything".
+        right: user.isAdministrator ? 'Everything' : 'Read',
         timeFrame: 'Permanent',
         grantedBy: 'System',
       },
@@ -386,6 +390,16 @@ export class ShareSavedSearchDialogComponent implements OnInit {
         grantedBy: 'Parent',
       })),
     );
+  }
+
+  /**
+   * A permission as a person reads it. This table rendered `row.right` raw, so it alone showed
+   * Nuxeo identifiers — `ReadWrite`, `WriteSecurity` — in every locale, which is what made storing
+   * an English label in `right` look reasonable. The document, collection and browse tables all go
+   * through this helper; an unlabelled permission still shows its identifier, as Web UI's does.
+   */
+  protected permissionLabel(permission: string): string {
+    return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
 
   private toDisplayName(user: NuxeoUser): string {
@@ -566,11 +580,17 @@ export class ShareSavedSearchDialogComponent implements OnInit {
       });
   }
 
+  /**
+   * The permission to write for a row.
+   *
+   * `save()` replays every row, so this runs over entries the user never touched — which is why it
+   * must never rewrite a permission Nuxeo defines. It used to map `Write` to `ReadWrite`, widening
+   * an untouched entry's access on any save, and the labels below were indistinguishable from
+   * identifiers (NXSAT-334). Rows now carry identifiers; the map is kept only so a label left in
+   * state by an older build still resolves rather than reaching the server verbatim.
+   */
   private normalizePermissionForApi(perm: PermissionEntry): { right: string; timeFrame: string } {
-    // Normalize right values to API format
-    const rightMap: Record<string, string> = {
-      Read: 'Read',
-      Write: 'ReadWrite',
+    const legacyLabelToPermission: Record<string, string> = {
       Edit: 'ReadWrite',
       Manage: 'Everything',
       'Manage everything': 'Everything',
@@ -578,7 +598,7 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     };
 
     return {
-      right: rightMap[perm.right] || perm.right,
+      right: legacyLabelToPermission[perm.right] ?? perm.right,
       timeFrame: perm.timeFrame,
     };
   }
