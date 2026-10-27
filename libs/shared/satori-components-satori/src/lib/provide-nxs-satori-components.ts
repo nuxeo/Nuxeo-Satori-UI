@@ -21,9 +21,13 @@ import { NxsSatoriTabsComponent } from './tabs/satori-tabs.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
 
 /**
- * Re-register every `NXS_PRIMITIVE_IDS` entry — avatar, breadcrumbs, tag, status tag, rich tooltip,
- * error state, tabs, action bar and card — on Satori, over the Material implementations
- * `provideNxsComponents()` registered.
+ * Re-register the nine `NXS_PRIMITIVE_IDS` entries that have a Satori twin — avatar, breadcrumbs,
+ * tag, status tag, rich tooltip, error state, tabs, action bar and card — on Satori, over the
+ * Material implementations `provideNxsComponents()` registered.
+ *
+ * Nine of eleven, not all of them: `banner` and `chipSet` are registered by
+ * `provideNxsComponents()` and keep their Material implementations here, until their Satori
+ * wrappers are written. `primitives.ts` and `docs/extension-reference.md` §6a name the same two.
  *
  * Satori-if-available, Material otherwise, decided by which providers an application lists — not
  * at build time and not by a runtime probe. This entry point is the only one in the package that
