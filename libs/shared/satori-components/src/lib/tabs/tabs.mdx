@@ -65,7 +65,13 @@ export const usageHtml = `<nxs-tabs [tabs]="tabs()" [(selectedIndex)]="selected"
 
 `tabs` is required. `label` names the tab list and is optional. Import `NxsTabBodyDirective` with
 the component to mark the body template; without one, the strip renders with empty bodies. The tabs
-need no providers, show no text of their own and have no registered ID.
+need no providers and show no text of their own.
+
+They are registered as `nxs.primitives.tabs` by `provideNxsComponents()`, and Satori's navigation
+tabs re-register the ID when `provideNxsSatoriComponents()` follows it. A page that renders the ID
+through `lib-extension-outlet` shows whichever is registered — the document page does — and passes
+what the outlet cannot: the body template as `body`, and `selectHandler`, called with the tab and its
+position whenever the selection changes, in place of the outputs.
 
 ## Where its data comes from
 

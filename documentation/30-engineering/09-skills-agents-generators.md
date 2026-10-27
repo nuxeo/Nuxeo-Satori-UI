@@ -249,7 +249,7 @@ the architecture.
 | ----------------------- | ------------------- | ---------------------------------------------------------------------------- |
 | Stale Branch            | **Implemented**     | `stale.yml`, scheduled                                                       |
 | Dead Code               | **Implemented**     | `dead-code.yml`, weekly Mon 06:00 UTC                                        |
-| Changelog               | **Implemented**     | `changelog.yml`                                                              |
+| Changelog               | **Removed**         | `changelog.yml` deleted; `CHANGELOG.md` is written by hand                   |
 | AGENTS.md Staleness     | **Implemented**     | `staleness-check.yml` — flags `AGENTS/01-services.md` drifting from the code |
 | Release                 | **Implemented**     | `release.yml`, manual dispatch                                               |
 | Refactoring Opportunity | **Not implemented** |                                                                              |
@@ -264,7 +264,7 @@ the architecture.
 
 |                                                                 |                                                                                          Count |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------: |
-| Real, discrete, verifiable components                           |                                   **8 workflows + 2 review agents + 6 generators + 13 skills** |
+| Real, discrete, verifiable components                           |                                   **7 workflows + 2 review agents + 6 generators + 13 skills** |
 | Catalog entries that are context/procedure rather than an agent |                                                                                              8 |
 | Catalog entries not implemented at all                          | **8** (Broken Link, Performance, Refactoring Opportunity, and all six of Tier 4, less overlap) |
 
