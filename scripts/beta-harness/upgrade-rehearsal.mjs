@@ -344,6 +344,7 @@ if (!breakSlot) {
 function unpackInto(target) {
   mkdirSync(target, { recursive: true });
   const packed = execFileSync('npm', ['pack', DIST, '--pack-destination', STAGE], {
+    shell: process.platform === 'win32',
     cwd: ROOT,
     encoding: 'utf8',
   })
@@ -415,7 +416,12 @@ function compileCustomerApp(installed, label, when) {
   );
 
   try {
-    execFileSync('npx', ['ngc', '-p', configPath], { cwd: ROOT, stdio: 'pipe', encoding: 'utf8' });
+    execFileSync('npx', ['ngc', '-p', configPath], {
+      cwd: ROOT,
+      stdio: 'pipe',
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+    });
     notes.push(`the customer app compiles against ${label} (${when})`);
   } catch (error) {
     const output = `${error.stdout ?? ''}${error.stderr ?? ''}`.trim();

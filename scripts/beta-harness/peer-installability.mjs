@@ -109,6 +109,7 @@ function pack(label, mutate) {
   const out = join(work, `${label}-tarball`);
   mkdirSync(out);
   execFileSync('npm', ['pack', copy, '--pack-destination', out, '--ignore-scripts', '--silent'], {
+    shell: process.platform === 'win32',
     env: anonymousEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],
   });

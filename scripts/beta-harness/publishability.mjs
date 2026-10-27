@@ -384,6 +384,7 @@ try {
 
   try {
     execFileSync('npm', ['publish', '--dry-run', '--registry=https://registry.npmjs.org'], {
+      shell: process.platform === 'win32',
       cwd: copy,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -596,6 +597,7 @@ try {
       var diagnostics = '';
       try {
         execFileSync('npx', ['tsc', '-p', join(stage, 'tsconfig.json')], {
+          shell: process.platform === 'win32',
           cwd: process.cwd(),
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],

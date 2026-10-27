@@ -141,6 +141,7 @@ console.log(
 
 try {
   execFileSync('npx', ['ngc', '-p', configPath], {
+    shell: process.platform === 'win32',
     cwd: ROOT,
     stdio: 'pipe',
     encoding: 'utf8',
