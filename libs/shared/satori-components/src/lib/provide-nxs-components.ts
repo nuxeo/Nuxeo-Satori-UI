@@ -2,7 +2,9 @@ import type { EnvironmentProviders } from '@angular/core';
 import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 import { NxsAvatarComponent } from './avatar/avatar.component';
+import { NxsBannerComponent } from './banner/banner.component';
 import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
+import { NxsChipSetComponent } from './chip-set/chip-set.component';
 import { NxsCardComponent } from './card/card.component';
 import { NxsDocumentToolbarComponent } from './document-toolbar/document-toolbar.component';
 import { NxsErrorStateComponent } from './error-state/error-state.component';
@@ -24,7 +26,8 @@ import { NxsTagComponent } from './tag/tag.component';
  *
  * Registration goes through `provideSatoriExtensions`, so it layers like every other contribution:
  * in provider order, later wins per ID. List it **before** `provideNxsSatoriComponents()` from
- * `components-satori`, which re-registers every `NXS_PRIMITIVE_IDS` entry but `card` on Satori, and
+ * `components-satori`, which re-registers the nine `NXS_PRIMITIVE_IDS` entries that have a Satori
+ * twin — every one but `banner` and `chipSet` — on Satori, and
  * before your own `provideSatoriExtensions(...)` calls, so an override of yours wins.
  */
 export function provideNxsComponents(): EnvironmentProviders {
@@ -36,6 +39,8 @@ export function provideNxsComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.statusTag]: NxsStatusTagComponent,
       [NXS_PRIMITIVE_IDS.richTooltip]: NxsRichTooltipComponent,
       [NXS_PRIMITIVE_IDS.errorState]: NxsErrorStateComponent,
+      [NXS_PRIMITIVE_IDS.banner]: NxsBannerComponent,
+      [NXS_PRIMITIVE_IDS.chipSet]: NxsChipSetComponent,
       [NXS_PRIMITIVE_IDS.tabs]: NxsTabsComponent,
       [NXS_PRIMITIVE_IDS.actionBar]: NxsDocumentToolbarComponent,
       [NXS_PRIMITIVE_IDS.card]: NxsCardComponent,

@@ -1,0 +1,101 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ChipSetStories from './chip-set.stories';
+
+<Meta of={ChipSetStories} name="Overview" />
+
+# Chip set
+
+A chip set is a row of removable chips: the values a field holds, such as the coverage or subjects
+of a document, or the filters a search has applied. Each chip shows its label and a remove button.
+Use it to show values the reader can take away. For a field the reader types into and adds values
+to, use the tag input or the vocabulary select instead.
+
+## Key features
+
+- **Removable values.** Each chip has a remove button labelled with its own name, such as "Remove
+  Europe", so a screen reader says which value it removes.
+- **Data, not projection.** Each chip is an item with its label, its remove name and whether it is
+  disabled. The host builds the list from its own state.
+- **The host decides.** Pressing a remove button emits the chip. The set removes nothing itself; the
+  host drops the value, and the chip leaves when the list does.
+- **Replaceable by ID.** It is registered as `nxs.primitives.chipSet`, so your own chip set can take
+  its place on every screen that renders the ID.
+
+## Demo showcase
+
+The values a field holds, each removable.
+
+<Canvas of={ChipSetStories.RemovableValues} />
+
+## Usage
+
+export const usageTs = `import { NxsChipSetComponent, type NxsChipItem } from '@nuxeo/satori-platform/components';
+
+readonly coverage = signal<readonly string[]>(['europe']);
+readonly coverageChips = computed<NxsChipItem[]>(() =>
+  this.coverage().map((id) => ({
+    id,
+    label: this.coverageLabel(id),
+    removeLabel: this.translate.instant('acme.remove-item', { name: this.coverageLabel(id) }),
+  })),
+);
+
+removeCoverage(item: NxsChipItem): void {
+  this.coverage.update((values) => values.filter((id) => id !== item.id));
+}`;
+
+<Source language="typescript" dark code={usageTs} />
+
+export const usageHtml = `<nxs-chip-set label="Coverage" [items]="coverageChips()" (removed)="removeCoverage($event)" />`;
+
+<Source language="html" dark code={usageHtml} />
+
+`items` is the list of chips, in order. `label` names the set for a screen reader, and is blank for
+none. `removed` emits the chip whose remove button was pressed. Each chip's `label` and `removeLabel`
+are text you have already translated.
+
+The chip set needs no providers. Its remove buttons use the Material icon ligature `cancel`.
+
+Place it in a template by its selector, or render the ID `nxs.primitives.chipSet`
+(`NXS_PRIMITIVE_IDS.chipSet`) through `lib-extension-outlet`. The outlet binds no outputs, so a host
+rendering the ID passes `removeHandler`, a function called with the chip when its remove button is
+pressed. A replacement you register under the ID implements `NxsChipSetInputs`.
+
+## Where its data comes from
+
+The chip set loads nothing. Its chips come from the host's own state: a field's values, and the
+labels the host looks up for them. Saving the change is the host's job, and it goes through Nuxeo
+like any other edit.
+
+**In these stories** no request is made: each sets its items directly, and the labels are English.
+
+## Examples
+
+### A single value
+
+A single-select field shows one chip, and removing it clears the field.
+
+<Canvas of={ChipSetStories.SingleValue} />
+
+### A chip that cannot be removed
+
+A disabled chip shows its remove button disabled, and pressing it emits nothing.
+
+<Canvas of={ChipSetStories.DisabledChip} />
+
+### By registered ID
+
+Rendered through `lib-extension-outlet` by its ID. Pressing a remove button calls the
+`removeHandler` the host passes.
+
+<Canvas of={ChipSetStories.ByRegisteredId} />
+
+## Accessibility
+
+- **Named set.** Pass a `label` and the set is named for a screen reader, such as "Coverage".
+- **Remove buttons.** Each button is named by its chip, so the reader hears "Remove Europe", not a
+  bare icon.
+- **Keyboard.** Each remove button is reached with **Tab** and pressed with **Enter** or **Space**.
+  Pressing it does not open the field the chips sit in.
+- **Disabled chips.** A disabled chip's remove button is disabled, so it cannot be reached or pressed.

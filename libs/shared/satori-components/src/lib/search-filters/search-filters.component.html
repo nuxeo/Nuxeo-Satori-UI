@@ -188,23 +188,12 @@
 
 <ng-template #chips let-field="field" let-values="values" let-titleKey="titleKey">
   @if (values.length > 0) {
-    <mat-chip-set class="nxs-search-filters__chips" [attr.aria-label]="titleKey | translate">
-      @for (value of values; track value) {
-        <mat-chip (removed)="removeChoice(field, value)">
-          {{ field === 'collections' ? collectionTitle(value) : value }}
-          <button
-            matChipRemove
-            type="button"
-            [attr.aria-label]="
-              'satori-components.search-filters.remove'
-                | translate: { value: field === 'collections' ? collectionTitle(value) : value }
-            "
-          >
-            <mat-icon aria-hidden="true" svgIcon="circle_x" />
-          </button>
-        </mat-chip>
-      }
-    </mat-chip-set>
+    <nxs-chip-set
+      class="nxs-search-filters__chips"
+      [label]="titleKey | translate"
+      [items]="chipItems(field, values)"
+      (removed)="removeChoice(field, $event.id)"
+    />
   }
 </ng-template>
 

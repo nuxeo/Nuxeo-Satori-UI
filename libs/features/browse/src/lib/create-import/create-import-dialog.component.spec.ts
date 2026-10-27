@@ -1733,6 +1733,35 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       component.removeSubject('cinema');
       expect(component.subjects).toEqual(['painting']);
     });
+
+    it('builds a removable chip per subject, labelled as the subject reads', async () => {
+      await createDialog();
+      component.subjects = ['cinema'];
+
+      expect(component.subjectChips()).toEqual([
+        expect.objectContaining({
+          id: 'cinema',
+          label: 'Art/Cinema',
+          removeLabel: expect.any(String),
+        }),
+      ]);
+    });
+
+    it('shows the nature and coverage as one chip each, and none when unset', async () => {
+      await createDialog();
+      expect(component.natureChips()).toEqual([]);
+      expect(component.coverageChips()).toEqual([]);
+
+      component.nature = 'contract';
+      component.coverage = 'tanzania';
+
+      expect(component.natureChips()).toEqual([
+        expect.objectContaining({ id: 'contract', label: component.naturePillLabel('contract') }),
+      ]);
+      expect(component.coverageChips()).toEqual([
+        expect.objectContaining({ id: 'tanzania', label: component.coveragePillLabel('tanzania') }),
+      ]);
+    });
   });
 
   describe('display helpers', () => {

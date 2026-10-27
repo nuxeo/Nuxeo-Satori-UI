@@ -213,6 +213,11 @@ the bridge in NXSAT-635. The trash, task-detail, asset and contracts rows are un
 
 ### 4.6 Banners and inline notices → `banner` → `nxs-banner`
 
+**Migrated under NXSAT-677** (`nxs-banner` now exists, registered as `nxs.primitives.banner`): the two location hints in create-import and search's AI error. The trashed-document and version banners in document detail were first migrated here, but `main` moved them to `sat-banner` (NXSAT-673), so they are not `nxs-banner` on this branch. The rows below that name them are the record as measured on 2026-10-08. Still on
+Material, as the scope column says: the KD and AI banners, the workflow and task-action banners
+(NXSAT-327), and the collection page's unavailable state, which is a page-level error state rather
+than a banner.
+
 | Site                                                                                                      | What it is                                   | Scope                      |
 | --------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------------------------- |
 | `libs/features/browse/src/lib/browse/browse.html:95`                                                      | Domain hint (`role="note"`), DomainHint      | NXSAT-308                  |
@@ -248,6 +253,8 @@ for elsewhere or are not banners:
   is a status badge.
 
 ### 4.7 Chips → no Satori target → stay Material, owned by the §5 J/K inputs
+
+**Wrapped under NXSAT-677** (`nxs-chip-set`, registered as `nxs.primitives.chipSet`): the display chip sets of removable values. These are the trigger chips in the metadata, collection and create-import dialogs, the metadata editor's trigger, and the search filters' chips. The input chip grids (`mat-chip-grid`: tag editor, tag input, vocabulary select, and the metadata editor's grid) are not display chips and stay on Material. Wrapping them is the §5 J/K work.
 
 | Site                                                                                                                         | What it is                                      | Scope     |
 | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | --------- |
@@ -469,7 +476,7 @@ A suggested order for NXSAT-308, with the core-slice sites each wrapper takes ov
 6. **`nxs-tabs`**: 4 sites. It needs the navigational-tabs design decision first (section 3, item 3).
 7. **`nxs-card`**: 2 sites, plus DocumentCards.
 
-Not wrappers: chips, which go with the §5 J/K inputs (section 3, item 1); tables, which go into `nxs-document-list`,
+Not wrappers: the input chip grids, which go with the §5 J/K inputs (section 3, item 1); display chip sets are wrapped as `nxs-chip-set` (NXSAT-677); tables, which go into `nxs-document-list`,
 History and PermissionsPanel; split panes, which nobody has asked for.
 
 ## 6. How this was produced
