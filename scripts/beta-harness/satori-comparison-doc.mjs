@@ -707,6 +707,10 @@ export function checkComparison(inputs) {
       variant: own ? variant : null,
       satoriSelector,
       satElement: own ? satElement : null,
+      // Every element the wrapper's own template renders, not just the documented one: a wrapper
+      // picking one per input — the error state, one per status — renders a different one than the
+      // section names, and the capture looks for any of these.
+      satElements: own && variant ? (inputs.satoriVariants.get(variant)?.elements ?? []) : null,
       registeredId,
       story,
       satoriStory: own ? satoriStory : null,

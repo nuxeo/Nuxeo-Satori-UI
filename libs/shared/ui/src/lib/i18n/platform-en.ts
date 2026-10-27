@@ -368,6 +368,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "satori-components.permission-dialogs.update.updated-notified": "Permission updated and notification sent",
   "satori-components.permission-dialogs.user-group": "User / Group",
   "satori-components.permissions-panel.add": "Add",
+  "satori-components.permissions-panel.all-permissions": "All permissions",
   "satori-components.permissions-panel.column.acl": "Access list",
   "satori-components.permissions-panel.column.actions": "Actions",
   "satori-components.permissions-panel.column.granted-by": "Granted by",

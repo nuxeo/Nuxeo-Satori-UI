@@ -90,6 +90,13 @@
   gap: 8px;
 }
 
+.nxs-permissions-panel__section-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .nxs-permissions-panel__section-title {
   font-size: 0.875rem;
   font-weight: 600;
