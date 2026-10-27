@@ -666,7 +666,7 @@ journeyTest('browse', async ({ signedIn: page, a11y }) => {
   await expect(page.locator('lib-browse'), 'lib-browse must render').toBeVisible();
   await expect(
     page
-      .locator('.browse-row, .doc-card-wrapper, nxs-document-list .nxs-document-list__row')
+      .locator('.browse-row, .card-grid nxs-card, nxs-document-list .nxs-document-list__row')
       .first(),
     'browse must list at least one document, or this scans an empty table',
   ).toBeVisible();
@@ -685,6 +685,10 @@ journeyTest('browse', async ({ signedIn: page, a11y }) => {
  * matches the control's accessible name (precondition, not axe).
  */
 const DOCUMENT_DETAIL_TOOLBAR_ADD_TO_COLLECTION = '[data-action-id="app.toolbar.addToCollection"]';
+/** The header's action buttons, whichever implementation of the action bar renders them. */
+const DOCUMENT_DETAIL_HEADER_ACTION_BUTTONS = '.detail-header .header-actions button';
+/** The "More actions" trigger's icon: an SVG icon, so named by attribute, not by text. */
+const MORE_ACTIONS_ICON = 'mat-icon[aria-hidden="true"][data-mat-icon-name="more_vert"]';
 
 /**
  * NXENG-808 — keyboard focus on a header toolbar icon button before the journey scan.
@@ -728,9 +732,11 @@ async function enterDocumentDetailHeaderToolbarIconFocusState(page: Page): Promi
  * (`docs/accessibility.md`); this only proves the scan runs with that control focused.
  */
 async function enterDocumentDetailHeaderMoreActionsFocusState(page: Page): Promise<void> {
+  // By its SVG icon's name, not its class: the header renders whatever is registered as
+  // `nxs.primitives.actionBar` — Material's icon buttons, or Satori's action-bar buttons in the app.
   const moreActions = page
-    .locator('.detail-header .header-actions button.mat-mdc-icon-button')
-    .filter({ has: page.locator('mat-icon[aria-hidden="true"]', { hasText: 'more_vert' }) })
+    .locator(DOCUMENT_DETAIL_HEADER_ACTION_BUTTONS)
+    .filter({ has: page.locator(MORE_ACTIONS_ICON) })
     .first();
   await expect(
     moreActions,
@@ -745,19 +751,18 @@ async function enterDocumentDetailHeaderMoreActionsFocusState(page: Page): Promi
 
   const maxSteps = 120;
   for (let step = 0; step <= maxSteps; step++) {
-    const onTarget = await page.evaluate(() => {
-      const buttons = document.querySelectorAll(
-        '.detail-header .header-actions button.mat-mdc-icon-button',
-      );
-      for (const target of buttons) {
-        const icon = target.querySelector('mat-icon[aria-hidden="true"]');
-        if (icon?.textContent?.trim() !== 'more_vert') {
-          continue;
+    const onTarget = await page.evaluate(
+      ([buttonsSelector, iconSelector]) => {
+        for (const target of document.querySelectorAll(buttonsSelector)) {
+          if (!target.querySelector(iconSelector)) {
+            continue;
+          }
+          return document.activeElement === target;
         }
-        return document.activeElement === target;
-      }
-      return false;
-    });
+        return false;
+      },
+      [DOCUMENT_DETAIL_HEADER_ACTION_BUTTONS, MORE_ACTIONS_ICON] as const,
+    );
     if (onTarget) {
       return;
     }

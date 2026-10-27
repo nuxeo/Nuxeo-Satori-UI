@@ -105,10 +105,6 @@ export const PACKAGED_BULK_ACTIONS: readonly ExtensionActionDescriptor[] = [
  * Each toggle is **two descriptors gated by opposite rules** rather than one
  * whose label the component swaps, so a customer relabelling "Notify Me"
  * without relabelling "Unsubscribe" gets exactly that.
- *
- * The knowledge-enrichment and Content Lake controls are **not** here. They
- * render progress spinners and a three-state ingest marker rather than a
- * button, so a descriptor cannot express them; they remain markup.
  */
 export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescriptor[] = [
   {

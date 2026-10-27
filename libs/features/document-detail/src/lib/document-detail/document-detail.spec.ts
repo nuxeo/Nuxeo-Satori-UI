@@ -33,11 +33,6 @@ import {
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
-import {
-  KeClientService,
-  KeEnrichmentError,
-  type KeEnrichmentResult,
-} from '@agentic-ui/shared/ke-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { NxsToastService } from '@nuxeo/satori-platform/components';
 
@@ -68,9 +63,6 @@ const NOTE_DOC: NuxeoDocument = {
 const mockBrowseService = {
   updateDocument: vi.fn((): Observable<NuxeoDocument> => of(STUB_DOC)),
 };
-
-const keResult = (result: string): KeEnrichmentResult =>
-  ({ textClassification: { result } }) as KeEnrichmentResult;
 
 const mockDocumentDetailService = {
   // Never-emitting Observable: keeps loadDocument's subscription "in-flight" so
@@ -176,10 +168,6 @@ describe('DocumentDetailComponent', () => {
         { provide: DocumentDetailService, useValue: mockDocumentDetailService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        {
-          provide: KeClientService,
-          useValue: { enrich: (): Observable<KeEnrichmentResult> => of(keResult('')) },
-        },
         { provide: TaskService, useValue: mockTaskService },
         { provide: WorkflowService, useValue: mockWorkflowService },
         { provide: ARenderService, useValue: mockARenderService },
@@ -381,94 +369,6 @@ describe('DocumentDetailComponent', () => {
     });
   });
 
-  describe('text classification', () => {
-    // docUid is set by the route paramMap mock; no private-field access needed.
-
-    it('refuses to write the "not_from_provided_classes" sentinel to dc:nature', async () => {
-      const keClient = TestBed.inject(KeClientService);
-      const browse = TestBed.inject(BrowseService);
-      vi.spyOn(keClient, 'enrich').mockReturnValue(of(keResult('not_from_provided_classes')));
-      const updateSpy = vi.spyOn(browse, 'updateDocument');
-
-      component.runTextClassification();
-      await fixture.whenStable();
-
-      expect(updateSpy).not.toHaveBeenCalled();
-      expect(component.keError()).toMatch(/could not match this document/i);
-    });
-
-    it('refuses to write a category that is not in the nature vocabulary', async () => {
-      const keClient = TestBed.inject(KeClientService);
-      const browse = TestBed.inject(BrowseService);
-      vi.spyOn(keClient, 'enrich').mockReturnValue(of(keResult('Hallucinated')));
-      const updateSpy = vi.spyOn(browse, 'updateDocument');
-
-      component.runTextClassification();
-      await fixture.whenStable();
-
-      expect(updateSpy).not.toHaveBeenCalled();
-      expect(component.keError()).toMatch(/"Hallucinated".*not one of the \d+ document categories/);
-    });
-
-    it('shows the Knowledge Enrichment client error through its catalogue key', async () => {
-      const keClient = TestBed.inject(KeClientService);
-      vi.spyOn(keClient, 'enrich').mockReturnValue(
-        throwError(
-          () =>
-            new KeEnrichmentError(
-              'Knowledge Enrichment returned HTTP 502.',
-              502,
-              null,
-              'ke-client.message.http-status',
-              { code: 502 },
-            ),
-        ),
-      );
-
-      component.runTextClassification();
-      await fixture.whenStable();
-
-      expect(component.keError()).toBe('Knowledge Enrichment returned HTTP 502.');
-    });
-
-    it('shows a server-supplied Knowledge Enrichment message as it came', async () => {
-      const keClient = TestBed.inject(KeClientService);
-      vi.spyOn(keClient, 'enrich').mockReturnValue(
-        throwError(() => new KeEnrichmentError('Quota exceeded for tenant', 429)),
-      );
-
-      component.runTextClassification();
-      await fixture.whenStable();
-
-      expect(component.keError()).toBe('Quota exceeded for tenant');
-    });
-
-    it('writes the vocabulary id when KE returns a valid display label', async () => {
-      const keClient = TestBed.inject(KeClientService);
-      const browse = TestBed.inject(BrowseService);
-      vi.spyOn(keClient, 'enrich').mockReturnValue(of(keResult('Contract')));
-      const updateSpy = vi.spyOn(browse, 'updateDocument').mockReturnValue(of(STUB_DOC));
-
-      component.runTextClassification();
-      await fixture.whenStable();
-
-      expect(updateSpy).toHaveBeenCalledWith('doc-uid-1', { 'dc:nature': 'contract' });
-      expect(component.keError()).toBeNull();
-    });
-
-    it('aborts classification (no enrich call) when the nature vocabulary is empty', async () => {
-      const keClient = TestBed.inject(KeClientService);
-      const enrichSpy = vi.spyOn(keClient, 'enrich');
-      component.natureVocabulary.set([]);
-
-      component.runTextClassification();
-      await fixture.whenStable();
-
-      expect(enrichSpy).not.toHaveBeenCalled();
-      expect(component.keError()).toMatch(/nature.*vocabulary failed to load/i);
-    });
-  });
-
   describe('write permission guards (NXSAT-163)', () => {
     const readOnlyDoc: NuxeoDocument = {
       ...STUB_DOC,
@@ -543,10 +443,6 @@ describe('DocumentDetailComponent', () => {
           { provide: DocumentDetailService, useValue: mockDocumentDetailService },
           { provide: BrowseService, useValue: mockBrowseService },
           { provide: DirectoryService, useValue: mockDirectoryService },
-          {
-            provide: KeClientService,
-            useValue: { enrich: (): Observable<KeEnrichmentResult> => of(keResult('')) },
-          },
           { provide: TaskService, useValue: mockTaskService },
           { provide: WorkflowService, useValue: mockWorkflowService },
           { provide: ARenderService, useValue: mockARenderService },

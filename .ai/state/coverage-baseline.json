@@ -65,12 +65,10 @@
       "sCovered": 2
     },
     "document-detail": {
-      "lines": 88.03,
-      "statements": 88.03,
+      "lines": 87.0,
+      "statements": 87.0,
       "branches": 74.97,
-      "functions": 93.17,
-      "sTotal": 2490,
-      "sCovered": 2192
+      "functions": 93.17
     },
     "document-layouts": {
       "lines": 98.73,
@@ -159,14 +157,6 @@
       "functions": 100,
       "sTotal": 303,
       "sCovered": 302
-    },
-    "shared-ke-client": {
-      "lines": 100,
-      "statements": 100,
-      "branches": 98.23,
-      "functions": 100,
-      "sTotal": 123,
-      "sCovered": 123
     },
     "tasks": {
       "lines": 97,

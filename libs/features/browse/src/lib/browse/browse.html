@@ -288,58 +288,72 @@
                 </div>
               }
               <!-- Card view -->
+              <!-- Each card renders by ID, with the built-in card as the fallback. -->
               <div class="card-grid">
-                @for (doc of filteredEntries(); track doc.uid) {
-                  <div
-                    class="doc-card-wrapper"
-                    [class.doc-card-wrapper--selected]="isSelected(doc.uid)"
-                  >
-                    <div class="grid-card-checkbox">
-                      <mat-checkbox
-                        [checked]="isSelected(doc.uid)"
-                        [aria-label]="selectionAriaLabel(doc)"
-                        (change)="toggleSelection(doc.uid)"
-                        (click)="$event.stopPropagation()"
-                      ></mat-checkbox>
-                    </div>
-                    <button class="doc-card" type="button" (click)="onRowClick(doc)">
-                      <div class="card-thumb">
-                        <nxs-thumbnail class="card-thumb-img" [documentId]="doc.uid">
-                          <mat-icon class="card-thumb-icon" [svgIcon]="docIcon(doc)" />
-                        </nxs-thumbnail>
-                      </div>
-                      <div class="card-body">
-                        <span class="card-title">{{ doc.title }}</span>
-                        <span class="card-type">{{ doc.type | docTypeLabel }}</span>
-                      </div>
+                @for (card of cards(); track card.doc.uid) {
+                  @let doc = card.doc;
+                  <ng-template #cardThumbnail>
+                    <nxs-thumbnail class="card-thumb-img" [documentId]="doc.uid">
+                      <mat-icon class="card-thumb-icon" [svgIcon]="docIcon(doc)" />
+                    </nxs-thumbnail>
+                  </ng-template>
+                  <ng-template #collectionMenu>
+                    <button
+                      mat-icon-button
+                      type="button"
+                      [matMenuTriggerFor]="collectionCardMenu"
+                      [attr.aria-label]="'browse.browse.collection-actions' | translate"
+                    >
+                      <mat-icon svgIcon="more_vert" />
                     </button>
-                    @if (isCollectionEntry(doc) && hasCollectionEntryActions(doc)) {
-                      <button
-                        mat-icon-button
-                        type="button"
-                        class="grid-card-menu"
-                        [matMenuTriggerFor]="collectionCardMenu"
-                        [attr.aria-label]="'browse.browse.collection-actions' | translate"
-                        (click)="$event.stopPropagation()"
-                      >
-                        <mat-icon svgIcon="more_vert" />
-                      </button>
-                      <mat-menu #collectionCardMenu="matMenu">
-                        @if (canEditCollectionEntry(doc)) {
-                          <button mat-menu-item (click)="openEditCollectionDialog(doc)">
-                            <mat-icon svgIcon="pencil" />
-                            <span>{{ 'browse.browse.edit' | translate }}</span>
-                          </button>
-                        }
-                        @if (canDeleteCollectionEntry(doc)) {
-                          <button mat-menu-item (click)="deleteCollectionEntry(doc)">
-                            <mat-icon svgIcon="trash" />
-                            <span>{{ 'browse.browse.delete' | translate }}</span>
-                          </button>
-                        }
-                      </mat-menu>
-                    }
-                  </div>
+                    <mat-menu #collectionCardMenu="matMenu">
+                      @if (canEditCollectionEntry(doc)) {
+                        <button mat-menu-item (click)="openEditCollectionDialog(doc)">
+                          <mat-icon svgIcon="pencil" />
+                          <span>{{ 'browse.browse.edit' | translate }}</span>
+                        </button>
+                      }
+                      @if (canDeleteCollectionEntry(doc)) {
+                        <button mat-menu-item (click)="deleteCollectionEntry(doc)">
+                          <mat-icon svgIcon="trash" />
+                          <span>{{ 'browse.browse.delete' | translate }}</span>
+                        </button>
+                      }
+                    </mat-menu>
+                  </ng-template>
+                  @let cardInputs =
+                    {
+                      heading: card.name,
+                      subheading: doc.type | docTypeLabel,
+                      selected: isSelected(doc.uid),
+                      selectionLabel: selectionAriaLabel(doc),
+                      selectionHandler: card.select,
+                      openHandler: card.open,
+                      media: cardThumbnail,
+                      headerAction:
+                        isCollectionEntry(doc) && hasCollectionEntryActions(doc)
+                          ? collectionMenu
+                          : null,
+                      actions: null,
+                    };
+                  <lib-extension-outlet
+                    #cardOutlet
+                    class="card-outlet"
+                    [componentId]="cardId"
+                    [componentInputs]="cardInputs"
+                  />
+                  @if (cardOutlet.unresolved()) {
+                    <nxs-card
+                      [heading]="cardInputs.heading"
+                      [subheading]="cardInputs.subheading"
+                      [selected]="cardInputs.selected"
+                      [selectionLabel]="cardInputs.selectionLabel"
+                      [selectionHandler]="cardInputs.selectionHandler"
+                      [openHandler]="cardInputs.openHandler"
+                      [media]="cardInputs.media"
+                      [headerAction]="cardInputs.headerAction"
+                    />
+                  }
                 }
               </div>
               <nxs-pager

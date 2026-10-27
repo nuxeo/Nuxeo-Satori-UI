@@ -25,7 +25,6 @@ import {
 import {
   ARenderService,
   BrowseService,
-  ContentLakeIngestService,
   CURRENT_USERNAME,
   DirectoryService,
   DocumentDetailService,
@@ -42,8 +41,6 @@ import {
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
-import { KdClientService } from '@agentic-ui/shared/kd-client';
-import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 import { DocumentDetailComponent } from './document-detail';
@@ -102,9 +99,6 @@ function version(minor: number, over: Partial<NuxeoDocument> = {}): NuxeoDocumen
   });
 }
 
-const emptyKe = (): Observable<KeEnrichmentResult> =>
-  of({ textClassification: { result: '' } } as KeEnrichmentResult);
-
 const mockDetailService = {
   getFullDocument: vi.fn((_uid?: string): Observable<NuxeoDocument> => of(live())),
   fetchBlob: vi.fn((): Observable<Blob> => of(new Blob(['x'], { type: 'text/plain' }))),
@@ -147,14 +141,6 @@ const mockWorkflowService = {
   getDocumentWorkflows: vi.fn((_uid: string): Observable<NuxeoWorkflow[]> => of([])),
 };
 
-const mockContentLake = {
-  startIngest: vi.fn(() => of({ commandId: 'c1' })),
-  waitUntilComplete: vi.fn(() => of({})),
-  markIngested: vi.fn(() => of([])),
-  backfillIngestMarkerIfNeeded: vi.fn(() => of({ doc: null, presentInContentLake: false })),
-};
-
-/** A blob Content Lake can ingest, and Knowledge Enrichment can read. */
 const PDF = { 'file:content': { name: 'a.pdf', 'mime-type': 'application/pdf', data: '' } };
 
 describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
@@ -196,7 +182,6 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
             getAllL10nEntries: vi.fn(() => of([])),
           },
         },
-        { provide: KeClientService, useValue: { enrich: emptyKe } },
         { provide: TaskService, useValue: { getDocumentTasks: vi.fn(() => of([])) } },
         { provide: WorkflowService, useValue: mockWorkflowService },
         {
@@ -218,8 +203,6 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
           },
         },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: ContentLakeIngestService, useValue: mockContentLake },
-        { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         {
           provide: AppConfigService,
           useValue: {
@@ -473,26 +456,6 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(component.canManagePermissions()).toBe(false);
       expect(el('[data-action-id="app.toolbar.edit"]')).toBeNull();
       expect(el('button.nxs-manage-versions__create')).toBeNull();
-    });
-
-    it('offers no enrichment that would write back to a version', async () => {
-      // Knowledge Enrichment writes `dc:description` / `dc:nature` and tags back to the document.
-      await render(live({ properties: { ...live().properties, ...PDF } }));
-      expect(el('.ke-action-group')).toBeTruthy();
-
-      fixture.destroy();
-      await render(version(1, { properties: { ...version(1).properties, ...PDF } }));
-      expect(el('.ke-action-group')).toBeNull();
-    });
-
-    it('does not backfill the Content Lake marker on a version, which would be a write', async () => {
-      await render(live({ properties: { ...live().properties, ...PDF } }));
-      expect(mockContentLake.backfillIngestMarkerIfNeeded).toHaveBeenCalled();
-
-      mockContentLake.backfillIngestMarkerIfNeeded.mockClear();
-      fixture.destroy();
-      await render(version(1, { properties: { ...version(1).properties, ...PDF } }));
-      expect(mockContentLake.backfillIngestMarkerIfNeeded).not.toHaveBeenCalled();
     });
 
     it('refuses an edit on a version even if a manifest re-enables the action', async () => {
