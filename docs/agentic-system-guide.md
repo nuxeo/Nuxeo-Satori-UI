@@ -437,13 +437,12 @@ The test step was previously commented out — it is now active.
 
 ---
 
-### `changelog.yml`
+### `CHANGELOG.md` (no workflow)
 
-|                  |                                                                                                                                                   |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Trigger**      | Every merge to `main`                                                                                                                             |
-| **What it does** | Reads all Conventional Commit messages (`feat:`, `fix:`, `docs:`, etc.) and auto-generates `CHANGELOG.md`. Commits the update directly to `main`. |
-| **Effect**       | The changelog is always current. No one has to write release notes manually.                                                                      |
+`changelog.yml` was removed. `CHANGELOG.md` is written by hand, in the PR that makes the change.
+The workflow's direct push to `main` was rejected by the repository rules on every run, and its
+generator, with no release tags to start from, prepended the full commit history as a `0.0.0`
+section above the curated file, and prepended it again on each later run.
 
 ---
 
@@ -502,7 +501,6 @@ These files in `docs/agent-workflows/` explain the full step-by-step flow for th
 | `dependabot.yml`                       | Monday 06:00 UTC                       | None                 |
 | `stale.yml`                            | Daily 02:00 UTC                        | None                 |
 | `dead-code.yml`                        | Monday 06:00 UTC                       | None                 |
-| `changelog.yml`                        | Every merge to `main`                  | None                 |
 | `staleness-check.yml`                  | Monday 07:00 UTC                       | None                 |
 | `release.yml`                          | Manual GitHub Actions dispatch         | One click            |
 

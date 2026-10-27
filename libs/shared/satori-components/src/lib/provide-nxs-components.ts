@@ -4,10 +4,12 @@ import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 import { NxsAvatarComponent } from './avatar/avatar.component';
 import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
 import { NxsCardComponent } from './card/card.component';
+import { NxsDocumentToolbarComponent } from './document-toolbar/document-toolbar.component';
 import { NxsErrorStateComponent } from './error-state/error-state.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { NxsRichTooltipComponent } from './rich-tooltip/rich-tooltip.component';
 import { NxsStatusTagComponent } from './status-tag/status-tag.component';
+import { NxsTabsComponent } from './tabs/tabs.component';
 import { NxsTagComponent } from './tag/tag.component';
 // satori:import:components — `satori-component` inserts above this line
 
@@ -34,6 +36,8 @@ export function provideNxsComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.statusTag]: NxsStatusTagComponent,
       [NXS_PRIMITIVE_IDS.richTooltip]: NxsRichTooltipComponent,
       [NXS_PRIMITIVE_IDS.errorState]: NxsErrorStateComponent,
+      [NXS_PRIMITIVE_IDS.tabs]: NxsTabsComponent,
+      [NXS_PRIMITIVE_IDS.actionBar]: NxsDocumentToolbarComponent,
       [NXS_PRIMITIVE_IDS.card]: NxsCardComponent,
       // satori:register:components — `satori-component` inserts above this line
     },

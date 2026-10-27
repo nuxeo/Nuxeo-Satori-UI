@@ -1,7 +1,9 @@
 import type { InputSignal, InputSignalWithTransform, TemplateRef } from '@angular/core';
 
+import type { NxsToolbarAction } from './document-toolbar/document-toolbar.component';
 import type { NxsErrorStatus } from './error-state/error-status';
 import type { NxsHeadingLevel } from './heading-level';
+import type { NxsTab, NxsTabBodyContext } from './tabs/tab-body.directive';
 
 /**
  * The IDs of the primitives Satori also ships, registered by `provideNxsComponents()`.
@@ -20,6 +22,8 @@ export const NXS_PRIMITIVE_IDS = Object.freeze({
   statusTag: 'nxs.primitives.statusTag',
   richTooltip: 'nxs.primitives.richTooltip',
   errorState: 'nxs.primitives.errorState',
+  tabs: 'nxs.primitives.tabs',
+  actionBar: 'nxs.primitives.actionBar',
   card: 'nxs.primitives.card',
 } as const);
 
@@ -113,6 +117,50 @@ export interface NxsRichTooltipInputs {
   readonly triggerLabel: InputSignal<string>;
   /** A Material icon ligature for the trigger. */
   readonly icon: InputSignal<string>;
+}
+
+/**
+ * `nxs.primitives.tabs`: a tab strip and the selected tab's body. Text inputs arrive already
+ * translated.
+ *
+ * A host rendering the ID through `lib-extension-outlet` passes `body` and `selectHandler`,
+ * because the outlet sets inputs and neither projects content nor binds outputs.
+ */
+export interface NxsTabsInputs {
+  /** The tabs, in display order. */
+  readonly tabs: InputSignal<readonly NxsTab[]>;
+  /** The tab list's accessible name. Optional. */
+  readonly label: InputSignal<string>;
+  /** The selected tab's position. Past the last tab selects the last. */
+  readonly selectedIndex: InputSignal<number>;
+  /**
+   * The template every tab's body renders from, given the tab as `let-tab`. A body once shown is
+   * kept, hidden, while another tab is selected, so what the user left in it is there on return.
+   */
+  readonly body: InputSignal<TemplateRef<NxsTabBodyContext> | null>;
+  /**
+   * Called with the selected tab and its position whenever the selection changes — the user
+   * choosing a tab, or the host moving `selectedIndex` — but not for the first selection.
+   */
+  readonly selectHandler: InputSignal<((tab: NxsTab, index: number) => void) | null>;
+}
+
+/**
+ * `nxs.primitives.actionBar`: a row of actions, some behind a "More actions" menu. Text inputs
+ * arrive already translated.
+ *
+ * A host rendering the ID through `lib-extension-outlet` passes `actionHandler`, because the
+ * outlet sets inputs and binds no outputs.
+ */
+export interface NxsActionBarInputs {
+  /** Every entry, in display order; each one's `overflow` decides which group it is in. */
+  readonly actions: InputSignal<readonly NxsToolbarAction[]>;
+  /** The group's accessible name. Blank falls back to the library's own "Document actions". */
+  readonly label: InputSignal<string>;
+  /** The menu button's accessible name and tooltip. Blank falls back to "More actions". */
+  readonly moreLabel: InputSignal<string>;
+  /** Called with the entry the user ran. Never a disabled one. */
+  readonly actionHandler: InputSignal<((action: NxsToolbarAction) => void) | null>;
 }
 
 /**

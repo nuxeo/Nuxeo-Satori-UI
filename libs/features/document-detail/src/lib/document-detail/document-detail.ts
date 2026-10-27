@@ -179,7 +179,6 @@ import {
   NxsPermissionsPanelComponent,
   NxsPropertiesPanelComponent,
   NxsSpinnerComponent,
-  NxsTabBodyDirective,
   NxsTabsComponent,
   NxsTagComponent,
   NxsToastService,
@@ -266,7 +265,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     NxsManageVersionsComponent,
     NxsPropertiesPanelComponent,
     NxsSpinnerComponent,
-    NxsTabBodyDirective,
     NxsTabsComponent,
     NxsTagComponent,
     CdkAriaLive,
@@ -825,6 +823,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   );
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
   readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
+  readonly tabsId = NXS_PRIMITIVE_IDS.tabs;
+  readonly actionBarId = NXS_PRIMITIVE_IDS.actionBar;
+  /** What the tab strip calls when the selection changes, rendered by ID or as the fallback. */
+  readonly tabSelectHandler = (_tab: NxsTab, index: number): void => this.onTabChange(index);
+  /** What the action bar rendered by ID calls in place of `(selected)`. */
+  readonly toolbarActionHandler = (entry: NxsToolbarAction): void => this.runToolbarEntry(entry);
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadDocumentPermissions();
   readonly canWriteDoc = computed(() => !this.isVersionView() && canWriteDocument(this.doc()));
