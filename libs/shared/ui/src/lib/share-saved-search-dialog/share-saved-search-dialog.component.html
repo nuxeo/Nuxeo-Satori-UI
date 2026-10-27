@@ -55,7 +55,7 @@
             @for (row of permissions(); track row.id) {
               <tr>
                 <td>{{ row.userGroup }}</td>
-                <td>{{ row.right }}</td>
+                <td>{{ permissionLabel(row.right) }}</td>
                 <td>{{ row.timeFrame }}</td>
                 <td>{{ row.grantedBy || '-' }}</td>
                 <td class="actions-cell">
@@ -66,6 +66,7 @@
                     [attr.aria-label]="
                       'shared-ui.share-saved-search-dialog.edit-permission' | translate
                     "
+                    [disabled]="saving() || !isEditable(row)"
                     (click)="editRow(row.id)"
                   >
                     <mat-icon svgIcon="pencil" />
@@ -145,7 +146,7 @@
               @for (row of inheritedPermissions(); track $index) {
                 <tr>
                   <td>{{ row.userGroup }}</td>
-                  <td>{{ row.right }}</td>
+                  <td>{{ permissionLabel(row.right) }}</td>
                   <td>{{ row.timeFrame }}</td>
                   <td>{{ row.grantedBy || '-' }}</td>
                 </tr>
@@ -192,7 +193,7 @@
             @for (row of externalPermissions(); track row.id) {
               <tr>
                 <td>{{ row.userGroup }}</td>
-                <td>{{ row.right }}</td>
+                <td>{{ permissionLabel(row.right) }}</td>
                 <td>{{ row.timeFrame }}</td>
                 <td>{{ row.grantedBy || '-' }}</td>
                 <td class="actions-cell">

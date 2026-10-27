@@ -33,7 +33,6 @@
       "@agentic-ui/shared/ai-client": ["libs/shared/ai-client/src/index.ts"],
       "@agentic-ui/shared/document-layouts": ["libs/shared/document-layouts/src/index.ts"],
       "@agentic-ui/shared/kd-client": ["libs/shared/kd-client/src/index.ts"],
-      "@agentic-ui/shared/ke-client": ["libs/shared/ke-client/src/index.ts"],
       "@agentic-ui/shared/util": ["libs/shared/util/src/index.ts"],
       "@nuxeo/satori-platform": ["libs/platform/src/index.ts"],
       "@nuxeo/satori-platform/app-config": ["libs/shared/app-config/src/index.ts"],

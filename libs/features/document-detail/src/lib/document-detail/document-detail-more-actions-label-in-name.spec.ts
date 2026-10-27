@@ -17,7 +17,7 @@ const toolbarTemplatePath = join(
 );
 
 const MORE_ACTIONS_KEY = 'document-detail.document-detail.more-actions';
-const MORE_NAME = `ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)`;
+const MORE_NAME = `view.ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)`;
 
 function headerMoreActionsButtonMarkup(html: string): string {
   const needle = '[matMenuTriggerFor]="moreMenu"';

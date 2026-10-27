@@ -1,8 +1,7 @@
+// The `--nxs-tabs-*` tokens are read with their defaults rather than declared here, so a page can set
+// them on any ancestor — the `lib-extension-outlet` that renders `nxs.primitives.tabs`, say — and
+// not only on this element.
 :host {
-  --nxs-tabs-header-surface: var(--mat-sys-surface);
-  --nxs-tabs-header-border: var(--mat-sys-outline-variant);
-  --nxs-tabs-focus-outline: var(--mat-sys-primary);
-  --nxs-tabs-icon-color: var(--mat-sys-primary);
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -21,8 +20,8 @@
 
   // stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides
   ::ng-deep .mat-mdc-tab-header {
-    background: var(--nxs-tabs-header-surface);
-    border-bottom: 1px solid var(--nxs-tabs-header-border);
+    background: var(--nxs-tabs-header-surface, var(--mat-sys-surface));
+    border-bottom: 1px solid var(--nxs-tabs-header-border, var(--mat-sys-outline-variant));
     flex-shrink: 0;
   }
 
@@ -45,7 +44,7 @@
   // list with `:focus-visible`, because IBM Equal Access `style_focus_visible` reads `:focus` only.
   // stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides
   ::ng-deep .mat-mdc-tab:focus {
-    outline: 2px solid var(--nxs-tabs-focus-outline);
+    outline: 2px solid var(--nxs-tabs-focus-outline, var(--mat-sys-primary));
     outline-offset: -2px;
   }
 
@@ -80,5 +79,5 @@
   font-size: 18px;
   width: 18px;
   height: 18px;
-  color: var(--nxs-tabs-icon-color);
+  color: var(--nxs-tabs-icon-color, var(--mat-sys-primary));
 }

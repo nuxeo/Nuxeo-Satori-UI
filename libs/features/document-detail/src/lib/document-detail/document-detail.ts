@@ -70,14 +70,6 @@ import {
   insecureAllowedForHost,
   originOf,
   TagService,
-  ContentLakeIngestService,
-  buildContentLakeIngestMarker,
-  isContentLakeIngestCurrent,
-  needsContentLakeIngest,
-  readBlobDigest,
-  resolveIngestMarkerWriteProperty,
-  shouldProbeContentLakeIngestStatus,
-  supportsContentLakeIngest,
   canManageDocumentPermissions,
   canPublishDocument,
   canTagDocument,
@@ -125,14 +117,7 @@ import {
   type SentimentItem,
   type SentimentResponse,
 } from '@agentic-ui/shared/ai-client';
-import {
-  KeClientService,
-  KeEnrichmentError,
-  type KeEnrichRequest,
-  type KeEnrichmentResult,
-} from '@agentic-ui/shared/ke-client';
 import { DocumentLayoutComponent } from '@agentic-ui/shared/document-layouts';
-import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   catchError,
   finalize,
@@ -194,7 +179,6 @@ import {
   NxsPermissionsPanelComponent,
   NxsPropertiesPanelComponent,
   NxsSpinnerComponent,
-  NxsTabBodyDirective,
   NxsTabsComponent,
   NxsTagComponent,
   NxsToastService,
@@ -229,46 +213,6 @@ const TAG_CATEGORIES: SatTagCategory[] = [
   'pink',
   'orange',
 ];
-
-/**
- * Sentinel value the Hyland Knowledge Enrichment `text-classification` action returns
- * when the model cannot match the document to any of the supplied candidate classes.
- * We must never write this to `dc:nature` — it is not a valid vocabulary id and Nuxeo
- * will reject the PUT with HTTP 422 ("Cannot find vocabulary value").
- *
- * See AGENTS/08-bug-patterns.md ("AI free-form output written to a vocabulary field").
- */
-const KE_NO_MATCH_SENTINEL = 'not_from_provided_classes';
-
-type KeUiAction =
-  | 'text-classification'
-  | 'named-entity-recognition-text'
-  | 'text-summarization'
-  | 'image-enrichment';
-
-/** Catalogue keys for the progress, success and failure message of each enrichment action. */
-const KE_MESSAGE_KEYS: Record<KeUiAction, { start: string; success: string; failed: string }> = {
-  'text-classification': {
-    start: 'document-detail.message.ke-start-classification',
-    success: 'document-detail.message.ke-success-classification',
-    failed: 'document-detail.message.ke-failed-classification',
-  },
-  'named-entity-recognition-text': {
-    start: 'document-detail.message.ke-start-entity-extraction',
-    success: 'document-detail.message.ke-success-entity-extraction',
-    failed: 'document-detail.message.ke-failed-entity-extraction',
-  },
-  'text-summarization': {
-    start: 'document-detail.message.ke-start-summarization',
-    success: 'document-detail.message.ke-success-summarization',
-    failed: 'document-detail.message.ke-failed-summarization',
-  },
-  'image-enrichment': {
-    start: 'document-detail.message.ke-start-image-enrichment',
-    success: 'document-detail.message.ke-success-image-enrichment',
-    failed: 'document-detail.message.ke-failed-image-enrichment',
-  },
-};
 
 /**
  * The message for a refused restore. 403 is also what Nuxeo answers when another user holds
@@ -323,7 +267,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     NxsManageVersionsComponent,
     NxsPropertiesPanelComponent,
     NxsSpinnerComponent,
-    NxsTabBodyDirective,
     NxsTabsComponent,
     NxsTagComponent,
     CdkAriaLive,
@@ -388,9 +331,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private readonly nuxeoApiOrigin = inject(NUXEO_API_ORIGIN);
   private readonly tagService = inject(TagService);
   private readonly aiGateway = inject(AiGatewayService);
-  private readonly keClient = inject(KeClientService);
-  private readonly contentLakeIngestService = inject(ContentLakeIngestService);
-  private readonly kdClient = inject(KdClientService);
   private readonly aiChatService = inject(AiChatService);
   readonly featureFlags = inject(AiFeatureFlagService);
 
@@ -643,19 +583,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly aiSentimentMap = signal<Record<string, SentimentItem>>({});
   readonly aiThreadSummary = signal<string | null>(null);
   readonly aiSentimentLoading = signal(false);
-  readonly keActionInFlight = signal<KeUiAction | null>(null);
-  readonly keStatus = signal<string | null>(null);
-  readonly keError = signal<string | null>(null);
-  readonly contentLakeIngestInFlight = signal(false);
-  readonly contentLakeIngestStatus = signal<string | null>(null);
-  readonly contentLakeIngestError = signal<string | null>(null);
-  /** Set after a successful ingest or CheckDigest probe when the marker cannot be persisted. */
-  readonly contentLakePresenceVerified = signal(false);
-  readonly contentLakePresenceChecking = signal(false);
-
-  // Loaded from the Nuxeo `nature` directory and supplied as candidate classes to the
-  // KE text-classification model. Sourcing live ids guarantees the value we write back
-  // to `dc:nature` is in the vocabulary (Nuxeo enforces this and returns 422 otherwise).
+  // Loaded from the Nuxeo `nature` directory for metadata display.
   // Refreshed on each document navigation (Nuxeo Web UI parity).
   readonly natureVocabulary = signal<DirectoryEntry[]>([]);
   readonly coverageVocabulary = signal<L10nDirectoryEntry[]>([]);
@@ -827,19 +755,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return (pictureContent?.['mime-type'] as string) ?? '';
   });
 
-  readonly supportsTextKnowledgeEnrichment = computed(
-    () => this.fileMimeType() === 'application/pdf',
-  );
-  readonly supportsImageKnowledgeEnrichment = computed(() => {
-    const mime = this.fileMimeType();
-    return mime.startsWith('image/') || this.typeTraits().picture;
-  });
-  readonly canIngestToContentLake = computed(() => needsContentLakeIngest(this.doc()));
-  readonly showsContentLakeIngested = computed(
-    () => isContentLakeIngestCurrent(this.doc()) || this.contentLakePresenceVerified(),
-  );
-  readonly showsContentLakeIngestAction = computed(() => supportsContentLakeIngest(this.doc()));
-
   readonly attachments = computed(() => {
     const d = this.doc();
     if (!d) return [];
@@ -897,6 +812,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   );
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
   readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
+  readonly tabsId = NXS_PRIMITIVE_IDS.tabs;
+  readonly actionBarId = NXS_PRIMITIVE_IDS.actionBar;
+  /** What the tab strip calls when the selection changes, rendered by ID or as the fallback. */
+  readonly tabSelectHandler = (_tab: NxsTab, index: number): void => this.onTabChange(index);
+  /** What the action bar rendered by ID calls in place of `(selected)`. */
+  readonly toolbarActionHandler = (entry: NxsToolbarAction): void => this.runToolbarEntry(entry);
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadDocumentPermissions();
   readonly canWriteDoc = computed(() => !this.isVersionView() && canWriteDocument(this.doc()));
@@ -1066,7 +987,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return historyState?.freshNote === true;
   }
 
-  /** Pre-loads vocabulary data for metadata display and KE classification (live queries). */
+  /** Pre-loads vocabulary data for metadata display (live queries). */
   private loadVocabularies(): void {
     this.directoryService
       .getEntries('nature')
@@ -1111,14 +1032,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.showStartProcessPanel.set(false);
     this.documentTasks.set([]);
     this.documentWorkflows.set([]);
-    this.keActionInFlight.set(null);
-    this.keStatus.set(null);
-    this.keError.set(null);
-    this.contentLakeIngestInFlight.set(false);
-    this.contentLakeIngestStatus.set(null);
-    this.contentLakeIngestError.set(null);
-    this.contentLakePresenceVerified.set(false);
-    this.contentLakePresenceChecking.set(false);
     this.panelSubTab.set('properties');
     this.permissionsTabLoaded = false;
     this.publishTabLoaded = false;
@@ -1239,104 +1152,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     });
   }
 
-  runTextClassification(): void {
-    const candidates = this.natureVocabulary().map((entry) => entry.id);
-    if (candidates.length === 0) {
-      const message = this.translate.instant(
-        'document-detail.message.classification-unavailable-vocabulary',
-      );
-      this.keError.set(message);
-      this.toast.error(message);
-      return;
-    }
-    this.runKnowledgeEnrichment('text-classification', {
-      actions: ['text-classification'],
-      classes: candidates,
-    });
-  }
-
-  runTextEntityExtraction(): void {
-    this.runKnowledgeEnrichment('named-entity-recognition-text', {
-      actions: ['named-entity-recognition-text'],
-    });
-  }
-
-  runTextSummarization(): void {
-    this.runKnowledgeEnrichment('text-summarization', {
-      actions: ['text-summarization'],
-      maxWordCount: 150,
-    });
-  }
-
-  runImageEnrichment(): void {
-    this.runKnowledgeEnrichment('image-enrichment', {
-      actions: ['image-description', 'named-entity-recognition-image'],
-      maxWordCount: 100,
-    });
-  }
-
-  ingestToContentLake(): void {
-    const uid = this.docUid;
-    if (!uid || !this.canIngestToContentLake() || this.contentLakeIngestInFlight()) {
-      return;
-    }
-
-    this.contentLakeIngestInFlight.set(true);
-    this.contentLakeIngestError.set(null);
-    this.contentLakeIngestStatus.set(null);
-
-    this.contentLakeIngestService
-      .startIngest([uid])
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        switchMap((command) => this.contentLakeIngestService.waitUntilComplete(command.commandId)),
-        switchMap((status) =>
-          this.contentLakeIngestService
-            .markIngested([uid])
-            .pipe(map((updatedDocs) => ({ status, updatedDoc: updatedDocs[0] ?? null }))),
-        ),
-        finalize(() => this.contentLakeIngestInFlight.set(false)),
-      )
-      .subscribe({
-        next: ({ status, updatedDoc }) => {
-          if (status.error || status.errorCount > 0) {
-            const message = this.translate.instant(
-              'document-detail.message.content-lake-ingest-finished-with-errors',
-              { count: status.errorCount },
-            );
-            this.contentLakeIngestError.set(message);
-            this.contentLakeIngestStatus.set(null);
-            this.toast.error(message);
-            return;
-          }
-
-          const message = this.translate.instant(
-            'document-detail.message.ingested-to-content-lake',
-          );
-          this.contentLakeIngestStatus.set(message);
-          this.contentLakePresenceVerified.set(true);
-          if (updatedDoc) {
-            this.doc.set(updatedDoc);
-          } else {
-            this.applyContentLakeIngestMarkerLocally();
-          }
-          this.toast.show(message);
-        },
-        error: (err: Error) => {
-          const message =
-            err.message ||
-            this.translate.instant('document-detail.message.content-lake-ingest-failed');
-          this.contentLakeIngestError.set(message);
-          this.contentLakeIngestStatus.set(null);
-          this.toast.error(message);
-        },
-      });
-  }
-
-  isKeActionRunning(action: KeUiAction): boolean {
-    return this.keActionInFlight() === action;
-  }
-
   navigateToDoc(uid: string): void {
     void this.router.navigateByUrl(`/doc/${uid}`);
   }
@@ -1369,200 +1184,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     });
   }
 
-  private runKnowledgeEnrichment(uiAction: KeUiAction, request: KeEnrichRequest): void {
-    if (!this.docUid || this.keActionInFlight()) return;
-
-    this.keActionInFlight.set(uiAction);
-    this.keError.set(null);
-    this.keStatus.set(this.keStartMessage(uiAction));
-
-    this.detailService
-      .fetchBlob(this.docUid)
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        switchMap((blob) =>
-          this.keClient.enrich(blob, {
-            ...request,
-            sourceId: this.docUid,
-          }),
-        ),
-        switchMap((result) => this.persistKnowledgeEnrichment(uiAction, result)),
-        finalize(() => this.keActionInFlight.set(null)),
-      )
-      .subscribe({
-        next: (updatedDoc) => {
-          this.doc.set(updatedDoc);
-          this.syncActionStates(updatedDoc);
-          this.keStatus.set(this.keSuccessMessage(uiAction));
-          this.toast.show(this.keSuccessMessage(uiAction));
-        },
-        error: (err) => {
-          const message = this.resolveKnowledgeEnrichmentError(err, uiAction);
-          this.keError.set(message);
-          this.keStatus.set(null);
-          this.toast.error(message);
-        },
-      });
-  }
-
-  private persistKnowledgeEnrichment(
-    uiAction: KeUiAction,
-    result: KeEnrichmentResult,
-  ): Observable<NuxeoDocument> {
-    const docId = this.docUid;
-    const propertyUpdates: Record<string, unknown> = {};
-    let tagsToApply: string[] = [];
-
-    switch (uiAction) {
-      case 'text-classification': {
-        const category = result.textClassification?.result?.trim();
-        const vocabularySize = this.natureVocabulary().length;
-
-        if (!category) {
-          console.warn('[KE] text-classification returned no category', result);
-          return this.throwKeResultError(
-            this.translate.instant('document-detail.message.ke-no-category'),
-          );
-        }
-        if (category === KE_NO_MATCH_SENTINEL) {
-          console.warn(
-            `[KE] text-classification: no match against ${vocabularySize} candidate(s)`,
-            { candidates: this.natureVocabulary().map((entry) => entry.id), result },
-          );
-          return this.throwKeResultError(
-            this.translate.instant('document-detail.message.ke-no-category-match', {
-              count: vocabularySize,
-            }),
-          );
-        }
-        // Map back to a vocabulary id. Accept either the id or the display label
-        // (the LLM occasionally returns the human-readable label rather than the id).
-        const resolvedId = this.resolveNatureVocabularyId(category);
-        if (!resolvedId) {
-          console.warn(`[KE] text-classification: "${category}" is not in the nature vocabulary`, {
-            candidates: this.natureVocabulary().map((entry) => entry.id),
-            result,
-          });
-          return this.throwKeResultError(
-            this.translate.instant('document-detail.message.ke-category-not-in-vocabulary', {
-              category,
-              count: vocabularySize,
-            }),
-          );
-        }
-        propertyUpdates['dc:nature'] = resolvedId;
-        break;
-      }
-
-      case 'text-summarization': {
-        const summary = result.textSummary?.result?.trim();
-        if (!summary) {
-          return this.throwKeResultError(
-            this.translate.instant('document-detail.message.ke-no-summary'),
-          );
-        }
-        propertyUpdates['dc:description'] = summary;
-        break;
-      }
-
-      case 'named-entity-recognition-text': {
-        tagsToApply = this.collectNamedEntityTags(result.namedEntityText?.result);
-        if (tagsToApply.length === 0) {
-          return this.throwKeResultError(
-            this.translate.instant('document-detail.message.ke-no-text-entities'),
-          );
-        }
-        break;
-      }
-
-      case 'image-enrichment': {
-        const description = result.imageDescription?.result?.trim();
-        tagsToApply = this.collectNamedEntityTags(result.namedEntityImage?.result);
-
-        if (description) {
-          propertyUpdates['dc:description'] = description;
-        }
-        if (Object.keys(propertyUpdates).length === 0 && tagsToApply.length === 0) {
-          return this.throwKeResultError(
-            this.translate.instant('document-detail.message.ke-no-image-result'),
-          );
-        }
-        break;
-      }
-    }
-
-    const existingTags = new Set(this.tags().map((tag) => tag.toLowerCase()));
-    const uniqueTags = tagsToApply.filter((tag) => !existingTags.has(tag.toLowerCase()));
-
-    const update$ =
-      Object.keys(propertyUpdates).length > 0
-        ? this.browseService.updateDocument(docId, propertyUpdates)
-        : of(null);
-    const tags$ =
-      uniqueTags.length > 0
-        ? forkJoin(uniqueTags.map((tag) => this.tagService.addTag(docId, tag)))
-        : of([]);
-
-    return forkJoin({ updated: update$, tags: tags$ }).pipe(
-      switchMap(() => this.detailService.getFullDocument(docId)),
-    );
-  }
-
-  /**
-   * Maps a KE classification result back to a Nuxeo `nature` vocabulary id.
-   * Accepts a match against either `id` or `displayLabel` (case-insensitive) since
-   * the LLM sometimes returns the human-readable label.
-   */
-  private resolveNatureVocabularyId(value: string): string | null {
-    const needle = value.trim().toLowerCase();
-    if (!needle) return null;
-    const match = this.natureVocabulary().find(
-      (entry) => entry.id.toLowerCase() === needle || entry.displayLabel.toLowerCase() === needle,
-    );
-    return match?.id ?? null;
-  }
-
-  private collectNamedEntityTags(entityMap: Record<string, string[]> | null | undefined): string[] {
-    if (!entityMap) return [];
-    const values = Object.values(entityMap).flatMap((entries) => entries ?? []);
-    return Array.from(
-      new Set(values.map((value) => value.trim()).filter((value) => value.length > 0)),
-    );
-  }
-
-  private keStartMessage(action: KeUiAction): string {
-    return this.translate.instant(KE_MESSAGE_KEYS[action].start);
-  }
-
-  private keSuccessMessage(action: KeUiAction): string {
-    return this.translate.instant(KE_MESSAGE_KEYS[action].success);
-  }
-
-  private resolveKnowledgeEnrichmentError(error: unknown, action: KeUiAction): string {
-    const fallback = this.translate.instant(KE_MESSAGE_KEYS[action].failed);
-    if (error instanceof KeEnrichmentError && error.messageKey) {
-      return this.translate.instant(error.messageKey, error.messageParams);
-    }
-    if (error instanceof Error && error.message) {
-      if (error.message.includes('No authentication info for calling the Enrichment service')) {
-        return this.translate.instant('document-detail.message.ke-not-configured');
-      }
-      return error.message;
-    }
-    const maybeMessage = (error as { error?: { message?: string }; message?: string } | null)?.error
-      ?.message;
-    if (maybeMessage?.includes('No authentication info for calling the Enrichment service')) {
-      return this.translate.instant('document-detail.message.ke-not-configured');
-    }
-    return maybeMessage ?? (error as { message?: string } | null)?.message ?? fallback;
-  }
-
-  private throwKeResultError(message: string): Observable<never> {
-    return new Observable((subscriber) => {
-      subscriber.error(new Error(message));
-    });
-  }
-
   ngOnDestroy(): void {
     // Leaving the last viewed document in the context would let a rule on
     // another page answer about a document the user is no longer looking at.
@@ -1576,55 +1197,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       URL.revokeObjectURL(url);
     }
     this.revokeStoryboardObjectUrls();
-  }
-
-  private maybeBackfillContentLakeMarker(doc: NuxeoDocument): void {
-    // The backfill writes the marker to the document, and a version is read-only.
-    if (doc.isVersion) return;
-    if (!shouldProbeContentLakeIngestStatus(doc)) {
-      if (isContentLakeIngestCurrent(doc)) {
-        this.contentLakePresenceVerified.set(true);
-      }
-      return;
-    }
-
-    this.contentLakePresenceChecking.set(true);
-    this.kdClient
-      .listIngestSourceIds()
-      .pipe(
-        switchMap((sourceIds) =>
-          this.contentLakeIngestService.backfillIngestMarkerIfNeeded(doc, sourceIds),
-        ),
-        finalize(() => this.contentLakePresenceChecking.set(false)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((result) => {
-        if (result.presentInContentLake) {
-          this.contentLakePresenceVerified.set(true);
-        }
-        if (result.doc && this.doc()?.uid === result.doc.uid) {
-          this.doc.set(result.doc);
-        }
-      });
-  }
-
-  private applyContentLakeIngestMarkerLocally(): void {
-    const doc = this.doc();
-    if (!doc) {
-      return;
-    }
-    const digest = readBlobDigest(doc);
-    const writeProperty = resolveIngestMarkerWriteProperty(doc);
-    if (!digest || !writeProperty) {
-      return;
-    }
-    this.doc.set({
-      ...doc,
-      properties: {
-        ...doc.properties,
-        [writeProperty]: buildContentLakeIngestMarker(digest),
-      },
-    });
   }
 
   private loadDocument(uid: string): void {
@@ -1669,7 +1241,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           this.loadDocumentTasks(uid);
           this.loadDocumentWorkflows(uid);
           this.loadARenderUrl(doc);
-          this.maybeBackfillContentLakeMarker(doc);
         },
         error: (err: unknown) => {
           if (!isCurrent()) return;

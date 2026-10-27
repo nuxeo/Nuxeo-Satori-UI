@@ -4,6 +4,7 @@ import {
   provideZonelessChangeDetection,
   signal,
   type EnvironmentProviders,
+  type TemplateRef,
   type Type,
   type WritableSignal,
   ChangeDetectionStrategy,
@@ -34,7 +35,13 @@ import {
   NxsShareExternalDialogComponent,
   NxsUpdatePermissionDialogComponent,
   type NxsBreadcrumbItem,
+  provideNxsComponents,
+  type NxsTab,
+  type NxsTabBodyContext,
+  type NxsToolbarAction,
 } from '@nuxeo/satori-platform/components';
+import { provideNxsSatoriComponents } from '@nuxeo/satori-platform/components-satori';
+import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
@@ -62,13 +69,10 @@ import {
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
-import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
 import { DocumentViewerComponent, MAT_TAB_LIST_KEYDOWN_ATTR } from '@nuxeo/satori-platform/ui';
 
 import { DocumentDetailComponent } from './document-detail';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { provideNxsSatoriComponents } from '@nuxeo/satori-platform/components-satori';
-import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
 /**
  * The `toolbar` and `tabs` slots, asserted **against the rendered template**.
@@ -215,9 +219,6 @@ const nuxeoGet = vi.fn((path: string): Observable<unknown> =>
   ),
 );
 
-const emptyKe = (): Observable<KeEnrichmentResult> =>
-  of({ textClassification: { result: '' } } as KeEnrichmentResult);
-
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument> => of(doc())),
   fetchBlob: vi.fn((): Observable<Blob> => of(new Blob(['x'], { type: 'text/plain' }))),
@@ -229,8 +230,9 @@ const mockDetailService = {
   getAllComments: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getVersions: vi.fn((): Observable<unknown[]> => of([])),
   getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
-  getPublishedVersions: vi.fn((): Observable<unknown[]> => of([])),
-  getSectionTree: vi.fn((): Observable<unknown[]> => of([])),
+  // Both answer a document list, as the service does; the Publishing tab reads `entries`.
+  getPublishedVersions: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
+  getSectionTree: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
   getAuditLog: vi.fn((): Observable<Record<string, unknown>> =>
     of({ entries: [], resultsCount: 0 }),
@@ -283,7 +285,8 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     extensions: unknown,
     focused: NuxeoDocument = doc(),
     components: Readonly<Record<string, Type<unknown>>> = {},
-    extraProviders: EnvironmentProviders[] = [],
+    /** After the page's own, as the app lists `provideNxsComponents()` and its Satori follow-up. */
+    registrations: EnvironmentProviders[] = [],
   ): Promise<void> {
     manifest.set({ extensionLayers: [extensions] });
     mockDetailService.getFullDocument.mockReturnValue(of(focused));
@@ -308,7 +311,6 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: BrowseService, useValue: { updateDocument: vi.fn(() => of(doc())) } },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: KeClientService, useValue: { enrich: emptyKe } },
         { provide: TaskService, useValue: { getDocumentTasks: vi.fn(() => of([])) } },
         {
           provide: WorkflowService,
@@ -352,7 +354,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
             ...components,
           },
         }),
-        ...extraProviders,
+        ...registrations,
       ],
     }).compileComponents();
 
@@ -783,6 +785,242 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       });
 
       expect(tabLabels()).toEqual(['Where published', 'View', 'Annotations', 'Permissions']);
+    });
+  });
+
+  /**
+   * The strip and the header actions are rendered by ID — `nxs.primitives.tabs` and
+   * `nxs.primitives.actionBar` — so what is registered there is what the page shows: Material from
+   * `provideNxsComponents()`, Satori once `provideNxsSatoriComponents()` follows it, or a
+   * customer's component. Registering an ID nothing resolves changes nothing anyone can see, which
+   * is the defect these tests exist to catch: each fails if the page goes back to `<nxs-tabs>` or
+   * `<nxs-document-toolbar>` written into its template.
+   */
+  describe('the tabs and the action bar, by registered ID', () => {
+    const SATORI = [provideSatori(), provideNxsComponents(), provideNxsSatoriComponents()];
+    const tabsOutlet = (): HTMLElement =>
+      fixture.nativeElement.querySelector('lib-extension-outlet.detail-tabs');
+    const actionBarOutlet = (): HTMLElement =>
+      fixture.nativeElement.querySelector('lib-extension-outlet.header-actions');
+
+    async function settle(): Promise<void> {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    it('falls back to the Material strip and toolbar when nothing registers the IDs', async () => {
+      await render({});
+
+      expect(tabsOutlet().classList).toContain('detail-tabs--unresolved');
+      expect(tabsOutlet().children).toHaveLength(0);
+      expect(fixture.nativeElement.querySelector('nxs-tabs.detail-tabs')).toBeTruthy();
+      expect(actionBarOutlet().classList).toContain('header-actions--unresolved');
+      expect(
+        fixture.nativeElement.querySelector('nxs-document-toolbar.header-actions'),
+      ).toBeTruthy();
+    });
+
+    it('renders the Material strip and toolbar through the outlets when provideNxsComponents() registers them', async () => {
+      await render({}, doc(), {}, [provideNxsComponents()]);
+
+      expect(tabsOutlet().querySelector('nxs-tabs')).toBeTruthy();
+      expect(actionBarOutlet().querySelector('nxs-document-toolbar')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('nxs-tabs.detail-tabs')).toBeNull();
+      expect(fixture.nativeElement.querySelector('nxs-document-toolbar.header-actions')).toBeNull();
+      expect(tabLabels()).toEqual(['View', 'Annotations', 'Permissions', 'History', 'Publishing']);
+      expect(actionIds()).toContain('app.toolbar.edit');
+    });
+
+    it('renders Satori in place of Material once provideNxsSatoriComponents() follows', async () => {
+      await render({}, doc(), {}, SATORI);
+
+      expect(tabsOutlet().querySelector('nxs-satori-tabs sat-navigation-tabs')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('nxs-tabs')).toBeNull();
+      const labels = [...tabsOutlet().querySelectorAll('a[satNavigationTab]')].map((el) =>
+        el.textContent?.trim(),
+      );
+      expect(labels).toEqual(['View', 'Annotations', 'Permissions', 'History', 'Publishing']);
+
+      const bar = actionBarOutlet().querySelector('nxs-satori-action-bar');
+      expect(bar).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('nxs-document-toolbar')).toBeNull();
+      expect(bar?.querySelector('[data-action-id="app.toolbar.edit"]')?.classList).toContain(
+        'sat-action-bar-button',
+      );
+    });
+
+    it('selects a Satori tab through the page, which loads that tab', async () => {
+      await render({}, doc(), {}, SATORI);
+
+      const history = [...tabsOutlet().querySelectorAll<HTMLElement>('a[satNavigationTab]')].find(
+        (el) => el.textContent?.trim() === 'History',
+      );
+      history?.click();
+      await settle();
+
+      expect(fixture.componentInstance.activeTabId()).toBe('app.tabs.history');
+      expect(fixture.componentInstance.historyShown()).toBe(true);
+      expect(history?.getAttribute('aria-selected')).toBe('true');
+    });
+
+    it('moves the Satori strip when the page selects a tab itself', async () => {
+      await render({}, doc(), {}, SATORI);
+
+      fixture.componentInstance.goToPublishingTab();
+      await settle();
+
+      const selected = tabsOutlet().querySelector('a[satNavigationTab][aria-selected="true"]');
+      expect(selected?.textContent?.trim()).toBe('Publishing');
+    });
+
+    // The Note editor holds an unsaved draft itself, so a strip that rebuilt the View body on every
+    // switch would discard it on a look at History.
+    it.each([
+      ['Material', [provideNxsComponents()]],
+      ['Satori', SATORI],
+    ])(
+      'keeps the Note editor, and its draft, across a switch to History and back on %s',
+      async (_name, registrations) => {
+        await render(
+          {},
+          doc({
+            type: 'Note',
+            properties: { 'note:note': 'hello', 'note:mime_type': 'text/plain' },
+          }),
+          {},
+          registrations,
+        );
+        const tab = (label: string): HTMLElement | undefined =>
+          [...tabsOutlet().querySelectorAll<HTMLElement>('[role="tab"]')].find(
+            (el) => el.textContent?.trim() === label,
+          );
+        const editor = tabsOutlet().querySelector('lib-note-editor');
+        expect(editor).toBeTruthy();
+
+        tab('History')?.click();
+        await settle();
+        expect(fixture.componentInstance.activeTabId()).toBe('app.tabs.history');
+        tab('View')?.click();
+        await settle();
+
+        expect(fixture.componentInstance.activeTabId()).toBe('app.tabs.view');
+        expect(tabsOutlet().querySelector('lib-note-editor')).toBe(editor);
+      },
+    );
+
+    // A manifest that hides the selected tab puts another in its position without moving the
+    // index, so only `selectHandler` says so; the page's lazy loads for that tab hang off it.
+    it.each([
+      ['the unresolved fallback', [] as EnvironmentProviders[]],
+      ['Material by ID', [provideNxsComponents()]],
+      ['Satori by ID', SATORI],
+    ])(
+      'loads the tab that takes the selected position when the manifest hides the selected one, on %s',
+      async (_name, registrations) => {
+        await render({}, doc(), {}, registrations);
+        const strip = (): HTMLElement =>
+          fixture.nativeElement.querySelector('nxs-tabs.detail-tabs') ?? tabsOutlet();
+        [...strip().querySelectorAll<HTMLElement>('[role="tab"]')]
+          .find((el) => el.textContent?.trim() === 'History')
+          ?.click();
+        await settle();
+        expect(fixture.componentInstance.activeTabId()).toBe('app.tabs.history');
+        const changes = vi.spyOn(fixture.componentInstance, 'onTabChange');
+        mockDetailService.getSectionTree.mockClear();
+
+        manifest.set({
+          extensionLayers: [{ overrides: { 'app.tabs.history': { visible: false } } }],
+        });
+        await settle();
+        await settle();
+
+        expect(changes).toHaveBeenCalledWith(3);
+        expect(fixture.componentInstance.activeTabId()).toBe('app.tabs.publishing');
+        expect(mockDetailService.getSectionTree).toHaveBeenCalled();
+      },
+    );
+
+    it('runs a Satori action through the page', async () => {
+      await render({}, doc(), {}, SATORI);
+      // Only that the entry reaches the page: running it opens a real dialog jsdom cannot lay out.
+      const run = vi
+        .spyOn(fixture.componentInstance, 'runToolbarEntry')
+        .mockImplementation(() => undefined);
+
+      actionBarOutlet()
+        .querySelector<HTMLElement>('[data-action-id="app.toolbar.addToCollection"]')
+        ?.click();
+
+      expect(run).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'app.toolbar.addToCollection' }),
+      );
+    });
+
+    @Component({
+      standalone: true,
+      selector: 'lib-test-acme-tabs',
+      changeDetection: ChangeDetectionStrategy.Eager,
+      template: `<p class="acme-tabs">ACME TABS {{ ids() }} at {{ selectedIndex() }}</p>
+        <button type="button" class="acme-tabs__history" (click)="pick(3)">History</button>`,
+    })
+    class AcmeTabsComponent {
+      readonly tabs = input<readonly NxsTab[]>([]);
+      readonly label = input('');
+      readonly selectedIndex = input(0);
+      readonly body = input<TemplateRef<NxsTabBodyContext> | null>(null);
+      readonly selectHandler = input<((tab: NxsTab, index: number) => void) | null>(null);
+      ids(): string {
+        return this.tabs()
+          .map((tab) => tab.id)
+          .join(',');
+      }
+      pick(index: number): void {
+        const tab = this.tabs()[index];
+        if (tab) this.selectHandler()?.(tab, index);
+      }
+    }
+
+    @Component({
+      standalone: true,
+      selector: 'lib-test-acme-action-bar',
+      changeDetection: ChangeDetectionStrategy.Eager,
+      template: `<button type="button" class="acme-bar" (click)="runFirst()">
+        ACME BAR {{ actions().length }}
+      </button>`,
+    })
+    class AcmeActionBarComponent {
+      readonly actions = input<readonly NxsToolbarAction[]>([]);
+      readonly label = input('');
+      readonly moreLabel = input('');
+      readonly actionHandler = input<((action: NxsToolbarAction) => void) | null>(null);
+      runFirst(): void {
+        const first = this.actions()[0];
+        if (first) this.actionHandler()?.(first);
+      }
+    }
+
+    it("renders a customer's tabs and action bar registered under the IDs, with the page's inputs", async () => {
+      await render({}, doc(), {
+        [NXS_PRIMITIVE_IDS.tabs]: AcmeTabsComponent,
+        [NXS_PRIMITIVE_IDS.actionBar]: AcmeActionBarComponent,
+      });
+      // Only that the entry reaches the page: running it opens a real dialog jsdom cannot lay out.
+      const run = vi
+        .spyOn(fixture.componentInstance, 'runToolbarEntry')
+        .mockImplementation(() => undefined);
+
+      expect(tabsOutlet().querySelector('.acme-tabs')?.textContent).toContain(
+        'app.tabs.view,app.tabs.annotations,app.tabs.permissions,app.tabs.history,app.tabs.publishing at 0',
+      );
+      tabsOutlet().querySelector<HTMLElement>('.acme-tabs__history')?.click();
+      await settle();
+      expect(fixture.componentInstance.activeTabId()).toBe('app.tabs.history');
+      expect(tabsOutlet().querySelector('.acme-tabs')?.textContent).toContain('at 3');
+
+      actionBarOutlet().querySelector<HTMLElement>('.acme-bar')?.click();
+      expect(run).toHaveBeenCalledWith(expect.objectContaining({ id: 'app.toolbar.edit' }));
+      expect(fixture.nativeElement.querySelector('nxs-tabs, nxs-document-toolbar')).toBeNull();
     });
   });
 
@@ -1377,7 +1615,8 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
   });
 
   /**
-   * NXSAT-652. The trail, the AI primary category and the activity avatars render by their
+   * NXSAT-652. The trail, the AI primary category, a publication's version tag and the activity
+   * avatars render by their
    * `nxs.primitives.*` ID, so a component registered under one replaces it here. This spec
    * registers no `provideNxsComponents()`, so without an override each falls back to its `nxs-`
    * element — the second half of the contract. Seen red on purpose by restoring `<sat-breadcrumbs>`.
@@ -1576,6 +1815,24 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       const tag = fixture.nativeElement.querySelector('.ai-meta-row .acme-tag') as HTMLElement;
       expect(tag?.textContent?.trim()).toBe('Report');
       expect(tag.dataset['color']).toBe('blue');
+    });
+
+    it('renders a publication’s version tag through nxs.primitives.tag', async () => {
+      const publication = doc({
+        isProxy: true,
+        isCheckedOut: false,
+        properties: { 'uid:major_version': 1, 'uid:minor_version': 0 },
+      });
+      await render({}, publication, { [NXS_PRIMITIVE_IDS.tag]: AcmeTagComponent });
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const tag = fixture.nativeElement.querySelector(
+        'nxs-properties-panel [nxsVersion] .acme-tag',
+      ) as HTMLElement;
+      expect(tag?.textContent?.trim()).toBe('1.0');
+      expect(tag.dataset['color']).toBe('gray');
+      expect(fixture.nativeElement.querySelector('[nxsVersion] nxs-tag')).toBeNull();
     });
   });
 });

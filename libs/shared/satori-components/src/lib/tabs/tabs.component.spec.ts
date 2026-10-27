@@ -130,6 +130,32 @@ describe('NxsTabsComponent', () => {
     expect(activeBody()?.textContent).toContain('Permissions body');
   });
 
+  // The tab group reports only `selectedTabChange` here, not `selectedIndexChange`.
+  it('reports a different tab at the same position when the list changes under the selection', async () => {
+    host.index.set(1);
+    await render();
+    host.tabs.set([TABS[0], TABS[2]]);
+    await render();
+    expect(host.selected).toEqual(['app.tabs.permissions', 'acme.tabs.claims']);
+    expect(activeBody()?.getAttribute('data-for')).toBe('acme.tabs.claims');
+  });
+
+  it('keeps a body alive while another tab is selected', async () => {
+    const view = activeBody();
+    tabs()[1].click();
+    await render();
+    tabs()[0].click();
+    await render();
+    expect(activeBody()).toBe(view);
+  });
+
+  it('selects the last tab for an index past it', async () => {
+    host.index.set(7);
+    await render();
+    expect(tabs()[2].getAttribute('aria-selected')).toBe('true');
+    expect(activeBody()?.getAttribute('data-for')).toBe('acme.tabs.claims');
+  });
+
   it('types the body template context as the tab', () => {
     const directive = host.bodyTemplate();
     expect(directive).toBeInstanceOf(NxsTabBodyDirective);
@@ -155,5 +181,44 @@ describe('NxsTabsComponent', () => {
     await bare.whenStable();
     expect((bare.nativeElement as HTMLElement).querySelectorAll('[role="tab"]').length).toBe(3);
     expect((bare.nativeElement as HTMLElement).querySelector('.body')).toBeNull();
+  });
+
+  // What a host rendering `nxs.primitives.tabs` through an outlet passes, as inputs: it can project
+  // nothing and bind no output.
+  it('renders the body input over a projected template, and calls the select handler', async () => {
+    const calls: [string, number][] = [];
+    @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
+      standalone: true,
+      imports: [NxsTabsComponent, NxsTabBodyDirective],
+      template: `
+        <ng-template #given let-tab
+          ><p class="body body--given">{{ tab.label }} given</p></ng-template
+        >
+        <nxs-tabs [tabs]="tabs" [body]="given" [selectHandler]="handler">
+          <ng-template nxsTabBody><p class="body body--projected">projected</p></ng-template>
+        </nxs-tabs>
+      `,
+    })
+    class InputHost {
+      readonly tabs = TABS;
+      readonly handler = (tab: NxsTab, index: number) => calls.push([tab.id, index]);
+    }
+    const given = TestBed.createComponent(InputHost);
+    given.detectChanges();
+    await given.whenStable();
+    const root = given.nativeElement as HTMLElement;
+    expect(root.querySelector('.mat-mdc-tab-body-active .body')?.textContent?.trim()).toBe(
+      'View given',
+    );
+    expect(root.querySelector('.body--projected')).toBeNull();
+
+    root.querySelectorAll<HTMLElement>('[role="tab"]')[1].click();
+    given.detectChanges();
+    await given.whenStable();
+    expect(calls).toEqual([['app.tabs.permissions', 1]]);
+    expect(root.querySelector('.mat-mdc-tab-body-active .body')?.textContent?.trim()).toBe(
+      'Permissions given',
+    );
   });
 });

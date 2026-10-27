@@ -39,7 +39,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 
 import {
   NuxeoDocument,
@@ -147,6 +146,7 @@ import {
   NxsActionMenuComponent,
   NxsAvatarComponent,
   NxsBreadcrumbsComponent,
+  NxsCardComponent,
   NxsColumnPickerComponent,
   NxsDocumentListComponent,
   NxsDomainHintComponent,
@@ -176,6 +176,7 @@ import {
   type NxsMenuAction,
   type NxsPickableColumn,
   NxsToastService,
+  nxsVisibleText,
   provideNxsToast,
 } from '@nuxeo/satori-platform/components';
 
@@ -226,6 +227,7 @@ const PAGE_SIZE = 50;
     NxsActionMenuComponent,
     NxsAvatarComponent,
     NxsBreadcrumbsComponent,
+    NxsCardComponent,
     NxsColumnPickerComponent,
     NxsDocumentListComponent,
     NxsDomainHintComponent,
@@ -257,7 +259,6 @@ const PAGE_SIZE = 50;
     MatDatepickerModule,
     MatChipsModule,
     MatAutocompleteModule,
-    MatCheckboxModule,
     ExtensionOutletComponent,
     NxsPermissionsPanelComponent,
   ],
@@ -695,6 +696,24 @@ export class BrowseComponent {
   readonly primitiveIds = NXS_PRIMITIVE_IDS;
   /** Rendered by ID, so the product shows Satori's status tag and a host without it the built-in one. */
   readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
+  /** Each card in the card view is rendered by ID, so a component registered under it replaces them. */
+  readonly cardId = NXS_PRIMITIVE_IDS.card;
+
+  /**
+   * The card view's cards, each with its own open and selection callbacks.
+   *
+   * The outlet that renders a card by ID binds no outputs, so the callbacks reach the card as
+   * inputs. They are made here, once per listing, rather than in the template, so a card's inputs
+   * keep their identity from one change detection to the next and the outlet does not re-set them.
+   */
+  readonly cards = computed(() =>
+    this.filteredEntries().map((doc) => ({
+      doc,
+      name: this.documentName(doc),
+      open: () => this.onRowClick(doc),
+      select: () => this.toggleSelection(doc.uid),
+    })),
+  );
 
   readonly breadcrumbs = computed<NxsBreadcrumbItem[]>(() => {
     this.currentLang();
@@ -2196,7 +2215,15 @@ export class BrowseComponent {
   }
 
   selectionAriaLabel(doc: NuxeoDocument): string {
-    return this.translate.instant('common.select-item', { name: doc.title });
+    return this.translate.instant('common.select-item', { name: this.documentName(doc) });
+  }
+
+  /**
+   * What a document is called on screen and to a screen reader: its title, else its path, else its
+   * UID — as the document list names a row — so a card's controls are never unnamed.
+   */
+  documentName(doc: NuxeoDocument): string {
+    return nxsVisibleText(doc.title) || doc.path || doc.uid;
   }
 
   toggleSelection(id: string): void {

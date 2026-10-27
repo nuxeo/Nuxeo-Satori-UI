@@ -1,5 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Component, input, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  input,
+  provideZonelessChangeDetection,
+  signal,
+  type EnvironmentProviders,
+  type Provider,
+  type TemplateRef,
+} from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { By } from '@angular/platform-browser';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -22,8 +33,15 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { AiFeatureFlagService, AiGatewayService } from '@agentic-ui/shared/ai-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { NXS_PRIMITIVE_IDS, NxsToastService } from '@nuxeo/satori-platform/components';
+import {
+  NXS_PRIMITIVE_IDS,
+  NxsToastService,
+  provideNxsComponents,
+  type NxsCardInputs,
+} from '@nuxeo/satori-platform/components';
 import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
+
+type SearchResponseLike = { items: SearchResultItem[]; aggregations: Record<string, unknown> };
 
 /** A customer's tag, registered under `nxs.primitives.tag`. */
 @Component({
@@ -36,7 +54,31 @@ class AcmeTagComponent {
   readonly color = input('');
 }
 
-type SearchResponseLike = { items: SearchResultItem[]; aggregations: Record<string, unknown> };
+/** A card registered under the packaged card's ID, which shows what the page passed it. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-probe-card',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  imports: [NgTemplateOutlet],
+  template: `
+    <p class="probe-heading">{{ heading() }}</p>
+    <p class="probe-subheading">{{ subheading() }}</p>
+    <p class="probe-selection-label">{{ selectionLabel() }}</p>
+    <div class="probe-media"><ng-container [ngTemplateOutlet]="media()" /></div>
+    <div class="probe-actions"><ng-container [ngTemplateOutlet]="actions()" /></div>
+  `,
+})
+class ProbeCardComponent implements NxsCardInputs {
+  readonly heading = input('');
+  readonly subheading = input('');
+  readonly selected = input(false, { transform: (value: unknown) => value === true });
+  readonly selectionLabel = input('');
+  readonly selectionHandler = input<((selected: boolean) => void) | null>(null);
+  readonly openHandler = input<(() => void) | null>(null);
+  readonly media = input<TemplateRef<unknown> | null>(null);
+  readonly headerAction = input<TemplateRef<unknown> | null>(null);
+  readonly actions = input<TemplateRef<unknown> | null>(null);
+}
 
 const mockSearchService = {
   search: vi.fn((_request?: Record<string, unknown>): Observable<SearchResponseLike> =>
@@ -219,11 +261,14 @@ describe('SearchComponent', () => {
   /**
    * Rebuild the TestBed with a given query-param map. `rendered` keeps the real template, for a
    * test that asserts what the page shows rather than what the component holds; `providers` are
-   * added to the defaults.
+   * added after the page's own, as an application's registrations are.
    */
   async function configure(
     queryParams: Record<string, string> = {},
-    { rendered = false, providers = [] as unknown[] } = {},
+    {
+      rendered = false,
+      providers = [],
+    }: { rendered?: boolean; providers?: (Provider | EnvironmentProviders)[] } = {},
   ): Promise<void> {
     TestBed.overrideProvider(NxsToastService, { useValue: toast });
     const bed = TestBed.configureTestingModule({
@@ -1322,12 +1367,13 @@ describe('SearchComponent', () => {
   });
 
   /**
-   * NXSAT-652. A result's type renders through `nxs.primitives.tag` in the grid and the list, so a
-   * component registered under the ID replaces it; with nothing registered, `nxs-tag` renders.
-   * Seen red on purpose by restoring the plain-text type pill.
+   * NXSAT-652. A list row's type renders through `nxs.primitives.tag`, so a component registered
+   * under the ID replaces it; with nothing registered, `nxs-tag` renders. The grid shows the type
+   * as its card's subheading instead, which `grid view` covers. Seen red on purpose by restoring
+   * the plain-text type badge.
    */
   describe('the type tag', () => {
-    async function renderResults(view: 'grid' | 'list', providers: unknown[]): Promise<void> {
+    async function renderList(providers: (Provider | EnvironmentProviders)[]): Promise<void> {
       mockSearchService.search.mockReturnValue(
         of({ items: [resultItem({ id: 'a', type: 'File' })], aggregations: {} }),
       );
@@ -1335,7 +1381,7 @@ describe('SearchComponent', () => {
       await configure({}, { rendered: true, providers });
       fixture = TestBed.createComponent(SearchComponent);
       component = fixture.componentInstance;
-      component.setViewMode(view);
+      component.setViewMode('list');
       await fixture.whenStable();
       fixture.detectChanges();
       // An unregistered ID is reported unresolved from a promise.
@@ -1349,26 +1395,20 @@ describe('SearchComponent', () => {
     const el = (selector: string): HTMLElement | null =>
       (fixture.nativeElement as HTMLElement).querySelector(selector);
 
-    it('renders the grid card’s type through nxs.primitives.tag', async () => {
-      await renderResults('grid', [override]);
+    it('renders the list row’s type through nxs.primitives.tag', async () => {
+      await renderList([override]);
 
-      const tag = el('.result-type .acme-tag');
+      const tag = el('.simple-list-type .acme-tag');
       expect(tag?.textContent?.trim()).toBe('File');
       expect(tag?.dataset['color']).toBe('gray');
-      expect(el('.result-type')?.getAttribute('title')).toBe('File');
-    });
-
-    it('renders the list row’s type through nxs.primitives.tag', async () => {
-      await renderResults('list', [override]);
-
-      expect(el('.simple-list-type .acme-tag')?.textContent?.trim()).toBe('File');
+      expect(el('.simple-list-type')?.getAttribute('title')).toBe('File');
     });
 
     it('falls back to nxs-tag when nothing is registered under the ID', async () => {
-      await renderResults('grid', []);
+      await renderList([]);
 
-      expect(el('.result-type nxs-tag')?.textContent?.trim()).toBe('File');
-      expect(el('.result-type .acme-tag')).toBeNull();
+      expect(el('.simple-list-type nxs-tag')?.textContent?.trim()).toBe('File');
+      expect(el('.simple-list-type .acme-tag')).toBeNull();
     });
   });
 
@@ -1663,6 +1703,115 @@ describe('SearchComponent', () => {
       component.downloadDocument('d1', 'report', event);
 
       expect(event.stopPropagation).toHaveBeenCalled();
+    });
+  });
+  /**
+   * The grid view renders each result's card by `nxs.primitives.card`, so whatever is registered
+   * under it — the library's card, a customer's, Satori's later — is what the user sees.
+   */
+  describe('grid view', () => {
+    const RESULTS = [
+      resultItem({ id: 'a', title: 'Claim 42.pdf', type: 'File', icon: 'file' }),
+      resultItem({ id: 'b', title: 'Claims', type: 'Folder', icon: 'folder' }),
+    ];
+
+    async function renderGrid(
+      providers: (Provider | EnvironmentProviders)[] = [],
+      items = RESULTS,
+    ): Promise<void> {
+      mockSearchService.search.mockReturnValue(of({ items, aggregations: {} }));
+      // `beforeEach` does not reset it, and a saved-search test before this one leaves one open,
+      // which the rendered page's saved-search actions would then read the permissions of.
+      mockSearchAggregationService.selectedSavedSearchId.set('');
+      mockSearchAggregationService.selectedSavedSearchTitle.set('');
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true, providers });
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      component.setViewMode('grid');
+      await settle();
+    }
+
+    /** An outlet learns from a promise that its ID is unregistered, so it settles twice. */
+    async function settle(): Promise<void> {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    const el = () => fixture.nativeElement as HTMLElement;
+
+    // The heading is the name of the control that opens the card, so it is never blank.
+    it('names an untitled result by its ID, on the card and on its checkbox', async () => {
+      await renderGrid(
+        [provideNxsComponents()],
+        [resultItem({ id: 'untitled-1', title: '', type: 'File', icon: 'file' })],
+      );
+      const card = el().querySelector('.result-grid nxs-card') as HTMLElement;
+      expect(card.querySelector('button.nxs-card__open')?.textContent?.trim()).toBe('untitled-1');
+      expect(card.querySelector('mat-checkbox input')?.getAttribute('aria-label')).toBe(
+        'Select untitled-1',
+      );
+    });
+
+    it('renders every card by its registered ID, with what the page passes it', async () => {
+      await renderGrid([
+        provideNxsComponents(),
+        provideSatoriExtensions({ components: { [NXS_PRIMITIVE_IDS.card]: ProbeCardComponent } }),
+      ]);
+      const navigate = vi.spyOn(component['router'], 'navigateByUrl');
+
+      const probes = el().querySelectorAll('.result-grid lib-extension-outlet lib-test-probe-card');
+      expect(probes).toHaveLength(2);
+      expect(el().querySelector('nxs-card')).toBeNull();
+      const text = (selector: string) =>
+        [...probes].map((probe) => probe.querySelector(selector)?.textContent?.trim());
+      expect(text('.probe-heading')).toEqual(['Claim 42.pdf', 'Claims']);
+      expect(text('.probe-subheading')).toEqual(['File', 'Folder']);
+      expect(text('.probe-selection-label')).toEqual(['Select Claim 42.pdf', 'Select Claims']);
+      // The templates render where the page declared them, so they read the page's own row.
+      expect(probes[0].querySelector('.probe-media nxs-thumbnail mat-icon')).not.toBeNull();
+      expect(probes[0].querySelector('.probe-actions nxs-favorite-toggle')).not.toBeNull();
+      expect(
+        probes[0].querySelector('.probe-actions button[aria-label="Download"]'),
+      ).not.toBeNull();
+      expect(probes[1].querySelector('.probe-actions button[aria-label="Download"]')).toBeNull();
+
+      const [first, second] = fixture.debugElement
+        .queryAll(By.directive(ProbeCardComponent))
+        .map((probe) => probe.componentInstance as ProbeCardComponent);
+      first.openHandler()?.();
+      expect(navigate).toHaveBeenCalledWith('/doc/a');
+      second.selectionHandler()?.(true);
+      expect(mockSelectionService.toggle).toHaveBeenCalledWith('b', 'Claims');
+    });
+
+    it('renders the library card through the outlet, with no fallback beside it', async () => {
+      await renderGrid([provideNxsComponents()]);
+
+      const cards = el().querySelectorAll('.result-grid nxs-card');
+      expect(cards).toHaveLength(2);
+      expect(el().querySelectorAll('.result-grid lib-extension-outlet nxs-card')).toHaveLength(2);
+      expect(cards[0].querySelector('button.nxs-card__open')?.textContent?.trim()).toBe(
+        'Claim 42.pdf',
+      );
+      expect(cards[0].querySelector('.nxs-card__media nxs-thumbnail')).not.toBeNull();
+      expect(cards[0].querySelector('.nxs-card__actions nxs-favorite-toggle')).not.toBeNull();
+    });
+
+    it('falls back to the built-in card when nothing is registered under the ID', async () => {
+      await renderGrid();
+      const navigate = vi.spyOn(component['router'], 'navigateByUrl');
+
+      const cards = el().querySelectorAll<HTMLElement>('.result-grid nxs-card');
+      expect(cards).toHaveLength(2);
+      expect(el().querySelector('.result-grid lib-extension-outlet nxs-card')).toBeNull();
+      cards[0].querySelector<HTMLElement>('button.nxs-card__open')?.click();
+      expect(navigate).toHaveBeenCalledWith('/doc/a');
+      cards[1].querySelector<HTMLInputElement>('.nxs-card__select input')?.click();
+      expect(mockSelectionService.toggle).toHaveBeenCalledWith('b', 'Claims');
     });
   });
 });
