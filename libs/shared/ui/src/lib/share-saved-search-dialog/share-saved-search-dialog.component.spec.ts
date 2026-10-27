@@ -518,6 +518,40 @@ describe('ShareSavedSearchDialogComponent', () => {
         expect(editButtonsDisabled()).toEqual([true, false]);
       });
 
+      it('falls back sensibly for an entry missing an id, a username or a permission', async () => {
+        // All three are reachable: a workflow-written ACE can carry no id, an external-style entry
+        // names an email rather than a username, and a malformed ACE can carry no permission.
+        const sparse = {
+          id: undefined,
+          username: undefined,
+          email: 'someone@example.com',
+          permission: undefined,
+          creator: undefined,
+          granted: true,
+          begin: null,
+          end: null,
+        };
+        await mount({
+          ...SAVED_SEARCH,
+          contextParameters: {
+            ...(SAVED_SEARCH.contextParameters as object),
+            acls: [{ name: 'local', aces: [sparse] }],
+          },
+        } as unknown as NuxeoDocument);
+
+        expect(component().permissions()).toEqual([
+          expect.objectContaining({
+            id: 'local-0',
+            aceId: undefined,
+            userGroup: 'someone@example.com',
+            right: 'Read',
+            grantedBy: 'System',
+          }),
+        ]);
+        // No ACE id, so there is nothing for Nuxeo to address: both actions are off.
+        expect(editButtonsDisabled()).toEqual([true]);
+      });
+
       it('disables Edit on a deny row and leaves it on a grant', async () => {
         await mount(withDenies);
 

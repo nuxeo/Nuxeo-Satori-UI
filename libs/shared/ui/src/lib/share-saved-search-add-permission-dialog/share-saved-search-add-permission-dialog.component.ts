@@ -246,7 +246,25 @@ export class ShareSavedSearchAddPermissionDialogComponent {
    * Clearing a date on purpose leaves the control valid, so it still works.
    */
   private datesInvalid(): boolean {
-    return [this.fromModel(), this.toModel()].some((model) => model?.invalid === true);
+    return (
+      [this.fromModel(), this.toModel()].some((model) => model?.invalid === true) ||
+      this.rangeInverted()
+    );
+  }
+
+  /**
+   * Whether the entry would start after it ends.
+   *
+   * Both controls are individually valid in that case, so nothing else catches it, and Nuxeo
+   * accepts the ACE — leaving an entry that never grants anything. `nxs-permissions-panel` refuses
+   * the same shape (`refusalsFor`, reason `invalid-time-frame`). Only applies to a date-based
+   * entry: a permanent one has no bounds, and either bound alone cannot be inverted.
+   */
+  rangeInverted(): boolean {
+    if (this.timeFrameMode !== 'date-based') return false;
+    const begin = this.beginDate?.getTime();
+    const end = this.endDate?.getTime();
+    return begin !== undefined && end !== undefined && begin > end;
   }
 
   isSubmitDisabled(): boolean {

@@ -262,11 +262,12 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     // One flag for both endpoints meant changing the start rewrote the end from its instant to a
     // day, which Nuxeo re-anchors at its own midnight — moving a boundary nobody touched.
     it('keeps the end instant when only the start changes', async () => {
+      // Before the end, which is 2026-02-19T23:00Z — an inverted range is refused on purpose.
       const result = await submit({}, (d) => {
-        d.beginDate = new Date(2026, 2, 1);
+        d.beginDate = new Date(2026, 1, 1);
         d.onBeginChanged();
       });
-      expect(result).toMatchObject({ begin: '2026-03-01', end: END });
+      expect(result).toMatchObject({ begin: '2026-02-01', end: END });
     });
 
     it('keeps the start instant when only the end changes', async () => {
@@ -341,6 +342,73 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
         };
         const result = (close.mock.calls[0]?.[0] as ShareSavedSearchAddPermissionResult[])?.[0];
         expect(result).toMatchObject({ begin: BEGIN, end: null });
+      });
+    });
+
+    // Both controls are individually valid when the start is after the end, so nothing else
+    // catches it, and Nuxeo accepts the ACE — leaving an entry that never grants anything.
+    // `nxs-permissions-panel` refuses the same shape as `invalid-time-frame`.
+    describe('an inverted range', () => {
+      const dated = () =>
+        open({
+          permissions: SAVED_SEARCH_VISIBLE,
+          initialData: {
+            userGroup: 'powerusers',
+            right: 'Write',
+            timeFrame: 'x',
+            begin: BEGIN,
+            end: END,
+          },
+        });
+
+      it('will not submit a start later than the end', async () => {
+        const dialog = await dated();
+        expect(dialog.isSubmitDisabled()).toBe(false);
+
+        dialog.beginDate = new Date(2026, 2, 1);
+        dialog.onBeginChanged();
+
+        expect(dialog.rangeInverted()).toBe(true);
+        expect(dialog.isSubmitDisabled()).toBe(true);
+
+        dialog.create(false);
+
+        expect(TestBed.inject(MatDialogRef).close).not.toHaveBeenCalled();
+      });
+
+      it('accepts a start equal to the end', async () => {
+        const dialog = await dated();
+
+        dialog.beginDate = new Date(2026, 1, 20);
+        dialog.onBeginChanged();
+        dialog.endDate = new Date(2026, 1, 20);
+        dialog.onEndChanged();
+
+        expect(dialog.rangeInverted()).toBe(false);
+        expect(dialog.isSubmitDisabled()).toBe(false);
+      });
+
+      it('ignores the ordering once the entry is permanent', async () => {
+        const dialog = await dated();
+        dialog.beginDate = new Date(2026, 2, 1);
+        dialog.onBeginChanged();
+        expect(dialog.rangeInverted()).toBe(true);
+
+        dialog.timeFrameMode = 'permanent';
+        dialog.onTimeFrameModeChanged();
+
+        expect(dialog.rangeInverted()).toBe(false);
+        expect(dialog.isSubmitDisabled()).toBe(false);
+      });
+
+      it('ignores a single bound, which cannot be inverted', async () => {
+        const dialog = await dated();
+
+        dialog.endDate = null;
+        dialog.onEndChanged();
+
+        expect(dialog.rangeInverted()).toBe(false);
+        expect(dialog.isSubmitDisabled()).toBe(false);
       });
     });
 
