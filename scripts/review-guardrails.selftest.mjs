@@ -9746,7 +9746,7 @@ expectRed(
     ),
   }),
   null,
-  /has a `\.\.\.override` spread at or after `components`[\s\S]*can replace the map this reads/,
+  /has a `\.\.\.override` entry at or after `components`[\s\S]*can replace the map this reads/,
 );
 
 falsePositiveControls += 1;
@@ -9860,6 +9860,66 @@ expectGreen(
     [BASELINED]:
       "import { SatTagModule as Tags } from '@hylandsoftware/satori-ui/tag';\n" +
       'export class TrashComponent {}\n',
+  }),
+);
+
+/**
+ * Properties after the literal `components` that could be `components` again.
+ *
+ * Each replaces the map at runtime while the reader returns the literal entries, so a replacement
+ * that preserves them and adds one primitive hides only the addition. The forms are not
+ * enumerable — a computed name, a shorthand — so anything after the map that is not a plain
+ * assignment under a readable name is reported.
+ */
+for (const [shape, preamble, entry] of [
+  ['a computed name', "const key = 'components';\n", '    [key]: other,'],
+  ['a shorthand', 'const components = other;\n', '    components,'],
+]) {
+  expectRed(
+    `${shape} after the map can replace it, so it is reported`,
+    'checkAdoptedPatternsNotBypassed',
+    adoption({
+      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: (preamble + ADOPTION_REGISTRY).replace(
+        '    },\n  });',
+        `    },\n${entry}\n  });`,
+      ),
+    }),
+    null,
+    /entry at or after `components` in a `provideSatoriExtensions\(…\)` argument, which can replace the map this reads/,
+  );
+}
+
+falsePositiveControls += 1;
+expectGreen(
+  'a duplicated `components` key adopts what the last map says, not the union',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // Duplicate keys are legal and the later wins, so the effective map here adopts `avatar`
+    // only. `tag` is therefore not adopted and the import below is not a bypass. Asserting green
+    // is what makes this control discriminate: merging both maps would adopt `tag` as well and
+    // fail the import, so this goes red the moment the reader unions them. An `avatar` import
+    // instead would be caught either way and would prove nothing.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '    },\n  });',
+      '    },\n' +
+        '    components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n' +
+        '  });',
+    ),
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a readable non-`components` key after the map is not a replacement',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // `directives` is a plain assignment under a name this can read, so it cannot be `components`
+    // and must not be reported. Rejecting every trailing property would fail the legitimate shape.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '    },\n  });',
+      "    },\n    directives: {},\n    'pipes': {},\n  });",
+    ),
   }),
 );
 

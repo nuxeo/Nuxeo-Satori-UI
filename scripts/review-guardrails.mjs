@@ -10040,11 +10040,14 @@ function componentsContributionsIn(source) {
       continue;
     }
 
+    // The LAST literal `components` is the one that registers — duplicate keys are legal and the
+    // later wins — so this keeps it rather than merging every one it finds. Matched by value, not
+    // by source text: `getText()` keeps the quotes on `'components'`, so a quoted key never
+    // matched and a computed one was rejected outright, either way skipping a real contribution
+    // whose primitives escaped while a bare-key one kept the set non-empty.
     let componentsAt = -1;
+    let componentsProperties;
     for (const [index, property] of argument.properties.entries()) {
-      // By value, not by source text. `getText()` keeps the quotes on `'components'`, so a quoted
-      // key never matched, and computed names were rejected outright — both skipped a real
-      // contribution whose primitives then escaped while a bare-key one kept the set non-empty.
       if (
         !ts.isPropertyAssignment(property) ||
         staticPropertyName(property.name) !== 'components'
@@ -10059,22 +10062,26 @@ function componentsContributionsIn(source) {
         continue;
       }
       componentsAt = index;
-      properties.push(...property.initializer.properties);
+      componentsProperties = property.initializer.properties;
     }
+    if (componentsProperties !== undefined) properties.push(...componentsProperties);
 
-    // A spread later in the contribution object can replace `components` wholesale, and the
-    // entries read above would then be whatever the literal said rather than what registers.
-    // Preserving the literal's entries while adding one more is the dangerous case: the baseline
-    // still resolves, so only the added primitive silently escapes. `componentsAt` of -1 makes
-    // this catch a spread in an object with no literal `components` at all, which can introduce
-    // one just as easily.
-    const spreadAt = argument.properties.findIndex(
-      (property, index) => ts.isSpreadAssignment(property) && index > componentsAt,
-    );
-    if (spreadAt !== -1) {
+    // Anything after that map which could be `components` again replaces it, and the entries read
+    // above would then be whatever the literal said rather than what registers. Preserving those
+    // entries while adding one more is the dangerous case: the baseline still resolves, so only
+    // the added primitive silently escapes. A spread is one way; `[key]: { … }` with `key`
+    // evaluating to `'components'` is another, and so is a `{ components }` shorthand. Rather
+    // than enumerate the forms, anything that is not a plain assignment under a name readable
+    // here is reported. `componentsAt` of -1 makes this cover an object with no literal
+    // `components` at all, which such a property can introduce just as easily.
+    for (const [index, property] of argument.properties.entries()) {
+      if (index <= componentsAt) continue;
+      if (ts.isPropertyAssignment(property) && staticPropertyName(property.name) !== undefined) {
+        continue;
+      }
       problems.push(
-        `a \`${argument.properties[spreadAt].getText(source)}\` spread at or after \`components\` ` +
-          'in a `provideSatoriExtensions(…)` argument, which can replace the map this reads',
+        `a \`${property.getText(source)}\` entry at or after \`components\` in a ` +
+          '`provideSatoriExtensions(…)` argument, which can replace the map this reads',
       );
     }
   }
