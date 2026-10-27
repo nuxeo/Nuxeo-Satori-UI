@@ -86,8 +86,9 @@ Place it in a template by its selector, or render the ID `nxs.primitives.card`
 (`NXS_PRIMITIVE_IDS.card`) through `lib-extension-outlet` with the same inputs, as browse and search
 do. The outlet sets inputs and binds no outputs, which is why everything the card takes is an input.
 Give the outlet `display: contents` in a grid, so the card it renders is the grid item. A
-replacement you register under the ID implements `NxsCardInputs`. Satori's own card is not wrapped
-yet, so the ID renders this component with or without `provideNxsSatoriComponents()`.
+replacement you register under the ID implements `NxsCardInputs`. With
+`provideNxsSatoriComponents()` the ID renders Satori's interactive card instead, through the wrapper
+in `@nuxeo/satori-platform/components-satori`; the same inputs, and the same thing a click does.
 
 ## Where its data comes from
 

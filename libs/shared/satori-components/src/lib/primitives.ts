@@ -6,16 +6,18 @@ import type { NxsHeadingLevel } from './heading-level';
 import type { NxsTab, NxsTabBodyContext } from './tabs/tab-body.directive';
 
 /**
- * The IDs of the primitives this library registers by `provideNxsComponents()`. The first four and
- * `errorState` are primitives Satori also ships; `banner` and `chipSet` have no Satori twin yet.
+ * The IDs of the primitives this library registers by `provideNxsComponents()`. Satori ships a twin
+ * for every one of them but `banner` and `chipSet`.
  *
- * Each ID resolves to a Material implementation from this entry point, and all but `card`, `banner` and `chipSet` to a
- * Satori-backed one once `provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori`
- * is provided after it. `errorState` is Satori-backed there too, as `sat-401-error-state` to `sat-500-error-state`.
- * `banner` and `chipSet` stay on Material too, until their Satori twins are written; `card` has no Satori-backed implementation yet.
- * Every implementation of an ID implements the same `Nxs…Inputs` contract below, so whoever renders an ID —
- * a `lib-extension-outlet` with `componentInputs` — gets the same inputs whichever is registered.
- * A customer overriding an ID implements that contract too.
+ * Each ID resolves to a Material implementation from this entry point, and all but `banner` and
+ * `chipSet` to a Satori-backed one once `provideNxsSatoriComponents()` from
+ * `@nuxeo/satori-platform/components-satori` is provided after it. `errorState` is Satori-backed
+ * there as `sat-401-error-state` to `sat-500-error-state`, `card` as `sat-interactive-card`,
+ * `emptyState` as `sat-empty-state` and `upload` as `sat-upload-field`.
+ * `banner` and `chipSet` stay on Material until their Satori twins are written. Every
+ * implementation of an ID implements the same `Nxs…Inputs` contract below, so whoever renders an
+ * ID — a `lib-extension-outlet` with `componentInputs` — gets the same inputs whichever is
+ * registered. A customer overriding an ID implements that contract too.
  */
 export const NXS_PRIMITIVE_IDS = Object.freeze({
   avatar: 'nxs.primitives.avatar',
@@ -29,6 +31,8 @@ export const NXS_PRIMITIVE_IDS = Object.freeze({
   tabs: 'nxs.primitives.tabs',
   actionBar: 'nxs.primitives.actionBar',
   card: 'nxs.primitives.card',
+  emptyState: 'nxs.primitives.emptyState',
+  upload: 'nxs.primitives.upload',
 } as const);
 
 /** Avatar colours. The values Satori's avatar takes, which `/components-satori` asserts. */
@@ -254,4 +258,51 @@ export interface NxsCardInputs {
   readonly headerAction: InputSignal<TemplateRef<unknown> | null>;
   /** Rendered at the foot of the card: buttons such as Favorite and Download. */
   readonly actions: InputSignal<TemplateRef<unknown> | null>;
+}
+
+/**
+ * `nxs.primitives.emptyState`: what a list, panel or result set shows in place of content when it
+ * has none. Text inputs arrive already translated.
+ *
+ * `actions` is a template because the outlet that renders an ID projects no content. A host using
+ * the element instead may project the same buttons as content, which both implementations still
+ * accept — the two are rendered in the same place, the template first.
+ */
+export interface NxsEmptyStateInputs {
+  /** What is empty, in one line. */
+  readonly heading: InputSignal<string>;
+  /** The heading's level in the page outline, 1 to 6. */
+  readonly headingLevel: InputSignal<NxsHeadingLevel>;
+  /** An optional second line, usually what to do next. Blank shows none. */
+  readonly message: InputSignal<string>;
+  /** An optional icon name. Decorative, so hidden from assistive technology. */
+  readonly icon: InputSignal<string>;
+  /** Rendered under the message: buttons such as "Create folder" or "Clear filters". */
+  readonly actions: InputSignal<TemplateRef<unknown> | null>;
+}
+
+/**
+ * `nxs.primitives.upload`: where files are dropped from the computer, or chosen with a control —
+ * the same files either way. Text inputs arrive already translated.
+ *
+ * A host rendering the ID through `lib-extension-outlet` passes `filesHandler`, because the outlet
+ * sets inputs and binds no outputs. A host using the element may bind the `files` output instead;
+ * both are called, so a host never has to pick.
+ */
+export interface NxsUploadInputs {
+  /** What the zone says, such as "Drag and drop files here". */
+  readonly label: InputSignal<string>;
+  /** The choosing control's text. Blank says "Choose files", or "Choose a file" when single. */
+  readonly buttonLabel: InputSignal<string>;
+  /** Takes several files at once. */
+  readonly multiple: InputSignalWithTransform<boolean, unknown>;
+  /** The file types the chooser offers, as the `accept` attribute takes them: `.csv`. */
+  readonly accept: InputSignal<string>;
+  /** Takes nothing, from the control or a drop. */
+  readonly disabled: InputSignalWithTransform<boolean, unknown>;
+  /**
+   * Called with the files chosen or dropped: one when `multiple` is off, however many were dropped
+   * otherwise. Never called with an empty list, and never while disabled.
+   */
+  readonly filesHandler: InputSignal<((files: readonly File[]) => void) | null>;
 }

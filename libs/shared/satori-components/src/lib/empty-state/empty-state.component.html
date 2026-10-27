@@ -25,5 +25,8 @@
   <p class="nxs-empty-state__message">{{ message() }}</p>
 }
 <div class="nxs-empty-state__actions">
+  @if (actions(); as actionsTemplate) {
+    <ng-container [ngTemplateOutlet]="actionsTemplate" />
+  }
   <ng-content />
 </div>

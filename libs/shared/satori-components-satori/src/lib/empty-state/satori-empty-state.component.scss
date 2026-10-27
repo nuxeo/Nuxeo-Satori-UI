@@ -1,0 +1,23 @@
+// A block, as the Material empty state's host is a flex column.
+//
+// Without this the host is `display: inline`, and an inline box wrapping Satori's flex column
+// reports a collapsed rectangle of its own: it lays out acceptably but anything measuring the
+// wrapper — a parent sizing it, or a screenshot cropping to it — gets nothing to measure.
+// `sat-empty-state` already centres its own content, so the host only has to be a box.
+:host {
+  display: block;
+}
+
+// Matches the size the Material implementation gives its icon, so the two illustrations read at the
+// same scale. Satori sizes `sat-illustration` svgs itself; a `mat-icon` is not one of those.
+.nxs-satori-empty-state__icon {
+  width: 48px;
+  height: 48px;
+  font-size: 48px;
+}
+
+// The slot is rendered even when empty, so it must not add a gap of its own when there is nothing
+// in it.
+.nxs-satori-empty-state__actions:empty {
+  display: none;
+}

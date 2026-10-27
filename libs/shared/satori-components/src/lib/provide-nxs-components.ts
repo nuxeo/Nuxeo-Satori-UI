@@ -7,6 +7,8 @@ import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
 import { NxsChipSetComponent } from './chip-set/chip-set.component';
 import { NxsCardComponent } from './card/card.component';
 import { NxsDocumentToolbarComponent } from './document-toolbar/document-toolbar.component';
+import { NxsDropzoneComponent } from './dropzone/dropzone.component';
+import { NxsEmptyStateComponent } from './empty-state/empty-state.component';
 import { NxsErrorStateComponent } from './error-state/error-state.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { NxsRichTooltipComponent } from './rich-tooltip/rich-tooltip.component';
@@ -26,7 +28,8 @@ import { NxsTagComponent } from './tag/tag.component';
  *
  * Registration goes through `provideSatoriExtensions`, so it layers like every other contribution:
  * in provider order, later wins per ID. List it **before** `provideNxsSatoriComponents()` from
- * `components-satori`, which re-registers every `NXS_PRIMITIVE_IDS` entry but `card` on Satori, and
+ * `components-satori`, which re-registers the nine `NXS_PRIMITIVE_IDS` entries that have a Satori
+ * twin — every one but `banner` and `chipSet` — on Satori, and
  * before your own `provideSatoriExtensions(...)` calls, so an override of yours wins.
  */
 export function provideNxsComponents(): EnvironmentProviders {
@@ -43,6 +46,8 @@ export function provideNxsComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.tabs]: NxsTabsComponent,
       [NXS_PRIMITIVE_IDS.actionBar]: NxsDocumentToolbarComponent,
       [NXS_PRIMITIVE_IDS.card]: NxsCardComponent,
+      [NXS_PRIMITIVE_IDS.emptyState]: NxsEmptyStateComponent,
+      [NXS_PRIMITIVE_IDS.upload]: NxsDropzoneComponent,
       // satori:register:components — `satori-component` inserts above this line
     },
   });
