@@ -19,9 +19,9 @@ const toolbarTemplatePath = join(
 );
 
 function inlineLoopMarkup(html: string): string {
-  const start = html.indexOf('@for (action of inline()');
+  const start = html.indexOf('@for (action of view.inline()');
   expect(start, 'inline actions @for block').toBeGreaterThan(-1);
-  const end = html.indexOf('@if (overflow().length > 0)', start);
+  const end = html.indexOf('@if (view.overflow().length > 0)', start);
   expect(end, 'end of inline actions @for block').toBeGreaterThan(start);
   return html.slice(start, end);
 }
@@ -47,7 +47,7 @@ describe('Document detail toolbar label in name (NXSAT-528)', () => {
 
   it('names toolbar icon buttons via cdk-visually-hidden text and hides icon ligatures', () => {
     const loop = inlineLoopMarkup(readFileSync(toolbarTemplatePath, 'utf8'));
-    expect(loop).toMatch(/\[matTooltip\]="tooltipOf\(action\)"/);
+    expect(loop).toMatch(/\[matTooltip\]="view\.tooltipOf\(action\)"/);
     expect(loop).not.toMatch(/\[attr\.aria-label\]/);
     expect(loop).toMatch(/cdk-visually-hidden[\s\S]*nameOf\(action\)/);
     expect(loop).toMatch(/\[svgIcon\]="action\.icon"/);
