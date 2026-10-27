@@ -55,10 +55,11 @@ export const REPORT_DIR = 'a11y/reports';
 /**
  * Browse has listed at least one document — in either view, under whichever card is registered.
  *
- * Shared, so the two specs that guard on it cannot drift apart. Each alternative is here for a
- * reason:
+ * Shared, so the specs that guard on it cannot drift apart. Each alternative is here for a reason:
  *
- * - `.browse-row` — the table view's row.
+ * - `nxs-document-list .nxs-document-list__row` — the **default** view's row. `viewMode` starts as
+ *   `'list'` (`browse.ts`), and list mode renders `nxs-document-list`, so this is the alternative
+ *   that carries the guard on an ordinary visit.
  * - `.card-grid .card-outlet > :not(.extension-outlet__loading)` — the card the outlet **resolved**,
  *   whatever it is: Material's `nxs-card`, Satori's `nxs-satori-card`, or a customer's own. It
  *   cannot be the outlet itself: `.card-outlet` is `display: contents`, so it generates no box and
@@ -66,14 +67,19 @@ export const REPORT_DIR = 'a11y/reports';
  *   `:not()` drops the outlet's own loading placeholder, which would otherwise satisfy the guard
  *   before any card existed.
  * - `.card-grid > nxs-card` — browse's sibling fallback, rendered when the outlet resolves nothing.
+ * - `.browse-row` — the **Trash** tab's table row, not the main list's. Kept because the guard is
+ *   also used where trash is what is on screen; it is not the one that matches a populated folder.
  *
  * These guards exist to stop a scan running against an empty page, so a selector that silently
- * stops matching weakens them without failing. That is how this one was wrong twice: first named
- * for `nxs-card` alone, which the app stops rendering the moment Satori's card is registered, then
- * for the box-less outlet.
+ * stops matching weakens them without failing. That is how this one has been wrong three times:
+ * named for `nxs-card` alone, which the app stops rendering the moment Satori's card is registered;
+ * then for the box-less outlet; then without the document-list row, which left it matching nothing
+ * in the default view.
  */
 export const BROWSE_LOADED =
-  '.browse-row, .card-grid .card-outlet > :not(.extension-outlet__loading), .card-grid > nxs-card';
+  'nxs-document-list .nxs-document-list__row, ' +
+  '.card-grid .card-outlet > :not(.extension-outlet__loading), ' +
+  '.card-grid > nxs-card, .browse-row';
 
 /**
  * Put the app's session into a page so it is past the route guard.
