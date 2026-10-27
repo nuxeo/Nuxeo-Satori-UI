@@ -189,15 +189,39 @@ describe('NxsSatoriUploadComponent', () => {
     expect(handled).toEqual([]);
   });
 
-  // So the same file can be chosen again after being removed: without the reset the second pick
-  // fires no `change` at all. Satori's handler does this; the Material dropzone does it itself, and
-  // this is the assertion that the two agree.
-  it('forgets the pick, so choosing the same file twice is two picks', () => {
-    const handled: (readonly File[])[] = [];
-    render({ label: 'Drop files', filesHandler: (files: readonly File[]) => handled.push(files) });
+  /**
+   * Records every write to the input's `value`, so the reset can be asserted as something that
+   * happened rather than as a state that was already true.
+   *
+   * Reading `value` back cannot show it: a file input starts at `''`, so `expect(value).toBe('')`
+   * holds whether or not anything reset it. Nor can counting deliveries: `choose()` dispatches
+   * `change` itself, where a browser would fire none for the same file re-chosen into a non-empty
+   * input. Both of those were the first versions of this test, and both passed with the reset
+   * removed.
+   */
+  function valueWrites(input: HTMLInputElement): string[] {
+    const writes: string[] = [];
+    let current = input.value;
+    Object.defineProperty(input, 'value', {
+      configurable: true,
+      get: () => current,
+      set: (next: string) => {
+        current = next;
+        writes.push(next);
+      },
+    });
+    return writes;
+  }
+
+  // The reset is Satori's — `SatUpload.onSelectFiles` ends with `input.value = ''` — and this
+  // component depends on it, having no `change` handler of its own and so doing no resetting
+  // either. Without it a browser fires no `change` for the same file chosen twice and the second
+  // pick is silently dropped, which is why a Satori upgrade that stopped resetting should fail
+  // here rather than in someone's upload.
+  it('resets the chooser after a pick, so the same file can be chosen again', () => {
+    render({ label: 'Drop files' });
+    const writes = valueWrites(picker());
     choose([file('claim.pdf')]);
-    expect(picker().value).toBe('');
-    choose([file('claim.pdf')]);
-    expect(handled).toHaveLength(2);
+    expect(writes).toEqual(['']);
   });
 });
