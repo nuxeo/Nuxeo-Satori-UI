@@ -673,6 +673,56 @@ describe('NxsTagEditorComponent', () => {
       expect(tags.tagsOf).not.toHaveBeenCalled();
     });
 
+    it('reads again on the next open when the read failed', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      tags.tagsOf.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await mount();
+      expect(chips()).toEqual(['contract', 'q3']);
+
+      fixture.destroy();
+      await mount();
+      expect(tags.tagsOf).toHaveBeenCalledTimes(2);
+      expect(chips()).toEqual(['contract', 'q3', 'invoice']);
+    });
+
+    it('is not cancelled by a change that failed while the read was on its way', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      const read = new Subject<string[]>();
+      tags.tagsOf.mockReturnValueOnce(read);
+      tags.removeTag.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await mount();
+      removeButton('q3').click();
+      await settle();
+      expect(toastError).toHaveBeenCalledOnce();
+
+      read.next(['contract', 'invoice']);
+      read.complete();
+      await settle();
+
+      expect(chips()).toEqual(['contract', 'invoice']);
+      expect(host.changes).toEqual([['contract', 'invoice']]);
+    });
+
     it('drops a change still waiting when its user signs out and back in as the same user', async () => {
       const added = new Subject<string[]>();
       tags.addTag.mockReturnValue(added);

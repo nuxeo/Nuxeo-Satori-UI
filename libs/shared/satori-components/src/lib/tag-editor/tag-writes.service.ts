@@ -53,11 +53,12 @@ export type NxsTagAnswer = { readonly write: NxsTagWrite } & (
  * loaded before the change, or after another client changed the tags again, is never replayed.
  *
  * Every change belongs to the user who made it, and to the session that user was in. The app's
- * user is a plain function, so a sign-out is seen when its signal reports it: each such change
- * starts a new session, and a change still waiting then is dropped unsent, rather than sent with
- * whoever signs in next — even when the same user signs back in. An answer that arrives after its
- * session has ended says nothing and is not kept. A host that provides no `CURRENT_USERNAME` gets
- * no such separation.
+ * user is a plain function over its own signal, so a change of user is seen at the next effect
+ * flush: each such change starts a new session, and a change still waiting then is dropped unsent,
+ * rather than sent with whoever signs in next. Two changes that coalesce within one flush are not
+ * seen, which a person signing out and back in cannot do. An answer that arrives after its session
+ * has ended says nothing and is not kept. A host that provides no `CURRENT_USERNAME` gets no such
+ * separation.
  *
  * Not exported: a host installs it with `provideNxsTagWrites()`, and only the editor calls it.
  */
@@ -136,6 +137,11 @@ export class NxsTagWrites {
    */
   takeUnheard(uid: string): boolean {
     return this.unheard.delete(uid);
+  }
+
+  /** A read that was to replace `uid`'s copy did not finish, so the next editor must read again. */
+  keepUnheard(uid: string): void {
+    this.unheard.add(uid);
   }
 
   /** An editor heard `uid`'s answer, so nothing is kept for the next one. */

@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-147 exported symbol(s).
+148 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -2342,8 +2342,8 @@ class NxsTagEditorComponent {
     readonly tagsChange: import("@angular/core").OutputEmitterRef<readonly string[]>;
     protected readonly id: string;
     protected readonly saved: import("@angular/core").WritableSignal<readonly string[]>;
-    protected readonly adding: import("@angular/core").WritableSignal<readonly string[]>;
-    protected readonly removing: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly adding: import("@angular/core").Signal<string[]>;
+    protected readonly removing: import("@angular/core").Signal<ReadonlySet<string>>;
     protected readonly term: import("@angular/core").WritableSignal<string>;
     protected readonly shown: import("@angular/core").Signal<string[]>;
     protected readonly options: import("@angular/core").Signal<readonly NxsTagOption[]>;
@@ -2773,6 +2773,7 @@ function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorite
 function nxsVersionLabel(doc: NuxeoDocument): string;
 function nxsVisibleText(text: string | null | undefined): string;
 function provideNxsComponents(): EnvironmentProviders;
+function provideNxsTagWrites(): Provider;
 function provideNxsThumbnailCache(): Provider;
 function provideNxsToast(): Provider;
 ```
@@ -4287,6 +4288,7 @@ interface SynchronizationRootRow {
 class TagService {
     addTag(uid: string, label: string): Observable<string[]>;
     removeTag(uid: string, label: string): Observable<string[]>;
+    tagsOf(uid: string): Observable<string[]>;
     searchTags(term: string): Observable<string[]>;
     suggestTags(term: string): Observable<string[]>;
     static ɵfac: i0.ɵɵFactoryDeclaration<TagService, never>;

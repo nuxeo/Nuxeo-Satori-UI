@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   ElementRef,
   inject,
   input,
@@ -33,11 +34,13 @@ import {
   debounceTime,
   distinctUntilChanged,
   filter,
+  finalize,
   map,
   of,
   Subject,
   switchMap,
   takeUntil,
+  tap,
 } from 'rxjs';
 
 import { NxsSpinnerComponent } from '../spinner/spinner.component';
@@ -96,6 +99,7 @@ let nextId = 0;
 })
 export class NxsTagEditorComponent {
   private readonly tagService = inject(TagService);
+  private readonly destroyRef = inject(DestroyRef);
   // The host's, from `provideNxsTagWrites()`; otherwise this editor's own, which still finishes
   // its changes after the editor closes but cannot hand their answers to the next one.
   private readonly writes = inject(NxsTagWrites, { optional: true }) ?? new NxsTagWrites();
@@ -232,18 +236,34 @@ export class NxsTagEditorComponent {
   }
 
   /**
-   * The document's tags as Nuxeo holds them now. An answer for the document that arrives first is
-   * newer than this read, so it wins: the read is dropped rather than applied over it.
+   * The document's tags as Nuxeo holds them now. A saved change for the document that is answered
+   * first is newer than this read, so it wins and the read is dropped. A read that fails, is
+   * interrupted or lands after the document changed keeps the mark, so the next editor reads again.
    */
   private refresh(uid: string): void {
+    let answered = false;
+    let stored = false;
     this.tagService
       .tagsOf(uid)
       .pipe(
-        catchError(() => of<readonly string[] | null>(null)),
-        takeUntil(this.writes.answers.pipe(filter((answer) => answer.write.uid === uid))),
+        takeUntil(
+          this.writes.answers.pipe(
+            filter((answer) => answer.write.uid === uid && 'tags' in answer),
+            tap(() => (answered = true)),
+          ),
+        ),
+        finalize(() => {
+          if (!answered && !stored) this.writes.keepUnheard(uid);
+        }),
+        takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe((tags) => {
-        if (tags && uid === this.documentUid()) this.store(tags);
+      .subscribe({
+        next: (tags) => {
+          if (uid !== this.documentUid()) return;
+          stored = true;
+          this.store(tags);
+        },
+        error: () => undefined,
       });
   }
 
