@@ -641,9 +641,10 @@ item whose ID follows the convention picks up a registered component with no fur
 
 ## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
 
-Nine component-registry IDs for the primitives Satori also ships. Each resolves to a Material
-implementation from `@nuxeo/satori-platform/components`, and to a Satori-backed one when
-`@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only
+Eleven component-registry IDs for the primitives. Nine have a Satori twin; `banner` and
+`chipSet` have no Satori wrapper yet, so they stay Material-only. Each resolves to a Material
+implementation from `@nuxeo/satori-platform/components`, and all but `banner` and `chipSet` to a Satori-backed
+one when `@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only
 one in the package that imports `@hylandsoftware/satori-ui`, an **optional** peer: without GitHub
 Packages access, leave it out and every ID still resolves, on Material.
 
@@ -658,6 +659,8 @@ Packages access, leave it out and every ID still resolves, on Material.
 | `nxs.primitives.tabs`        | `tabs`, `label`, `selectedIndex`, `body`, `selectHandler`                                                                    | `NxsTabsComponent`            | `sat-navigation-tabs`                                    |
 | `nxs.primitives.actionBar`   | `actions`, `label`, `moreLabel`, `actionHandler`                                                                             | `NxsDocumentToolbarComponent` | Satori's action-bar button, `button[satActionBarButton]` |
 | `nxs.primitives.card`        | `heading`, `subheading`, `selected`, `selectionLabel`, `selectionHandler`, `openHandler`, `media`, `headerAction`, `actions` | `NxsCardComponent`            | `sat-interactive-card`                                   |
+| `nxs.primitives.banner`      | `message`, `tone`, `announce`, `actions`                                                                                     | `NxsBannerComponent`          | — (Material only for now)                                |
+| `nxs.primitives.chipSet`     | `items`, `label`, `removeHandler`                                                                                            | `NxsChipSetComponent`         | — (Material only for now)                                |
 
 Both implementations of an ID declare the same inputs (`Nxs…Inputs` in `/components`; a spec in
 `/components-satori` compares them), so whoever renders an ID passes the same `componentInputs`

@@ -54,12 +54,15 @@ const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
 ];
 
 /**
- * Primitives no Satori component re-registers, so they keep their Material implementation with or
- * without `provideNxsSatoriComponents()`. Empty since NXSAT-675 wrapped Satori's interactive card:
- * every ID is paired. An ID added here needs its reason beside it, because the list is what tells
- * the check below that Material-only was the intention and not an omission.
+ * Primitives no Satori component re-registers yet, so they keep their Material implementation with
+ * or without `provideNxsSatoriComponents()`. The banner and chip set are Material-only until their
+ * Satori wrappers are written; `docs/extension-reference.md` §6a says so too. The card left this
+ * list when NXSAT-675 wrapped Satori's interactive card, and is in `PAIRS` above.
+ *
+ * An ID added here needs its reason beside it, because the list is what tells the check below that
+ * Material-only was the intention and not an omission.
  */
-const MATERIAL_ONLY: readonly string[] = [];
+const MATERIAL_ONLY: readonly string[] = [NXS_PRIMITIVE_IDS.banner, NXS_PRIMITIVE_IDS.chipSet];
 
 function registry(providers: (Provider | EnvironmentProviders)[]): ExtensionComponentRegistry {
   TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection(), ...providers] });
