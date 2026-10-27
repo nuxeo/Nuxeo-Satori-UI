@@ -80,7 +80,7 @@ if (OUT === BUNDLE || OUT.startsWith(BUNDLE + sep)) {
 }
 
 const problems = [];
-// Reported with `/`, as package entry names are, so a build reads the same on every platform.
+// Reported with `/`, as package entry names are, so a problem reads the same on every platform.
 const problem = (file, message) =>
   problems.push(`${relative(HERE, file).split(sep).join('/') || '.'}: ${message}`);
 
