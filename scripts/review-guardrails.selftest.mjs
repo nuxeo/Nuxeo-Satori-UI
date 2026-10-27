@@ -10048,6 +10048,42 @@ expectGreen(
   }),
 );
 
+expectRed(
+  'a local binding shadowing the registered class name is reported, not followed to the import',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // The registration reads the local `NxsSatoriTagComponent`, which is the banner wrapper, so
+    // the banner entry point is what registers — not the tag one the import would suggest.
+    // Following the import guarded `tag` and let direct banner imports through.
+    [`${SATORI_LIB}/satori-banner.component.ts`]:
+      "import { SatBanner } from '@hylandsoftware/satori-ui/banner';\n" +
+      'export class NxsSatoriBannerComponent {}\n',
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      'export function provideNxsSatoriComponents() {',
+      "import { NxsSatoriBannerComponent } from './satori-banner.component';\n\n" +
+        'export function provideNxsSatoriComponents() {\n' +
+        '  const NxsSatoriTagComponent = NxsSatoriBannerComponent;',
+    ),
+  }),
+  null,
+  /registers the `tag` primitive as `NxsSatoriTagComponent`, which the file also binds locally/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a local binding whose name is not a registered class does not trip the shadowing check',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // The provider's own name, and a saved provider binding, are both locally bound — rejecting
+    // every local binding rather than only ones shadowing a registration would fail the real
+    // registry outright.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  const installed = provideSatoriExtensions({',
+    ).replace(/\n  \}\);\n\}/, '\n  });\n  return installed;\n}'),
+  }),
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',

@@ -10271,6 +10271,33 @@ function adoptedSatoriEntryPoints() {
     }
   }
 
+  /**
+   * Names the file binds somewhere other than an import, so a registration identifier that one
+   * of them shadows is not followed to the module's import.
+   *
+   * `const NxsSatoriTagComponent = NxsSatoriBannerComponent;` inside the provider registers the
+   * banner wrapper under the tag id. Resolving the identifier through `importedFrom` guarded the
+   * tag entry point instead of the banner one, so direct banner imports passed. The same
+   * shadowing as the two return-side findings, on the value this time; the answer is the same —
+   * a name this cannot resolve with confidence is reported, never guessed.
+   */
+  const locallyBound = new Set();
+  const collectBindings = (node) => {
+    if (ts.isImportDeclaration(node)) return;
+    if (
+      (ts.isVariableDeclaration(node) ||
+        ts.isFunctionDeclaration(node) ||
+        ts.isClassDeclaration(node) ||
+        ts.isParameter(node)) &&
+      node.name !== undefined &&
+      ts.isIdentifier(node.name)
+    ) {
+      locallyBound.add(node.name.text);
+    }
+    ts.forEachChild(node, collectBindings);
+  };
+  collectBindings(source);
+
   /** `[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent` -> `['tag', 'NxsSatoriTagComponent']`. */
   const adopted = new Map();
   /** Registered, but the implementation is not a name this can follow. Reported, never skipped. */
@@ -10357,6 +10384,17 @@ function adoptedSatoriEntryPoints() {
   const registryDir = dirname(SATORI_ADOPTION_REGISTRY);
   const guarded = new Map();
   for (const [primitive, className] of adopted) {
+    if (locallyBound.has(className)) {
+      fail(
+        `${SATORI_ADOPTION_REGISTRY} registers the \`${primitive}\` primitive as ` +
+          `\`${className}\`, which the file also binds locally, so which component that name ` +
+          'holds at the registration could not be read. A local binding can point it at another ' +
+          "wrapper entirely, guarding that wrapper's entry point instead of this one. Register " +
+          'the imported class under its own name.',
+      );
+      continue;
+    }
+
     const origin = importedFrom.get(className);
     const specifier = origin?.specifier;
 
