@@ -262,9 +262,18 @@ export class ShareSavedSearchAddPermissionDialogComponent {
    */
   rangeInverted(): boolean {
     if (this.timeFrameMode !== 'date-based') return false;
-    const begin = this.beginDate?.getTime();
-    const end = this.endDate?.getTime();
-    return begin !== undefined && end !== undefined && begin > end;
+    if (!this.beginDate || !this.endDate) return false;
+    // Compared as the calendar days the picker shows, which is what the user chose and what the
+    // table renders — the same basis as `invalidTimeFrame` in nxs-permissions-panel, which also
+    // compares `YYYY-MM-DD` strings. Comparing the picker instants instead made the verdict
+    // depend on the browser's offset: two entries a user sees as the same day could compare
+    // either way. It does not make validation and the write agree in every zone, because an
+    // untouched endpoint is written as its own instant while a changed one is written as a day
+    // the server anchors at its own midnight, and the server's zone is not knowable here — see
+    // the PR discussion. Both are what the user sees, which is the basis they can reason about.
+    const begin = this.formatDate(this.beginDate);
+    const end = this.formatDate(this.endDate);
+    return begin > end;
   }
 
   isSubmitDisabled(): boolean {

@@ -376,6 +376,20 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
         expect(TestBed.inject(MatDialogRef).close).not.toHaveBeenCalled();
       });
 
+      it('judges on the calendar days shown, not the picker instants', async () => {
+        // Two instants the user sees as the same day must not compare as inverted. Instants an
+        // hour apart on one day did, depending on the browser's offset.
+        const dialog = await dated();
+
+        dialog.beginDate = new Date(2026, 1, 20, 23, 0, 0);
+        dialog.onBeginChanged();
+        dialog.endDate = new Date(2026, 1, 20, 1, 0, 0);
+        dialog.onEndChanged();
+
+        expect(dialog.rangeInverted()).toBe(false);
+        expect(dialog.isSubmitDisabled()).toBe(false);
+      });
+
       it('accepts a start equal to the end', async () => {
         const dialog = await dated();
 
