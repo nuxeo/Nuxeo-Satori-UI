@@ -9,11 +9,10 @@ import type { NxsTab, NxsTabBodyContext } from './tabs/tab-body.directive';
  * The IDs of the primitives this library registers by `provideNxsComponents()`. The first four and
  * `errorState` are primitives Satori also ships; `banner` and `chipSet` have no Satori twin yet.
  *
- * Each ID resolves to a Material implementation from this entry point, and all but `card` to a
+ * Each ID resolves to a Material implementation from this entry point, and all but `card`, `banner` and `chipSet` to a
  * Satori-backed one once `provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori`
- * is provided after it. `errorState` stays on Material there: Satori's error states arrive in
- * Satori 1.0, which needs a newer Angular than this package supports. `banner` and `chipSet` stay on
- * Material too, until their Satori twins are written; `card` has no Satori-backed implementation yet.
+ * is provided after it. `errorState` is Satori-backed there too, as `sat-401-error-state` to `sat-500-error-state`.
+ * `banner` and `chipSet` stay on Material too, until their Satori twins are written; `card` has no Satori-backed implementation yet.
  * Every implementation of an ID implements the same `Nxs…Inputs` contract below, so whoever renders an ID —
  * a `lib-extension-outlet` with `componentInputs` — gets the same inputs whichever is registered.
  * A customer overriding an ID implements that contract too.
