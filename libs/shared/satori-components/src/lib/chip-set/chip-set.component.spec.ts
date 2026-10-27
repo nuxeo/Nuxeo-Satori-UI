@@ -92,11 +92,16 @@ describe('NxsChipSetComponent', () => {
   });
 
   it('calls removeHandler with the chip, before it emits removed', () => {
-    const handler = vi.fn();
+    // Snapshot what has been emitted when the handler runs: it must run before `removed` is emitted.
+    let emittedWhenHandlerRan: string[] | undefined;
+    const handler = vi.fn(() => {
+      emittedWhenHandlerRan = [...host.removed];
+    });
     host.handler.set(handler);
     fixture.detectChanges();
     removeButtons()[0].click();
     expect(handler).toHaveBeenCalledWith(expect.objectContaining({ id: 'europe' }));
+    expect(emittedWhenHandlerRan).toEqual([]);
     expect(host.removed).toEqual(['europe']);
   });
 
