@@ -12,7 +12,8 @@ import type { NxsTab, NxsTabBodyContext } from './tabs/tab-body.directive';
  * Each ID resolves to a Material implementation from this entry point, and all but `banner` and
  * `chipSet` to a Satori-backed one once `provideNxsSatoriComponents()` from
  * `@nuxeo/satori-platform/components-satori` is provided after it. `errorState` is Satori-backed
- * there as `sat-401-error-state` to `sat-500-error-state`, and `card` as `sat-interactive-card`.
+ * there as `sat-401-error-state` to `sat-500-error-state`, `card` as `sat-interactive-card` and
+ * `emptyState` as `sat-empty-state`.
  * `banner` and `chipSet` stay on Material until their Satori twins are written. Every
  * implementation of an ID implements the same `Nxs…Inputs` contract below, so whoever renders an
  * ID — a `lib-extension-outlet` with `componentInputs` — gets the same inputs whichever is
@@ -30,6 +31,7 @@ export const NXS_PRIMITIVE_IDS = Object.freeze({
   tabs: 'nxs.primitives.tabs',
   actionBar: 'nxs.primitives.actionBar',
   card: 'nxs.primitives.card',
+  emptyState: 'nxs.primitives.emptyState',
 } as const);
 
 /** Avatar colours. The values Satori's avatar takes, which `/components-satori` asserts. */
@@ -254,5 +256,26 @@ export interface NxsCardInputs {
   /** Rendered in the card's top corner: usually a menu button. */
   readonly headerAction: InputSignal<TemplateRef<unknown> | null>;
   /** Rendered at the foot of the card: buttons such as Favorite and Download. */
+  readonly actions: InputSignal<TemplateRef<unknown> | null>;
+}
+
+/**
+ * `nxs.primitives.emptyState`: what a list, panel or result set shows in place of content when it
+ * has none. Text inputs arrive already translated.
+ *
+ * `actions` is a template because the outlet that renders an ID projects no content. A host using
+ * the element instead may project the same buttons as content, which both implementations still
+ * accept — the two are rendered in the same place, the template first.
+ */
+export interface NxsEmptyStateInputs {
+  /** What is empty, in one line. */
+  readonly heading: InputSignal<string>;
+  /** The heading's level in the page outline, 1 to 6. */
+  readonly headingLevel: InputSignal<NxsHeadingLevel>;
+  /** An optional second line, usually what to do next. Blank shows none. */
+  readonly message: InputSignal<string>;
+  /** An optional icon name. Decorative, so hidden from assistive technology. */
+  readonly icon: InputSignal<string>;
+  /** Rendered under the message: buttons such as "Create folder" or "Clear filters". */
   readonly actions: InputSignal<TemplateRef<unknown> | null>;
 }

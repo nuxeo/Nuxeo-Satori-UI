@@ -641,9 +641,9 @@ item whose ID follows the convention picks up a registered component with no fur
 
 ## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
 
-Eleven component-registry IDs for the primitives. Nine have a Satori twin; `banner` and
+Twelve component-registry IDs for the primitives. Ten have a Satori twin; `banner` and
 `chipSet` have no Satori wrapper yet, so they stay Material-only. Each resolves to a Material
-implementation from `@nuxeo/satori-platform/components`, and all but `banner` and `chipSet` to a Satori-backed
+implementation from `@nuxeo/satori-platform/components`, and all but those two to a Satori-backed
 one when `@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only
 one in the package that imports `@hylandsoftware/satori-ui`, an **optional** peer: without GitHub
 Packages access, leave it out and every ID still resolves, on Material.
@@ -659,6 +659,7 @@ Packages access, leave it out and every ID still resolves, on Material.
 | `nxs.primitives.tabs`        | `tabs`, `label`, `selectedIndex`, `body`, `selectHandler`                                                                    | `NxsTabsComponent`            | `sat-navigation-tabs`                                    |
 | `nxs.primitives.actionBar`   | `actions`, `label`, `moreLabel`, `actionHandler`                                                                             | `NxsDocumentToolbarComponent` | Satori's action-bar button, `button[satActionBarButton]` |
 | `nxs.primitives.card`        | `heading`, `subheading`, `selected`, `selectionLabel`, `selectionHandler`, `openHandler`, `media`, `headerAction`, `actions` | `NxsCardComponent`            | `sat-interactive-card`                                   |
+| `nxs.primitives.emptyState`  | `heading`, `headingLevel`, `message`, `icon`, `actions`                                                                      | `NxsEmptyStateComponent`      | `sat-empty-state`                                        |
 | `nxs.primitives.banner`      | `message`, `tone`, `announce`, `actions`                                                                                     | `NxsBannerComponent`          | — (Material only for now)                                |
 | `nxs.primitives.chipSet`     | `items`, `label`, `removeHandler`                                                                                            | `NxsChipSetComponent`         | — (Material only for now)                                |
 
@@ -685,7 +686,9 @@ implements the matching `Nxs…Inputs` interface.
 it projects no content and binds no outputs. So the IDs that need either take it as an input —
 `retryHandler` on the error state; `body`, the template every tab's body renders from, and
 `selectHandler` on the tabs; `actionHandler` on the action bar; on the card, `openHandler`,
-`selectionHandler` and the `media`, `headerAction` and `actions` templates. `selectHandler` is called whenever the
+`selectionHandler` and the `media`, `headerAction` and `actions` templates; on the empty state, the
+`actions` template. A host using the element instead of the ID may project the empty state's actions
+as content, which both implementations also accept. `selectHandler` is called whenever the
 selection changes, whoever changed it, but not for the first; `actionHandler` never for a disabled
 entry. The Material implementations take the same inputs and keep their outputs
 (`selectedIndexChange`, `selected`) for a template that renders them directly.
@@ -711,8 +714,12 @@ Those elements render directly until they move onto the IDs. Nor does an overrid
 action bar reach any other tab group or action row: browse's and the collection page's tabs are
 Material tab groups and their header actions their own markup, the search and trash toolbars are
 their own markup, and the metadata editor writes `nxs-tabs` into its template. Nothing in a packaged screen renders
-`nxs.primitives.errorState` or `nxs.primitives.richTooltip` by ID yet, so an override of those two
-reaches only a host of yours that renders them. Where a host resolves an ID through a
+`nxs.primitives.errorState`, `nxs.primitives.richTooltip` or `nxs.primitives.emptyState` by ID yet, so
+an override of those three reaches only a host of yours that renders them. The empty state in
+particular is registered but not yet resolved anywhere we ship: `nxs-document-list` and
+`nxs-document-history` write `<nxs-empty-state>` into their own templates, so replacing the ID does
+not change what they show. Registering it makes it addressable from a manifest in **your** hosts
+today; routing our own screens through it is separate work. Where a host resolves an ID through a
 `lib-extension-outlet` with a `componentId`, and in the library's Storybook, the IDs render as
 described above.
 

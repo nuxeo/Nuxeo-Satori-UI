@@ -14,6 +14,7 @@ import { NxsSatoriActionBarComponent } from './action-bar/satori-action-bar.comp
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
 import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.component';
 import { NxsSatoriCardComponent } from './card/satori-card.component';
+import { NxsSatoriEmptyStateComponent } from './empty-state/satori-empty-state.component';
 import { NxsSatoriErrorStateComponent } from './error-state/satori-error-state.component';
 import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-tooltip.component';
 import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';
@@ -21,11 +22,11 @@ import { NxsSatoriTabsComponent } from './tabs/satori-tabs.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
 
 /**
- * Re-register the nine `NXS_PRIMITIVE_IDS` entries that have a Satori twin — avatar, breadcrumbs,
- * tag, status tag, rich tooltip, error state, tabs, action bar and card — on Satori, over the
- * Material implementations `provideNxsComponents()` registered.
+ * Re-register the ten `NXS_PRIMITIVE_IDS` entries that have a Satori twin — avatar, breadcrumbs,
+ * tag, status tag, rich tooltip, error state, tabs, action bar, card and empty state — on Satori,
+ * over the Material implementations `provideNxsComponents()` registered.
  *
- * Nine of eleven, not all of them: `banner` and `chipSet` are registered by
+ * Ten of twelve, not all of them: `banner` and `chipSet` are registered by
  * `provideNxsComponents()` and keep their Material implementations here, until their Satori
  * wrappers are written. `primitives.ts` and `docs/extension-reference.md` §6a name the same two.
  *
@@ -53,6 +54,7 @@ export function provideNxsSatoriComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.tabs]: NxsSatoriTabsComponent,
       [NXS_PRIMITIVE_IDS.actionBar]: NxsSatoriActionBarComponent,
       [NXS_PRIMITIVE_IDS.card]: NxsSatoriCardComponent,
+      [NXS_PRIMITIVE_IDS.emptyState]: NxsSatoriEmptyStateComponent,
     },
   });
 }

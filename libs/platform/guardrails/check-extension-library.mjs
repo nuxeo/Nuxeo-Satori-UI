@@ -373,6 +373,7 @@ const PRIMITIVE_CONTRACTS = {
   card: 'NxsCardInputs',
   banner: 'NxsBannerInputs',
   chipSet: 'NxsChipSetInputs',
+  emptyState: 'NxsEmptyStateInputs',
 };
 
 const COMPONENTS_KEY = String.raw`(?:\bcomponents|'components'|"components")\s*:\s*`;

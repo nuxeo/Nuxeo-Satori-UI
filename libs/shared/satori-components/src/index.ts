@@ -160,6 +160,7 @@ export {
   type NxsChipSetInputs,
   type NxsBreadcrumbsInputs,
   type NxsCardInputs,
+  type NxsEmptyStateInputs,
   type NxsErrorStateInputs,
   type NxsRichTooltipInputs,
   type NxsStatusTagInputs,

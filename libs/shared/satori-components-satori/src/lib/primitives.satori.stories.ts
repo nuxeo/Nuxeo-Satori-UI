@@ -1,3 +1,4 @@
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { provideRouter, withDisabledInitialNavigation, withHashLocation } from '@angular/router';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
@@ -35,7 +36,7 @@ const meta: Meta = {
         provideNxsSatoriComponents(),
       ],
     }),
-    moduleMetadata({ imports: [ExtensionOutletComponent, MatIconModule] }),
+    moduleMetadata({ imports: [ExtensionOutletComponent, MatIconModule, MatButtonModule] }),
   ],
 };
 
@@ -133,6 +134,19 @@ export const SatoriRegistration: StoryObj = {
             selectionHandler: selectCard,
             openHandler: openCard,
             media: cardMedia
+          }"
+        />
+        <ng-template #emptyActions>
+          <button mat-flat-button type="button">Create folder</button>
+        </ng-template>
+        <lib-extension-outlet
+          style="display: block; inline-size: 320px"
+          [componentId]="ids.emptyState"
+          [componentInputs]="{
+            heading: 'No documents here',
+            message: 'Drag a file in, or create a folder to get started.',
+            icon: 'folder_open',
+            actions: emptyActions
           }"
         />
       </div>

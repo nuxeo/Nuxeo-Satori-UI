@@ -622,16 +622,41 @@ try {
         // that case, so this changes no existing capture; it matters for a section whose story
         // renders several components, where the documented one can be last. The card's is.
         const fitted = await fitViewport(page, [h.selector]);
-        const fits = fitted.some((b) => b.ok && b.bottom + 24 <= page.viewportSize().height);
+        // Every edge, not just the bottom. `crop()` clamps to the viewport on both axes, so a
+        // target wider than it comes out cut off horizontally while a bottom-only predicate still
+        // certifies "the whole element" — and a negative `top` or `left`, which is what a target
+        // scrolled partly above the fold has, passed that predicate too. `fitViewport` can only
+        // grow the height, so a width overflow is reported rather than fixed: it means the story
+        // renders the component wider than 1280px and the story is what has to change.
+        const vp = () => page.viewportSize();
+        const clipped = fitted.filter(
+          (b) =>
+            !b.ok ||
+            b.top < 0 ||
+            b.left < 0 ||
+            b.bottom > vp().height + 1 ||
+            b.right > vp().width + 1,
+        );
         record(
           subject,
           `<${h.selector}> fits the viewport, so the crop is the whole element`,
-          fits,
-          `viewport ${page.viewportSize().width}×${page.viewportSize().height}`,
+          fitted.length > 0 && clipped.length === 0,
+          clipped.length
+            ? clipped.map((b) => `${b.sel}: ${b.why ?? 'outside the capture'}`).join(', ')
+            : `viewport ${vp().width}×${vp().height}`,
         );
         let opened = null;
         if (c.captured === 'Opened from the keyboard')
           opened = await openFromKeyboard(page, h.selector);
+        // Measured and cropped in viewport coordinates, so a component below the fold has to be
+        // scrolled to first. The "By registered ID" story is a grid of every primitive and is
+        // taller than any viewport: without this, its lower entries produced a zero-height clip
+        // and the run reported a failed capture for a component that had rendered perfectly well.
+        await page
+          .locator(h.selector)
+          .first()
+          .scrollIntoViewIfNeeded()
+          .catch(() => undefined); // not every selector is a single element; the box check below reports it
         const seen = await inspect(page, h.selector);
         await isolate(page, h.selector);
         const file = join(OUT, 'raw', `${slug}-${side}.png`);
@@ -763,6 +788,7 @@ try {
       'nxs-tabs',
       'nxs-document-toolbar',
       'nxs-card',
+      'nxs-empty-state',
     ],
     with: [
       'nxs-satori-avatar',
@@ -774,6 +800,7 @@ try {
       'nxs-satori-tabs',
       'nxs-satori-action-bar',
       'nxs-satori-card',
+      'nxs-satori-empty-state',
     ],
   };
   const primitiveCount = PRIMITIVE_HOSTS.with.length;
