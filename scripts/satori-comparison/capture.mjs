@@ -568,19 +568,32 @@ try {
             'negative',
           );
         } else if (c.own) {
-          // The element the section documents, not any `sat-*`: a wrapper rendering something else
-          // would otherwise pass a check named after Satori's component. By selector, so an element
-          // a Satori component is applied to by attribute — `<button satActionBarButton>` — counts.
-          const inside = await page.evaluate(
-            ([host, element]) =>
-              [...document.querySelectorAll(host)].some((t) => t.querySelector(element)),
-            [h.selector, satoriElementSelector(c.satElement)],
-          );
+          // The elements the wrapper's own template renders, not any `sat-*`: a wrapper rendering
+          // something else would otherwise pass a check named after Satori's component. By
+          // selector, so an element a Satori component is applied to by attribute —
+          // `<button satActionBarButton>` — counts. A wrapper that picks one element per input —
+          // the error state, one per status — renders a different one than the section names, so
+          // any of its own is allowed and the one found is recorded.
+          const candidates = c.satElements?.length ? c.satElements : [c.satElement];
+          const found = [];
+          for (const element of candidates) {
+            const inside = await page.evaluate(
+              ([host, el]) => [...document.querySelectorAll(host)].some((t) => t.querySelector(el)),
+              [h.selector, satoriElementSelector(element)],
+            );
+            if (inside) found.push(element);
+          }
           record(
             subject,
-            `Satori's <${c.satElement}> inside <${h.selector}>`,
-            inside,
-            seen.satInside.length ? `rendered: ${seen.satInside.join(', ')}` : 'no sat-* element',
+            candidates.length > 1
+              ? `one of ${c.variant}'s Satori elements inside <${h.selector}>`
+              : `Satori's <${c.satElement}> inside <${h.selector}>`,
+            found.length > 0,
+            found.length
+              ? `rendered: ${found.join(', ')}`
+              : seen.satInside.length
+                ? `rendered: ${seen.satInside.join(', ')}`
+                : 'no sat-* element',
           );
         }
       } catch (error) {
@@ -676,7 +689,9 @@ try {
     const host = side === 'without' ? 'nxs-avatar' : 'nxs-satori-avatar';
     try {
       const { errors } = await open(page, url, host);
-      const seen = await inspect(page, host);
+      // Selected by every primitive host, so `count` asserts the image holds all of them. The
+      // other fields read are document-wide and do not depend on this selector.
+      const seen = await inspect(page, PRIMITIVE_HOSTS[side].join(', '));
       await page.screenshot({ path: join(OUT, FULL_IMAGES[side]), animations: 'disabled' });
       const close = await browser.newContext({
         viewport: { width: 1440, height: 900 },
@@ -696,6 +711,12 @@ try {
         'no page errors',
         errors.length === 0,
         errors.join(' | '),
+      );
+      record(
+        `Full screenshot (${side})`,
+        `all ${primitiveCount} primitives rendered`,
+        seen.count === primitiveCount,
+        `${seen.count} of ${primitiveCount} host(s): ${PRIMITIVE_HOSTS[side].join(', ')}`,
       );
       if (side === 'without') {
         record(
