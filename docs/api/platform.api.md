@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-138 exported symbol(s).
+146 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -202,6 +202,8 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly statusTag: "nxs.primitives.statusTag";
     readonly richTooltip: "nxs.primitives.richTooltip";
     readonly errorState: "nxs.primitives.errorState";
+    readonly banner: "nxs.primitives.banner";
+    readonly chipSet: "nxs.primitives.chipSet";
     readonly tabs: "nxs.primitives.tabs";
     readonly actionBar: "nxs.primitives.actionBar";
     readonly card: "nxs.primitives.card";
@@ -306,6 +308,58 @@ interface NxsAvatarInputs {
     }
 }
 type NxsAvatarSize = '128' | '18' | '24' | '28' | '36' | '64' | '80';
+interface NxsBannerAction {
+    readonly label: string;
+    readonly icon?: string;
+    readonly emphasis: 'filled' | 'outlined' | 'text';
+    readonly danger?: boolean;
+    readonly disabled?: boolean;
+    readonly cssClass?: string;
+    readonly press: () => void;
+    }
+}
+type NxsBannerAnnounce = 'alert' | 'none' | 'status';
+class NxsBannerComponent implements NxsBannerInputs {
+    readonly message: import("@angular/core").InputSignal<string>;
+    readonly tone: import("@angular/core").InputSignal<NxsBannerTone>;
+    readonly announce: import("@angular/core").InputSignal<NxsBannerAnnounce>;
+    readonly actions: import("@angular/core").InputSignal<readonly NxsBannerAction[]>;
+    protected readonly icon: import("@angular/core").Signal<string>;
+    protected readonly role: import("@angular/core").Signal<string | null>;
+    protected press(action: NxsBannerAction): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsBannerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsBannerComponent, "nxs-banner", never, {
+    "message": {
+    "alias": "message";
+    "required": false;
+    "isSignal": true;
+    };
+    "tone": {
+    "alias": "tone";
+    "required": false;
+    "isSignal": true;
+    };
+    "announce": {
+    "alias": "announce";
+    "required": false;
+    "isSignal": true;
+    };
+    "actions": {
+    "alias": "actions";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsBannerInputs {
+    readonly message: InputSignal<string>;
+    readonly tone: InputSignal<NxsBannerTone>;
+    readonly announce: InputSignal<NxsBannerAnnounce>;
+    readonly actions: InputSignal<readonly NxsBannerAction[]>;
+    }
+}
+type NxsBannerTone = 'error' | 'info' | 'warning';
 interface NxsBreadcrumbItem {
     readonly label: string;
     readonly routerLink?: string | readonly (string | number)[];
@@ -418,6 +472,47 @@ interface NxsCardInputs {
     readonly media: InputSignal<TemplateRef<unknown> | null>;
     readonly headerAction: InputSignal<TemplateRef<unknown> | null>;
     readonly actions: InputSignal<TemplateRef<unknown> | null>;
+    }
+}
+interface NxsChipItem {
+    readonly id: string;
+    readonly label: string;
+    readonly removeLabel: string;
+    readonly disabled?: boolean;
+    }
+}
+class NxsChipSetComponent implements NxsChipSetInputs {
+    readonly items: import("@angular/core").InputSignal<readonly NxsChipItem[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly removeHandler: import("@angular/core").InputSignal<((item: NxsChipItem) => void) | null>;
+    readonly removed: import("@angular/core").OutputEmitterRef<NxsChipItem>;
+    protected pressRemove(item: NxsChipItem): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsChipSetComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsChipSetComponent, "nxs-chip-set", never, {
+    "items": {
+    "alias": "items";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "removeHandler": {
+    "alias": "removeHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "removed": "removed";
+    }, never, never, true, never>;
+    }
+}
+interface NxsChipSetInputs {
+    readonly items: InputSignal<readonly NxsChipItem[]>;
+    readonly label: InputSignal<string>;
+    readonly removeHandler: InputSignal<((item: NxsChipItem) => void) | null>;
     }
 }
 class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
@@ -1544,6 +1639,8 @@ class NxsMetadataEditorComponent {
     protected groupedOptions(directory: string): ReturnType<typeof groupL10nChildrenByParent>;
     protected usesL10n(directory: string): boolean;
     protected vocabularyLabel(directory: string, id: unknown): string;
+    protected triggerChips(control: AbstractControl, directory: string, multiple: boolean): NxsChipItem[];
+    protected removeTrigger(control: AbstractControl, multiple: boolean, item: NxsChipItem): void;
     protected listValue(control: AbstractControl): readonly unknown[];
     protected panelToggled(): void;
     protected clearValue(control: AbstractControl, multiple: boolean): void;
@@ -1686,6 +1783,8 @@ class NxsPermissionsPanelComponent {
     protected readonly editable: import("@angular/core").Signal<boolean>;
     protected readonly trackItem: (_index: number, item: LocalItem) => string;
     protected readonly pendingCount: import("@angular/core").Signal<number>;
+    protected readonly allPermissions: import("@angular/core").WritableSignal<boolean>;
+    protected readonly offersAll: import("@angular/core").Signal<boolean>;
     protected readonly permissionGroups: import("@angular/core").Signal<{
     label: string;
     permissions: readonly string[];
@@ -2031,6 +2130,7 @@ class NxsSearchFiltersComponent {
     protected clearFulltext(): void;
     protected addChoice(field: ChoiceField, value: string): void;
     protected removeChoice(field: ChoiceField, value: string): void;
+    protected chipItems(field: ChoiceField, values: readonly string[]): NxsChipItem[];
     protected onCollectionsFocus(): void;
     protected onTagInput(value: string): void;
     protected resetFilters(): void;
@@ -4764,6 +4864,7 @@ class EditCollectionDialogComponent implements OnInit {
     onNaturePanelOpen(open: boolean): void;
     naturePillLabel(id: string): string;
     subjectPillLabel(id: string): string;
+    subjectChips(): NxsChipItem[];
     coveragePillLabel(id: string): string;
     clearNature(): void;
     clearCoverage(): void;

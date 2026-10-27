@@ -15,6 +15,8 @@ import {
 import { provideTranslateService } from '@ngx-translate/core';
 
 import { NxsAvatarComponent } from './avatar/avatar.component';
+import { NxsBannerComponent } from './banner/banner.component';
+import { NxsChipSetComponent } from './chip-set/chip-set.component';
 import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
 import { NxsCardComponent } from './card/card.component';
 import { NxsDocumentToolbarComponent } from './document-toolbar/document-toolbar.component';
@@ -49,11 +51,13 @@ describe('provideNxsComponents', () => {
     expect(components.peek(NXS_PRIMITIVE_IDS.statusTag)).toBe(NxsStatusTagComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.richTooltip)).toBe(NxsRichTooltipComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.errorState)).toBe(NxsErrorStateComponent);
+    expect(components.peek(NXS_PRIMITIVE_IDS.banner)).toBe(NxsBannerComponent);
+    expect(components.peek(NXS_PRIMITIVE_IDS.chipSet)).toBe(NxsChipSetComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.tabs)).toBe(NxsTabsComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.actionBar)).toBe(NxsDocumentToolbarComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.card)).toBe(NxsCardComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.emptyState)).toBe(NxsEmptyStateComponent);
-    expect(Object.keys(NXS_PRIMITIVE_IDS)).toHaveLength(10);
+    expect(Object.keys(NXS_PRIMITIVE_IDS)).toHaveLength(12);
   });
 
   it('registers nothing under those IDs when it is not provided', () => {

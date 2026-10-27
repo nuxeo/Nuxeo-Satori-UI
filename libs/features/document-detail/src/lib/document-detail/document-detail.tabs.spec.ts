@@ -1410,5 +1410,4 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(openPanel).toHaveBeenCalledWith(expect.objectContaining({ docId: 'doc-1' }));
     });
   });
-
 });

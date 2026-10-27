@@ -119,10 +119,12 @@
               }
             </div>
             @if (locationRestricted()) {
-              <p class="location-hint" role="alert">
-                <span class="location-hint-bar" aria-hidden="true"></span>
-                {{ importLocationHint() | translate }}
-              </p>
+              <nxs-banner
+                class="location-hint"
+                tone="error"
+                announce="alert"
+                [message]="importLocationHint() | translate"
+              />
             }
           </div>
 
@@ -341,10 +343,12 @@
                   }
                 </div>
                 @if (locationRestricted()) {
-                  <p class="location-hint" role="alert">
-                    <span class="location-hint-bar" aria-hidden="true"></span>
-                    {{ importLocationHint() | translate }}
-                  </p>
+                  <nxs-banner
+                    class="location-hint"
+                    tone="error"
+                    announce="alert"
+                    [message]="importLocationHint() | translate"
+                  />
                 }
               </div>
 
@@ -457,23 +461,7 @@
                   (selectionChange)="natureSelect.close()"
                 >
                   <mat-select-trigger>
-                    @if (nature; as natureId) {
-                      <mat-chip-set class="subjects-trigger-chips">
-                        <mat-chip (removed)="clearNature()">
-                          {{ naturePillLabel(natureId) }}
-                          <button
-                            type="button"
-                            matChipRemove
-                            [attr.aria-label]="
-                              'shared.remove-item' | translate: { name: naturePillLabel(natureId) }
-                            "
-                            (click)="$event.stopPropagation(); clearNature()"
-                          >
-                            <mat-icon svgIcon="circle_x" />
-                          </button>
-                        </mat-chip>
-                      </mat-chip-set>
-                    }
+                    <ng-container *ngTemplateOutlet="natureChip" />
                   </mat-select-trigger>
                   <div class="vocab-panel__search">
                     <input
@@ -506,23 +494,7 @@
                   (openedChange)="onSubjectsPanelOpen($event)"
                 >
                   <mat-select-trigger>
-                    <mat-chip-set class="subjects-trigger-chips">
-                      @for (id of subjects; track id) {
-                        <mat-chip (removed)="removeSubject(id)">
-                          {{ subjectPillLabel(id) }}
-                          <button
-                            type="button"
-                            matChipRemove
-                            [attr.aria-label]="
-                              'shared.remove-item' | translate: { name: subjectPillLabel(id) }
-                            "
-                            (click)="$event.stopPropagation()"
-                          >
-                            <mat-icon svgIcon="circle_x" />
-                          </button>
-                        </mat-chip>
-                      }
-                    </mat-chip-set>
+                    <ng-container *ngTemplateOutlet="subjectsChip" />
                   </mat-select-trigger>
                   <div class="vocab-panel__search">
                     <input
@@ -562,24 +534,7 @@
                   (selectionChange)="coverageSelect.close()"
                 >
                   <mat-select-trigger>
-                    @if (coverage; as coverageId) {
-                      <mat-chip-set class="subjects-trigger-chips">
-                        <mat-chip (removed)="clearCoverage()">
-                          {{ coveragePillLabel(coverageId) }}
-                          <button
-                            type="button"
-                            matChipRemove
-                            [attr.aria-label]="
-                              'shared.remove-item'
-                                | translate: { name: coveragePillLabel(coverageId) }
-                            "
-                            (click)="$event.stopPropagation(); clearCoverage()"
-                          >
-                            <mat-icon svgIcon="circle_x" />
-                          </button>
-                        </mat-chip>
-                      </mat-chip-set>
-                    }
+                    <ng-container *ngTemplateOutlet="coverageChip" />
                   </mat-select-trigger>
                   <div class="vocab-panel__search">
                     <input
@@ -703,24 +658,7 @@
                       (selectionChange)="importNatureSelect.close()"
                     >
                       <mat-select-trigger>
-                        @if (nature; as natureId) {
-                          <mat-chip-set class="subjects-trigger-chips">
-                            <mat-chip (removed)="clearNature()">
-                              {{ naturePillLabel(natureId) }}
-                              <button
-                                type="button"
-                                matChipRemove
-                                [attr.aria-label]="
-                                  'shared.remove-item'
-                                    | translate: { name: naturePillLabel(natureId) }
-                                "
-                                (click)="$event.stopPropagation(); clearNature()"
-                              >
-                                <mat-icon svgIcon="circle_x" />
-                              </button>
-                            </mat-chip>
-                          </mat-chip-set>
-                        }
+                        <ng-container *ngTemplateOutlet="natureChip" />
                       </mat-select-trigger>
                       <div class="vocab-panel__search">
                         <input
@@ -755,23 +693,7 @@
                       (openedChange)="onSubjectsPanelOpen($event)"
                     >
                       <mat-select-trigger>
-                        <mat-chip-set class="subjects-trigger-chips">
-                          @for (id of subjects; track id) {
-                            <mat-chip (removed)="removeSubject(id)">
-                              {{ subjectPillLabel(id) }}
-                              <button
-                                type="button"
-                                matChipRemove
-                                [attr.aria-label]="
-                                  'shared.remove-item' | translate: { name: subjectPillLabel(id) }
-                                "
-                                (click)="$event.stopPropagation()"
-                              >
-                                <mat-icon svgIcon="circle_x" />
-                              </button>
-                            </mat-chip>
-                          }
-                        </mat-chip-set>
+                        <ng-container *ngTemplateOutlet="subjectsChip" />
                       </mat-select-trigger>
                       <div class="vocab-panel__search">
                         <input
@@ -811,24 +733,7 @@
                       (selectionChange)="importCoverageSelect.close()"
                     >
                       <mat-select-trigger>
-                        @if (coverage; as coverageId) {
-                          <mat-chip-set class="subjects-trigger-chips">
-                            <mat-chip (removed)="clearCoverage()">
-                              {{ coveragePillLabel(coverageId) }}
-                              <button
-                                type="button"
-                                matChipRemove
-                                [attr.aria-label]="
-                                  'shared.remove-item'
-                                    | translate: { name: coveragePillLabel(coverageId) }
-                                "
-                                (click)="$event.stopPropagation(); clearCoverage()"
-                              >
-                                <mat-icon svgIcon="circle_x" />
-                              </button>
-                            </mat-chip>
-                          </mat-chip-set>
-                        }
+                        <ng-container *ngTemplateOutlet="coverageChip" />
                       </mat-select-trigger>
                       <div class="vocab-panel__search">
                         <input
@@ -1073,3 +978,31 @@
     </mat-dialog-actions>
   }
 </div>
+
+<ng-template #natureChip>
+  @if (nature) {
+    <nxs-chip-set
+      class="subjects-trigger-chips"
+      [items]="natureChips()"
+      (removed)="clearNature()"
+    />
+  }
+</ng-template>
+
+<ng-template #coverageChip>
+  @if (coverage) {
+    <nxs-chip-set
+      class="subjects-trigger-chips"
+      [items]="coverageChips()"
+      (removed)="clearCoverage()"
+    />
+  }
+</ng-template>
+
+<ng-template #subjectsChip>
+  <nxs-chip-set
+    class="subjects-trigger-chips"
+    [items]="subjectChips()"
+    (removed)="removeSubject($event.id)"
+  />
+</ng-template>

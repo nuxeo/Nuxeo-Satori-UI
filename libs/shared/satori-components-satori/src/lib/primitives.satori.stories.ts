@@ -100,7 +100,16 @@ export const SatoriRegistration: StoryObj = {
         <lib-extension-outlet [componentId]="ids.tag" [componentInputs]="tag" />
         <lib-extension-outlet [componentId]="ids.statusTag" [componentInputs]="statusTag" />
         <lib-extension-outlet [componentId]="ids.richTooltip" [componentInputs]="tooltip" />
-        <lib-extension-outlet [componentId]="ids.errorState" [componentInputs]="errorState" />
+        <!--
+          Sized like the tabs below: the error state fills a region, where the primitives above are
+          small and inline. An outlet is an inline custom element and \`justify-items: start\`
+          shrink-wraps it, which leaves a region-filling child 0 px wide.
+        -->
+        <lib-extension-outlet
+          style="display: block; width: 420px"
+          [componentId]="ids.errorState"
+          [componentInputs]="errorState"
+        />
         <ng-template #tabBody let-tab>
           <p style="padding: 16px">The {{ tab.label }} tab body.</p>
         </ng-template>

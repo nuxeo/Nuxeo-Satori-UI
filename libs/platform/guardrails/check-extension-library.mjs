@@ -371,6 +371,8 @@ const PRIMITIVE_CONTRACTS = {
   tabs: 'NxsTabsInputs',
   actionBar: 'NxsActionBarInputs',
   card: 'NxsCardInputs',
+  banner: 'NxsBannerInputs',
+  chipSet: 'NxsChipSetInputs',
   emptyState: 'NxsEmptyStateInputs',
 };
 
