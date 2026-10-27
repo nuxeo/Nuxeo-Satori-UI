@@ -231,57 +231,64 @@
         </div>
       </div>
 
+      <!-- Each card renders by ID, with the built-in card as the fallback. -->
       <div class="result-grid">
-        @for (row of displayResults(); track row.id) {
-          <div class="result-card" [class.selected]="isSelected(row.id)">
-            <div class="grid-card-checkbox col-hover-select">
-              <mat-checkbox
-                [checked]="isSelected(row.id)"
-                [aria-label]="'common.select-item' | translate: { name: row.name }"
-                (change)="toggleSelection(row.id)"
-                (click)="$event.stopPropagation()"
-              ></mat-checkbox>
-            </div>
-            <div class="result-card-thumbnail">
-              <nxs-thumbnail class="result-thumbnail-image" [documentId]="row.id">
-                <mat-icon class="result-icon" [svgIcon]="row.icon" />
-              </nxs-thumbnail>
-            </div>
-            <div class="result-card-body">
-              <div class="result-head">
-                <button
-                  type="button"
-                  class="result-name"
-                  [title]="row.name"
-                  (click)="openDocument(row.id); $event.stopPropagation()"
-                >
-                  {{ row.name }}
-                </button>
-                <span class="result-type-pill" [title]="row.type | docTypeLabel">{{
-                  row.type | docTypeLabel
-                }}</span>
-              </div>
-              <div class="grid-card-actions col-hover-actions">
-                <nxs-favorite-toggle
-                  [documentId]="row.id"
-                  [favorite]="isFavorited(row.id)"
-                  (changed)="onFavoriteChanged(row.id, $event)"
-                  (failed)="onFavoriteFailed($event)"
-                />
-                @if (isDownloadableType(row.type)) {
-                  <button
-                    mat-icon-button
-                    [matTooltip]="'search.search.download' | translate"
-                    [attr.aria-label]="'search.search.download' | translate"
-                    class="action-btn"
-                    (click)="downloadDocument(row.id, row.name, $event)"
-                  >
-                    <mat-icon class="action-icon" svgIcon="download" />
-                  </button>
-                }
-              </div>
-            </div>
-          </div>
+        @for (card of gridCards(); track card.row.id) {
+          @let row = card.row;
+          <ng-template #resultThumbnail>
+            <nxs-thumbnail class="result-thumbnail-image" [documentId]="row.id">
+              <mat-icon class="result-icon" [svgIcon]="row.icon" />
+            </nxs-thumbnail>
+          </ng-template>
+          <ng-template #resultActions>
+            <nxs-favorite-toggle
+              [documentId]="row.id"
+              [favorite]="isFavorited(row.id)"
+              (changed)="onFavoriteChanged(row.id, $event)"
+              (failed)="onFavoriteFailed($event)"
+            />
+            @if (isDownloadableType(row.type)) {
+              <button
+                mat-icon-button
+                [matTooltip]="'search.search.download' | translate"
+                [attr.aria-label]="'search.search.download' | translate"
+                class="action-btn"
+                (click)="downloadDocument(row.id, row.name, $event)"
+              >
+                <mat-icon class="action-icon" svgIcon="download" />
+              </button>
+            }
+          </ng-template>
+          @let cardInputs =
+            {
+              heading: card.name,
+              subheading: row.type | docTypeLabel,
+              selected: isSelected(row.id),
+              selectionLabel: 'common.select-item' | translate: { name: card.name },
+              selectionHandler: card.select,
+              openHandler: card.open,
+              media: resultThumbnail,
+              headerAction: null,
+              actions: resultActions,
+            };
+          <lib-extension-outlet
+            #cardOutlet
+            class="card-outlet"
+            [componentId]="cardId"
+            [componentInputs]="cardInputs"
+          />
+          @if (cardOutlet.unresolved()) {
+            <nxs-card
+              [heading]="cardInputs.heading"
+              [subheading]="cardInputs.subheading"
+              [selected]="cardInputs.selected"
+              [selectionLabel]="cardInputs.selectionLabel"
+              [selectionHandler]="cardInputs.selectionHandler"
+              [openHandler]="cardInputs.openHandler"
+              [media]="cardInputs.media"
+              [actions]="cardInputs.actions"
+            />
+          }
         }
 
         @if (resultCount() === 0) {

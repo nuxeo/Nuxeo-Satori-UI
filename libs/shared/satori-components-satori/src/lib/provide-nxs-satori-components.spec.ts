@@ -15,6 +15,7 @@ import {
   NXS_PRIMITIVE_IDS,
   NxsAvatarComponent,
   NxsBreadcrumbsComponent,
+  NxsCardComponent,
   NxsDocumentToolbarComponent,
   NxsErrorStateComponent,
   NxsRichTooltipComponent,
@@ -50,6 +51,13 @@ const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
   [NXS_PRIMITIVE_IDS.actionBar, NxsDocumentToolbarComponent, NxsSatoriActionBarComponent],
 ];
 
+/**
+ * Primitives no Satori component re-registers yet, so they keep their Material implementation with
+ * or without `provideNxsSatoriComponents()`. The card waits for a wrapper of Satori's interactive
+ * card (NXSAT-675), which moves it into `PAIRS`.
+ */
+const MATERIAL_ONLY: readonly string[] = [NXS_PRIMITIVE_IDS.card];
+
 function registry(providers: (Provider | EnvironmentProviders)[]): ExtensionComponentRegistry {
   TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection(), ...providers] });
   return TestBed.inject(ExtensionComponentRegistry);
@@ -67,9 +75,18 @@ describe('provideNxsSatoriComponents', () => {
   });
 
   // A new ID with no Satori pair here would be registered on Material only, and every check below
-  // would pass without it.
-  it('pairs every primitive ID', () => {
-    expect(PAIRS.map(([id]) => id).sort()).toEqual(Object.values(NXS_PRIMITIVE_IDS).sort());
+  // would pass without it — unless it is listed in MATERIAL_ONLY, on purpose and with its reason.
+  it('pairs every primitive ID, but those deliberately left on Material', () => {
+    expect([...PAIRS.map(([id]) => id), ...MATERIAL_ONLY].sort()).toEqual(
+      Object.values(NXS_PRIMITIVE_IDS).sort(),
+    );
+  });
+
+  // No Satori card is wrapped yet, so `PAIRS` has no card and the ID keeps the Material one. Its
+  // Satori variant replaces this test with a `PAIRS` entry.
+  it('leaves the card on Material, which no Satori component re-registers yet', () => {
+    const components = registry([provideNxsComponents(), provideNxsSatoriComponents()]);
+    expect(components.peek(NXS_PRIMITIVE_IDS.card)).toBe(NxsCardComponent);
   });
 
   it('leaves Material in place for a host that provides only the base registration', () => {
