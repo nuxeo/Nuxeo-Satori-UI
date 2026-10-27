@@ -384,6 +384,19 @@ describe('NxsUserGroupPickerComponent', () => {
     expect(chips()).toHaveLength(2);
   });
 
+  it('hands the form a chosen principal without the search text it replaced', async () => {
+    await multiple();
+    await type('adm');
+    await settle();
+    const pending: boolean[] = [];
+    const watching = host.many.valueChanges.subscribe(() =>
+      pending.push(host.many.hasError('nxsChooseFromList')),
+    );
+    options()[0].click();
+    watching.unsubscribe();
+    expect(pending).toEqual([false]);
+  });
+
   it('shows a disabled empty state when every matching principal is selected', async () => {
     await multiple();
     host.many.setValue([

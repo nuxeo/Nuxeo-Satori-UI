@@ -302,6 +302,18 @@ describe('NxsDocumentReferenceInputComponent', () => {
     expect(chips()).toHaveLength(2);
   });
 
+  it('hands the form a chosen document without the search text it replaced', async () => {
+    await multiple();
+    await type('contract');
+    const pending: boolean[] = [];
+    const watching = host.many.valueChanges.subscribe(() =>
+      pending.push(host.many.hasError('nxsChooseFromList')),
+    );
+    options()[0].click();
+    watching.unsubscribe();
+    expect(pending).toEqual([false]);
+  });
+
   it('looks up stored document titles while keeping unreadable ids', async () => {
     await multiple();
     host.many.setValue(['c1', 'gone']);

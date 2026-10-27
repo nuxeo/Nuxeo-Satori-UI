@@ -320,9 +320,10 @@ export class NxsDocumentReferenceInputComponent
       this.references.update((references) => new Map(references).set(id, document));
     if (this.multiple()) {
       if (!document || id === null || this.chosen().includes(id)) return;
-      this.commit([...this.chosen(), id]);
+      // Clear the search first: the form validates inside `commit`, and must not see it pending.
       this.text.set('');
       this.finder.reset();
+      this.commit([...this.chosen(), id]);
     } else {
       this.commit(id);
       this.document.set(document);

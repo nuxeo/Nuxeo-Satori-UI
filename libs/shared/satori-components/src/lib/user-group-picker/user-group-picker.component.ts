@@ -244,9 +244,10 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
     if (this.multiple()) {
       if (!principal || this.chosen().some((chosen) => chosen.prefixedId === principal.prefixedId))
         return;
-      this.commit([...this.chosen(), principal]);
+      // Clear the search first: the form validates inside `commit`, and must not see it pending.
       this.text.set('');
       this.finder.reset();
+      this.commit([...this.chosen(), principal]);
     } else {
       this.commit(principal);
       if (principal) {
