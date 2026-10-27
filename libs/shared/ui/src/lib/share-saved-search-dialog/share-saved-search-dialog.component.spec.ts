@@ -107,6 +107,20 @@ describe('ShareSavedSearchDialogComponent', () => {
   const component = () => fixture.componentInstance;
 
   /**
+   * Whether each local row's Edit button is disabled, in row order. Asserted through the DOM
+   * rather than by calling the component's `isEditable`, which is `protected`: what matters is
+   * what the user can reach, and reaching into a protected member fails the `spec-types` gate.
+   */
+  const editButtonsDisabled = () => {
+    const host: HTMLElement = fixture.nativeElement;
+    return Array.from(
+      host.querySelectorAll<HTMLButtonElement>(
+        'table.permissions-table:not(.readonly-table) tbody tr button.edit-btn',
+      ),
+    ).map((button) => button.disabled);
+  };
+
+  /**
    * What the add/edit dialog closes with. Built here in the shape that dialog really returns —
    * resolved `begin`/`end` instants or days, plus the notification choices — so a host test cannot
    * pass a shape the dialog never produces. The round trip through the real dialog is asserted in
@@ -500,17 +514,20 @@ describe('ShareSavedSearchDialogComponent', () => {
           },
         } as unknown as NuxeoDocument);
 
-        const rows = component().permissions();
-        expect(rows).toHaveLength(2);
-        expect(component().isEditable(rows[0])).toBe(false);
+        expect(component().permissions()).toHaveLength(2);
+        expect(editButtonsDisabled()).toEqual([true, false]);
       });
 
-      it('treats a deny as not editable and a grant as editable', async () => {
+      it('disables Edit on a deny row and leaves it on a grant', async () => {
         await mount(withDenies);
-        const rows = component().permissions();
 
-        expect(component().isEditable(rows[0])).toBe(false);
-        expect(component().isEditable(rows[1])).toBe(true);
+        // powerusers is the deny, members the grant.
+        expect(
+          component()
+            .permissions()
+            .map((r) => r.userGroup),
+        ).toEqual(['powerusers', 'members']);
+        expect(editButtonsDisabled()).toEqual([true, false]);
       });
     });
 

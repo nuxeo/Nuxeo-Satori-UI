@@ -4692,6 +4692,7 @@ interface PermissionEntry {
     grantedBy: string;
     begin?: string | null;
     end?: string | null;
+    granted?: boolean;
     }
 }
 interface PictureInfo {
@@ -4802,6 +4803,7 @@ class ShareSavedSearchDialogComponent implements OnInit {
     sendExternalNotification(row: ExternalPermissionEntry): void;
     removeExternalPermission(row: ExternalPermissionEntry): void;
     togglePermissionInheritance(): void;
+    protected isEditable(row: PermissionEntry): boolean;
     protected permissionLabel(permission: string): string;
     openAddPermissionDialog(): void;
     removeRow(id: string): void;
