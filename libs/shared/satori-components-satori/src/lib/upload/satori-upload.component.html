@@ -11,12 +11,22 @@
       ) | translate)
   }}</span>
   <!-- The field reads `multiple`, `accept` and `disabled` from this input, pairs its own
-       `<label for>` with the id Satori's directive puts on it, and points `satUpload` at it so a
-       click on the field opens the chooser. -->
+       `<label for>` with its id, and points `satUpload` at it so a click on the field opens the
+       chooser.
+
+       `aria-hidden` and `tabindex` are stated here for the same reason the Material dropzone states
+       them on its own picker: this input is the file-dialog mechanism, not the control. The control
+       is Satori's `<button satUpload>`, which is what carries the name and takes the focus. Satori
+       host-binds `hidden` on this element, so it was already out of the accessibility tree and out
+       of the tab order — saying so in the markup changes nothing at run time, and makes the element
+       legible as a mechanism to a reader and to static analysis, which sees attributes and not host
+       bindings. `click()` on it still opens the dialog, which is how both implementations work. -->
   <input
     satUploadFieldInput
     type="file"
     [id]="inputId"
+    tabindex="-1"
+    aria-hidden="true"
     [multiple]="multiple()"
     [attr.accept]="accept() || null"
     [disabled]="disabled()"
