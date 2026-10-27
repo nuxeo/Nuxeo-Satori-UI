@@ -1,7 +1,14 @@
-import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  inject,
+  signal,
+  viewChild,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, NgModel } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -146,6 +153,7 @@ export class AddPermissionDialogComponent {
   private readonly destroyRef = inject(DestroyRef);
 
   readonly selectedUser = signal<NxsPrincipal | null>(null);
+  private readonly principalModel = viewChild('principal', { read: NgModel });
   readonly saving = signal(false);
 
   readonly permissionOptions = PERMISSION_OPTIONS;
@@ -218,6 +226,8 @@ export class AddPermissionDialogComponent {
 
   private resetForm(): void {
     this.selectedUser.set(null);
+    // Untouched again, or the emptied picker shows its `required` error before anyone types.
+    this.principalModel()?.control.markAsUntouched();
     this.permission = 'Read';
     this.timeFrame = 'permanent';
     this.beginDate = null;

@@ -279,6 +279,28 @@ describe('NxsTagEditorComponent', () => {
 
       expect(tags.removeTag).toHaveBeenCalledTimes(1);
     });
+
+    it('adds a tag straight back while its removal is still on its way', async () => {
+      const removed = new Subject<string[]>();
+      tags.removeTag.mockReturnValue(removed);
+      tags.addTag.mockReturnValue(of(['q3', 'contract']));
+      await mount();
+
+      removeButton('contract').click();
+      await settle();
+      await type('contract');
+      key(box(), 27, 'Escape');
+      await enter();
+
+      // Queued behind the removal, so the document ends up as the user last left it.
+      expect(tags.addTag).not.toHaveBeenCalled();
+      removed.next(['q3']);
+      removed.complete();
+      await settle();
+
+      expect(tags.addTag).toHaveBeenCalledExactlyOnceWith('doc-1', 'contract');
+      expect(chips()).toEqual(['q3', 'contract']);
+    });
   });
 
   describe('suggestions', () => {

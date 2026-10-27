@@ -184,7 +184,7 @@ describe('Add permission — rendered principal picker', () => {
     TestBed.resetTestingModule();
   });
 
-  it('sends the selected raw group id and clears the form after create-and-add-another', async () => {
+  it('sends the selected raw group id and clears the form, error-free, after create-and-add-another', async () => {
     vi.clearAllMocks();
     TestBed.overrideProvider(NxsToastService, { useValue: { show: vi.fn(), error: vi.fn() } });
     await TestBed.configureTestingModule({
@@ -220,6 +220,9 @@ describe('Add permission — rendered principal picker', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(fixture.componentInstance.selectedUser()?.kind).toBe('group');
+    // Leaving the picker for the button touches it.
+    box.dispatchEvent(new FocusEvent('blur'));
+    fixture.detectChanges();
     fixture.componentInstance.create(true);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -227,5 +230,9 @@ describe('Add permission — rendered principal picker', () => {
     expect(add).toHaveBeenCalledWith('doc-1', expect.objectContaining({ username: 'legal-team' }));
     expect(fixture.componentInstance.selectedUser()).toBeNull();
     expect(box.value).toBe('');
+    // Emptied for the next entry, not flagged as a missed required field.
+    expect(
+      fixture.nativeElement.querySelector('nxs-user-group-picker .mat-form-field-invalid'),
+    ).toBeNull();
   });
 });

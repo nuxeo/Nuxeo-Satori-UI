@@ -72,9 +72,14 @@ export class NxsPickerControl<T> {
     this.onTouched();
   }
 
-  /** Touched here or in the form — `markAllAsTouched()` on submit, for example. */
+  /**
+   * Touched as the form says, when there is one: leaving the field reaches it through `onTouched`,
+   * and so do `markAllAsTouched()` on submit and `reset()` or `markAsUntouched()` after one — which
+   * a flag kept here as well would outlive, leaving a cleared field showing its `required` error.
+   * Without a form, touched here.
+   */
   wasTouched(): boolean {
-    return this.touched() || Boolean(this.control?.touched);
+    return this.control ? this.control.touched : this.touched();
   }
 
   /** The form's validators, or the picker's own, reject the value. */

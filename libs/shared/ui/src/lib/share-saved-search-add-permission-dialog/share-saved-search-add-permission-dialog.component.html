@@ -3,6 +3,7 @@
 <mat-dialog-content>
   @if (!isEditMode) {
     <nxs-user-group-picker
+      #principal="ngModel"
       class="full-width"
       [label]="'shared-ui.share-saved-search-add-permission-dialog.user-group' | translate"
       [ngModel]="selectedPrincipal()"

@@ -97,12 +97,17 @@ describe('Saved-search sharing — principal picker integration', () => {
     expect(fixture.componentInstance.selectedPrincipal()?.id).toBe('legal-team');
   });
 
-  it('clears the picker after create-and-add-another and accumulates entries', async () => {
+  it('clears the picker, error-free, after create-and-add-another and accumulates entries', async () => {
     await render();
     await pick();
+    // Leaving the picker for the button touches it.
+    box().dispatchEvent(new FocusEvent('blur'));
     fixture.componentInstance.create(true);
     await settle();
     expect(box().value).toBe('');
+    expect(
+      fixture.nativeElement.querySelector('nxs-user-group-picker .mat-form-field-invalid'),
+    ).toBeNull();
     expect(fixture.componentInstance.isSubmitDisabled()).toBe(true);
     expect(close).not.toHaveBeenCalled();
     await pick();

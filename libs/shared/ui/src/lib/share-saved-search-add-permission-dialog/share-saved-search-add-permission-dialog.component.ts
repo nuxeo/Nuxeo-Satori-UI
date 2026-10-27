@@ -1,5 +1,5 @@
-import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, inject, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
+import { FormsModule, NgModel } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -69,6 +69,7 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     inject<ShareSavedSearchAddPermissionDialogData>(MAT_DIALOG_DATA, { optional: true }) ?? {};
 
   readonly selectedPrincipal = signal<NxsPrincipal | null>(null);
+  private readonly principalModel = viewChild('principal', { read: NgModel });
   private readonly translate = inject(TranslateService);
   readonly saving = signal(false);
   readonly rightOptions: readonly { value: string; label: string }[];
@@ -247,6 +248,8 @@ export class ShareSavedSearchAddPermissionDialogComponent {
 
   private resetForm(): void {
     this.selectedPrincipal.set(null);
+    // Untouched again, or the emptied picker shows its `required` error before anyone types.
+    this.principalModel()?.control.markAsUntouched();
     this.right = this.firstRight();
     this.timeFrameMode = 'permanent';
     this.beginDate = null;

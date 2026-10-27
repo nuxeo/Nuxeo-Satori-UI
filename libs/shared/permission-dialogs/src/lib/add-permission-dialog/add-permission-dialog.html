@@ -2,6 +2,7 @@
 
 <mat-dialog-content>
   <nxs-user-group-picker
+    #principal="ngModel"
     [label]="'permissions.add-permission-dialog.user-group' | translate"
     [ngModel]="selectedUser()"
     (ngModelChange)="selectedUser.set($event)"

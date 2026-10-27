@@ -134,7 +134,7 @@ export class NxsTagEditorComponent {
   protected readonly options = computed<readonly NxsTagOption[]>(() => {
     const term = this.term().trim().toLowerCase();
     if (!term) return [];
-    const taken = [...this.saved(), ...this.adding()];
+    const taken = this.taken();
     const existing = this.suggestions()
       .filter((tag) => !taken.some((other) => same(other, tag)))
       .map((label) => ({ label, isNew: false }));
@@ -204,9 +204,16 @@ export class NxsTagEditorComponent {
   }
 
   private add(label: string): void {
-    const taken = [...this.saved(), ...this.adding()];
-    if (taken.some((tag) => same(tag, label))) return;
+    if (this.taken().some((tag) => same(tag, label))) return;
     this.writes.write(this.documentUid(), 'add', label, this.saved());
+  }
+
+  /**
+   * The tags the document has, or will once the queue drains: a tag on its way out is not one, so
+   * it can be added straight back, and is queued after its removal.
+   */
+  private taken(): string[] {
+    return [...this.shown(), ...this.adding()];
   }
 
   private queued(change: NxsTagChange): string[] {
