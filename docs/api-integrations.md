@@ -586,8 +586,9 @@ afterwards; `Tag.Suggestion` with `[{ "id", "displayLabel" }]`.
 - Web UI's `isTaggable` — `canTagDocument(doc)` here — offers neither without Write, nor on a version
   or a proxy.
 
-**Used by:** `nxs-tag-editor` in the document page's Properties panel, and the AI "Suggested tags"
-card, which refreshes the document's tags from `addTag`'s answer.
+**Used by:** `nxs-tag-editor` in the document page's Properties panel and in Browse's details panel
+(Tags sub-tab), and the AI "Suggested tags" card, which refreshes the document's tags from
+`addTag`'s answer.
 
 ---
 
@@ -1674,6 +1675,23 @@ immediate saves, with `canTagDocument` controlling read-only state. Its writes a
 `provideNxsTagWrites()` in the app config, so closing the panel or moving to another document
 mid-write neither cancels a change nor drops the ones behind it.
 `nxs-tag-input` remains a form control for labels that are saved with a form.
+
+**Why three characters, not one (NXSAT-654, measured 2026-10-27).** `UserGroup.Suggestion` does
+not cap its answer: it returns every user and group matching the term. Measured on Nuxeo
+`2025.25.21` seeded with 3,000 users and 150 groups, sending exactly the picker's request, three
+times per term, median latency:
+
+| Minimum | Terms | Matches, mean / max | Payload, mean / max | Latency p50 / p95 |
+| ------- | ----- | ------------------- | ------------------- | ----------------- |
+| 1       | a–z   | 232 / 673           | 68 KB / 198 KB      | 35 / 56 ms        |
+| 2       | 35    | 73 / 283            | 22 KB / 82 KB       | 30 / 39 ms        |
+| 3       | 45    | 41 / 271            | 12 KB / 80 KB       | 29 / 43 ms        |
+
+Latency barely moves on a local server; what one character costs is the answer's size, which grows
+with the directory — about six times the matches and payload of three characters here, every one
+rendered as an option. The picker debounces 300 ms, so it asks on each pause rather than each
+keystroke, but at one character the first pause already fetches a fifth of the directory. Three is
+also Web UI's default, so the minimum stays at three.
 
 ---
 

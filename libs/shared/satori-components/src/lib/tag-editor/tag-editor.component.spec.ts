@@ -12,7 +12,7 @@ import { of, Subject, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testTranslateProviders } from '@agentic-ui/testing/i18n';
-import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
+import { CURRENT_USERNAME, TagService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsToastService } from '../toast/toast.service';
 import { NxsTagEditorComponent } from './tag-editor.component';
@@ -50,6 +50,8 @@ describe('NxsTagEditorComponent', () => {
   };
   let toastShow: ReturnType<typeof vi.spyOn>;
   let toastError: ReturnType<typeof vi.spyOn>;
+  /** Who is signed in, as the app shell reports it through `CURRENT_USERNAME`. */
+  const user = signal<string | null>('alice');
 
   const el = (): HTMLElement => fixture.nativeElement;
   const chips = (): string[] =>
@@ -83,9 +85,11 @@ describe('NxsTagEditorComponent', () => {
   const removeButton = (tag: string): HTMLButtonElement =>
     el().querySelector(`button[aria-label="Remove tag ${tag}"]`) as HTMLButtonElement;
 
-  async function mount(): Promise<void> {
+  /** Renders a host, on `tags` when given: the document as the host loaded it. */
+  async function mount(tags?: readonly string[]): Promise<void> {
     fixture = TestBed.createComponent(HostComponent);
     host = fixture.componentInstance;
+    if (tags) host.tags.set(tags);
     await settle();
   }
 
@@ -102,6 +106,7 @@ describe('NxsTagEditorComponent', () => {
         provideNoopAnimations(),
         testTranslateProviders(),
         { provide: TagService, useValue: tags },
+        { provide: CURRENT_USERNAME, useValue: () => user() },
         ...(writes ? [provideNxsTagWrites()] : []),
       ],
     }).compileComponents();
@@ -109,6 +114,7 @@ describe('NxsTagEditorComponent', () => {
 
   beforeEach(async () => {
     tags = { addTag: vi.fn(), removeTag: vi.fn(), suggestTags: vi.fn(() => of([])) };
+    user.set('alice');
     toastShow = vi.spyOn(NxsToastService.prototype, 'show').mockImplementation(() => undefined);
     toastError = vi.spyOn(NxsToastService.prototype, 'error').mockImplementation(() => undefined);
     await configure();
@@ -528,6 +534,60 @@ describe('NxsTagEditorComponent', () => {
 
       expect(toastError).toHaveBeenCalledWith('The tag invoice could not be added.');
 
+      await mount();
+      expect(chips()).toEqual(['contract', 'q3']);
+      expect(host.changes).toEqual([]);
+    });
+
+    it('does not replay a stored answer over tags the host has loaded again since', async () => {
+      tags.addTag.mockReturnValue(of(['contract', 'q3', 'invoice']));
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      // Another client changed the tags after that answer, and the host reloaded the document.
+      await mount(['contract', 'q3', 'invoice', 'urgent']);
+
+      expect(chips()).toEqual(['contract', 'q3', 'invoice', 'urgent']);
+      expect(host.changes).toEqual([]);
+    });
+
+    it("never sends one user's queued change as the next, nor says another's answer", async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      tags.removeTag.mockReturnValue(of(['q3', 'invoice']));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('contract').click();
+      await settle();
+
+      // alice signs out and bob signs in while her add is still on its way.
+      user.set(null);
+      user.set('bob');
+      await settle();
+      expect(el().querySelector('.nxs-tag-editor__pending')).toBeNull();
+      expect(chips()).toEqual(['contract', 'q3']);
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+      await settle();
+
+      // Her queued removal was never sent with bob's session, and her answer is not his to hear.
+      expect(tags.removeTag).not.toHaveBeenCalled();
+      expect(toastShow).not.toHaveBeenCalled();
+      expect(host.changes).toEqual([]);
+
+      fixture.destroy();
       await mount();
       expect(chips()).toEqual(['contract', 'q3']);
       expect(host.changes).toEqual([]);

@@ -152,11 +152,12 @@ export class NxsTagEditorComponent {
       )
       .subscribe((answer) => this.hear(answer));
 
-    // An answer may have come while no editor for this document was open to hear it.
+    // An answer may have come while no editor for this document was open to hear it. It is
+    // applied only over the tags it was made over: anything else the host passes is newer.
     toObservable(this.documentUid)
       .pipe(takeUntilDestroyed())
       .subscribe((uid) => {
-        const tags = this.writes.take(uid);
+        const tags = this.writes.take(uid, this.tags());
         if (tags) this.store(tags);
       });
 
@@ -216,10 +217,10 @@ export class NxsTagEditorComponent {
       .map((write) => write.label);
   }
 
-  /** A failed change needs nothing here: its chip came back, or went, with the queue. */
+  /** Only a saved change needs anything here: a failed one's chip went back with the queue. */
   private hear(answer: NxsTagAnswer): void {
-    if ('error' in answer) return;
-    this.writes.take(answer.write.uid);
+    if (!('tags' in answer)) return;
+    this.writes.heard(answer.write.uid);
     this.store(answer.tags);
   }
 
