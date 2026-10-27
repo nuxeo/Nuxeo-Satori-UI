@@ -1,0 +1,51 @@
+import { Canvas, Meta } from '@storybook/addon-docs/blocks';
+
+import * as GroupDetailsPageStories from './admin-group-details-page.stories';
+
+<Meta of={GroupDetailsPageStories} name="Overview" />
+
+# Group details page
+
+The group details page shows one group: its label, its members, the groups nested in it, and the
+permissions it holds. An administrator edits the group, removes members or nested groups, removes a
+permission, or deletes the group from here.
+
+## Key features
+
+- **Members and nesting together.** Members are users; nested groups are groups the group contains.
+  Each has its own remove action.
+- **Confirmed deletion.** Deleting asks first, and the page emits `deleted` so the host can return to the list.
+- **Outcomes stay visible.** An action reports on a status line; a refusal is an alert.
+
+## Accessibility
+
+The title is the page's level-one heading, and each section has a named heading. Each remove button is
+named with the member or group it removes.
+
+## Demo showcase
+
+<Canvas of={GroupDetailsPageStories.Profile} />
+
+## Usage
+
+```html
+<nxs-admin-group-details-page
+  [groupId]="groupName"
+  (deleted)="router.navigate(['/administration/users-groups'])"
+  (userOpened)="router.navigate(['/administration/users-groups/user', $event])"
+  (groupOpened)="router.navigate(['/administration/users-groups/group', $event])"
+  (documentOpened)="router.navigate(['/doc', $event])"
+/>
+```
+
+`groupId` is required. The page's words are translated under `satori-components.admin-group-details-page.*`.
+It reads through `UserService` and `PrincipalPermissionsService`, and writes through `UserService` and
+`DocumentDetailService`. Nuxeo checks each permission on the request.
+
+## Examples
+
+### Profile
+
+The group as an administrator sees it: its label, members, nested groups and permissions. Removing a member or a nested group, or deleting the group, reports on the status line; a refusal is an alert.
+
+<Canvas of={GroupDetailsPageStories.Profile} />

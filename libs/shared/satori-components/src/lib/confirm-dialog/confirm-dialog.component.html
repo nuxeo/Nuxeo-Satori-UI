@@ -1,0 +1,10 @@
+<h2 mat-dialog-title>{{ data.title }}</h2>
+<mat-dialog-content>
+  <p class="nxs-confirm-dialog__message">{{ data.message }}</p>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button type="button" mat-button mat-dialog-close>
+    {{ 'satori-components.confirm-dialog.cancel' | translate }}
+  </button>
+  <button type="button" mat-flat-button (click)="confirm()">{{ data.confirmLabel }}</button>
+</mat-dialog-actions>

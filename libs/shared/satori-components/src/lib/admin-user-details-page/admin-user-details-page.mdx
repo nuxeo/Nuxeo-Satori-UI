@@ -1,0 +1,51 @@
+import { Canvas, Meta } from '@storybook/addon-docs/blocks';
+
+import * as UserDetailsPageStories from './admin-user-details-page.stories';
+
+<Meta of={UserDetailsPageStories} name="Overview" />
+
+# User details page
+
+The user details page shows one account: its profile, the groups it belongs to, and the permissions it
+holds directly and through each group. An administrator edits the profile, changes the password,
+removes the user from a group, removes a permission, or deletes the account from here.
+
+## Key features
+
+- **Everything for one account.** The profile, groups and every permission table are on one page, so an
+  administrator can see why a user can do something.
+- **Each table pages on its own.** The direct permissions and each group's permissions page separately.
+- **Confirmed deletion.** Deleting asks first, and the page emits `deleted` so the host can return to the list.
+- **Outcomes stay visible.** An action reports on a status line; a refusal is an alert.
+
+## Accessibility
+
+The title is the page's level-one heading and each section has a level-two heading. Each row button is
+named with what it acts on, such as "Remove Members from this user".
+
+## Demo showcase
+
+<Canvas of={UserDetailsPageStories.Profile} />
+
+## Usage
+
+```html
+<nxs-admin-user-details-page
+  [userId]="username"
+  (deleted)="router.navigate(['/administration/users-groups'])"
+  (groupOpened)="router.navigate(['/administration/users-groups/group', $event])"
+  (documentOpened)="router.navigate(['/doc', $event])"
+/>
+```
+
+`userId` is required. The page's words are translated under `satori-components.admin-user-details-page.*`.
+It reads through `UserService` and `PrincipalPermissionsService`, and writes through `UserService` and
+`DocumentDetailService`. Nuxeo checks each permission on the request.
+
+## Examples
+
+### Profile
+
+The account as an administrator sees it: its profile, its groups, and the permissions it holds directly and through each group. Each table pages on its own.
+
+<Canvas of={UserDetailsPageStories.Profile} />

@@ -1,0 +1,280 @@
+<header class="nxs-ugp__header">
+  <h1 class="nxs-ugp__title">
+    {{ 'satori-components.admin-users-groups-page.title' | translate }}
+  </h1>
+  <button type="button" mat-flat-button [matMenuTriggerFor]="newMenu">
+    <mat-icon svgIcon="plus_large" />
+    {{ 'satori-components.admin-users-groups-page.new' | translate }}
+  </button>
+  <mat-menu #newMenu="matMenu">
+    <button type="button" mat-menu-item (click)="openCreateUser()">
+      {{ 'satori-components.admin-users-groups-page.new-user' | translate }}
+    </button>
+    <button type="button" mat-menu-item (click)="openCreateGroup()">
+      {{ 'satori-components.admin-users-groups-page.new-group' | translate }}
+    </button>
+  </mat-menu>
+</header>
+
+<form class="nxs-ugp__search" role="search" (ngSubmit)="runSearch()">
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="nxs-ugp__search-field">
+    <mat-label>{{ 'satori-components.admin-users-groups-page.search' | translate }}</mat-label>
+    <input matInput name="query" [ngModel]="query()" (ngModelChange)="query.set($event)" />
+    <button
+      mat-icon-button
+      matSuffix
+      type="submit"
+      [attr.aria-label]="'satori-components.admin-users-groups-page.run-search' | translate"
+    >
+      <mat-icon svgIcon="search" />
+    </button>
+  </mat-form-field>
+</form>
+
+@if (status(); as current) {
+  <p
+    class="nxs-ugp__status"
+    [class.nxs-ugp__status--error]="current.error"
+    [attr.role]="current.error ? 'alert' : 'status'"
+  >
+    {{ current.text | translate }}
+  </p>
+}
+
+<section class="nxs-ugp__recent" aria-labelledby="nxs-ugp-recent-title">
+  <h2 id="nxs-ugp-recent-title" class="nxs-ugp__section-title">
+    {{ 'satori-components.admin-users-groups-page.recent' | translate }}
+  </h2>
+  @if (recentLoading()) {
+    <mat-spinner
+      diameter="32"
+      [attr.aria-label]="'satori-components.admin-users-groups-page.loading' | translate"
+    />
+  } @else {
+    <table mat-table [dataSource]="recentPageRows()" class="nxs-ugp__table">
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef>
+          {{ 'satori-components.admin-users-groups-page.name' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let row">
+          <button type="button" class="nxs-ugp__link" (click)="openRecent(row)">
+            {{ row.name }}
+          </button>
+        </td>
+      </ng-container>
+      <ng-container matColumnDef="identifier">
+        <th mat-header-cell *matHeaderCellDef>
+          {{ 'satori-components.admin-users-groups-page.identifier' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let row">{{ row.identifier }}</td>
+      </ng-container>
+      <ng-container matColumnDef="email">
+        <th mat-header-cell *matHeaderCellDef>
+          {{ 'satori-components.admin-users-groups-page.email' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let row">{{ row.email || '—' }}</td>
+      </ng-container>
+      <tr mat-header-row *matHeaderRowDef="recentColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: recentColumns"></tr>
+    </table>
+    @if (recent().length === 0) {
+      <p class="nxs-ugp__empty">
+        {{ 'satori-components.admin-users-groups-page.no-recent' | translate }}
+      </p>
+    } @else {
+      <mat-paginator
+        [length]="recent().length"
+        [pageIndex]="recentPage()"
+        [pageSize]="recentPageSize"
+        [pageSizeOptions]="[recentPageSize]"
+        [hidePageSize]="true"
+        showFirstLastButtons
+        (page)="onRecentPage($event)"
+      />
+    }
+  }
+</section>
+
+<mat-tab-group
+  class="nxs-ugp__tabs"
+  animationDuration="0ms"
+  [selectedIndex]="selectedTab()"
+  (selectedIndexChange)="selectedTab.set($event)"
+>
+  <mat-tab
+    [label]="
+      'satori-components.admin-users-groups-page.users-tab' | translate: { count: usersTotal() }
+    "
+  >
+    @if (usersLoading()) {
+      <mat-spinner
+        diameter="40"
+        [attr.aria-label]="'satori-components.admin-users-groups-page.loading' | translate"
+      />
+    } @else if (usersError()) {
+      <p class="nxs-ugp__error" role="alert">
+        {{ 'satori-components.admin-users-groups-page.could-not-load-users' | translate }}
+      </p>
+    } @else {
+      <table mat-table [dataSource]="users()" class="nxs-ugp__table">
+        <ng-container matColumnDef="username">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-users-groups-page.username' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let user">
+            <button type="button" class="nxs-ugp__link" (click)="userChosen()(user.id)">
+              {{ user.id }}
+            </button>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-users-groups-page.name' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let user">{{ displayName(user) }}</td>
+        </ng-container>
+        <ng-container matColumnDef="email">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-users-groups-page.email' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let user">{{ user.properties.email }}</td>
+        </ng-container>
+        <ng-container matColumnDef="groups">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-users-groups-page.groups' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let user">{{ groupsLabel(user) }}</td>
+        </ng-container>
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let user" class="nxs-ugp__actions">
+            <button
+              type="button"
+              mat-icon-button
+              [attr.aria-label]="
+                'satori-components.admin-users-groups-page.edit-user' | translate: { name: user.id }
+              "
+              [matTooltip]="'satori-components.admin-users-groups-page.edit' | translate"
+              (click)="openEditUser(user)"
+            >
+              <mat-icon svgIcon="pencil" />
+            </button>
+            <button
+              type="button"
+              mat-icon-button
+              [attr.aria-label]="
+                'satori-components.admin-users-groups-page.delete-user-aria'
+                  | translate: { name: user.id }
+              "
+              [matTooltip]="'satori-components.admin-users-groups-page.delete' | translate"
+              (click)="deleteUser(user)"
+            >
+              <mat-icon svgIcon="trash" />
+            </button>
+          </td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="userColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: userColumns"></tr>
+      </table>
+      @if (users().length === 0) {
+        <p class="nxs-ugp__empty">
+          {{ 'satori-components.admin-users-groups-page.no-users' | translate }}
+        </p>
+      }
+      <mat-paginator
+        [length]="usersTotal()"
+        [pageIndex]="usersPage()"
+        [pageSize]="pageSize"
+        [hidePageSize]="true"
+        showFirstLastButtons
+        (page)="onUsersPage($event)"
+      />
+    }
+  </mat-tab>
+
+  <mat-tab
+    [label]="
+      'satori-components.admin-users-groups-page.groups-tab' | translate: { count: groupsTotal() }
+    "
+  >
+    @if (groupsLoading()) {
+      <mat-spinner
+        diameter="40"
+        [attr.aria-label]="'satori-components.admin-users-groups-page.loading' | translate"
+      />
+    } @else if (groupsError()) {
+      <p class="nxs-ugp__error" role="alert">
+        {{ 'satori-components.admin-users-groups-page.could-not-load-groups' | translate }}
+      </p>
+    } @else {
+      <table mat-table [dataSource]="groups()" class="nxs-ugp__table">
+        <ng-container matColumnDef="groupname">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-users-groups-page.group' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let group">
+            <button type="button" class="nxs-ugp__link" (click)="groupChosen()(group.groupname)">
+              {{ group.groupname }}
+            </button>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="label">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-users-groups-page.label' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let group">{{ group.grouplabel }}</td>
+        </ng-container>
+        <ng-container matColumnDef="members">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-users-groups-page.members' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let group">{{ membersPreview(group) }}</td>
+        </ng-container>
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let group" class="nxs-ugp__actions">
+            <button
+              type="button"
+              mat-icon-button
+              [attr.aria-label]="
+                'satori-components.admin-users-groups-page.edit-group'
+                  | translate: { name: group.groupname }
+              "
+              [matTooltip]="'satori-components.admin-users-groups-page.edit' | translate"
+              (click)="openEditGroup(group)"
+            >
+              <mat-icon svgIcon="pencil" />
+            </button>
+            <button
+              type="button"
+              mat-icon-button
+              [attr.aria-label]="
+                'satori-components.admin-users-groups-page.delete-group-aria'
+                  | translate: { name: group.groupname }
+              "
+              [matTooltip]="'satori-components.admin-users-groups-page.delete' | translate"
+              (click)="deleteGroup(group)"
+            >
+              <mat-icon svgIcon="trash" />
+            </button>
+          </td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="groupColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: groupColumns"></tr>
+      </table>
+      @if (groups().length === 0) {
+        <p class="nxs-ugp__empty">
+          {{ 'satori-components.admin-users-groups-page.no-groups' | translate }}
+        </p>
+      }
+      <mat-paginator
+        [length]="groupsTotal()"
+        [pageIndex]="groupsPage()"
+        [pageSize]="pageSize"
+        [hidePageSize]="true"
+        showFirstLastButtons
+        (page)="onGroupsPage($event)"
+      />
+    }
+  </mat-tab>
+</mat-tab-group>

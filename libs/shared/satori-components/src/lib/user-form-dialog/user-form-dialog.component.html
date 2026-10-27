@@ -1,0 +1,196 @@
+<div class="nxs-user-form-dialog__shell">
+  @if (saving()) {
+    <div class="nxs-user-form-dialog__busy" aria-busy="true" aria-live="polite">
+      <mat-spinner
+        diameter="40"
+        [attr.aria-label]="'satori-components.user-form-dialog.loading' | translate"
+      />
+    </div>
+  }
+  <h2 mat-dialog-title class="nxs-user-form-dialog__title">
+    {{
+      data.mode === 'create'
+        ? ('satori-components.user-form-dialog.create-user' | translate)
+        : ('satori-components.user-form-dialog.edit-user' | translate)
+    }}
+  </h2>
+  <mat-dialog-content class="nxs-user-form-dialog__form">
+    @if (loadingGroups()) {
+      <div class="nxs-user-form-dialog__spinner">
+        <mat-spinner
+          diameter="36"
+          [attr.aria-label]="'satori-components.user-form-dialog.loading' | translate"
+        />
+      </div>
+    }
+    <mat-form-field appearance="outline" class="nxs-user-form-dialog__field">
+      <mat-label>{{ 'satori-components.user-form-dialog.username' | translate }}</mat-label>
+      <input
+        matInput
+        name="username"
+        required
+        autocomplete="off"
+        [disabled]="data.mode === 'edit' || saving()"
+        [ngModel]="username()"
+        (ngModelChange)="username.set($event)"
+      />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="nxs-user-form-dialog__field">
+      <mat-label>{{ 'satori-components.user-form-dialog.first-name' | translate }}</mat-label>
+      <input
+        matInput
+        name="firstName"
+        [disabled]="saving()"
+        [ngModel]="firstName()"
+        (ngModelChange)="firstName.set($event)"
+      />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="nxs-user-form-dialog__field">
+      <mat-label>{{ 'satori-components.user-form-dialog.last-name' | translate }}</mat-label>
+      <input
+        matInput
+        name="lastName"
+        [disabled]="saving()"
+        [ngModel]="lastName()"
+        (ngModelChange)="lastName.set($event)"
+      />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="nxs-user-form-dialog__field">
+      <mat-label>{{ 'satori-components.user-form-dialog.company' | translate }}</mat-label>
+      <input
+        matInput
+        name="company"
+        [disabled]="saving()"
+        [ngModel]="company()"
+        (ngModelChange)="company.set($event)"
+      />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="nxs-user-form-dialog__field">
+      <mat-label>{{ 'satori-components.user-form-dialog.email' | translate }}</mat-label>
+      <input
+        matInput
+        name="email"
+        type="email"
+        required
+        autocomplete="off"
+        [disabled]="saving()"
+        [ngModel]="email()"
+        (ngModelChange)="email.set($event)"
+      />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="nxs-user-form-dialog__field">
+      <mat-label>{{ 'satori-components.user-form-dialog.groups' | translate }}</mat-label>
+      <mat-chip-grid #groupChipGrid>
+        @for (group of groups(); track group) {
+          <mat-chip-row (removed)="removeGroup(group)">
+            {{ group }}
+            <button
+              type="button"
+              matChipRemove
+              [attr.aria-label]="
+                'satori-components.user-form-dialog.remove-group' | translate: { name: group }
+              "
+            >
+              <mat-icon svgIcon="circle_x" />
+            </button>
+          </mat-chip-row>
+        }
+        <input
+          name="groupSearch"
+          [placeholder]="
+            groups().length ? '' : ('satori-components.user-form-dialog.search-groups' | translate)
+          "
+          [matChipInputFor]="groupChipGrid"
+          [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
+          [matAutocomplete]="groupAuto"
+          [disabled]="saving()"
+          [ngModel]="groupQuery()"
+          (focus)="onGroupInputFocus()"
+          (ngModelChange)="onGroupSearch($event)"
+          (keydown)="onGroupInputKeydown($event)"
+          (matChipInputTokenEnd)="addGroupFromInput($event)"
+        />
+      </mat-chip-grid>
+      <mat-hint>
+        @if (loadingGroupOptions()) {
+          {{ 'satori-components.user-form-dialog.loading-groups' | translate }}
+        } @else {
+          {{ 'satori-components.user-form-dialog.pick-group' | translate }}
+        }
+      </mat-hint>
+    </mat-form-field>
+    <mat-autocomplete
+      #groupAuto="matAutocomplete"
+      autoActiveFirstOption
+      (optionSelected)="onGroupSelected($event)"
+    >
+      @for (group of groupOptions(); track group.groupname) {
+        <mat-option [value]="group.groupname">{{ group.grouplabel }}</mat-option>
+      }
+    </mat-autocomplete>
+    <mat-slide-toggle
+      class="nxs-user-form-dialog__toggle"
+      color="primary"
+      [checked]="setPassword()"
+      [disabled]="saving()"
+      (change)="setPasswordEnabled($event.checked)"
+    >
+      {{ 'satori-components.user-form-dialog.set-password' | translate }}
+    </mat-slide-toggle>
+    @if (setPassword()) {
+      <mat-form-field appearance="outline" class="nxs-user-form-dialog__field">
+        <mat-label>{{ 'satori-components.user-form-dialog.password' | translate }}</mat-label>
+        <input
+          matInput
+          name="password"
+          type="password"
+          required
+          autocomplete="new-password"
+          [disabled]="saving()"
+          [ngModel]="password()"
+          (ngModelChange)="password.set($event)"
+        />
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="nxs-user-form-dialog__field">
+        <mat-label>{{
+          'satori-components.user-form-dialog.verify-password' | translate
+        }}</mat-label>
+        <input
+          matInput
+          name="confirmPassword"
+          type="password"
+          required
+          autocomplete="new-password"
+          [disabled]="saving()"
+          [ngModel]="confirmPassword()"
+          (ngModelChange)="confirmPassword.set($event)"
+        />
+      </mat-form-field>
+      @if (passwordsDiffer()) {
+        <p class="nxs-user-form-dialog__failure" role="alert">
+          {{ 'satori-components.user-form-dialog.passwords-do-not-match' | translate }}
+        </p>
+      }
+    }
+    @if (failure(); as key) {
+      <p class="nxs-user-form-dialog__failure" role="alert">{{ key | translate }}</p>
+    }
+  </mat-dialog-content>
+  <mat-dialog-actions align="end" class="nxs-user-form-dialog__actions">
+    <button type="button" mat-button mat-dialog-close [disabled]="saving()">
+      {{ 'satori-components.user-form-dialog.cancel' | translate }}
+    </button>
+    @if (data.mode === 'create') {
+      <button type="button" mat-flat-button (click)="submit(true)" [disabled]="!canSave()">
+        {{ 'satori-components.user-form-dialog.create-another' | translate }}
+      </button>
+    }
+    <button type="button" mat-flat-button (click)="submit(false)" [disabled]="!canSave()">
+      {{
+        data.mode === 'create'
+          ? ('satori-components.user-form-dialog.create' | translate)
+          : ('satori-components.user-form-dialog.save' | translate)
+      }}
+    </button>
+  </mat-dialog-actions>
+</div>

@@ -188,9 +188,12 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-134 exported symbol(s).
+151 exported symbol(s).
 
 ```ts
+const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
+const NXS_ADMIN_USERS_GROUPS_PAGE_ID = "nxs.components.adminUsersGroupsPage";
+const NXS_ADMIN_USER_DETAILS_PAGE_ID = "nxs.components.adminUserDetailsPage";
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
 const NXS_MODIFIED_RANGES: readonly ["last24h", "lastWeek", "lastMonth", "lastYear", "priorToLastYear"];
@@ -242,6 +245,169 @@ class NxsActionMenuComponent {
     }, {
     "selected": "selected";
     }, never, never, true, never>;
+    }
+}
+class NxsAdminGroupDetailsPageComponent {
+    readonly groupId: import("@angular/core").InputSignal<string>;
+    readonly deleted: import("@angular/core").InputSignal<() => void>;
+    readonly userChosen: import("@angular/core").InputSignal<(username: string) => void>;
+    readonly groupChosen: import("@angular/core").InputSignal<(groupname: string) => void>;
+    readonly documentChosen: import("@angular/core").InputSignal<(documentId: string) => void>;
+    protected readonly memberColumns: readonly ["username", "actions"];
+    protected readonly nestedColumns: readonly ["groupname", "actions"];
+    protected readonly permissionColumns: readonly ["on", "right", "timeFrame", "grantedBy", "actions"];
+    protected readonly pageSize = 10;
+    protected readonly group: import("@angular/core").WritableSignal<NuxeoGroup | null>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly loadFailed: import("@angular/core").WritableSignal<boolean>;
+    protected readonly status: import("@angular/core").WritableSignal<Status | null>;
+    protected readonly permissionsPage: import("@angular/core").WritableSignal<PrincipalPermissionPage>;
+    protected readonly permissionsLoading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly permissionsIndex: import("@angular/core").WritableSignal<number>;
+    constructor();
+    protected onPermissionsPage(event: PageEvent): void;
+    protected edit(): void;
+    protected deleteGroup(): void;
+    protected removeMember(userId: string): void;
+    protected removeNestedGroup(nestedId: string): void;
+    protected removePermission(row: PrincipalPermissionRow): void;
+    protected timeFrame(row: PrincipalPermissionRow): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAdminGroupDetailsPageComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAdminGroupDetailsPageComponent, "nxs-admin-group-details-page", never, {
+    "groupId": {
+    "alias": "groupId";
+    "required": true;
+    "isSignal": true;
+    };
+    "deleted": {
+    "alias": "deleted";
+    "required": false;
+    "isSignal": true;
+    };
+    "userChosen": {
+    "alias": "userChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    "groupChosen": {
+    "alias": "groupChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    "documentChosen": {
+    "alias": "documentChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+class NxsAdminUserDetailsPageComponent {
+    readonly userId: import("@angular/core").InputSignal<string>;
+    readonly deleted: import("@angular/core").InputSignal<() => void>;
+    readonly groupChosen: import("@angular/core").InputSignal<(groupname: string) => void>;
+    readonly documentChosen: import("@angular/core").InputSignal<(documentId: string) => void>;
+    protected readonly permissionColumns: readonly ["on", "right", "timeFrame", "grantedBy", "actions"];
+    protected readonly groupColumns: readonly ["name", "identifier", "actions"];
+    protected readonly pageSize = 10;
+    protected readonly user: import("@angular/core").WritableSignal<NuxeoUser | null>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly loadFailed: import("@angular/core").WritableSignal<boolean>;
+    protected readonly status: import("@angular/core").WritableSignal<Status$1 | null>;
+    protected readonly groups: import("@angular/core").WritableSignal<MemberGroup[]>;
+    protected readonly localPermissions: import("@angular/core").WritableSignal<PrincipalPermissionPage>;
+    protected readonly localPermissionsLoading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly localPage: import("@angular/core").WritableSignal<number>;
+    protected readonly groupPermissions: import("@angular/core").WritableSignal<Record<string, PrincipalPermissionPage>>;
+    protected readonly groupPermissionsLoading: import("@angular/core").WritableSignal<Record<string, boolean>>;
+    constructor();
+    protected pageChanged(groupId: string | null, event: PageEvent): void;
+    protected changePassword(): void;
+    protected edit(): void;
+    protected deleteUser(): void;
+    protected removeFromGroup(groupId: string): void;
+    protected removePermission(row: PrincipalPermissionRow): void;
+    protected timeFrame(row: PrincipalPermissionRow): string;
+    protected groupPermissionsOf(groupId: string): PrincipalPermissionPage;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAdminUserDetailsPageComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAdminUserDetailsPageComponent, "nxs-admin-user-details-page", never, {
+    "userId": {
+    "alias": "userId";
+    "required": true;
+    "isSignal": true;
+    };
+    "deleted": {
+    "alias": "deleted";
+    "required": false;
+    "isSignal": true;
+    };
+    "groupChosen": {
+    "alias": "groupChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    "documentChosen": {
+    "alias": "documentChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+class NxsAdminUsersGroupsPageComponent implements OnInit {
+    readonly userChosen: import("@angular/core").InputSignal<(username: string) => void>;
+    readonly groupChosen: import("@angular/core").InputSignal<(groupname: string) => void>;
+    protected readonly pageSize = 20;
+    protected readonly recentPageSize = 5;
+    protected readonly userColumns: readonly ["username", "name", "email", "groups", "actions"];
+    protected readonly groupColumns: readonly ["groupname", "label", "members", "actions"];
+    protected readonly recentColumns: readonly ["name", "identifier", "email"];
+    protected readonly query: import("@angular/core").WritableSignal<string>;
+    protected readonly users: import("@angular/core").WritableSignal<NuxeoUser[]>;
+    protected readonly groups: import("@angular/core").WritableSignal<NuxeoGroup[]>;
+    protected readonly usersPage: import("@angular/core").WritableSignal<number>;
+    protected readonly groupsPage: import("@angular/core").WritableSignal<number>;
+    protected readonly usersTotal: import("@angular/core").WritableSignal<number>;
+    protected readonly groupsTotal: import("@angular/core").WritableSignal<number>;
+    protected readonly usersLoading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly groupsLoading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly usersError: import("@angular/core").WritableSignal<boolean>;
+    protected readonly groupsError: import("@angular/core").WritableSignal<boolean>;
+    protected readonly recent: import("@angular/core").WritableSignal<NxsRecentPrincipalRow[]>;
+    protected readonly recentLoading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly recentPage: import("@angular/core").WritableSignal<number>;
+    protected readonly recentPageRows: import("@angular/core").Signal<NxsRecentPrincipalRow[]>;
+    protected readonly selectedTab: import("@angular/core").WritableSignal<number>;
+    protected readonly status: import("@angular/core").WritableSignal<Status$2 | null>;
+    ngOnInit(): void;
+    protected runSearch(): void;
+    protected loadRecent(): void;
+    protected onUsersPage(event: PageEvent): void;
+    protected onGroupsPage(event: PageEvent): void;
+    protected onRecentPage(event: PageEvent): void;
+    protected openRecent(row: NxsRecentPrincipalRow): void;
+    protected openCreateUser(): void;
+    protected openEditUser(user: NuxeoUser): void;
+    protected deleteUser(user: NuxeoUser): void;
+    protected openCreateGroup(): void;
+    protected openEditGroup(group: NuxeoGroup): void;
+    protected deleteGroup(group: NuxeoGroup): void;
+    protected displayName(user: NuxeoUser): string;
+    protected groupsLabel(user: NuxeoUser): string;
+    protected membersPreview(group: NuxeoGroup): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAdminUsersGroupsPageComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAdminUsersGroupsPageComponent, "nxs-admin-users-groups-page", never, {
+    "userChosen": {
+    "alias": "userChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    "groupChosen": {
+    "alias": "groupChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 type NxsAvatarColor = 'blue' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow';
@@ -400,6 +566,23 @@ interface NxsCardInputs {
     readonly actions: InputSignal<TemplateRef<unknown> | null>;
     }
 }
+class NxsChangePasswordDialogComponent {
+    protected readonly data: NxsChangePasswordDialogData;
+    protected readonly password: import("@angular/core").WritableSignal<string>;
+    protected readonly confirm: import("@angular/core").WritableSignal<string>;
+    protected readonly trimmedPassword: import("@angular/core").Signal<string>;
+    protected readonly matches: import("@angular/core").Signal<boolean>;
+    protected readonly mismatch: import("@angular/core").Signal<boolean>;
+    protected save(): void;
+    protected cancel(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsChangePasswordDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsChangePasswordDialogComponent, "nxs-change-password-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsChangePasswordDialogData {
+    readonly username: string;
+    }
+}
 class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
     readonly columns: import("@angular/core").InputSignal<readonly NxsPickableColumn[]>;
     readonly required: import("@angular/core").InputSignal<readonly string[]>;
@@ -521,6 +704,19 @@ class NxsCommentsComponent {
     }, {
     "threadChange": "threadChange";
     }, ["extra"], never, true, never>;
+    }
+}
+class NxsConfirmDialogComponent {
+    protected readonly data: NxsConfirmDialogData;
+    protected confirm(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsConfirmDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsConfirmDialogComponent, "nxs-confirm-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsConfirmDialogData {
+    readonly title: string;
+    readonly message: string;
+    readonly confirmLabel: string;
     }
 }
 class NxsCreateVersionDialogComponent {
@@ -1411,6 +1607,41 @@ interface NxsFolderPickerDialogResult {
     readonly title: string;
     }
 }
+class NxsGroupFormDialogComponent implements OnInit {
+    protected readonly data: NxsGroupFormDialogData;
+    protected readonly separatorKeysCodes: number[];
+    protected readonly groupname: import("@angular/core").WritableSignal<string>;
+    protected readonly grouplabel: import("@angular/core").WritableSignal<string>;
+    protected readonly members: import("@angular/core").WritableSignal<string[]>;
+    protected readonly memberQuery: import("@angular/core").WritableSignal<string>;
+    protected readonly memberOptions: import("@angular/core").WritableSignal<NuxeoUser[]>;
+    protected readonly canSave: import("@angular/core").Signal<boolean>;
+    ngOnInit(): void;
+    protected onMemberSearch(query: string): void;
+    protected onMemberInputFocus(): void;
+    protected onMemberInputKeydown(event: KeyboardEvent): void;
+    protected onMemberSelected(event: MatAutocompleteSelectedEvent): void;
+    protected addMemberFromInput(event: MatChipInputEvent): void;
+    protected removeMember(id: string): void;
+    protected submit(createAnother?: boolean): void;
+    protected userDisplayLine(user: NuxeoUser): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsGroupFormDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsGroupFormDialogComponent, "nxs-group-form-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsGroupFormDialogData {
+    readonly mode: 'create' | 'edit';
+    readonly group?: NuxeoGroup;
+    }
+}
+interface NxsGroupFormDialogResult {
+    readonly mode: 'create' | 'edit';
+    readonly groupname: string;
+    readonly grouplabel: string;
+    readonly memberUsers: string[];
+    readonly createAnother?: boolean;
+    }
+}
 type NxsHeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 class NxsIconComponent {
     readonly name: import("@angular/core").InputSignal<string>;
@@ -1793,6 +2024,13 @@ class NxsPropertiesPanelComponent {
     }, {
     "publicationsSelected": "publicationsSelected";
     }, never, ["[nxsVersion]", "[nxsTags]", "*"], true, never>;
+    }
+}
+interface NxsRecentPrincipalRow {
+    readonly kind: 'group' | 'user';
+    readonly name: string;
+    readonly identifier: string;
+    readonly email: string;
     }
 }
 class NxsRenameDialogComponent {
@@ -2457,6 +2695,57 @@ class NxsUploadQueueComponent {
     }
 }
 type NxsUploadState = 'done' | 'failed' | 'staged' | 'uploading' | 'waiting';
+class NxsUserFormDialogComponent implements OnInit {
+    protected readonly data: NxsUserFormDialogData;
+    protected readonly separatorKeysCodes: number[];
+    protected readonly username: import("@angular/core").WritableSignal<string>;
+    protected readonly firstName: import("@angular/core").WritableSignal<string>;
+    protected readonly lastName: import("@angular/core").WritableSignal<string>;
+    protected readonly company: import("@angular/core").WritableSignal<string>;
+    protected readonly email: import("@angular/core").WritableSignal<string>;
+    protected readonly groups: import("@angular/core").WritableSignal<string[]>;
+    protected readonly setPassword: import("@angular/core").WritableSignal<boolean>;
+    protected readonly password: import("@angular/core").WritableSignal<string>;
+    protected readonly confirmPassword: import("@angular/core").WritableSignal<string>;
+    protected readonly groupQuery: import("@angular/core").WritableSignal<string>;
+    protected readonly groupOptions: import("@angular/core").WritableSignal<GroupOption[]>;
+    protected readonly loadingGroups: import("@angular/core").WritableSignal<boolean>;
+    protected readonly loadingGroupOptions: import("@angular/core").WritableSignal<boolean>;
+    protected readonly saving: import("@angular/core").WritableSignal<boolean>;
+    protected readonly failure: import("@angular/core").WritableSignal<string | null>;
+    protected readonly passwordsDiffer: import("@angular/core").Signal<boolean>;
+    protected readonly canSave: import("@angular/core").Signal<boolean>;
+    ngOnInit(): void;
+    protected onGroupSearch(query: string): void;
+    protected onGroupInputFocus(): void;
+    protected onGroupInputKeydown(event: KeyboardEvent): void;
+    protected onGroupSelected(event: MatAutocompleteSelectedEvent): void;
+    protected addGroupFromInput(event: MatChipInputEvent): void;
+    protected removeGroup(groupname: string): void;
+    protected setPasswordEnabled(enabled: boolean): void;
+    protected submit(createAnother?: boolean): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsUserFormDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsUserFormDialogComponent, "nxs-user-form-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsUserFormDialogData {
+    readonly mode: 'create' | 'edit';
+    readonly user?: NuxeoUser;
+    }
+}
+interface NxsUserFormDialogResult {
+    readonly mode: 'create' | 'edit';
+    readonly username: string;
+    readonly firstName: string;
+    readonly lastName: string;
+    readonly company: string;
+    readonly email: string;
+    readonly groups: string[];
+    readonly password?: string;
+    readonly invited?: boolean;
+    readonly createAnother?: boolean;
+    }
+}
 class NxsUserGroupPickerComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly label: import("@angular/core").InputSignal<string>;
     readonly search: import("@angular/core").InputSignal<NxsPrincipalSearch>;

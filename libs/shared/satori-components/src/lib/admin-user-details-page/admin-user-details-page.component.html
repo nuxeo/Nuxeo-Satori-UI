@@ -1,0 +1,209 @@
+@if (status(); as current) {
+  <p
+    class="nxs-udp__status"
+    [class.nxs-udp__status--error]="current.error"
+    [attr.role]="current.error ? 'alert' : 'status'"
+  >
+    {{ current.text | translate }}
+  </p>
+}
+
+@if (loading()) {
+  <mat-spinner
+    diameter="36"
+    [attr.aria-label]="'satori-components.admin-user-details-page.loading' | translate"
+  />
+} @else if (loadFailed()) {
+  <p class="nxs-udp__error" role="alert">
+    {{ 'satori-components.admin-user-details-page.could-not-load' | translate }}
+  </p>
+} @else if (user(); as u) {
+  <section class="nxs-udp__card nxs-udp__profile">
+    <div class="nxs-udp__identity">
+      <div class="nxs-udp__avatar" aria-hidden="true"><mat-icon svgIcon="user" /></div>
+      <div>
+        <h1 class="nxs-udp__title">{{ u.id }}</h1>
+        <p class="nxs-udp__sub">{{ u.properties.firstName }} {{ u.properties.lastName }}</p>
+      </div>
+    </div>
+    <div class="nxs-udp__actions">
+      <button type="button" mat-button (click)="deleteUser()">
+        <mat-icon svgIcon="trash" />
+        {{ 'satori-components.admin-user-details-page.delete' | translate }}
+      </button>
+      <button type="button" mat-button (click)="changePassword()">
+        <mat-icon svgIcon="lock" />
+        {{ 'satori-components.admin-user-details-page.change-password' | translate }}
+      </button>
+      <button type="button" mat-flat-button (click)="edit()">
+        <mat-icon svgIcon="pencil" />
+        {{ 'satori-components.admin-user-details-page.edit' | translate }}
+      </button>
+    </div>
+    <dl class="nxs-udp__meta">
+      <dt>{{ 'satori-components.admin-user-details-page.email' | translate }}</dt>
+      <dd>{{ u.properties.email || '—' }}</dd>
+      <dt>{{ 'satori-components.admin-user-details-page.company' | translate }}</dt>
+      <dd>{{ u.properties.company || '—' }}</dd>
+    </dl>
+  </section>
+
+  <section class="nxs-udp__card" aria-labelledby="nxs-udp-groups">
+    <h2 id="nxs-udp-groups" class="nxs-udp__section-title">
+      {{ 'satori-components.admin-user-details-page.groups' | translate }}
+    </h2>
+    <table mat-table [dataSource]="groups()" class="nxs-udp__table">
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef>
+          {{ 'satori-components.admin-user-details-page.name' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let group">
+          <button type="button" class="nxs-udp__link" (click)="groupChosen()(group.id)">
+            {{ group.label }}
+          </button>
+        </td>
+      </ng-container>
+      <ng-container matColumnDef="identifier">
+        <th mat-header-cell *matHeaderCellDef>
+          {{ 'satori-components.admin-user-details-page.identifier' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let group">{{ group.id }}</td>
+      </ng-container>
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let group">
+          <button
+            type="button"
+            mat-icon-button
+            [attr.aria-label]="
+              'satori-components.admin-user-details-page.remove-from-group'
+                | translate: { name: group.label }
+            "
+            [matTooltip]="'satori-components.admin-user-details-page.remove-group' | translate"
+            (click)="removeFromGroup(group.id)"
+          >
+            <mat-icon svgIcon="x_large" />
+          </button>
+        </td>
+      </ng-container>
+      <tr mat-header-row *matHeaderRowDef="groupColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: groupColumns"></tr>
+    </table>
+    @if (groups().length === 0) {
+      <p class="nxs-udp__empty">
+        {{ 'satori-components.admin-user-details-page.no-groups' | translate }}
+      </p>
+    }
+  </section>
+
+  <section class="nxs-udp__card" aria-labelledby="nxs-udp-local">
+    <h2 id="nxs-udp-local" class="nxs-udp__section-title">
+      {{ 'satori-components.admin-user-details-page.local-permissions' | translate }}
+    </h2>
+    @if (localPermissionsLoading()) {
+      <mat-spinner
+        diameter="32"
+        [attr.aria-label]="'satori-components.admin-user-details-page.loading' | translate"
+      />
+    } @else {
+      <ng-container
+        *ngTemplateOutlet="
+          permissionTable;
+          context: {
+            page: localPermissions(),
+            groupId: null,
+            empty: 'satori-components.admin-user-details-page.no-local',
+          }
+        "
+      />
+    }
+  </section>
+
+  @for (group of groups(); track group.id) {
+    <section class="nxs-udp__card" [attr.aria-label]="group.label">
+      <h2 class="nxs-udp__section-title">
+        {{
+          'satori-components.admin-user-details-page.group-permissions'
+            | translate: { group: group.label }
+        }}
+      </h2>
+      @if (groupPermissionsLoading()[group.id]) {
+        <mat-spinner
+          diameter="32"
+          [attr.aria-label]="'satori-components.admin-user-details-page.loading' | translate"
+        />
+      } @else {
+        <ng-container
+          *ngTemplateOutlet="
+            permissionTable;
+            context: { page: groupPermissionsOf(group.id), groupId: group.id, empty: group.label }
+          "
+        />
+      }
+    </section>
+  }
+}
+
+<ng-template #permissionTable let-page="page" let-groupId="groupId" let-empty="empty">
+  <table mat-table [dataSource]="page.rows" class="nxs-udp__table">
+    <ng-container matColumnDef="on">
+      <th mat-header-cell *matHeaderCellDef>
+        {{ 'satori-components.admin-user-details-page.on' | translate }}
+      </th>
+      <td mat-cell *matCellDef="let row">
+        <button type="button" class="nxs-udp__link" (click)="documentChosen()(row.documentUid)">
+          {{ row.documentTitle }}
+        </button>
+        <div class="nxs-udp__path">{{ row.documentPath }}</div>
+      </td>
+    </ng-container>
+    <ng-container matColumnDef="right">
+      <th mat-header-cell *matHeaderCellDef>
+        {{ 'satori-components.admin-user-details-page.right' | translate }}
+      </th>
+      <td mat-cell *matCellDef="let row">{{ row.permission }}</td>
+    </ng-container>
+    <ng-container matColumnDef="timeFrame">
+      <th mat-header-cell *matHeaderCellDef>
+        {{ 'satori-components.admin-user-details-page.time-frame' | translate }}
+      </th>
+      <td mat-cell *matCellDef="let row">{{ timeFrame(row) }}</td>
+    </ng-container>
+    <ng-container matColumnDef="grantedBy">
+      <th mat-header-cell *matHeaderCellDef>
+        {{ 'satori-components.admin-user-details-page.granted-by' | translate }}
+      </th>
+      <td mat-cell *matCellDef="let row">{{ row.grantedBy ?? '—' }}</td>
+    </ng-container>
+    <ng-container matColumnDef="actions">
+      <th mat-header-cell *matHeaderCellDef></th>
+      <td mat-cell *matCellDef="let row">
+        <button
+          type="button"
+          mat-icon-button
+          [attr.aria-label]="
+            'satori-components.admin-user-details-page.remove-permission' | translate
+          "
+          [matTooltip]="'satori-components.admin-user-details-page.remove-permission' | translate"
+          (click)="removePermission(row)"
+        >
+          <mat-icon svgIcon="trash" />
+        </button>
+      </td>
+    </ng-container>
+    <tr mat-header-row *matHeaderRowDef="permissionColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: permissionColumns"></tr>
+  </table>
+  @if (page.rows.length === 0) {
+    <p class="nxs-udp__empty">
+      {{ 'satori-components.admin-user-details-page.no-permissions' | translate: { name: empty } }}
+    </p>
+  }
+  <mat-paginator
+    [length]="page.totalDocuments"
+    [pageSize]="pageSize"
+    [pageIndex]="page.currentPageIndex"
+    [hidePageSize]="true"
+    (page)="pageChanged(groupId, $event)"
+  />
+</ng-template>

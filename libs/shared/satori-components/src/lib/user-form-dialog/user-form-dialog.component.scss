@@ -1,0 +1,50 @@
+// As wide as the form needs, and never wider than the pane MatDialog gives the dialog.
+:host {
+  display: block;
+  width: 460px;
+  max-width: 100%;
+}
+
+.nxs-user-form-dialog__shell {
+  position: relative;
+  min-height: 100%;
+}
+
+.nxs-user-form-dialog__busy {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--mat-sys-surface) 75%, transparent);
+}
+
+.nxs-user-form-dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 70vh;
+  padding-top: 0.25rem;
+  overflow-x: hidden;
+}
+
+.nxs-user-form-dialog__spinner {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 0 1rem;
+}
+
+.nxs-user-form-dialog__field {
+  width: 100%;
+}
+
+.nxs-user-form-dialog__toggle {
+  margin: 0.5rem 0 0.15rem;
+}
+
+.nxs-user-form-dialog__failure {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-error);
+}
