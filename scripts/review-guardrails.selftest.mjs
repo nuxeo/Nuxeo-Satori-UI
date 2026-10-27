@@ -9653,13 +9653,13 @@ expectRed(
 );
 
 expectRed(
-  'a second contribution in the provider is read too, not just the first',
+  'a contribution the provider never returns is reported, and the returned one still guards',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    // `avatar` moves to a first call and `tag` stays in the returned one, so stopping at the
-    // first contribution reads only `avatar` — non-empty, nothing obviously wrong, and `tag`
-    // unguarded. Ordered this way on purpose: with `tag` in the first call the control would
-    // pass even when only one contribution is read, and would prove nothing.
+    // `avatar` moves to a call whose result is thrown away and `tag` stays in the returned one.
+    // An earlier round combined contributions in source order; that is unsound once a call may
+    // register nothing, so the unreturned one is reported and only the returned one is read —
+    // which must still catch the tag bypass below.
     [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
       '      [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent,\n',
       '',
@@ -9674,6 +9674,66 @@ expectRed(
   }),
   null,
   /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+);
+
+/**
+ * Two installed contributions, which cannot be ordered here.
+ *
+ * Branch returns are alternatives, not successive registrations, so merging them invents a
+ * mapping that never happens at runtime — and a later one pointing `tag` at the avatar wrapper
+ * would hide a reachable entry point. A nested helper is the same problem from the other side:
+ * its `return` does not return from the provider, and whether it is ever called is not decidable
+ * here, so its contribution is reported rather than counted.
+ */
+expectRed(
+  'two conditionally returned contributions are rejected rather than merged',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  if (Math.random() > 0.5) {\n' +
+        '    return provideSatoriExtensions({\n' +
+        '      components: { [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent },\n' +
+        '    });\n' +
+        '  }\n' +
+        '  return provideSatoriExtensions({',
+    ),
+  }),
+  null,
+  /2 installed `provideSatoriExtensions\(…\)` contributions, whose effective order could not be determined/,
+);
+
+expectRed(
+  'a nested helper’s return is not the provider’s, so its contribution is reported',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  function maybe() {\n' +
+        '    return provideSatoriExtensions({\n' +
+        '      components: { [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent },\n' +
+        '    });\n' +
+        '  }\n' +
+        '  void maybe;\n' +
+        '  return provideSatoriExtensions({',
+    ),
+  }),
+  null,
+  /a `provideSatoriExtensions\(…\)` call whose result is never returned/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'the provider written as an arrow is read, not treated as a nested function',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // The nested-function rule must not skip the provider itself. A concise arrow body is the
+    // returned expression, so there is no `return` statement to find.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      'export function provideNxsSatoriComponents() {\n  return provideSatoriExtensions({',
+      'export const provideNxsSatoriComponents = () =>\n  provideSatoriExtensions({',
+    ).replace(/\n  \}\);\n\}/, '\n  });'),
+  }),
 );
 
 expectRed(

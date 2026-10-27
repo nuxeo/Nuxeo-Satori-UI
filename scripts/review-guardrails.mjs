@@ -9599,6 +9599,39 @@ const SATORI_ADOPTION_REGISTRY =
 /** The one function whose contributions decide what is adopted. */
 const PROVIDER_FUNCTION = 'provideNxsSatoriComponents';
 
+/** The provider's body, whether it is written as a function declaration or an arrow. */
+function providerBodyOf(statement) {
+  if (ts.isFunctionDeclaration(statement)) return statement.body;
+  if (ts.isVariableStatement(statement)) {
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === PROVIDER_FUNCTION &&
+        declaration.initializer !== undefined &&
+        (ts.isArrowFunction(declaration.initializer) ||
+          ts.isFunctionExpression(declaration.initializer))
+      ) {
+        return declaration.initializer.body;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Anything with its own `return`: a nested one does not return from the enclosing function. */
+function isFunctionLike(node) {
+  return (
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isGetAccessorDeclaration(node) ||
+    ts.isSetAccessorDeclaration(node) ||
+    ts.isConstructorDeclaration(node) ||
+    ts.isClassDeclaration(node)
+  );
+}
+
 /**
  * A property name's value, however it is spelled: `components`, `'components'`, `["components"]`.
  *
@@ -9936,23 +9969,56 @@ function componentsContributionsIn(source) {
 
   const problems = [];
   const installed = new Set();
-  const findReturns = (node) => {
-    if (ts.isReturnStatement(node) && node.expression !== undefined) {
-      const returned = node.expression;
-      if (isProvideCall(returned)) {
-        installed.add(returned);
-      } else if (ts.isIdentifier(returned) && saved.has(returned.text)) {
-        installed.add(saved.get(returned.text));
-      } else {
-        problems.push(
-          `a \`return ${returned.getText(source)}\` whose installed contribution could not be ` +
-            'determined',
-        );
-      }
+
+  const takeReturned = (returned) => {
+    if (isProvideCall(returned)) {
+      installed.add(returned);
+    } else if (ts.isIdentifier(returned) && saved.has(returned.text)) {
+      installed.add(saved.get(returned.text));
+    } else {
+      problems.push(
+        `a \`return ${returned.getText(source)}\` whose installed contribution could not be ` +
+          'determined',
+      );
     }
-    ts.forEachChild(node, findReturns);
   };
-  findReturns(provider);
+
+  // Only the provider's own returns. A `return` inside a nested helper returns from that helper,
+  // not from the provider, and whether the helper is ever called cannot be answered here — so
+  // crossing into one would count a contribution that may install nothing. Such a call is still
+  // in `all`, so it is reported below as a result that is never returned.
+  //
+  // Resolved to the body first, because the nested-function rule would otherwise skip the
+  // provider itself when it is written as an arrow.
+  const body = providerBodyOf(provider);
+  if (body === undefined) {
+    problems.push(`a \`${PROVIDER_FUNCTION}\` whose body could not be read`);
+  } else if (!ts.isBlock(body)) {
+    // A concise arrow body is the returned expression.
+    takeReturned(body);
+  } else {
+    const findReturns = (node) => {
+      if (isFunctionLike(node)) return;
+      if (ts.isReturnStatement(node) && node.expression !== undefined)
+        takeReturned(node.expression);
+      ts.forEachChild(node, findReturns);
+    };
+    ts.forEachChild(body, findReturns);
+  }
+
+  // More than one installed contribution cannot be ordered here. Alternative branch returns are
+  // exclusive rather than successive, so merging them invents a registration that never happens
+  // at runtime — and a later mapping to another wrapper would hide a reachable entry point. An
+  // earlier round allowed either combining contributions in provider order or rejecting shapes
+  // whose effective contribution cannot be determined; this is the rejection, and it is the only
+  // one of the two that is sound once branches are possible.
+  if (installed.size > 1) {
+    problems.push(
+      `${installed.size} installed \`provideSatoriExtensions(…)\` contributions, whose effective ` +
+        'order could not be determined — branch returns are alternatives, not successive ' +
+        'registrations, so which one registers a given primitive is not decidable here',
+    );
+  }
 
   for (const call of all) {
     if (installed.has(call)) continue;
