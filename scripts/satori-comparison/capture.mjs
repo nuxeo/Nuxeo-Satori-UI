@@ -166,6 +166,8 @@ function buildStorybooks() {
         encoding: 'utf8',
         env: { ...process.env, NX_DAEMON: 'false' },
         maxBuffer: 1 << 28,
+        // On Windows `npx` is a `.cmd` shim, which spawnSync cannot launch without a shell.
+        shell: process.platform === 'win32',
       },
     );
     writeFileSync(log, `${res.stdout ?? ''}\n${res.stderr ?? ''}`);
