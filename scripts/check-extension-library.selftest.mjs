@@ -12,13 +12,17 @@
  * Usage: node scripts/check-extension-library.selftest.mjs
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 const GUARDRAIL = resolve(
   import.meta.dirname,
   '../libs/platform/guardrails/check-extension-library.mjs',
+);
+const PRIMITIVES = resolve(
+  import.meta.dirname,
+  '../libs/shared/satori-components/src/lib/primitives.ts',
 );
 const failures = [];
 let negative = 0;
@@ -1207,27 +1211,74 @@ expectRed(
   /does not implement `NxsTagInputs` from '@nuxeo\/satori-platform\/components'/,
 );
 
-// A customer may override the card as they may any primitive, so the guardrail has to know it:
-// without an entry it refused the override as "the platform has no `nxs.primitives.card`".
+// ------------------------------------------------- every primitive can be overridden ----
+
+// The guardrail keeps its own list of the primitives a customer may override, because it cannot
+// read the platform's source in their CI. Nothing compared it with `NXS_PRIMITIVE_IDS`, and an ID
+// it lacks is one it refuses to let them override ("the platform has no … to override") — the
+// status tag, the tabs, the action bar and the card all were.
 {
-  const cardOverride = (implementsClause) =>
+  positive += 1;
+  const ids = readFileSync(PRIMITIVES, 'utf8');
+  const entries = (body) => [...body.matchAll(/^\s*(\w+):\s*'([^']+)'/gm)];
+  const primitives = entries(
+    /NXS_PRIMITIVE_IDS = Object\.freeze\(\{([\s\S]*?)\}/.exec(ids)?.[1] ?? '',
+  )
+    .map(([, key]) => key)
+    .sort();
+  const contracts = new Map(
+    entries(
+      /const PRIMITIVE_CONTRACTS = \{([\s\S]*?)\};/.exec(readFileSync(GUARDRAIL, 'utf8'))?.[1] ??
+        '',
+    ).map(([, key, contract]) => [key, contract]),
+  );
+  if (!primitives.length || !contracts.size) {
+    failures.push(
+      'the primitive list check could not read NXS_PRIMITIVE_IDS or PRIMITIVE_CONTRACTS',
+    );
+  }
+  const missing = primitives.filter((id) => !contracts.has(id));
+  const extra = [...contracts.keys()].filter((id) => !primitives.includes(id));
+  const unknown = [...contracts].filter(
+    ([, contract]) => !new RegExp(String.raw`export interface ${contract}\b`).test(ids),
+  );
+  if (missing.length) {
+    failures.push(
+      `PRIMITIVE_CONTRACTS lacks ${missing.join(', ')}, so overriding them is refused.`,
+    );
+  }
+  if (extra.length) failures.push(`PRIMITIVE_CONTRACTS names ${extra.join(', ')}, not primitives.`);
+  for (const [id, contract] of unknown) {
+    failures.push(
+      `PRIMITIVE_CONTRACTS maps ${id} to ${contract}, which primitives.ts does not export.`,
+    );
+  }
+}
+
+for (const [id, contract] of [
+  ['statusTag', 'NxsStatusTagInputs'],
+  ['tabs', 'NxsTabsInputs'],
+  ['actionBar', 'NxsActionBarInputs'],
+  ['card', 'NxsCardInputs'],
+]) {
+  const override = (implementsClause) =>
     library({
       'src/lib/extensions.ts': extensions(
-        "'nxs.primitives.card': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
+        `'nxs.primitives.${id}': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),`,
       ),
       'src/lib/claims/claims.ts':
-        "import type { NxsCardInputs } from '@nuxeo/satori-platform/components';\n" +
+        `import type { ${contract} } from '@nuxeo/satori-platform/components';\n` +
         panel({ implementsClause }),
-      'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.card'),
+      'src/lib/extensions.spec.ts': overrideSpec(`nxs.primitives.${id}`),
     });
   expectGreen(
-    'an override of nxs.primitives.card that implements NxsCardInputs',
-    cardOverride(' implements NxsCardInputs'),
+    `an override of nxs.primitives.${id} that implements ${contract}`,
+    override(` implements ${contract}`),
   );
   expectRed(
-    'an override of nxs.primitives.card that does not implement NxsCardInputs',
-    cardOverride(''),
-    /does not implement `NxsCardInputs`/,
+    `an override of nxs.primitives.${id} that does not implement ${contract}`,
+    override(''),
+    new RegExp(`does not implement \`${contract}\``),
   );
 }
 
