@@ -9260,7 +9260,71 @@ expectRed(
       "// wraps '@hylandsoftware/satori-ui/tag' one day\nexport class NxsSatoriTagComponent {}\n",
   }),
   null,
-  /registers `NxsSatoriTagComponent` for the `tag` primitive, but neither [\s\S]*nor anything it re-exports imports `@hylandsoftware\/satori-ui`/,
+  /registers `NxsSatoriTagComponent` for the `tag` primitive, but [\s\S]*which declares it, imports nothing from `@hylandsoftware\/satori-ui`/,
+);
+
+/**
+ * A barrel carrying the registered wrapper and an unregistered one.
+ *
+ * `./tag` re-exports both `NxsSatoriTagComponent`, which is registered, and a banner wrapper that
+ * is not. Reading the barrel's whole re-export graph would attribute
+ * `@hylandsoftware/satori-ui/banner` to the `tag` primitive and reject every legitimate feature
+ * import of the banner, so the two controls below are a pair: the tag import must still be
+ * caught, and the banner import must still be allowed.
+ */
+const mixedBarrel = (featureFile) =>
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      "from './tag/satori-tag.component'",
+      "from './tag'",
+    ),
+    [`${SATORI_LIB}/tag/index.ts`]:
+      "export * from './satori-tag.component';\nexport * from './satori-banner.component';\n",
+    [`${SATORI_LIB}/tag/satori-banner.component.ts`]:
+      "import { SatBanner } from '@hylandsoftware/satori-ui/banner';\n" +
+      'export class NxsSatoriBannerComponent {}\n',
+    ...featureFile,
+  });
+
+expectRed(
+  'a mixed barrel still catches the registered primitive',
+  'checkAdoptedPatternsNotBypassed',
+  mixedBarrel({
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a mixed barrel does not make its unregistered sibling’s entry point adopted',
+  'checkAdoptedPatternsNotBypassed',
+  mixedBarrel({
+    [NOT_BASELINED]: "import { SatBanner } from '@hylandsoftware/satori-ui/banner';\n",
+  }),
+);
+
+expectRed(
+  'a renaming re-export keeps the trail: the symbol is followed under its local name',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      "from './tag/satori-tag.component'",
+      "from './tag'",
+    ),
+    // The barrel is the only place the registered name exists; the implementation declares it
+    // under another one, so a search that did not carry the alias across would lose it here and
+    // report that nothing declares the registered class.
+    [`${SATORI_LIB}/tag/index.ts`]:
+      "export { NxsSatoriTagImpl as NxsSatoriTagComponent } from './satori-tag.component';\n",
+    [`${SATORI_LIB}/tag/satori-tag.component.ts`]:
+      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class NxsSatoriTagImpl {}\n',
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
 );
 
 falsePositiveControls += 1;

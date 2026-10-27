@@ -9713,24 +9713,73 @@ function satoriEntryPointsIn(path, body) {
 }
 
 /**
- * The files a module re-exports from, relative ones only, resolved to repository paths.
+ * The file that declares `symbol`, following relative re-exports from `path` and renaming as it
+ * goes. `undefined` when nothing reachable declares it.
  *
- * Only `export … from './x'`, because the case this exists for is a barrel: a registered class
- * reached through an `index.ts` that re-exports it. Following plain imports as well would collect
- * entry points a shared helper happens to use and guard them for the wrong primitive.
+ * Why the symbol and not the barrel. Collecting Satori imports from everything a barrel
+ * re-exports attributes them all to one primitive: an `index.ts` that re-exports both the
+ * registered tag wrapper and an unregistered banner wrapper would make
+ * `@hylandsoftware/satori-ui/banner` a guarded entry point of the `tag` primitive, and every
+ * legitimate feature import of the banner would fail. Only the file that actually declares the
+ * registered class says what that primitive wraps.
+ *
+ * `export { A as B } from './x'` is followed under its local name, so an alias does not lose the
+ * trail. `export * from './x'` cannot say which symbol it carries without resolving the module
+ * graph, so each one is searched and the first file declaring the symbol wins — enough for a
+ * barrel, and it never attributes a sibling's imports to this primitive.
  */
-function relativeReExportsOf(path, body) {
-  const source = ts.createSourceFile(path, body, ts.ScriptTarget.Latest, true);
-  const targets = [];
+function fileDeclaringSymbol(path, symbol, seen = new Set()) {
+  const key = `${path} ${symbol}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+  if (!fileExists(path)) return undefined;
+
+  const source = ts.createSourceFile(path, read(path), ts.ScriptTarget.Latest, true);
+  const declares = source.statements.some((statement) => {
+    if (ts.isVariableStatement(statement)) {
+      return statement.declarationList.declarations.some(
+        (declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === symbol,
+      );
+    }
+    return (
+      (ts.isClassDeclaration(statement) ||
+        ts.isFunctionDeclaration(statement) ||
+        ts.isInterfaceDeclaration(statement) ||
+        ts.isTypeAliasDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name?.text === symbol
+    );
+  });
+  if (declares) return path;
+
+  const stars = [];
   for (const statement of source.statements) {
     if (!ts.isExportDeclaration(statement)) continue;
     const specifier = statement.moduleSpecifier;
     if (specifier === undefined || !ts.isStringLiteralLike(specifier)) continue;
     if (!specifier.text.startsWith('.')) continue;
-    const resolved = resolveRelativeModule(dirname(path), specifier.text);
-    if (resolved !== undefined) targets.push(resolved);
+    const target = resolveRelativeModule(dirname(path), specifier.text);
+    if (target === undefined) continue;
+
+    const bindings = statement.exportClause;
+    if (bindings === undefined) {
+      stars.push(target);
+      continue;
+    }
+    if (!ts.isNamedExports(bindings)) continue;
+    for (const element of bindings.elements) {
+      if (element.name.text !== symbol) continue;
+      const local = element.propertyName?.text ?? element.name.text;
+      const found = fileDeclaringSymbol(target, local, seen);
+      if (found !== undefined) return found;
+    }
   }
-  return targets;
+
+  for (const target of stars) {
+    const found = fileDeclaringSymbol(target, symbol, seen);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 /** `./tag/satori-tag.component` from a directory -> the repository path of its `.ts`, if any. */
@@ -9821,29 +9870,28 @@ function adoptedSatoriEntryPoints() {
       continue;
     }
 
-    // Walk re-exports, so a class registered through a barrel is followed to the file that
-    // actually imports Satori. `./rich-tooltip` resolving to an `index.ts` that re-exports the
-    // component used to resolve fine and yield nothing, which left that primitive's entry point
-    // unguarded while the other five kept `guarded` non-empty — invisible to the emptiness check
-    // below, so a new direct rich-tooltip import would have passed.
-    const entries = new Set();
-    const seen = new Set();
-    const queue = [resolved];
-    while (queue.length > 0) {
-      const file = queue.shift();
-      if (seen.has(file)) continue;
-      seen.add(file);
-      const body = read(file);
-      for (const entry of satoriEntryPointsIn(file, body).keys()) entries.add(entry);
-      for (const target of relativeReExportsOf(file, body)) {
-        if (!seen.has(target)) queue.push(target);
-      }
+    // Follow the registered symbol, not the module. A class registered as `./rich-tooltip` sits
+    // behind an `index.ts` that only re-exports it: reading that barrel's own imports yields
+    // nothing, which left the primitive unguarded while the other five kept `guarded` non-empty
+    // and the emptiness check below quiet. Resolving the symbol instead also keeps a mixed barrel
+    // honest — one that re-exports an unregistered banner wrapper alongside the tag wrapper must
+    // not make `@hylandsoftware/satori-ui/banner` an entry point of the `tag` primitive.
+    const declaring = fileDeclaringSymbol(resolved, className);
+    if (declaring === undefined) {
+      fail(
+        `${SATORI_ADOPTION_REGISTRY} registers \`${className}\` for the \`${primitive}\` primitive, ` +
+          `but neither ${resolved} nor anything it re-exports declares that name, so the entry ` +
+          'points that primitive wraps could not be read and new direct use of them would not be ' +
+          'caught.',
+      );
+      continue;
     }
 
+    const entries = new Set(satoriEntryPointsIn(declaring, read(declaring)).keys());
     if (entries.size === 0) {
       fail(
         `${SATORI_ADOPTION_REGISTRY} registers \`${className}\` for the \`${primitive}\` primitive, ` +
-          `but neither ${resolved} nor anything it re-exports imports \`${SATORI_PACKAGE}\`, so ` +
+          `but ${declaring}, which declares it, imports nothing from \`${SATORI_PACKAGE}\`, so ` +
           'that primitive has no guarded entry point and direct use of whatever it wraps would ' +
           'not be caught. A Satori implementation that imports no Satori is the thing to check ' +
           'first.',
