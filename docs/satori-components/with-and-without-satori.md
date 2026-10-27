@@ -17,7 +17,7 @@ On GitHub they show as missing images, by design.
 
 ## Summary
 
-The `nxs-` library renders the same pages whether or not a customer has access to Satori. Ten primitives — avatar, tag, status tag, breadcrumbs, rich tooltip, error state, tabs, the document toolbar's action bar, the card and the empty state — exist twice, under one registered ID each: a built-in version in `@nuxeo/satori-platform/components`, and a thin wrapper around Satori's own component in `@nuxeo/satori-platform/components-satori`. Every other component is the same component in both cases; only the theme differs.
+The `nxs-` library renders the same pages whether or not a customer has access to Satori. Eleven primitives — avatar, tag, status tag, breadcrumbs, rich tooltip, error state, tabs, the document toolbar's action bar, the card, the empty state and the upload — exist twice, under one registered ID each: a built-in version in `@nuxeo/satori-platform/components`, and a thin wrapper around Satori's own component in `@nuxeo/satori-platform/components-satori`. Every other component is the same component in both cases; only the theme differs.
 
 > **Note:** the library is not published yet; this page describes the configuration it is built to support.
 
@@ -59,7 +59,7 @@ Leaving out `provideNxsSatoriComponents()` gives the built-in versions; nothing 
 
 ## Side by side
 
-Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The ten primitives with a Satori variant render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
+Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The eleven primitives with a Satori variant render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
 
 ### Avatar
 
@@ -485,16 +485,20 @@ The same location trail, folder list and buttons in both; the theme sets the typ
 
 ### Dropzone
 
-| Field           | Value                            |
-| --------------- | -------------------------------- |
-| Component       | `NxsDropzoneComponent`           |
-| Registered ID   | —                                |
-| With Satori     | Same component; theme only       |
-| Storybook story | `upload-dropzone--several-files` |
+| Field           | Value                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Component       | `NxsDropzoneComponent`                                                                                               |
+| Registered ID   | `nxs.primitives.upload`                                                                                              |
+| With Satori     | Satori's own component: `NxsSatoriUploadComponent` renders `<sat-upload-field>`                                      |
+| Storybook story | `primitives-by-registered-id--material-registration`; with Satori `primitives-by-registered-id--satori-registration` |
 
-![Dropzone: without Satori on the left, with Satori on the right](dropzone-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+![Dropzone: without Satori on the left, with Satori on the right](dropzone-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same inputs.')
 
-The same dashed area, text and button in both; the theme sets the type, the outline and the button's style. Files dragged over it light it up in the theme's primary container colour.
+The same label, chooser text and icon in both, from the same inputs. The built-in component draws a dashed area with a separate button; Satori's upload field is one control — a label above, and an area that both opens the chooser and takes the drop — so the two differ in shape because the components do.
+
+Satori ships two upload components, and the field is the one wrapped. Its sibling `sat-upload-area` overlays whatever it wraps while a file is dragged anywhere over the window, but the overlay reads "Drop files here." as a literal in its own template, with no key in Satori's catalogue — so on this component, whose every other string the caller translates, it would have shown English to every other locale. The field's own text is translated, and the wrapper replaces it with the caller's `buttonLabel` anyway.
+
+One thing Satori adds that the built-in component does not: a polite live region naming what was uploaded. It is kept rather than switched off.
 
 ### Upload queue
 
@@ -764,13 +768,13 @@ What a click does is the same in both: the heading opens the item, so does a cli
 
 ## Full screenshots
 
-Storybook's "Primitives/By registered ID" story renders all ten registered IDs that have a Satori variant — avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs, action bar, card and empty state — with one template and the same inputs.
+Storybook's "Primitives/By registered ID" story renders all eleven registered IDs that have a Satori variant — avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs, action bar, card, empty state and upload — with one template and the same inputs.
 
-![The ten primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
+![The eleven primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
 
-![The ten primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
+![The eleven primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
 
-![The ten primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
+![The eleven primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
 
 ## Detailed differences
 
@@ -842,7 +846,7 @@ The components in the library today:
 | Document tree                   | —                                                                                                                       | Same component; theme only   |
 | Rename dialog                   | —                                                                                                                       | Same component; theme only   |
 | Folder picker                   | —                                                                                                                       | Same component; theme only   |
-| Dropzone                        | —                                                                                                                       | Same component; theme only   |
+| Dropzone                        | `nxs.primitives.upload`                                                                                                 | Yes — Satori's own component |
 | Upload queue                    | —                                                                                                                       | Same component; theme only   |
 | Search filters                  | —                                                                                                                       | Same component; theme only   |
 | Saved search select             | —                                                                                                                       | Same component; theme only   |

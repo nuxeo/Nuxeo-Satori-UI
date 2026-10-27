@@ -7,6 +7,7 @@ import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
 import { NxsChipSetComponent } from './chip-set/chip-set.component';
 import { NxsCardComponent } from './card/card.component';
 import { NxsDocumentToolbarComponent } from './document-toolbar/document-toolbar.component';
+import { NxsDropzoneComponent } from './dropzone/dropzone.component';
 import { NxsEmptyStateComponent } from './empty-state/empty-state.component';
 import { NxsErrorStateComponent } from './error-state/error-state.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
@@ -45,6 +46,7 @@ export function provideNxsComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.actionBar]: NxsDocumentToolbarComponent,
       [NXS_PRIMITIVE_IDS.card]: NxsCardComponent,
       [NXS_PRIMITIVE_IDS.emptyState]: NxsEmptyStateComponent,
+      [NXS_PRIMITIVE_IDS.upload]: NxsDropzoneComponent,
       // satori:register:components — `satori-component` inserts above this line
     },
   });

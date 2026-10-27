@@ -168,6 +168,7 @@ export {
   type NxsTagColor,
   type NxsTagInputs,
   type NxsTagStatus,
+  type NxsUploadInputs,
 } from './lib/primitives';
 export { provideNxsComponents } from './lib/provide-nxs-components';
 export { nxsInitials, nxsVisibleText } from './lib/visible-text';

@@ -6,9 +6,9 @@ import * as ByIdStories from './primitives.stories';
 
 # Primitives by registered ID
 
-Ten components here are also in Satori's own component library: the avatar, the breadcrumbs, the
+Eleven components here are also in Satori's own component library: the avatar, the breadcrumbs, the
 tag, the status tag, the rich tooltip, the error state, the tabs, the document toolbar's action bar,
-the card and the empty state. Each one is registered under an ID. A screen that renders the ID, rather than the
+the card, the empty state and the upload. Each one is registered under an ID. A screen that renders the ID, rather than the
 component, shows whichever version the application registered: Satori's, when
 `@nuxeo/satori-platform/components-satori` is installed and provided, or the built-in version
 otherwise.
@@ -20,7 +20,8 @@ otherwise.
 - **Callbacks and templates are inputs.** A screen renders an ID through `lib-extension-outlet`, which
   sets inputs and nothing else, so the tabs take their body template and selection callback, the
   action bar its action callback, the error state its retry callback, the card its open and
-  selection callbacks and its templates, and the empty state its actions template, as inputs.
+  selection callbacks and its templates, the empty state its actions template, and the upload its
+  files callback, as inputs.
 - **Satori when it is available.** The choice is made by the providers your application lists, not
   when the library is built and not by checking at run time.
 - **Works without Satori.** Without access to GitHub Packages, leave Satori out: every ID still
@@ -189,6 +190,21 @@ Every ID, rendered through `lib-extension-outlet` as a screen renders them.
       </td>
       <td>
         Empty state (<code>sat-empty-state</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.upload</code>
+      </td>
+      <td>
+        <code>label</code>, <code>buttonLabel</code>, <code>multiple</code>, <code>accept</code>,
+        <code>disabled</code>, <code>filesHandler</code>
+      </td>
+      <td>
+        <code>NxsUploadInputs</code>
+      </td>
+      <td>
+        Upload field (<code>sat-upload-field</code>)
       </td>
     </tr>
   </tbody>

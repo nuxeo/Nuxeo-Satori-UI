@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-146 exported symbol(s).
+147 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -208,6 +208,7 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly actionBar: "nxs.primitives.actionBar";
     readonly card: "nxs.primitives.card";
     readonly emptyState: "nxs.primitives.emptyState";
+    readonly upload: "nxs.primitives.upload";
     }>;
 }
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
@@ -1256,12 +1257,13 @@ interface NxsDriveDialogData {
     readonly folderPath?: string;
     }
 }
-class NxsDropzoneComponent {
+class NxsDropzoneComponent implements NxsUploadInputs {
     readonly label: import("@angular/core").InputSignal<string>;
     readonly buttonLabel: import("@angular/core").InputSignal<string>;
     readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly accept: import("@angular/core").InputSignal<string>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly filesHandler: import("@angular/core").InputSignal<((files: readonly File[]) => void) | null>;
     readonly files: import("@angular/core").OutputEmitterRef<readonly File[]>;
     protected readonly drop: NxsFileDropTracker;
     protected readonly buttonId: string;
@@ -1292,6 +1294,11 @@ class NxsDropzoneComponent {
     };
     "disabled": {
     "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "filesHandler": {
+    "alias": "filesHandler";
     "required": false;
     "isSignal": true;
     };
@@ -2520,6 +2527,15 @@ interface NxsUpdatePermissionDialogData {
     readonly documentUid: string;
     readonly ace: NuxeoAce;
     readonly permissions?: readonly string[] | null;
+    }
+}
+interface NxsUploadInputs {
+    readonly label: InputSignal<string>;
+    readonly buttonLabel: InputSignal<string>;
+    readonly multiple: InputSignalWithTransform<boolean, unknown>;
+    readonly accept: InputSignal<string>;
+    readonly disabled: InputSignalWithTransform<boolean, unknown>;
+    readonly filesHandler: InputSignal<((files: readonly File[]) => void) | null>;
     }
 }
 interface NxsUploadItem {

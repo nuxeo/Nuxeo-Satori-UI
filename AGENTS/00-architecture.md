@@ -111,9 +111,9 @@ gate, also in CI):
 | `PLATFORM_ENTRY_POINTS` in `libs/platform/src/index.ts` lists exactly the subpaths a `libs/platform/<subpath>/ng-package.json` publishes                                                                                                                                                                                                                                                                                                                                          | `checkPlatformEntryPointsListed`           |
 | Every Storybook `<Source>` code sample under `libs/` and `apps/` parses and is formatted as Prettier formats its language, and no inline sample has an indented continuation line, which MDX strips                                                                                                                                                                                                                                                                               | `checkMdxCodeSamplesFormatted`             |
 
-**Satori if available, Material otherwise — by ID** (plan section 3). Twelve primitives overlap with
+**Satori if available, Material otherwise — by ID** (plan section 3). Thirteen primitives overlap with
 Satori: avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs, the action bar, the
-card, the empty state, the banner and the chip set. `/components` implements each on Material — the
+card, the empty state, the upload, the banner and the chip set. `/components` implements each on Material — the
 tabs as `nxs-tabs` and the action bar as `nxs-document-toolbar` — and `provideNxsComponents()`
 registers them as `nxs.primitives.*` (`NXS_PRIMITIVE_IDS`). The error state's Satori version comes
 from `@hylandsoftware/satori-ui/empty-state` rather than an entry point named after it, as

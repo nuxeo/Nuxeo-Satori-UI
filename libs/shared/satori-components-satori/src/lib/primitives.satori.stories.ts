@@ -92,6 +92,7 @@ export const SatoriRegistration: StoryObj = {
       // the card one that opens something, which is how browse and search render it.
       openCard: () => undefined,
       selectCard: () => undefined,
+      takeFiles: () => undefined,
     },
     template: `
       <div style="display: grid; gap: 16px; justify-items: start">
@@ -147,6 +148,16 @@ export const SatoriRegistration: StoryObj = {
             message: 'Drag a file in, or create a folder to get started.',
             icon: 'folder_open',
             actions: emptyActions
+          }"
+        />
+        <lib-extension-outlet
+          style="display: block; inline-size: 320px"
+          [componentId]="ids.upload"
+          [componentInputs]="{
+            label: 'Drag and drop files here',
+            multiple: true,
+            accept: '.pdf,.docx',
+            filesHandler: takeFiles
           }"
         />
       </div>

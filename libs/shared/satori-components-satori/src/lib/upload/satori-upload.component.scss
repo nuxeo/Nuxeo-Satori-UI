@@ -1,0 +1,14 @@
+// A block, as the Material dropzone's host is a flex column. Without it the host is
+// `display: inline` and its own rectangle collapses, which anything measuring the wrapper reads as
+// nothing — see the empty-state wrapper's stylesheet for the same note.
+:host {
+  display: block;
+}
+
+// Satori's field sizes its own icon; this matches the size the Material dropzone gives its one, so
+// the two read at the same scale.
+:host mat-icon {
+  width: 32px;
+  height: 32px;
+  font-size: 32px;
+}

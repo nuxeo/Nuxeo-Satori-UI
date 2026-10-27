@@ -31,6 +31,7 @@ export const NXS_PRIMITIVE_IDS = Object.freeze({
   actionBar: 'nxs.primitives.actionBar',
   card: 'nxs.primitives.card',
   emptyState: 'nxs.primitives.emptyState',
+  upload: 'nxs.primitives.upload',
 } as const);
 
 /** Avatar colours. The values Satori's avatar takes, which `/components-satori` asserts. */
@@ -277,4 +278,30 @@ export interface NxsEmptyStateInputs {
   readonly icon: InputSignal<string>;
   /** Rendered under the message: buttons such as "Create folder" or "Clear filters". */
   readonly actions: InputSignal<TemplateRef<unknown> | null>;
+}
+
+/**
+ * `nxs.primitives.upload`: where files are dropped from the computer, or chosen with a control —
+ * the same files either way. Text inputs arrive already translated.
+ *
+ * A host rendering the ID through `lib-extension-outlet` passes `filesHandler`, because the outlet
+ * sets inputs and binds no outputs. A host using the element may bind the `files` output instead;
+ * both are called, so a host never has to pick.
+ */
+export interface NxsUploadInputs {
+  /** What the zone says, such as "Drag and drop files here". */
+  readonly label: InputSignal<string>;
+  /** The choosing control's text. Blank says "Choose files", or "Choose a file" when single. */
+  readonly buttonLabel: InputSignal<string>;
+  /** Takes several files at once. */
+  readonly multiple: InputSignalWithTransform<boolean, unknown>;
+  /** The file types the chooser offers, as the `accept` attribute takes them: `.csv`. */
+  readonly accept: InputSignal<string>;
+  /** Takes nothing, from the control or a drop. */
+  readonly disabled: InputSignalWithTransform<boolean, unknown>;
+  /**
+   * Called with the files chosen or dropped: one when `multiple` is off, however many were dropped
+   * otherwise. Never called with an empty list, and never while disabled.
+   */
+  readonly filesHandler: InputSignal<((files: readonly File[]) => void) | null>;
 }

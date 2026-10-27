@@ -20,10 +20,11 @@ import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-toolti
 import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';
 import { NxsSatoriTabsComponent } from './tabs/satori-tabs.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
+import { NxsSatoriUploadComponent } from './upload/satori-upload.component';
 
 /**
  * Re-register every `NXS_PRIMITIVE_IDS` entry — avatar, breadcrumbs, tag, status tag, rich tooltip,
- * error state, tabs, action bar, card and empty state — on Satori, over the Material implementations
+ * error state, tabs, action bar, card, empty state and upload — on Satori, over the Material implementations
  * `provideNxsComponents()` registered.
  *
  * Satori-if-available, Material otherwise, decided by which providers an application lists — not
@@ -51,6 +52,7 @@ export function provideNxsSatoriComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.actionBar]: NxsSatoriActionBarComponent,
       [NXS_PRIMITIVE_IDS.card]: NxsSatoriCardComponent,
       [NXS_PRIMITIVE_IDS.emptyState]: NxsSatoriEmptyStateComponent,
+      [NXS_PRIMITIVE_IDS.upload]: NxsSatoriUploadComponent,
     },
   });
 }

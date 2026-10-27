@@ -1,0 +1,23 @@
+<sat-upload-field [uploadedFiles]="uploaded()" (filesLoaded)="onFilesLoaded($event)">
+  <mat-label>{{ label() }}</mat-label>
+  <mat-icon aria-hidden="true" svgIcon="upload" />
+  <!-- Replaces Satori's own `sat.upload-field.browse-or-drop` fallback, and falls back to the same
+       two keys the Material implementation uses, so a blank `buttonLabel` reads alike in both. -->
+  <span>{{
+    ownButtonLabel() ||
+      ((multiple()
+        ? 'satori-components.dropzone.choose-files'
+        : 'satori-components.dropzone.choose-file'
+      ) | translate)
+  }}</span>
+  <!-- The field reads `multiple`, `accept` and `disabled` from this input, pairs its own
+       `<label for>` with the id Satori's directive puts on it, and points `satUpload` at it so a
+       click on the field opens the chooser. -->
+  <input
+    satUploadFieldInput
+    type="file"
+    [multiple]="multiple()"
+    [attr.accept]="accept() || null"
+    [disabled]="disabled()"
+  />
+</sat-upload-field>

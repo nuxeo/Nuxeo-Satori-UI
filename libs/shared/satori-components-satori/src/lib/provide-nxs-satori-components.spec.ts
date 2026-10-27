@@ -17,6 +17,7 @@ import {
   NxsBreadcrumbsComponent,
   NxsCardComponent,
   NxsDocumentToolbarComponent,
+  NxsDropzoneComponent,
   NxsEmptyStateComponent,
   NxsErrorStateComponent,
   NxsRichTooltipComponent,
@@ -42,6 +43,7 @@ import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-toolti
 import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';
 import { NxsSatoriTabsComponent } from './tabs/satori-tabs.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
+import { NxsSatoriUploadComponent } from './upload/satori-upload.component';
 
 const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
   [NXS_PRIMITIVE_IDS.avatar, NxsAvatarComponent, NxsSatoriAvatarComponent],
@@ -54,12 +56,13 @@ const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
   [NXS_PRIMITIVE_IDS.actionBar, NxsDocumentToolbarComponent, NxsSatoriActionBarComponent],
   [NXS_PRIMITIVE_IDS.card, NxsCardComponent, NxsSatoriCardComponent],
   [NXS_PRIMITIVE_IDS.emptyState, NxsEmptyStateComponent, NxsSatoriEmptyStateComponent],
+  [NXS_PRIMITIVE_IDS.upload, NxsDropzoneComponent, NxsSatoriUploadComponent],
 ];
 
 /**
  * Primitives no Satori component re-registers, so they keep their Material implementation with or
- * without `provideNxsSatoriComponents()`. The card and the empty state left this list when
- * NXSAT-675 wrapped Satori's interactive card and empty state; the banner and the chip set are
+ * without `provideNxsSatoriComponents()`. The card, the empty state and the upload left this
+ * list as NXSAT-675 wrapped Satori's interactive card, empty state and upload field; the banner and the chip set are
  * Material-only until their Satori wrappers are written, and `docs/extension-reference.md` §6a says
  * so too. An ID added here needs its reason beside it, because the list is what tells the check
  * below that Material-only was the intention and not an omission.
@@ -782,5 +785,180 @@ describe('the Satori empty state, rendered by nxs.primitives.emptyState', () => 
     await fixture.whenStable();
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[satEmptyStateAction] .probe-create')).not.toBeNull();
+  });
+});
+
+/**
+ * The upload is the one primitive whose Material implementation has an output, so the ID's contract
+ * needed a `filesHandler` input as well — the outlet binds no outputs. These assert that both
+ * routes fire, and that the rules about what counts as a file reaching the host are the same on
+ * both sides: nothing empty, nothing while disabled, and one file unless `multiple`.
+ */
+describe('the Satori upload, rendered by nxs.primitives.upload', () => {
+  @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
+    standalone: true,
+    imports: [ExtensionOutletComponent],
+    template: `<lib-extension-outlet [componentId]="id" [componentInputs]="inputs" />`,
+  })
+  class UploadOutletHost {
+    readonly id = NXS_PRIMITIVE_IDS.upload as string;
+    inputs: Record<string, unknown> = {};
+  }
+
+  let handled: (readonly File[])[];
+
+  const file = (name: string) => new File(['x'], name, { type: 'text/plain' });
+
+  async function renderUpload(
+    inputs: Record<string, unknown> = {},
+    satori = true,
+  ): Promise<HTMLElement> {
+    TestBed.configureTestingModule({
+      imports: [UploadOutletHost],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([]),
+        provideSatori(),
+        provideNxsComponents(),
+        ...(satori ? [provideNxsSatoriComponents()] : []),
+      ],
+    });
+    const fixture = TestBed.createComponent(UploadOutletHost);
+    fixture.componentInstance.inputs = {
+      label: 'Drag and drop files here',
+      filesHandler: (files: readonly File[]) => handled.push(files),
+      ...inputs,
+    };
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  /**
+   * A drop, with `dataTransfer` faked the way `dropzone.component.spec.ts` fakes it: jsdom's
+   * `DataTransfer` cannot be populated. Deliberately no `items`, because Satori reads those first
+   * and would then need `getAsFile()` stubs — with only `files`, both implementations take the same
+   * path through the same list.
+   */
+  function dropEvent(files: File[]): DragEvent {
+    const event = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent;
+    Object.defineProperty(event, 'dataTransfer', {
+      value: { types: ['Files'], files, dropEffect: 'none' },
+    });
+    return event;
+  }
+
+  /** A drop on Satori's field: `satUpload` sits on the button inside it. */
+  function drop(host: HTMLElement, ...files: File[]): void {
+    const target = host.querySelector('.sat-upload-field-interactive') ?? host;
+    target.dispatchEvent(dropEvent(files));
+  }
+
+  beforeEach(() => {
+    handled = [];
+  });
+
+  it("renders Satori's upload field, and no Material dropzone", async () => {
+    const host = await renderUpload();
+    expect(host.querySelector('nxs-satori-upload sat-upload-field')).not.toBeNull();
+    expect(host.querySelector('nxs-dropzone')).toBeNull();
+  });
+
+  it('shows our label and our chooser text, not Satori’s own fallback', async () => {
+    const host = await renderUpload({ buttonLabel: 'Pick a document' });
+    expect(host.querySelector('mat-label')?.textContent?.trim()).toBe('Drag and drop files here');
+    expect(host.querySelector('.sat-upload-field-interactive')?.textContent).toContain(
+      'Pick a document',
+    );
+    expect(host.querySelector('sat-upload-field')?.textContent).not.toContain('browse-or-drop');
+  });
+
+  // The reason the upload field was wrapped rather than `sat-upload-area`, whose overlay text is a
+  // literal with no catalogue key: every string on screen here is one the caller translated.
+  it('falls back to the same key the Material implementation uses when buttonLabel is blank', async () => {
+    const host = await renderUpload({ multiple: true });
+    expect(host.querySelector('.sat-upload-field-interactive')?.textContent).toContain(
+      'satori-components.dropzone.choose-files',
+    );
+  });
+
+  it('asks for one file when multiple is off', async () => {
+    const host = await renderUpload();
+    expect(host.querySelector<HTMLInputElement>('input[type="file"]')?.multiple).toBe(false);
+  });
+
+  it('asks for several files when multiple is on', async () => {
+    const host = await renderUpload({ multiple: true });
+    expect(host.querySelector<HTMLInputElement>('input[type="file"]')?.multiple).toBe(true);
+  });
+
+  it('passes accept through to the chooser, and omits it when blank', async () => {
+    const host = await renderUpload({ accept: '.csv' });
+    expect(host.querySelector('input[type="file"]')?.getAttribute('accept')).toBe('.csv');
+  });
+
+  it('omits accept entirely when blank, as Material does', async () => {
+    const host = await renderUpload();
+    expect(host.querySelector('input[type="file"]')?.hasAttribute('accept')).toBe(false);
+  });
+
+  it('calls the handler the outlet passed with a dropped file', async () => {
+    const host = await renderUpload();
+    drop(host, file('claim.pdf'));
+    expect(handled).toHaveLength(1);
+    expect(handled[0].map((f) => f.name)).toEqual(['claim.pdf']);
+  });
+
+  it('takes only the first of several dropped files when multiple is off, as Material does', async () => {
+    const host = await renderUpload();
+    drop(host, file('a.pdf'), file('b.pdf'));
+    expect(handled[0].map((f) => f.name)).toEqual(['a.pdf']);
+  });
+
+  it('takes every dropped file when multiple is on', async () => {
+    const host = await renderUpload({ multiple: true });
+    drop(host, file('a.pdf'), file('b.pdf'));
+    expect(handled[0].map((f) => f.name)).toEqual(['a.pdf', 'b.pdf']);
+  });
+
+  it('takes nothing while disabled, as Material does', async () => {
+    const host = await renderUpload({ disabled: true });
+    drop(host, file('claim.pdf'));
+    expect(handled).toEqual([]);
+  });
+
+  it('disables the chooser and says so, while disabled', async () => {
+    const host = await renderUpload({ disabled: true });
+    expect(host.querySelector<HTMLInputElement>('input[type="file"]')?.disabled).toBe(true);
+    expect(
+      host.querySelector<HTMLButtonElement>('button.sat-upload-field-interactive')?.disabled,
+    ).toBe(true);
+  });
+
+  it('takes nothing from an empty drop', async () => {
+    const host = await renderUpload();
+    drop(host);
+    expect(handled).toEqual([]);
+  });
+
+  it('names the chooser from our label, through Satori’s own label pairing', async () => {
+    const host = await renderUpload();
+    const label = host.querySelector('label.sat-upload-field-label');
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(label?.getAttribute('for')).toBe(input?.id);
+    expect(input?.id).toBeTruthy();
+  });
+
+  it('calls the same handler on Material, so a host passes the same inputs either way', async () => {
+    const host = await renderUpload({}, false);
+    expect(host.querySelector('nxs-dropzone')).not.toBeNull();
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    // Material's dropzone takes a drop on its own host rather than on a projected button.
+    host.querySelector('nxs-dropzone')?.dispatchEvent(dropEvent([file('claim.pdf')]));
+    expect(handled[0]?.map((f) => f.name)).toEqual(['claim.pdf']);
   });
 });
