@@ -29,16 +29,20 @@ on:
 permissions:
   contents: read
 
+# Runs are serialised because nothing is committed or tagged, so two runs from `main` bump
+# from the same version and would compute the same one. `queue: max` keeps every queued run:
+# the default (`single`) cancels an already-pending run when a newer one joins the group, so
+# a publish waiting behind another run could be dropped by a later dry run.
+concurrency:
+  group: publish-platform
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   # Everything that runs repository code happens here, with no registry token in scope.
   # The tarball it produces is the only thing handed to the publish job.
-  # Runs are serialised because nothing is committed or tagged, so two runs from `main`
-  # bump from the same version and would compute the same one.
   build:
     runs-on: ubuntu-latest
-    concurrency:
-      group: publish-platform
-      cancel-in-progress: false
     outputs:
       tarball: ${{ steps.pack.outputs.tarball }}
     steps:
@@ -103,9 +107,6 @@ jobs:
     needs: build
     if: ${{ !inputs.dryRun }}
     runs-on: ubuntu-latest
-    concurrency:
-      group: publish-platform
-      cancel-in-progress: false
     steps:
       - uses: actions/download-artifact@v4
         with:
