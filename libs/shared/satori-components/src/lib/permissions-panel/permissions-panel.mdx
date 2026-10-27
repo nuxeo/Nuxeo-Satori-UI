@@ -56,9 +56,10 @@ call the panel makes.
 `documentId` is the only required input: the uid of the document. `permissionsChanged` is an
 optional callback the panel calls after any write that may have changed the document's permissions,
 so you can refresh anything else you show that depends on them. `offer` chooses what the selects
-list: `all`, the default, is the type's `userVisiblePermissions`, then Nuxeo's standard permissions,
-then every other one the server reports; `type` is the type's list alone, as Web UI offers it. An
-entry holding a permission outside the list keeps it in its own select either way.
+list: `type`, the default, is the type's `userVisiblePermissions` alone, as Web UI offers it, with
+the **All permissions** checkbox to add the rest. `all` is that list, then Nuxeo's standard
+permissions, then every other one the server reports, with the checkbox fixed on. An entry holding a
+permission outside the list keeps it in its own select either way.
 
 The panel needs `HttpClient` and the platform's `DocumentDetailService`, which an application using
 `@nuxeo/satori-platform/nuxeo-client` already has. Its labels and the permission names are translated
@@ -93,8 +94,9 @@ application's sign-in. The panel reads the document with three enrichers:
 - **`permissions`** decides whether the panel can be edited. Holding `WriteSecurity` or `Everything`
   makes it editable; with anything less the same tables are read-only. A version is always
   read-only, because its `permissions` repeat the live document's.
-- **`userVisiblePermissions`** fills the "suggested" group of the permission list. Nuxeo's standard
-  permissions, and any others `permissions` reports, follow it.
+- **`userVisiblePermissions`** fills the "suggested" group of the permission list, which is the
+  default. Ticking **All permissions** adds Nuxeo's standard permissions, and any others
+  `permissions` reports.
 
 Writes call `addPermission`, `replacePermission` and `removePermissionById`, one per changed entry.
 Blocking and restoring inheritance call `blockPermissionInheritance` and

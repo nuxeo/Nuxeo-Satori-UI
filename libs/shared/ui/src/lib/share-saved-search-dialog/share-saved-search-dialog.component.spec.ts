@@ -67,13 +67,15 @@ describe('ShareSavedSearchDialogComponent', () => {
   let documents: Record<string, ReturnType<typeof vi.fn>>;
   let dialog: { open: ReturnType<typeof vi.fn> };
 
-  async function mount(read: NuxeoDocument | Error) {
+  async function mount(read: NuxeoDocument | Error, isAdministrator = true) {
     documents = {
       getDocumentPermissions: vi.fn(() =>
         read instanceof Error ? throwError(() => read) : of(read),
       ),
       removePermission: vi.fn(() => of({})),
       removePermissionById: vi.fn(() => of({})),
+      replacePermission: vi.fn(() => of({})),
+      addPermission: vi.fn(() => of({})),
     };
     dialog = { open: vi.fn(() => ({ afterClosed: () => of(null) })) };
     await TestBed.configureTestingModule({
@@ -88,7 +90,7 @@ describe('ShareSavedSearchDialogComponent', () => {
           provide: UserService,
           useValue: {
             getUser: vi.fn(() =>
-              of({ id: 'Administrator', isAdministrator: true, properties: { groups: [] } }),
+              of({ id: 'Administrator', isAdministrator, properties: { groups: [] } }),
             ),
           },
         },
@@ -103,6 +105,38 @@ describe('ShareSavedSearchDialogComponent', () => {
   }
 
   const component = () => fixture.componentInstance;
+
+  /**
+   * Whether each local row's Edit button is disabled, in row order. Asserted through the DOM
+   * rather than by calling the component's `isEditable`, which is `protected`: what matters is
+   * what the user can reach, and reaching into a protected member fails the `spec-types` gate.
+   */
+  const editButtonsDisabled = () => {
+    const host: HTMLElement = fixture.nativeElement;
+    return Array.from(
+      host.querySelectorAll<HTMLButtonElement>(
+        'table.permissions-table:not(.readonly-table) tbody tr button.edit-btn',
+      ),
+    ).map((button) => button.disabled);
+  };
+
+  /**
+   * What the add/edit dialog closes with. Built here in the shape that dialog really returns —
+   * resolved `begin`/`end` instants or days, plus the notification choices — so a host test cannot
+   * pass a shape the dialog never produces. The round trip through the real dialog is asserted in
+   * `share-saved-search-add-permission-dialog.component.spec.ts`.
+   */
+  const dialogResult = (over: Record<string, unknown> = {}) => ({
+    userGroup: 'members',
+    right: 'Everything',
+    timeFrame: 'Permanent',
+    grantedBy: 'Group',
+    begin: null,
+    end: null,
+    notify: false,
+    comment: null,
+    ...over,
+  });
 
   describe('removing a local entry', () => {
     it('removes that one entry by its id, leaving the other entry its principal holds', async () => {
@@ -170,29 +204,29 @@ describe('ShareSavedSearchDialogComponent', () => {
       ]);
     });
 
-    it('applies an edit opened before the re-read to the row it was opened on', async () => {
+    it('applies an edit opened after the re-read to the row it was opened on', async () => {
+      // A removal re-reads and re-indexes the rows. The edit must still address the ACE the dialog
+      // was opened on, not whichever row now sits at its old position. (Opening an edit *during*
+      // the re-read is refused outright — see "refuses to open while a write ... is pending".)
       await mount(SAVED_SEARCH);
       const [read, writeVersion] = component().permissions();
-      const reread = new Subject<NuxeoDocument>();
-      documents['getDocumentPermissions'].mockReturnValueOnce(reread);
+      documents['getDocumentPermissions'].mockReturnValueOnce(
+        of(readAfter(['members:Read:true:Administrator::'])),
+      );
       const edited = new Subject<unknown>();
       dialog.open.mockReturnValueOnce({ afterClosed: () => edited });
 
       component().removeRow(read.id);
       component().editRow(writeVersion.id);
-      // The re-read lands while the edit dialog is still open, then the edit is submitted.
-      reread.next(readAfter(['members:Read:true:Administrator::']));
-      reread.complete();
-      edited.next([
-        { userGroup: 'members', right: 'Everything', timeFrame: 'Permanent', grantedBy: 'Group' },
-      ]);
+      edited.next([dialogResult()]);
 
-      expect(component().permissions()).toEqual([
+      expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
+        UID,
         expect.objectContaining({
-          aceId: 'members:WriteVersion:true:Administrator::',
-          right: 'Everything',
+          id: 'members:WriteVersion:true:Administrator::',
+          permission: 'Everything',
         }),
-      ]);
+      );
     });
 
     it('keeps row ids unique when the re-read brings in an entry the dialog had not shown', async () => {
@@ -306,6 +340,503 @@ describe('ShareSavedSearchDialogComponent', () => {
       UID,
       expect.objectContaining({ username: 'members', permission: 'Write' }),
     );
+  });
+
+  // NXSAT-334, on the path a user actually takes: Edit on a row, then Update in the dialog.
+  // Before this, submitting an edit only updated the `permissions` signal and nothing wrote it, so
+  // the edit was discarded when the dialog closed.
+  describe('submitting an edit', () => {
+    /** Opens the edit dialog on the first row and submits `result`. */
+    async function submitEdit(result: Record<string, unknown>) {
+      await mount(SAVED_SEARCH);
+      const row = component().permissions()[0];
+      dialog.open.mockReturnValueOnce({ afterClosed: () => of([dialogResult(result)]) });
+
+      component().editRow(row.id);
+      return row;
+    }
+
+    const GRANTABLE = [
+      'Read',
+      'ReadWrite',
+      'Everything',
+      'Write',
+      'ReadVersion',
+      'WriteVersion',
+      'AddChildren',
+      'RemoveChildren',
+      'Remove',
+      'Version',
+      'WriteSecurity',
+      'Unlock',
+      'SetRetention',
+      'UnsetRetention',
+    ];
+
+    it.each(GRANTABLE)('writes %s to the server as it is', async (permission) => {
+      const row = await submitEdit({
+        userGroup: 'members',
+        right: permission,
+        timeFrame: 'Permanent',
+        grantedBy: 'Group',
+      });
+
+      expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
+        UID,
+        expect.objectContaining({ id: row.aceId, username: 'members', permission }),
+      );
+    });
+
+    it('writes the edit by ACE id, so it cannot land on another entry', async () => {
+      const row = await submitEdit({
+        userGroup: 'members',
+        right: 'Everything',
+        timeFrame: 'Permanent',
+        grantedBy: 'Group',
+      });
+
+      expect(row.aceId).toBe('members:Read:true:Administrator::');
+      expect(documents['replacePermission']).toHaveBeenCalledWith(
+        UID,
+        expect.objectContaining({ id: 'members:Read:true:Administrator::' }),
+      );
+    });
+
+    it('shows the server’s own row afterwards, not the staged edit', async () => {
+      // Nuxeo answers 200 to replacing an id it no longer holds and changes nothing, so a staged
+      // edit left on screen would claim a change that did not happen.
+      await mount(SAVED_SEARCH);
+      const row = component().permissions()[0];
+      dialog.open.mockReturnValueOnce({
+        afterClosed: () => of([dialogResult()]),
+      });
+
+      component().editRow(row.id);
+
+      // The re-read is the unchanged fixture: the write did not take.
+      expect(
+        component()
+          .permissions()
+          .map((r) => r.right),
+      ).toEqual(['Read', 'WriteVersion']);
+    });
+
+    it('drops the stale ACE id when the write took but the re-read failed', async () => {
+      // The write succeeded, so the staged row is the best information there is. But an ACE id
+      // encodes the permission and dates, so the one held is now stale: a further edit or removal
+      // would address an entry the server no longer has, and Nuxeo answers 200 to that, changing
+      // nothing. Without the id the row's buttons are disabled until a successful re-read.
+      await mount(SAVED_SEARCH);
+      const row = component().permissions()[0];
+      documents['getDocumentPermissions'].mockReturnValueOnce(
+        throwError(() => new Error('re-read failed')),
+      );
+      dialog.open.mockReturnValueOnce({
+        afterClosed: () => of([dialogResult()]),
+      });
+
+      component().editRow(row.id);
+
+      expect(documents['replacePermission']).toHaveBeenCalledOnce();
+      expect(component().permissions()[0]).toEqual(
+        expect.objectContaining({ aceId: undefined, right: 'Everything' }),
+      );
+      expect(component().saving()).toBe(false);
+    });
+
+    // `Document.ReplacePermission` writes a grant, so a deny can never be replaced without
+    // inverting it. The inheritance marker is a deny-`Everything` for `Everyone`: listed as an
+    // ordinary row it was editable, and submitting it unchanged would have granted Everyone
+    // full access. `nxs-permissions-panel` refuses the same thing.
+    describe('deny entries', () => {
+      const MARKER = { ...ace('Everyone', 'Everything'), granted: false };
+      const DENY = { ...ace('powerusers', 'Write'), granted: false };
+      const withDenies = {
+        ...SAVED_SEARCH,
+        contextParameters: {
+          ...(SAVED_SEARCH.contextParameters as object),
+          acls: [{ name: 'local', aces: [MARKER, DENY, ace('members', 'Read')] }],
+        },
+      } as unknown as NuxeoDocument;
+
+      it('does not list the inheritance marker as an editable row', async () => {
+        await mount(withDenies);
+
+        expect(
+          component()
+            .permissions()
+            .map((r) => r.userGroup),
+        ).toEqual(['powerusers', 'members']);
+        expect(component().isInheritanceBlocked()).toBe(true);
+      });
+
+      it('writes nothing when editRow is called on a deny entry', async () => {
+        await mount(withDenies);
+        const deny = component()
+          .permissions()
+          .find((r) => r.userGroup === 'powerusers');
+        if (!deny) throw new Error('the deny row is not shown');
+        dialog.open.mockClear();
+
+        component().editRow(deny.id);
+
+        expect(dialog.open).not.toHaveBeenCalled();
+        expect(documents['replacePermission']).not.toHaveBeenCalled();
+      });
+
+      it('recognises the marker when the principal is group-prefixed', async () => {
+        // Nuxeo reports a group either bare or as `group:<name>` depending on the enricher.
+        const prefixed = { ...ace('group:Everyone', 'Everything'), granted: false };
+        await mount({
+          ...SAVED_SEARCH,
+          contextParameters: {
+            ...(SAVED_SEARCH.contextParameters as object),
+            acls: [{ name: 'local', aces: [prefixed, ace('members', 'Read')] }],
+          },
+        } as unknown as NuxeoDocument);
+
+        expect(
+          component()
+            .permissions()
+            .map((r) => r.userGroup),
+        ).toEqual(['members']);
+      });
+
+      it('keeps an entry that names no principal, rather than reading it as the marker', async () => {
+        // A deny-`Everything` with no username is not the marker, and dropping it would hide an
+        // entry. It stays listed and, being a deny, is not editable.
+        const nameless = { ...ace('', 'Everything'), username: undefined, granted: false };
+        await mount({
+          ...SAVED_SEARCH,
+          contextParameters: {
+            ...(SAVED_SEARCH.contextParameters as object),
+            acls: [{ name: 'local', aces: [nameless, ace('members', 'Read')] }],
+          },
+        } as unknown as NuxeoDocument);
+
+        expect(component().permissions()).toHaveLength(2);
+        expect(editButtonsDisabled()).toEqual([true, false]);
+      });
+
+      it('falls back sensibly for an entry missing an id, a username or a permission', async () => {
+        // All three are reachable: a workflow-written ACE can carry no id, an external-style entry
+        // names an email rather than a username, and a malformed ACE can carry no permission.
+        const sparse = {
+          id: undefined,
+          username: undefined,
+          email: 'someone@example.com',
+          permission: undefined,
+          creator: undefined,
+          granted: true,
+          begin: null,
+          end: null,
+        };
+        await mount({
+          ...SAVED_SEARCH,
+          contextParameters: {
+            ...(SAVED_SEARCH.contextParameters as object),
+            acls: [{ name: 'local', aces: [sparse] }],
+          },
+        } as unknown as NuxeoDocument);
+
+        expect(component().permissions()).toEqual([
+          expect.objectContaining({
+            id: 'local-0',
+            aceId: undefined,
+            userGroup: 'someone@example.com',
+            right: 'Read',
+            grantedBy: 'System',
+          }),
+        ]);
+        // No ACE id, so there is nothing for Nuxeo to address: both actions are off.
+        expect(editButtonsDisabled()).toEqual([true]);
+      });
+
+      it('disables Edit on a deny row and leaves it on a grant', async () => {
+        await mount(withDenies);
+
+        // powerusers is the deny, members the grant.
+        expect(
+          component()
+            .permissions()
+            .map((r) => r.userGroup),
+        ).toEqual(['powerusers', 'members']);
+        expect(editButtonsDisabled()).toEqual([true, false]);
+      });
+    });
+
+    it('refuses to open while a write or its re-read is pending', async () => {
+      // Submitting into an ACL that is mid-change used to be dropped silently by the guard in
+      // `afterClosed`. The dialog is not opened at all now, and the Edit button is disabled.
+      await mount(SAVED_SEARCH);
+      const [read, writeVersion] = component().permissions();
+      const pending = new Subject<NuxeoDocument>();
+      documents['getDocumentPermissions'].mockReturnValueOnce(pending);
+
+      component().removeRow(read.id);
+      expect(component().saving()).toBe(true);
+      dialog.open.mockClear();
+
+      component().editRow(writeVersion.id);
+
+      expect(dialog.open).not.toHaveBeenCalled();
+
+      // Once the removal's re-read lands, editing is available again.
+      pending.next(readAfter(['members:Read:true:Administrator::']));
+      pending.complete();
+      expect(component().saving()).toBe(false);
+      component().editRow(writeVersion.id);
+      expect(dialog.open).toHaveBeenCalledOnce();
+    });
+
+    it('writes nothing for a row that was never read from the ACL', async () => {
+      // The fallback row has no ACE id, so there is nothing for Nuxeo to replace.
+      await mount(new Error('no read'));
+      const row = component().permissions()[0];
+      dialog.open.mockReturnValueOnce({
+        afterClosed: () =>
+          of([dialogResult({ userGroup: row.userGroup, right: 'Read', grantedBy: 'System' })]),
+      });
+
+      component().editRow(row.id);
+
+      expect(row.aceId).toBeUndefined();
+      expect(documents['replacePermission']).not.toHaveBeenCalled();
+    });
+
+    it('puts the row back when the write fails', async () => {
+      await mount(SAVED_SEARCH);
+      const row = component().permissions()[0];
+      documents['replacePermission'] = vi.fn(() => throwError(() => new Error('403')));
+      dialog.open.mockReturnValueOnce({
+        afterClosed: () => of([dialogResult()]),
+      });
+
+      component().editRow(row.id);
+
+      expect(component().permissions()[0]).toEqual(row);
+    });
+
+    describe('dates', () => {
+      const DATED = {
+        ...ace('powerusers', 'Write'),
+        begin: '2026-01-14T23:00:00.000Z',
+        end: '2026-02-19T23:00:00.000Z',
+      };
+      const withDated = {
+        ...SAVED_SEARCH,
+        contextParameters: {
+          ...(SAVED_SEARCH.contextParameters as object),
+          acls: [{ name: 'local', aces: [DATED] }],
+        },
+      } as unknown as NuxeoDocument;
+
+      it('writes the server’s own instants back when the time frame is untouched', async () => {
+        // A day written at CET midnight is held as 23:00 UTC the day before. Writing the rendered
+        // day back would re-anchor it at the server's midnight and move the entry.
+        await mount(withDated);
+        const row = component().permissions()[0];
+        dialog.open.mockReturnValueOnce({
+          afterClosed: () =>
+            of([
+              dialogResult({
+                userGroup: 'powerusers',
+                timeFrame: row.timeFrame,
+                begin: DATED.begin,
+                end: DATED.end,
+              }),
+            ]),
+        });
+
+        component().editRow(row.id);
+
+        expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
+          UID,
+          expect.objectContaining({
+            permission: 'Everything',
+            begin: '2026-01-14T23:00:00.000Z',
+            end: '2026-02-19T23:00:00.000Z',
+          }),
+        );
+      });
+
+      it('clears both dates when the user makes a dated entry permanent', async () => {
+        await mount(withDated);
+        const row = component().permissions()[0];
+        dialog.open.mockReturnValueOnce({
+          afterClosed: () => of([dialogResult({ userGroup: 'powerusers', right: 'Write' })]),
+        });
+
+        component().editRow(row.id);
+
+        expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
+          UID,
+          expect.objectContaining({ permission: 'Write', begin: null, end: null }),
+        );
+      });
+
+      it('writes the new days when the user changed the time frame', async () => {
+        await mount(withDated);
+        const row = component().permissions()[0];
+        dialog.open.mockReturnValueOnce({
+          afterClosed: () =>
+            of([
+              dialogResult({
+                userGroup: 'powerusers',
+                right: 'Write',
+                timeFrame: '2026-03-01 - 2026-03-31',
+                begin: '2026-03-01',
+                end: '2026-03-31',
+              }),
+            ]),
+        });
+
+        component().editRow(row.id);
+
+        expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
+          UID,
+          expect.objectContaining({ begin: '2026-03-01', end: '2026-03-31' }),
+        );
+      });
+    });
+  });
+
+  // `save()` is a public member of this component and stays for API compatibility, but nothing in
+  // the dialog calls it — the Update button persists one entry by id, as Web UI's does. These
+  // cover the method itself; the live path is the `submitting an edit` block above.
+  describe('save()', () => {
+    it('writes an untouched entry on the permission it already holds', async () => {
+      await mount(SAVED_SEARCH);
+      documents['replacePermission'] = vi.fn(() => of({}));
+
+      component().save();
+
+      // The legacy map turned `Write` into the broader `ReadWrite`; `WriteVersion` and every other
+      // permission outside its four keys fell through to `perm.right`, so only `Write` regressed.
+      const written = documents['replacePermission'].mock.calls.map(
+        (call) => (call[1] as { username: string; permission: string }).permission,
+      );
+      expect(written).toEqual(['Read', 'WriteVersion']);
+    });
+
+    // The map is kept only so a label left in state by an older build resolves to an identifier
+    // rather than reaching the server verbatim. Asserted so that claim is in code, not just prose.
+    it.each([
+      ['Edit', 'ReadWrite'],
+      ['Manage', 'Everything'],
+      ['Manage everything', 'Everything'],
+      ['Can collect', 'ReadCanCollect'],
+    ])('resolves the legacy label %s to %s', async (label, permission) => {
+      await mount(SAVED_SEARCH);
+      documents['replacePermission'] = vi.fn(() => of({}));
+      component().permissions.update((rows) =>
+        rows.map((row, i) => (i === 0 ? { ...row, right: label } : row)),
+      );
+
+      component().save();
+
+      expect(documents['replacePermission']).toHaveBeenCalledWith(
+        UID,
+        expect.objectContaining({ username: 'members', permission }),
+      );
+    });
+
+    // The guarantee above — "never rewrite a permission Nuxeo defines" — holds only while no key
+    // of the legacy label map is itself a permission identifier. `Write` was, which is how it came
+    // to be widened. This mirrors the panel's `NXS_STANDARD_PERMISSIONS`, which is internal to
+    // `satori-components`; exporting it to share it here would add a customer-visible export.
+    const GRANTABLE = [
+      'Read',
+      'ReadWrite',
+      'Everything',
+      'Write',
+      'ReadVersion',
+      'WriteVersion',
+      'AddChildren',
+      'RemoveChildren',
+      'Remove',
+      'Version',
+      'WriteSecurity',
+      'Unlock',
+      'SetRetention',
+      'UnsetRetention',
+    ];
+
+    it.each(GRANTABLE)('writes %s to the server unchanged', async (permission) => {
+      await mount(SAVED_SEARCH);
+      documents['replacePermission'] = vi.fn(() => of({}));
+      component().permissions.update((rows) =>
+        rows.map((row, i) => (i === 0 ? { ...row, right: permission } : row)),
+      );
+
+      component().save();
+
+      expect(documents['replacePermission']).toHaveBeenCalledWith(
+        UID,
+        expect.objectContaining({ username: 'members', permission }),
+      );
+    });
+
+    it('writes Write as Write rather than widening it to ReadWrite', async () => {
+      await mount(SAVED_SEARCH);
+      documents['replacePermission'] = vi.fn(() => of({}));
+      component().permissions.update((rows) =>
+        rows.map((row, i) => (i === 0 ? { ...row, right: 'Write' } : row)),
+      );
+
+      component().save();
+
+      expect(documents['replacePermission']).toHaveBeenCalledWith(
+        UID,
+        expect.objectContaining({ username: 'members', permission: 'Write' }),
+      );
+    });
+  });
+
+  describe('the permission column', () => {
+    /** The rendered Right cell of every local row. */
+    const rightCells = () => {
+      const host: HTMLElement = fixture.nativeElement;
+      const rows = host.querySelectorAll<HTMLTableRowElement>(
+        'table.permissions-table:not(.readonly-table) tbody tr',
+      );
+      return Array.from(rows).map((row) => row.cells[1]?.textContent?.trim() ?? '');
+    };
+
+    it('reads a Nuxeo identifier as its label, in the active locale', async () => {
+      await mount(SAVED_SEARCH);
+
+      // This table rendered `row.right` raw, so it alone showed `WriteVersion` in every locale.
+      expect(rightCells()).toEqual(['Read', 'Write versions']);
+    });
+
+    it('shows an unlabelled permission as its identifier, as Web UI does', async () => {
+      await mount(SAVED_SEARCH);
+      component().permissions.update((rows) =>
+        rows.map((row, i) => (i === 0 ? { ...row, right: 'CustomFromMarketplace' } : row)),
+      );
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(rightCells()[0]).toBe('CustomFromMarketplace');
+    });
+
+    it('carries an identifier, not a label, on the row it falls back to without a read', async () => {
+      // No ACL to read, so the dialog synthesises a row from the current user. It used to put the
+      // English "Manage everything" in `right`, which an edit then could not tell from an id.
+      await mount(new Error('no read'));
+
+      expect(component().permissions()).toEqual([expect.objectContaining({ right: 'Everything' })]);
+      // Still reads the same to a person, now through the translation.
+      expect(rightCells()).toEqual(['Manage everything']);
+    });
+
+    it('falls back to Read for a user who is not an administrator', async () => {
+      await mount(new Error('no read'), false);
+
+      expect(component().permissions()).toEqual([expect.objectContaining({ right: 'Read' })]);
+      expect(rightCells()).toEqual(['Read']);
+    });
   });
 
   it("hands the add and edit dialogs the saved search's own userVisiblePermissions", async () => {

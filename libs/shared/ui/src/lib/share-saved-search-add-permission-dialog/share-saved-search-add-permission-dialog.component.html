@@ -68,7 +68,11 @@
     <span class="field-label no-margin">{{
       'shared-ui.share-saved-search-add-permission-dialog.time-frame' | translate
     }}</span>
-    <mat-radio-group [(ngModel)]="timeFrameMode" class="time-frame-radios">
+    <mat-radio-group
+      [(ngModel)]="timeFrameMode"
+      (ngModelChange)="onTimeFrameModeChanged()"
+      class="time-frame-radios"
+    >
       <mat-radio-button value="permanent">{{
         'shared-ui.share-saved-search-add-permission-dialog.permanent' | translate
       }}</mat-radio-button>
@@ -80,16 +84,18 @@
 
   <div class="date-fields">
     <nxs-date-input
-      #beginDateControl="ngModel"
+      #fromModel="ngModel"
       [label]="'shared-ui.share-saved-search-add-permission-dialog.from' | translate"
       [(ngModel)]="beginDate"
+      (ngModelChange)="onBeginChanged()"
       [disabled]="timeFrameMode === 'permanent'"
     />
 
     <nxs-date-input
-      #endDateControl="ngModel"
+      #toModel="ngModel"
       [label]="'shared-ui.share-saved-search-add-permission-dialog.to' | translate"
       [(ngModel)]="endDate"
+      (ngModelChange)="onEndChanged()"
       [disabled]="timeFrameMode === 'permanent'"
     />
   </div>
@@ -125,29 +131,14 @@
   </button>
   <span class="spacer"></span>
   @if (isEditMode) {
-    <button
-      mat-flat-button
-      color="primary"
-      [disabled]="!datesValid() || isSubmitDisabled()"
-      (click)="create(false)"
-    >
+    <button mat-flat-button color="primary" [disabled]="isSubmitDisabled()" (click)="create(false)">
       {{ 'shared-ui.share-saved-search-add-permission-dialog.update' | translate }}
     </button>
   } @else {
-    <button
-      mat-flat-button
-      color="primary"
-      [disabled]="!datesValid() || isSubmitDisabled()"
-      (click)="create(true)"
-    >
+    <button mat-flat-button color="primary" [disabled]="isSubmitDisabled()" (click)="create(true)">
       {{ 'shared-ui.share-saved-search-add-permission-dialog.create-and-add-another' | translate }}
     </button>
-    <button
-      mat-flat-button
-      color="primary"
-      [disabled]="!datesValid() || isSubmitDisabled()"
-      (click)="create(false)"
-    >
+    <button mat-flat-button color="primary" [disabled]="isSubmitDisabled()" (click)="create(false)">
       {{ 'shared-ui.share-saved-search-add-permission-dialog.create' | translate }}
     </button>
   }
