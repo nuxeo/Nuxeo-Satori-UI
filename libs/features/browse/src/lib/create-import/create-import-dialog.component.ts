@@ -20,7 +20,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
@@ -188,7 +187,6 @@ const DIALOG_SIZE = {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatChipsModule,
     MatDatepickerModule,
     MatProgressBarModule,
     MatSlideToggleModule,

@@ -110,12 +110,12 @@ gate, also in CI):
 | `PLATFORM_ENTRY_POINTS` in `libs/platform/src/index.ts` lists exactly the subpaths a `libs/platform/<subpath>/ng-package.json` publishes                                                                                                                                                                                                                                                                                                                                          | `checkPlatformEntryPointsListed`           |
 | Every Storybook `<Source>` code sample under `libs/` and `apps/` parses and is formatted as Prettier formats its language, and no inline sample has an indented continuation line, which MDX strips                                                                                                                                                                                                                                                                               | `checkMdxCodeSamplesFormatted`             |
 
-**Satori if available, Material otherwise — by ID** (plan section 3). Nine primitives overlap with
+**Satori if available, Material otherwise — by ID** (plan section 3). Eleven primitives overlap with
 Satori: avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs, the action bar and the
 card. `/components` implements each on Material — the tabs as `nxs-tabs` and the action bar as
 `nxs-document-toolbar` — and `provideNxsComponents()` registers them as `nxs.primitives.*`
 (`NXS_PRIMITIVE_IDS`). `@nuxeo/satori-platform/components-satori` — its own project,
-`libs/shared/satori-components-satori`, same tags — re-registers all but the card on Satori with
+`libs/shared/satori-components-satori`, same tags — re-registers all but `card`, `banner` and `chipSet` on Satori with
 `provideNxsSatoriComponents()`; until Satori's interactive card is wrapped, `nxs.primitives.card`
 renders the Material `nxs-card` either way. Both go through
 `provideSatoriExtensions`, so later wins: the app lists both in that order, and an application

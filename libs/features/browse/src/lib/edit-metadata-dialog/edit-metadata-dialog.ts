@@ -16,7 +16,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 
 import {
@@ -71,7 +70,6 @@ export interface EditMetadataDialogData {
     MatSelectModule,
     MatDatepickerModule,
     MatProgressSpinnerModule,
-    MatChipsModule,
     MatIconModule,
   ],
   templateUrl: './edit-metadata-dialog.html',

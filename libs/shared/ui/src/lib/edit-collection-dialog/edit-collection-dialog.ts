@@ -17,7 +17,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { forkJoin } from 'rxjs';
 
@@ -67,7 +66,6 @@ export interface EditCollectionDialogData {
     MatButtonModule,
     MatDatepickerModule,
     MatProgressSpinnerModule,
-    MatChipsModule,
     MatIconModule,
   ],
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
