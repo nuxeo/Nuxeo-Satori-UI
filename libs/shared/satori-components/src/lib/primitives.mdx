@@ -11,15 +11,17 @@ tag, the status tag, the rich tooltip, the error state, the tabs and the documen
 bar. Each one is registered under an ID. A screen that renders the ID, rather than the component,
 shows whichever version the application registered: Satori's, when
 `@nuxeo/satori-platform/components-satori` is installed and provided, or the built-in version
-otherwise.
+otherwise. The card is registered the same way, but nothing wraps Satori's interactive card yet, so
+it renders the built-in version either way for now.
 
 ## Key features
 
-- **Eight IDs, one set of inputs each.** Both versions of an ID take the same inputs, so a screen
-  passes the same values whichever is registered.
+- **One set of inputs per ID.** Every version of an ID takes the same inputs, so a screen passes
+  the same values whichever is registered.
 - **Callbacks and templates are inputs.** A screen renders an ID through `lib-extension-outlet`, which
   sets inputs and nothing else, so the tabs take their body template and selection callback, the
-  action bar its action callback, and the error state its retry callback, as inputs.
+  action bar its action callback, the error state its retry callback, and the card its open and
+  selection callbacks and its templates, as inputs.
 - **Satori when it is available.** The choice is made by the providers your application lists, not
   when the library is built and not by checking at run time.
 - **Works without Satori.** Without access to GitHub Packages, leave Satori out: every ID still
@@ -29,7 +31,8 @@ otherwise.
 
 ## Demo showcase
 
-Every ID, rendered through `lib-extension-outlet` as a screen renders them.
+The IDs with a Satori version, rendered through `lib-extension-outlet` as a screen renders them. The
+card, which has none yet, is shown by ID on its own page.
 
 <Canvas of={ByIdStories.MaterialRegistration} />
 
@@ -158,6 +161,20 @@ Every ID, rendered through `lib-extension-outlet` as a screen renders them.
       <td>
         Action-bar buttons (<code>satActionBarButton</code>)
       </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.card</code>
+      </td>
+      <td>
+        <code>heading</code>, <code>subheading</code>, <code>selected</code>,
+        <code>selectionLabel</code>, <code>selectionHandler</code>, <code>openHandler</code>,
+        <code>media</code>, <code>headerAction</code>, <code>actions</code>
+      </td>
+      <td>
+        <code>NxsCardInputs</code>
+      </td>
+      <td>None yet: Satori's interactive card is not wrapped</td>
     </tr>
   </tbody>
 </table>

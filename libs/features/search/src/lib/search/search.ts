@@ -8,7 +8,11 @@ import {
   DestroyRef,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { DescriptorLabelPipe, descriptorLabel } from '@nuxeo/satori-platform/extensions';
+import {
+  DescriptorLabelPipe,
+  ExtensionOutletComponent,
+  descriptorLabel,
+} from '@nuxeo/satori-platform/extensions';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -52,6 +56,8 @@ import {
 } from '@agentic-ui/shared/ai-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
+  NXS_PRIMITIVE_IDS,
+  NxsCardComponent,
   NxsColumnPickerComponent,
   NxsErrorStateComponent,
   NxsFavoriteToggleComponent,
@@ -64,6 +70,7 @@ import {
   type NxsErrorStatus,
   type NxsPickableColumn,
   NxsToastService,
+  nxsVisibleText,
   provideNxsToast,
 } from '@nuxeo/satori-platform/components';
 
@@ -193,6 +200,8 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
   selector: 'lib-search',
   standalone: true,
   imports: [
+    ExtensionOutletComponent,
+    NxsCardComponent,
     NxsColumnPickerComponent,
     NxsErrorStateComponent,
     NxsFavoriteToggleComponent,
@@ -395,6 +404,26 @@ export class SearchComponent {
   });
 
   readonly displayResults = computed(() => this.filteredResults());
+
+  /** Each card in the grid view is rendered by ID, so a component registered under it replaces them. */
+  readonly cardId = NXS_PRIMITIVE_IDS.card;
+
+  /**
+   * The grid view's cards, each with its own open and selection callbacks.
+   *
+   * The outlet that renders a card by ID binds no outputs, so the callbacks reach the card as
+   * inputs. They are made here, once per result set, rather than in the template, so a card's inputs
+   * keep their identity from one change detection to the next and the outlet does not re-set them.
+   */
+  readonly gridCards = computed(() =>
+    this.displayResults().map((row) => ({
+      row,
+      // Never blank, so the card's controls are never unnamed: a result with no title by its ID.
+      name: nxsVisibleText(row.name) || row.id,
+      open: () => this.openDocument(row.id),
+      select: () => this.toggleSelection(row.id),
+    })),
+  );
 
   readonly sortedResults = computed(() => {
     const rows = [...this.displayResults()];
