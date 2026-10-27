@@ -20,12 +20,13 @@ import { spawnToolSync } from './package-command.mjs';
  *                    twice while gates were added.
  *   --base <ref>     git base for affected calculation (default origin/main)
  *   --tail <n>       lines of failing output to show (default 40)
+ *   --require-complete  exit 1 unless the verdict is `pass`: every gate ran and passed
  *
  * Examples:
  *   node scripts/beta-harness/verify-gate.mjs --gates guardrails,lint
  *   node scripts/beta-harness/verify-gate.mjs --phase phase-1-config --base main
  *
- * Exit code is 1 if any gate failed.
+ * Exit code is 1 if any gate failed, or with --require-complete if any did not run.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -608,6 +609,13 @@ await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 console.log('');
 for (const line of summaryLines) console.log(line);
 console.log(`\nreport   ${reportPath}`);
+
+// `--require-complete`, for CI that claims the full gate: a green exit must mean every gate ran
+// and passed, so `pass-incomplete` (a gate NOT RUN) and `pass-partial` fail as well.
+if (!anyFailed && args.has('require-complete') && verdict !== 'pass') {
+  console.error(`verdict ${verdict}: --require-complete accepts only every gate run and green`);
+  process.exit(1);
+}
 
 process.exit(anyFailed ? 1 : 0);
 

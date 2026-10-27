@@ -111,6 +111,28 @@ control('the real runner counts a skipped code-scanning gate as NOT RUN, not gre
   );
 });
 
+control('--require-complete fails the same run instead of exiting 0', () => {
+  const run = spawnSync(
+    process.execPath,
+    [
+      join(here, 'verify-gate.mjs'),
+      '--gates',
+      'code-scanning',
+      '--phase',
+      'selftest-require-complete',
+      '--require-complete',
+    ],
+    { cwd: repoRoot, env, encoding: 'utf8' },
+  );
+  expect(run.status === 1, `runner exited ${run.status}, expected 1`);
+  expect(
+    /verdict pass-[a-z]+: --require-complete accepts only every gate run and green/.test(
+      run.stderr,
+    ),
+    `stderr does not name the verdict it refused:\n${run.stderr.slice(-400)}`,
+  );
+});
+
 control('the real runner carries on after a gate that did not run', () => {
   const run = spawnSync(
     process.execPath,
