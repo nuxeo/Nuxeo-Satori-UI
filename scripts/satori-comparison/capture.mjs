@@ -535,6 +535,15 @@ try {
         let opened = null;
         if (c.captured === 'Opened from the keyboard')
           opened = await openFromKeyboard(page, h.selector);
+        // Measured and cropped in viewport coordinates, so a component below the fold has to be
+        // scrolled to first. The "By registered ID" story is a grid of every primitive and is
+        // taller than any viewport: without this, its lower entries produced a zero-height clip
+        // and the run reported a failed capture for a component that had rendered perfectly well.
+        await page
+          .locator(h.selector)
+          .first()
+          .scrollIntoViewIfNeeded()
+          .catch(() => undefined); // not every selector is a single element; the box check below reports it
         const seen = await inspect(page, h.selector);
         await isolate(page, h.selector);
         const file = join(OUT, 'raw', `${slug}-${side}.png`);
@@ -650,6 +659,8 @@ try {
       'nxs-error-state',
       'nxs-tabs',
       'nxs-document-toolbar',
+      'nxs-card',
+      'nxs-empty-state',
     ],
     with: [
       'nxs-satori-avatar',
@@ -660,6 +671,8 @@ try {
       'nxs-satori-error-state',
       'nxs-satori-tabs',
       'nxs-satori-action-bar',
+      'nxs-satori-card',
+      'nxs-satori-empty-state',
     ],
   };
   const primitiveCount = PRIMITIVE_HOSTS.with.length;

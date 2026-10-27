@@ -5,6 +5,7 @@ import { NxsAvatarComponent } from './avatar/avatar.component';
 import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
 import { NxsCardComponent } from './card/card.component';
 import { NxsDocumentToolbarComponent } from './document-toolbar/document-toolbar.component';
+import { NxsEmptyStateComponent } from './empty-state/empty-state.component';
 import { NxsErrorStateComponent } from './error-state/error-state.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { NxsRichTooltipComponent } from './rich-tooltip/rich-tooltip.component';
@@ -39,6 +40,7 @@ export function provideNxsComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.tabs]: NxsTabsComponent,
       [NXS_PRIMITIVE_IDS.actionBar]: NxsDocumentToolbarComponent,
       [NXS_PRIMITIVE_IDS.card]: NxsCardComponent,
+      [NXS_PRIMITIVE_IDS.emptyState]: NxsEmptyStateComponent,
       // satori:register:components — `satori-component` inserts above this line
     },
   });

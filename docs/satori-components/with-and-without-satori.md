@@ -17,7 +17,7 @@ On GitHub they show as missing images, by design.
 
 ## Summary
 
-The `nxs-` library renders the same pages whether or not a customer has access to Satori. Nine primitives — avatar, tag, status tag, breadcrumbs, rich tooltip, error state, tabs, the document toolbar's action bar and the card — exist twice, under one registered ID each: a built-in version in `@nuxeo/satori-platform/components`, and a thin wrapper around Satori's own component in `@nuxeo/satori-platform/components-satori`. Every other component is the same component in both cases; only the theme differs.
+The `nxs-` library renders the same pages whether or not a customer has access to Satori. Ten primitives — avatar, tag, status tag, breadcrumbs, rich tooltip, error state, tabs, the document toolbar's action bar, the card and the empty state — exist twice, under one registered ID each: a built-in version in `@nuxeo/satori-platform/components`, and a thin wrapper around Satori's own component in `@nuxeo/satori-platform/components-satori`. Every other component is the same component in both cases; only the theme differs.
 
 > **Note:** the library is not published yet; this page describes the configuration it is built to support.
 
@@ -59,7 +59,7 @@ Leaving out `provideNxsSatoriComponents()` gives the built-in versions; nothing 
 
 ## Side by side
 
-Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The nine primitives with a Satori variant render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
+Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The ten primitives with a Satori variant render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
 
 ### Avatar
 
@@ -198,16 +198,18 @@ The same note in both; the theme sets its colours and type.
 
 ### Empty state
 
-| Field           | Value                                       |
-| --------------- | ------------------------------------------- |
-| Component       | `NxsEmptyStateComponent`                    |
-| Registered ID   | —                                           |
-| With Satori     | Same component; theme only                  |
-| Storybook story | `states-empty-state--with-projected-action` |
+| Field           | Value                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Component       | `NxsEmptyStateComponent`                                                                                             |
+| Registered ID   | `nxs.primitives.emptyState`                                                                                          |
+| With Satori     | Satori's own component: `NxsSatoriEmptyStateComponent` renders `<sat-empty-state>`                                   |
+| Storybook story | `primitives-by-registered-id--material-registration`; with Satori `primitives-by-registered-id--satori-registration` |
 
-![Empty state: without Satori on the left, with Satori on the right](empty-state-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+![Empty state: without Satori on the left, with Satori on the right](empty-state-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same inputs.')
 
-The same icon, heading, message and projected action in both; the theme sets the type, the colours and the button's style.
+The same icon, heading, message and action in both, from the same inputs. Satori centres them in a column with its own measure, so the two differ in layout because the components do. The emptiness is announced once either way: the built-in component carries `role="status"` on itself, and Satori's `sat-empty-state` carries it, so the wrapper adds no second region.
+
+It is registered under an ID, so a customer can replace it. Nothing we ship renders it by ID yet — the document list and the document history write `<nxs-empty-state>` into their own templates — so replacing the ID changes what your own hosts show, not those two screens.
 
 ### Error state
 
@@ -732,13 +734,13 @@ What a click does is the same in both: the heading opens the item, so does a cli
 
 ## Full screenshots
 
-Storybook's "Primitives/By registered ID" story renders all nine registered IDs that have a Satori variant — avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs, action bar and card — with one template and the same inputs.
+Storybook's "Primitives/By registered ID" story renders all ten registered IDs that have a Satori variant — avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs, action bar, card and empty state — with one template and the same inputs.
 
-![The nine primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
+![The ten primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
 
-![The nine primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
+![The ten primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
 
-![The nine primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
+![The ten primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
 
 ## Detailed differences
 
@@ -789,7 +791,7 @@ The components in the library today:
 | Thumbnail                       | —                                                                                                                       | Same component; theme only   |
 | Folder header                   | —                                                                                                                       | Same component; theme only   |
 | Domain hint                     | —                                                                                                                       | Same component; theme only   |
-| Empty state                     | —                                                                                                                       | Same component; theme only   |
+| Empty state                     | `nxs.primitives.emptyState`                                                                                             | Yes — Satori's own component |
 | Error state                     | `nxs.primitives.errorState`                                                                                             | Yes — Satori's own component |
 | Spinner                         | —                                                                                                                       | Same component; theme only   |
 | Toast                           | —                                                                                                                       | Same component; theme only   |

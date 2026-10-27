@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-137 exported symbol(s).
+138 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -205,6 +205,7 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly tabs: "nxs.primitives.tabs";
     readonly actionBar: "nxs.primitives.actionBar";
     readonly card: "nxs.primitives.card";
+    readonly emptyState: "nxs.primitives.emptyState";
     }>;
 }
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
@@ -1237,11 +1238,12 @@ interface NxsEditorSection {
     }
 }
 type NxsEditorValues = Readonly<Record<string, unknown>>;
-class NxsEmptyStateComponent {
+class NxsEmptyStateComponent implements NxsEmptyStateInputs {
     readonly heading: InputSignal<string>;
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
     readonly message: InputSignal<string>;
     readonly icon: InputSignal<string>;
+    readonly actions: InputSignal<TemplateRef<unknown> | null>;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsEmptyStateComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsEmptyStateComponent, "nxs-empty-state", never, {
     "heading": {
@@ -1264,7 +1266,20 @@ class NxsEmptyStateComponent {
     "required": false;
     "isSignal": true;
     };
+    "actions": {
+    "alias": "actions";
+    "required": false;
+    "isSignal": true;
+    };
     }, {}, never, ["*"], true, never>;
+    }
+}
+interface NxsEmptyStateInputs {
+    readonly heading: InputSignal<string>;
+    readonly headingLevel: InputSignal<NxsHeadingLevel>;
+    readonly message: InputSignal<string>;
+    readonly icon: InputSignal<string>;
+    readonly actions: InputSignal<TemplateRef<unknown> | null>;
     }
 }
 class NxsErrorStateComponent implements NxsErrorStateInputs {

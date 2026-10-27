@@ -17,6 +17,7 @@ import {
   NxsBreadcrumbsComponent,
   NxsCardComponent,
   NxsDocumentToolbarComponent,
+  NxsEmptyStateComponent,
   NxsErrorStateComponent,
   NxsRichTooltipComponent,
   NxsStatusTagComponent,
@@ -34,6 +35,7 @@ import { NxsSatoriActionBarComponent } from './action-bar/satori-action-bar.comp
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
 import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.component';
 import { NxsSatoriCardComponent } from './card/satori-card.component';
+import { NxsSatoriEmptyStateComponent } from './empty-state/satori-empty-state.component';
 import { NxsSatoriErrorStateComponent } from './error-state/satori-error-state.component';
 import { provideNxsSatoriComponents } from './provide-nxs-satori-components';
 import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-tooltip.component';
@@ -51,11 +53,12 @@ const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
   [NXS_PRIMITIVE_IDS.tabs, NxsTabsComponent, NxsSatoriTabsComponent],
   [NXS_PRIMITIVE_IDS.actionBar, NxsDocumentToolbarComponent, NxsSatoriActionBarComponent],
   [NXS_PRIMITIVE_IDS.card, NxsCardComponent, NxsSatoriCardComponent],
+  [NXS_PRIMITIVE_IDS.emptyState, NxsEmptyStateComponent, NxsSatoriEmptyStateComponent],
 ];
 
 /**
  * Primitives no Satori component re-registers, so they keep their Material implementation with or
- * without `provideNxsSatoriComponents()`. Empty since NXSAT-675 wrapped Satori's interactive card:
+ * without `provideNxsSatoriComponents()`. Empty since NXSAT-675 wrapped Satori's interactive card and empty state:
  * every ID is paired. An ID added here needs its reason beside it, because the list is what tells
  * the check below that Material-only was the intention and not an omission.
  */
@@ -635,5 +638,147 @@ describe('the Satori card, rendered by nxs.primitives.card', () => {
   it('hides a blank subheading, as Material does', async () => {
     const { host } = await renderCard({ subheading: '  ' });
     expect(host.querySelector('[satInteractiveCardSubtitle]')).toBeNull();
+  });
+});
+
+/**
+ * The empty state is announced, so the thing worth asserting is the live region rather than any
+ * particular element: the Material implementation puts `role="status"` on its own host, Satori's
+ * `sat-empty-state` carries it itself, and the wrapper's host deliberately does not add a second.
+ * Both must end up with exactly one.
+ */
+describe('the Satori empty state, rendered by nxs.primitives.emptyState', () => {
+  @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
+    standalone: true,
+    imports: [ExtensionOutletComponent],
+    template: `<lib-extension-outlet [componentId]="id" [componentInputs]="inputs" />`,
+  })
+  class EmptyStateOutletHost {
+    id = NXS_PRIMITIVE_IDS.emptyState as string;
+    inputs: Record<string, unknown> = {};
+  }
+
+  async function renderEmptyState(
+    inputs: Record<string, unknown>,
+    satori = true,
+  ): Promise<HTMLElement> {
+    TestBed.configureTestingModule({
+      imports: [EmptyStateOutletHost],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([]),
+        provideSatori(),
+        provideNxsComponents(),
+        ...(satori ? [provideNxsSatoriComponents()] : []),
+      ],
+    });
+    const fixture = TestBed.createComponent(EmptyStateOutletHost);
+    fixture.componentInstance.inputs = inputs;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  /** Every `role="status"` no `aria-hidden` subtree hides. */
+  const liveRegions = (root: HTMLElement) =>
+    Array.from(root.querySelectorAll('[role="status"]')).filter(
+      (region) => !region.closest('[aria-hidden="true"]'),
+    );
+
+  it("renders Satori's empty state, and no Material one", async () => {
+    const host = await renderEmptyState({ heading: 'No documents here' });
+    expect(host.querySelector('nxs-satori-empty-state sat-empty-state')).not.toBeNull();
+    expect(host.querySelector('nxs-empty-state')).toBeNull();
+  });
+
+  it('announces the emptiness through exactly one live region', async () => {
+    const host = await renderEmptyState({ heading: 'No documents here' });
+    const regions = liveRegions(host);
+    expect(regions).toHaveLength(1);
+    expect(regions[0].tagName.toLowerCase()).toBe('sat-empty-state');
+    expect(regions[0].textContent).toContain('No documents here');
+  });
+
+  it('announces through exactly one live region on Material too, which is the parity that matters', async () => {
+    const host = await renderEmptyState({ heading: 'No documents here' }, false);
+    const regions = liveRegions(host);
+    expect(regions).toHaveLength(1);
+    expect(regions[0].tagName.toLowerCase()).toBe('nxs-empty-state');
+  });
+
+  it('renders the heading at the level the host asked for', async () => {
+    const host = await renderEmptyState({ heading: 'No results', headingLevel: 3 });
+    expect(host.querySelector('h3[satEmptyStateHeadline]')?.textContent?.trim()).toBe('No results');
+    expect(host.querySelector('h2[satEmptyStateHeadline]')).toBeNull();
+  });
+
+  it('defaults the heading to level 2, as Material does', async () => {
+    const host = await renderEmptyState({ heading: 'No results' });
+    expect(host.querySelector('h2[satEmptyStateHeadline]')).not.toBeNull();
+  });
+
+  it('shows the message as the description', async () => {
+    const host = await renderEmptyState({
+      heading: 'No documents here',
+      message: 'Drag a file in to get started.',
+    });
+    expect(host.querySelector('[satEmptyStateDescription]')?.textContent?.trim()).toBe(
+      'Drag a file in to get started.',
+    );
+  });
+
+  it('omits the description when there is no message', async () => {
+    const host = await renderEmptyState({ heading: 'No documents here' });
+    expect(host.querySelector('[satEmptyStateDescription]')).toBeNull();
+  });
+
+  // Satori wraps its illustration slot in `aria-hidden="true"` itself, so the icon is decorative
+  // without the wrapper saying so — the same as Material, which marks it `aria-hidden` directly.
+  it('puts the icon in the illustration slot, hidden from assistive technology', async () => {
+    const host = await renderEmptyState({ heading: 'No documents here', icon: 'folder_open' });
+    const icon = host.querySelector('[satEmptyStateIllustration]');
+    expect(icon).not.toBeNull();
+    expect(icon?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(
+      host.querySelector('[satEmptyStateIllustration]')?.getAttribute('data-mat-icon-name'),
+    ).toBe('folder_open');
+  });
+
+  it('renders the actions template the outlet passes, since the outlet projects no content', async () => {
+    @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
+      standalone: true,
+      imports: [ExtensionOutletComponent],
+      template: `<ng-template #actions
+          ><button class="probe-create" type="button">Create folder</button></ng-template
+        >
+        <lib-extension-outlet
+          [componentId]="id"
+          [componentInputs]="{ heading: 'No documents here', actions }"
+        />`,
+    })
+    class EmptyStateHostComponent {
+      readonly id = NXS_PRIMITIVE_IDS.emptyState;
+    }
+
+    TestBed.configureTestingModule({
+      imports: [EmptyStateHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([]),
+        provideSatori(),
+        provideNxsComponents(),
+        provideNxsSatoriComponents(),
+      ],
+    });
+    const fixture = TestBed.createComponent(EmptyStateHostComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[satEmptyStateAction] .probe-create')).not.toBeNull();
   });
 });

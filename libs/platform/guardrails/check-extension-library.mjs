@@ -371,6 +371,7 @@ const PRIMITIVE_CONTRACTS = {
   tabs: 'NxsTabsInputs',
   actionBar: 'NxsActionBarInputs',
   card: 'NxsCardInputs',
+  emptyState: 'NxsEmptyStateInputs',
 };
 
 const COMPONENTS_KEY = String.raw`(?:\bcomponents|'components'|"components")\s*:\s*`;

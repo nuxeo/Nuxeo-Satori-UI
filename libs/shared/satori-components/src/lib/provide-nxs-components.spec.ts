@@ -18,6 +18,7 @@ import { NxsAvatarComponent } from './avatar/avatar.component';
 import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
 import { NxsCardComponent } from './card/card.component';
 import { NxsDocumentToolbarComponent } from './document-toolbar/document-toolbar.component';
+import { NxsEmptyStateComponent } from './empty-state/empty-state.component';
 import { NxsErrorStateComponent } from './error-state/error-state.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { provideNxsComponents } from './provide-nxs-components';
@@ -51,7 +52,8 @@ describe('provideNxsComponents', () => {
     expect(components.peek(NXS_PRIMITIVE_IDS.tabs)).toBe(NxsTabsComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.actionBar)).toBe(NxsDocumentToolbarComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.card)).toBe(NxsCardComponent);
-    expect(Object.keys(NXS_PRIMITIVE_IDS)).toHaveLength(9);
+    expect(components.peek(NXS_PRIMITIVE_IDS.emptyState)).toBe(NxsEmptyStateComponent);
+    expect(Object.keys(NXS_PRIMITIVE_IDS)).toHaveLength(10);
   });
 
   it('registers nothing under those IDs when it is not provided', () => {
