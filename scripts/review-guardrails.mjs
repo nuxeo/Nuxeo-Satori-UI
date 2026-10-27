@@ -9600,6 +9600,22 @@ const SATORI_ADOPTION_REGISTRY =
 const PROVIDER_FUNCTION = 'provideNxsSatoriComponents';
 
 /**
+ * A property name's value, however it is spelled: `components`, `'components'`, `["components"]`.
+ *
+ * `undefined` when the name is not statically a string — a computed identifier or expression.
+ * Comparing `getText()` instead kept the quotes, so every quoted key silently failed to match.
+ */
+function staticPropertyName(name) {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)) {
+    return name.expression.text;
+  }
+  return undefined;
+}
+
+/**
  * The only two trees allowed to name a Satori entry point for an adopted pattern.
  *
  * `/satori-components` holds the Material implementation of every primitive and
@@ -9613,6 +9629,14 @@ const SATORI_COMPONENT_LIBS = [
 ];
 
 const SATORI_PACKAGE = '@hylandsoftware/satori-ui';
+
+/**
+ * Import forms that name no symbol. In the baseline's place they would be a blanket exemption, so
+ * none is listed and each fails closed.
+ */
+const SATORI_IMPORT_NAMESPACE = '* (namespace import)';
+const SATORI_IMPORT_SIDE_EFFECT = '(side-effect import)';
+const SATORI_IMPORT_DYNAMIC = '(dynamic import)';
 
 /**
  * Anchored at both ends and matched against a specifier, never against source text.
@@ -9634,41 +9658,67 @@ const ADOPTION_SCAN_SKIP = /(\.spec\.ts|\.stories\.ts|test-setup\.ts|\/__mocks__
  * directly. Failing them here would have made the gate red on arrival, which is how a gate gets
  * demoted to a warning and then deleted.
  *
- * The list may only shrink. An entry whose file no longer imports the entry point is reported as
- * stale, so migrating a site and leaving its exemption behind fails too — an allowlist nothing
- * prunes is the thing this repo has twice found rotting. A baselined path that does not exist at
- * all is ignored rather than reported: the guardrail runs against fixture trees in
- * `review-guardrails.selftest.mjs` that contain none of these files, and a missing file imports
- * nothing and so bypasses nothing.
+ * Exempt per symbol, not per file. Listing only the file exempted every *future* import from that
+ * entry point there too: adding `SatStatusTag` beside trash's `SatTagModule` collapsed into the
+ * same exempt pair and passed. The legacy symbols are recorded, under the names the module
+ * exports, so a site keeps exactly the imports it already had and a new one fails.
  *
- * @type {Map<string, Set<string>>}
+ * The list may only shrink, in both directions. A file that no longer imports the entry point is
+ * reported as stale, and so is a listed symbol it no longer imports — migrating a site and
+ * leaving its exemption behind fails too. An allowlist nothing prunes is the thing this repo has
+ * twice found rotting. A baselined path that does not exist at all is ignored rather than
+ * reported: the guardrail runs against fixture trees in `review-guardrails.selftest.mjs` that
+ * contain none of these files, and a missing file imports nothing and so bypasses nothing.
+ *
+ * @type {Map<string, Map<string, Set<string>>>}
  */
 const ADOPTION_BASELINE = new Map([
   [
     '@hylandsoftware/satori-ui/avatar',
-    new Set([
-      'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
-      'apps/nuxeo-ui/src/app/shell/app-shell.component.ts',
-      'libs/features/browse/src/lib/browse/browse.ts',
-      'libs/features/collections/src/lib/collection-detail/collection-detail.ts',
-      'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+    new Map([
+      [
+        'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
+        new Set(['SatAvatarModule', 'SatAvatarCategory']),
+      ],
+      ['apps/nuxeo-ui/src/app/shell/app-shell.component.ts', new Set(['SatAvatarModule'])],
+      ['libs/features/browse/src/lib/browse/browse.ts', new Set(['SatAvatarModule'])],
+      [
+        'libs/features/collections/src/lib/collection-detail/collection-detail.ts',
+        new Set(['SatAvatarModule']),
+      ],
+      [
+        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+        new Set(['SatAvatarModule']),
+      ],
     ]),
   ],
   [
     '@hylandsoftware/satori-ui/breadcrumbs',
-    new Set([
-      'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
-      'libs/features/tasks/src/lib/tasks-page/tasks-page.component.ts',
+    new Map([
+      [
+        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+        new Set(['SatBreadcrumbs', 'SatBreadcrumbsItem']),
+      ],
+      [
+        'libs/features/tasks/src/lib/tasks-page/tasks-page.component.ts',
+        new Set(['SatBreadcrumbs', 'SatBreadcrumbsItem']),
+      ],
     ]),
   ],
   [
     '@hylandsoftware/satori-ui/tag',
-    new Set([
-      'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
-      'libs/features/browse/src/lib/browse/browse.ts',
-      'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
-      'libs/features/tasks/src/lib/task-detail/task-detail.component.ts',
-      'libs/features/trash/src/lib/trash/trash.component.ts',
+    new Map([
+      ['apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts', new Set(['SatTagModule'])],
+      ['libs/features/browse/src/lib/browse/browse.ts', new Set(['SatTagModule'])],
+      [
+        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+        new Set(['SatTagModule', 'SatTagCategory']),
+      ],
+      [
+        'libs/features/tasks/src/lib/task-detail/task-detail.component.ts',
+        new Set(['SatTagModule']),
+      ],
+      ['libs/features/trash/src/lib/trash/trash.component.ts', new Set(['SatTagModule'])],
     ]),
   ],
 ]);
@@ -9688,26 +9738,62 @@ const ADOPTION_BASELINE = new Map([
  * that last one work. A specifier built by concatenation is not a literal and is not read; nor is
  * `require()`, which nothing in this repository uses for these packages.
  *
- * @returns {Map<string, number>} entry point name -> 1-based line of its first import
+ * The symbols come with it, under the names the module exports, so `ADOPTION_BASELINE` can exempt
+ * the legacy imports of a site without exempting the site forever. A local rename does not change
+ * them. Three import forms name nothing, and each gets a sentinel rather than an empty set: a
+ * namespace import reaches everything, a side-effect import names nothing, and a dynamic import
+ * is resolved at runtime. None is in the baseline, so each fails closed if one appears.
+ *
+ * @returns {Map<string, { line: number, symbols: Set<string> }>} entry point -> first line, symbols
  */
 function satoriEntryPointsIn(path, body) {
   const source = ts.createSourceFile(path, body, ts.ScriptTarget.Latest, true);
   const found = new Map();
 
-  const record = (node) => {
+  const record = (node, symbols) => {
     if (node === undefined || !ts.isStringLiteralLike(node)) return;
     const entry = SATORI_ENTRY_POINT.exec(node.text)?.[1];
-    if (entry === undefined || found.has(entry)) return;
-    found.set(entry, source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1);
+    if (entry === undefined) return;
+    const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+    const existing = found.get(entry);
+    if (existing === undefined) {
+      found.set(entry, { line, symbols: new Set(symbols) });
+      return;
+    }
+    for (const symbol of symbols) existing.symbols.add(symbol);
+  };
+
+  const importedNames = (clause) => {
+    if (clause === undefined) return [SATORI_IMPORT_SIDE_EFFECT];
+    const names = clause.name === undefined ? [] : [clause.name.text];
+    const bindings = clause.namedBindings;
+    if (bindings !== undefined && ts.isNamedImports(bindings)) {
+      // The exported name, not the local one: `{ A as B }` is an import of `A`.
+      for (const element of bindings.elements) {
+        names.push((element.propertyName ?? element.name).text);
+      }
+    } else if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+      names.push(SATORI_IMPORT_NAMESPACE);
+    }
+    return names.length > 0 ? names : [SATORI_IMPORT_SIDE_EFFECT];
   };
 
   const visit = (node) => {
-    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-      record(node.moduleSpecifier);
+    if (ts.isImportDeclaration(node)) {
+      record(node.moduleSpecifier, importedNames(node.importClause));
+    } else if (ts.isExportDeclaration(node)) {
+      const bindings = node.exportClause;
+      const names =
+        bindings !== undefined && ts.isNamedExports(bindings)
+          ? bindings.elements.map((element) => (element.propertyName ?? element.name).text)
+          : [SATORI_IMPORT_NAMESPACE];
+      record(node.moduleSpecifier, names);
     } else if (ts.isImportTypeNode(node)) {
-      record(ts.isLiteralTypeNode(node.argument) ? node.argument.literal : undefined);
+      record(ts.isLiteralTypeNode(node.argument) ? node.argument.literal : undefined, [
+        SATORI_IMPORT_DYNAMIC,
+      ]);
     } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-      record(node.arguments[0]);
+      record(node.arguments[0], [SATORI_IMPORT_DYNAMIC]);
     }
     ts.forEachChild(node, visit);
   };
@@ -9816,23 +9902,69 @@ function componentsContributionsIn(source) {
   );
   if (provider === undefined) return { properties: undefined, problems: [] };
 
-  const calls = [];
+  const isProvideCall = (node) =>
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'provideSatoriExtensions';
+
+  const all = [];
   const findCalls = (node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'provideSatoriExtensions'
-    ) {
-      calls.push(node);
-    }
+    if (isProvideCall(node)) all.push(node);
     ts.forEachChild(node, findCalls);
   };
   findCalls(provider);
-  if (calls.length === 0) return { properties: undefined, problems: [] };
+  if (all.length === 0) return { properties: undefined, problems: [] };
+
+  // `provideSatoriExtensions` returns providers; it does not install them. A call whose result is
+  // thrown away registers nothing, so reading every call in source order was wrong in the one way
+  // that matters: saving the real provider, then making a discarded call that maps `richTooltip`
+  // to the avatar wrapper, and returning the saved one, let the discarded call win here and left
+  // rich-tooltip unguarded. Only what the provider returns is installed.
+  const saved = new Map();
+  const findSaved = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      isProvideCall(node.initializer)
+    ) {
+      saved.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, findSaved);
+  };
+  findSaved(provider);
+
+  const problems = [];
+  const installed = new Set();
+  const findReturns = (node) => {
+    if (ts.isReturnStatement(node) && node.expression !== undefined) {
+      const returned = node.expression;
+      if (isProvideCall(returned)) {
+        installed.add(returned);
+      } else if (ts.isIdentifier(returned) && saved.has(returned.text)) {
+        installed.add(saved.get(returned.text));
+      } else {
+        problems.push(
+          `a \`return ${returned.getText(source)}\` whose installed contribution could not be ` +
+            'determined',
+        );
+      }
+    }
+    ts.forEachChild(node, findReturns);
+  };
+  findReturns(provider);
+
+  for (const call of all) {
+    if (installed.has(call)) continue;
+    problems.push(
+      'a `provideSatoriExtensions(…)` call whose result is never returned, so whether it ' +
+        'registers anything could not be determined',
+    );
+  }
 
   const properties = [];
-  const problems = [];
-  for (const call of calls) {
+  for (const call of all) {
+    if (!installed.has(call)) continue;
     const argument = call.arguments[0];
     if (argument === undefined || !ts.isObjectLiteralExpression(argument)) {
       problems.push(
@@ -9844,10 +9976,12 @@ function componentsContributionsIn(source) {
 
     let componentsAt = -1;
     for (const [index, property] of argument.properties.entries()) {
+      // By value, not by source text. `getText()` keeps the quotes on `'components'`, so a quoted
+      // key never matched, and computed names were rejected outright — both skipped a real
+      // contribution whose primitives then escaped while a bare-key one kept the set non-empty.
       if (
         !ts.isPropertyAssignment(property) ||
-        ts.isComputedPropertyName(property.name) ||
-        property.name.getText(source) !== 'components'
+        staticPropertyName(property.name) !== 'components'
       ) {
         continue;
       }
@@ -10229,8 +10363,14 @@ function checkAdoptedPatternsNotBypassed() {
         !SATORI_COMPONENT_LIBS.some((lib) => file.startsWith(lib)),
     );
 
-  /** Baselined `entry point -> path` pairs seen to still import it, to find the stale ones. */
-  const stillBypassing = new Set();
+  /**
+   * `"<entry point> <path>"` -> the symbols that site actually imports, for baselined sites only.
+   * Absent means the site no longer imports the entry point at all; present but missing a listed
+   * symbol means that symbol's exemption is stale. Both make the baseline shrink.
+   *
+   * @type {Map<string, Set<string>>}
+   */
+  const seenSymbols = new Map();
 
   for (const file of files) {
     if (!fileExists(file)) continue;
@@ -10241,38 +10381,64 @@ function checkAdoptedPatternsNotBypassed() {
     // the package only in a comment still gets parsed, and correctly yields no import.
     if (!body.includes(SATORI_PACKAGE)) continue;
 
-    for (const [entry, line] of satoriEntryPointsIn(file, body)) {
+    for (const [entry, { line, symbols }] of satoriEntryPointsIn(file, body)) {
       const specifier = `@hylandsoftware/satori-ui/${entry}`;
       const primitives = guarded.get(specifier);
       if (primitives === undefined) continue;
 
-      if (ADOPTION_BASELINE.get(specifier)?.has(file)) {
-        stillBypassing.add(`${specifier} ${file}`);
+      const names = [...primitives].sort();
+      const describe =
+        `That entry point is how ${SATORI_ADOPTION_REGISTRY} implements the adopted ` +
+        `${names.length > 1 ? 'primitives' : 'primitive'} ` +
+        `${names.map((name) => `\`${name}\``).join(' and ')}, so this bypasses ` +
+        `${names.length > 1 ? 'them' : 'it'}: the host loses the Material fallback and the ` +
+        'customer loses the extension id. Consume the primitive from ' +
+        '`@nuxeo/satori-platform/components` instead.';
+
+      const exempt = ADOPTION_BASELINE.get(specifier)?.get(file);
+      if (exempt !== undefined) {
+        // Seen either way, so a site that still imports the entry point is never also reported as
+        // a stale exemption. The symbols it used are recorded for the per-symbol staleness check.
+        seenSymbols.set(`${specifier} ${file}`, symbols);
+
+        const added = [...symbols].filter((symbol) => !exempt.has(symbol)).sort();
+        if (added.length === 0) continue;
+        fail(
+          `${file}:${line} imports ${added.map((name) => `\`${name}\``).join(', ')} from ` +
+            `\`${specifier}\`, which \`ADOPTION_BASELINE\` does not exempt for this file. The ` +
+            'baseline covers the imports this site already had, not whatever it imports next, ' +
+            `so adding one is new direct use. ${describe}`,
+        );
         continue;
       }
 
-      const names = [...primitives].sort();
       fail(
         `${file}:${line} imports \`${specifier}\` directly, outside ` +
-          `${SATORI_COMPONENT_LIBS.join(' and ')}. That entry point is how ` +
-          `${SATORI_ADOPTION_REGISTRY} implements the adopted ` +
-          `${names.length > 1 ? 'primitives' : 'primitive'} ${names.map((name) => `\`${name}\``).join(' and ')}, ` +
-          `so this bypasses ${names.length > 1 ? 'them' : 'it'}: the host loses the Material ` +
-          'fallback and the customer loses the extension id. Consume the primitive from ' +
-          '`@nuxeo/satori-platform/components` instead.',
+          `${SATORI_COMPONENT_LIBS.join(' and ')}. ${describe}`,
       );
     }
   }
 
-  for (const [specifier, paths] of ADOPTION_BASELINE) {
-    for (const path of paths) {
+  for (const [specifier, files] of ADOPTION_BASELINE) {
+    for (const [path, exempt] of files) {
       if (!fileExists(path)) continue;
-      if (stillBypassing.has(`${specifier} ${path}`)) continue;
-      fail(
-        `${path} no longer imports \`${specifier}\`, so its entry in \`ADOPTION_BASELINE\` is ` +
-          'stale. Delete that line: the baseline records what predates the guardrail and may ' +
-          'only shrink.',
-      );
+      const symbols = seenSymbols.get(`${specifier} ${path}`);
+      if (symbols === undefined) {
+        fail(
+          `${path} no longer imports \`${specifier}\`, so its entry in \`ADOPTION_BASELINE\` is ` +
+            'stale. Delete that entry: the baseline records what predates the guardrail and may ' +
+            'only shrink.',
+        );
+        continue;
+      }
+      const gone = [...exempt].filter((symbol) => !symbols.has(symbol)).sort();
+      if (gone.length > 0) {
+        fail(
+          `${path} no longer imports ${gone.map((name) => `\`${name}\``).join(', ')} from ` +
+            `\`${specifier}\`, so that much of its \`ADOPTION_BASELINE\` entry is stale. Delete ` +
+            'those symbols: the baseline may only shrink.',
+        );
+      }
     }
   }
 }

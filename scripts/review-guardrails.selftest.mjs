@@ -9351,7 +9351,7 @@ expectGreen(
     // entry live, so the stale-exemption check stays quiet and only the comment is under test.
     [BASELINED]:
       "// migrated away from '@hylandsoftware/satori-ui/avatar' already\n" +
-      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+      "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n",
   }),
 );
 
@@ -9703,12 +9703,112 @@ expectGreen(
   }),
 );
 
+expectRed(
+  'a discarded contribution cannot overwrite the installed one',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // The real provider is saved, a discarded call then maps `tag` to the avatar wrapper, and the
+    // saved one is returned. Reading every call in source order let the discarded one win, so
+    // `tag` resolved to the avatar's entry point and `satori-ui/tag` stopped being guarded.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  const installed = provideSatoriExtensions({',
+    ).replace(
+      /\n  \}\);\n\}/,
+      '\n  });\n' +
+        '  provideSatoriExtensions({\n' +
+        '    components: { [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent },\n' +
+        '  });\n' +
+        '  return installed;\n}',
+    ),
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+);
+
+expectRed(
+  'a contribution whose result is thrown away is reported, since it may register nothing',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  provideSatoriExtensions({ components: {} });\n  return provideSatoriExtensions({',
+    ),
+  }),
+  null,
+  /a `provideSatoriExtensions\(…\)` call whose result is never returned/,
+);
+
+for (const [shape, key] of [
+  ['a quoted', "'components':"],
+  ['a computed string', "['components']:"],
+]) {
+  expectRed(
+    `${shape} \`components\` key is the same contribution and still guards its primitives`,
+    'checkAdoptedPatternsNotBypassed',
+    adoption({
+      // `getText()` keeps the quotes, so these never matched `components` and the whole
+      // contribution was skipped — every primitive in it unguarded at once.
+      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+        'components: {',
+        key + ' {',
+      ),
+      [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+    }),
+    null,
+    /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+  );
+}
+
+expectRed(
+  'a baselined site importing a symbol the baseline does not list is new direct use',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // Trash is baselined for `SatTagModule` only. Exempting the file rather than its symbols let
+    // anything else from the same entry point ride along, which is the gap this closes.
+    [BASELINED]:
+      "import { SatTagModule, SatStatusTag } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class TrashComponent {}\n',
+  }),
+  null,
+  /trash\.component\.ts:1 imports `SatStatusTag` from `@hylandsoftware\/satori-ui\/tag`, which `ADOPTION_BASELINE` does not exempt for this file/,
+);
+
+expectRed(
+  'a baselined symbol that is no longer imported leaves a stale exemption',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // `document-detail` is baselined for `SatTagModule` and `SatTagCategory`; dropping the second
+    // must shrink the entry rather than sit there forever.
+    'libs/features/document-detail/src/lib/document-detail/document-detail.ts':
+      "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n" +
+      "import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';\n" +
+      "import { SatBreadcrumbs, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';\n",
+  }),
+  null,
+  /document-detail\.ts no longer imports `SatTagCategory` from `@hylandsoftware\/satori-ui\/tag`, so that much of its `ADOPTION_BASELINE` entry is stale/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a local rename does not count as a different symbol',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // The baseline records the name the module exports, so aliasing it locally is still the same
+    // legacy import and must stay exempt.
+    [BASELINED]:
+      "import { SatTagModule as Tags } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class TrashComponent {}\n',
+  }),
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',
   adoption({
     [BASELINED]:
-      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n" +
+      "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n" +
       'export class TrashComponent {}\n',
   }),
 );
