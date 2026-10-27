@@ -1671,6 +1671,8 @@ class NxsPermissionsPanelComponent {
     protected readonly editable: import("@angular/core").Signal<boolean>;
     protected readonly trackItem: (_index: number, item: LocalItem) => string;
     protected readonly pendingCount: import("@angular/core").Signal<number>;
+    protected readonly allPermissions: import("@angular/core").WritableSignal<boolean>;
+    protected readonly offersAll: import("@angular/core").Signal<boolean>;
     protected readonly permissionGroups: import("@angular/core").Signal<{
     label: string;
     permissions: readonly string[];

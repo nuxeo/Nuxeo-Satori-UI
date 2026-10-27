@@ -9593,6 +9593,1014 @@ function checkSatoriPrimitivesRegisteredInOrder() {
   }
 }
 
+const SATORI_ADOPTION_REGISTRY =
+  'libs/shared/satori-components-satori/src/lib/provide-nxs-satori-components.ts';
+
+/** The one function whose contributions decide what is adopted. */
+const PROVIDER_FUNCTION = 'provideNxsSatoriComponents';
+
+/** The provider's body, whether it is written as a function declaration or an arrow. */
+function providerBodyOf(statement) {
+  if (ts.isFunctionDeclaration(statement)) return statement.body;
+  if (ts.isVariableStatement(statement)) {
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === PROVIDER_FUNCTION &&
+        declaration.initializer !== undefined &&
+        (ts.isArrowFunction(declaration.initializer) ||
+          ts.isFunctionExpression(declaration.initializer))
+      ) {
+        return declaration.initializer.body;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Anything with its own `return`: a nested one does not return from the enclosing function. */
+function isFunctionLike(node) {
+  return (
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isGetAccessorDeclaration(node) ||
+    ts.isSetAccessorDeclaration(node) ||
+    ts.isConstructorDeclaration(node) ||
+    ts.isClassDeclaration(node)
+  );
+}
+
+/**
+ * A property name's value, however it is spelled: `components`, `'components'`, `["components"]`.
+ *
+ * `undefined` when the name is not statically a string — a computed identifier or expression.
+ * Comparing `getText()` instead kept the quotes, so every quoted key silently failed to match.
+ */
+function staticPropertyName(name) {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)) {
+    return name.expression.text;
+  }
+  return undefined;
+}
+
+/**
+ * The only two trees allowed to name a Satori entry point for an adopted pattern.
+ *
+ * `/satori-components` holds the Material implementation of every primitive and
+ * `/satori-components-satori` the Satori one; between them they *are* the adoption. Everything
+ * else — features, both applications — consumes the primitive by its `NXS_PRIMITIVE_IDS` id and
+ * gets whichever implementation the host registered.
+ */
+const SATORI_COMPONENT_LIBS = [
+  'libs/shared/satori-components/',
+  'libs/shared/satori-components-satori/',
+];
+
+const SATORI_PACKAGE = '@hylandsoftware/satori-ui';
+
+/**
+ * Import forms that name no symbol. In the baseline's place they would be a blanket exemption, so
+ * none is listed and each fails closed.
+ */
+const SATORI_IMPORT_NAMESPACE = '* (namespace import)';
+const SATORI_IMPORT_SIDE_EFFECT = '(side-effect import)';
+const SATORI_IMPORT_DYNAMIC = '(dynamic import)';
+
+/**
+ * Anchored at both ends and matched against a specifier, never against source text.
+ *
+ * `^…$` is what keeps `@hylandsoftware/satori-ui/tag-input` from reading as the adopted `tag`
+ * entry point. The old pattern leaned on the surrounding quotes for that, which only worked
+ * because it was matching text.
+ */
+const SATORI_ENTRY_POINT = /^@hylandsoftware\/satori-ui\/([a-z0-9-]+)$/;
+
+/** Specs, stories and mocks ship nothing, so a direct import in one is not a bypass. */
+const ADOPTION_SCAN_SKIP = /(\.spec\.ts|\.stories\.ts|test-setup\.ts|\/__mocks__\/)/;
+
+/**
+ * Sites that already bypassed an adopted primitive when this guardrail landed (NXSAT-676).
+ *
+ * The ticket asks for *new* use to fail, and twelve sites predate it: the tag, avatar and
+ * breadcrumbs primitives were adopted in NXSAT-673 after this code was written against Satori
+ * directly. Failing them here would have made the gate red on arrival, which is how a gate gets
+ * demoted to a warning and then deleted.
+ *
+ * Exempt per symbol, not per file. Listing only the file exempted every *future* import from that
+ * entry point there too: adding `SatStatusTag` beside trash's `SatTagModule` collapsed into the
+ * same exempt pair and passed. The legacy symbols are recorded, under the names the module
+ * exports, so a site keeps exactly the imports it already had and a new one fails.
+ *
+ * The list may only shrink, in both directions. A file that no longer imports the entry point is
+ * reported as stale, and so is a listed symbol it no longer imports — migrating a site and
+ * leaving its exemption behind fails too. An allowlist nothing prunes is the thing this repo has
+ * twice found rotting. A baselined path that does not exist at all is ignored rather than
+ * reported: the guardrail runs against fixture trees in `review-guardrails.selftest.mjs` that
+ * contain none of these files, and a missing file imports nothing and so bypasses nothing.
+ *
+ * @type {Map<string, Map<string, Set<string>>>}
+ */
+const ADOPTION_BASELINE = new Map([
+  [
+    '@hylandsoftware/satori-ui/avatar',
+    new Map([
+      [
+        'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
+        new Set(['SatAvatarModule', 'SatAvatarCategory']),
+      ],
+      ['apps/nuxeo-ui/src/app/shell/app-shell.component.ts', new Set(['SatAvatarModule'])],
+      ['libs/features/browse/src/lib/browse/browse.ts', new Set(['SatAvatarModule'])],
+      [
+        'libs/features/collections/src/lib/collection-detail/collection-detail.ts',
+        new Set(['SatAvatarModule']),
+      ],
+      [
+        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+        new Set(['SatAvatarModule']),
+      ],
+    ]),
+  ],
+  [
+    '@hylandsoftware/satori-ui/breadcrumbs',
+    new Map([
+      [
+        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+        new Set(['SatBreadcrumbs', 'SatBreadcrumbsItem']),
+      ],
+      [
+        'libs/features/tasks/src/lib/tasks-page/tasks-page.component.ts',
+        new Set(['SatBreadcrumbs', 'SatBreadcrumbsItem']),
+      ],
+    ]),
+  ],
+  [
+    '@hylandsoftware/satori-ui/tag',
+    new Map([
+      ['apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts', new Set(['SatTagModule'])],
+      ['libs/features/browse/src/lib/browse/browse.ts', new Set(['SatTagModule'])],
+      [
+        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+        new Set(['SatTagModule', 'SatTagCategory']),
+      ],
+      [
+        'libs/features/tasks/src/lib/task-detail/task-detail.component.ts',
+        new Set(['SatTagModule']),
+      ],
+      ['libs/features/trash/src/lib/trash/trash.component.ts', new Set(['SatTagModule'])],
+    ]),
+  ],
+]);
+
+/**
+ * Every `@hylandsoftware/satori-ui/<entry>` module a file really imports, and the line it is on.
+ *
+ * Read from the syntax tree, not matched in the text. A regex over the source counted a mention
+ * in a comment or an ordinary string as an import, which fails both ways: a feature file that
+ * only *names* an entry point in a comment would be reported as a bypass, and a baselined file
+ * whose import was deleted but whose comment still names it would keep its exemption alive
+ * forever — the stale-exemption check is only as good as what counts as an import. Matching text
+ * also missed `import(\`@hylandsoftware/satori-ui/tag\`)`, since the regex wanted a quote.
+ *
+ * Covers static imports and re-exports, bare `import '…'`, dynamic `import()` in value and type
+ * position, and backtick specifiers with no substitution — `ts.isStringLiteralLike` is what makes
+ * that last one work. A specifier built by concatenation is not a literal and is not read; nor is
+ * `require()`, which nothing in this repository uses for these packages.
+ *
+ * The symbols come with it, under the names the module exports, so `ADOPTION_BASELINE` can exempt
+ * the legacy imports of a site without exempting the site forever. A local rename does not change
+ * them. Three import forms name nothing, and each gets a sentinel rather than an empty set: a
+ * namespace import reaches everything, a side-effect import names nothing, and a dynamic import
+ * is resolved at runtime. None is in the baseline, so each fails closed if one appears.
+ *
+ * @returns {Map<string, { line: number, symbols: Set<string> }>} entry point -> first line, symbols
+ */
+function satoriEntryPointsIn(path, body) {
+  const source = ts.createSourceFile(path, body, ts.ScriptTarget.Latest, true);
+  const found = new Map();
+
+  const record = (node, symbols) => {
+    if (node === undefined || !ts.isStringLiteralLike(node)) return;
+    const entry = SATORI_ENTRY_POINT.exec(node.text)?.[1];
+    if (entry === undefined) return;
+    const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+    const existing = found.get(entry);
+    if (existing === undefined) {
+      found.set(entry, { line, symbols: new Set(symbols) });
+      return;
+    }
+    for (const symbol of symbols) existing.symbols.add(symbol);
+  };
+
+  const importedNames = (clause) => {
+    if (clause === undefined) return [SATORI_IMPORT_SIDE_EFFECT];
+    const names = clause.name === undefined ? [] : [clause.name.text];
+    const bindings = clause.namedBindings;
+    if (bindings !== undefined && ts.isNamedImports(bindings)) {
+      // The exported name, not the local one: `{ A as B }` is an import of `A`.
+      for (const element of bindings.elements) {
+        names.push((element.propertyName ?? element.name).text);
+      }
+    } else if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+      names.push(SATORI_IMPORT_NAMESPACE);
+    }
+    return names.length > 0 ? names : [SATORI_IMPORT_SIDE_EFFECT];
+  };
+
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node)) {
+      record(node.moduleSpecifier, importedNames(node.importClause));
+    } else if (ts.isExportDeclaration(node)) {
+      const bindings = node.exportClause;
+      const names =
+        bindings !== undefined && ts.isNamedExports(bindings)
+          ? bindings.elements.map((element) => (element.propertyName ?? element.name).text)
+          : [SATORI_IMPORT_NAMESPACE];
+      record(node.moduleSpecifier, names);
+    } else if (ts.isImportTypeNode(node)) {
+      record(ts.isLiteralTypeNode(node.argument) ? node.argument.literal : undefined, [
+        SATORI_IMPORT_DYNAMIC,
+      ]);
+    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      record(node.arguments[0], [SATORI_IMPORT_DYNAMIC]);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+/**
+ * The file that declares `symbol`, following relative re-exports from `path` and renaming as it
+ * goes. `undefined` when nothing reachable declares it.
+ *
+ * Why the symbol and not the barrel. Collecting Satori imports from everything a barrel
+ * re-exports attributes them all to one primitive: an `index.ts` that re-exports both the
+ * registered tag wrapper and an unregistered banner wrapper would make
+ * `@hylandsoftware/satori-ui/banner` a guarded entry point of the `tag` primitive, and every
+ * legitimate feature import of the banner would fail. Only the file that actually declares the
+ * registered class says what that primitive wraps.
+ *
+ * `export { A as B } from './x'` is followed under its local name, so an alias does not lose the
+ * trail. `export * from './x'` cannot say which symbol it carries without resolving the module
+ * graph, so each one is searched and the first file declaring the symbol wins — enough for a
+ * barrel, and it never attributes a sibling's imports to this primitive.
+ */
+function fileDeclaringSymbol(path, symbol, seen = new Set()) {
+  const key = `${path} ${symbol}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+  if (!fileExists(path)) return undefined;
+
+  const source = ts.createSourceFile(path, read(path), ts.ScriptTarget.Latest, true);
+  const declares = source.statements.some((statement) => {
+    if (ts.isVariableStatement(statement)) {
+      return statement.declarationList.declarations.some(
+        (declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === symbol,
+      );
+    }
+    return (
+      (ts.isClassDeclaration(statement) ||
+        ts.isFunctionDeclaration(statement) ||
+        ts.isInterfaceDeclaration(statement) ||
+        ts.isTypeAliasDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name?.text === symbol
+    );
+  });
+  if (declares) return path;
+
+  const stars = [];
+  for (const statement of source.statements) {
+    if (!ts.isExportDeclaration(statement)) continue;
+    const specifier = statement.moduleSpecifier;
+    if (specifier === undefined || !ts.isStringLiteralLike(specifier)) continue;
+    if (!specifier.text.startsWith('.')) continue;
+    const target = resolveRelativeModule(dirname(path), specifier.text);
+    if (target === undefined) continue;
+
+    const bindings = statement.exportClause;
+    if (bindings === undefined) {
+      stars.push(target);
+      continue;
+    }
+    if (!ts.isNamedExports(bindings)) continue;
+    for (const element of bindings.elements) {
+      if (element.name.text !== symbol) continue;
+      const local = element.propertyName?.text ?? element.name.text;
+      const found = fileDeclaringSymbol(target, local, seen);
+      if (found !== undefined) return found;
+    }
+  }
+
+  for (const target of stars) {
+    const found = fileDeclaringSymbol(target, symbol, seen);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/**
+ * The properties of the `components` object inside `provideSatoriExtensions({ … })`.
+ *
+ * The adopted set is what *that* call contributes, so this is where it is read from — not from
+ * every primitive-keyed property in the file. Any other object literal, including one declared
+ * later with the same keys, registers nothing and must not be able to redirect a primitive at
+ * another component's entry point.
+ *
+ * Scoped to `provideNxsSatoriComponents`, because taking the first `provideSatoriExtensions` call
+ * anywhere in the module could read an unrelated helper's contribution instead.
+ *
+ * Only what the provider **returns** is read. `provideSatoriExtensions` returns providers rather
+ * than installing them, so a call whose result is thrown away registers nothing; such a call, and
+ * a `return` this cannot resolve to one, are reported. A `return` inside a nested helper does not
+ * return from the provider and is not counted.
+ *
+ * More than one installed contribution is **rejected, not merged**. An earlier round read every
+ * call in source order and let a later one override an earlier one, on the reasoning that source
+ * order is provider order. That is unsound twice over: a call may register nothing, and branch
+ * returns are alternatives rather than a sequence, so merging them invents a mapping that never
+ * happens at runtime. Do not reinstate it — `review-guardrails.selftest.mjs` has controls that
+ * reject exactly that behaviour.
+ *
+ * Within one contribution the **last** literal `components` is read, since duplicate keys are
+ * legal and the later wins, and anything after it that could be `components` again — a spread, a
+ * computed name, a shorthand — is reported rather than silently read around.
+ *
+ * `properties` is `undefined` when the provider or any contribution at all is missing, which the
+ * caller reports rather than treating as an empty adopted set. `problems` are shapes that could
+ * hide a registration; the caller fails on each.
+ */
+function componentsContributionsIn(source) {
+  const provider = source.statements.find(
+    (statement) =>
+      (ts.isFunctionDeclaration(statement) && statement.name?.text === PROVIDER_FUNCTION) ||
+      (ts.isVariableStatement(statement) &&
+        statement.declarationList.declarations.some(
+          (declaration) =>
+            ts.isIdentifier(declaration.name) && declaration.name.text === PROVIDER_FUNCTION,
+        )),
+  );
+  if (provider === undefined) return { properties: undefined, problems: [] };
+
+  const isProvideCall = (node) =>
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'provideSatoriExtensions';
+
+  const all = [];
+  const findCalls = (node) => {
+    if (isProvideCall(node)) all.push(node);
+    ts.forEachChild(node, findCalls);
+  };
+  findCalls(provider);
+  if (all.length === 0) return { properties: undefined, problems: [] };
+
+  // `provideSatoriExtensions` returns providers; it does not install them. A call whose result is
+  // thrown away registers nothing, so reading every call in source order was wrong in the one way
+  // that matters: saving the real provider, then making a discarded call that maps `richTooltip`
+  // to the avatar wrapper, and returning the saved one, let the discarded call win here and left
+  // rich-tooltip unguarded. Only what the provider returns is installed.
+  const problems = [];
+  const installed = new Set();
+  const body = providerBodyOf(provider);
+
+  /**
+   * `const <name> = provideSatoriExtensions(…)` among the provider body's own statements.
+   *
+   * Scoped and `const`, and both halves of that are load-bearing.
+   *
+   * Scoped, because matching by name anywhere in the provider let an uncalled helper answer for
+   * the outer return: a helper declaring `const installed = provideSatoriExtensions(…)` beside an
+   * outer `const installed = actualContribution()` had its map accepted, instead of the outer
+   * `return installed` being reported as unresolvable — the real contribution's primitives
+   * unguarded. Only a binding the return can actually see counts, and a block-scoped one does not
+   * count either: it leaves the return unresolvable, which is reported.
+   *
+   * `const`, because resolving a `let` to its initializer ignores every later assignment, so
+   * `let p = provideSatoriExtensions(…); p = addTagProvider(p); return p;` read the original map
+   * and missed whatever the helper added. A binding that cannot be reassigned is the one case
+   * where the initializer is still what the name holds at the return.
+   */
+  const saved = new Map();
+  if (body !== undefined && ts.isBlock(body)) {
+    for (const statement of body.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          ts.isIdentifier(declaration.name) &&
+          declaration.initializer !== undefined &&
+          isProvideCall(declaration.initializer)
+        ) {
+          saved.set(declaration.name.text, declaration.initializer);
+        }
+      }
+    }
+  }
+
+  /**
+   * `atBodyLevel` is the whole lexical story, in both directions.
+   *
+   * `saved` holds only bindings declared among the provider body's own statements, so a name is
+   * resolved against it only by a return at that same level. An inner block may shadow the name —
+   * `const installed = provideSatoriExtensions(…)` outside, `const installed =
+   * actualContribution(); return installed;` inside — and resolving that inner return against the
+   * outer binding accepted a map the inner contribution replaces, leaving its primitives
+   * unguarded with nothing reported. A nested identifier return is therefore unresolved and fails
+   * closed; a nested `return provideSatoriExtensions(…)` is still read, since it needs no name.
+   */
+  const takeReturned = (returned, atBodyLevel) => {
+    if (isProvideCall(returned)) {
+      installed.add(returned);
+      return;
+    }
+    if (atBodyLevel && ts.isIdentifier(returned) && saved.has(returned.text)) {
+      installed.add(saved.get(returned.text));
+      return;
+    }
+    problems.push(
+      `a \`return ${returned.getText(source)}\` whose installed contribution could not be ` +
+        'determined',
+    );
+  };
+
+  // Only the provider's own returns. A `return` inside a nested helper returns from that helper,
+  // not from the provider, and whether the helper is ever called cannot be answered here — so
+  // crossing into one would count a contribution that may install nothing. Such a call is still
+  // in `all`, so it is reported below as a result that is never returned.
+  //
+  // `body` is resolved above rather than walked from `provider`, because the nested-function rule
+  // would otherwise skip the provider itself when it is written as an arrow.
+  if (body === undefined) {
+    problems.push(`a \`${PROVIDER_FUNCTION}\` whose body could not be read`);
+  } else if (!ts.isBlock(body)) {
+    // A concise arrow body is the returned expression, at the provider's own level.
+    takeReturned(body, true);
+  } else {
+    const findReturns = (node, atBodyLevel) => {
+      if (isFunctionLike(node)) return;
+      if (ts.isReturnStatement(node) && node.expression !== undefined) {
+        takeReturned(node.expression, atBodyLevel);
+        return;
+      }
+      ts.forEachChild(node, (child) => findReturns(child, false));
+    };
+    for (const statement of body.statements) findReturns(statement, true);
+  }
+
+  // More than one installed contribution cannot be ordered here. Alternative branch returns are
+  // exclusive rather than successive, so merging them invents a registration that never happens
+  // at runtime — and a later mapping to another wrapper would hide a reachable entry point. An
+  // earlier round allowed either combining contributions in provider order or rejecting shapes
+  // whose effective contribution cannot be determined; this is the rejection, and it is the only
+  // one of the two that is sound once branches are possible.
+  if (installed.size > 1) {
+    problems.push(
+      `${installed.size} installed \`provideSatoriExtensions(…)\` contributions, whose effective ` +
+        'order could not be determined — branch returns are alternatives, not successive ' +
+        'registrations, so which one registers a given primitive is not decidable here',
+    );
+  }
+
+  for (const call of all) {
+    if (installed.has(call)) continue;
+    problems.push(
+      'a `provideSatoriExtensions(…)` call whose result is never returned, so whether it ' +
+        'registers anything could not be determined',
+    );
+  }
+
+  const properties = [];
+  for (const call of all) {
+    if (!installed.has(call)) continue;
+    const argument = call.arguments[0];
+    if (argument === undefined || !ts.isObjectLiteralExpression(argument)) {
+      problems.push(
+        'a `provideSatoriExtensions(…)` argument that is not an object literal, so its ' +
+          'contribution could not be read',
+      );
+      continue;
+    }
+
+    // The LAST literal `components` is the one that registers — duplicate keys are legal and the
+    // later wins — so this keeps it rather than merging every one it finds. Matched by value, not
+    // by source text: `getText()` keeps the quotes on `'components'`, so a quoted key never
+    // matched and a computed one was rejected outright, either way skipping a real contribution
+    // whose primitives escaped while a bare-key one kept the set non-empty.
+    let componentsAt = -1;
+    let componentsProperties;
+    for (const [index, property] of argument.properties.entries()) {
+      if (
+        !ts.isPropertyAssignment(property) ||
+        staticPropertyName(property.name) !== 'components'
+      ) {
+        continue;
+      }
+      if (!ts.isObjectLiteralExpression(property.initializer)) {
+        problems.push(
+          `a \`components\` value \`${property.initializer.getText(source)}\` that is not an ` +
+            'object literal, so the primitives it registers could not be read',
+        );
+        continue;
+      }
+      componentsAt = index;
+      componentsProperties = property.initializer.properties;
+    }
+    if (componentsProperties !== undefined) properties.push(...componentsProperties);
+
+    // Anything after that map which could be `components` again replaces it, and the entries read
+    // above would then be whatever the literal said rather than what registers. Preserving those
+    // entries while adding one more is the dangerous case: the baseline still resolves, so only
+    // the added primitive silently escapes. A spread is one way; `[key]: { … }` with `key`
+    // evaluating to `'components'` is another, and so is a `{ components }` shorthand. Rather
+    // than enumerate the forms, anything that is not a plain assignment under a name readable
+    // here is reported. `componentsAt` of -1 makes this cover an object with no literal
+    // `components` at all, which such a property can introduce just as easily.
+    for (const [index, property] of argument.properties.entries()) {
+      if (index <= componentsAt) continue;
+      if (ts.isPropertyAssignment(property) && staticPropertyName(property.name) !== undefined) {
+        continue;
+      }
+      problems.push(
+        `a \`${property.getText(source)}\` entry at or after \`components\` in a ` +
+          '`provideSatoriExtensions(…)` argument, which can replace the map this reads',
+      );
+    }
+  }
+  return { properties, problems };
+}
+
+/**
+ * Every `NXS_PRIMITIVE_IDS` value is `nxs.primitives.` followed by its own property name, so the
+ * suffix of a written-out id *is* the primitive name — see `NXS_PRIMITIVE_IDS` in
+ * `libs/shared/satori-components/src/lib/primitives.ts`.
+ */
+const NXS_PRIMITIVE_ID_VALUE = /^nxs\.primitives\.([A-Za-z][A-Za-z0-9]*)$/;
+
+/**
+ * The primitive id a `components` key names: `'tag'`, `null`, or `undefined`.
+ *
+ * Three outcomes, and the difference between the last two is the whole point. `undefined` means
+ * the key names no primitive and belongs to some other object literal — skip it and keep walking.
+ * `null` means it *does* address `NXS_PRIMITIVE_IDS` but does not name one id, which the caller
+ * reports: leaving such a key out of the adopted set silently unguards that primitive while the
+ * rest keep the emptiness check satisfied.
+ *
+ * Four spellings register the same thing, because `NXS_PRIMITIVE_IDS.tag` *is* the string
+ * `'nxs.primitives.tag'`: `[NXS_PRIMITIVE_IDS.tag]`, `[NXS_PRIMITIVE_IDS['tag']]`,
+ * `'nxs.primitives.tag'` and `['nxs.primitives.tag']`. Reading only the first two left a written
+ * -out id registering at runtime and absent from the adopted set.
+ *
+ * The line between the last two outcomes is *resolved*, not *recognised*. A key this can evaluate
+ * to a string and that is not a primitive id is `undefined`; a key it cannot evaluate at all —
+ * `[tagId]`, `[NXS_PRIMITIVE_IDS[key]]`, `[OTHER_IDS.thing]` — is `null`, because "names no
+ * primitive" and "I cannot tell" are different answers and only the first is safe to skip.
+ */
+function primitiveIdOfKey(node, source) {
+  // A string literal, computed or not, carries the id itself. Resolved but not a primitive id —
+  // another extension's component id — is `undefined`: legitimately not an adopted primitive.
+  const literal = ts.isComputedPropertyName(node.name) ? node.name.expression : node.name;
+  if (ts.isStringLiteralLike(literal)) {
+    return NXS_PRIMITIVE_ID_VALUE.exec(literal.text)?.[1];
+  }
+
+  // A plain property name is the string of that name, and no id contains a dot, so `components`
+  // or `meta` can never be one.
+  if (!ts.isComputedPropertyName(node.name)) return undefined;
+  const key = node.name.expression;
+
+  if (
+    ts.isPropertyAccessExpression(key) &&
+    key.expression.getText(source) === 'NXS_PRIMITIVE_IDS'
+  ) {
+    return key.name.text;
+  }
+  if (ts.isElementAccessExpression(key) && key.expression.getText(source) === 'NXS_PRIMITIVE_IDS') {
+    const accessor = key.argumentExpression;
+    return ts.isStringLiteralLike(accessor)
+      ? (NXS_PRIMITIVE_ID_VALUE.exec(accessor.text)?.[1] ?? accessor.text)
+      : null;
+  }
+
+  // Every other computed key is unresolved, not absent, so it is reported rather than skipped.
+  // `[tagId]` with `const tagId = NXS_PRIMITIVE_IDS.tag` registers the tag primitive perfectly
+  // well at runtime; reading it as "names no primitive" dropped it from enforcement while the
+  // others kept the adopted set non-empty. Inside the `components` contribution the honest answer
+  // to a key this cannot evaluate is "I do not know", and the caller fails on that.
+  return null;
+}
+
+/**
+ * The class name inside a registration, past anything that only annotates or groups it.
+ *
+ * `(C)`, `C as Type`, `C satisfies Type` and `C!` all register the same class, and a check that
+ * only accepted a bare identifier treated each as nothing to follow. Caller reports whatever is
+ * still not a name, so an unsupported shape fails loudly instead of quietly narrowing the gate.
+ */
+function unwrapRegistration(node) {
+  let current = node;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isTypeAssertionExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+/** `./tag/satori-tag.component` from a directory -> the repository path of its `.ts`, if any. */
+function resolveRelativeModule(fromDir, specifier) {
+  return [`${join(fromDir, specifier)}.ts`, join(fromDir, specifier, 'index.ts')]
+    .map(toPosixRel)
+    .find((candidate) => fileExists(candidate));
+}
+
+/**
+ * The Satori entry points that implement an adopted primitive, and which primitive each serves.
+ *
+ * Derived, never listed. The adopted set is the `components` map of `provideNxsSatoriComponents()`
+ * — the one place that decides what is adopted — read from the AST so a call in a comment counts
+ * for nothing. Each registered class is then followed to its own file and that file's Satori
+ * imports are the entry points the primitive wraps.
+ *
+ * Deriving it matters more than it looks: a hand-written mapping is a second copy of the adopted
+ * set, and the copy is what goes stale. Adopting a seventh primitive extends this guardrail by
+ * editing nothing here. It also keeps the guardrail honest about `error-state`, which wraps
+ * Satori's `empty-state` entry point rather than one named after it.
+ *
+ * @returns {Map<string, Set<string>>} entry point specifier -> primitive ids it implements
+ */
+function adoptedSatoriEntryPoints() {
+  const source = ts.createSourceFile(
+    SATORI_ADOPTION_REGISTRY,
+    read(SATORI_ADOPTION_REGISTRY),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+
+  /**
+   * Local name in this file -> the module it came from and the name that module exports.
+   *
+   * Both halves are needed. `import { NxsSatoriTagComponent as Tag } from './tag/…'` registers
+   * `Tag` here, but the implementation declares `NxsSatoriTagComponent`, so following the local
+   * name searches that file for something it does not contain and a valid registration reads as
+   * one whose class nothing declares.
+   *
+   * @type {Map<string, { specifier: string, exported: string }>}
+   */
+  const importedFrom = new Map();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      importedFrom.set(element.name.text, {
+        specifier: statement.moduleSpecifier.text,
+        exported: element.propertyName?.text ?? element.name.text,
+      });
+    }
+  }
+
+  /**
+   * Names the file binds somewhere other than an import, so a registration identifier that one
+   * of them shadows is not followed to the module's import.
+   *
+   * `const NxsSatoriTagComponent = NxsSatoriBannerComponent;` inside the provider registers the
+   * banner wrapper under the tag id. Resolving the identifier through `importedFrom` guarded the
+   * tag entry point instead of the banner one, so direct banner imports passed. The same
+   * shadowing as the two return-side findings, on the value this time; the answer is the same —
+   * a name this cannot resolve with confidence is reported, never guessed.
+   */
+  const locallyBound = new Set();
+  const collectBindings = (node) => {
+    if (ts.isImportDeclaration(node)) return;
+    if (
+      (ts.isVariableDeclaration(node) ||
+        ts.isFunctionDeclaration(node) ||
+        ts.isClassDeclaration(node) ||
+        ts.isParameter(node)) &&
+      node.name !== undefined &&
+      ts.isIdentifier(node.name)
+    ) {
+      locallyBound.add(node.name.text);
+    }
+    ts.forEachChild(node, collectBindings);
+  };
+  collectBindings(source);
+
+  /** `[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent` -> `['tag', 'NxsSatoriTagComponent']`. */
+  const adopted = new Map();
+  /** Registered, but the implementation is not a name this can follow. Reported, never skipped. */
+  const unreadable = new Map();
+  /** Keyed for a primitive in a way that does not name one id, or hidden behind a spread. */
+  const unreadableKeys = [];
+
+  // Scoped to the `components` contribution, not the whole file. Collecting every
+  // primitive-keyed property anywhere in the file let an unrelated object literal declared later
+  // overwrite a real registration — `[NXS_PRIMITIVE_IDS.richTooltip]: NxsSatoriAvatarComponent`
+  // in some other map would point the rich-tooltip primitive at the avatar's entry point, and
+  // direct rich-tooltip imports would pass. Reading written-out ids widened that surface to any
+  // object in the file carrying an `nxs.primitives.*` key, so the scope is what keeps it closed.
+  const { properties: registrations, problems } = componentsContributionsIn(source);
+
+  // Each of these can hide a registration, so each is its own failure. They do not stop the read:
+  // whatever is readable is still guarded, and reporting the rest is what keeps a hidden entry
+  // from passing as an absent one.
+  for (const problem of problems) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} has ${problem}, so a primitive it adopts could be left out ` +
+        'of the guarded set and direct use of what that one wraps would not be caught.',
+    );
+  }
+
+  if (registrations === undefined) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} has no \`provideSatoriExtensions(…)\` call inside ` +
+        `\`${PROVIDER_FUNCTION}()\`, so the adopted set could not be read and this guardrail ` +
+        'would check nothing. Either the registration moved, or its shape changed and the AST ' +
+        'read here no longer matches it.',
+    );
+    return { guarded: new Map(), located: false };
+  }
+
+  for (const property of registrations) {
+    if (!ts.isPropertyAssignment(property)) {
+      // A spread or shorthand inside `components` can carry registrations this cannot see.
+      unreadableKeys.push(property.getText(source));
+      continue;
+    }
+    const primitive = primitiveIdOfKey(property, source);
+    if (primitive === null) {
+      unreadableKeys.push(property.name.getText(source));
+      continue;
+    }
+    // `undefined` is a `components` key that names no primitive — another extension's component
+    // id is legitimate there, and it is simply not an adopted primitive.
+    if (primitive === undefined) continue;
+
+    const value = unwrapRegistration(property.initializer);
+    if (ts.isIdentifier(value)) {
+      adopted.set(primitive, value.text);
+    } else {
+      unreadable.set(primitive, property.initializer.getText(source));
+    }
+  }
+
+  // Requiring a bare identifier and skipping everything else was a silent gap: a registration
+  // wrapped in parentheses, `as` or `satisfies` read as nothing to follow, that primitive went
+  // unguarded, and the other seven kept `guarded` non-empty so the emptiness check stayed quiet.
+  // Wrappers are unwrapped above; anything still not a name is reported here.
+  for (const [primitive, text] of unreadable) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} registers the \`${primitive}\` primitive as \`${text}\`, which ` +
+        'is not a class name once parentheses, `as`, `satisfies` and `!` are unwrapped, so the ' +
+        'Satori entry points it wraps could not be read and new direct use of them would not be ' +
+        'caught. Register the class itself, or teach `unwrapRegistration` this shape.',
+    );
+  }
+
+  // Same reasoning one level up, on the entry rather than the value: a key that addresses a
+  // primitive without naming one id, or a spread that hides entries altogether, leaves whatever
+  // it registers out of the adopted set while the others keep `guarded` non-empty.
+  for (const text of unreadableKeys) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} has a \`components\` entry \`${text}\` whose primitive could ` +
+        'not be read, so direct use of whatever it registers would not be caught. Write each ' +
+        "entry with a literal id — `[NXS_PRIMITIVE_IDS.tag]`, `[NXS_PRIMITIVE_IDS['tag']]` or " +
+        "`'nxs.primitives.tag'` — rather than a computed key or a spread.",
+    );
+  }
+
+  const registryDir = dirname(SATORI_ADOPTION_REGISTRY);
+  const guarded = new Map();
+  for (const [primitive, className] of adopted) {
+    if (locallyBound.has(className)) {
+      fail(
+        `${SATORI_ADOPTION_REGISTRY} registers the \`${primitive}\` primitive as ` +
+          `\`${className}\`, which the file also binds locally, so which component that name ` +
+          'holds at the registration could not be read. A local binding can point it at another ' +
+          "wrapper entirely, guarding that wrapper's entry point instead of this one. Register " +
+          'the imported class under its own name.',
+      );
+      continue;
+    }
+
+    const origin = importedFrom.get(className);
+    const specifier = origin?.specifier;
+
+    // Every failure to reach the implementation is reported, never skipped. Skipping one would
+    // leave that primitive's entry points unguarded while the other five still filled `guarded`,
+    // so the emptiness check in the caller would not notice and the guardrail would quietly cover
+    // less than it claims.
+    const resolved =
+      specifier !== undefined && specifier.startsWith('.')
+        ? resolveRelativeModule(registryDir, specifier)
+        : undefined;
+
+    if (resolved === undefined) {
+      const why =
+        specifier === undefined
+          ? 'no import in that file declares that name'
+          : specifier.startsWith('.')
+            ? `its module \`${specifier}\` does not resolve`
+            : `it is imported from \`${specifier}\` rather than a relative path`;
+      fail(
+        `${SATORI_ADOPTION_REGISTRY} registers \`${className}\` for the \`${primitive}\` primitive ` +
+          `but ${why}, so the entry points that primitive ` +
+          'wraps could not be read and new direct use of them would not be caught.',
+      );
+      continue;
+    }
+
+    // Follow the registered symbol, not the module. A class registered as `./rich-tooltip` sits
+    // behind an `index.ts` that only re-exports it: reading that barrel's own imports yields
+    // nothing, which left the primitive unguarded while the other five kept `guarded` non-empty
+    // and the emptiness check below quiet. Resolving the symbol instead also keeps a mixed barrel
+    // honest — one that re-exports an unregistered banner wrapper alongside the tag wrapper must
+    // not make `@hylandsoftware/satori-ui/banner` an entry point of the `tag` primitive.
+    //
+    // Searched under the name the module exports, not the local one: an aliased registry import
+    // registers `Tag` here while the implementation declares `NxsSatoriTagComponent`, and looking
+    // for `Tag` in that file would reject a registration that is perfectly valid.
+    const declaring = fileDeclaringSymbol(resolved, origin.exported);
+    if (declaring === undefined) {
+      fail(
+        `${SATORI_ADOPTION_REGISTRY} registers \`${className}\` for the \`${primitive}\` primitive, ` +
+          `but neither ${resolved} nor anything it re-exports declares \`${origin.exported}\`, so ` +
+          'the entry points that primitive wraps could not be read and new direct use of them ' +
+          'would not be caught.',
+      );
+      continue;
+    }
+
+    const entries = new Set(satoriEntryPointsIn(declaring, read(declaring)).keys());
+    if (entries.size === 0) {
+      fail(
+        `${SATORI_ADOPTION_REGISTRY} registers \`${className}\` for the \`${primitive}\` primitive, ` +
+          `but ${declaring}, which declares it, imports nothing from \`${SATORI_PACKAGE}\`, so ` +
+          'that primitive has no guarded entry point and direct use of whatever it wraps would ' +
+          'not be caught. A Satori implementation that imports no Satori is the thing to check ' +
+          'first.',
+      );
+      continue;
+    }
+
+    for (const entry of entries) {
+      const specifierFor = `@hylandsoftware/satori-ui/${entry}`;
+      if (!guarded.has(specifierFor)) guarded.set(specifierFor, new Set());
+      guarded.get(specifierFor).add(primitive);
+    }
+  }
+  return { guarded, located: true };
+}
+
+/**
+ * A pattern adopted onto Satori must be consumed through its `nxs-` primitive (NXSAT-676).
+ *
+ * Once `provideNxsSatoriComponents()` registers a primitive on Satori, reaching past it to
+ * `@hylandsoftware/satori-ui/<entry>` in feature or application code gets the Satori rendering
+ * while losing everything the primitive exists for: the Material fallback a host without GitHub
+ * Packages access falls back to, the extension id a customer overrides through Layer 1, and the
+ * value contract `NxsSatoriValueContract` proves at compile time. The bypass still *looks* right
+ * on screen, which is why it needs a gate rather than review.
+ *
+ * ## What this does not claim
+ *
+ * Not a Material check. NXSAT-676's scope line asks for "direct Material use of an adopted
+ * pattern", and that does not map onto the adopted set: Material has no avatar, breadcrumbs,
+ * status-tag or error-state component at all, and for the two that look mappable
+ * `docs/satori-components/material-inventory.md` section 3 rules both out — chips are recorded as
+ * having no Satori 1.0 target and deliberately stay `mat-chip-*`, and plain `matTooltip` is not
+ * the rich tooltip. Banning either would fail roughly thirty-seven files that the inventory says
+ * are correct. The bypass that is real, and exact, is the Satori one above; it is what the
+ * ticket's goal sentence asks for.
+ *
+ * Not scoped to the diff either. It reads the whole tree, so a bypass that moves between files
+ * in a refactor stays caught; `ADOPTION_BASELINE` carries the twelve pre-existing sites instead.
+ */
+function checkAdoptedPatternsNotBypassed() {
+  if (!fileExists(SATORI_ADOPTION_REGISTRY)) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} does not exist, so no pattern is known to be adopted and direct ` +
+        'Satori use of an adopted primitive was not checked.',
+    );
+    return;
+  }
+
+  const { guarded, located } = adoptedSatoriEntryPoints();
+  // `located` false means the `components` contribution itself was not found, which is already
+  // reported with the reason. Saying "yielded no entry point" after it would be the same failure
+  // twice, in vaguer words.
+  if (!located) return;
+  if (guarded.size === 0) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} yielded no Satori entry point for any adopted primitive, so ` +
+        'this guardrail checked nothing. Either the `components` map of ' +
+        '`provideNxsSatoriComponents()` is empty, or its shape changed and the AST read above no ' +
+        'longer matches it.',
+    );
+    return;
+  }
+
+  const files = git(['ls-files', '--cached', '--others', '--exclude-standard'])
+    .split('\n')
+    .filter(
+      (file) =>
+        file.endsWith('.ts') &&
+        !ADOPTION_SCAN_SKIP.test(file) &&
+        !SATORI_COMPONENT_LIBS.some((lib) => file.startsWith(lib)),
+    );
+
+  /**
+   * `"<entry point> <path>"` -> the symbols that site actually imports, for baselined sites only.
+   * Absent means the site no longer imports the entry point at all; present but missing a listed
+   * symbol means that symbol's exemption is stale. Both make the baseline shrink.
+   *
+   * @type {Map<string, Set<string>>}
+   */
+  const seenSymbols = new Map();
+
+  for (const file of files) {
+    if (!fileExists(file)) continue;
+    const body = read(file);
+    // Almost no file names Satori at all, and this walks every `.ts` in the repository on every
+    // `review:guardrails` run, including the inner loop. One substring test per file is what keeps
+    // the syntax-tree read below off the thousands of files that cannot match. A file that names
+    // the package only in a comment still gets parsed, and correctly yields no import.
+    if (!body.includes(SATORI_PACKAGE)) continue;
+
+    for (const [entry, { line, symbols }] of satoriEntryPointsIn(file, body)) {
+      const specifier = `@hylandsoftware/satori-ui/${entry}`;
+      const primitives = guarded.get(specifier);
+      if (primitives === undefined) continue;
+
+      const names = [...primitives].sort();
+      const describe =
+        `That entry point is how ${SATORI_ADOPTION_REGISTRY} implements the adopted ` +
+        `${names.length > 1 ? 'primitives' : 'primitive'} ` +
+        `${names.map((name) => `\`${name}\``).join(' and ')}, so this bypasses ` +
+        `${names.length > 1 ? 'them' : 'it'}: the host loses the Material fallback and the ` +
+        'customer loses the extension id. Consume the primitive from ' +
+        '`@nuxeo/satori-platform/components` instead.';
+
+      const exempt = ADOPTION_BASELINE.get(specifier)?.get(file);
+      if (exempt !== undefined) {
+        // Seen either way, so a site that still imports the entry point is never also reported as
+        // a stale exemption. The symbols it used are recorded for the per-symbol staleness check.
+        seenSymbols.set(`${specifier} ${file}`, symbols);
+
+        const added = [...symbols].filter((symbol) => !exempt.has(symbol)).sort();
+        if (added.length === 0) continue;
+        fail(
+          `${file}:${line} imports ${added.map((name) => `\`${name}\``).join(', ')} from ` +
+            `\`${specifier}\`, which \`ADOPTION_BASELINE\` does not exempt for this file. The ` +
+            'baseline covers the imports this site already had, not whatever it imports next, ' +
+            `so adding one is new direct use. ${describe}`,
+        );
+        continue;
+      }
+
+      fail(
+        `${file}:${line} imports \`${specifier}\` directly, outside ` +
+          `${SATORI_COMPONENT_LIBS.join(' and ')}. ${describe}`,
+      );
+    }
+  }
+
+  for (const [specifier, files] of ADOPTION_BASELINE) {
+    for (const [path, exempt] of files) {
+      if (!fileExists(path)) continue;
+      const symbols = seenSymbols.get(`${specifier} ${path}`);
+      if (symbols === undefined) {
+        fail(
+          `${path} no longer imports \`${specifier}\`, so its entry in \`ADOPTION_BASELINE\` is ` +
+            'stale. Delete that entry: the baseline records what predates the guardrail and may ' +
+            'only shrink.',
+        );
+        continue;
+      }
+      const gone = [...exempt].filter((symbol) => !symbols.has(symbol)).sort();
+      if (gone.length > 0) {
+        fail(
+          `${path} no longer imports ${gone.map((name) => `\`${name}\``).join(', ')} from ` +
+            `\`${specifier}\`, so that much of its \`ADOPTION_BASELINE\` entry is stale. Delete ` +
+            'those symbols: the baseline may only shrink.',
+        );
+      }
+    }
+  }
+}
+
 const GUARDRAILS = [
   checkThemeTokens,
   checkDocsNumbering,
@@ -9644,6 +10652,7 @@ const GUARDRAILS = [
   checkSatoriFallbackDependencies,
   checkSatoriFallbackEntryPoint,
   checkSatoriPrimitivesRegisteredInOrder,
+  checkAdoptedPatternsNotBypassed,
 ];
 
 /**
