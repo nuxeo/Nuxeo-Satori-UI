@@ -185,9 +185,8 @@ html:not([data-app-theme]) body.mat-typography sat-platform-nav h2.sat-platform-
  * `<html>`, and an inline value outranks a stylesheet rule on the same element.
  * Asserted in `platform-nav-focus-ring.spec.ts`.
  *
- * The token also feeds the nav list's scrollbar thumb — the only other thing Satori reads it
- * for — which the rule below suppresses: measured as no rendered scrollbar in Chromium,
- * Firefox and WebKit.
+ * The token also feeds the nav list's scrollbar thumb, making overflow discoverable on
+ * shorter screens (NXSAT-213).
  *
  * Global rather than in `app-shell.component.scss` so the guarantee is testable: the Karma
  * target loads this stylesheet into the page, which is what lets
@@ -305,6 +304,10 @@ sat-platform-nav #sat-platform-nav-user-profile:focus {
  * Trash stayed clipped when keyboard-focused without hovering the rail. Beat vendor specificity
  * (`html body` + `nav` element) and give the flex child `min-height: 0` so the list scrolls
  * inside the fixed panel above the user profile block.
+ *
+ * NXSAT-213: Satori pads the list's top by 48px unless a switcher precedes it. The shell has no
+ * switcher, so that padding sat as dead space under the logo and pushed the last entries below
+ * the fold. The scrollbar is left visible so a rail that overflows reads as one.
  */
 /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html body sat-platform-nav nav.sat-platform-nav-list {
@@ -313,19 +316,18 @@ html body sat-platform-nav nav.sat-platform-nav-list {
   overflow-y: auto;
   overflow-x: hidden;
   scroll-padding-block-end: var(--sat-platform-nav-height-high, 48px);
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  scrollbar-width: thin;
+  scrollbar-color: var(--sat-platform-nav-outline) transparent;
+  padding-top: 0;
 }
 
+/* Satori zeroes the end padding on hover; keep it so the items do not shift by 4px. */
 /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html body sat-platform-nav nav.sat-platform-nav-list:hover,
 html body sat-platform-nav nav.sat-platform-nav-list:focus-within {
   overflow-y: auto;
   overflow-x: hidden;
+  padding-inline-end: 4px;
 }
 
 /* Long page titles must not squeeze the trailing logo + actions (avoids clipped "HYLAND" / settings). */
