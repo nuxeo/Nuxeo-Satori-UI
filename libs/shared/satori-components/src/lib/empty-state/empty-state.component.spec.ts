@@ -17,11 +17,15 @@ import { NxsEmptyStateComponent } from './empty-state.component';
   imports: [NxsEmptyStateComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   template: `
+    <ng-template #actionsTpl>
+      <button type="button" class="probe-template-action">Clear filters</button>
+    </ng-template>
     <nxs-empty-state
       [heading]="heading()"
       [headingLevel]="headingLevel()"
       [message]="message()"
       [icon]="icon()"
+      [actions]="withTemplate() ? actionsTpl : null"
     >
       @if (withAction()) {
         <button type="button" class="probe-action">Create folder</button>
@@ -36,6 +40,7 @@ class HostComponent {
   readonly message = signal('');
   readonly icon = signal('');
   readonly withAction = signal(false);
+  readonly withTemplate = signal(false);
 }
 
 describe('NxsEmptyStateComponent', () => {
@@ -113,6 +118,35 @@ describe('NxsEmptyStateComponent', () => {
 
   it('leaves the actions container empty when nothing is projected', () => {
     expect(query('.nxs-empty-state__actions')?.children.length).toBe(0);
+  });
+
+  // The `actions` input, which is how a host rendering this by ID has to pass buttons: the outlet
+  // projects no content, so the projection cases above cannot cover it. Its Satori counterpart is
+  // covered through the outlet in `provide-nxs-satori-components.spec.ts`, which registers Satori —
+  // so without these, removing the `ngTemplateOutlet` from this template would fail neither side.
+  it('renders the actions template into the actions container', async () => {
+    host.withTemplate.set(true);
+    await render();
+    expect(query('.nxs-empty-state__actions .probe-template-action')?.textContent?.trim()).toBe(
+      'Clear filters',
+    );
+  });
+
+  it('renders the template and the projected content together, template first', async () => {
+    host.withTemplate.set(true);
+    host.withAction.set(true);
+    await render();
+    const actions = query('.nxs-empty-state__actions');
+    const labels = [...(actions?.querySelectorAll('button') ?? [])].map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(labels).toEqual(['Clear filters', 'Create folder']);
+  });
+
+  it('renders no template content when the input is null', async () => {
+    host.withTemplate.set(false);
+    await render();
+    expect(query('.nxs-empty-state__actions .probe-template-action')).toBeNull();
   });
 
   it('projects the caller’s action into the actions container', async () => {
