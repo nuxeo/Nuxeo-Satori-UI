@@ -1,9 +1,10 @@
 # Publishing the Satori platform to the `@nuxeo` registry
 
-**Status:** planned, **deliberately not executed**. Nothing in this repo publishes
-anything today, and `libs/platform/package.json` still carries `"private": true`.
+**Status:** planned, **deliberately not executed**. Nothing in this repo has published
+anything, and `libs/platform/package.json` still carries `"private": true`.
 This is the runbook for the final deployment stage, once the end-to-end plan is
-working locally.
+working locally. The publish workflow exists (§5.6, NXSAT-666) and can dry-run; a real
+publish stays blocked by `"private": true` until NXSAT-667 removes it.
 **Audience:** whoever cuts the first Beta release.
 **Supersedes** the scope recommendation in `docs/publish-readiness.md` §1 — see
 [What I got wrong earlier](#what-i-got-wrong-earlier).
@@ -254,10 +255,25 @@ npm install @nuxeo/satori-platform@alpha
 
 ### 5.6 A CI workflow, when it is wanted
 
-Deliberately not written yet — a workflow that publishes to the wrong registry or the
-wrong dist-tag is worse than none. When it is, model it on `alpha.yaml`: manual
-dispatch, `setup-node` with `registry-url` + `scope`, `NODE_AUTH_TOKEN` from
-`NPM_PACKAGES_TOKEN`, publish under a pre-release dist-tag.
+`.github/workflows/publish-platform.yml` (NXSAT-666), manual dispatch, with the inputs
+`dryRun` (default `true`) and `version_bump`:
+
+1. `nx release version <bump> --projects=platform` bumps `libs/platform/package.json`
+   in the runner's checkout only. Nothing is committed or tagged.
+2. `nx build platform`, then `npm publish --dry-run --tag alpha` from
+   `dist/libs/platform`, then `npm pack` to produce the tarball that gets published.
+3. Only when `dryRun` is false, in a separate job that checks nothing out: `npm publish`
+   of that tarball with `--tag alpha` to `https://packages.nuxeo.com/repository/npm-public/`.
+   `NPM_PACKAGES_TOKEN` is written to a runner-temp userconfig, removed when the step ends,
+   and never reaches a repository file or the build job.
+
+The workflow passes only `--tag alpha` and never `latest`. npm may still assign `latest`
+on the first publish of a package that has no dist-tags yet, so the first real run should
+check `npm view @nuxeo/satori-platform dist-tags` afterwards. While `"private": true` is
+set, npm refuses the real publish with `EPRIVATE`. That refusal comes from the registry
+client's own check, and npm's publish command may contact the registry before it. NXSAT-667
+removes the flag and records the shipped version in a reviewed commit. Until then a real
+run cannot publish, and the version it bumps is not in git.
 
 ---
 

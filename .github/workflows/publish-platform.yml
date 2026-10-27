@@ -1,0 +1,121 @@
+name: Publish Platform
+
+# Publishes @nuxeo/satori-platform to the Nuxeo Nexus registry. Dispatch only.
+#
+# Every run bumps, builds and dry-runs the package. A real publish happens only when
+# `dryRun` is false, and only with `--tag alpha`. The workflow never passes `latest`, and
+# promoting a version to `latest` is a separate, deliberate step.
+#
+# While `libs/platform/package.json` carries `"private": true`, npm refuses the real publish
+# with EPRIVATE. That flag is the switch NXSAT-667 flips. Until then this workflow can dry-run
+# and cannot publish.
+on:
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Dry run only. Build and inspect the package, publish nothing.'
+        type: boolean
+        default: true
+      version_bump:
+        description: 'Semver bump applied to libs/platform/package.json before the build'
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: read
+
+jobs:
+  # Everything that runs repository code happens here, with no registry token in scope.
+  # The tarball it produces is the only thing handed to the publish job.
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tarball: ${{ steps.pack.outputs.tarball }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      # Bumped in the runner's checkout only. Nothing is committed or tagged, so a real
+      # publish must be followed by a reviewed commit that records the version it shipped.
+      - name: Bump version
+        env:
+          VERSION_BUMP: ${{ inputs.version_bump }}
+        run: npx nx release version "$VERSION_BUMP" --projects=platform
+
+      # The version is written into dist/ by ng-packagr, so the bump must precede the build.
+      - name: Build platform
+        run: npx nx build platform
+
+      - name: Dry-run publish
+        working-directory: dist/libs/platform
+        run: |
+          set -euo pipefail
+          npm publish --dry-run --tag alpha \
+            --registry https://packages.nuxeo.com/repository/npm-public/
+          echo "Dry run of $(node -p 'require("./package.json").name')@$(node -p 'require("./package.json").version') passed."
+
+      # Packed here so the publish job uploads exactly the bytes that were dry-run.
+      - name: Pack tarball
+        id: pack
+        working-directory: dist/libs/platform
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tarball"
+          npm pack --pack-destination "$RUNNER_TEMP/tarball"
+          TARBALL=$(ls "$RUNNER_TEMP/tarball"/*.tgz)
+          echo "tarball=$(basename "$TARBALL")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-tarball
+          path: ${{ runner.temp }}/tarball/*.tgz
+          retention-days: 7
+          if-no-files-found: error
+
+  # Split from `build` so the registry token never shares a runner with repository code,
+  # the same split `publish-config-package.yml` makes. This job checks nothing out and runs
+  # only the downloaded tarball through npm.
+  publish:
+    needs: build
+    if: ${{ !inputs.dryRun }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: platform-tarball
+          path: tarball
+
+      # The token goes into a throwaway userconfig in the runner temp directory, never into a
+      # repository file. It is removed afterwards so it does not outlive the step.
+      - name: Publish to Nuxeo Nexus (alpha)
+        working-directory: tarball
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PACKAGES_TOKEN }}
+          TARBALL: ${{ needs.build.outputs.tarball }}
+        run: |
+          set -euo pipefail
+          # npm expands ${NODE_AUTH_TOKEN} from the environment at run time, so the file
+          # holds a reference to the token and never the token itself.
+          printf '%s\n' '//packages.nuxeo.com/repository/npm-public/:_authToken=${NODE_AUTH_TOKEN}' \
+            > "$RUNNER_TEMP/npmrc"
+          trap 'rm -f "$RUNNER_TEMP/npmrc"' EXIT
+          npm publish "$TARBALL" --tag alpha \
+            --registry https://packages.nuxeo.com/repository/npm-public/ \
+            --userconfig "$RUNNER_TEMP/npmrc"

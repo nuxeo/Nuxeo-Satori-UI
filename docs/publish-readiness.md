@@ -145,7 +145,9 @@ before being trusted.
 2. In `libs/platform/package.json`: remove `"private": true`, add `publishConfig`.
 3. If the scope changes, rename the 190 import specifiers and the `tsconfig.base.json`
    aliases, then `npm run beta:api -- --update`.
-4. Decide a version. It is `0.2.0`, hand-maintained and not tied to the app version. NXSAT-308
+4. Decide a version. It is `0.2.0` in the source, hand-maintained and not tied to the app
+   version. The publish workflow (NXSAT-666) bumps it in the runner only, never in git, so
+   the committed version stays the one a human set. NXSAT-308
    moved it from `0.1.0`: `CHANGELOG.md`'s Unreleased section holds breaking changes, and
    `^0.1.0` admits only `0.1.x`. A Beta wants `0.x` so the API can move without a major bump
    every sprint.
