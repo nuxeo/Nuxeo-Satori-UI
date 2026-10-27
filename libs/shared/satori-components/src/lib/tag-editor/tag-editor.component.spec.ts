@@ -47,6 +47,7 @@ describe('NxsTagEditorComponent', () => {
     addTag: ReturnType<typeof vi.fn<TagCall>>;
     removeTag: ReturnType<typeof vi.fn<TagCall>>;
     suggestTags: ReturnType<typeof vi.fn<(term: string) => Observable<string[]>>>;
+    tagsOf: ReturnType<typeof vi.fn<(uid: string) => Observable<string[]>>>;
   };
   let toastShow: ReturnType<typeof vi.spyOn>;
   let toastError: ReturnType<typeof vi.spyOn>;
@@ -113,7 +114,12 @@ describe('NxsTagEditorComponent', () => {
   }
 
   beforeEach(async () => {
-    tags = { addTag: vi.fn(), removeTag: vi.fn(), suggestTags: vi.fn(() => of([])) };
+    tags = {
+      addTag: vi.fn(),
+      removeTag: vi.fn(),
+      suggestTags: vi.fn(() => of([])),
+      tagsOf: vi.fn(() => of(['contract', 'q3', 'invoice'])),
+    };
     user.set('alice');
     toastShow = vi.spyOn(NxsToastService.prototype, 'show').mockImplementation(() => undefined);
     toastError = vi.spyOn(NxsToastService.prototype, 'error').mockImplementation(() => undefined);
@@ -505,7 +511,8 @@ describe('NxsTagEditorComponent', () => {
         'The tag contract has been removed from the document.',
       );
 
-      // Reopened with the tags the host loaded before the change: it catches up once, and only once.
+      // Reopened with the tags the host loaded before the change: it reads Nuxeo's once, and only once.
+      tags.tagsOf.mockReturnValue(of(['q3', 'invoice']));
       await mount();
       expect(chips()).toEqual(['q3', 'invoice']);
       expect(host.changes).toEqual([['q3', 'invoice']]);
@@ -561,8 +568,7 @@ describe('NxsTagEditorComponent', () => {
       expect(host.changes).toEqual([]);
     });
 
-    it('does not replay a stored answer over tags the host has loaded again since', async () => {
-      tags.addTag.mockReturnValue(of(['contract', 'q3', 'invoice']));
+    it('does not replay an add another client reversed, over the tags the host reloaded', async () => {
       const added = new Subject<string[]>();
       tags.addTag.mockReturnValueOnce(added);
       await mount();
@@ -574,11 +580,13 @@ describe('NxsTagEditorComponent', () => {
       added.next(['contract', 'q3', 'invoice']);
       added.complete();
 
-      // Another client changed the tags after that answer, and the host reloaded the document.
-      await mount(['contract', 'q3', 'invoice', 'urgent']);
+      // Another client removed the tag again. The host reloads the tags it had before the add.
+      tags.tagsOf.mockReturnValue(of(['contract', 'q3']));
+      await mount(['contract', 'q3']);
 
-      expect(chips()).toEqual(['contract', 'q3', 'invoice', 'urgent']);
-      expect(host.changes).toEqual([]);
+      expect(tags.tagsOf).toHaveBeenCalledExactlyOnceWith('doc-1');
+      expect(chips()).toEqual(['contract', 'q3']);
+      expect(host.changes).toEqual([['contract', 'q3']]);
     });
 
     it("never sends one user's queued change as the next, nor says another's answer", async () => {
@@ -613,6 +621,90 @@ describe('NxsTagEditorComponent', () => {
       await mount();
       expect(chips()).toEqual(['contract', 'q3']);
       expect(host.changes).toEqual([]);
+    });
+  });
+
+  describe('sessions and reloads', () => {
+    it('shows the tags Nuxeo holds after changes no editor heard, whatever the host reloaded', async () => {
+      const added = new Subject<string[]>();
+      const removed = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      tags.removeTag.mockReturnValueOnce(removed);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('q3').click();
+      await settle();
+      fixture.destroy();
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+      removed.next(['contract', 'invoice']);
+      removed.complete();
+
+      // The host reloaded between the two writes, so it holds the intermediate tags.
+      tags.tagsOf.mockReturnValue(of(['contract', 'invoice']));
+      await mount(['contract', 'q3', 'invoice']);
+
+      expect(tags.tagsOf).toHaveBeenCalledExactlyOnceWith('doc-1');
+      expect(chips()).toEqual(['contract', 'invoice']);
+      expect(host.changes).toEqual([['contract', 'invoice']]);
+    });
+
+    it('hears the answer to a change still in flight when the editor reopens', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+
+      await mount();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+      await settle();
+
+      expect(chips()).toEqual(['contract', 'q3', 'invoice']);
+      expect(host.changes).toEqual([['contract', 'q3', 'invoice']]);
+      expect(tags.tagsOf).not.toHaveBeenCalled();
+    });
+
+    it('drops a change still waiting when its user signs out and back in as the same user', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      tags.removeTag.mockReturnValue(of(['q3', 'invoice']));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('contract').click();
+      await settle();
+
+      // alice signs out and back in while her add is on its way, all within one change detection.
+      user.set(null);
+      user.set('alice');
+      TestBed.flushEffects();
+      await settle();
+      expect(el().querySelector('.nxs-tag-editor__pending')).toBeNull();
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+      await settle();
+
+      // Her queued removal is never sent in her new session, and her old answer is not kept.
+      expect(tags.removeTag).not.toHaveBeenCalled();
+      expect(toastShow).not.toHaveBeenCalled();
+      expect(host.changes).toEqual([]);
+
+      fixture.destroy();
+      await mount();
+      expect(tags.tagsOf).not.toHaveBeenCalled();
+      expect(chips()).toEqual(['contract', 'q3']);
     });
   });
 

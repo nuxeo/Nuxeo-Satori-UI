@@ -2,7 +2,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { TagService } from './tag.service';
@@ -152,6 +152,31 @@ function shippedSources(dir: string): string[] {
   });
 }
 
+describe('TagService.tagsOf', () => {
+  let service: TagService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(TagService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('reads the document with its tags facet, and answers with the labels Nuxeo holds now', () => {
+    let labels: string[] = [];
+    service.tagsOf('doc-1').subscribe((result) => (labels = result));
+    const request = http.expectOne((r) => r.url.endsWith('/nuxeo/api/v1/id/doc-1'));
+    expect(request.request.method).toBe('GET');
+    expect(request.request.params.get('properties')).toBe('facetedTag');
+    request.flush({ properties: { 'nxtag:tags': [{ label: 'contract' }, { label: 'q3' }] } });
+    expect(labels).toEqual(['contract', 'q3']);
+  });
+});
+
 describe('TagService is the only Tag.Suggestion sender', () => {
   it.each([
     ['a URL in single quotes', `post('/nuxeo/api/v1/automation/Tag.Suggestion', body)`, 1],
@@ -173,7 +198,7 @@ describe('TagService is the only Tag.Suggestion sender', () => {
       .flatMap(shippedSources)
       .flatMap((path) =>
         tagSuggestionSenders(readFileSync(path, 'utf8')).map(
-          (literal) => `${relative(repositoryRoot, path)}: ${literal}`,
+          (literal) => `${relative(repositoryRoot, path).split(sep).join('/')}: ${literal}`,
         ),
       );
     expect(senders).toEqual([

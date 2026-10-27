@@ -37,6 +37,7 @@ import {
   of,
   Subject,
   switchMap,
+  takeUntil,
 } from 'rxjs';
 
 import { NxsSpinnerComponent } from '../spinner/spinner.component';
@@ -152,13 +153,12 @@ export class NxsTagEditorComponent {
       )
       .subscribe((answer) => this.hear(answer));
 
-    // An answer may have come while no editor for this document was open to hear it. It is
-    // applied only over the tags it was made over: anything else the host passes is newer.
+    // An answer may have come while no editor for this document was open to hear it. Neither the
+    // host's copy nor that answer is known to be current, so Nuxeo is asked for the tags instead.
     toObservable(this.documentUid)
       .pipe(takeUntilDestroyed())
       .subscribe((uid) => {
-        const tags = this.writes.take(uid, this.tags());
-        if (tags) this.store(tags);
+        if (this.writes.takeUnheard(uid)) this.refresh(uid);
       });
 
     this.terms
@@ -229,6 +229,22 @@ export class NxsTagEditorComponent {
     if (!('tags' in answer)) return;
     this.writes.heard(answer.write.uid);
     this.store(answer.tags);
+  }
+
+  /**
+   * The document's tags as Nuxeo holds them now. An answer for the document that arrives first is
+   * newer than this read, so it wins: the read is dropped rather than applied over it.
+   */
+  private refresh(uid: string): void {
+    this.tagService
+      .tagsOf(uid)
+      .pipe(
+        catchError(() => of<readonly string[] | null>(null)),
+        takeUntil(this.writes.answers.pipe(filter((answer) => answer.write.uid === uid))),
+      )
+      .subscribe((tags) => {
+        if (tags && uid === this.documentUid()) this.store(tags);
+      });
   }
 
   private store(tags: readonly string[]): void {

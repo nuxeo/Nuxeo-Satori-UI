@@ -3,10 +3,12 @@ import {
   computed,
   createEnvironmentInjector,
   DestroyRef,
+  effect,
   EnvironmentInjector,
   inject,
   Injectable,
   signal,
+  untracked,
   type Provider,
 } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
@@ -24,6 +26,8 @@ export interface NxsTagWrite {
   readonly label: string;
   /** Who made it: `CURRENT_USERNAME` at the time. */
   readonly user: string | null;
+  /** The session it was made in: bumped whenever the user changes, so no write outlives it. */
+  readonly session: number;
 }
 
 /**
@@ -33,17 +37,6 @@ export interface NxsTagWrite {
 export type NxsTagAnswer = { readonly write: NxsTagWrite } & (
   { readonly tags: string[] } | { readonly error: unknown } | { readonly dropped: true }
 );
-
-/** An answer no editor was open to hear, and what it may be applied over. */
-interface NxsUnheard {
-  readonly user: string | null;
-  /** The tags the document had when the first unheard change was made. */
-  readonly base: readonly string[];
-  readonly tags: readonly string[];
-}
-
-const sameTags = (a: readonly string[], b: readonly string[]): boolean =>
-  a.length === b.length && a.every((tag) => b.includes(tag));
 
 /**
  * The tag editor's writes, held by the injector that provides them so they outlive the editor that
@@ -55,15 +48,16 @@ const sameTags = (a: readonly string[], b: readonly string[]): boolean =>
  * once made, is sent and answered whatever happens to the view: one at a time, in order, so an
  * answer can never overwrite a later one. The toast is said here for the same reason.
  *
- * An answer no editor was open to hear is kept for its document, and the next editor for that
- * document takes it, so a reopened panel shows what Nuxeo stored rather than the tags the host
- * loaded before the change — unless the host has loaded the document again since, when its copy
- * is newer and wins.
+ * An answer no editor was open to hear leaves its document marked, and the next editor for that
+ * document asks Nuxeo for the document's tags rather than trusting the copy its host holds: a copy
+ * loaded before the change, or after another client changed the tags again, is never replayed.
  *
- * Every change belongs to the user who made it, so the queue outliving a view never lets it outlive
- * a session: a change still waiting when its user signs out is dropped unsent, rather than sent
- * with whoever signs in next, and an answer that arrives after its user has gone says nothing and
- * is not kept. A host that provides no `CURRENT_USERNAME` gets no such separation.
+ * Every change belongs to the user who made it, and to the session that user was in. The app's
+ * user is a plain function, so a sign-out is seen when its signal reports it: each such change
+ * starts a new session, and a change still waiting then is dropped unsent, rather than sent with
+ * whoever signs in next — even when the same user signs back in. An answer that arrives after its
+ * session has ended says nothing and is not kept. A host that provides no `CURRENT_USERNAME` gets
+ * no such separation.
  *
  * Not exported: a host installs it with `provideNxsTagWrites()`, and only the editor calls it.
  */
@@ -83,17 +77,32 @@ export class NxsTagWrites {
   private readonly answered = new Subject<NxsTagAnswer>();
   /** The tags each document had after its last answer, while it still has writes in the queue. */
   private readonly known = new Map<string, readonly string[]>();
-  /** The answers left on a document that no editor was open to hear. */
-  private readonly unheard = new Map<string, NxsUnheard>();
+  /** The documents with an answer no editor was open to hear. */
+  private readonly unheard = new Set<string>();
   /** Every write not yet answered, whoever made it. */
   private readonly queued = signal<readonly NxsTagWrite[]>([]);
+  /** Bumped at each change of user, which ends the session the writes were made in. */
+  private readonly session = signal(0);
 
   /** The current user's writes not yet answered, in the order they were made. */
-  readonly pending = computed(() => this.queued().filter((write) => write.user === this.user()));
-  /** Each answer, as it arrives. An editor that hears one for its document calls `take`. */
+  readonly pending = computed(() =>
+    this.queued().filter((write) => write.session === this.session() && write.user === this.user()),
+  );
+  /** Each answer, as it arrives. An editor that hears one for its document calls `heard`. */
   readonly answers: Observable<NxsTagAnswer> = this.answered.asObservable();
 
   constructor() {
+    // The user is read through a plain function, so the only sign of a sign-out is the app's signal
+    // changing under this effect. Each change ends the session, and with it every answer kept for
+    // the session before: nothing from one session may be sent, shown or kept under the next.
+    effect(() => {
+      this.user();
+      untracked(() => {
+        this.session.update((session) => session + 1);
+        this.unheard.clear();
+        this.known.clear();
+      });
+    });
     // When the provider goes, no change is taken any more, but those already made are still sent
     // and answered: completing the queue lets `concatMap` finish them, where unsubscribing would
     // cancel the one in flight and drop the rest.
@@ -109,21 +118,24 @@ export class NxsTagWrites {
     // With nothing queued for the document, the caller's tags are the latest. Behind a queued
     // write, the answer to that write will be, so the caller's copy must not replace it.
     if (!this.pendingOn(uid)) this.known.set(uid, tags);
-    const write: NxsTagWrite = { uid, change, label, user: this.user() };
+    const write: NxsTagWrite = {
+      uid,
+      change,
+      label,
+      user: this.user(),
+      session: this.session(),
+    };
     this.queued.update((writes) => [...writes, write]);
     this.queue.next(write);
   }
 
   /**
-   * The tags an unheard answer left on `uid`, handed over once, to its own user, and only over the
-   * tags the change was made over. Any other `current` tags mean the host has loaded the document
-   * again since, so they are newer than the answer and it is dropped.
+   * Whether `uid` has an answer that no editor heard, and clears the mark. The next editor for the
+   * document must then read its tags from Nuxeo, since neither its host's copy nor the answer is
+   * known to be current.
    */
-  take(uid: string, current: readonly string[]): readonly string[] | undefined {
-    const unheard = this.unheard.get(uid);
-    this.unheard.delete(uid);
-    if (!unheard || unheard.user !== this.user()) return undefined;
-    return sameTags(current, unheard.base) ? unheard.tags : undefined;
+  takeUnheard(uid: string): boolean {
+    return this.unheard.delete(uid);
   }
 
   /** An editor heard `uid`'s answer, so nothing is kept for the next one. */
@@ -137,9 +149,11 @@ export class NxsTagWrites {
 
   private send(write: NxsTagWrite): Observable<NxsTagAnswer> {
     // Decided when its turn comes, not when it was queued: the request takes whoever is signed in
-    // then, which must still be the user who made the change.
+    // then, which must still be the user, in the session, who made the change.
     return defer(() => {
-      if (write.user !== this.user()) return of({ write, dropped: true as const });
+      if (write.session !== this.session() || write.user !== this.user()) {
+        return of({ write, dropped: true as const });
+      }
       const call =
         write.change === 'add'
           ? this.tagService.addTag(write.uid, write.label)
@@ -152,11 +166,11 @@ export class NxsTagWrites {
   }
 
   private settle(answer: NxsTagAnswer): void {
-    const { uid, change, label, user } = answer.write;
+    const { uid, change, label } = answer.write;
     const before = this.known.get(uid) ?? [];
     this.queued.update((writes) => writes.filter((write) => write !== answer.write));
-    if ('dropped' in answer || user !== this.user()) {
-      // Another user's change: never sent, or answered after its user left. Nobody here asked.
+    if ('dropped' in answer || !this.inSession(answer.write)) {
+      // Another session's change: never sent, or answered after its session ended. Nobody here asked.
       if (!this.pendingOn(uid)) this.known.delete(uid);
       return;
     }
@@ -164,10 +178,7 @@ export class NxsTagWrites {
       this.toast.error(this.failure(change, answer.error, label));
     } else {
       this.known.set(uid, answer.tags);
-      // A chain of unheard answers is applied over what the host had before the first of them.
-      const earlier = this.unheard.get(uid);
-      const base = earlier?.user === user ? earlier.base : before;
-      this.unheard.set(uid, { user, base, tags: answer.tags });
+      this.unheard.add(uid);
       // The label Nuxeo stored, which is the one to announce: "Q3 Report" comes back as `q3report`.
       const stored =
         change === 'add'
@@ -180,6 +191,10 @@ export class NxsTagWrites {
     }
     if (!this.pendingOn(uid)) this.known.delete(uid);
     this.answered.next(answer);
+  }
+
+  private inSession(write: NxsTagWrite): boolean {
+    return write.session === this.session() && write.user === this.user();
   }
 
   private failure(change: NxsTagChange, error: unknown, tag: string): string {
@@ -196,9 +211,9 @@ export class NxsTagWrites {
  * Keeps `nxs-tag-editor`'s changes for as long as the injector it is listed in, so one the user
  * made is never cancelled or dropped by the editor closing first — a tab or panel switched away, or
  * the host moving to another document. An answer that arrives with no editor open is shown by the
- * next editor for that document, which passes it on in `tagsChange` — unless the host has loaded
- * the document again since. A change never outlives its user's session: one still waiting at
- * sign-out is dropped, not sent as whoever signs in next. That needs the app's `CURRENT_USERNAME`.
+ * next editor for that document, which reads the document's tags from Nuxeo and passes them on in
+ * `tagsChange`. A change never outlives its user's session: one still waiting at sign-out is
+ * dropped, not sent as whoever signs in next. That needs the app's `CURRENT_USERNAME`.
  *
  * List it once, in the application's providers. A host and a remote share the instance the host
  * provides; a `providedIn` singleton would become one per side of a federation boundary.
