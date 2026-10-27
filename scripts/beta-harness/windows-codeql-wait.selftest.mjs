@@ -46,7 +46,9 @@ test('all platform jobs use the repository-pinned runtime accepted by gate zero'
 test('a clean Windows runner explicitly builds the bundle before the full gate', () => {
   const steps = workflow.jobs['windows-gate'].steps;
   const build = steps.findIndex((step) => step.run === 'npx nx build nuxeo-ui');
-  const gate = steps.findIndex((step) => step.run === 'npm run beta:gate -- --phase windows-ci');
+  const gate = steps.findIndex(
+    (step) => step.run === 'npm run beta:gate -- --phase windows-ci --require-complete',
+  );
   assert.ok(build >= 0);
   assert.ok(gate > build);
 });
