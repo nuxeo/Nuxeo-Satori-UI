@@ -641,25 +641,26 @@ item whose ID follows the convention picks up a registered component with no fur
 
 ## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
 
-Eleven component-registry IDs for the primitives. Nine are primitives Satori also ships; `banner` and `chipSet` have no Satori wrapper yet, so they stay Material-only. Each resolves to a Material
-implementation from `@nuxeo/satori-platform/components`, and all but `card`, `banner` and `chipSet` to a Satori-backed
+Eleven component-registry IDs for the primitives. Nine have a Satori twin; `banner` and
+`chipSet` have no Satori wrapper yet, so they stay Material-only. Each resolves to a Material
+implementation from `@nuxeo/satori-platform/components`, and all but `banner` and `chipSet` to a Satori-backed
 one when `@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only
 one in the package that imports `@hylandsoftware/satori-ui`, an **optional** peer: without GitHub
 Packages access, leave it out and every ID still resolves, on Material.
 
-| Component ID                 | Inputs (all text arrives translated)                                                                                         | Material implementation       | Satori-backed by                                                |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | --------------------------------------------------------------- |
-| `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`                                                                                         | `NxsAvatarComponent`          | `sat-avatar`                                                    |
-| `nxs.primitives.breadcrumbs` | `items`, `label`                                                                                                             | `NxsBreadcrumbsComponent`     | `sat-breadcrumbs`                                               |
-| `nxs.primitives.tag`         | `label`, `color`                                                                                                             | `NxsTagComponent`             | `sat-category-tag`                                              |
-| `nxs.primitives.statusTag`   | `label`, `status`, `hideIcon`                                                                                                | `NxsStatusTagComponent`       | `sat-status-tag`                                                |
-| `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon`                                                                                 | `NxsRichTooltipComponent`     | `sat-rich-tooltip`                                              |
-| `nxs.primitives.errorState`  | `status`, `heading`, `headingLevel`, `retryable`, `retryHandler`                                                             | `NxsErrorStateComponent`      | `sat-401-error-state` … `sat-500-error-state`                   |
-| `nxs.primitives.tabs`        | `tabs`, `label`, `selectedIndex`, `body`, `selectHandler`                                                                    | `NxsTabsComponent`            | `sat-navigation-tabs`                                           |
-| `nxs.primitives.actionBar`   | `actions`, `label`, `moreLabel`, `actionHandler`                                                                             | `NxsDocumentToolbarComponent` | Satori's action-bar button, `button[satActionBarButton]`        |
-| `nxs.primitives.card`        | `heading`, `subheading`, `selected`, `selectionLabel`, `selectionHandler`, `openHandler`, `media`, `headerAction`, `actions` | `NxsCardComponent`            | — (Material only: Satori's interactive card is not yet wrapped) |
-| `nxs.primitives.banner`      | `message`, `tone`, `announce`, `actions`                                                                                     | `NxsBannerComponent`          | — (Material only for now)                                       |
-| `nxs.primitives.chipSet`     | `items`, `label`, `removeHandler`                                                                                            | `NxsChipSetComponent`         | — (Material only for now)                                       |
+| Component ID                 | Inputs (all text arrives translated)                                                                                         | Material implementation       | Satori-backed by                                         |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------- |
+| `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`                                                                                         | `NxsAvatarComponent`          | `sat-avatar`                                             |
+| `nxs.primitives.breadcrumbs` | `items`, `label`                                                                                                             | `NxsBreadcrumbsComponent`     | `sat-breadcrumbs`                                        |
+| `nxs.primitives.tag`         | `label`, `color`                                                                                                             | `NxsTagComponent`             | `sat-category-tag`                                       |
+| `nxs.primitives.statusTag`   | `label`, `status`, `hideIcon`                                                                                                | `NxsStatusTagComponent`       | `sat-status-tag`                                         |
+| `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon`                                                                                 | `NxsRichTooltipComponent`     | `sat-rich-tooltip`                                       |
+| `nxs.primitives.errorState`  | `status`, `heading`, `headingLevel`, `retryable`, `retryHandler`                                                             | `NxsErrorStateComponent`      | `sat-401-error-state` … `sat-500-error-state`            |
+| `nxs.primitives.tabs`        | `tabs`, `label`, `selectedIndex`, `body`, `selectHandler`                                                                    | `NxsTabsComponent`            | `sat-navigation-tabs`                                    |
+| `nxs.primitives.actionBar`   | `actions`, `label`, `moreLabel`, `actionHandler`                                                                             | `NxsDocumentToolbarComponent` | Satori's action-bar button, `button[satActionBarButton]` |
+| `nxs.primitives.card`        | `heading`, `subheading`, `selected`, `selectionLabel`, `selectionHandler`, `openHandler`, `media`, `headerAction`, `actions` | `NxsCardComponent`            | `sat-interactive-card`                                   |
+| `nxs.primitives.banner`      | `message`, `tone`, `announce`, `actions`                                                                                     | `NxsBannerComponent`          | — (Material only for now)                                |
+| `nxs.primitives.chipSet`     | `items`, `label`, `removeHandler`                                                                                            | `NxsChipSetComponent`         | — (Material only for now)                                |
 
 Both implementations of an ID declare the same inputs (`Nxs…Inputs` in `/components`; a spec in
 `/components-satori` compares them), so whoever renders an ID passes the same `componentInputs`
@@ -688,6 +689,12 @@ it projects no content and binds no outputs. So the IDs that need either take it
 selection changes, whoever changed it, but not for the first; `actionHandler` never for a disabled
 entry. The Material implementations take the same inputs and keep their outputs
 (`selectedIndexChange`, `selected`) for a template that renders them directly.
+
+**What a click on a card does.** Both implementations open the item from the heading and from a
+click anywhere on the card that is not on another control, and neither opens it from the checkbox or
+from a button you pass in `headerAction` or `actions`. The one difference: on Satori a click on the
+few pixels of padding _around_ those controls opens the item, where on Material it does nothing. A
+replacement you register decides this for itself.
 
 **Where packaged screens render them.** Browse and the collection page render their breadcrumb
 trail through `nxs.primitives.breadcrumbs`. Browse, the collection page, document detail and task
