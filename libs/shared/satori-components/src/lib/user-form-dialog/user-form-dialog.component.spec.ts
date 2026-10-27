@@ -72,7 +72,7 @@ describe('NxsUserFormDialogComponent', () => {
   const component = (): Record<string, unknown> =>
     fixture.componentInstance as unknown as Record<string, unknown>;
   const method = (name: string): ((...args: unknown[]) => unknown) =>
-    component()[name] as (...args: unknown[]) => unknown;
+    (component()[name] as (...args: unknown[]) => unknown).bind(component());
   const button = (text: string): HTMLButtonElement =>
     Array.from(el().querySelectorAll('button')).find(
       (b) => b.textContent?.trim() === text,

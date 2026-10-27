@@ -50,7 +50,7 @@ describe('NxsGroupFormDialogComponent', () => {
   const component = (): Record<string, unknown> =>
     fixture.componentInstance as unknown as Record<string, unknown>;
   const method = (name: string): ((...args: unknown[]) => unknown) =>
-    component()[name] as (...args: unknown[]) => unknown;
+    (component()[name] as (...args: unknown[]) => unknown).bind(component());
   const signalOf = <T>(name: string): (() => T) => component()[name] as () => T;
   const button = (text: string): HTMLButtonElement =>
     Array.from(el().querySelectorAll('button')).find(
