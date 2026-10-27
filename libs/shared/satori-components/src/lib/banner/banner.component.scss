@@ -1,0 +1,58 @@
+:host {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 16px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+}
+
+:host([data-tone='warning']) {
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}
+
+:host([data-tone='error']) {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.nxs-banner__icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  font-size: 22px;
+}
+
+// Grows to push the actions right; below its basis the actions wrap onto their own line rather
+// than squeezing each other at 320 CSS pixels (WCAG 1.4.10).
+.nxs-banner__message {
+  flex: 1 1 12rem;
+  font: var(--mat-sys-body-medium);
+  font-weight: 500;
+}
+
+.nxs-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+  max-width: 100%;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+// Material 3 ignores a button's `color` palette variants, so a destructive action takes the error tokens
+// itself, in each emphasis. Disabled buttons keep Material's own disabled styling.
+.nxs-banner__danger {
+  --mat-text-button-label-text-color: var(--mat-sys-error);
+  --mat-outlined-button-label-text-color: var(--mat-sys-error);
+  --mat-outlined-button-outline-color: var(--mat-sys-error);
+  --mat-filled-button-container-color: var(--mat-sys-error);
+  --mat-filled-button-label-text-color: var(--mat-sys-on-error);
+}

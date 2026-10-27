@@ -75,10 +75,7 @@
         </div>
 
         @if (aiError()) {
-          <div class="ai-error">
-            <mat-icon svgIcon="error" />
-            {{ aiError() }}
-          </div>
+          <nxs-banner class="ai-error" tone="error" announce="alert" [message]="aiError() ?? ''" />
         }
 
         @if (showNxqlPanel() && aiGeneratedNxql()) {
