@@ -9411,6 +9411,30 @@ const REFUSED = [
     /is not imported by name from a relative module/,
   ],
   [
+    'registers a class it imports type-only',
+    // A registration must name a runtime value. This pins that intent rather than closing a
+    // reachable bypass: TypeScript refuses every shape the finding described — `import type` or
+    // `import { type … }` beside a same-named value is TS2440, a type-only binding used as a
+    // value is TS1361, and importing an interface as a value is TS2693 — and `typecheck` is one
+    // of this repo's gates. The fixture below does not compile, which the selftest does not
+    // check, so the row documents the rule rather than a defect it prevents.
+    (registry) =>
+      registry.replace(
+        "import { NxsSatoriTagComponent } from './tag/satori-tag.component';",
+        "import type { NxsSatoriTagComponent } from './tag/satori-tag.component';",
+      ),
+    /`NxsSatoriTagComponent`, registered for `tag`, is not imported by name from a relative module/,
+  ],
+  [
+    'registers a class imported with a specifier-level type modifier',
+    (registry) =>
+      registry.replace(
+        "import { NxsSatoriTagComponent } from './tag/satori-tag.component';",
+        "import { type NxsSatoriTagComponent } from './tag/satori-tag.component';",
+      ),
+    /`NxsSatoriTagComponent`, registered for `tag`, is not imported by name from a relative module/,
+  ],
+  [
     'registers one primitive twice',
     // Legal JS: the later wins, so only the avatar wrapper installs. Collecting both would guard
     // `@hylandsoftware/satori-ui/tag` — which nothing registers any more — and fail legitimate

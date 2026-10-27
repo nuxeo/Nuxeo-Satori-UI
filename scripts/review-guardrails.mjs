@@ -9973,9 +9973,14 @@ function adoptedSatoriEntryPoints() {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
       continue;
     }
+    // Type-only bindings name no runtime value, and a registration must be one. Skipped at both
+    // levels — `import type { … }` and `import { type … }` — so a registration naming one is
+    // refused as not imported rather than resolved to the module it annotates.
+    if (statement.importClause?.isTypeOnly === true) continue;
     const bindings = statement.importClause?.namedBindings;
     if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
     for (const element of bindings.elements) {
+      if (element.isTypeOnly === true) continue;
       imported.set(element.name.text, {
         specifier: statement.moduleSpecifier.text,
         exported: (element.propertyName ?? element.name).text,
