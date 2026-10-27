@@ -158,12 +158,17 @@ than pushing to a scope we might not own.
 
 ## 5. Deliberately not done
 
-- **No release CI workflow.** Publishing on a tag needs the scope decision first, and a
-  workflow that publishes to the wrong registry is worse than none.
+- **No real-publish CI workflow.** The manual `publish-platform` workflow (NXSAT-666) only
+  dry-runs by default, and its publish job runs only when `dryRun` is false and `private` is
+  removed. Publishing on a tag needs the scope decision first, and a workflow that publishes
+  to the wrong registry is worse than none.
 - **No provenance / signing.** Worth doing at GA; needs a public registry and a trusted
   CI publisher.
-- **Version is not automated.** No changesets, no semantic-release. With one package and
-  a hand-written changelog that is fine; it stops being fine with three.
+- **Version is not persistently automated.** The workflow bumps the version in the runner's
+  checkout only, via `nx release`, and never commits or tags it. No changesets, no
+  semantic-release. A real publish must be followed by a reviewed commit that records the
+  version shipped. With one package and a hand-written changelog that is fine; it stops being
+  fine with three.
 - **No real `npm install` of the template against the tarball.** `fork-simulation`
   covers type resolution offline. Peer _installability_, the risk this bullet once called
   uncovered, is now checked: `@hylandsoftware/satori-ui` is an optional peer that only
