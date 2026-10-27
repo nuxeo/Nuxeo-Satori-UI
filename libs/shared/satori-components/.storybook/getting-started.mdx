@@ -214,6 +214,15 @@ application can replace the component everywhere it appears without changing tho
     </tr>
     <tr>
       <td>
+        <code>nxs.primitives.card</code>
+      </td>
+      <td>Card</td>
+      <td>
+        <code>provideNxsComponents()</code>
+      </td>
+    </tr>
+    <tr>
+      <td>
         <code>nxs.components.permissionsPanel</code>
       </td>
       <td>Permissions panel</td>
@@ -222,7 +231,7 @@ application can replace the component everywhere it appears without changing tho
   </tbody>
 </table>
 
-The four `nxs.primitives.*` IDs are exported as `NXS_PRIMITIVE_IDS`, and the permissions panel's as
+The `nxs.primitives.*` IDs are exported as `NXS_PRIMITIVE_IDS`, and the permissions panel's as
 `NXS_PERMISSIONS_PANEL_ID`. Render an ID with `lib-extension-outlet`, passing the component's inputs:
 
 export const registeringByIdTs = `import { Component } from '@angular/core';
@@ -250,8 +259,8 @@ export class AcmeDocumentTypeComponent {
 />
 
 To replace a component, register your own under its ID, after the providers above. It takes the same
-inputs: for the four primitives, implement the matching interface (`NxsTagInputs` for the tag, and
-so on).
+inputs: for a primitive, implement the matching interface (`NxsTagInputs` for the tag, and so
+on).
 
 export const registeringByIdTs2 = `import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 

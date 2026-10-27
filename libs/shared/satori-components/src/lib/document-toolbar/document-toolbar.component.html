@@ -1,11 +1,11 @@
 <div
   class="nxs-document-toolbar__group"
   role="group"
-  [attr.aria-label]="ownLabel() || ('satori-components.document-toolbar.label' | translate)"
+  [attr.aria-label]="view.ownLabel() || ('satori-components.document-toolbar.label' | translate)"
 >
   <ng-content />
 
-  @for (action of inline(); track action.id) {
+  @for (action of view.inline(); track action.id) {
     <!-- The name is text, not aria-label: an icon ligature beside an aria-label reads as a
          visible label the name does not contain (WCAG 2.5.3, IBM label_name_visible). -->
     <button
@@ -14,35 +14,35 @@
       class="nxs-document-toolbar__action"
       [class.nxs-document-toolbar__action--active]="action.active"
       [attr.data-action-id]="action.id"
-      [matTooltip]="tooltipOf(action)"
+      [matTooltip]="view.tooltipOf(action)"
       [disabled]="!!action.disabled"
       disabledInteractive
-      (click)="run(action)"
+      (click)="view.run(action)"
     >
       @if (action.icon) {
-        <span class="cdk-visually-hidden" cdkAriaLive="off">{{ nameOf(action) }}</span>
+        <span class="cdk-visually-hidden" cdkAriaLive="off">{{ view.nameOf(action) }}</span>
         <mat-icon aria-hidden="true" [svgIcon]="action.icon" />
       } @else {
         <span class="nxs-document-toolbar__text">{{ action.label }}</span>
-        @if (extraOf(action); as extra) {
+        @if (view.extraOf(action); as extra) {
           <span class="cdk-visually-hidden" cdkAriaLive="off">. {{ extra }}</span>
         }
       }
     </button>
   }
 
-  @if (overflow().length > 0) {
+  @if (view.overflow().length > 0) {
     <button
       mat-icon-button
       type="button"
       class="nxs-document-toolbar__more"
       [matMenuTriggerFor]="moreMenu"
       [matTooltip]="
-        ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
+        view.ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
       "
     >
       <span class="cdk-visually-hidden" cdkAriaLive="off">{{
-        ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
+        view.ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
       }}</span>
       <mat-icon aria-hidden="true" svgIcon="more_vert" />
     </button>
@@ -50,7 +50,7 @@
 </div>
 
 <mat-menu #moreMenu="matMenu" class="nxs-document-toolbar__menu">
-  @for (action of overflow(); track action.id) {
+  @for (action of view.overflow(); track action.id) {
     <button
       mat-menu-item
       type="button"
@@ -59,7 +59,7 @@
       [matTooltip]="action.tooltip ?? ''"
       [matTooltipDisabled]="!action.tooltip"
       matTooltipPosition="left"
-      (click)="run(action)"
+      (click)="view.run(action)"
     >
       @if (action.icon) {
         <mat-icon aria-hidden="true" [svgIcon]="action.icon" />

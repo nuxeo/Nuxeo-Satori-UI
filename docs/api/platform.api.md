@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-132 exported symbol(s).
+137 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -204,6 +204,7 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly errorState: "nxs.primitives.errorState";
     readonly tabs: "nxs.primitives.tabs";
     readonly actionBar: "nxs.primitives.actionBar";
+    readonly card: "nxs.primitives.card";
     }>;
 }
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
@@ -213,6 +214,25 @@ interface NxsActionBarInputs {
     readonly label: InputSignal<string>;
     readonly moreLabel: InputSignal<string>;
     readonly actionHandler: InputSignal<((action: NxsToolbarAction) => void) | null>;
+    }
+}
+interface NxsActionBarSource {
+    readonly actions: Signal<readonly NxsToolbarAction[]>;
+    readonly label: Signal<string>;
+    readonly moreLabel: Signal<string>;
+    readonly actionHandler: Signal<((action: NxsToolbarAction) => void) | null>;
+    readonly selected: OutputEmitterRef<NxsToolbarAction>;
+    }
+}
+interface NxsActionBarView {
+    readonly inline: Signal<readonly NxsToolbarAction[]>;
+    readonly overflow: Signal<readonly NxsToolbarAction[]>;
+    readonly ownLabel: Signal<string>;
+    readonly ownMoreLabel: Signal<string>;
+    readonly tooltipOf: (action: NxsToolbarAction) => string;
+    readonly extraOf: (action: NxsToolbarAction) => string;
+    readonly nameOf: (action: NxsToolbarAction) => string;
+    readonly run: (action: NxsToolbarAction) => void;
     }
 }
 class NxsActionMenuComponent {
@@ -318,6 +338,85 @@ class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
 interface NxsBreadcrumbsInputs {
     readonly items: InputSignal<readonly NxsBreadcrumbItem[]>;
     readonly label: InputSignal<string>;
+    }
+}
+class NxsCardComponent implements NxsCardInputs {
+    readonly heading: import("@angular/core").InputSignal<string>;
+    readonly subheading: import("@angular/core").InputSignal<string>;
+    readonly selected: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly selectionLabel: import("@angular/core").InputSignal<string>;
+    readonly selectionHandler: import("@angular/core").InputSignal<((selected: boolean) => void) | null>;
+    readonly openHandler: import("@angular/core").InputSignal<(() => void) | null>;
+    readonly media: import("@angular/core").InputSignal<TemplateRef<unknown> | null>;
+    readonly headerAction: import("@angular/core").InputSignal<TemplateRef<unknown> | null>;
+    readonly actions: import("@angular/core").InputSignal<TemplateRef<unknown> | null>;
+    protected readonly interactive: import("@angular/core").Signal<boolean>;
+    protected readonly label: import("@angular/core").Signal<string>;
+    protected readonly selectable: import("@angular/core").Signal<boolean>;
+    protected readonly ownSubheading: import("@angular/core").Signal<string>;
+    protected readonly bare: import("@angular/core").Signal<boolean>;
+    protected toggle(selected: boolean): void;
+    protected open(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsCardComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsCardComponent, "nxs-card", never, {
+    "heading": {
+    "alias": "heading";
+    "required": false;
+    "isSignal": true;
+    };
+    "subheading": {
+    "alias": "subheading";
+    "required": false;
+    "isSignal": true;
+    };
+    "selected": {
+    "alias": "selected";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectionLabel": {
+    "alias": "selectionLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectionHandler": {
+    "alias": "selectionHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "openHandler": {
+    "alias": "openHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "media": {
+    "alias": "media";
+    "required": false;
+    "isSignal": true;
+    };
+    "headerAction": {
+    "alias": "headerAction";
+    "required": false;
+    "isSignal": true;
+    };
+    "actions": {
+    "alias": "actions";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsCardInputs {
+    readonly heading: InputSignal<string>;
+    readonly subheading: InputSignal<string>;
+    readonly selected: InputSignalWithTransform<boolean, unknown>;
+    readonly selectionLabel: InputSignal<string>;
+    readonly selectionHandler: InputSignal<((selected: boolean) => void) | null>;
+    readonly openHandler: InputSignal<(() => void) | null>;
+    readonly media: InputSignal<TemplateRef<unknown> | null>;
+    readonly headerAction: InputSignal<TemplateRef<unknown> | null>;
+    readonly actions: InputSignal<TemplateRef<unknown> | null>;
     }
 }
 class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
@@ -964,14 +1063,7 @@ class NxsDocumentToolbarComponent implements NxsActionBarInputs {
     readonly moreLabel: import("@angular/core").InputSignal<string>;
     readonly actionHandler: import("@angular/core").InputSignal<((action: NxsToolbarAction) => void) | null>;
     readonly selected: import("@angular/core").OutputEmitterRef<NxsToolbarAction>;
-    protected readonly inline: import("@angular/core").Signal<NxsToolbarAction[]>;
-    protected readonly overflow: import("@angular/core").Signal<NxsToolbarAction[]>;
-    protected readonly ownLabel: import("@angular/core").Signal<string>;
-    protected readonly ownMoreLabel: import("@angular/core").Signal<string>;
-    protected tooltipOf(action: NxsToolbarAction): string;
-    protected extraOf(action: NxsToolbarAction): string;
-    protected nameOf(action: NxsToolbarAction): string;
-    protected run(action: NxsToolbarAction): void;
+    protected readonly view: import("@nuxeo/satori-platform/components").NxsActionBarView;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentToolbarComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentToolbarComponent, "nxs-document-toolbar", never, {
     "actions": {
@@ -2528,6 +2620,7 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     }
 }
 function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: string, params?: Record<string, unknown>) => string, locale: string): string;
+function nxsActionBarView(bar: NxsActionBarSource): NxsActionBarView;
 function nxsDocumentSuggestionQuery(term: string, types?: readonly string[]): string;
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
@@ -4727,6 +4820,9 @@ interface PermissionEntry {
     right: string;
     timeFrame: string;
     grantedBy: string;
+    begin?: string | null;
+    end?: string | null;
+    granted?: boolean;
     }
 }
 interface PictureInfo {
@@ -4837,6 +4933,8 @@ class ShareSavedSearchDialogComponent implements OnInit {
     sendExternalNotification(row: ExternalPermissionEntry): void;
     removeExternalPermission(row: ExternalPermissionEntry): void;
     togglePermissionInheritance(): void;
+    protected isEditable(row: PermissionEntry): boolean;
+    protected permissionLabel(permission: string): string;
     openAddPermissionDialog(): void;
     removeRow(id: string): void;
     editRow(id: string): void;

@@ -359,12 +359,18 @@ if (!barrel) {
  * `components` object with quoted keys is read as registrations, loudly; one with plain keys, the
  * usual way to write it, is not read at all.
  */
+// One entry per `NXS_PRIMITIVE_IDS` member, which this file cannot read in a customer's CI;
+// `scripts/check-extension-library.selftest.mjs` fails when the two lists differ.
 const PRIMITIVE_CONTRACTS = {
   avatar: 'NxsAvatarInputs',
   breadcrumbs: 'NxsBreadcrumbsInputs',
   tag: 'NxsTagInputs',
+  statusTag: 'NxsStatusTagInputs',
   richTooltip: 'NxsRichTooltipInputs',
   errorState: 'NxsErrorStateInputs',
+  tabs: 'NxsTabsInputs',
+  actionBar: 'NxsActionBarInputs',
+  card: 'NxsCardInputs',
 };
 
 const COMPONENTS_KEY = String.raw`(?:\bcomponents|'components'|"components")\s*:\s*`;
