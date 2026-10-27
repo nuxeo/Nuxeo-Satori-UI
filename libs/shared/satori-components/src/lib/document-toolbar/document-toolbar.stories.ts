@@ -38,7 +38,7 @@ const meta: Meta<NxsDocumentToolbarComponent> = {
   title: 'Documents/Document toolbar',
   component: NxsDocumentToolbarComponent,
   tags: ['autodocs'],
-  args: { actions: FILE_TOOLBAR, label: '', moreLabel: '', selected: fn() },
+  args: { actions: FILE_TOOLBAR, label: '', moreLabel: '', actionHandler: fn(), selected: fn() },
   argTypes: {
     actions: {
       description:
@@ -51,6 +51,11 @@ const meta: Meta<NxsDocumentToolbarComponent> = {
     moreLabel: {
       control: 'text',
       description: 'The menu button’s name and tooltip. Blank falls back to “More actions”.',
+    },
+    actionHandler: {
+      control: false,
+      description:
+        'Called with the entry the user ran, as `selected` emits it. What a host rendering the ID through an outlet passes.',
     },
     selected: { control: false, description: 'The entry the user ran. Never a disabled one.' },
   },

@@ -10,16 +10,19 @@ import {
 } from '@nuxeo/satori-platform/components';
 import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
+import { NxsSatoriActionBarComponent } from './action-bar/satori-action-bar.component';
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
 import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.component';
 import { NxsSatoriErrorStateComponent } from './error-state/satori-error-state.component';
 import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-tooltip.component';
 import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';
+import { NxsSatoriTabsComponent } from './tabs/satori-tabs.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
 
 /**
- * Re-register the avatar, breadcrumbs, tag, status tag, rich tooltip and error state
- * `NXS_PRIMITIVE_IDS` on Satori, over the Material implementations `provideNxsComponents()` registered.
+ * Re-register the avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs and action
+ * bar `NXS_PRIMITIVE_IDS` on Satori, over the Material implementations `provideNxsComponents()`
+ * registered.
  *
  * Satori-if-available, Material otherwise, decided by which providers an application lists — not
  * at build time and not by a runtime probe. This entry point is the only one in the package that
@@ -42,6 +45,8 @@ export function provideNxsSatoriComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.statusTag]: NxsSatoriStatusTagComponent,
       [NXS_PRIMITIVE_IDS.richTooltip]: NxsSatoriRichTooltipComponent,
       [NXS_PRIMITIVE_IDS.errorState]: NxsSatoriErrorStateComponent,
+      [NXS_PRIMITIVE_IDS.tabs]: NxsSatoriTabsComponent,
+      [NXS_PRIMITIVE_IDS.actionBar]: NxsSatoriActionBarComponent,
     },
   });
 }

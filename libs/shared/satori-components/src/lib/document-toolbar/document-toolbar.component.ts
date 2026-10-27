@@ -6,6 +6,8 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 
+import type { NxsActionBarInputs } from '../primitives';
+
 /** One control on a document toolbar, already resolved by the host. */
 export interface NxsToolbarAction {
   /** The action's registered ID; rendered as `data-action-id`. */
@@ -35,6 +37,9 @@ export interface NxsToolbarAction {
  * dependency on the extensions barrel. Inline entries are icon buttons that stay focusable while
  * disabled, so their tooltip — "Locked by Jane on 3 May" — is reachable from the keyboard; the rest
  * sit behind one "More actions" button. Content projected into it renders before the actions.
+ *
+ * The Material implementation of `nxs.primitives.actionBar`. A host rendering that ID through
+ * `lib-extension-outlet` passes `actionHandler`, since the outlet binds no outputs.
  */
 @Component({
   selector: 'nxs-document-toolbar',
@@ -52,7 +57,7 @@ export interface NxsToolbarAction {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-document-toolbar' },
 })
-export class NxsDocumentToolbarComponent {
+export class NxsDocumentToolbarComponent implements NxsActionBarInputs {
   /** Every entry, in display order; `overflow` decides which group each one is in. */
   readonly actions = input.required<readonly NxsToolbarAction[]>();
   /**
@@ -62,6 +67,8 @@ export class NxsDocumentToolbarComponent {
   readonly label = input('');
   /** The menu button's accessible name and tooltip. Blank falls back to "More actions". */
   readonly moreLabel = input('');
+  /** Called with the entry the user ran, as `selected` emits it. Never a disabled one. */
+  readonly actionHandler = input<((action: NxsToolbarAction) => void) | null>(null);
 
   /** The entry the user ran. Never a disabled one. */
   readonly selected = output<NxsToolbarAction>();
@@ -98,5 +105,6 @@ export class NxsDocumentToolbarComponent {
   protected run(action: NxsToolbarAction): void {
     if (action.disabled) return;
     this.selected.emit(action);
+    this.actionHandler()?.(action);
   }
 }
