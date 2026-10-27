@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-132 exported symbol(s).
+135 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -968,9 +968,9 @@ class NxsDocumentToolbarComponent implements NxsActionBarInputs {
     protected readonly overflow: import("@angular/core").Signal<NxsToolbarAction[]>;
     protected readonly ownLabel: import("@angular/core").Signal<string>;
     protected readonly ownMoreLabel: import("@angular/core").Signal<string>;
-    protected tooltipOf(action: NxsToolbarAction): string;
-    protected extraOf(action: NxsToolbarAction): string;
-    protected nameOf(action: NxsToolbarAction): string;
+    protected readonly tooltipOf: typeof nxsToolbarActionTooltip;
+    protected readonly extraOf: typeof nxsToolbarActionExtra;
+    protected readonly nameOf: typeof nxsToolbarActionName;
     protected run(action: NxsToolbarAction): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentToolbarComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentToolbarComponent, "nxs-document-toolbar", never, {
@@ -2546,6 +2546,9 @@ function nxsSearchFiltersToRecord(filters: NxsSearchFilters): Record<string, str
 function nxsSearchFiltersToSavedParams(filters: NxsSearchFilters): Record<string, string>;
 function nxsTermOptions(aggregation: AggregateResult | undefined, selected: readonly string[]): NxsFacetOption[];
 function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorites' | 'removeFromFavorites'>, documentId: string, favorite: boolean): Observable<boolean>;
+function nxsToolbarActionExtra(action: NxsToolbarAction): string;
+function nxsToolbarActionName(action: NxsToolbarAction): string;
+function nxsToolbarActionTooltip(action: NxsToolbarAction): string;
 function nxsVersionLabel(doc: NuxeoDocument): string;
 function nxsVisibleText(text: string | null | undefined): string;
 function provideNxsComponents(): EnvironmentProviders;

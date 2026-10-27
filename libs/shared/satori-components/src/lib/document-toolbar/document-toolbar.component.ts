@@ -7,6 +7,11 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import type { NxsActionBarInputs } from '../primitives';
+import {
+  nxsToolbarActionExtra,
+  nxsToolbarActionName,
+  nxsToolbarActionTooltip,
+} from './toolbar-action-text';
 
 /** One control on a document toolbar, already resolved by the host. */
 export interface NxsToolbarAction {
@@ -78,25 +83,9 @@ export class NxsDocumentToolbarComponent implements NxsActionBarInputs {
   protected readonly ownLabel = computed(() => this.label().trim());
   protected readonly ownMoreLabel = computed(() => this.moreLabel().trim());
 
-  /** A tooltip only when there is one to show: Material renders an empty one as a blank bubble. */
-  protected tooltipOf(action: NxsToolbarAction): string {
-    return (action.tooltip ?? '').trim() || action.label;
-  }
-
-  /** What the tooltip adds to the label, if anything — "Locked by Jane on 3 May" on Unlock. */
-  protected extraOf(action: NxsToolbarAction): string {
-    const tip = (action.tooltip ?? '').trim();
-    return tip && tip !== action.label ? tip : '';
-  }
-
-  /**
-   * An icon button's accessible name: its label, then what its tooltip adds, so a keyboard or
-   * screen-reader user hears the lock owner a mouse user reads.
-   */
-  protected nameOf(action: NxsToolbarAction): string {
-    const extra = this.extraOf(action);
-    return extra ? `${action.label}. ${extra}` : action.label;
-  }
+  protected readonly tooltipOf = nxsToolbarActionTooltip;
+  protected readonly extraOf = nxsToolbarActionExtra;
+  protected readonly nameOf = nxsToolbarActionName;
 
   /**
    * Inline buttons are `disabledInteractive`, so a click on a disabled one still arrives here and
