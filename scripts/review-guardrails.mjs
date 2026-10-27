@@ -9783,6 +9783,46 @@ function fileDeclaringSymbol(path, symbol, seen = new Set()) {
 }
 
 /**
+ * The properties of the `components` object inside `provideSatoriExtensions({ … })`.
+ *
+ * The adopted set is what *that* call contributes, so this is where it is read from — not from
+ * every primitive-keyed property in the file. Any other object literal, including one declared
+ * later with the same keys, registers nothing and must not be able to redirect a primitive at
+ * another component's entry point.
+ *
+ * `undefined` when the call or the `components` object is not there, which the caller reports
+ * rather than treating as an empty adopted set.
+ */
+function componentsContributionIn(source) {
+  let properties;
+  const visit = (node) => {
+    if (properties !== undefined) return;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'provideSatoriExtensions' &&
+      node.arguments.length > 0 &&
+      ts.isObjectLiteralExpression(node.arguments[0])
+    ) {
+      for (const property of node.arguments[0].properties) {
+        if (
+          ts.isPropertyAssignment(property) &&
+          !ts.isComputedPropertyName(property.name) &&
+          property.name.getText(source) === 'components' &&
+          ts.isObjectLiteralExpression(property.initializer)
+        ) {
+          properties = property.initializer.properties;
+          return;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return properties;
+}
+
+/**
  * Every `NXS_PRIMITIVE_IDS` value is `nxs.primitives.` followed by its own property name, so the
  * suffix of a written-out id *is* the primitive name — see `NXS_PRIMITIVE_IDS` in
  * `libs/shared/satori-components/src/lib/primitives.ts`.
@@ -9907,28 +9947,48 @@ function adoptedSatoriEntryPoints() {
   const adopted = new Map();
   /** Registered, but the implementation is not a name this can follow. Reported, never skipped. */
   const unreadable = new Map();
-  /** Keyed off `NXS_PRIMITIVE_IDS` in a way that does not name one id. Also reported. */
+  /** Keyed for a primitive in a way that does not name one id, or hidden behind a spread. */
   const unreadableKeys = [];
-  const visit = (node) => {
-    if (ts.isPropertyAssignment(node)) {
-      const primitive = primitiveIdOfKey(node, source);
-      if (primitive === null) {
-        unreadableKeys.push(node.name.getText(source));
-        return;
-      }
-      if (primitive !== undefined) {
-        const value = unwrapRegistration(node.initializer);
-        if (ts.isIdentifier(value)) {
-          adopted.set(primitive, value.text);
-        } else {
-          unreadable.set(primitive, node.initializer.getText(source));
-        }
-        return;
-      }
+
+  // Scoped to the `components` contribution, not the whole file. Collecting every
+  // primitive-keyed property anywhere in the file let an unrelated object literal declared later
+  // overwrite a real registration — `[NXS_PRIMITIVE_IDS.richTooltip]: NxsSatoriAvatarComponent`
+  // in some other map would point the rich-tooltip primitive at the avatar's entry point, and
+  // direct rich-tooltip imports would pass. Reading written-out ids widened that surface to any
+  // object in the file carrying an `nxs.primitives.*` key, so the scope is what keeps it closed.
+  const registrations = componentsContributionIn(source);
+  if (registrations === undefined) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} has no \`components\` object inside a ` +
+        '`provideSatoriExtensions({ … })` call, so the adopted set could not be read and this ' +
+        'guardrail would check nothing. Either the registration moved, or its shape changed and ' +
+        'the AST read here no longer matches it.',
+    );
+    return { guarded: new Map(), located: false };
+  }
+
+  for (const property of registrations) {
+    if (!ts.isPropertyAssignment(property)) {
+      // A spread or shorthand inside `components` can carry registrations this cannot see.
+      unreadableKeys.push(property.getText(source));
+      continue;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    const primitive = primitiveIdOfKey(property, source);
+    if (primitive === null) {
+      unreadableKeys.push(property.name.getText(source));
+      continue;
+    }
+    // `undefined` is a `components` key that names no primitive — another extension's component
+    // id is legitimate there, and it is simply not an adopted primitive.
+    if (primitive === undefined) continue;
+
+    const value = unwrapRegistration(property.initializer);
+    if (ts.isIdentifier(value)) {
+      adopted.set(primitive, value.text);
+    } else {
+      unreadable.set(primitive, property.initializer.getText(source));
+    }
+  }
 
   // Requiring a bare identifier and skipping everything else was a silent gap: a registration
   // wrapped in parentheses, `as` or `satisfies` read as nothing to follow, that primitive went
@@ -9943,15 +10003,15 @@ function adoptedSatoriEntryPoints() {
     );
   }
 
-  // Same reasoning one level up, on the key rather than the value: a key that reads off
-  // `NXS_PRIMITIVE_IDS` but does not name one id leaves that primitive out of the adopted set
-  // entirely, and the others keep `guarded` non-empty.
+  // Same reasoning one level up, on the entry rather than the value: a key that addresses a
+  // primitive without naming one id, or a spread that hides entries altogether, leaves whatever
+  // it registers out of the adopted set while the others keep `guarded` non-empty.
   for (const text of unreadableKeys) {
     fail(
-      `${SATORI_ADOPTION_REGISTRY} has a \`components\` key \`${text}\` that reads off ` +
-        '`NXS_PRIMITIVE_IDS` without naming one id, so which primitive it registers could not be ' +
-        'read and direct use of whatever that one wraps would not be caught. Key it by a literal ' +
-        "id, as `[NXS_PRIMITIVE_IDS.tag]` or `[NXS_PRIMITIVE_IDS['tag']]`.",
+      `${SATORI_ADOPTION_REGISTRY} has a \`components\` entry \`${text}\` whose primitive could ` +
+        'not be read, so direct use of whatever it registers would not be caught. Write each ' +
+        "entry with a literal id — `[NXS_PRIMITIVE_IDS.tag]`, `[NXS_PRIMITIVE_IDS['tag']]` or " +
+        "`'nxs.primitives.tag'` — rather than a computed key or a spread.",
     );
   }
 
@@ -10024,7 +10084,7 @@ function adoptedSatoriEntryPoints() {
       guarded.get(specifierFor).add(primitive);
     }
   }
-  return guarded;
+  return { guarded, located: true };
 }
 
 /**
@@ -10060,7 +10120,11 @@ function checkAdoptedPatternsNotBypassed() {
     return;
   }
 
-  const guarded = adoptedSatoriEntryPoints();
+  const { guarded, located } = adoptedSatoriEntryPoints();
+  // `located` false means the `components` contribution itself was not found, which is already
+  // reported with the reason. Saying "yielded no entry point" after it would be the same failure
+  // twice, in vaguer words.
+  if (!located) return;
   if (guarded.size === 0) {
     fail(
       `${SATORI_ADOPTION_REGISTRY} yielded no Satori entry point for any adopted primitive, so ` +

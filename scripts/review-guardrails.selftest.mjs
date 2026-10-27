@@ -9465,7 +9465,7 @@ expectRed(
     [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
   }),
   null,
-  /has a `components` key `\[NXS_PRIMITIVE_IDS\[tagKey\]\]` that reads off `NXS_PRIMITIVE_IDS` without naming one id/,
+  /has a `components` entry `\[NXS_PRIMITIVE_IDS\[tagKey\]\]` whose primitive could not be read/,
 );
 
 /**
@@ -9508,6 +9508,67 @@ expectGreen(
       "    meta: { 'nxs.something.else': 1, plain: 2 },\n    components: {",
     ),
   }),
+);
+
+/**
+ * An unrelated object literal carrying the same keys.
+ *
+ * It registers nothing — only what `provideSatoriExtensions` is given does — so it must not be
+ * able to point a primitive at another component's entry point. Declared *after* the real call,
+ * which is what made it win when every primitive-keyed property in the file was collected: the
+ * later `set` overwrote the real registration, `tag` resolved to the avatar implementation, and
+ * `@hylandsoftware/satori-ui/tag` stopped being guarded.
+ */
+const decoyAfterRegistry =
+  '\nexport const NOT_A_REGISTRATION = {\n' +
+  '  [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent,\n' +
+  "  'nxs.primitives.avatar': NxsSatoriAvatarComponent,\n" +
+  '};\n';
+
+expectRed(
+  'an unrelated object with the same keys cannot redirect a primitive',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY + decoyAfterRegistry,
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an unrelated object with the same keys is not itself a finding',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY + decoyAfterRegistry,
+  }),
+);
+
+expectRed(
+  'a spread inside `components` can hide registrations, so it is reported',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '    components: {',
+      '    components: {\n      ...extra,',
+    ),
+  }),
+  null,
+  /has a `components` entry `\.\.\.extra` whose primitive could not be read/,
+);
+
+expectRed(
+  'the `components` contribution is gone, so nothing could be read',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      'components: {',
+      'other: {',
+    ),
+  }),
+  null,
+  /has no `components` object inside a `provideSatoriExtensions\(\{ … \}\)` call/,
 );
 
 expectGreen(
