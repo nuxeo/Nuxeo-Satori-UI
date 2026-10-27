@@ -6,18 +6,22 @@ import * as ByIdStories from './primitives.stories';
 
 # Primitives by registered ID
 
-Four components here are also in Satori's own component library: the avatar, the breadcrumbs, the
-tag and the rich tooltip. Each one is registered under an ID. A screen that renders the ID, rather
-than the component, shows whichever version the application registered: Satori's, when
+Eight components here are also in Satori's own component library: the avatar, the breadcrumbs, the
+tag, the status tag, the rich tooltip, the error state, the tabs and the document toolbar's action
+bar. Each one is registered under an ID. A screen that renders the ID, rather than the component,
+shows whichever version the application registered: Satori's, when
 `@nuxeo/satori-platform/components-satori` is installed and provided, or the built-in version
-otherwise. A fifth, the error state, is registered the same way; Satori's own error states arrive with
-Satori 1.0, which needs a newer Angular than this package supports, so it renders the built-in
-version either way for now.
+otherwise. The card is registered the same way, but nothing wraps Satori's interactive card yet, so
+it renders the built-in version either way for now.
 
 ## Key features
 
-- **Five IDs, one set of inputs each.** Both versions of an ID take the same inputs, so a screen
-  passes the same values whichever is registered.
+- **One set of inputs per ID.** Every version of an ID takes the same inputs, so a screen passes
+  the same values whichever is registered.
+- **Callbacks and templates are inputs.** A screen renders an ID through `lib-extension-outlet`, which
+  sets inputs and nothing else, so the tabs take their body template and selection callback, the
+  action bar its action callback, the error state its retry callback, and the card its open and
+  selection callbacks and its templates, as inputs.
 - **Satori when it is available.** The choice is made by the providers your application lists, not
   when the library is built and not by checking at run time.
 - **Works without Satori.** Without access to GitHub Packages, leave Satori out: every ID still
@@ -27,8 +31,8 @@ version either way for now.
 
 ## Demo showcase
 
-The four IDs with a Satori version, rendered through `lib-extension-outlet` as a screen renders them.
-The error state's own page shows it by ID.
+The IDs with a Satori version, rendered through `lib-extension-outlet` as a screen renders them. The
+card, which has none yet, is shown by ID on its own page.
 
 <Canvas of={ByIdStories.MaterialRegistration} />
 
@@ -88,6 +92,20 @@ The error state's own page shows it by ID.
     </tr>
     <tr>
       <td>
+        <code>nxs.primitives.statusTag</code>
+      </td>
+      <td>
+        <code>label</code>, <code>status</code>, <code>hideIcon</code>
+      </td>
+      <td>
+        <code>NxsStatusTagInputs</code>
+      </td>
+      <td>
+        Status tag (<code>sat-status-tag</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
         <code>nxs.primitives.richTooltip</code>
       </td>
       <td>
@@ -111,7 +129,52 @@ The error state's own page shows it by ID.
       <td>
         <code>NxsErrorStateInputs</code>
       </td>
-      <td>None yet: Satori 1.0's error states</td>
+      <td>
+        Error states (<code>sat-401-error-state</code> to <code>sat-500-error-state</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.tabs</code>
+      </td>
+      <td>
+        <code>tabs</code>, <code>label</code>, <code>selectedIndex</code>, <code>body</code>,
+        <code>selectHandler</code>
+      </td>
+      <td>
+        <code>NxsTabsInputs</code>
+      </td>
+      <td>
+        Navigation tabs (<code>sat-navigation-tabs</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.actionBar</code>
+      </td>
+      <td>
+        <code>actions</code>, <code>label</code>, <code>moreLabel</code>, <code>actionHandler</code>
+      </td>
+      <td>
+        <code>NxsActionBarInputs</code>
+      </td>
+      <td>
+        Action-bar buttons (<code>satActionBarButton</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.card</code>
+      </td>
+      <td>
+        <code>heading</code>, <code>subheading</code>, <code>selected</code>,
+        <code>selectionLabel</code>, <code>selectionHandler</code>, <code>openHandler</code>,
+        <code>media</code>, <code>headerAction</code>, <code>actions</code>
+      </td>
+      <td>
+        <code>NxsCardInputs</code>
+      </td>
+      <td>None yet: Satori's interactive card is not wrapped</td>
     </tr>
   </tbody>
 </table>
@@ -234,6 +297,26 @@ providers: [
       </td>
       <td>
         Satori's opens on hover and focus. The built-in one opens when its button is activated.
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.tabs</code>
+      </td>
+      <td>
+        Satori's draw the selected tab on a tinted background and wrap onto a second row when they do
+        not fit; the built-in ones underline it and scroll. Both render the selected tab's body under
+        the strip and select a tab with a click, Enter or Space.
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.actionBar</code>
+      </td>
+      <td>
+        Satori's buttons have Satori's rounded hover layer and focus ring; the built-in ones are
+        Material icon buttons. Both keep an <code>overflow</code> entry in the menu and a disabled
+        entry focusable, so its tooltip can be read.
       </td>
     </tr>
   </tbody>

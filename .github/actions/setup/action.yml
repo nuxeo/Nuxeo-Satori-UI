@@ -1,0 +1,106 @@
+name: Set up the repository
+description: >-
+  Node 24, `npm ci` against GitHub Packages, and the affected SHAs present in this job's own
+  checkout. The caller must have run `actions/checkout` first.
+
+# Every job in ci.yml needs all of these before it can do anything, and ci.yml went from one job
+# to seven. Six copies of the same steps is the shape where one copy gets a fix and the others do
+# not — the same argument the `agent-mirror` gate makes about `.cursor/`, `.claude/` and
+# `.agent/`. One definition, six callers.
+#
+# `actions/checkout` is deliberately NOT here, even though all six callers need it with
+# `fetch-depth: 0`. A local composite action is loaded from the workspace by path, so the runner
+# cannot resolve `./.github/actions/setup` until the repository is already on disk — putting the
+# checkout inside the thing that needs the checkout to be found fails with "Can't find
+# 'action.yml'" before any step runs. Each caller does its own checkout immediately above.
+#
+# Composite actions cannot read `secrets`, so the GitHub Packages token is an input the caller
+# passes from `secrets`. Nothing here echoes it.
+
+inputs:
+  github-packages-token:
+    description: >-
+      A token with `read:packages` for the @hylandsoftware scope. `npm ci` resolves that scope
+      from GitHub Packages and `.npmrc` names both variables below, so npm refuses to start when
+      either is unset.
+    required: true
+  base:
+    description: NX_BASE, so `git diff` and `nx affected` can reach that commit in this checkout.
+    required: true
+  head:
+    description: NX_HEAD, for the same reason.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: npm
+        registry-url: https://npm.pkg.github.com
+        scope: '@hylandsoftware'
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.github-packages-token }}
+        SATORI_GH_READONLY_TOKEN: ${{ inputs.github-packages-token }}
+
+    # THERE IS DELIBERATELY NO NX CACHE STEP HERE.
+    #
+    # nx.json marks six targets cacheable and nothing persists the cache between runs, so
+    # lint, build, test and typecheck do recompute from cold every time. This action first
+    # tried to fix that with `actions/cache` on `.nx/cache`, which does not work, in two
+    # independent ways — both measured on Nx 23.3.0, the pinned version:
+    #
+    #  1. `.nx/cache` is not where this workspace's cache lives. Nx 23 prefers a shared
+    #     per-user root, `~/.nx/<sha256(workspace-id)[0:16]>/{cache,databases}`, and only
+    #     falls back to `<root>/.nx/cache` when `cacheDirectory`, `NX_CACHE_DIRECTORY`,
+    #     `NX_WORKSPACE_DATA_DIRECTORY` or `NX_PROJECT_GRAPH_CACHE_DIRECTORY` is set — see
+    #     `nx/dist/src/utils/cache-directory.js`, `computeSharedDataLocation`. None is set
+    #     here, `.nx/` does not exist in a checkout, and the live cache measured 235 MB
+    #     across 161 entries under `~/.nx/`. So the step archived an absent directory and
+    #     reported success: a cache that could only ever have been decorative.
+    #
+    #  2. Even with the path corrected, the artifact directory alone is not enough. The
+    #     DB's `cache_outputs` rows index the cache directory's contents, so the two have
+    #     to travel together; Nx's own comment on `resolveSharedDataLocation` spells this
+    #     out. Restoring `cache/` without `databases/` was measured to print
+    #     "Unrecognized Cache Artifacts ... will not be able to use them" and re-run the
+    #     task. Restoring both produced a genuine hit ("Nx read the output from the cache").
+    #
+    # What a working version needs is both directories pinned into the workspace
+    # (`NX_CACHE_DIRECTORY` + `NX_WORKSPACE_DATA_DIRECTORY`) and cached under one key. That
+    # is NOT done here because one fact could not be established off a single machine: the
+    # database's filename is a v5 UUID that does not vary with the directory path, and
+    # whether it varies per machine decides whether a restored DB is found at all on a
+    # fresh runner. If it does vary, the whole arrangement is green and useless — the
+    # failure mode this repository has been bitten by repeatedly, and the reason the rule is
+    # that a gate is not evidence until it has been seen to fail on purpose.
+    #
+    # The supported answer is a real remote cache — Nx Cloud, or self-hosted S3/Azure/GCS —
+    # which is a decision about infrastructure and credentials rather than a workflow edit.
+    # Until then this is honestly absent rather than dishonestly present.
+
+    # `fetch-depth: 0` brings the branch history, but a pull_request run is built on an
+    # ephemeral merge ref whose parents are not always reachable from it, and `nx affected`
+    # and every `git diff --name-only "$NX_BASE...$NX_HEAD"` in ci.yml need both commits
+    # present locally. Carried over verbatim from the single-job workflow.
+    - name: Ensure affected SHAs are available
+      shell: bash
+      env:
+        NX_BASE: ${{ inputs.base }}
+        NX_HEAD: ${{ inputs.head }}
+      run: |
+        set -euo pipefail
+        git fetch --no-tags --prune origin
+
+        if ! git cat-file -e "$NX_BASE^{commit}" 2>/dev/null; then
+          git fetch --no-tags origin "$NX_BASE"
+        fi
+
+        if ! git cat-file -e "$NX_HEAD^{commit}" 2>/dev/null; then
+          git fetch --no-tags origin "$NX_HEAD"
+        fi

@@ -110,20 +110,26 @@ gate, also in CI):
 | `PLATFORM_ENTRY_POINTS` in `libs/platform/src/index.ts` lists exactly the subpaths a `libs/platform/<subpath>/ng-package.json` publishes                                                                                                                                                                                                                                                                                                                                          | `checkPlatformEntryPointsListed`           |
 | Every Storybook `<Source>` code sample under `libs/` and `apps/` parses and is formatted as Prettier formats its language, and no inline sample has an indented continuation line, which MDX strips                                                                                                                                                                                                                                                                               | `checkMdxCodeSamplesFormatted`             |
 
-**Satori if available, Material otherwise — by ID** (plan section 3). Five primitives overlap with
-Satori: avatar, breadcrumbs, tag, status tag and rich tooltip. `/components` implements each on Material and
-`provideNxsComponents()` registers them as `nxs.primitives.*` (`NXS_PRIMITIVE_IDS`), with a sixth,
-`errorState`, which Satori implements only from 1.0 and so stays on Material for now.
-`@nuxeo/satori-platform/components-satori` — its own project, `libs/shared/satori-components-satori`,
-same tags — re-registers the same IDs on Satori with `provideNxsSatoriComponents()`. Both go through
+**Satori if available, Material otherwise — by ID** (plan section 3). Nine primitives overlap with
+Satori: avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs, the action bar and the
+card. `/components` implements each on Material — the tabs as `nxs-tabs` and the action bar as
+`nxs-document-toolbar` — and `provideNxsComponents()` registers them as `nxs.primitives.*`
+(`NXS_PRIMITIVE_IDS`). `@nuxeo/satori-platform/components-satori` — its own project,
+`libs/shared/satori-components-satori`, same tags — re-registers all but the card on Satori with
+`provideNxsSatoriComponents()`; until Satori's interactive card is wrapped, `nxs.primitives.card`
+renders the Material `nxs-card` either way. Both go through
 `provideSatoriExtensions`, so later wins: the app lists both in that order, and an application
 without GitHub Packages access lists only the first. Each pair implements one `Nxs…Inputs`
 interface and a spec compares their declared inputs, so `componentInputs` mean the same thing
 whichever is registered. `@hylandsoftware/satori-ui` is an **optional** peer of the package, and
 `beta:installable` proves the built tarball installs without it. The IDs are in
 `docs/extension-reference.md` §6a. Browse and the collection page render their breadcrumbs by ID,
-and `nxs-document-list` each row's type tag and contributor avatar; other packaged screens do not
-yet. The base library's value
+browse's and search's card views each card, document detail its tab strip and header actions, and
+`nxs-document-list` each row's type tag and contributor avatar; other packaged screens do not yet. A
+`lib-extension-outlet` sets inputs only — it projects no content and binds no outputs — so a
+primitive that needs a callback or a template takes it as an input: the error state's
+`retryHandler`, the tabs' `body` and `selectHandler`, the action bar's `actionHandler`, and the
+card's open and selection handlers and its thumbnail and action templates. The base library's value
 unions (`NxsAvatarColor` and the rest) are asserted equal to Satori's at compile time in
 `/components-satori`, since `/components` may not import Satori to check.
 
@@ -176,8 +182,8 @@ branch or change history:
   when to use it, `## Key features`, `## Demo showcase` (a `<Canvas>`), `## Usage` (the import, any
   providers, the registered ID), `## Examples` (a `<Canvas>` per meaningful state), and
   `## Accessibility`. A component backed by a service adds `## Where its data comes from`, naming
-  the service, and says the stories use an in-memory fake; the five primitives add what Satori's
-  version of the same ID changes. `preview.ts` shows the code under every `<Canvas>`, with zoom
+  the service, and says the stories use an in-memory fake; a primitive with a Satori version adds
+  what Satori's version of the same ID changes. `preview.ts` shows the code under every `<Canvas>`, with zoom
   tools above it, and a table of contents of the `##` and `###` headings.
 - **API**: the `autodocs` page, renamed by `docs.defaultName` in `main.ts` and rendered by
   `.storybook/api-page.ts` (`parameters.docs.page`). Inputs and outputs under the names a template
@@ -325,7 +331,9 @@ shipped in the package; customers use `extension-component`. By hand, the steps 
       class; the ID something registers the component under, or `—` when nothing does;
       `Same component; theme only` (or, for a component `libs/shared/satori-components-satori`
       re-registers, `Satori's own component:` naming the `NxsSatori…Component` and the `<sat-…>`
-      element its template renders, plus a second story from that library); and a story **of that
+      element its template renders — or, for a wrapper that renders none, the element a Satori
+      component is applied to by attribute, as `<button satActionBarButton>` — plus a second story
+      from that library); and a story **of that
       component** — one whose Storybook meta names it, or that renders its registered ID through an
       outlet — then the image `<selector without nxs->-side-by-side.png`, and a row under
       "All components". The two `<!-- satori:comparison:* -->` markers are where the

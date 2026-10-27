@@ -18,7 +18,6 @@ import {
   ARenderService,
   BrowseService,
   CURRENT_USERNAME,
-  ContentLakeIngestService,
   DirectoryService,
   DocumentDetailService,
   NuxeoApiBase,
@@ -31,13 +30,11 @@ import {
   type NuxeoComment,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   AiChatService,
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
-import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
@@ -134,11 +131,6 @@ function directoryEntry(id: string, displayLabel: string): DirectoryEntry {
   return { id, label: displayLabel, displayLabel, ordering: 0, obsolete: 0, directoryName: 'd' };
 }
 
-/** A complete enrichment result; a test supplies only the action it is exercising. */
-function keResult(over: Partial<KeEnrichmentResult> = {}): KeEnrichmentResult {
-  return { inProgress: false, generalProcessingErrors: [], raw: null, ...over };
-}
-
 interface DialogRefLike {
   afterClosed: () => Observable<unknown>;
 }
@@ -198,28 +190,6 @@ const mockAiGateway = {
   analyzeSentiment: vi.fn(
     (): Observable<{ sentiments: Array<{ id: string }>; threadSummary: string | null }> =>
       of({ sentiments: [], threadSummary: null }),
-  ),
-};
-
-const mockKeClient = {
-  enrich: vi.fn((): Observable<KeEnrichmentResult> => of(keResult())),
-};
-
-const mockIngestService = {
-  startIngest: vi.fn((): Observable<{ commandId: string }> => of({ commandId: 'cmd-1' })),
-  waitUntilComplete: vi.fn(
-    (): Observable<{
-      commandId: string;
-      state: string;
-      processed: number;
-      error: boolean;
-      errorCount: number;
-    }> => of({ commandId: 'cmd-1', state: 'COMPLETED', processed: 1, error: false, errorCount: 0 }),
-  ),
-  markIngested: vi.fn((): Observable<NuxeoDocument[]> => of([])),
-  backfillIngestMarkerIfNeeded: vi.fn(
-    (): Observable<{ doc: NuxeoDocument | null; presentInContentLake: boolean }> =>
-      of({ doc: null, presentInContentLake: false }),
   ),
 };
 
@@ -305,15 +275,6 @@ describe('DocumentDetailComponent — tab surfaces', () => {
     mockAiGateway.classify.mockReturnValue(of({ category: 'Invoice' }));
     mockAiGateway.findSimilar.mockReturnValue(of({ documents: [] }));
     mockAiGateway.analyzeSentiment.mockReturnValue(of({ sentiments: [], threadSummary: null }));
-    mockKeClient.enrich.mockReturnValue(of(keResult()));
-    mockIngestService.startIngest.mockReturnValue(of({ commandId: 'cmd-1' }));
-    mockIngestService.waitUntilComplete.mockReturnValue(
-      of({ commandId: 'cmd-1', state: 'COMPLETED', processed: 1, error: false, errorCount: 0 }),
-    );
-    mockIngestService.markIngested.mockReturnValue(of([]));
-    mockIngestService.backfillIngestMarkerIfNeeded.mockReturnValue(
-      of({ doc: null, presentInContentLake: false }),
-    );
     mockNuxeoApi.nxqlSearch.mockReturnValue(of({ entries: [] }));
     mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
   }
@@ -343,7 +304,6 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: BrowseService, useValue: { updateDocument: vi.fn(() => of(doc())) } },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: KeClientService, useValue: mockKeClient },
         { provide: TaskService, useValue: { getDocumentTasks: vi.fn(() => of([])) } },
         {
           provide: WorkflowService,
@@ -362,8 +322,6 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         { provide: AiChatService, useValue: { openPanel: vi.fn() } },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(true) } },
         { provide: NuxeoApiBase, useValue: mockNuxeoApi },
-        { provide: ContentLakeIngestService, useValue: mockIngestService },
-        { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
@@ -1450,270 +1408,6 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openAiAssistant();
 
       expect(openPanel).toHaveBeenCalledWith(expect.objectContaining({ docId: 'doc-1' }));
-    });
-  });
-
-  describe('knowledge enrichment', () => {
-    it('refuses to classify when the nature vocabulary never loaded', async () => {
-      mockDirectoryService.getEntries.mockReturnValue(of([]));
-      await build();
-
-      component.runTextClassification();
-
-      expect(mockKeClient.enrich).not.toHaveBeenCalled();
-      expect(component.keError()).toContain('"nature" vocabulary failed to load');
-      expect(component.keActionInFlight()).toBeNull();
-      // A refusal, so it is announced as an error rather than as news.
-      expect(toast.error).toHaveBeenCalledWith(component.keError());
-      expect(toast.show).not.toHaveBeenCalled();
-    });
-
-    it('writes the matched vocabulary id, not the label the model returned', async () => {
-      mockDirectoryService.getEntries.mockReturnValue(of([directoryEntry('contract', 'Contract')]));
-      const updateDocument = vi.fn(() => of(doc()));
-      TestBed.overrideProvider(BrowseService, { useValue: { updateDocument } });
-      await build();
-      mockKeClient.enrich.mockReturnValue(
-        of(keResult({ textClassification: { result: 'Contract', isSuccess: true } })),
-      );
-
-      component.runTextClassification();
-
-      expect(updateDocument).toHaveBeenCalledWith('doc-1', { 'dc:nature': 'contract' });
-      expect(component.keError()).toBeNull();
-      expect(component.keActionInFlight()).toBeNull();
-    });
-
-    it('refuses to write the no-match sentinel to the vocabulary field', async () => {
-      mockDirectoryService.getEntries.mockReturnValue(of([directoryEntry('contract', 'Contract')]));
-      const updateDocument = vi.fn(() => of(doc()));
-      TestBed.overrideProvider(BrowseService, { useValue: { updateDocument } });
-      await build();
-      mockKeClient.enrich.mockReturnValue(
-        of(
-          keResult({
-            textClassification: { result: 'not_from_provided_classes', isSuccess: true },
-          }),
-        ),
-      );
-
-      component.runTextClassification();
-
-      // Nuxeo rejects a value outside the vocabulary with HTTP 422.
-      expect(updateDocument).not.toHaveBeenCalled();
-      expect(component.keError()).toContain('could not match this document');
-    });
-
-    it('refuses to write a category that is not in the vocabulary', async () => {
-      mockDirectoryService.getEntries.mockReturnValue(of([directoryEntry('contract', 'Contract')]));
-      const updateDocument = vi.fn(() => of(doc()));
-      TestBed.overrideProvider(BrowseService, { useValue: { updateDocument } });
-      await build();
-      mockKeClient.enrich.mockReturnValue(
-        of(keResult({ textClassification: { result: 'Hallucination', isSuccess: true } })),
-      );
-
-      component.runTextClassification();
-
-      expect(updateDocument).not.toHaveBeenCalled();
-      expect(component.keError()).toContain('is not one of the');
-    });
-
-    it('reports an empty classification result', async () => {
-      mockDirectoryService.getEntries.mockReturnValue(of([directoryEntry('contract', 'Contract')]));
-      await build();
-      mockKeClient.enrich.mockReturnValue(
-        of(keResult({ textClassification: { result: '   ', isSuccess: true } })),
-      );
-
-      component.runTextClassification();
-
-      expect(component.keError()).toContain('did not return a document category');
-    });
-
-    it('writes a returned summary to the description', async () => {
-      const updateDocument = vi.fn(() => of(doc()));
-      TestBed.overrideProvider(BrowseService, { useValue: { updateDocument } });
-      await build();
-      mockKeClient.enrich.mockReturnValue(
-        of(keResult({ textSummary: { result: ' a summary ', isSuccess: true } })),
-      );
-
-      component.runTextSummarization();
-
-      expect(updateDocument).toHaveBeenCalledWith('doc-1', { 'dc:description': 'a summary' });
-      expect(component.keStatus()).toContain('description updated');
-    });
-
-    it('reports an empty summary rather than blanking the description', async () => {
-      const updateDocument = vi.fn(() => of(doc()));
-      TestBed.overrideProvider(BrowseService, { useValue: { updateDocument } });
-      await build();
-      mockKeClient.enrich.mockReturnValue(
-        of(keResult({ textSummary: { result: '', isSuccess: true } })),
-      );
-
-      component.runTextSummarization();
-
-      expect(updateDocument).not.toHaveBeenCalled();
-      expect(component.keError()).toContain('did not return a summary');
-    });
-
-    it('turns extracted entities into de-duplicated tags', async () => {
-      await build();
-      mockKeClient.enrich.mockReturnValue(
-        of(
-          keResult({
-            namedEntityText: {
-              result: { person: ['Alice', ' Alice ', ''], org: ['Acme'] },
-              isSuccess: true,
-            },
-          }),
-        ),
-      );
-
-      component.runTextEntityExtraction();
-
-      expect(mockTagService.addTag.mock.calls.map((c) => c[1])).toEqual(['Alice', 'Acme']);
-      expect(component.keStatus()).toContain('tags updated');
-    });
-
-    it('reports when entity extraction found nothing', async () => {
-      await build();
-      mockKeClient.enrich.mockReturnValue(
-        of(keResult({ namedEntityText: { result: {}, isSuccess: true } })),
-      );
-
-      component.runTextEntityExtraction();
-
-      expect(mockTagService.addTag).not.toHaveBeenCalled();
-      expect(component.keError()).toContain('did not return any text entities');
-    });
-
-    it('writes an image description and its entity tags', async () => {
-      const updateDocument = vi.fn(() => of(doc()));
-      TestBed.overrideProvider(BrowseService, { useValue: { updateDocument } });
-      await build();
-      mockKeClient.enrich.mockReturnValue(
-        of(
-          keResult({
-            imageDescription: { result: 'a cat', isSuccess: true },
-            namedEntityImage: { result: { animal: ['cat'] }, isSuccess: true },
-          }),
-        ),
-      );
-
-      component.runImageEnrichment();
-
-      expect(updateDocument).toHaveBeenCalledWith('doc-1', { 'dc:description': 'a cat' });
-      expect(mockTagService.addTag).toHaveBeenCalledWith('doc-1', 'cat');
-    });
-
-    it('reports when image enrichment returned neither description nor entities', async () => {
-      await build();
-      mockKeClient.enrich.mockReturnValue(of(keResult()));
-
-      component.runImageEnrichment();
-
-      expect(component.keError()).toContain('did not return an image description');
-    });
-
-    it('explains an unconfigured enrichment service rather than echoing the raw error', async () => {
-      await build();
-      mockKeClient.enrich.mockReturnValue(
-        throwError(() => new Error('No authentication info for calling the Enrichment service')),
-      );
-
-      component.runTextSummarization();
-
-      expect(component.keError()).toContain('not configured on this Nuxeo server yet');
-      expect(component.keStatus()).toBeNull();
-      expect(component.keActionInFlight()).toBeNull();
-    });
-
-    it('refuses to start a second enrichment while one is running', async () => {
-      await build();
-      mockDetailService.fetchBlob.mockReturnValue(
-        new Observable<Blob>(() => {
-          /* never emits */
-        }),
-      );
-
-      component.runTextSummarization();
-      component.runImageEnrichment();
-
-      expect(component.isKeActionRunning('text-summarization')).toBe(true);
-      expect(component.isKeActionRunning('image-enrichment')).toBe(false);
-      expect(mockDetailService.fetchBlob).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('Content Lake ingest', () => {
-    const ingestable = (): NuxeoDocument =>
-      doc({
-        properties: {
-          'file:content': { name: 'a.pdf', 'mime-type': 'application/pdf', digest: 'abc123' },
-        },
-      });
-
-    it('ingests the document and reports the document the server returned', async () => {
-      const updated = doc({ title: 'Marked ingested' });
-      mockIngestService.markIngested.mockReturnValue(of([updated]));
-      await build(ingestable());
-
-      component.ingestToContentLake();
-
-      expect(mockIngestService.startIngest).toHaveBeenCalledWith(['doc-1']);
-      expect(mockIngestService.waitUntilComplete).toHaveBeenCalledWith('cmd-1');
-      expect(component.doc()?.title).toBe('Marked ingested');
-      expect(component.contentLakePresenceVerified()).toBe(true);
-      expect(component.contentLakeIngestInFlight()).toBe(false);
-      expect(component.contentLakeIngestError()).toBeNull();
-    });
-
-    it('records the marker locally when the server could not persist it', async () => {
-      mockIngestService.markIngested.mockReturnValue(of([]));
-      await build(ingestable());
-
-      component.ingestToContentLake();
-
-      expect(component.contentLakePresenceVerified()).toBe(true);
-      expect(component.contentLakeIngestStatus()).toContain('Ingested to Content Lake');
-    });
-
-    it('reports an ingest that finished with errors as a failure, not a success', async () => {
-      mockIngestService.waitUntilComplete.mockReturnValue(
-        of({ commandId: 'cmd-1', state: 'COMPLETED', processed: 1, error: false, errorCount: 3 }),
-      );
-      await build(ingestable());
-
-      component.ingestToContentLake();
-
-      expect(component.contentLakeIngestError()).toContain('(3 failed)');
-      expect(toast.error).toHaveBeenCalledWith(component.contentLakeIngestError());
-      expect(component.contentLakeIngestStatus()).toBeNull();
-      expect(component.contentLakePresenceVerified()).toBe(false);
-      expect(component.contentLakeIngestInFlight()).toBe(false);
-    });
-
-    it('surfaces the thrown message when the ingest call itself fails', async () => {
-      mockIngestService.startIngest.mockReturnValue(
-        throwError(() => new Error('connector missing')),
-      );
-      await build(ingestable());
-
-      component.ingestToContentLake();
-
-      expect(component.contentLakeIngestError()).toBe('connector missing');
-      expect(component.contentLakeIngestInFlight()).toBe(false);
-    });
-
-    it('does not ingest a document that has nothing to ingest', async () => {
-      await build(doc({ properties: {} }));
-
-      component.ingestToContentLake();
-
-      expect(mockIngestService.startIngest).not.toHaveBeenCalled();
     });
   });
 });

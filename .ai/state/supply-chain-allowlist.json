@@ -93,6 +93,6 @@
   },
   "unreferencedDependencies": {
     "tslib": "Emitted helper library. The TypeScript compiler generates imports of it into the build output; no source file names it.",
-    "@angular/animations": "Required by @angular/material at runtime for its transitions. Never imported by our source."
+    "@angular/animations": "Imported by @angular/platform-browser/animations, which app.config.ts uses for provideAnimations() and the specs use for provideNoopAnimations(). It is only an optional peer of @angular/platform-browser, so nothing installs it unless it is declared here. Not needed by @angular/material: 22.2.4 declares no dependency on it, and the earlier reason saying Material needed it was out of date (NXSAT-672). provideAnimations() is deprecated in Angular 22; when it is removed, this dependency and this entry go with it."
   }
 }

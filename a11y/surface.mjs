@@ -87,7 +87,6 @@ export const NOT_A_SURFACE_ERROR = {
   'ai-error': 'AI: the search page rendered; its AI panel did not.',
   'ai-error-banner': 'AI: document detail rendered; its AI panel did not.',
   'ai-chat-error': 'AI: the shell rendered; the chat drawer did not.',
-  'ke-status-banner--error': 'Data state: knowledge-enrichment status of this document.',
   'kd-status-chip--error': 'Data state: status of one answer in the KD list.',
   'edit-document-dialog__error': 'Save error inside the edit dialog; the page rendered.',
   'nxs-folder-picker-dialog__failure':

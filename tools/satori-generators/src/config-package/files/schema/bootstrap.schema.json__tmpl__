@@ -5,34 +5,68 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "$schema": { "type": "string" },
-    "nuxeoApiOrigin": { "$ref": "#/definitions/nuxeoApiOrigin" },
-    "nuxeoServerUrl": { "$ref": "#/definitions/nuxeoServerUrl" },
-    "aiBackendUrl": { "$ref": "#/definitions/aiBackendUrl" },
-    "branding": { "$ref": "#/definitions/branding" },
-    "defaultThemeId": { "$ref": "#/definitions/defaultThemeId" },
-    "themes": { "$ref": "#/definitions/themes" },
-    "defaultLanguage": { "$ref": "#/definitions/defaultLanguage" },
-    "availableLanguages": { "$ref": "#/definitions/availableLanguages" },
-    "integrations": { "$ref": "#/definitions/integrations" },
-    "session": { "$ref": "#/definitions/session" },
-    "sso": { "$ref": "#/definitions/sso" },
+    "$schema": {
+      "type": "string"
+    },
+    "nuxeoApiOrigin": {
+      "$ref": "#/definitions/nuxeoApiOrigin"
+    },
+    "nuxeoServerUrl": {
+      "$ref": "#/definitions/nuxeoServerUrl"
+    },
+    "aiBackendUrl": {
+      "$ref": "#/definitions/aiBackendUrl"
+    },
+    "branding": {
+      "$ref": "#/definitions/branding"
+    },
+    "defaultThemeId": {
+      "$ref": "#/definitions/defaultThemeId"
+    },
+    "themes": {
+      "$ref": "#/definitions/themes"
+    },
+    "defaultLanguage": {
+      "$ref": "#/definitions/defaultLanguage"
+    },
+    "availableLanguages": {
+      "$ref": "#/definitions/availableLanguages"
+    },
+    "integrations": {
+      "$ref": "#/definitions/integrations"
+    },
+    "session": {
+      "$ref": "#/definitions/session"
+    },
+    "sso": {
+      "$ref": "#/definitions/sso"
+    },
     "presales": {
       "type": "object",
       "additionalProperties": false,
       "description": "Demo presets. Honoured only when a fragment sets presetSwitching: true; a URL then selects one with ?preset=<name>, for that browser only.",
       "properties": {
-        "presetSwitching": { "type": "boolean" },
+        "presetSwitching": {
+          "type": "boolean"
+        },
         "presets": {
           "type": "object",
-          "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+          },
           "additionalProperties": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "label": { "type": "string" },
-              "bootstrap": { "$ref": "#/definitions/overlay" },
-              "manifest": { "$ref": "manifest.schema.json" }
+              "label": {
+                "type": "string"
+              },
+              "bootstrap": {
+                "$ref": "#/definitions/overlay"
+              },
+              "manifest": {
+                "$ref": "manifest.schema.json"
+              }
             }
           }
         }
@@ -45,17 +79,39 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "nuxeoApiOrigin": { "$ref": "#/definitions/nuxeoApiOrigin" },
-        "nuxeoServerUrl": { "$ref": "#/definitions/nuxeoServerUrl" },
-        "aiBackendUrl": { "$ref": "#/definitions/aiBackendUrl" },
-        "branding": { "$ref": "#/definitions/branding" },
-        "defaultThemeId": { "$ref": "#/definitions/defaultThemeId" },
-        "themes": { "$ref": "#/definitions/themes" },
-        "defaultLanguage": { "$ref": "#/definitions/defaultLanguage" },
-        "availableLanguages": { "$ref": "#/definitions/availableLanguages" },
-        "integrations": { "$ref": "#/definitions/integrations" },
-        "session": { "$ref": "#/definitions/session" },
-        "sso": { "$ref": "#/definitions/sso" }
+        "nuxeoApiOrigin": {
+          "$ref": "#/definitions/nuxeoApiOrigin"
+        },
+        "nuxeoServerUrl": {
+          "$ref": "#/definitions/nuxeoServerUrl"
+        },
+        "aiBackendUrl": {
+          "$ref": "#/definitions/aiBackendUrl"
+        },
+        "branding": {
+          "$ref": "#/definitions/branding"
+        },
+        "defaultThemeId": {
+          "$ref": "#/definitions/defaultThemeId"
+        },
+        "themes": {
+          "$ref": "#/definitions/themes"
+        },
+        "defaultLanguage": {
+          "$ref": "#/definitions/defaultLanguage"
+        },
+        "availableLanguages": {
+          "$ref": "#/definitions/availableLanguages"
+        },
+        "integrations": {
+          "$ref": "#/definitions/integrations"
+        },
+        "session": {
+          "$ref": "#/definitions/session"
+        },
+        "sso": {
+          "$ref": "#/definitions/sso"
+        }
       }
     },
     "nuxeoApiOrigin": {
@@ -74,40 +130,76 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "applicationTitle": { "type": "string" },
-        "documentTitle": { "type": "string", "description": "The browser tab title." },
+        "applicationTitle": {
+          "type": "string"
+        },
+        "documentTitle": {
+          "type": "string",
+          "description": "The browser tab title."
+        },
         "logo": {
           "description": "Replaces the Satori marks in the header and on the login page; null keeps them. src is relative to the configuration directory (assets/<name>, declared as an <asset> in the component XML), an https: URL, or a data:image/ URI.",
           "oneOf": [
-            { "type": "null" },
+            {
+              "type": "null"
+            },
             {
               "type": "object",
               "additionalProperties": false,
               "required": ["src"],
-              "properties": { "src": { "type": "string" }, "alt": { "type": "string" } }
+              "properties": {
+                "src": {
+                  "type": "string"
+                },
+                "alt": {
+                  "type": "string"
+                }
+              }
             }
           ]
         }
       }
     },
-    "defaultThemeId": { "type": "string" },
+    "defaultThemeId": {
+      "type": "string"
+    },
     "themes": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["id"],
         "properties": {
-          "id": { "type": "string", "minLength": 1 },
-          "label": { "type": "string" },
-          "labelKey": { "type": "string" },
-          "base": { "type": "string" },
-          "preview": { "type": "object" },
-          "tokens": { "type": "object" }
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string"
+          },
+          "labelKey": {
+            "type": "string"
+          },
+          "base": {
+            "type": "string"
+          },
+          "preview": {
+            "type": "object"
+          },
+          "tokens": {
+            "type": "object"
+          }
         }
       }
     },
-    "defaultLanguage": { "type": "string" },
-    "availableLanguages": { "type": "array", "items": { "type": "string" } },
+    "defaultLanguage": {
+      "type": "string"
+    },
+    "availableLanguages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "integrations": {
       "type": "object",
       "additionalProperties": false,
@@ -115,24 +207,28 @@
         "arender": {
           "description": "null turns the annotation viewer off. A fragment may set either key alone; the viewer needs a viewerOrigin once all fragments are merged.",
           "oneOf": [
-            { "type": "null" },
+            {
+              "type": "null"
+            },
             {
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "viewerOrigin": { "type": "string" },
-                "nuxeoInternalUrl": { "type": "string" }
+                "viewerOrigin": {
+                  "type": "string"
+                },
+                "nuxeoInternalUrl": {
+                  "type": "string"
+                }
               }
             }
           ]
         },
         "knowledgeDiscoveryOperations": {
           "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
-        "knowledgeEnrichmentOperations": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -140,8 +236,14 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "idleTimeoutMs": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-        "warningBeforeMs": { "type": ["number", "null"], "exclusiveMinimum": 0 }
+        "idleTimeoutMs": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0
+        },
+        "warningBeforeMs": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0
+        }
       }
     },
     "sso": {
@@ -155,14 +257,26 @@
             "type": "object",
             "required": ["id", "path"],
             "properties": {
-              "id": { "type": "string", "minLength": 1 },
-              "label": { "type": "string" },
-              "path": { "type": "string", "pattern": "^/" }
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "label": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^/"
+              }
             }
           }
         },
-        "postLoginPath": { "type": ["string", "null"] },
-        "returnQueryParam": { "type": ["string", "null"] }
+        "postLoginPath": {
+          "type": ["string", "null"]
+        },
+        "returnQueryParam": {
+          "type": ["string", "null"]
+        }
       }
     }
   }

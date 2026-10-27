@@ -78,68 +78,13 @@ sat-breadcrumbs {
   gap: 8px;
   flex-shrink: 0;
 
+  // The fallback toolbar renders beside an unresolved outlet, which would otherwise add a gap.
+  &--unresolved {
+    display: none;
+  }
+
   button {
     color: var(--mat-sys-on-surface-variant);
-  }
-}
-
-.content-lake-ingest-loader,
-.content-lake-ingest-marker {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  cursor: default;
-}
-
-.ke-action-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-// Spin the leading <mat-icon> on KE buttons while an action is in flight.
-// We deliberately use a spinning mat-icon instead of <mat-spinner>, because
-// <mat-spinner> renders as a block-level element that breaks Material's
-// stroked-button content alignment (the text gets pushed onto the next line).
-// A mat-icon is laid out identically to the static leading icon, so swapping
-// in and out causes zero layout shift.
-//
-// IMPORTANT: the glyph MUST exist in the legacy "Material Icons" font that
-// apps/nuxeo-ui/src/index.html loads. `progress_activity` is in Material
-// Symbols only and renders as an empty box here, so use `autorenew`.
-.ke-action-btn mat-icon.ke-spinning {
-  animation: ke-spin 1s linear infinite;
-}
-
-// NXENG-789 / IBM issue 299839583 — Material stroked buttons suppress the default focus ring.
-// IBM Equal Access `style_focus_visible` reads `:focus` only; keep this selector standalone.
-//
-// Positive `outline-offset` paints outside the button; the pixels behind it are the header's
-// fixed `#fff` (`.detail-header` above), not the themed page chrome. In dark and kawaii,
-// `--mat-sys-primary` resolves too pale on that surface (1.71:1). Use the same indigo as the
-// panel toggle so 1.4.11 holds on the white header in every theme.
-/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
-.ke-action-btn.mat-mdc-outlined-button:focus {
-  outline-style: solid;
-  outline-width: 2px;
-  outline-color: var(--agentic-document-detail-header-focus-outline);
-  outline-offset: 2px;
-}
-
-/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
-.ke-action-btn.mat-mdc-outlined-button:focus-visible {
-  outline-style: solid;
-  outline-width: 2px;
-  outline-color: var(--agentic-document-detail-header-focus-outline);
-  outline-offset: 2px;
-}
-
-@keyframes ke-spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 
@@ -212,11 +157,23 @@ sat-breadcrumbs {
 
 // The tab header stays #fff in every packaged theme; the panel toggle's focus ring
 // (`document-detail-panel-toggle-focus.scss`) assumes that surface.
+// Set on the outlet that renders `nxs.primitives.tabs` and on its fallback; the tokens reach the
+// strip either way. The outlet fills the column as the strip does, so a body still scrolls itself.
 .detail-tabs {
   --nxs-tabs-header-surface: #fff;
   --nxs-tabs-header-border: #e0e0e0;
   --nxs-tabs-focus-outline: var(--agentic-document-detail-panel-toggle-focus-outline);
   --nxs-tabs-icon-color: #6366f1;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+
+  // The fallback renders beside an unresolved outlet; an empty flex child would share the space.
+  &--unresolved {
+    display: none;
+  }
 }
 
 // A contributed View tab body brings no layout of its own; the tab body clips, so it scrolls here.

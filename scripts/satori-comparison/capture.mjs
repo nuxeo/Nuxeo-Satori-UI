@@ -52,6 +52,7 @@ import {
   FULL_STORIES,
   ROOT,
   loadComparison,
+  satoriElementSelector,
 } from '../beta-harness/satori-comparison-doc.mjs';
 
 const EXIT_FAIL = 1;
@@ -568,11 +569,17 @@ try {
           );
         } else if (c.own) {
           // The element the section documents, not any `sat-*`: a wrapper rendering something else
-          // would otherwise pass a check named after Satori's component.
+          // would otherwise pass a check named after Satori's component. By selector, so an element
+          // a Satori component is applied to by attribute — `<button satActionBarButton>` — counts.
+          const inside = await page.evaluate(
+            ([host, element]) =>
+              [...document.querySelectorAll(host)].some((t) => t.querySelector(element)),
+            [h.selector, satoriElementSelector(c.satElement)],
+          );
           record(
             subject,
             `Satori's <${c.satElement}> inside <${h.selector}>`,
-            seen.satInside.includes(c.satElement),
+            inside,
             seen.satInside.length ? `rendered: ${seen.satInside.join(', ')}` : 'no sat-* element',
           );
         }
@@ -630,12 +637,32 @@ try {
   }
 
   // The "Primitives/By registered ID" story in both Storybooks: the whole viewport, as it renders,
-  // and a close-up of the five primitives together for the side-by-side.
+  // and a close-up of every primitive together for the side-by-side.
   const full = {};
+  // One host per `NXS_PRIMITIVE_IDS` entry, in the story's order; the story renders each ID once.
   const PRIMITIVE_HOSTS = {
-    without: 'nxs-avatar, nxs-breadcrumbs, nxs-tag, nxs-status-tag, nxs-rich-tooltip',
-    with: 'nxs-satori-avatar, nxs-satori-breadcrumbs, nxs-satori-tag, nxs-satori-status-tag, nxs-satori-rich-tooltip',
+    without: [
+      'nxs-avatar',
+      'nxs-breadcrumbs',
+      'nxs-tag',
+      'nxs-status-tag',
+      'nxs-rich-tooltip',
+      'nxs-error-state',
+      'nxs-tabs',
+      'nxs-document-toolbar',
+    ],
+    with: [
+      'nxs-satori-avatar',
+      'nxs-satori-breadcrumbs',
+      'nxs-satori-tag',
+      'nxs-satori-status-tag',
+      'nxs-satori-rich-tooltip',
+      'nxs-satori-error-state',
+      'nxs-satori-tabs',
+      'nxs-satori-action-bar',
+    ],
   };
+  const primitiveCount = PRIMITIVE_HOSTS.with.length;
   for (const [side, book] of [
     ['without', 'without'],
     ['with', 'with-satori'],
@@ -658,7 +685,7 @@ try {
       try {
         const zoomed = await close.newPage();
         await open(zoomed, url, host);
-        const all = await inspect(zoomed, PRIMITIVE_HOSTS[side]);
+        const all = await inspect(zoomed, PRIMITIVE_HOSTS[side].join(', '));
         full[side] = join(OUT, 'raw', `full-${side}.png`);
         await crop(zoomed, all.box, full[side]);
       } finally {
@@ -681,8 +708,8 @@ try {
       } else {
         record(
           `Full screenshot (${side})`,
-          'all five IDs resolve to Satori wrappers',
-          seen.nxsSatoriHosts === 5,
+          `all ${primitiveCount} IDs resolve to Satori wrappers`,
+          seen.nxsSatoriHosts === primitiveCount,
           `${seen.nxsSatoriHosts} nxs-satori-* host(s)`,
         );
       }
@@ -694,7 +721,7 @@ try {
     await compose(
       browser,
       {
-        title: 'All five primitives, by registered ID',
+        title: `All ${primitiveCount} primitives, by registered ID`,
         subtitle:
           'The "Primitives/By registered ID" story: one template, the same inputs. Close-ups at 2x device pixel ratio.',
         left: {
@@ -757,7 +784,7 @@ try {
       ...components.flatMap((c) => [`## ${c.heading}`, '', `![${c.heading}](${c.image})`, '']),
       '## Full screenshots',
       '',
-      `![All five primitives](${FULL_IMAGES.sideBySide})`,
+      `![All ${primitiveCount} primitives](${FULL_IMAGES.sideBySide})`,
       '',
       '## Checks',
       '',
