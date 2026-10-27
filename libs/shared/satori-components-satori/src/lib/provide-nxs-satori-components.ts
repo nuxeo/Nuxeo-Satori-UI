@@ -20,13 +20,14 @@ import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-toolti
 import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';
 import { NxsSatoriTabsComponent } from './tabs/satori-tabs.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
+import { NxsSatoriUploadComponent } from './upload/satori-upload.component';
 
 /**
- * Re-register the ten `NXS_PRIMITIVE_IDS` entries that have a Satori twin — avatar, breadcrumbs,
- * tag, status tag, rich tooltip, error state, tabs, action bar, card and empty state — on Satori,
- * over the Material implementations `provideNxsComponents()` registered.
+ * Re-register the eleven `NXS_PRIMITIVE_IDS` entries that have a Satori twin — avatar,
+ * breadcrumbs, tag, status tag, rich tooltip, error state, tabs, action bar, card, empty state and
+ * upload — on Satori, over the Material implementations `provideNxsComponents()` registered.
  *
- * Ten of twelve, not all of them: `banner` and `chipSet` are registered by
+ * Eleven of thirteen, not all of them: `banner` and `chipSet` are registered by
  * `provideNxsComponents()` and keep their Material implementations here, until their Satori
  * wrappers are written. `primitives.ts` and `docs/extension-reference.md` §6a name the same two.
  *
@@ -55,6 +56,7 @@ export function provideNxsSatoriComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.actionBar]: NxsSatoriActionBarComponent,
       [NXS_PRIMITIVE_IDS.card]: NxsSatoriCardComponent,
       [NXS_PRIMITIVE_IDS.emptyState]: NxsSatoriEmptyStateComponent,
+      [NXS_PRIMITIVE_IDS.upload]: NxsSatoriUploadComponent,
     },
   });
 }

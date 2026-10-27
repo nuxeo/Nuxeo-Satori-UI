@@ -789,6 +789,7 @@ try {
       'nxs-document-toolbar',
       'nxs-card',
       'nxs-empty-state',
+      'nxs-dropzone',
     ],
     with: [
       'nxs-satori-avatar',
@@ -801,6 +802,7 @@ try {
       'nxs-satori-action-bar',
       'nxs-satori-card',
       'nxs-satori-empty-state',
+      'nxs-satori-upload',
     ],
   };
   const primitiveCount = PRIMITIVE_HOSTS.with.length;

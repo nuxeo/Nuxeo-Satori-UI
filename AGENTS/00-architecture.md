@@ -111,15 +111,17 @@ gate, also in CI):
 | `PLATFORM_ENTRY_POINTS` in `libs/platform/src/index.ts` lists exactly the subpaths a `libs/platform/<subpath>/ng-package.json` publishes                                                                                                                                                                                                                                                                                                                                          | `checkPlatformEntryPointsListed`           |
 | Every Storybook `<Source>` code sample under `libs/` and `apps/` parses and is formatted as Prettier formats its language, and no inline sample has an indented continuation line, which MDX strips                                                                                                                                                                                                                                                                               | `checkMdxCodeSamplesFormatted`             |
 
-**Satori if available, Material otherwise — by ID** (plan section 3). Twelve primitives are
-registered by ID, and ten of them overlap with Satori: avatar, breadcrumbs, tag, status tag, rich
-tooltip, error state, tabs, the action bar, the card and the empty state. The banner and the chip
-set have no Satori twin yet. `/components` implements each on Material — the tabs as `nxs-tabs` and
-the action bar as `nxs-document-toolbar` — and `provideNxsComponents()` registers them as
-`nxs.primitives.*` (`NXS_PRIMITIVE_IDS`). The error state's Satori version comes from
+**Satori if available, Material otherwise — by ID** (plan section 3). Thirteen primitives are
+registered by ID, and eleven of them overlap with Satori: avatar, breadcrumbs, tag, status tag, rich
+tooltip, error state, tabs, the action bar, the card, the empty state and the upload. The banner and
+the chip set have no Satori twin yet. `/components` implements each on Material — the tabs as
+`nxs-tabs` and the action bar as `nxs-document-toolbar` — and `provideNxsComponents()` registers
+them as `nxs.primitives.*` (`NXS_PRIMITIVE_IDS`). The error state's Satori version comes from
 `@hylandsoftware/satori-ui/empty-state` rather than an entry point named after it, as
 `sat-401-error-state` through `sat-500-error-state`; the card's comes from
-`@hylandsoftware/satori-ui/interactive-card`.
+`@hylandsoftware/satori-ui/interactive-card`, and the upload's from
+`@hylandsoftware/satori-ui/upload-field` rather than `/upload`, whose drag overlay carries an
+untranslated literal.
 `@nuxeo/satori-platform/components-satori` — its own project,
 `libs/shared/satori-components-satori`, same tags — re-registers all but `banner` and `chipSet` on
 Satori with `provideNxsSatoriComponents()`; until their Satori twins are written,
