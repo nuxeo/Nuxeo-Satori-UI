@@ -105,15 +105,18 @@ gate, also in CI):
 | `libs/shared/satori-components-satori` may import `@hylandsoftware/satori-ui` and nothing else from GitHub Packages, no ADF and no HxCS client, followed transitively                                                                                                                                                                                                                                                                                                             | `checkSatoriFallbackDependencies`          |
 | It is reached only through `@nuxeo/satori-platform/components-satori`, by the same rules as the base library                                                                                                                                                                                                                                                                                                                                                                      | `checkSatoriFallbackEntryPoint`            |
 | `apps/nuxeo-ui` lists `provideNxsComponents()` before `provideNxsSatoriComponents()` in its providers                                                                                                                                                                                                                                                                                                                                                                             | `checkSatoriPrimitivesRegisteredInOrder`   |
+| Nothing outside the two libraries imports the `@hylandsoftware/satori-ui` entry point behind an adopted primitive, which would take the Satori rendering while losing the Material fallback and the extension ID. Both the adopted set and the entry points each one wraps are read from `provideNxsSatoriComponents()`, never listed, so adopting a seventh primitive extends the rule by itself. `ADOPTION_BASELINE` holds the twelve sites that predate it and may only shrink | `checkAdoptedPatternsNotBypassed`          |
 | Every `@Component` in either library has a spec that imports it by value, or imports what opens it — the coverage floor passes a component nothing tests once its module is imported                                                                                                                                                                                                                                                                                              | `checkSatoriComponentsHaveSpecs`           |
 | Neither library puts Material's native date adapter in an injector — `provideNativeDateAdapter()`, `MatNativeDateModule`, or `NativeDateAdapter` as a provider — which hides the host's adapter and reads typed dates as American (NXSAT-629). Specs and stories are exempt                                                                                                                                                                                                       | `checkSatoriLibrariesKeepHostDateAdapter`  |
 | `PLATFORM_ENTRY_POINTS` in `libs/platform/src/index.ts` lists exactly the subpaths a `libs/platform/<subpath>/ng-package.json` publishes                                                                                                                                                                                                                                                                                                                                          | `checkPlatformEntryPointsListed`           |
 | Every Storybook `<Source>` code sample under `libs/` and `apps/` parses and is formatted as Prettier formats its language, and no inline sample has an indented continuation line, which MDX strips                                                                                                                                                                                                                                                                               | `checkMdxCodeSamplesFormatted`             |
 
-**Satori if available, Material otherwise — by ID** (plan section 3). Five primitives overlap with
-Satori: avatar, breadcrumbs, tag, status tag and rich tooltip. `/components` implements each on Material and
-`provideNxsComponents()` registers them as `nxs.primitives.*` (`NXS_PRIMITIVE_IDS`), with a sixth,
-`errorState`, which Satori implements only from 1.0 and so stays on Material for now.
+**Satori if available, Material otherwise — by ID** (plan section 3). Six primitives overlap with
+Satori: avatar, breadcrumbs, tag, status tag, rich tooltip and error state. `/components` implements each
+on Material and `provideNxsComponents()` registers them as `nxs.primitives.*` (`NXS_PRIMITIVE_IDS`).
+The error state crossed last, in NXSAT-673: Satori implements it only from 1.0, and from
+`@hylandsoftware/satori-ui/empty-state` rather than an entry point named after it, as
+`sat-401-error-state` through `sat-500-error-state`.
 `@nuxeo/satori-platform/components-satori` — its own project, `libs/shared/satori-components-satori`,
 same tags — re-registers the same IDs on Satori with `provideNxsSatoriComponents()`. Both go through
 `provideSatoriExtensions`, so later wins: the app lists both in that order, and an application
@@ -167,8 +170,8 @@ branch or change history:
   when to use it, `## Key features`, `## Demo showcase` (a `<Canvas>`), `## Usage` (the import, any
   providers, the registered ID), `## Examples` (a `<Canvas>` per meaningful state), and
   `## Accessibility`. A component backed by a service adds `## Where its data comes from`, naming
-  the service, and says the stories use an in-memory fake; the five primitives add what Satori's
-  version of the same ID changes. `preview.ts` shows the code under every `<Canvas>`, with zoom
+  the service, and says the stories use an in-memory fake; a primitive with a Satori version adds
+  what Satori's version of the same ID changes. `preview.ts` shows the code under every `<Canvas>`, with zoom
   tools above it, and a table of contents of the `##` and `###` headings.
 - **API**: the `autodocs` page, renamed by `docs.defaultName` in `main.ts` and rendered by
   `.storybook/api-page.ts` (`parameters.docs.page`). Inputs and outputs under the names a template

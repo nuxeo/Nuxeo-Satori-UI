@@ -9030,6 +9030,209 @@ expectRed(
   /demo\.mjs:2 defaults NUXEO_USER [\s\S]*demo\.mjs:3 defaults NUXEO_PASS [\s\S]*demo\.mjs:5 defaults NUXEO_AUTH /,
 );
 
+/* ---------------- checkAdoptedPatternsNotBypassed (NXSAT-676) ---------------- */
+
+/**
+ * The adoption registry, with two primitives adopted and one Satori entry point each.
+ *
+ * `satori-tag.component.ts` is what makes `@hylandsoftware/satori-ui/tag` a guarded specifier:
+ * the guardrail derives the guarded set by following each registered class to its file, so a
+ * fixture that registered a class without shipping its file would guard nothing and every
+ * negative control below would pass for the wrong reason.
+ */
+const ADOPTION_REGISTRY = `import { NXS_PRIMITIVE_IDS } from '@nuxeo/satori-platform/components';
+import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
+
+import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
+import { NxsSatoriTagComponent } from './tag/satori-tag.component';
+
+export function provideNxsSatoriComponents() {
+  return provideSatoriExtensions({
+    components: {
+      [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent,
+      [NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,
+    },
+  });
+}
+`;
+
+const SATORI_LIB = 'libs/shared/satori-components-satori/src/lib';
+
+const adoption = (extra = {}) => ({
+  [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY,
+  [`${SATORI_LIB}/avatar/satori-avatar.component.ts`]:
+    "import { SatAvatar } from '@hylandsoftware/satori-ui/avatar';\n" +
+    'export class NxsSatoriAvatarComponent {}\n',
+  [`${SATORI_LIB}/tag/satori-tag.component.ts`]:
+    "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n" +
+    'export class NxsSatoriTagComponent {}\n',
+  ...extra,
+});
+
+/** A feature that is NOT in `ADOPTION_BASELINE`, so it is held to the rule. */
+const NOT_BASELINED = 'libs/features/search/src/lib/search/search.ts';
+/** A feature that IS in `ADOPTION_BASELINE` for `@hylandsoftware/satori-ui/tag`. */
+const BASELINED = 'libs/features/trash/src/lib/trash/trash.component.ts';
+
+expectRed(
+  'a feature imports an adopted primitive’s Satori entry point directly',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [NOT_BASELINED]:
+      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class SearchComponent {}\n',
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`[\s\S]*bypasses it/,
+);
+
+expectRed(
+  'the bypass is reported against every primitive the entry point implements',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/status-tag/satori-status-tag.component.ts`]:
+      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class NxsSatoriStatusTagComponent {}\n',
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '      [NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,\n',
+      '      [NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,\n' +
+        '      [NXS_PRIMITIVE_IDS.statusTag]: NxsSatoriStatusTagComponent,\n',
+    ).replace(
+      "import { NxsSatoriTagComponent } from './tag/satori-tag.component';\n",
+      "import { NxsSatoriTagComponent } from './tag/satori-tag.component';\n" +
+        "import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';\n",
+    ),
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /adopted primitives `statusTag` and `tag`/,
+);
+
+expectRed(
+  'a baselined site that no longer imports the entry point leaves a stale exemption',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [BASELINED]: 'export class TrashComponent {}\n',
+  }),
+  null,
+  /trash\.component\.ts no longer imports `@hylandsoftware\/satori-ui\/tag`[\s\S]*stale[\s\S]*may\s+only shrink/,
+);
+
+expectRed(
+  'the adopted registry registers nothing, so the guardrail would check nothing',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.split('\n')
+      .filter((line) => !line.includes('[NXS_PRIMITIVE_IDS.'))
+      .join('\n'),
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /yielded no Satori entry point for any adopted primitive, so [\s\S]*checked nothing/,
+);
+
+/**
+ * The registered class is there, its file is not — so the entry points that primitive wraps
+ * cannot be read, and `@hylandsoftware/satori-ui/tag` silently stops being guarded. Avatar still
+ * resolves, so the guarded set is not empty and the "checked nothing" branch above is not the one
+ * under test here.
+ */
+const missingTagImplementation = () => {
+  const files = adoption({
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  });
+  delete files[`${SATORI_LIB}/tag/satori-tag.component.ts`];
+  return files;
+};
+
+expectRed(
+  'a registered class whose module does not resolve hides the entry points it wraps',
+  'checkAdoptedPatternsNotBypassed',
+  missingTagImplementation(),
+  null,
+  /registers `NxsSatoriTagComponent` for the `tag` primitive but its module[\s\S]*does not resolve/,
+);
+
+expectRed(
+  'a registered class reached through a barrel, so its entry points cannot be read either',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      "import { NxsSatoriTagComponent } from './tag/satori-tag.component';",
+      "import { NxsSatoriTagComponent } from '@nuxeo/satori-platform/components-satori';",
+    ),
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /registers `NxsSatoriTagComponent` for the `tag` primitive but it is imported from `@nuxeo\/satori-platform\/components-satori` rather than a relative path/,
+);
+
+expectRed(
+  'the adoption registry is missing entirely',
+  'checkAdoptedPatternsNotBypassed',
+  { [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n" },
+  null,
+  /provide-nxs-satori-components\.ts does not exist, so no pattern is known to be adopted/,
+);
+
+expectGreen(
+  'a feature consuming the primitive by id, which is the whole point',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [NOT_BASELINED]:
+      "import { NxsTagComponent } from '@nuxeo/satori-platform/components';\n" +
+      'export class SearchComponent {}\n',
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a Satori entry point no adopted primitive wraps stays directly importable',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [NOT_BASELINED]: "import { SatBanner } from '@hylandsoftware/satori-ui/banner';\n",
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'the two component libraries may name the entry point: between them they are the adoption',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    'libs/shared/satori-components/src/lib/tag/nxs-tag.component.ts':
+      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a spec ships nothing, so a direct import in one is not a bypass',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    'libs/features/search/src/lib/search/search.spec.ts':
+      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a longer entry-point name that merely starts with an adopted one is not matched',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [NOT_BASELINED]: "import { SatTagInput } from '@hylandsoftware/satori-ui/tag-input';\n",
+  }),
+);
+
+expectGreen(
+  'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [BASELINED]:
+      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class TrashComponent {}\n',
+  }),
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

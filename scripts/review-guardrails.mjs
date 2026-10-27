@@ -9593,6 +9593,275 @@ function checkSatoriPrimitivesRegisteredInOrder() {
   }
 }
 
+const SATORI_ADOPTION_REGISTRY =
+  'libs/shared/satori-components-satori/src/lib/provide-nxs-satori-components.ts';
+
+/**
+ * The only two trees allowed to name a Satori entry point for an adopted pattern.
+ *
+ * `/satori-components` holds the Material implementation of every primitive and
+ * `/satori-components-satori` the Satori one; between them they *are* the adoption. Everything
+ * else — features, both applications — consumes the primitive by its `NXS_PRIMITIVE_IDS` id and
+ * gets whichever implementation the host registered.
+ */
+const SATORI_COMPONENT_LIBS = [
+  'libs/shared/satori-components/',
+  'libs/shared/satori-components-satori/',
+];
+
+const SATORI_PACKAGE = '@hylandsoftware/satori-ui';
+
+const SATORI_ENTRY_POINT = /['"]@hylandsoftware\/satori-ui\/([a-z0-9-]+)['"]/g;
+
+/** Specs, stories and mocks ship nothing, so a direct import in one is not a bypass. */
+const ADOPTION_SCAN_SKIP = /(\.spec\.ts|\.stories\.ts|test-setup\.ts|\/__mocks__\/)/;
+
+/**
+ * Sites that already bypassed an adopted primitive when this guardrail landed (NXSAT-676).
+ *
+ * The ticket asks for *new* use to fail, and twelve sites predate it: the tag, avatar and
+ * breadcrumbs primitives were adopted in NXSAT-673 after this code was written against Satori
+ * directly. Failing them here would have made the gate red on arrival, which is how a gate gets
+ * demoted to a warning and then deleted.
+ *
+ * The list may only shrink. An entry whose file no longer imports the entry point is reported as
+ * stale, so migrating a site and leaving its exemption behind fails too — an allowlist nothing
+ * prunes is the thing this repo has twice found rotting. A baselined path that does not exist at
+ * all is ignored rather than reported: the guardrail runs against fixture trees in
+ * `review-guardrails.selftest.mjs` that contain none of these files, and a missing file imports
+ * nothing and so bypasses nothing.
+ *
+ * @type {Map<string, Set<string>>}
+ */
+const ADOPTION_BASELINE = new Map([
+  [
+    '@hylandsoftware/satori-ui/avatar',
+    new Set([
+      'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
+      'apps/nuxeo-ui/src/app/shell/app-shell.component.ts',
+      'libs/features/browse/src/lib/browse/browse.ts',
+      'libs/features/collections/src/lib/collection-detail/collection-detail.ts',
+      'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+    ]),
+  ],
+  [
+    '@hylandsoftware/satori-ui/breadcrumbs',
+    new Set([
+      'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+      'libs/features/tasks/src/lib/tasks-page/tasks-page.component.ts',
+    ]),
+  ],
+  [
+    '@hylandsoftware/satori-ui/tag',
+    new Set([
+      'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
+      'libs/features/browse/src/lib/browse/browse.ts',
+      'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
+      'libs/features/tasks/src/lib/task-detail/task-detail.component.ts',
+      'libs/features/trash/src/lib/trash/trash.component.ts',
+    ]),
+  ],
+]);
+
+/** Every `@hylandsoftware/satori-ui/<entry>` specifier in one file's source. */
+function satoriEntryPointsIn(body) {
+  return new Set([...body.matchAll(SATORI_ENTRY_POINT)].map((match) => match[1]));
+}
+
+/**
+ * The Satori entry points that implement an adopted primitive, and which primitive each serves.
+ *
+ * Derived, never listed. The adopted set is the `components` map of `provideNxsSatoriComponents()`
+ * — the one place that decides what is adopted — read from the AST so a call in a comment counts
+ * for nothing. Each registered class is then followed to its own file and that file's Satori
+ * imports are the entry points the primitive wraps.
+ *
+ * Deriving it matters more than it looks: a hand-written mapping is a second copy of the adopted
+ * set, and the copy is what goes stale. Adopting a seventh primitive extends this guardrail by
+ * editing nothing here. It also keeps the guardrail honest about `error-state`, which wraps
+ * Satori's `empty-state` entry point rather than one named after it.
+ *
+ * @returns {Map<string, Set<string>>} entry point specifier -> primitive ids it implements
+ */
+function adoptedSatoriEntryPoints() {
+  const source = ts.createSourceFile(
+    SATORI_ADOPTION_REGISTRY,
+    read(SATORI_ADOPTION_REGISTRY),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+
+  /** Class name -> the module specifier it was imported from. */
+  const importedFrom = new Map();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      importedFrom.set(element.name.text, statement.moduleSpecifier.text);
+    }
+  }
+
+  /** `[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent` -> `['tag', 'NxsSatoriTagComponent']`. */
+  const adopted = new Map();
+  const visit = (node) => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      ts.isComputedPropertyName(node.name) &&
+      ts.isPropertyAccessExpression(node.name.expression) &&
+      node.name.expression.expression.getText(source) === 'NXS_PRIMITIVE_IDS' &&
+      ts.isIdentifier(node.initializer)
+    ) {
+      adopted.set(node.name.expression.name.text, node.initializer.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+
+  const registryDir = dirname(SATORI_ADOPTION_REGISTRY);
+  const guarded = new Map();
+  for (const [primitive, className] of adopted) {
+    const specifier = importedFrom.get(className);
+
+    // Every failure to reach the implementation is reported, never skipped. Skipping one would
+    // leave that primitive's entry points unguarded while the other five still filled `guarded`,
+    // so the emptiness check in the caller would not notice and the guardrail would quietly cover
+    // less than it claims.
+    const resolved =
+      specifier !== undefined && specifier.startsWith('.')
+        ? [`${join(registryDir, specifier)}.ts`, join(registryDir, specifier, 'index.ts')]
+            .map(toPosixRel)
+            .find((candidate) => fileExists(candidate))
+        : undefined;
+
+    if (resolved === undefined) {
+      const why =
+        specifier === undefined
+          ? 'no import in that file declares that name'
+          : specifier.startsWith('.')
+            ? `its module \`${specifier}\` does not resolve`
+            : `it is imported from \`${specifier}\` rather than a relative path`;
+      fail(
+        `${SATORI_ADOPTION_REGISTRY} registers \`${className}\` for the \`${primitive}\` primitive ` +
+          `but ${why}, so the entry points that primitive ` +
+          'wraps could not be read and new direct use of them would not be caught.',
+      );
+      continue;
+    }
+
+    for (const entry of satoriEntryPointsIn(read(resolved))) {
+      const specifierFor = `@hylandsoftware/satori-ui/${entry}`;
+      if (!guarded.has(specifierFor)) guarded.set(specifierFor, new Set());
+      guarded.get(specifierFor).add(primitive);
+    }
+  }
+  return guarded;
+}
+
+/**
+ * A pattern adopted onto Satori must be consumed through its `nxs-` primitive (NXSAT-676).
+ *
+ * Once `provideNxsSatoriComponents()` registers a primitive on Satori, reaching past it to
+ * `@hylandsoftware/satori-ui/<entry>` in feature or application code gets the Satori rendering
+ * while losing everything the primitive exists for: the Material fallback a host without GitHub
+ * Packages access falls back to, the extension id a customer overrides through Layer 1, and the
+ * value contract `NxsSatoriValueContract` proves at compile time. The bypass still *looks* right
+ * on screen, which is why it needs a gate rather than review.
+ *
+ * ## What this does not claim
+ *
+ * Not a Material check. NXSAT-676's scope line asks for "direct Material use of an adopted
+ * pattern", and that does not map onto the adopted set: Material has no avatar, breadcrumbs,
+ * status-tag or error-state component at all, and for the two that look mappable
+ * `docs/satori-components/material-inventory.md` section 3 rules both out — chips are recorded as
+ * having no Satori 1.0 target and deliberately stay `mat-chip-*`, and plain `matTooltip` is not
+ * the rich tooltip. Banning either would fail roughly thirty-seven files that the inventory says
+ * are correct. The bypass that is real, and exact, is the Satori one above; it is what the
+ * ticket's goal sentence asks for.
+ *
+ * Not scoped to the diff either. It reads the whole tree, so a bypass that moves between files
+ * in a refactor stays caught; `ADOPTION_BASELINE` carries the twelve pre-existing sites instead.
+ */
+function checkAdoptedPatternsNotBypassed() {
+  if (!fileExists(SATORI_ADOPTION_REGISTRY)) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} does not exist, so no pattern is known to be adopted and direct ` +
+        'Satori use of an adopted primitive was not checked.',
+    );
+    return;
+  }
+
+  const guarded = adoptedSatoriEntryPoints();
+  if (guarded.size === 0) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} yielded no Satori entry point for any adopted primitive, so ` +
+        'this guardrail checked nothing. Either the `components` map of ' +
+        '`provideNxsSatoriComponents()` is empty, or its shape changed and the AST read above no ' +
+        'longer matches it.',
+    );
+    return;
+  }
+
+  const files = git(['ls-files', '--cached', '--others', '--exclude-standard'])
+    .split('\n')
+    .filter(
+      (file) =>
+        file.endsWith('.ts') &&
+        !ADOPTION_SCAN_SKIP.test(file) &&
+        !SATORI_COMPONENT_LIBS.some((lib) => file.startsWith(lib)),
+    );
+
+  /** Baselined `entry point -> path` pairs seen to still import it, to find the stale ones. */
+  const stillBypassing = new Set();
+
+  for (const file of files) {
+    if (!fileExists(file)) continue;
+    const body = read(file);
+    // Almost no file names Satori at all, and this walks every `.ts` in the repository on every
+    // `review:guardrails` run, including the inner loop. One substring test per file beats a
+    // regex per line.
+    if (!body.includes(SATORI_PACKAGE)) continue;
+
+    for (const [index, line] of body.split('\n').entries()) {
+      for (const entry of satoriEntryPointsIn(line)) {
+        const specifier = `@hylandsoftware/satori-ui/${entry}`;
+        const primitives = guarded.get(specifier);
+        if (primitives === undefined) continue;
+
+        if (ADOPTION_BASELINE.get(specifier)?.has(file)) {
+          stillBypassing.add(`${specifier} ${file}`);
+          continue;
+        }
+
+        const names = [...primitives].sort();
+        fail(
+          `${file}:${index + 1} imports \`${specifier}\` directly, outside ` +
+            `${SATORI_COMPONENT_LIBS.join(' and ')}. That entry point is how ` +
+            `${SATORI_ADOPTION_REGISTRY} implements the adopted ` +
+            `${names.length > 1 ? 'primitives' : 'primitive'} ${names.map((name) => `\`${name}\``).join(' and ')}, ` +
+            `so this bypasses ${names.length > 1 ? 'them' : 'it'}: the host loses the Material ` +
+            'fallback and the customer loses the extension id. Consume the primitive from ' +
+            '`@nuxeo/satori-platform/components` instead.',
+        );
+      }
+    }
+  }
+
+  for (const [specifier, paths] of ADOPTION_BASELINE) {
+    for (const path of paths) {
+      if (!fileExists(path)) continue;
+      if (stillBypassing.has(`${specifier} ${path}`)) continue;
+      fail(
+        `${path} no longer imports \`${specifier}\`, so its entry in \`ADOPTION_BASELINE\` is ` +
+          'stale. Delete that line: the baseline records what predates the guardrail and may ' +
+          'only shrink.',
+      );
+    }
+  }
+}
+
 const GUARDRAILS = [
   checkThemeTokens,
   checkDocsNumbering,
@@ -9644,6 +9913,7 @@ const GUARDRAILS = [
   checkSatoriFallbackDependencies,
   checkSatoriFallbackEntryPoint,
   checkSatoriPrimitivesRegisteredInOrder,
+  checkAdoptedPatternsNotBypassed,
 ];
 
 /**
