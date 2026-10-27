@@ -199,9 +199,9 @@ describe('NxsSatoriUploadComponent', () => {
    * input. Both of those were the first versions of this test, and both passed with the reset
    * removed.
    */
-  function valueWrites(input: HTMLInputElement): string[] {
+  function valueWrites(input: HTMLInputElement, seed = ''): string[] {
     const writes: string[] = [];
-    let current = input.value;
+    let current = seed;
     Object.defineProperty(input, 'value', {
       configurable: true,
       get: () => current,
@@ -220,8 +220,12 @@ describe('NxsSatoriUploadComponent', () => {
   // here rather than in someone's upload.
   it('resets the chooser after a pick, so the same file can be chosen again', () => {
     render({ label: 'Drop files' });
-    const writes = valueWrites(picker());
+    // Seeded with what a browser shows after a pick, so the end state is a change rather than the
+    // initial condition. The write is still what is asserted — the seed only means a reader does
+    // not have to take the spy's word for the test being able to fail.
+    const writes = valueWrites(picker(), 'C:\\fakepath\\claim.pdf');
     choose([file('claim.pdf')]);
     expect(writes).toEqual(['']);
+    expect(picker().value).toBe('');
   });
 });
