@@ -53,6 +53,16 @@ carrying it opens normally, with breadcrumbs into `/browse`.
   `provideNxsSatoriComponents()` re-registers the same four IDs on Satori. List it after
   `provideNxsComponents()`; later registrations win.
 
+### Added (`@nuxeo-satori/platform/components`) — card
+
+- `nxs-card` on Material, registered as `nxs.primitives.card` (`NXS_PRIMITIVE_IDS.card`) by
+  `provideNxsComponents()`, with its input contract `NxsCardInputs`. It has no outputs: its open and
+  selection handlers and the templates for its media, header action and actions are inputs, so a
+  host rendering the ID through `lib-extension-outlet` passes them. `provideNxsSatoriComponents()`
+  does not re-register it, so the ID renders `nxs-card` with or without Satori.
+- Browse's and search's card views render each card through `nxs.primitives.card`, so a component
+  registered under the ID replaces every card there.
+
 ### Added (`@nuxeo-satori/platform/components`) — search
 
 - `nxs-search-filters`, Web UI's search form over `default_search`, which edits `NxsSearchFilters`
