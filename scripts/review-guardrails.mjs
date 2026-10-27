@@ -9782,6 +9782,27 @@ function fileDeclaringSymbol(path, symbol, seen = new Set()) {
   return undefined;
 }
 
+/**
+ * The class name inside a registration, past anything that only annotates or groups it.
+ *
+ * `(C)`, `C as Type`, `C satisfies Type` and `C!` all register the same class, and a check that
+ * only accepted a bare identifier treated each as nothing to follow. Caller reports whatever is
+ * still not a name, so an unsupported shape fails loudly instead of quietly narrowing the gate.
+ */
+function unwrapRegistration(node) {
+  let current = node;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isTypeAssertionExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
 /** `./tag/satori-tag.component` from a directory -> the repository path of its `.ts`, if any. */
 function resolveRelativeModule(fromDir, specifier) {
   return [`${join(fromDir, specifier)}.ts`, join(fromDir, specifier, 'index.ts')]
@@ -9827,19 +9848,40 @@ function adoptedSatoriEntryPoints() {
 
   /** `[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent` -> `['tag', 'NxsSatoriTagComponent']`. */
   const adopted = new Map();
+  /** Registered, but the implementation is not a name this can follow. Reported, never skipped. */
+  const unreadable = new Map();
   const visit = (node) => {
     if (
       ts.isPropertyAssignment(node) &&
       ts.isComputedPropertyName(node.name) &&
       ts.isPropertyAccessExpression(node.name.expression) &&
-      node.name.expression.expression.getText(source) === 'NXS_PRIMITIVE_IDS' &&
-      ts.isIdentifier(node.initializer)
+      node.name.expression.expression.getText(source) === 'NXS_PRIMITIVE_IDS'
     ) {
-      adopted.set(node.name.expression.name.text, node.initializer.text);
+      const primitive = node.name.expression.name.text;
+      const value = unwrapRegistration(node.initializer);
+      if (ts.isIdentifier(value)) {
+        adopted.set(primitive, value.text);
+      } else {
+        unreadable.set(primitive, node.initializer.getText(source));
+      }
+      return;
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
+
+  // Requiring a bare identifier and skipping everything else was a silent gap: a registration
+  // wrapped in parentheses, `as` or `satisfies` read as nothing to follow, that primitive went
+  // unguarded, and the other seven kept `guarded` non-empty so the emptiness check stayed quiet.
+  // Wrappers are unwrapped above; anything still not a name is reported here.
+  for (const [primitive, text] of unreadable) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} registers the \`${primitive}\` primitive as \`${text}\`, which ` +
+        'is not a class name once parentheses, `as`, `satisfies` and `!` are unwrapped, so the ' +
+        'Satori entry points it wraps could not be read and new direct use of them would not be ' +
+        'caught. Register the class itself, or teach `unwrapRegistration` this shape.',
+    );
+  }
 
   const registryDir = dirname(SATORI_ADOPTION_REGISTRY);
   const guarded = new Map();

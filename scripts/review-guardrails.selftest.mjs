@@ -9355,6 +9355,53 @@ expectGreen(
   }),
 );
 
+/**
+ * A registration wrapped in something that only annotates or groups the class.
+ *
+ * Each of these registers `NxsSatoriTagComponent` exactly as the bare name does, so the tag
+ * primitive must stay guarded and the bypass below must still be caught. `avatar` is registered
+ * plainly throughout, which is the point: it keeps the guarded set non-empty, so a wrapper that
+ * read as nothing to follow would slip past the "registers nothing" check rather than being
+ * noticed. That is the shape of the gap these controls exist for.
+ */
+for (const [shape, initializer] of [
+  ['parentheses', '(NxsSatoriTagComponent)'],
+  ['an `as` assertion', 'NxsSatoriTagComponent as never'],
+  ['a `satisfies` clause', 'NxsSatoriTagComponent satisfies never'],
+  ['a non-null assertion', 'NxsSatoriTagComponent!'],
+]) {
+  expectRed(
+    `a registration behind ${shape} still guards its primitive`,
+    'checkAdoptedPatternsNotBypassed',
+    adoption({
+      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+        '[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,',
+        `[NXS_PRIMITIVE_IDS.tag]: ${initializer},`,
+      ),
+      [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+    }),
+    null,
+    /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+  );
+}
+
+expectRed(
+  'an implementation this cannot follow is reported, even though another primitive still reads',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // `avatar` is still a plain name, so `guarded` is not empty and the "registers nothing" check
+    // says nothing about this. Without its own report the tag primitive would be unguarded and
+    // the run would be green.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,',
+      '[NXS_PRIMITIVE_IDS.tag]: wrapTag(NxsSatoriTagComponent),',
+    ),
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /registers the `tag` primitive as `wrapTag\(NxsSatoriTagComponent\)`, which is not a class name once parentheses, `as`, `satisfies` and `!` are unwrapped/,
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',
