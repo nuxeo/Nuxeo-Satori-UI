@@ -641,7 +641,7 @@ item whose ID follows the convention picks up a registered component with no fur
 
 ## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
 
-Thirteen component-registry IDs for the primitives. Eleven of them Satori also ships; `banner` and
+Thirteen component-registry IDs for the primitives. Eleven have a Satori twin; `banner` and
 `chipSet` have no Satori wrapper yet, so they stay Material-only. Each resolves to a Material
 implementation from `@nuxeo/satori-platform/components`, and all but those two to a Satori-backed
 one when `@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only

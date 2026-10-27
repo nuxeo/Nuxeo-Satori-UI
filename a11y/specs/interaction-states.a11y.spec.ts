@@ -1,5 +1,12 @@
 import type { Locator, Page } from '@playwright/test';
-import { aiFindingsNote, expect, REPORT_DIR, test, waitForScreenSettled } from '../fixtures';
+import {
+  aiFindingsNote,
+  BROWSE_LOADED,
+  expect,
+  REPORT_DIR,
+  test,
+  waitForScreenSettled,
+} from '../fixtures';
 
 /**
  * WCAG 2.1 AA scan of **interaction states** — surfaces that exist only after a click.
@@ -105,7 +112,7 @@ async function openBrowse(page: Page): Promise<void> {
   await page.goto(BROWSE, { waitUntil: 'networkidle' });
   await expect(page.locator('lib-browse'), 'lib-browse must render').toBeVisible();
   await expect(
-    page.locator('.browse-row, .card-grid .card-outlet').first(),
+    page.locator(BROWSE_LOADED).first(),
     'browse must show at least one document, or every state below scans an empty page',
   ).toBeVisible();
   await waitForScreenSettled(page, 'lib-browse', true);

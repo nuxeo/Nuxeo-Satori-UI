@@ -615,6 +615,20 @@ try {
       const url = `${base}/${h.book}/iframe.html?id=${h.story}&viewMode=story`;
       try {
         const { errors, iconFont } = await open(page, url, h.selector);
+        // Grow the viewport until the documented element fits, before anything measures or crops
+        // it. `crop()` clamps to the viewport, so an element below the fold comes out truncated —
+        // or, if it starts below the fold entirely, with a negative clip height. A component whose
+        // story shows it alone already fits, and `fitViewport` returns without touching anything in
+        // that case, so this changes no existing capture; it matters for a section whose story
+        // renders several components, where the documented one can be last. The card's is.
+        const fitted = await fitViewport(page, [h.selector]);
+        const fits = fitted.some((b) => b.ok && b.bottom + 24 <= page.viewportSize().height);
+        record(
+          subject,
+          `<${h.selector}> fits the viewport, so the crop is the whole element`,
+          fits,
+          `viewport ${page.viewportSize().width}×${page.viewportSize().height}`,
+        );
         let opened = null;
         if (c.captured === 'Opened from the keyboard')
           opened = await openFromKeyboard(page, h.selector);
@@ -741,7 +755,12 @@ try {
   // The "Primitives/By registered ID" story in both Storybooks: the whole viewport, as it renders,
   // and a close-up of every primitive together for the side-by-side.
   const full = {};
-  // One host per `NXS_PRIMITIVE_IDS` entry, in the story's order; the story renders each ID once.
+  // One host per ID the "Primitives/By registered ID" story renders, in the story's order — not one
+  // per `NXS_PRIMITIVE_IDS` entry, which is a longer list: `banner` and `chipSet` are registered but
+  // have no Satori twin, so the story leaves them out and this is the set with two sides to compare.
+  // `primitiveCount` below is this length, and the count check further down asserts the story
+  // resolved exactly this many `nxs-satori-*` hosts — so an ID added to the story without being
+  // added here fails that check rather than being quietly cropped out of the screenshots.
   const PRIMITIVE_HOSTS = {
     without: [
       'nxs-avatar',
