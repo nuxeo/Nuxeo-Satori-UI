@@ -325,12 +325,14 @@ export class NxsDocumentReferenceInputComponent
       this.finder.reset();
       this.commit([...this.chosen(), id]);
     } else {
-      this.commit(id);
+      // Show the choice before `commit`: a form may reset the field from inside it, and the reset
+      // must be what stays on screen.
       this.document.set(document);
       if (document) {
         this.text.set(document.title);
         this.finder.reset();
       }
+      this.commit(id);
     }
     this.documentChange.emit(document);
   }

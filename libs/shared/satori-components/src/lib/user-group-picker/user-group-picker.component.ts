@@ -249,11 +249,13 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
       this.finder.reset();
       this.commit([...this.chosen(), principal]);
     } else {
-      this.commit(principal);
+      // Show the choice before `commit`: a form may reset the field from inside it, and the reset
+      // must be what stays on screen.
       if (principal) {
         this.text.set(principal.label);
         this.finder.reset();
       }
+      this.commit(principal);
     }
   }
 

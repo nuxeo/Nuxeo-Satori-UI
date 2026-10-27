@@ -255,6 +255,19 @@ describe('NxsDocumentReferenceInputComponent', () => {
     expect(host.reference.value).toBe('c1');
   });
 
+  it('stays reset when the form resets it from inside the change a choice makes', async () => {
+    const resetting = host.reference.valueChanges.subscribe((value) => {
+      if (value) host.reference.reset();
+    });
+    await type('contract');
+    options()[0].click();
+    await render();
+    resetting.unsubscribe();
+    expect(host.reference.value).toBeNull();
+    expect(input().value).toBe('');
+    expect(host.reference.hasError('nxsChooseFromList')).toBe(false);
+  });
+
   it('keeps a uid it cannot look up, shown as it is', async () => {
     host.reference.setValue('gone');
     await render();

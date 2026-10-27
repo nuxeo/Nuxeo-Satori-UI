@@ -316,6 +316,20 @@ describe('NxsUserGroupPickerComponent', () => {
     expect(input().value).toBe('');
   });
 
+  it('stays reset when the form resets it from inside the change a choice makes', async () => {
+    const resetting = host.principal.valueChanges.subscribe((value) => {
+      if (value) host.principal.reset();
+    });
+    await type('adm');
+    await settle();
+    options()[0].click();
+    await render();
+    resetting.unsubscribe();
+    expect(host.principal.value).toBeNull();
+    expect(input().value).toBe('');
+    expect(host.principal.hasError('nxsChooseFromList')).toBe(false);
+  });
+
   it('shows the form’s required error once the user has left the field empty', async () => {
     expect(root().querySelector('mat-error')).toBeNull();
     leave();
