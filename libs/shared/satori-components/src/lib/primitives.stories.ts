@@ -1,3 +1,4 @@
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
@@ -26,7 +27,7 @@ const meta: Meta = {
     applicationConfig({
       providers: [provideStoryRouter(), provideNxsComponents()],
     }),
-    moduleMetadata({ imports: [ExtensionOutletComponent, MatIconModule] }),
+    moduleMetadata({ imports: [ExtensionOutletComponent, MatIconModule, MatButtonModule] }),
   ],
 };
 
@@ -82,6 +83,7 @@ export const MaterialRegistration: StoryObj = {
       // the card one that opens something, which is how browse and search render it.
       openCard: () => undefined,
       selectCard: () => undefined,
+      takeFiles: () => undefined,
     },
     template: `
       <div style="display: grid; gap: 16px; justify-items: start">
@@ -126,6 +128,29 @@ export const MaterialRegistration: StoryObj = {
             media: cardMedia
           }"
         />
+        <ng-template #emptyActions>
+          <button mat-flat-button type="button">Create folder</button>
+        </ng-template>
+        <lib-extension-outlet
+          style="display: block; inline-size: 320px"
+          [componentId]="ids.emptyState"
+          [componentInputs]="{
+            heading: 'No documents here',
+            message: 'Drag a file in, or create a folder to get started.',
+            icon: 'folder_open',
+            actions: emptyActions
+          }"
+        />
+        <lib-extension-outlet
+          style="display: block; inline-size: 320px"
+          [componentId]="ids.upload"
+          [componentInputs]="{
+            label: 'Drag and drop files here',
+            multiple: true,
+            accept: '.pdf,.docx',
+            filesHandler: takeFiles
+          }"
+        />
       </div>
     `,
   }),
@@ -135,4 +160,37 @@ export const MaterialRegistration: StoryObj = {
     ).toBeVisible();
     await expect(canvas.queryByText(/satori-components\./)).toBeNull();
   },
+};
+
+/**
+ * The upload, disabled, rendered through `nxs.primitives.upload`.
+ *
+ * Its own story because the showcase above renders every ID in its default state, and a disabled
+ * upload there would misrepresent how the component normally looks. Disabling it is the one thing
+ * about this wrapper that the unit tests can assert and no screenshot showed: the wrapper writes
+ * Satori's `SatUploadField.disabled`, which is a writable signal rather than an input, so an effect
+ * drives it — and what a reader wants to see is that it reaches Satori's own control and not only
+ * the projected file input.
+ *
+ * The same template and inputs in both Storybooks, so the two halves differ only in what is
+ * registered.
+ */
+export const DisabledUpload: StoryObj = {
+  name: 'Disabled upload',
+  render: () => ({
+    props: { ids: NXS_PRIMITIVE_IDS, takeFiles: () => undefined },
+    template: `
+      <lib-extension-outlet
+        style="display: block; inline-size: 320px"
+        [componentId]="ids.upload"
+        [componentInputs]="{
+          label: 'Drag and drop files here',
+          buttonLabel: 'Choose files',
+          multiple: true,
+          disabled: true,
+          filesHandler: takeFiles
+        }"
+      />
+    `,
+  }),
 };

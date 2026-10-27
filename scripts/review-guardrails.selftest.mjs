@@ -9033,7 +9033,7 @@ expectRed(
 /* ---------------- checkAdoptedPatternsNotBypassed (NXSAT-676) ---------------- */
 
 /**
- * The adoption registry, with two primitives adopted and one Satori entry point each.
+ * The adoption registry, in the one shape the guardrail reads, with two primitives adopted.
  *
  * `satori-tag.component.ts` is what makes `@hylandsoftware/satori-ui/tag` a guarded specifier:
  * the guardrail derives the guarded set by following each registered class to its file, so a
@@ -9078,14 +9078,15 @@ const NOT_BASELINED = 'libs/features/search/src/lib/search/search.ts';
  */
 const BASELINED = 'libs/features/document-detail/src/lib/document-detail/document-detail.ts';
 
+/** A direct import of an adopted entry point, which the scan must catch. */
+const BYPASS = "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n";
+
+/* --- the scan: what the guardrail is for --- */
+
 expectRed(
   'a feature imports an adopted primitive’s Satori entry point directly',
   'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [NOT_BASELINED]:
-      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class SearchComponent {}\n',
-  }),
+  adoption({ [NOT_BASELINED]: BYPASS + 'export class SearchComponent {}\n' }),
   null,
   /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`[\s\S]*bypasses it/,
 );
@@ -9106,86 +9107,27 @@ expectRed(
       "import { NxsSatoriTagComponent } from './tag/satori-tag.component';\n" +
         "import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';\n",
     ),
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+    [NOT_BASELINED]: BYPASS,
   }),
   null,
   /adopted primitives `statusTag` and `tag`/,
 );
 
 expectRed(
-  'a baselined site that no longer imports the entry point leaves a stale exemption',
+  'a dynamic import with a backtick specifier is still an import',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    [BASELINED]: 'export class DocumentDetailComponent {}\n',
+    [NOT_BASELINED]: 'export const lazyTag = () => import(`@hylandsoftware/satori-ui/tag`);\n',
   }),
   null,
-  /document-detail\.ts no longer imports `@hylandsoftware\/satori-ui\/tag`[\s\S]*stale[\s\S]*may\s+only shrink/,
-);
-
-expectRed(
-  'the adopted registry registers nothing, so the guardrail would check nothing',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.split('\n')
-      .filter((line) => !line.includes('[NXS_PRIMITIVE_IDS.'))
-      .join('\n'),
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /yielded no Satori entry point for any adopted primitive, so [\s\S]*checked nothing/,
-);
-
-/**
- * The registered class is there, its file is not — so the entry points that primitive wraps
- * cannot be read, and `@hylandsoftware/satori-ui/tag` silently stops being guarded. Avatar still
- * resolves, so the guarded set is not empty and the "checked nothing" branch above is not the one
- * under test here.
- */
-const missingTagImplementation = () => {
-  const files = adoption({
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  });
-  delete files[`${SATORI_LIB}/tag/satori-tag.component.ts`];
-  return files;
-};
-
-expectRed(
-  'a registered class whose module does not resolve hides the entry points it wraps',
-  'checkAdoptedPatternsNotBypassed',
-  missingTagImplementation(),
-  null,
-  /registers `NxsSatoriTagComponent` for the `tag` primitive but its module[\s\S]*does not resolve/,
-);
-
-expectRed(
-  'a registered class reached through a barrel, so its entry points cannot be read either',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      "import { NxsSatoriTagComponent } from './tag/satori-tag.component';",
-      "import { NxsSatoriTagComponent } from '@nuxeo/satori-platform/components-satori';",
-    ),
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /registers `NxsSatoriTagComponent` for the `tag` primitive but it is imported from `@nuxeo\/satori-platform\/components-satori` rather than a relative path/,
-);
-
-expectRed(
-  'the adoption registry is missing entirely',
-  'checkAdoptedPatternsNotBypassed',
-  { [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n" },
-  null,
-  /provide-nxs-satori-components\.ts does not exist, so no pattern is known to be adopted/,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly/,
 );
 
 expectGreen(
   'a feature consuming the primitive by id, which is the whole point',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    [NOT_BASELINED]:
-      "import { NxsTagComponent } from '@nuxeo/satori-platform/components';\n" +
-      'export class SearchComponent {}\n',
+    [NOT_BASELINED]: "import { NxsTagComponent } from '@nuxeo/satori-platform/components';\n",
   }),
 );
 
@@ -9203,8 +9145,7 @@ expectGreen(
   'the two component libraries may name the entry point: between them they are the adoption',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    'libs/shared/satori-components/src/lib/tag/nxs-tag.component.ts':
-      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+    'libs/shared/satori-components/src/lib/tag/nxs-tag.component.ts': BYPASS,
   }),
 );
 
@@ -9212,10 +9153,7 @@ falsePositiveControls += 1;
 expectGreen(
   'a spec ships nothing, so a direct import in one is not a bypass',
   'checkAdoptedPatternsNotBypassed',
-  adoption({
-    'libs/features/search/src/lib/search/search.spec.ts':
-      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
+  adoption({ 'libs/features/search/src/lib/search/search.spec.ts': BYPASS }),
 );
 
 falsePositiveControls += 1;
@@ -9227,110 +9165,6 @@ expectGreen(
   }),
 );
 
-expectRed(
-  'a dynamic import with a backtick specifier is still an import',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [NOT_BASELINED]:
-      'export const lazyTag = () => import(`@hylandsoftware/satori-ui/tag`);\n' +
-      'export class SearchComponent {}\n',
-  }),
-  null,
-  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly/,
-);
-
-expectRed(
-  'a re-exporting barrel is followed, so the primitive it registers is still guarded',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // `./tag` resolves to an index.ts that only re-exports, so the component — and the Satori
-    // import that makes `@hylandsoftware/satori-ui/tag` guarded — are one hop further on.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      "from './tag/satori-tag.component'",
-      "from './tag'",
-    ),
-    [`${SATORI_LIB}/tag/index.ts`]: "export * from './satori-tag.component';\n",
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-);
-
-expectRed(
-  'a registered implementation that imports no Satori at all leaves its primitive unguarded',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/tag/satori-tag.component.ts`]:
-      "// wraps '@hylandsoftware/satori-ui/tag' one day\nexport class NxsSatoriTagComponent {}\n",
-  }),
-  null,
-  /registers `NxsSatoriTagComponent` for the `tag` primitive, but [\s\S]*which declares it, imports nothing from `@hylandsoftware\/satori-ui`/,
-);
-
-/**
- * A barrel carrying the registered wrapper and an unregistered one.
- *
- * `./tag` re-exports both `NxsSatoriTagComponent`, which is registered, and a banner wrapper that
- * is not. Reading the barrel's whole re-export graph would attribute
- * `@hylandsoftware/satori-ui/banner` to the `tag` primitive and reject every legitimate feature
- * import of the banner, so the two controls below are a pair: the tag import must still be
- * caught, and the banner import must still be allowed.
- */
-const mixedBarrel = (featureFile) =>
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      "from './tag/satori-tag.component'",
-      "from './tag'",
-    ),
-    [`${SATORI_LIB}/tag/index.ts`]:
-      "export * from './satori-tag.component';\nexport * from './satori-banner.component';\n",
-    [`${SATORI_LIB}/tag/satori-banner.component.ts`]:
-      "import { SatBanner } from '@hylandsoftware/satori-ui/banner';\n" +
-      'export class NxsSatoriBannerComponent {}\n',
-    ...featureFile,
-  });
-
-expectRed(
-  'a mixed barrel still catches the registered primitive',
-  'checkAdoptedPatternsNotBypassed',
-  mixedBarrel({
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-);
-
-falsePositiveControls += 1;
-expectGreen(
-  'a mixed barrel does not make its unregistered sibling’s entry point adopted',
-  'checkAdoptedPatternsNotBypassed',
-  mixedBarrel({
-    [NOT_BASELINED]: "import { SatBanner } from '@hylandsoftware/satori-ui/banner';\n",
-  }),
-);
-
-expectRed(
-  'a renaming re-export keeps the trail: the symbol is followed under its local name',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      "from './tag/satori-tag.component'",
-      "from './tag'",
-    ),
-    // The barrel is the only place the registered name exists; the implementation declares it
-    // under another one, so a search that did not carry the alias across would lose it here and
-    // report that nothing declares the registered class.
-    [`${SATORI_LIB}/tag/index.ts`]:
-      "export { NxsSatoriTagImpl as NxsSatoriTagComponent } from './satori-tag.component';\n",
-    [`${SATORI_LIB}/tag/satori-tag.component.ts`]:
-      "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class NxsSatoriTagImpl {}\n',
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-);
-
 falsePositiveControls += 1;
 expectGreen(
   'an entry point named only in a comment or an ordinary string is not an import',
@@ -9340,497 +9174,26 @@ expectGreen(
       "// Use `nxs-tag`, never '@hylandsoftware/satori-ui/tag' directly.\n" +
       '/* see @hylandsoftware/satori-ui/avatar for the sizes */\n' +
       "export const DOC = 'import from @hylandsoftware/satori-ui/tag';\n" +
-      'export const HINT = `@hylandsoftware/satori-ui/breadcrumbs`;\n' +
-      "import { NxsTagComponent } from '@nuxeo/satori-platform/components';\n",
+      'export const HINT = `@hylandsoftware/satori-ui/breadcrumbs`;\n',
   }),
 );
 
-falsePositiveControls += 1;
+/* --- the baseline: exempt per symbol, shrink-only --- */
+
 expectGreen(
-  'a comment naming an entry point the file is not baselined for is not a bypass',
+  'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    // This file is baselined for `tag` and not for `avatar`, so a text match would read the
-    // comment as an avatar bypass and fail it. Its real `tag` import is what keeps the baseline
-    // entry live, so the stale-exemption check stays quiet and only the comment is under test.
     [BASELINED]:
-      "// migrated away from '@hylandsoftware/satori-ui/avatar' already\n" +
-      "import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';\n",
+      "import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class DocumentDetailComponent {}\n',
   }),
 );
-
-/**
- * A registration wrapped in something that only annotates or groups the class.
- *
- * Each of these registers `NxsSatoriTagComponent` exactly as the bare name does, so the tag
- * primitive must stay guarded and the bypass below must still be caught. `avatar` is registered
- * plainly throughout, which is the point: it keeps the guarded set non-empty, so a wrapper that
- * read as nothing to follow would slip past the "registers nothing" check rather than being
- * noticed. That is the shape of the gap these controls exist for.
- */
-for (const [shape, initializer] of [
-  ['parentheses', '(NxsSatoriTagComponent)'],
-  ['an `as` assertion', 'NxsSatoriTagComponent as never'],
-  ['a `satisfies` clause', 'NxsSatoriTagComponent satisfies never'],
-  ['a non-null assertion', 'NxsSatoriTagComponent!'],
-]) {
-  expectRed(
-    `a registration behind ${shape} still guards its primitive`,
-    'checkAdoptedPatternsNotBypassed',
-    adoption({
-      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-        '[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,',
-        `[NXS_PRIMITIVE_IDS.tag]: ${initializer},`,
-      ),
-      [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-    }),
-    null,
-    /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-  );
-}
-
-expectRed(
-  'an implementation this cannot follow is reported, even though another primitive still reads',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // `avatar` is still a plain name, so `guarded` is not empty and the "registers nothing" check
-    // says nothing about this. Without its own report the tag primitive would be unguarded and
-    // the run would be green.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,',
-      '[NXS_PRIMITIVE_IDS.tag]: wrapTag(NxsSatoriTagComponent),',
-    ),
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /registers the `tag` primitive as `wrapTag\(NxsSatoriTagComponent\)`, which is not a class name once parentheses, `as`, `satisfies` and `!` are unwrapped/,
-);
-
-/**
- * The registry importing the implementation under an alias.
- *
- * `Tag` is the local name the `components` map registers; `NxsSatoriTagComponent` is what the
- * implementation declares. Searching that file for the local name finds nothing and rejects a
- * valid registration, so these two controls bracket it: the correct tree must stay green, and the
- * primitive must still be guarded rather than quietly dropped.
- */
-const aliasedRegistryImport = (extra) =>
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      "import { NxsSatoriTagComponent } from './tag/satori-tag.component';",
-      "import { NxsSatoriTagComponent as Tag } from './tag/satori-tag.component';",
-    ).replace('[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,', '[NXS_PRIMITIVE_IDS.tag]: Tag,'),
-    ...extra,
-  });
-
-expectGreen(
-  'an aliased registry import is a valid registration, not a missing class',
-  'checkAdoptedPatternsNotBypassed',
-  aliasedRegistryImport({
-    [NOT_BASELINED]: "import { NxsTagComponent } from '@nuxeo/satori-platform/components';\n",
-  }),
-);
-
-expectRed(
-  'an aliased registry import still guards the primitive it registers',
-  'checkAdoptedPatternsNotBypassed',
-  aliasedRegistryImport({
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-);
-
-expectRed(
-  'a literal element-access key is the same registration and still guards its primitive',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '[NXS_PRIMITIVE_IDS.tag]:',
-      "[NXS_PRIMITIVE_IDS['tag']]:",
-    ),
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-);
-
-expectRed(
-  'a key that reads off NXS_PRIMITIVE_IDS without naming an id is reported, not skipped',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // `avatar` stays keyed normally, so `guarded` is non-empty and the "registers nothing" check
-    // is silent. Without its own report the tag primitive would simply be absent from the adopted
-    // set and the direct import below would pass.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '    components: {',
-      '    components: {\n      [NXS_PRIMITIVE_IDS[tagKey]]: NxsSatoriTagComponent,',
-    ).replace('[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,', ''),
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /has a `components` entry `\[NXS_PRIMITIVE_IDS\[tagKey\]\]` whose primitive could not be read/,
-);
-
-/**
- * The id written out instead of read off the constant.
- *
- * `NXS_PRIMITIVE_IDS.tag` *is* the string `'nxs.primitives.tag'`, so both spellings below
- * register identically at runtime. Reading only the computed-access forms left a written-out id
- * registered and absent from the adopted set, with `avatar` keeping `guarded` non-empty so the
- * "registers nothing" check stayed quiet.
- */
-for (const [shape, key] of [
-  ['a plain string key', "'nxs.primitives.tag':"],
-  ['a computed string key', "['nxs.primitives.tag']:"],
-]) {
-  expectRed(
-    `${shape} is the same registration and still guards its primitive`,
-    'checkAdoptedPatternsNotBypassed',
-    adoption({
-      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-        '[NXS_PRIMITIVE_IDS.tag]:',
-        key,
-      ),
-      [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-    }),
-    null,
-    /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-  );
-}
-
-falsePositiveControls += 1;
-expectGreen(
-  'an ordinary string key in the registry is not read as a primitive id',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // `components` and `nxs.something.else` are string keys that name no primitive. Treating any
-    // string key as an id would make these registrations of a primitive called `else`, or worse
-    // report them as unreadable.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '    components: {',
-      "    meta: { 'nxs.something.else': 1, plain: 2 },\n    components: {",
-    ),
-  }),
-);
-
-/**
- * An unrelated object literal carrying the same keys.
- *
- * It registers nothing — only what `provideSatoriExtensions` is given does — so it must not be
- * able to point a primitive at another component's entry point. Declared *after* the real call,
- * which is what made it win when every primitive-keyed property in the file was collected: the
- * later `set` overwrote the real registration, `tag` resolved to the avatar implementation, and
- * `@hylandsoftware/satori-ui/tag` stopped being guarded.
- */
-const decoyAfterRegistry =
-  '\nexport const NOT_A_REGISTRATION = {\n' +
-  '  [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent,\n' +
-  "  'nxs.primitives.avatar': NxsSatoriAvatarComponent,\n" +
-  '};\n';
-
-expectRed(
-  'an unrelated object with the same keys cannot redirect a primitive',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY + decoyAfterRegistry,
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-);
-
-falsePositiveControls += 1;
-expectGreen(
-  'an unrelated object with the same keys is not itself a finding',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY + decoyAfterRegistry,
-  }),
-);
-
-expectRed(
-  'a spread inside `components` can hide registrations, so it is reported',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '    components: {',
-      '    components: {\n      ...extra,',
-    ),
-  }),
-  null,
-  /has a `components` entry `\.\.\.extra` whose primitive could not be read/,
-);
-
-expectRed(
-  'a contribution with no `components` adopts nothing, so the gate says it checked nothing',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // `provideSatoriExtensions` may legitimately contribute things other than components, so a
-    // call without that key is not itself an error — it just leaves the adopted set empty, which
-    // the emptiness check reports. There is no separate "no components key" failure on purpose.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      'components: {',
-      'other: {',
-    ),
-  }),
-  null,
-  /yielded no Satori entry point for any adopted primitive, so this guardrail checked nothing/,
-);
-
-expectRed(
-  'the provider has no contribution at all, so the adopted set could not be read',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      /return provideSatoriExtensions\(\{[\s\S]*?\n  \}\);/,
-      'return undefined;',
-    ),
-  }),
-  null,
-  /has no `provideSatoriExtensions\(…\)` call inside `provideNxsSatoriComponents\(\)`/,
-);
-
-/**
- * Computed keys that cannot be evaluated here, each registering a primitive at runtime.
- *
- * `avatar` stays plainly keyed in all three, so the adopted set is never empty and the "registers
- * nothing" check is silent — the per-entry report is the only thing standing between these and a
- * primitive dropping out of enforcement unnoticed.
- */
-for (const [shape, preamble, key] of [
-  ['a constant', 'const tagId = NXS_PRIMITIVE_IDS.tag;\n', '[tagId]:'],
-  ['a constant read off another map', 'const OTHER = NXS_PRIMITIVE_IDS;\n', '[OTHER.tag]:'],
-  ['a template literal', 'const part = "tag";\n', '[`nxs.primitives.${part}`]:'],
-]) {
-  expectRed(
-    `a computed key built from ${shape} is reported, not skipped`,
-    'checkAdoptedPatternsNotBypassed',
-    adoption({
-      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: (preamble + ADOPTION_REGISTRY).replace(
-        '[NXS_PRIMITIVE_IDS.tag]:',
-        key,
-      ),
-      [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-    }),
-    null,
-    /has a `components` entry `[\s\S]*` whose primitive could not be read/,
-  );
-}
-
-falsePositiveControls += 1;
-expectGreen(
-  'another extension’s component id is resolved, not a primitive, and is skipped quietly',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // Both spellings evaluate to a string that is simply not a primitive id. `components` is the
-    // contract for every extension component, not only these eight, so these must not be
-    // reported as unreadable — "resolved and not a primitive" is a different answer from
-    // "cannot tell".
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '    components: {',
-      "    components: {\n      'acme.widget': NxsSatoriAvatarComponent,\n" +
-        "      ['acme.other']: NxsSatoriAvatarComponent,",
-    ),
-  }),
-);
-
-/**
- * An unrelated `provideSatoriExtensions` call earlier in the file.
- *
- * Only `provideNxsSatoriComponents` decides what is adopted. Taking the first such call anywhere
- * in the module read this helper's contribution instead, and `tag` left the guarded set while the
- * avatar registration here kept it non-empty.
- */
-const UNRELATED_HELPER =
-  'export function somethingElse() {\n  return provideSatoriExtensions({ components: {} });\n}\n\n';
-
-expectRed(
-  'an unrelated earlier contribution is not mistaken for the adoption provider',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: UNRELATED_HELPER + ADOPTION_REGISTRY,
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-);
-
-expectRed(
-  'a contribution the provider never returns is reported, and the returned one still guards',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // `avatar` moves to a call whose result is thrown away and `tag` stays in the returned one.
-    // An earlier round combined contributions in source order; that is unsound once a call may
-    // register nothing, so the unreturned one is reported and only the returned one is read —
-    // which must still catch the tag bypass below.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '      [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent,\n',
-      '',
-    ).replace(
-      '  return provideSatoriExtensions({',
-      '  provideSatoriExtensions({\n' +
-        '    components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n' +
-        '  });\n' +
-        '  return provideSatoriExtensions({',
-    ),
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-);
-
-/**
- * Two installed contributions, which cannot be ordered here.
- *
- * Branch returns are alternatives, not successive registrations, so merging them invents a
- * mapping that never happens at runtime — and a later one pointing `tag` at the avatar wrapper
- * would hide a reachable entry point. A nested helper is the same problem from the other side:
- * its `return` does not return from the provider, and whether it is ever called is not decidable
- * here, so its contribution is reported rather than counted.
- */
-expectRed(
-  'two conditionally returned contributions are rejected rather than merged',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  if (Math.random() > 0.5) {\n' +
-        '    return provideSatoriExtensions({\n' +
-        '      components: { [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent },\n' +
-        '    });\n' +
-        '  }\n' +
-        '  return provideSatoriExtensions({',
-    ),
-  }),
-  null,
-  /2 installed `provideSatoriExtensions\(…\)` contributions, whose effective order could not be determined/,
-);
-
-expectRed(
-  'a nested helper’s return is not the provider’s, so its contribution is reported',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  function maybe() {\n' +
-        '    return provideSatoriExtensions({\n' +
-        '      components: { [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent },\n' +
-        '    });\n' +
-        '  }\n' +
-        '  void maybe;\n' +
-        '  return provideSatoriExtensions({',
-    ),
-  }),
-  null,
-  /a `provideSatoriExtensions\(…\)` call whose result is never returned/,
-);
-
-falsePositiveControls += 1;
-expectGreen(
-  'the provider written as an arrow is read, not treated as a nested function',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // The nested-function rule must not skip the provider itself. A concise arrow body is the
-    // returned expression, so there is no `return` statement to find.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      'export function provideNxsSatoriComponents() {\n  return provideSatoriExtensions({',
-      'export const provideNxsSatoriComponents = () =>\n  provideSatoriExtensions({',
-    ).replace(/\n  \}\);\n\}/, '\n  });'),
-  }),
-);
-
-expectRed(
-  'a spread after `components` in the outer object can replace the map, so it is reported',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '    },\n  });',
-      '    },\n    ...override,\n  });',
-    ),
-  }),
-  null,
-  /has a `\.\.\.override` entry at or after `components`[\s\S]*can replace the map this reads/,
-);
-
-falsePositiveControls += 1;
-expectGreen(
-  'a spread before `components` cannot replace it, so it is not reported',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // The literal `components` is written after the spread, so it wins at runtime and the entries
-    // this reads are the ones that register. Failing here would reject a legitimate shape.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '    components: {',
-      '    ...base,\n    components: {',
-    ),
-  }),
-);
-
-expectRed(
-  'a discarded contribution cannot overwrite the installed one',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // The real provider is saved, a discarded call then maps `tag` to the avatar wrapper, and the
-    // saved one is returned. Reading every call in source order let the discarded one win, so
-    // `tag` resolved to the avatar's entry point and `satori-ui/tag` stopped being guarded.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  const installed = provideSatoriExtensions({',
-    ).replace(
-      /\n  \}\);\n\}/,
-      '\n  });\n' +
-        '  provideSatoriExtensions({\n' +
-        '    components: { [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent },\n' +
-        '  });\n' +
-        '  return installed;\n}',
-    ),
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-  null,
-  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-);
-
-expectRed(
-  'a contribution whose result is thrown away is reported, since it may register nothing',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  provideSatoriExtensions({ components: {} });\n  return provideSatoriExtensions({',
-    ),
-  }),
-  null,
-  /a `provideSatoriExtensions\(…\)` call whose result is never returned/,
-);
-
-for (const [shape, key] of [
-  ['a quoted', "'components':"],
-  ['a computed string', "['components']:"],
-]) {
-  expectRed(
-    `${shape} \`components\` key is the same contribution and still guards its primitives`,
-    'checkAdoptedPatternsNotBypassed',
-    adoption({
-      // `getText()` keeps the quotes, so these never matched `components` and the whole
-      // contribution was skipped — every primitive in it unguarded at once.
-      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-        'components: {',
-        key + ' {',
-      ),
-      [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-    }),
-    null,
-    /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
-  );
-}
 
 expectRed(
   'a baselined site importing a symbol the baseline does not list is new direct use',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    // Document detail is baselined for `SatTagCategory` only. Exempting the file rather than its
-    // symbols let anything else from the same entry point ride along, which is the gap this closes.
     [BASELINED]:
       "import { SatTagCategory, SatStatusTag } from '@hylandsoftware/satori-ui/tag';\n" +
       'export class DocumentDetailComponent {}\n',
@@ -9840,13 +9203,17 @@ expectRed(
 );
 
 expectRed(
+  'a baselined site that no longer imports the entry point leaves a stale exemption',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({ [BASELINED]: 'export class DocumentDetailComponent {}\n' }),
+  null,
+  /document-detail\.ts no longer imports `@hylandsoftware\/satori-ui\/tag`[\s\S]*stale[\s\S]*may\s+only shrink/,
+);
+
+expectRed(
   'a baselined symbol that is no longer imported leaves a stale exemption',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    // Every entry left in the baseline lists one symbol, so the file keeps importing the entry
-    // point under another name: the dashboard's `SatAvatarCategory` replaced by `SatAvatarModule`.
-    // That is also new direct use, reported on a line of its own; the stale symbol must still be
-    // reported rather than sit there forever. Its `tag` import keeps that entry live.
     'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts':
       "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n" +
       "import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';\n",
@@ -9860,242 +9227,316 @@ expectGreen(
   'a local rename does not count as a different symbol',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    // The baseline records the name the module exports, so aliasing it locally is still the same
-    // legacy import and must stay exempt.
     [BASELINED]:
       "import { SatTagCategory as Category } from '@hylandsoftware/satori-ui/tag';\n" +
       'export class DocumentDetailComponent {}\n',
   }),
 );
 
-/**
- * Properties after the literal `components` that could be `components` again.
- *
- * Each replaces the map at runtime while the reader returns the literal entries, so a replacement
- * that preserves them and adds one primitive hides only the addition. The forms are not
- * enumerable — a computed name, a shorthand — so anything after the map that is not a plain
- * assignment under a readable name is reported.
- */
-for (const [shape, preamble, entry] of [
-  ['a computed name', "const key = 'components';\n", '    [key]: other,'],
-  ['a shorthand', 'const components = other;\n', '    components,'],
-]) {
-  expectRed(
-    `${shape} after the map can replace it, so it is reported`,
-    'checkAdoptedPatternsNotBypassed',
-    adoption({
-      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: (preamble + ADOPTION_REGISTRY).replace(
-        '    },\n  });',
-        `    },\n${entry}\n  });`,
-      ),
-    }),
-    null,
-    /entry at or after `components` in a `provideSatoriExtensions\(…\)` argument, which can replace the map this reads/,
-  );
-}
-
 falsePositiveControls += 1;
 expectGreen(
-  'a duplicated `components` key adopts what the last map says, not the union',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // Duplicate keys are legal and the later wins, so the effective map here adopts `avatar`
-    // only. `tag` is therefore not adopted and the import below is not a bypass. Asserting green
-    // is what makes this control discriminate: merging both maps would adopt `tag` as well and
-    // fail the import, so this goes red the moment the reader unions them. An `avatar` import
-    // instead would be caught either way and would prove nothing.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '    },\n  });',
-      '    },\n' +
-        '    components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n' +
-        '  });',
-    ),
-    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
-  }),
-);
-
-falsePositiveControls += 1;
-expectGreen(
-  'a readable non-`components` key after the map is not a replacement',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // `directives` is a plain assignment under a name this can read, so it cannot be `components`
-    // and must not be reported. Rejecting every trailing property would fail the legitimate shape.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '    },\n  });',
-      "    },\n    directives: {},\n    'pipes': {},\n  });",
-    ),
-  }),
-);
-
-/**
- * A reassigned binding, which the initializer no longer describes at `return`.
- *
- * Resolving `p` to its initializer ignores the assignment, so the first map is read and whatever
- * the helper adds is adopted at runtime and unguarded here. Only a `const` binding still holds
- * its initializer at the return, so a mutable one leaves the return unresolvable and is reported.
- * The second control is the pair: the `const` form this depends on must keep working.
- */
-expectRed(
-  'a reassigned provider binding is reported, since its initializer is not what is returned',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  let installed = provideSatoriExtensions({',
-    ).replace(
-      /\n  \}\);\n\}/,
-      '\n  });\n  installed = addTagProvider(installed);\n  return installed;\n}',
-    ),
-  }),
-  null,
-  /a `return installed` whose installed contribution could not be determined/,
-);
-
-falsePositiveControls += 1;
-expectGreen(
-  'a `const` provider binding that is returned is read, not rejected',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // Saving the provider and returning it unchanged is a legitimate shape and must keep working;
-    // the `const`-only rule above would otherwise have closed the hole by rejecting both forms.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  const installed = provideSatoriExtensions({',
-    ).replace(/\n  \}\);\n\}/, '\n  });\n  return installed;\n}'),
-  }),
-);
-
-expectRed(
-  'a helper’s shadowing binding cannot answer for the provider’s own return',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // An uncalled helper declares `installed` and the provider's own `installed` is something
-    // this cannot read. Matching by name anywhere in the provider accepted the helper's map and
-    // reported nothing, leaving the real contribution's primitives unguarded. The outer return
-    // must be reported instead.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  function unused() {\n' +
-        '    const installed = provideSatoriExtensions({\n' +
-        '      components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n' +
-        '    });\n' +
-        '    return installed;\n' +
-        '  }\n' +
-        '  void unused;\n' +
-        '  const installed = actualContribution();\n' +
-        '  return installed;\n' +
-        '  return provideSatoriExtensions({',
-    ),
-  }),
-  null,
-  /a `return installed` whose installed contribution could not be determined/,
-);
-
-expectRed(
-  'a block-scoped binding the return cannot see is not resolved',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // `const installed` lives inside an `if` block, so it is not in scope at the outer return.
-    // Walking the whole body rather than its own statements would have resolved it anyway.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  if (globalThis) {\n' +
-        '    const installed = provideSatoriExtensions({\n' +
-        '      components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n' +
-        '    });\n' +
-        '    void installed;\n' +
-        '  }\n' +
-        '  return installed;\n' +
-        '  return provideSatoriExtensions({',
-    ),
-  }),
-  null,
-  /a `return installed` whose installed contribution could not be determined/,
-);
-
-expectRed(
-  'an inner block shadowing the provider binding is not resolved against the outer one',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // The outer `installed` is a real contribution; the inner block shadows it with one this
-    // cannot read and returns that. Resolving the inner return against the outer binding accepted
-    // a map the inner contribution replaces — the other direction of the shadowing the previous
-    // commit fixed, and the reason both sides now have to agree on scope.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  const installed = provideSatoriExtensions({\n' +
-        '    components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n' +
-        '  });\n' +
-        '  if (globalThis) {\n' +
-        '    const installed = actualContribution();\n' +
-        '    return installed;\n' +
-        '  }\n' +
-        '  return provideSatoriExtensions({',
-    ),
-  }),
-  null,
-  /a `return installed` whose installed contribution could not be determined/,
-);
-
-falsePositiveControls += 1;
-expectGreen(
-  'a nested `return provideSatoriExtensions(…)` needs no name, so it is still read',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // The scope rule applies to identifier returns, not to a call returned directly: there is no
-    // binding to shadow. Rejecting every nested return would have failed this legitimate shape,
-    // and it is the only contribution here, so the adopted set is not empty either.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  if (globalThis) {\n    return provideSatoriExtensions({',
-    ).replace(/\n  \}\);\n\}/, '\n    });\n  }\n}'),
-  }),
-);
-
-expectRed(
-  'a local binding shadowing the registered class name is reported, not followed to the import',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // The registration reads the local `NxsSatoriTagComponent`, which is the banner wrapper, so
-    // the banner entry point is what registers — not the tag one the import would suggest.
-    // Following the import guarded `tag` and let direct banner imports through.
-    [`${SATORI_LIB}/satori-banner.component.ts`]:
-      "import { SatBanner } from '@hylandsoftware/satori-ui/banner';\n" +
-      'export class NxsSatoriBannerComponent {}\n',
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      'export function provideNxsSatoriComponents() {',
-      "import { NxsSatoriBannerComponent } from './satori-banner.component';\n\n" +
-        'export function provideNxsSatoriComponents() {\n' +
-        '  const NxsSatoriTagComponent = NxsSatoriBannerComponent;',
-    ),
-  }),
-  null,
-  /registers the `tag` primitive as `NxsSatoriTagComponent`, which the file also binds locally/,
-);
-
-falsePositiveControls += 1;
-expectGreen(
-  'a local binding whose name is not a registered class does not trip the shadowing check',
-  'checkAdoptedPatternsNotBypassed',
-  adoption({
-    // The provider's own name, and a saved provider binding, are both locally bound — rejecting
-    // every local binding rather than only ones shadowing a registration would fail the real
-    // registry outright.
-    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
-      '  return provideSatoriExtensions({',
-      '  const installed = provideSatoriExtensions({',
-    ).replace(/\n  \}\);\n\}/, '\n  });\n  return installed;\n}'),
-  }),
-);
-
-expectGreen(
-  'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
+  'a comment naming an entry point the file is not baselined for is not a bypass',
   'checkAdoptedPatternsNotBypassed',
   adoption({
     [BASELINED]:
-      "import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class DocumentDetailComponent {}\n',
+      "// migrated away from '@hylandsoftware/satori-ui/avatar' already\n" +
+      "import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+);
+
+/* --- the registry: one shape read, every other refused --- */
+
+/**
+ * Every shape the canonical rule refuses, and the reason each reports.
+ *
+ * This table replaces roughly forty controls, one per shape the old resolver tried to read:
+ * discarded calls, branch returns, nested helpers, mutable and shadowed bindings, barrels,
+ * wrapped values, four key spellings, trailing spreads and computed overwrites. Each of those
+ * needed its own rule, its own failure and its own control, and each new rule enlarged the
+ * surface the next defect hid in. One rule needs one control per shape it refuses, and the
+ * shapes no longer interact.
+ *
+ * `avatar` stays canonically registered in every row that edits only the `tag` entry, so the
+ * adopted set is never empty — a row that passed because nothing was adopted would prove nothing.
+ */
+const REFUSED = [
+  [
+    'declares no provider function',
+    (registry) =>
+      registry.replace('export function provideNxsSatoriComponents() {', 'function other() {'),
+    /declares no `function provideNxsSatoriComponents` with a body/,
+  ],
+  [
+    'writes the provider as an arrow',
+    (registry) =>
+      registry
+        .replace(
+          'export function provideNxsSatoriComponents() {\n  return provideSatoriExtensions({',
+          'export const provideNxsSatoriComponents = () =>\n  provideSatoriExtensions({',
+        )
+        .replace(/\n  \}\);\n\}/, '\n  });'),
+    /declares no `function provideNxsSatoriComponents` with a body/,
+  ],
+  [
+    'saves the provider in a binding before returning it',
+    (registry) =>
+      registry
+        .replace(
+          '  return provideSatoriExtensions({',
+          '  const installed = provideSatoriExtensions({',
+        )
+        .replace(/\n  \}\);\n\}/, '\n  });\n  return installed;\n}'),
+    /has 2 statements rather than a single `return`/,
+  ],
+  [
+    'makes a second, discarded contribution',
+    (registry) =>
+      registry.replace(
+        '  return provideSatoriExtensions({',
+        '  provideSatoriExtensions({ components: {} });\n  return provideSatoriExtensions({',
+      ),
+    /has 2 statements rather than a single `return`/,
+  ],
+  [
+    'returns conditionally',
+    (registry) =>
+      registry.replace(
+        '  return provideSatoriExtensions({',
+        '  if (globalThis) {\n    return provideSatoriExtensions({ components: {} });\n  }\n  return provideSatoriExtensions({',
+      ),
+    /has 2 statements rather than a single `return`/,
+  ],
+  [
+    'returns a call this cannot read',
+    (registry) =>
+      registry.replace('  return provideSatoriExtensions({', '  return buildProvider({'),
+    /returns `buildProvider\(\{[\s\S]*rather than a direct `provideSatoriExtensions\(…\)` call/,
+  ],
+  [
+    'takes a parameter that shadows a registered class',
+    (registry) =>
+      registry.replace(
+        'export function provideNxsSatoriComponents() {',
+        'export function provideNxsSatoriComponents(\n' +
+          '  NxsSatoriTagComponent = NxsSatoriAvatarComponent,\n' +
+          ') {',
+      ),
+    /takes 1 parameter\(s\), and a parameter can shadow a registered class/,
+  ],
+  [
+    'passes a second argument',
+    (registry) => registry.replace(/\n  \}\);\n\}/, '\n  }, extra);\n}'),
+    /is not given exactly one object literal/,
+  ],
+  [
+    'adds a sibling property to the contribution',
+    (registry) => registry.replace(/\n  \}\);\n\}/, '\n    directives: {},\n  });\n}'),
+    /its contribution is not exactly one `components: \{ … \}` object literal/,
+  ],
+  [
+    'spreads into the contribution',
+    (registry) => registry.replace('    components: {', '    ...base,\n    components: {'),
+    /its contribution is not exactly one `components: \{ … \}` object literal/,
+  ],
+  [
+    'duplicates the `components` key',
+    (registry) =>
+      registry.replace(
+        /\n  \}\);\n\}/,
+        '\n    components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n  });\n}',
+      ),
+    /its contribution is not exactly one `components: \{ … \}` object literal/,
+  ],
+  [
+    'quotes the `components` key',
+    (registry) => registry.replace('    components: {', "    'components': {"),
+    /its contribution is not exactly one `components: \{ … \}` object literal/,
+  ],
+  [
+    'has no `components` key at all',
+    (registry) => registry.replace('    components: {', '    other: {'),
+    /its contribution is not exactly one `components: \{ … \}` object literal/,
+  ],
+  [
+    'writes an id out as a string',
+    (registry) => registry.replace('[NXS_PRIMITIVE_IDS.tag]:', "'nxs.primitives.tag':"),
+    /entry `'nxs\.primitives\.tag': NxsSatoriTagComponent` is not `\[NXS_PRIMITIVE_IDS\.<id>\]: <ImportedClass>`/,
+  ],
+  [
+    'reads the id by element access',
+    (registry) => registry.replace('[NXS_PRIMITIVE_IDS.tag]:', "[NXS_PRIMITIVE_IDS['tag']]:"),
+    /entry `\[NXS_PRIMITIVE_IDS\['tag'\]\]: NxsSatoriTagComponent` is not/,
+  ],
+  [
+    'keys an entry off a constant',
+    (registry) => registry.replace('[NXS_PRIMITIVE_IDS.tag]:', '[tagId]:'),
+    /entry `\[tagId\]: NxsSatoriTagComponent` is not/,
+  ],
+  [
+    'spreads inside the `components` map',
+    (registry) => registry.replace('    components: {', '    components: {\n      ...extra,'),
+    /entry `\.\.\.extra` is not/,
+  ],
+  [
+    'wraps a registered class in parentheses',
+    (registry) => registry.replace(': NxsSatoriTagComponent,', ': (NxsSatoriTagComponent),'),
+    /is not `\[NXS_PRIMITIVE_IDS\.<id>\]: <ImportedClass>`/,
+  ],
+  [
+    'asserts a registered class with `as`',
+    (registry) => registry.replace(': NxsSatoriTagComponent,', ': NxsSatoriTagComponent as never,'),
+    /is not `\[NXS_PRIMITIVE_IDS\.<id>\]: <ImportedClass>`/,
+  ],
+  [
+    'registers a call rather than a class',
+    (registry) => registry.replace(': NxsSatoriTagComponent,', ': wrapTag(NxsSatoriTagComponent),'),
+    /is not `\[NXS_PRIMITIVE_IDS\.<id>\]: <ImportedClass>`/,
+  ],
+  [
+    'adopts nothing',
+    (registry) =>
+      registry.replace(/\n      \[NXS_PRIMITIVE_IDS[^\n]*\n      \[NXS_PRIMITIVE_IDS[^\n]*/, ''),
+    /its `components` object is empty, so no primitive is adopted/,
+  ],
+  [
+    'registers a class it does not import',
+    (registry) =>
+      registry.replace("import { NxsSatoriTagComponent } from './tag/satori-tag.component';\n", ''),
+    /`NxsSatoriTagComponent`, registered for `tag`, is not imported by name from a relative module/,
+  ],
+  [
+    'imports a registered class from a package',
+    (registry) =>
+      registry.replace(
+        "import { NxsSatoriTagComponent } from './tag/satori-tag.component';",
+        "import { NxsSatoriTagComponent } from '@nuxeo/satori-platform/components-satori';",
+      ),
+    /is not imported by name from a relative module/,
+  ],
+  [
+    'registers a class it imports type-only',
+    // A registration must name a runtime value. This pins that intent rather than closing a
+    // reachable bypass: TypeScript refuses every shape the finding described — `import type` or
+    // `import { type … }` beside a same-named value is TS2440, a type-only binding used as a
+    // value is TS1361, and importing an interface as a value is TS2693 — and `typecheck` is one
+    // of this repo's gates. The fixture below does not compile, which the selftest does not
+    // check, so the row documents the rule rather than a defect it prevents.
+    (registry) =>
+      registry.replace(
+        "import { NxsSatoriTagComponent } from './tag/satori-tag.component';",
+        "import type { NxsSatoriTagComponent } from './tag/satori-tag.component';",
+      ),
+    /`NxsSatoriTagComponent`, registered for `tag`, is not imported by name from a relative module/,
+  ],
+  [
+    'registers a class imported with a specifier-level type modifier',
+    (registry) =>
+      registry.replace(
+        "import { NxsSatoriTagComponent } from './tag/satori-tag.component';",
+        "import { type NxsSatoriTagComponent } from './tag/satori-tag.component';",
+      ),
+    /`NxsSatoriTagComponent`, registered for `tag`, is not imported by name from a relative module/,
+  ],
+  [
+    'registers one primitive twice',
+    // Legal JS: the later wins, so only the avatar wrapper installs. Collecting both would guard
+    // `@hylandsoftware/satori-ui/tag` — which nothing registers any more — and fail legitimate
+    // direct imports of it. This row is the one refusal that prevents a false positive rather
+    // than a missed bypass.
+    (registry) =>
+      registry.replace(
+        '      [NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,',
+        '      [NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,\n' +
+          '      [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent,',
+      ),
+    /it registers `tag` more than once/,
+  ],
+  [
+    'reaches a registered class through a barrel',
+    (registry) => registry.replace("from './tag/satori-tag.component'", "from './tag'"),
+    /`\.\/tag`, which registers `tag`, does not resolve to a file declaring `NxsSatoriTagComponent`/,
+    // A real re-exporting barrel, so `./tag` resolves and the refusal is `declaresName` rejecting
+    // a file that only re-exports. Without this the row tested an unresolved module instead, and
+    // deleting the declaration check would still have passed it.
+    { [`${SATORI_LIB}/tag/index.ts`]: "export * from './satori-tag.component';\n" },
+  ],
+];
+
+for (const [shape, rewrite, reason, extra] of REFUSED) {
+  expectRed(
+    `a registry that ${shape} is refused`,
+    'checkAdoptedPatternsNotBypassed',
+    adoption({
+      ...extra,
+      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: rewrite(ADOPTION_REGISTRY),
+      [NOT_BASELINED]: BYPASS,
+    }),
+    null,
+    reason,
+  );
+}
+
+expectRed(
+  'a registered implementation that imports no Satori leaves its primitive unguarded',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/tag/satori-tag.component.ts`]:
+      "// wraps '@hylandsoftware/satori-ui/tag' one day\nexport class NxsSatoriTagComponent {}\n",
+  }),
+  null,
+  /which declares `NxsSatoriTagComponent` for `tag`, imports nothing from `@hylandsoftware\/satori-ui`/,
+);
+
+expectRed(
+  'the adoption registry is missing entirely',
+  'checkAdoptedPatternsNotBypassed',
+  { [NOT_BASELINED]: BYPASS },
+  null,
+  /provide-nxs-satori-components\.ts does not exist, so no pattern is known to be adopted/,
+);
+
+/* --- shapes the canonical rule still accepts, which it must not refuse --- */
+
+falsePositiveControls += 1;
+expectGreen(
+  'an aliased import is canonical: the module declares the name it exports',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      "import { NxsSatoriTagComponent } from './tag/satori-tag.component';",
+      "import { NxsSatoriTagComponent as Tag } from './tag/satori-tag.component';",
+    ).replace('[NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,', '[NXS_PRIMITIVE_IDS.tag]: Tag,'),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an unrelated object or helper elsewhere in the registry file is ignored',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // Only the provider's own body is read, so neither a decoy map with the same keys nor another
+    // `provideSatoriExtensions` call in a different function can affect the adopted set. Refusing
+    // on either would fail a file that is canonical where it counts.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]:
+      ADOPTION_REGISTRY +
+      '\nexport const NOT_A_REGISTRATION = {\n' +
+      '  [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent,\n' +
+      '};\n\nexport function somethingElse() {\n' +
+      '  return provideSatoriExtensions({ components: {} });\n}\n',
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a type-only export after the provider is not part of the shape',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // The real registry ends in the `NxsSatoriValueContract` type assertions, so the rule must
+    // read the provider rather than the whole file.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]:
+      ADOPTION_REGISTRY +
+      '\ntype Assert<T extends true> = T;\n' +
+      'export type Contract = [Assert<true>];\n',
   }),
 );
 
