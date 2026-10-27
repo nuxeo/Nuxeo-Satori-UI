@@ -196,6 +196,19 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
       component.removeSubject('art');
       expect(component.subjects).toEqual(['cinema']);
     });
+
+    it('builds a removable chip per subject, named for its own remove button', () => {
+      component.subjects = ['art', 'cinema'];
+
+      expect(component.subjectChips()).toEqual([
+        expect.objectContaining({
+          id: 'art',
+          label: expect.any(String),
+          removeLabel: expect.any(String),
+        }),
+        expect.objectContaining({ id: 'cinema', label: expect.any(String) }),
+      ]);
+    });
   });
 
   it.each([
