@@ -1,5 +1,6 @@
+import { EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { defer, of, throwError } from 'rxjs';
+import { Observable, defer, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -85,5 +86,33 @@ describe('NxsVocabularyRequests', () => {
     requests.getEntries('nature').subscribe();
     other.getEntries('nature').subscribe();
     expect(sent).toEqual(['nature', 'nature']);
+  });
+
+  it('keeps a request running when its field lets go, and stops it when the host is destroyed', () => {
+    // An l10n directory still being read page by page: a request that has not finished.
+    let running = 0;
+    const host = createEnvironmentInjector(
+      [
+        NxsVocabularyRequests,
+        {
+          provide: DirectoryService,
+          useValue: {
+            getAllL10nEntries: () =>
+              new Observable<L10nDirectoryEntry[]>(() => {
+                running++;
+                return () => running--;
+              }),
+          },
+        },
+      ],
+      TestBed.inject(EnvironmentInjector),
+    );
+    const hosted = host.get(NxsVocabularyRequests);
+
+    hosted.getAllL10nEntries('l10nsubjects').subscribe().unsubscribe();
+    expect(running).toBe(1);
+
+    host.destroy();
+    expect(running).toBe(0);
   });
 });
