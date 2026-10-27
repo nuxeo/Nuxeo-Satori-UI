@@ -2,7 +2,7 @@ name: Cross-platform Beta tooling
 
 on:
   pull_request:
-    branches: [main, 'integration/**', 'feature/nxsat-673-satori-1.0']
+    branches: [main, 'integration/**']
   push:
     # Match CodeQL's triggers: a new feature branch has no analysis until its PR opens.
     branches: [main, 'integration/**']

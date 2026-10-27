@@ -27,12 +27,14 @@ const success = {
 };
 const analysis = { ref: context.ref, commit_sha: context.sha, tool: { name: 'CodeQL' } };
 
-test('Windows verification and its CodeQL prerequisite run for the fixed Satori target', () => {
+test('Windows verification and its CodeQL prerequisite run for PRs into main, not the merged Satori branch', () => {
   const codeql = load(
     readFileSync(new URL('../../.github/workflows/codeql.yml', import.meta.url), 'utf8'),
   );
-  for (const config of [workflow, codeql])
-    assert.ok(config.on.pull_request.branches.includes('feature/nxsat-673-satori-1.0'));
+  for (const config of [workflow, codeql]) {
+    assert.ok(config.on.pull_request.branches.includes('main'));
+    assert.ok(!config.on.pull_request.branches.includes('feature/nxsat-673-satori-1.0'));
+  }
 });
 
 test('all platform jobs use the repository-pinned runtime accepted by gate zero', () => {
