@@ -9306,10 +9306,19 @@ const REFUSED = [
   [
     'returns a call this cannot read',
     (registry) =>
-      registry
-        .replace('  return provideSatoriExtensions({', '  return buildProvider({')
-        .replace('    components: {', '    components: {'),
+      registry.replace('  return provideSatoriExtensions({', '  return buildProvider({'),
     /returns `buildProvider\(\{[\s\S]*rather than a direct `provideSatoriExtensions\(…\)` call/,
+  ],
+  [
+    'takes a parameter that shadows a registered class',
+    (registry) =>
+      registry.replace(
+        'export function provideNxsSatoriComponents() {',
+        'export function provideNxsSatoriComponents(\n' +
+          '  NxsSatoriTagComponent = NxsSatoriAvatarComponent,\n' +
+          ') {',
+      ),
+    /takes 1 parameter\(s\), and a parameter can shadow a registered class/,
   ],
   [
     'passes a second argument',
@@ -9405,14 +9414,19 @@ const REFUSED = [
     'reaches a registered class through a barrel',
     (registry) => registry.replace("from './tag/satori-tag.component'", "from './tag'"),
     /`\.\/tag`, which registers `tag`, does not resolve to a file declaring `NxsSatoriTagComponent`/,
+    // A real re-exporting barrel, so `./tag` resolves and the refusal is `declaresName` rejecting
+    // a file that only re-exports. Without this the row tested an unresolved module instead, and
+    // deleting the declaration check would still have passed it.
+    { [`${SATORI_LIB}/tag/index.ts`]: "export * from './satori-tag.component';\n" },
   ],
 ];
 
-for (const [shape, rewrite, reason] of REFUSED) {
+for (const [shape, rewrite, reason, extra] of REFUSED) {
   expectRed(
     `a registry that ${shape} is refused`,
     'checkAdoptedPatternsNotBypassed',
     adoption({
+      ...extra,
       [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: rewrite(ADOPTION_REGISTRY),
       [NOT_BASELINED]: BYPASS,
     }),

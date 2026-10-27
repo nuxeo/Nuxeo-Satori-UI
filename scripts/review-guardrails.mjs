@@ -9886,6 +9886,17 @@ function adoptedSatoriEntryPoints() {
   if (provider?.body === undefined) {
     return refuse(`it declares no \`function ${PROVIDER_FUNCTION}\` with a body`);
   }
+  // A parameter is a binding too, and a defaulted one shadowing an imported class registers
+  // whatever it defaults to: `provideNxsSatoriComponents(NxsSatoriTagComponent =
+  // NxsSatoriBannerComponent)` leaves a no-argument call registering the banner wrapper while
+  // this reads the tag import. The real provider takes none, so requiring that is free, and it is
+  // the last place a binding could hide once the body is a single `return`.
+  if (provider.parameters.length !== 0) {
+    return refuse(
+      `\`${PROVIDER_FUNCTION}\` takes ${provider.parameters.length} parameter(s), and a ` +
+        'parameter can shadow a registered class',
+    );
+  }
   if (provider.body.statements.length !== 1) {
     return refuse(
       `\`${PROVIDER_FUNCTION}\` has ${provider.body.statements.length} statements rather than a ` +
