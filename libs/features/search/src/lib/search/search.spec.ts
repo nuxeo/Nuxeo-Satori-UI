@@ -1658,8 +1658,11 @@ describe('SearchComponent', () => {
       resultItem({ id: 'b', title: 'Claims', type: 'Folder', icon: 'folder' }),
     ];
 
-    async function renderGrid(providers: (Provider | EnvironmentProviders)[] = []): Promise<void> {
-      mockSearchService.search.mockReturnValue(of({ items: RESULTS, aggregations: {} }));
+    async function renderGrid(
+      providers: (Provider | EnvironmentProviders)[] = [],
+      items = RESULTS,
+    ): Promise<void> {
+      mockSearchService.search.mockReturnValue(of({ items, aggregations: {} }));
       // `beforeEach` does not reset it, and a saved-search test before this one leaves one open,
       // which the rendered page's saved-search actions would then read the permissions of.
       mockSearchAggregationService.selectedSavedSearchId.set('');
@@ -1682,6 +1685,19 @@ describe('SearchComponent', () => {
     }
 
     const el = () => fixture.nativeElement as HTMLElement;
+
+    // The heading is the name of the control that opens the card, so it is never blank.
+    it('names an untitled result by its ID, on the card and on its checkbox', async () => {
+      await renderGrid(
+        [provideNxsComponents()],
+        [resultItem({ id: 'untitled-1', title: '', type: 'File', icon: 'file' })],
+      );
+      const card = el().querySelector('.result-grid nxs-card') as HTMLElement;
+      expect(card.querySelector('button.nxs-card__open')?.textContent?.trim()).toBe('untitled-1');
+      expect(card.querySelector('mat-checkbox input')?.getAttribute('aria-label')).toBe(
+        'Select untitled-1',
+      );
+    });
 
     it('renders every card by its registered ID, with what the page passes it', async () => {
       await renderGrid([

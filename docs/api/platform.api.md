@@ -326,6 +326,7 @@ class NxsCardComponent implements NxsCardInputs {
     protected readonly label: import("@angular/core").Signal<string>;
     protected readonly selectable: import("@angular/core").Signal<boolean>;
     protected readonly ownSubheading: import("@angular/core").Signal<string>;
+    protected readonly bare: import("@angular/core").Signal<boolean>;
     protected toggle(selected: boolean): void;
     protected open(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsCardComponent, never>;

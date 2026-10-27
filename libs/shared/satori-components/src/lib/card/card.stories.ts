@@ -127,6 +127,18 @@ export const NotInteractive: Story = {
   args: { selectionLabel: '', openHandler: null },
 };
 
+/**
+ * With no media, the checkbox and the corner menu still sit in the corners, and the title starts
+ * below them rather than under them.
+ */
+export const WithoutMedia: Story = {
+  args: { heading: 'Q3 claims', subheading: 'Collection', selectionLabel: 'Select Q3 claims' },
+  render: (args) => ({
+    props: { ...args, media: null },
+    template: `${HEADER_ACTION}\n${card('\n    [headerAction]="headerAction"')}`,
+  }),
+};
+
 /** A title longer than the card is cut short with an ellipsis; hovering it shows it whole. */
 export const LongTitle: Story = {
   args: {

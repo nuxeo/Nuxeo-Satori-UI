@@ -155,6 +155,24 @@ describe('NxsCardComponent', () => {
     expect(host.querySelector('.nxs-card__actions')).toBeNull();
   });
 
+  // The checkbox and the menu sit in the corners over the media; with none, they would cover the
+  // heading and take the clicks meant to open the card.
+  it('makes room above its text for the corner controls when it has no media', async () => {
+    const { media, headerAction } = templates();
+    const bare = () =>
+      fixture.nativeElement
+        .querySelector('.nxs-card__surface')
+        .classList.contains('nxs-card__surface--bare');
+    await render({ heading: 'Q3 claims', selectionLabel: 'Select Q3 claims' });
+    expect(bare()).toBe(true);
+    await render({ media: media() });
+    expect(bare()).toBe(false);
+    await render({ media: null, selectionLabel: '' });
+    expect(bare()).toBe(false);
+    await render({ headerAction: headerAction() });
+    expect(bare()).toBe(true);
+  });
+
   it('declares no outputs: the outlet that renders it by ID would bind none', () => {
     expect(reflectComponentType(NxsCardComponent)?.outputs).toEqual([]);
   });

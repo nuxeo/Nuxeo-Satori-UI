@@ -1,4 +1,8 @@
-<mat-card class="nxs-card__surface" [appearance]="interactive() ? 'outlined' : 'filled'">
+<mat-card
+  class="nxs-card__surface"
+  [class.nxs-card__surface--bare]="bare()"
+  [appearance]="interactive() ? 'outlined' : 'filled'"
+>
   @if (selectable()) {
     <mat-checkbox
       class="nxs-card__select"

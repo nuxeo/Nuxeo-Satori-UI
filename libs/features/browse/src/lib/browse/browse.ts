@@ -177,6 +177,7 @@ import {
   type NxsMenuAction,
   type NxsPickableColumn,
   NxsToastService,
+  nxsVisibleText,
   provideNxsToast,
 } from '@nuxeo/satori-platform/components';
 
@@ -706,6 +707,7 @@ export class BrowseComponent {
   readonly cards = computed(() =>
     this.filteredEntries().map((doc) => ({
       doc,
+      name: this.documentName(doc),
       open: () => this.onRowClick(doc),
       select: () => this.toggleSelection(doc.uid),
     })),
@@ -2211,7 +2213,15 @@ export class BrowseComponent {
   }
 
   selectionAriaLabel(doc: NuxeoDocument): string {
-    return this.translate.instant('common.select-item', { name: doc.title });
+    return this.translate.instant('common.select-item', { name: this.documentName(doc) });
+  }
+
+  /**
+   * What a document is called on screen and to a screen reader: its title, else its path, else its
+   * UID — as the document list names a row — so a card's controls are never unnamed.
+   */
+  documentName(doc: NuxeoDocument): string {
+    return nxsVisibleText(doc.title) || doc.path || doc.uid;
   }
 
   toggleSelection(id: string): void {

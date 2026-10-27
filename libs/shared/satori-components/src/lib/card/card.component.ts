@@ -44,7 +44,11 @@ import { nxsVisibleText } from '../visible-text';
   },
 })
 export class NxsCardComponent implements NxsCardInputs {
-  /** The card's title, already translated: for a document, its title. */
+  /**
+   * The card's title, already translated: for a document, its title. When the card opens something
+   * it is the accessible name of the control that opens it, so pass a name that is never blank — a
+   * document with no title by its path, as the document list names such a row.
+   */
   readonly heading = input('');
   /** One line under the heading, already translated, such as the document's type. Blank shows none. */
   readonly subheading = input('');
@@ -75,6 +79,13 @@ export class NxsCardComponent implements NxsCardInputs {
   protected readonly label = computed(() => nxsVisibleText(this.selectionLabel()));
   protected readonly selectable = computed(() => this.label() !== '');
   protected readonly ownSubheading = computed(() => nxsVisibleText(this.subheading()));
+  /**
+   * The checkbox and the header action sit in the corners over the media. A card with neither media
+   * nor room for them would put them over its heading, so it reserves that room above the text.
+   */
+  protected readonly bare = computed(
+    () => this.media() === null && (this.selectable() || this.headerAction() !== null),
+  );
 
   protected toggle(selected: boolean): void {
     this.selectionHandler()?.(selected);

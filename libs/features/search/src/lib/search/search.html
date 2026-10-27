@@ -261,10 +261,10 @@
           </ng-template>
           @let cardInputs =
             {
-              heading: row.name,
+              heading: card.name,
               subheading: row.type | docTypeLabel,
               selected: isSelected(row.id),
-              selectionLabel: 'common.select-item' | translate: { name: row.name },
+              selectionLabel: 'common.select-item' | translate: { name: card.name },
               selectionHandler: card.select,
               openHandler: card.open,
               media: resultThumbnail,

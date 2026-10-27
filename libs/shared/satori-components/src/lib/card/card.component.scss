@@ -45,6 +45,11 @@
   padding: 10px 12px;
 }
 
+// No media for the corner controls to sit over: the text starts below them instead of under them.
+.nxs-card__surface--bare .nxs-card__body {
+  padding-top: 48px;
+}
+
 .nxs-card__heading,
 .nxs-card__subheading {
   display: block;

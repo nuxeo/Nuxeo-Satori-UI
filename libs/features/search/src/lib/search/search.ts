@@ -70,6 +70,7 @@ import {
   type NxsErrorStatus,
   type NxsPickableColumn,
   NxsToastService,
+  nxsVisibleText,
   provideNxsToast,
 } from '@nuxeo/satori-platform/components';
 
@@ -417,6 +418,8 @@ export class SearchComponent {
   readonly gridCards = computed(() =>
     this.displayResults().map((row) => ({
       row,
+      // Never blank, so the card's controls are never unnamed: a result with no title by its ID.
+      name: nxsVisibleText(row.name) || row.id,
       open: () => this.openDocument(row.id),
       select: () => this.toggleSelection(row.id),
     })),

@@ -1025,6 +1025,30 @@ describe('BrowseComponent — rendered document list', () => {
       await settleOutlets();
     }
 
+    // The heading is the name of the control that opens the card, so it is never blank.
+    it('names an untitled document by its path, on the card and on its checkbox', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({
+          folder,
+          entries: [
+            doc({ uid: 'untitled-1', title: '  ', path: '/default-domain/workspaces/ws-1/x' }),
+          ],
+          totalSize: 1,
+        }),
+      );
+      await render([provideNxsComponents()]);
+      (query('button[aria-label="Card view"]') as HTMLButtonElement).click();
+      await settleOutlets();
+
+      const card = query('.card-grid nxs-card') as HTMLElement;
+      expect(card.querySelector('button.nxs-card__open')?.textContent?.trim()).toBe(
+        '/default-domain/workspaces/ws-1/x',
+      );
+      expect(card.querySelector('mat-checkbox input')?.getAttribute('aria-label')).toBe(
+        'Select /default-domain/workspaces/ws-1/x',
+      );
+    });
+
     it('renders every card by its registered ID, with what browse passes it', async () => {
       await renderCards([
         provideNxsComponents(),
