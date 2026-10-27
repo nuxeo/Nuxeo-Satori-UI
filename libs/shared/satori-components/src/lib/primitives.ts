@@ -6,17 +6,18 @@ import type { NxsHeadingLevel } from './heading-level';
 import type { NxsTab, NxsTabBodyContext } from './tabs/tab-body.directive';
 
 /**
- * The IDs of the primitives this library registers by `provideNxsComponents()`. The first four and
- * `errorState` are primitives Satori also ships; `banner` and `chipSet` have no Satori twin yet.
+ * The IDs of the primitives this library registers by `provideNxsComponents()`. Satori ships a twin
+ * for every one of them but `banner` and `chipSet`.
  *
  * Each ID resolves to a Material implementation from this entry point, and all but `banner` and
  * `chipSet` to a Satori-backed one once `provideNxsSatoriComponents()` from
  * `@nuxeo/satori-platform/components-satori` is provided after it. `errorState` is Satori-backed
- * there as `sat-401-error-state` to `sat-500-error-state`, from an entry point not named after it.
+ * there as `sat-401-error-state` to `sat-500-error-state`, `card` as `sat-interactive-card` and
+ * `emptyState` as `sat-empty-state`.
  * `banner` and `chipSet` stay on Material until their Satori twins are written. Every
- * implementation of an ID implements the same `Nxs…Inputs` contract below, so whoever renders an ID
- * — a `lib-extension-outlet` with `componentInputs` — gets the same inputs whichever is registered.
- * A customer overriding an ID implements that contract too.
+ * implementation of an ID implements the same `Nxs…Inputs` contract below, so whoever renders an
+ * ID — a `lib-extension-outlet` with `componentInputs` — gets the same inputs whichever is
+ * registered. A customer overriding an ID implements that contract too.
  */
 export const NXS_PRIMITIVE_IDS = Object.freeze({
   avatar: 'nxs.primitives.avatar',

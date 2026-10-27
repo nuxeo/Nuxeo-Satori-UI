@@ -2,6 +2,7 @@ import type { A11yFixture, ScanPageOptions } from '@a11y-scout/playwright';
 import type { Page, Response, TestInfo, TestType } from '@playwright/test';
 import {
   aiFindingsNote,
+  BROWSE_LOADED,
   expect,
   expectSurfaceUsable,
   REPORT_DIR,
@@ -665,9 +666,7 @@ journeyTest('browse', async ({ signedIn: page, a11y }) => {
 
   await expect(page.locator('lib-browse'), 'lib-browse must render').toBeVisible();
   await expect(
-    page
-      .locator('.browse-row, .card-grid .card-outlet, nxs-document-list .nxs-document-list__row')
-      .first(),
+    page.locator(BROWSE_LOADED).first(),
     'browse must list at least one document, or this scans an empty table',
   ).toBeVisible();
   await waitForScreenSettled(page, 'lib-browse', true);

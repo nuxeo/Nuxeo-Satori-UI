@@ -86,29 +86,19 @@ import { nxsVisibleText, type NxsCardInputs } from '@nuxeo/satori-platform/compo
   },
 })
 export class NxsSatoriCardComponent implements NxsCardInputs {
-  /**
-   * The card's title, already translated: for a document, its title. When the card opens something
-   * it is the accessible name of the control that opens it, so pass a name that is never blank.
-   */
+  // Declared bare, as the other wrappers in this library declare theirs: `NxsCardInputs` in
+  // `/components` is the contract, the Material implementation carries the behavioural notes, and
+  // this class is not exported from the barrel — so per-input JSDoc here reaches no API page or
+  // Storybook entry. Restating it only put a second copy of the Material card's input block in the
+  // tree, which is what SonarCloud counted as duplication.
   readonly heading = input('');
-  /** One line under the heading, already translated, such as the document's type. Blank shows none. */
   readonly subheading = input('');
-  /** Whether the item is selected. Accepts a bare attribute, `selected`. */
   readonly selected = input(false, { transform: booleanAttribute });
-  /**
-   * The selection checkbox's accessible name, already translated. Blank, or only whitespace or
-   * zero-width characters, renders no checkbox: the card is not selectable.
-   */
   readonly selectionLabel = input('');
-  /** Called with the checkbox's new state when the user toggles it. */
   readonly selectionHandler = input<((selected: boolean) => void) | null>(null);
-  /** Called when the user opens the card. Without it the heading is text and the card opens nothing. */
   readonly openHandler = input<(() => void) | null>(null);
-  /** Rendered as the card's content, under the heading: usually the document's thumbnail. */
   readonly media = input<TemplateRef<unknown> | null>(null);
-  /** Rendered in the card's header beside the checkbox: usually a menu button. */
   readonly headerAction = input<TemplateRef<unknown> | null>(null);
-  /** Rendered in a row at the foot of the card: buttons such as Favorite and Download. */
   readonly actions = input<TemplateRef<unknown> | null>(null);
 
   /**
@@ -116,7 +106,6 @@ export class NxsSatoriCardComponent implements NxsCardInputs {
    * borderless, which is the distinction Material's outlined-versus-filled appearance draws.
    */
   protected readonly interactive = computed(() => this.openHandler() !== null);
-  /** The checkbox's name as a reader gets it: whitespace or zero-width characters alone are none. */
   protected readonly label = computed(() => nxsVisibleText(this.selectionLabel()));
   protected readonly selectable = computed(() => this.label() !== '');
   protected readonly ownSubheading = computed(() => nxsVisibleText(this.subheading()));
