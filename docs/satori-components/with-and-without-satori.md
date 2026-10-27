@@ -17,7 +17,7 @@ On GitHub they show as missing images, by design.
 
 ## Summary
 
-The `nxs-` library renders the same pages whether or not a customer has access to Satori. Eight primitives — avatar, tag, status tag, breadcrumbs, rich tooltip, error state, tabs and the document toolbar's action bar — exist twice, under one registered ID each: a built-in version in `@nuxeo/satori-platform/components`, and a thin wrapper around Satori's own component in `@nuxeo/satori-platform/components-satori`. Every other component is the same component in both cases; only the theme differs. A ninth registered ID, the card's, has only the built-in version until Satori's interactive card is wrapped.
+The `nxs-` library renders the same pages whether or not a customer has access to Satori. Nine primitives — avatar, tag, status tag, breadcrumbs, rich tooltip, error state, tabs, the document toolbar's action bar and the card — exist twice, under one registered ID each: a built-in version in `@nuxeo/satori-platform/components`, and a thin wrapper around Satori's own component in `@nuxeo/satori-platform/components-satori`. Every other component is the same component in both cases; only the theme differs.
 
 > **Note:** the library is not published yet; this page describes the configuration it is built to support.
 
@@ -59,7 +59,7 @@ Leaving out `provideNxsSatoriComponents()` gives the built-in versions; nothing 
 
 ## Side by side
 
-Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The eight primitives with a Satori variant render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
+Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The nine primitives with a Satori variant render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
 
 ### Avatar
 
@@ -715,30 +715,30 @@ It follows Web UI's audit search: every filter and the sort go to the server, so
 
 ### Card
 
-| Field           | Value                               |
-| --------------- | ----------------------------------- |
-| Component       | `NxsCardComponent`                  |
-| Registered ID   | `nxs.primitives.card`               |
-| With Satori     | Same component; theme only          |
-| Storybook story | `primitives-card--by-registered-id` |
+| Field           | Value                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Component       | `NxsCardComponent`                                                                                                   |
+| Registered ID   | `nxs.primitives.card`                                                                                                |
+| With Satori     | Satori's own component: `NxsSatoriCardComponent` renders `<sat-interactive-card>`                                    |
+| Storybook story | `primitives-by-registered-id--material-registration`; with Satori `primitives-by-registered-id--satori-registration` |
 
-![Card: without Satori on the left, with Satori on the right](card-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+![Card: without Satori on the left, with Satori on the right](card-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same inputs.')
 
-Three documents in a folder's card view, rendered by `nxs.primitives.card` as browse and search render each card: the same thumbnail frame, title, type and checkbox in both, with the first card selected. The theme sets the type, the outline and the selection colour.
+One document in a folder's card view, rendered by `nxs.primitives.card` as browse and search render each card: the same title, type, thumbnail frame and selection checkbox in both, from the same inputs. The layouts differ because the components do — Satori's card stacks its title above its content, where the built-in card frames the thumbnail on top and puts the text under it, with the checkbox over the corner.
 
-Satori has an interactive card of its own, but nothing wraps it yet, so the ID renders this card with Satori registered too. A provider that registers its own card under the ID replaces every card in browse's and search's card views. The page passes the card its open and selection handlers and the templates for its thumbnail and actions, so a replacement gets them too.
+What a click does is the same in both: the heading opens the item, so does a click anywhere on the card that is not on another control, and the checkbox and any button passed for the corner or the footer do not. A provider that registers its own card under the ID replaces every card in browse's and search's card views. The page passes the card its open and selection handlers and the templates for its thumbnail and actions, so a replacement gets them too.
 
 <!-- satori:comparison:components -->
 
 ## Full screenshots
 
-Storybook's "Primitives/By registered ID" story renders the eight registered IDs that have a Satori variant — avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs and action bar — with one template and the same inputs. The ninth, `nxs.primitives.card`, has no Satori variant yet, so the story leaves it out; the Card section above shows it rendered by ID.
+Storybook's "Primitives/By registered ID" story renders all nine registered IDs that have a Satori variant — avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs, action bar and card — with one template and the same inputs.
 
-![The eight primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
+![The nine primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
 
-![The eight primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
+![The nine primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
 
-![The eight primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
+![The nine primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
 
 ## Detailed differences
 
@@ -757,7 +757,7 @@ The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Sa
 
 ## How our own app uses this
 
-The app registers both entry points, so anything rendered by an ID that has a Satori variant shows Satori. Browse and the collection page render their breadcrumbs by ID, browse, the collection page, document detail and task detail render their status tags by ID, document detail renders its tab strip and its header's action row by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's, and a provider that registers its own component under the ID swaps them. Browse's and search's card views render each card by ID too; the card has no Satori variant yet, so there the app shows the built-in card, and a provider that registers its own card under the ID swaps it. A manifest only names the ID; it does not choose the implementation. Its other screens still use `<sat-avatar>`, `<sat-category-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and no ID reaches them.
+The app registers both entry points, so anything rendered by an ID that has a Satori variant shows Satori. Browse and the collection page render their breadcrumbs by ID, browse, the collection page, document detail and task detail render their status tags by ID, document detail renders its tab strip and its header's action row by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's, and a provider that registers its own component under the ID swaps them. Browse's and search's card views render each card by ID too, so there the app shows Satori's interactive card, and a provider that registers its own card under the ID swaps it. A manifest only names the ID; it does not choose the implementation. Its other screens still use `<sat-avatar>`, `<sat-category-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and no ID reaches them.
 
 Only things rendered by ID, such as customer extensions, go through the choice.
 
@@ -826,7 +826,7 @@ The components in the library today:
 | Manage versions                 | —                                                                                                                       | Same component; theme only   |
 | Create version dialog           | —                                                                                                                       | Same component; theme only   |
 | Document history                | —                                                                                                                       | Same component; theme only   |
-| Card                            | `nxs.primitives.card`                                                                                                   | Same component; theme only   |
+| Card                            | `nxs.primitives.card`                                                                                                   | Yes — Satori's own component |
 
 This table and the screenshots are kept current as components are added.
 

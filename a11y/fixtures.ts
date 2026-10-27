@@ -97,7 +97,10 @@ export async function installSession(page: Page): Promise<void> {
  * **known** error state is visible. It does **not** prove the repository data arrived: a
  * feature that fails silently, with no error class and a plausible empty layout, still passes.
  * Route-specific loaded-state evidence is stronger, and `openBrowse()` uses it where the
- * selector is known — `.browse-row, .card-grid nxs-card`. This is the general check for the
+ * selector is known — `.browse-row, .card-grid .card-outlet`. The card view's selector names the
+ * outlet rather than the card inside it, because which card that is depends on what the
+ * application registered under `nxs.primitives.card`: Material's `nxs-card`, Satori's
+ * `nxs-satori-card`, or a customer's own. This is the general check for the
  * surfaces where no such selector has been established, and it is deliberately named for the
  * weaker claim it makes.
  */

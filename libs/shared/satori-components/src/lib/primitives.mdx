@@ -6,13 +6,12 @@ import * as ByIdStories from './primitives.stories';
 
 # Primitives by registered ID
 
-Eight components here are also in Satori's own component library: the avatar, the breadcrumbs, the
-tag, the status tag, the rich tooltip, the error state, the tabs and the document toolbar's action
-bar. Each one is registered under an ID. A screen that renders the ID, rather than the component,
-shows whichever version the application registered: Satori's, when
+Nine components here are also in Satori's own component library: the avatar, the breadcrumbs, the
+tag, the status tag, the rich tooltip, the error state, the tabs, the document toolbar's action bar
+and the card. Each one is registered under an ID. A screen that renders the ID, rather than the
+component, shows whichever version the application registered: Satori's, when
 `@nuxeo/satori-platform/components-satori` is installed and provided, or the built-in version
-otherwise. The card is registered the same way, but nothing wraps Satori's interactive card yet, so
-it renders the built-in version either way for now.
+otherwise.
 
 ## Key features
 
@@ -31,8 +30,7 @@ it renders the built-in version either way for now.
 
 ## Demo showcase
 
-The IDs with a Satori version, rendered through `lib-extension-outlet` as a screen renders them. The
-card, which has none yet, is shown by ID on its own page.
+Every ID, rendered through `lib-extension-outlet` as a screen renders them.
 
 <Canvas of={ByIdStories.MaterialRegistration} />
 
@@ -174,7 +172,9 @@ card, which has none yet, is shown by ID on its own page.
       <td>
         <code>NxsCardInputs</code>
       </td>
-      <td>None yet: Satori's interactive card is not wrapped</td>
+      <td>
+        Interactive card (<code>sat-interactive-card</code>)
+      </td>
     </tr>
   </tbody>
 </table>

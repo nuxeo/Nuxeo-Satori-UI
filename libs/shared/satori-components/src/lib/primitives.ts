@@ -8,10 +8,9 @@ import type { NxsTab, NxsTabBodyContext } from './tabs/tab-body.directive';
 /**
  * The IDs of the primitives Satori also ships, registered by `provideNxsComponents()`.
  *
- * Each ID resolves to a Material implementation from this entry point, and all but `card` to a
- * Satori-backed one once `provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori`
- * is provided after it. `card` has no Satori-backed implementation yet, so it renders the Material one
- * with or without that provider. Every implementation of an ID implements the same `Nxs…Inputs`
+ * Each ID resolves to a Material implementation from this entry point, and to a Satori-backed one
+ * once `provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori` is provided
+ * after it. Every implementation of an ID implements the same `Nxs…Inputs`
  * contract below, so whoever renders an ID — a `lib-extension-outlet` with `componentInputs` — gets
  * the same inputs whichever is registered. A customer overriding an ID implements that contract too.
  */

@@ -115,9 +115,8 @@ Satori: avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs, t
 card. `/components` implements each on Material — the tabs as `nxs-tabs` and the action bar as
 `nxs-document-toolbar` — and `provideNxsComponents()` registers them as `nxs.primitives.*`
 (`NXS_PRIMITIVE_IDS`). `@nuxeo/satori-platform/components-satori` — its own project,
-`libs/shared/satori-components-satori`, same tags — re-registers all but the card on Satori with
-`provideNxsSatoriComponents()`; until Satori's interactive card is wrapped, `nxs.primitives.card`
-renders the Material `nxs-card` either way. Both go through
+`libs/shared/satori-components-satori`, same tags — re-registers every one of them on Satori with
+`provideNxsSatoriComponents()`. Both go through
 `provideSatoriExtensions`, so later wins: the app lists both in that order, and an application
 without GitHub Packages access lists only the first. Each pair implements one `Nxs…Inputs`
 interface and a spec compares their declared inputs, so `componentInputs` mean the same thing
