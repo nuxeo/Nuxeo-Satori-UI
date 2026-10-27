@@ -1,0 +1,55 @@
+<mat-icon class="nxs-banner__icon" aria-hidden="true">{{ icon() }}</mat-icon>
+<span class="nxs-banner__message">{{ message() }}</span>
+@if (actions().length) {
+  <div class="nxs-banner__actions">
+    @for (action of actions(); track $index) {
+      @switch (action.emphasis) {
+        @case ('filled') {
+          <button
+            mat-flat-button
+            type="button"
+            [class]="action.cssClass ?? null"
+            [class.nxs-banner__danger]="action.danger"
+            [disabled]="action.disabled"
+            (click)="press(action)"
+          >
+            @if (action.icon) {
+              <mat-icon>{{ action.icon }}</mat-icon>
+            }
+            {{ action.label }}
+          </button>
+        }
+        @case ('outlined') {
+          <button
+            mat-stroked-button
+            type="button"
+            [class]="action.cssClass ?? null"
+            [class.nxs-banner__danger]="action.danger"
+            [disabled]="action.disabled"
+            (click)="press(action)"
+          >
+            @if (action.icon) {
+              <mat-icon>{{ action.icon }}</mat-icon>
+            }
+            {{ action.label }}
+          </button>
+        }
+        @default {
+          <button
+            mat-button
+            type="button"
+            [class]="action.cssClass ?? null"
+            [class.nxs-banner__danger]="action.danger"
+            [disabled]="action.disabled"
+            (click)="press(action)"
+          >
+            @if (action.icon) {
+              <mat-icon>{{ action.icon }}</mat-icon>
+            }
+            {{ action.label }}
+          </button>
+        }
+      }
+    }
+  </div>
+}

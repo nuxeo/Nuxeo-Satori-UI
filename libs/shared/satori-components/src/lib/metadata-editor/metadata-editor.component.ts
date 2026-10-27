@@ -45,9 +45,11 @@ import {
   l10nEntryLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { NxsChipSetComponent } from '../chip-set/chip-set.component';
 import { NxsDateMaskPipe } from '../date-input/date-mask.pipe';
 import { provideNxsDateAdapter } from '../date-input/locale-date';
 import type { NxsHeadingLevel } from '../heading-level';
+import type { NxsChipItem } from '../primitives';
 import { nxsPropertyText } from '../properties-panel/property-text';
 import { NxsTab, NxsTabBodyDirective } from '../tabs/tab-body.directive';
 import { NxsTabsComponent } from '../tabs/tabs.component';
@@ -174,6 +176,7 @@ let nextId = 0;
   styleUrl: './metadata-editor.component.scss',
   imports: [
     NgTemplateOutlet,
+    NxsChipSetComponent,
     ReactiveFormsModule,
     TranslatePipe,
     MatButtonModule,
@@ -442,6 +445,38 @@ export class NxsMetadataEditorComponent {
     if (vocabulary.l10n) return formatHierarchicalL10nLabel(id, [...vocabulary.entries]);
     const entry = vocabulary.entries.find((candidate) => candidate.id === id);
     return entry ? directoryPickerLabel(entry) : id;
+  }
+
+  /**
+   * The trigger's chips: one per value the control holds, an empty value showing none. Each id is
+   * the value's position in the control, so a removal finds it again.
+   */
+  protected triggerChips(
+    control: AbstractControl,
+    directory: string,
+    multiple: boolean,
+  ): NxsChipItem[] {
+    const values = multiple ? this.listValue(control) : [control.value];
+    return values.flatMap((id, index) => {
+      if (!id) return [];
+      const label = this.vocabularyLabel(directory, id);
+      return [
+        {
+          id: String(index),
+          label,
+          removeLabel: this.translate.instant('satori-components.metadata-editor.remove-value', {
+            name: label,
+          }),
+          disabled: control.disabled,
+        },
+      ];
+    });
+  }
+
+  /** A trigger chip was removed: drop its position from a multiple value, or clear a single one. */
+  protected removeTrigger(control: AbstractControl, multiple: boolean, item: NxsChipItem): void {
+    if (multiple) this.removeItem(control, Number(item.id));
+    else this.clearValue(control, false);
   }
 
   protected listValue(control: AbstractControl): readonly unknown[] {
