@@ -71,6 +71,8 @@ describe('NxsUserFormDialogComponent', () => {
   const el = (): HTMLElement => fixture.nativeElement as HTMLElement;
   const component = (): Record<string, unknown> =>
     fixture.componentInstance as unknown as Record<string, unknown>;
+  const method = (name: string): ((...args: unknown[]) => unknown) =>
+    component()[name] as (...args: unknown[]) => unknown;
   const button = (text: string): HTMLButtonElement =>
     Array.from(el().querySelectorAll('button')).find(
       (b) => b.textContent?.trim() === text,
@@ -230,7 +232,7 @@ describe('NxsUserFormDialogComponent', () => {
     it('adds a typed group as a chip on Enter', async () => {
       const clear = vi.fn();
       await render();
-      component()['addGroupFromInput']({ value: 'custom', chipInput: { clear } });
+      method('addGroupFromInput')({ value: 'custom', chipInput: { clear } });
       await render();
       expect((component()['groups'] as () => string[])()).toEqual(['custom']);
       expect(clear).toHaveBeenCalled();
@@ -238,7 +240,7 @@ describe('NxsUserFormDialogComponent', () => {
 
     it('ignores a blank group entry', () => {
       const clear = vi.fn();
-      component()['addGroupFromInput']({ value: '   ', chipInput: { clear } });
+      method('addGroupFromInput')({ value: '   ', chipInput: { clear } });
       expect((component()['groups'] as () => string[])()).toEqual([]);
       expect(clear).toHaveBeenCalled();
     });
@@ -247,21 +249,21 @@ describe('NxsUserFormDialogComponent', () => {
       const groupsOf = component()['groups'] as () => string[];
       (component()['groups'] as { set: (v: string[]) => void }).set(['man']);
       const deselect = vi.fn();
-      component()['onGroupSelected']({ option: { value: 'managers', deselect } });
+      method('onGroupSelected')({ option: { value: 'managers', deselect } });
       expect(groupsOf()).toEqual(['managers']);
       expect(deselect).toHaveBeenCalled();
     });
 
     it('does not add a second chip for the Enter that followed an autocomplete choice', () => {
       const clear = vi.fn();
-      component()['onGroupSelected']({ option: { value: 'members', deselect: vi.fn() } });
-      component()['addGroupFromInput']({ value: 'members', chipInput: { clear } });
+      method('onGroupSelected')({ option: { value: 'members', deselect: vi.fn() } });
+      method('addGroupFromInput')({ value: 'members', chipInput: { clear } });
       expect((component()['groups'] as () => string[])()).toEqual(['members']);
     });
 
     it('removes a group chip', () => {
-      component()['onGroupSelected']({ option: { value: 'members', deselect: vi.fn() } });
-      component()['removeGroup']('members');
+      method('onGroupSelected')({ option: { value: 'members', deselect: vi.fn() } });
+      method('removeGroup')('members');
       expect((component()['groups'] as () => string[])()).toEqual([]);
     });
 
@@ -271,7 +273,7 @@ describe('NxsUserFormDialogComponent', () => {
         { groupname: 'managers', grouplabel: 'Managers' },
       ]);
       const clear = vi.fn();
-      component()['addGroupFromInput']({ value: 'man', chipInput: { clear } });
+      method('addGroupFromInput')({ value: 'man', chipInput: { clear } });
       expect((component()['groups'] as () => string[])()).toEqual([]);
     });
 
@@ -280,31 +282,31 @@ describe('NxsUserFormDialogComponent', () => {
       (component()['groupOptions'] as { set: (v: unknown[]) => void }).set([
         { groupname: 'managers', grouplabel: 'Managers' },
       ]);
-      component()['addGroupFromInput']({ value: 'manmanagers', chipInput: { clear: vi.fn() } });
+      method('addGroupFromInput')({ value: 'manmanagers', chipInput: { clear: vi.fn() } });
       expect((component()['groups'] as () => string[])()).toEqual(['managers']);
     });
 
     it('turns the group search into a query on focus and on each change', () => {
-      component()['onGroupInputFocus']();
-      component()['onGroupSearch']('ma');
+      method('onGroupInputFocus')();
+      method('onGroupSearch')('ma');
       expect(searchGroupsPaged).toHaveBeenCalledWith('*', 200, 0);
     });
 
     it('takes Enter as a choice from the results when there are any, and as typed text when not', () => {
       (component()['groupQuery'] as { set: (v: string) => void }).set('x');
-      component()['onGroupInputKeydown']({ key: 'Enter' } as KeyboardEvent);
-      component()['addGroupFromInput']({ value: 'x', chipInput: { clear: vi.fn() } });
+      method('onGroupInputKeydown')({ key: 'Enter' } as KeyboardEvent);
+      method('addGroupFromInput')({ value: 'x', chipInput: { clear: vi.fn() } });
       expect((component()['groups'] as () => string[])()).toEqual([]);
       (component()['groupOptions'] as { set: (v: unknown[]) => void }).set([]);
-      component()['onGroupInputKeydown']({ key: 'Enter' } as KeyboardEvent);
-      component()['addGroupFromInput']({ value: 'x', chipInput: { clear: vi.fn() } });
+      method('onGroupInputKeydown')({ key: 'Enter' } as KeyboardEvent);
+      method('addGroupFromInput')({ value: 'x', chipInput: { clear: vi.fn() } });
       expect((component()['groups'] as () => string[])()).toEqual(['x']);
     });
 
     it('clears the password fields when the toggle is switched off', () => {
-      component()['setPasswordEnabled'](true);
+      method('setPasswordEnabled')(true);
       (component()['password'] as { set: (v: string) => void }).set('pw');
-      component()['setPasswordEnabled'](false);
+      method('setPasswordEnabled')(false);
       expect((component()['password'] as () => string)()).toBe('');
     });
   });

@@ -49,6 +49,8 @@ describe('NxsGroupFormDialogComponent', () => {
   const el = (): HTMLElement => fixture.nativeElement as HTMLElement;
   const component = (): Record<string, unknown> =>
     fixture.componentInstance as unknown as Record<string, unknown>;
+  const method = (name: string): ((...args: unknown[]) => unknown) =>
+    component()[name] as (...args: unknown[]) => unknown;
   const signalOf = <T>(name: string): (() => T) => component()[name] as () => T;
   const button = (text: string): HTMLButtonElement =>
     Array.from(el().querySelectorAll('button')).find(
@@ -103,7 +105,7 @@ describe('NxsGroupFormDialogComponent', () => {
     it('closes with the trimmed values and the members added, and nothing is written', async () => {
       await type('groupname', ' editors ');
       await type('grouplabel', ' Editors ');
-      component()['addMemberFromInput']({ value: 'carol', chipInput: { clear: vi.fn() } });
+      method('addMemberFromInput')({ value: 'carol', chipInput: { clear: vi.fn() } });
       button('Create').click();
       expect(close).toHaveBeenCalledWith({
         mode: 'create',
@@ -122,9 +124,9 @@ describe('NxsGroupFormDialogComponent', () => {
 
     it('adds a typed member on Enter, and ignores a blank one', () => {
       const clear = vi.fn();
-      component()['addMemberFromInput']({ value: '   ', chipInput: { clear } });
+      method('addMemberFromInput')({ value: '   ', chipInput: { clear } });
       expect(signalOf<string[]>('members')()).toEqual([]);
-      component()['addMemberFromInput']({ value: 'dave', chipInput: { clear } });
+      method('addMemberFromInput')({ value: 'dave', chipInput: { clear } });
       expect(signalOf<string[]>('members')()).toEqual(['dave']);
       expect(clear).toHaveBeenCalledTimes(2);
     });
@@ -132,47 +134,47 @@ describe('NxsGroupFormDialogComponent', () => {
     it('adds the member chosen from the results, and not the typed prefix', () => {
       (component()['memberQuery'] as { set: (v: string) => void }).set('al');
       (component()['memberOptions'] as { set: (v: unknown[]) => void }).set(USERS.entries);
-      component()['addMemberFromInput']({ value: 'alice', chipInput: { clear: vi.fn() } });
+      method('addMemberFromInput')({ value: 'alice', chipInput: { clear: vi.fn() } });
       expect(signalOf<string[]>('members')()).toEqual(['alice']);
     });
 
     it('takes Enter as a choice from the results when there are any', () => {
       (component()['memberQuery'] as { set: (v: string) => void }).set('x');
       (component()['memberOptions'] as { set: (v: unknown[]) => void }).set(USERS.entries);
-      component()['onMemberInputKeydown']({ key: 'Enter' } as KeyboardEvent);
-      component()['addMemberFromInput']({ value: 'x', chipInput: { clear: vi.fn() } });
+      method('onMemberInputKeydown')({ key: 'Enter' } as KeyboardEvent);
+      method('addMemberFromInput')({ value: 'x', chipInput: { clear: vi.fn() } });
       expect(signalOf<string[]>('members')()).toEqual([]);
     });
 
     it('treats a typed prefix of a known user as unfinished', () => {
       (component()['memberOptions'] as { set: (v: unknown[]) => void }).set(USERS.entries);
-      component()['addMemberFromInput']({ value: 'al', chipInput: { clear: vi.fn() } });
+      method('addMemberFromInput')({ value: 'al', chipInput: { clear: vi.fn() } });
       expect(signalOf<string[]>('members')()).toEqual([]);
     });
 
     it('adds the chosen member from the autocomplete and skips the Enter that followed', () => {
-      component()['onMemberSelected']({ option: { value: USERS.entries[1], deselect: vi.fn() } });
-      component()['addMemberFromInput']({ value: 'bob', chipInput: { clear: vi.fn() } });
+      method('onMemberSelected')({ option: { value: USERS.entries[1], deselect: vi.fn() } });
+      method('addMemberFromInput')({ value: 'bob', chipInput: { clear: vi.fn() } });
       expect(signalOf<string[]>('members')()).toEqual(['bob']);
     });
 
     it('removes a member and asks the results again', () => {
-      component()['onMemberSelected']({ option: { value: USERS.entries[1], deselect: vi.fn() } });
-      component()['removeMember']('bob');
+      method('onMemberSelected')({ option: { value: USERS.entries[1], deselect: vi.fn() } });
+      method('removeMember')('bob');
       expect(signalOf<string[]>('members')()).toEqual([]);
     });
 
     it('asks for results on focus, and when the query changes', async () => {
-      component()['onMemberInputFocus']();
-      component()['onMemberSearch']('al');
+      method('onMemberInputFocus')();
+      method('onMemberSearch')('al');
       // The search waits 250 ms for typing to settle.
       await new Promise((resolve) => setTimeout(resolve, 300));
       expect(searchUsersPaged).toHaveBeenCalledWith('al', 30, 0);
     });
 
     it('describes a member with a name and email, or neither', () => {
-      expect(component()['userDisplayLine'](USERS.entries[0])).toBe('Alice Ng · alice@acme.test');
-      expect(component()['userDisplayLine'](USERS.entries[1])).toBe('');
+      expect(method('userDisplayLine')(USERS.entries[0])).toBe('Alice Ng · alice@acme.test');
+      expect(method('userDisplayLine')(USERS.entries[1])).toBe('');
     });
   });
 
