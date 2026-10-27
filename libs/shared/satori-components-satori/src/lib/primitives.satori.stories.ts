@@ -164,3 +164,36 @@ export const SatoriRegistration: StoryObj = {
     `,
   }),
 };
+
+/**
+ * The upload, disabled, rendered through `nxs.primitives.upload`.
+ *
+ * Its own story because the showcase above renders every ID in its default state, and a disabled
+ * upload there would misrepresent how the component normally looks. Disabling it is the one thing
+ * about this wrapper that the unit tests can assert and no screenshot showed: the wrapper writes
+ * Satori's `SatUploadField.disabled`, which is a writable signal rather than an input, so an effect
+ * drives it — and what a reader wants to see is that it reaches Satori's own control and not only
+ * the projected file input.
+ *
+ * The same template and inputs in both Storybooks, so the two halves differ only in what is
+ * registered.
+ */
+export const DisabledUpload: StoryObj = {
+  name: 'Disabled upload',
+  render: () => ({
+    props: { ids: NXS_PRIMITIVE_IDS, takeFiles: () => undefined },
+    template: `
+      <lib-extension-outlet
+        style="display: block; inline-size: 320px"
+        [componentId]="ids.upload"
+        [componentInputs]="{
+          label: 'Drag and drop files here',
+          buttonLabel: 'Choose files',
+          multiple: true,
+          disabled: true,
+          filesHandler: takeFiles
+        }"
+      />
+    `,
+  }),
+};
