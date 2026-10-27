@@ -69,7 +69,15 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import ts from 'typescript';
@@ -358,6 +366,62 @@ if (undeclared.length > 0) {
     `${externalImports.size} external import(s) across the bundles, all declared: ` +
       `${[...externalImports.keys()].sort().join(', ')}`,
   );
+}
+
+// ------------------------------------ 2c. the Satori implementation is not redistributed ----
+
+/**
+ * `@hylandsoftware/satori-ui` is the customer's to install (an optional peer). The shipped bytes
+ * may carry only a bare reference to it, from the one entry point documented as its importer, and
+ * no `Sat*` type may appear outside a comment. Nothing else in the gate reads for either.
+ *
+ * Both checks are guarded by a control. A scan that stops seeing imports, or a matcher that stops
+ * matching, must fail here rather than report a clean result.
+ */
+const SATORI_PEER = '@hylandsoftware/satori-ui';
+const SATORI_IMPORTER = 'nuxeo-satori-platform-components-satori.mjs';
+const satoriImporters = externalImports.get(SATORI_PEER) ?? new Set();
+if (!satoriImporters.has(SATORI_IMPORTER)) {
+  fail(
+    `${SATORI_PEER} is not imported by ${SATORI_IMPORTER}, the one entry point documented as its importer.\n` +
+      '    Either the import moved, or the scan no longer reads it. Either way the Satori boundary\n' +
+      '    described in extension-reference §6a is not what the bytes say.',
+  );
+}
+for (const name of [...satoriImporters].filter((name) => name !== SATORI_IMPORTER).sort()) {
+  fail(
+    `${SATORI_PEER} is imported by ${name}, which is not its documented importer.\n` +
+      '    Only the components-satori entry point may reach the optional Satori peer.',
+  );
+}
+
+const SAT_TYPE = /\bSat[A-Z]\w*/g;
+const withoutComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const satControl = '/** SatAvatar in a comment */\nexport declare function f(): SatAvatarCategory;\n';
+const rawControlHits = satControl.match(SAT_TYPE) ?? [];
+const strippedControlHits = withoutComments(satControl).match(SAT_TYPE) ?? [];
+if (rawControlHits.length !== 2 || strippedControlHits.join() !== 'SatAvatarCategory') {
+  fail(
+    'The Sat* matcher no longer separates a comment from a type. Its control is a comment ' +
+      'mentioning `SatAvatar` and a declaration of `SatAvatarCategory`.',
+  );
+}
+
+const dtsFilesUnder = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return dtsFilesUnder(path);
+    return entry.name.endsWith('.d.ts') ? [path] : [];
+  });
+for (const file of dtsFilesUnder(join(DIST, 'types'))) {
+  const hits = withoutComments(readFileSync(file, 'utf8')).match(SAT_TYPE) ?? [];
+  if (hits.length > 0) {
+    fail(
+      `${relative(DIST, file)} declares or references ${[...new Set(hits)].join(', ')} outside a comment.\n` +
+        '    A Satori type in the public declarations makes the published API unusable without the\n' +
+        '    optional peer, which is the leak the Satori boundary exists to prevent.',
+    );
+  }
 }
 
 // -------------------------------------------- 3. npm publish --dry-run succeeds ----

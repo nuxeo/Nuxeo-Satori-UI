@@ -270,10 +270,25 @@ npm install @nuxeo/satori-platform@alpha
 The workflow passes only `--tag alpha` and never `latest`. npm may still assign `latest`
 on the first publish of a package that has no dist-tags yet, so the first real run should
 check `npm view @nuxeo/satori-platform dist-tags` afterwards. While `"private": true` is
-set, npm refuses the real publish with `EPRIVATE`. That refusal comes from the registry
-client's own check, and npm's publish command may contact the registry before it. NXSAT-667
-removes the flag and records the shipped version in a reviewed commit. Until then a real
-run cannot publish, and the version it bumps is not in git.
+set, npm refuses the real publish with `EPRIVATE`, and the refusal depends on the form of
+the command. Measured with npm 11.19.1 against an unreachable registry, using a dummy token:
+
+- `npm publish <directory>` is refused before any registry request.
+- `npm publish <file>.tgz`, the form the workflow uses, first requests the package document
+  from the registry (two attempts, both refused at connection) and then refuses with
+  `EPRIVATE`. A blocked run therefore still sends that request, with the token when one is
+  configured. The host is `packages.nuxeo.com`, the intended registry.
+
+A dry run does not authenticate. `npm publish --dry-run` prints `This command requires you to
+be logged in`, so a green dry run tests neither the token nor the registry's policy. The first
+real publish is the first test of both.
+
+The publish job runs only when its `if: ${{ !inputs.dryRun }}` is true, and that expression has
+not run on GitHub yet. The first dispatch, left at `dryRun: true`, should show the publish job
+skipped. A dispatch with `dryRun: false` is not a test: it is a publish attempt.
+
+NXSAT-667 removes the flag and records the shipped version in a reviewed commit. Until then a
+real run cannot publish, and the version it bumps is not in git.
 
 ---
 
