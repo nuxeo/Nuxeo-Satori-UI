@@ -7,10 +7,10 @@ import { NXS_PRIMITIVE_IDS } from './primitives';
 import { provideNxsComponents } from './provide-nxs-components';
 
 /**
- * The five `nxs.primitives.*` IDs Satori also implements, resolved through `lib-extension-outlet` as
- * a host renders them, with only `provideNxsComponents()` — what an application without Satori
- * gets. The Satori library's Storybook renders the same template with `provideNxsSatoriComponents()`
- * added.
+ * The `nxs.primitives.*` IDs, each of which Satori also implements, resolved through
+ * `lib-extension-outlet` as a host renders them, with only `provideNxsComponents()` — what an
+ * application without Satori gets. The Satori library's Storybook renders the same template with
+ * `provideNxsSatoriComponents()` added.
  *
  * It names no component, so it has no API page; `primitives.mdx` is its Overview.
  *
@@ -52,6 +52,30 @@ export const MaterialRegistration: StoryObj = {
         heading: 'Failed to load folder contents.',
         retryable: true,
       },
+      tabs: [
+        { id: 'app.tabs.view', label: 'View' },
+        { id: 'app.tabs.permissions', label: 'Permissions' },
+        { id: 'app.tabs.history', label: 'History' },
+        { id: 'acme.tabs.claims', label: 'Claims' },
+      ],
+      actionBar: {
+        moreLabel: 'More actions',
+        actions: [
+          { id: 'app.toolbar.edit', label: 'Edit', icon: 'pencil' },
+          { id: 'app.toolbar.addToCollection', label: 'Add to collection', icon: 'add_list' },
+          {
+            id: 'app.toolbar.unlock',
+            label: 'Unlock',
+            icon: 'lock',
+            tooltip: 'Locked by Jane Doe on May 3, 2026',
+            disabled: true,
+            active: true,
+          },
+          { id: 'app.toolbar.delete', label: 'Delete', icon: 'trash' },
+          { id: 'app.toolbar.publish', label: 'Publish document', icon: 'publish', overflow: true },
+          { id: 'app.toolbar.export', label: 'Export', icon: 'import_export', overflow: true },
+        ],
+      },
     },
     template: `
       <div style="display: grid; gap: 16px; justify-items: start">
@@ -60,7 +84,25 @@ export const MaterialRegistration: StoryObj = {
         <lib-extension-outlet [componentId]="ids.tag" [componentInputs]="tag" />
         <lib-extension-outlet [componentId]="ids.statusTag" [componentInputs]="statusTag" />
         <lib-extension-outlet [componentId]="ids.richTooltip" [componentInputs]="tooltip" />
-        <lib-extension-outlet [componentId]="ids.errorState" [componentInputs]="errorState" />
+        <!--
+          Sized like the tabs below: the error state fills a region, where the primitives above are
+          small and inline. An outlet is an inline custom element and \`justify-items: start\`
+          shrink-wraps it, which leaves a region-filling child 0 px wide.
+        -->
+        <lib-extension-outlet
+          style="display: block; width: 420px"
+          [componentId]="ids.errorState"
+          [componentInputs]="errorState"
+        />
+        <ng-template #tabBody let-tab>
+          <p style="padding: 16px">The {{ tab.label }} tab body.</p>
+        </ng-template>
+        <lib-extension-outlet
+          style="display: flex; flex-direction: column; width: 480px; height: 120px"
+          [componentId]="ids.tabs"
+          [componentInputs]="{ tabs, label: 'Document views', selectedIndex: 0, body: tabBody }"
+        />
+        <lib-extension-outlet [componentId]="ids.actionBar" [componentInputs]="actionBar" />
       </div>
     `,
   }),

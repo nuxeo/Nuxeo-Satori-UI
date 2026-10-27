@@ -216,6 +216,30 @@ const NEGATIVE = [
     /must name the element NxsSatoriTagComponent renders, as `<sat-category-tag>`, not `<sat-tag>`/,
   ],
   [
+    // The action bar renders no `sat-…` element; the element Satori's button is applied to is read.
+    'a Satori element the attribute-applied wrapper does not render',
+    {
+      doc: swap(
+        doc,
+        '`NxsSatoriActionBarComponent` renders `<button satActionBarButton>`',
+        '`NxsSatoriActionBarComponent` renders `<sat-action-group>`',
+      ),
+    },
+    /must name the element NxsSatoriActionBarComponent renders, as `<button satActionBarButton>`, not `<sat-action-group>`/,
+  ],
+  [
+    // A wrapper with a `sat-…` element is named by it, not by a Satori component applied inside.
+    "an attribute-applied element named where the wrapper renders Satori's own element",
+    {
+      doc: swap(
+        doc,
+        '`NxsSatoriTabsComponent` renders `<sat-navigation-tabs>`',
+        '`NxsSatoriTabsComponent` renders `<a satNavigationTab>`',
+      ),
+    },
+    /must name the element NxsSatoriTabsComponent renders, as `<sat-navigation-tabs>`, not `<a satNavigationTab>`/,
+  ],
+  [
     'an image whose name does not follow the selector',
     { doc: swap(doc, '](icon-side-by-side.png', '](icons-side-by-side.png') },
     /image must be icon-side-by-side\.png, not icons-side-by-side\.png/,

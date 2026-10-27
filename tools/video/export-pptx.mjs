@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { spawnTool } from '../../scripts/beta-harness/package-command.mjs';
 
 /**
  * Export the Beta infographic decks as PowerPoint files.
@@ -41,7 +40,7 @@ import { readFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { packageCommand } from '../../scripts/beta-harness/package-command.mjs';
+import { packageCommand, spawnTool } from '../../scripts/beta-harness/package-command.mjs';
 
 const execFileAsync = promisify(execFile);
 

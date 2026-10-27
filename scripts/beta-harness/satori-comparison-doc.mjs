@@ -21,7 +21,8 @@
  *   - a section's story is not a story *of* that component: its Storybook meta names the component,
  *     it renders the component's registered ID through an extension outlet, or it imports the
  *     module that opens it;
- *   - a section says Satori renders an element its wrapper's template does not;
+ *   - a section says Satori renders an element its wrapper's template does not — a `sat-…` element,
+ *     or an element a Satori component is applied to by attribute, `<button satActionBarButton>`;
  *   - a section's image file name disagrees with the code;
  *   - the "All components" table and the sections disagree;
  *   - the page text carries a ticket key, a pull-request reference or a branch name.
@@ -204,6 +205,41 @@ function templateOf(root, file, source) {
 }
 
 /**
+ * The Satori elements a template renders, as a section names them without the angle brackets:
+ * `sat-category-tag` for a Satori element, and `button satActionBarButton` for an element a Satori
+ * component is applied to by attribute. Satori ships several of those (`satActionBarButton`,
+ * `satNavigationTab`, `satBannerAction`), and a wrapper built from one renders no `sat-…` element.
+ *
+ * `sat-…` elements come first, in template order, then the attribute-applied ones, so the first —
+ * the one a section must name — is the wrapper's Satori element when it has one, and the element
+ * Satori is applied to only when it has none. Read from each start tag: an attribute value holding
+ * a `>` ends the tag early, so an attribute after it is not seen; no wrapper template has one.
+ */
+export function satoriElementsOf(template) {
+  const tags = [];
+  const applied = [];
+  for (const [, tag, attributes] of template.matchAll(/<([a-z][\w-]*)\b([^>]*)>/gi)) {
+    if (/^sat-/.test(tag)) {
+      tags.push(tag);
+      continue;
+    }
+    for (const [, name] of attributes.matchAll(/(?:^|\s)\[?(sat[A-Z]\w*)\]?(?=[\s=/>]|$)/g)) {
+      applied.push(`${tag} ${name}`);
+    }
+  }
+  return [...new Set([...tags, ...applied])];
+}
+
+/**
+ * The CSS selector for an element as `satoriElementsOf` names it, which the capture looks for
+ * inside the rendered wrapper. Attribute names match regardless of case in an HTML document.
+ */
+export function satoriElementSelector(element) {
+  const [tag, attribute] = element.split(' ');
+  return attribute ? `${tag}[${attribute}]` : tag;
+}
+
+/**
  * The `nxs.…` IDs the base library names, keyed by the expression a registration writes them with:
  * `NXS_PRIMITIVE_IDS.avatar` for a member of the frozen map, `NXS_PERMISSIONS_PANEL_ID` for an
  * exported constant. A registration file in another project writes the constant, not the string.
@@ -314,9 +350,7 @@ export function readInputs(root = ROOT, overrides = {}) {
   const satoriVariants = new Map();
   for (const file of walk(root, `${SATORI_SRC}/lib`, (n) => n.endsWith('.component.ts'))) {
     const source = read(root, file);
-    const elements = [
-      ...new Set([...templateOf(root, file, source).matchAll(/<(sat-[\w-]+)/g)].map((m) => m[1])),
-    ];
+    const elements = satoriElementsOf(templateOf(root, file, source));
     for (const m of source.matchAll(/export class (\w+Component)\b/g)) {
       satoriVariants.set(m[1], { selector: selectorOf(source), elements, file });
     }
@@ -574,11 +608,12 @@ export function checkComparison(inputs) {
       fail(`${where} "With Satori" must start with "${OWN}" or be "${THEME_ONLY}"`);
     }
     const variant = ticks(withSatori).find((t) => /^Nxs\w*Component$/.test(t)) ?? null;
-    // `<sat-category-tag>`: the element the capture then requires inside the rendered wrapper, so
-    // a wrapper rendering something else cannot pass a check named after Satori's component.
+    // `<sat-category-tag>`, or `<button satActionBarButton>` for a component Satori applies by
+    // attribute: the element the capture then requires inside the rendered wrapper, so a wrapper
+    // rendering something else cannot pass a check named after Satori's component.
     const satElement =
       ticks(withSatori)
-        .find((t) => /^<sat-[\w-]+>$/.test(t))
+        .find((t) => /^<(?:sat-[\w-]+|[a-z][\w-]* sat[A-Z]\w*)>$/.test(t))
         ?.slice(1, -1) ?? null;
     const reRegistered = registeredId ? (satoriClassById.get(registeredId) ?? null) : null;
     if (own) {
@@ -672,6 +707,10 @@ export function checkComparison(inputs) {
       variant: own ? variant : null,
       satoriSelector,
       satElement: own ? satElement : null,
+      // Every element the wrapper's own template renders, not just the documented one: a wrapper
+      // picking one per input — the error state, one per status — renders a different one than the
+      // section names, and the capture looks for any of these.
+      satElements: own && variant ? (inputs.satoriVariants.get(variant)?.elements ?? []) : null,
       registeredId,
       story,
       satoriStory: own ? satoriStory : null,

@@ -4,6 +4,7 @@
   [aria-label]="ownLabel()"
   [selectedIndex]="selectedIndex()"
   (selectedIndexChange)="select($event)"
+  (selectedTabChange)="select($event.index)"
 >
   @for (tab of tabs(); track tab.id) {
     <mat-tab>
@@ -15,9 +16,9 @@
           {{ tab.label }}
         </span>
       </ng-template>
-      @if (body(); as bodyTemplate) {
+      @if (bodyTemplate(); as template) {
         <ng-container
-          [ngTemplateOutlet]="bodyTemplate.template"
+          [ngTemplateOutlet]="template"
           [ngTemplateOutletContext]="{ $implicit: tab }"
         />
       }

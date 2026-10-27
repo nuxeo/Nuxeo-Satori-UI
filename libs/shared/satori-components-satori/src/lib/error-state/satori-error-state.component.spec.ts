@@ -126,4 +126,14 @@ describe('NxsSatoriErrorStateComponent', () => {
       expect(fixture.componentInstance.headingLevel()).toBe(level);
     }
   });
+
+  // A bare custom element is `display: inline` in a browser, and this one wraps a block, so without
+  // a display of its own the host's box measured 0x0: present in the DOM and invisible to anything
+  // that measures it, which is how the comparison capture came to wait for it until it timed out.
+  // Asserted on the declaration, not `getComputedStyle`: jsdom lays out an unknown element as a
+  // block whether or not the component asks for one, so computing it passes with the style removed.
+  it('declares a block display on the host, so it has a box of its own', async () => {
+    await fixture.whenStable();
+    expect(host.style.display).toBe('block');
+  });
 });
