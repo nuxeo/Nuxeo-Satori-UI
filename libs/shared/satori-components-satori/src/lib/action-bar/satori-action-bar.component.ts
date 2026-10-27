@@ -1,13 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SatActionBarButton } from '@hylandsoftware/satori-ui/action-bar';
 import { TranslatePipe } from '@ngx-translate/core';
 import {
-  nxsToolbarActionExtra,
-  nxsToolbarActionName,
-  nxsToolbarActionTooltip,
+  nxsActionBarView,
   type NxsActionBarInputs,
   type NxsToolbarAction,
 } from '@nuxeo/satori-platform/components';
@@ -42,20 +40,6 @@ export class NxsSatoriActionBarComponent implements NxsActionBarInputs {
   /** The entry the user ran. Never a disabled one. */
   readonly selected = output<NxsToolbarAction>();
 
-  protected readonly inline = computed(() => this.actions().filter((action) => !action.overflow));
-  protected readonly overflow = computed(() => this.actions().filter((action) => action.overflow));
-  protected readonly ownLabel = computed(() => this.label().trim());
-  protected readonly ownMoreLabel = computed(() => this.moreLabel().trim());
-
-  // The same text as Material's toolbar, from the same functions, so the accessible names match.
-  protected readonly tooltipOf = nxsToolbarActionTooltip;
-  protected readonly extraOf = nxsToolbarActionExtra;
-  protected readonly nameOf = nxsToolbarActionName;
-
-  /** A disabled inline entry is only `aria-disabled`, so a click still arrives and is refused here. */
-  protected run(action: NxsToolbarAction): void {
-    if (action.disabled) return;
-    this.selected.emit(action);
-    this.actionHandler()?.(action);
-  }
+  /** Grouping, names and running, the same as Material's toolbar: only the template differs. */
+  protected readonly view = nxsActionBarView(this);
 }

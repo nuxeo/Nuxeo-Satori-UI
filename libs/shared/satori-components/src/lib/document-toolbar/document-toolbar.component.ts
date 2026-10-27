@@ -1,5 +1,5 @@
 import { CdkAriaLive } from '@angular/cdk/a11y';
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -7,11 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import type { NxsActionBarInputs } from '../primitives';
-import {
-  nxsToolbarActionExtra,
-  nxsToolbarActionName,
-  nxsToolbarActionTooltip,
-} from './toolbar-action-text';
+import { nxsActionBarView } from './action-bar-view';
 
 /** One control on a document toolbar, already resolved by the host. */
 export interface NxsToolbarAction {
@@ -78,22 +74,6 @@ export class NxsDocumentToolbarComponent implements NxsActionBarInputs {
   /** The entry the user ran. Never a disabled one. */
   readonly selected = output<NxsToolbarAction>();
 
-  protected readonly inline = computed(() => this.actions().filter((action) => !action.overflow));
-  protected readonly overflow = computed(() => this.actions().filter((action) => action.overflow));
-  protected readonly ownLabel = computed(() => this.label().trim());
-  protected readonly ownMoreLabel = computed(() => this.moreLabel().trim());
-
-  protected readonly tooltipOf = nxsToolbarActionTooltip;
-  protected readonly extraOf = nxsToolbarActionExtra;
-  protected readonly nameOf = nxsToolbarActionName;
-
-  /**
-   * Inline buttons are `disabledInteractive`, so a click on a disabled one still arrives here and
-   * is refused here.
-   */
-  protected run(action: NxsToolbarAction): void {
-    if (action.disabled) return;
-    this.selected.emit(action);
-    this.actionHandler()?.(action);
-  }
+  /** Grouping, names and running, shared with Satori's action bar. */
+  protected readonly view = nxsActionBarView(this);
 }

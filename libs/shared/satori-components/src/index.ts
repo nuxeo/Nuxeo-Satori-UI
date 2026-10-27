@@ -43,10 +43,10 @@ export {
   type NxsToolbarAction,
 } from './lib/document-toolbar/document-toolbar.component';
 export {
-  nxsToolbarActionExtra,
-  nxsToolbarActionName,
-  nxsToolbarActionTooltip,
-} from './lib/document-toolbar/toolbar-action-text';
+  nxsActionBarView,
+  type NxsActionBarSource,
+  type NxsActionBarView,
+} from './lib/document-toolbar/action-bar-view';
 export { NxsDateInputComponent } from './lib/date-input/date-input.component';
 export { NxsDocTypeIconComponent } from './lib/doc-type-icon/doc-type-icon.component';
 export {

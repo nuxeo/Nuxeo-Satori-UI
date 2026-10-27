@@ -215,6 +215,25 @@ interface NxsActionBarInputs {
     readonly actionHandler: InputSignal<((action: NxsToolbarAction) => void) | null>;
     }
 }
+interface NxsActionBarSource {
+    readonly actions: Signal<readonly NxsToolbarAction[]>;
+    readonly label: Signal<string>;
+    readonly moreLabel: Signal<string>;
+    readonly actionHandler: Signal<((action: NxsToolbarAction) => void) | null>;
+    readonly selected: OutputEmitterRef<NxsToolbarAction>;
+    }
+}
+interface NxsActionBarView {
+    readonly inline: Signal<readonly NxsToolbarAction[]>;
+    readonly overflow: Signal<readonly NxsToolbarAction[]>;
+    readonly ownLabel: Signal<string>;
+    readonly ownMoreLabel: Signal<string>;
+    readonly tooltipOf: (action: NxsToolbarAction) => string;
+    readonly extraOf: (action: NxsToolbarAction) => string;
+    readonly nameOf: (action: NxsToolbarAction) => string;
+    readonly run: (action: NxsToolbarAction) => void;
+    }
+}
 class NxsActionMenuComponent {
     readonly actions: import("@angular/core").InputSignal<readonly NxsMenuAction[]>;
     readonly label: import("@angular/core").InputSignal<string>;
@@ -964,14 +983,7 @@ class NxsDocumentToolbarComponent implements NxsActionBarInputs {
     readonly moreLabel: import("@angular/core").InputSignal<string>;
     readonly actionHandler: import("@angular/core").InputSignal<((action: NxsToolbarAction) => void) | null>;
     readonly selected: import("@angular/core").OutputEmitterRef<NxsToolbarAction>;
-    protected readonly inline: import("@angular/core").Signal<NxsToolbarAction[]>;
-    protected readonly overflow: import("@angular/core").Signal<NxsToolbarAction[]>;
-    protected readonly ownLabel: import("@angular/core").Signal<string>;
-    protected readonly ownMoreLabel: import("@angular/core").Signal<string>;
-    protected readonly tooltipOf: typeof nxsToolbarActionTooltip;
-    protected readonly extraOf: typeof nxsToolbarActionExtra;
-    protected readonly nameOf: typeof nxsToolbarActionName;
-    protected run(action: NxsToolbarAction): void;
+    protected readonly view: import("@nuxeo/satori-platform/components").NxsActionBarView;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentToolbarComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentToolbarComponent, "nxs-document-toolbar", never, {
     "actions": {
@@ -2526,6 +2538,7 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     }
 }
 function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: string, params?: Record<string, unknown>) => string, locale: string): string;
+function nxsActionBarView(bar: NxsActionBarSource): NxsActionBarView;
 function nxsDocumentSuggestionQuery(term: string, types?: readonly string[]): string;
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
@@ -2546,9 +2559,6 @@ function nxsSearchFiltersToRecord(filters: NxsSearchFilters): Record<string, str
 function nxsSearchFiltersToSavedParams(filters: NxsSearchFilters): Record<string, string>;
 function nxsTermOptions(aggregation: AggregateResult | undefined, selected: readonly string[]): NxsFacetOption[];
 function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorites' | 'removeFromFavorites'>, documentId: string, favorite: boolean): Observable<boolean>;
-function nxsToolbarActionExtra(action: NxsToolbarAction): string;
-function nxsToolbarActionName(action: NxsToolbarAction): string;
-function nxsToolbarActionTooltip(action: NxsToolbarAction): string;
 function nxsVersionLabel(doc: NuxeoDocument): string;
 function nxsVisibleText(text: string | null | undefined): string;
 function provideNxsComponents(): EnvironmentProviders;
