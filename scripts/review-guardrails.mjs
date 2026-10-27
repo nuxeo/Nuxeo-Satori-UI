@@ -10003,17 +10003,30 @@ function componentsContributionsIn(source) {
     }
   }
 
-  const takeReturned = (returned) => {
+  /**
+   * `atBodyLevel` is the whole lexical story, in both directions.
+   *
+   * `saved` holds only bindings declared among the provider body's own statements, so a name is
+   * resolved against it only by a return at that same level. An inner block may shadow the name —
+   * `const installed = provideSatoriExtensions(…)` outside, `const installed =
+   * actualContribution(); return installed;` inside — and resolving that inner return against the
+   * outer binding accepted a map the inner contribution replaces, leaving its primitives
+   * unguarded with nothing reported. A nested identifier return is therefore unresolved and fails
+   * closed; a nested `return provideSatoriExtensions(…)` is still read, since it needs no name.
+   */
+  const takeReturned = (returned, atBodyLevel) => {
     if (isProvideCall(returned)) {
       installed.add(returned);
-    } else if (ts.isIdentifier(returned) && saved.has(returned.text)) {
-      installed.add(saved.get(returned.text));
-    } else {
-      problems.push(
-        `a \`return ${returned.getText(source)}\` whose installed contribution could not be ` +
-          'determined',
-      );
+      return;
     }
+    if (atBodyLevel && ts.isIdentifier(returned) && saved.has(returned.text)) {
+      installed.add(saved.get(returned.text));
+      return;
+    }
+    problems.push(
+      `a \`return ${returned.getText(source)}\` whose installed contribution could not be ` +
+        'determined',
+    );
   };
 
   // Only the provider's own returns. A `return` inside a nested helper returns from that helper,
@@ -10026,16 +10039,18 @@ function componentsContributionsIn(source) {
   if (body === undefined) {
     problems.push(`a \`${PROVIDER_FUNCTION}\` whose body could not be read`);
   } else if (!ts.isBlock(body)) {
-    // A concise arrow body is the returned expression.
-    takeReturned(body);
+    // A concise arrow body is the returned expression, at the provider's own level.
+    takeReturned(body, true);
   } else {
-    const findReturns = (node) => {
+    const findReturns = (node, atBodyLevel) => {
       if (isFunctionLike(node)) return;
-      if (ts.isReturnStatement(node) && node.expression !== undefined)
-        takeReturned(node.expression);
-      ts.forEachChild(node, findReturns);
+      if (ts.isReturnStatement(node) && node.expression !== undefined) {
+        takeReturned(node.expression, atBodyLevel);
+        return;
+      }
+      ts.forEachChild(node, (child) => findReturns(child, false));
     };
-    ts.forEachChild(body, findReturns);
+    for (const statement of body.statements) findReturns(statement, true);
   }
 
   // More than one installed contribution cannot be ordered here. Alternative branch returns are

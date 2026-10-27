@@ -10009,6 +10009,45 @@ expectRed(
   /a `return installed` whose installed contribution could not be determined/,
 );
 
+expectRed(
+  'an inner block shadowing the provider binding is not resolved against the outer one',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // The outer `installed` is a real contribution; the inner block shadows it with one this
+    // cannot read and returns that. Resolving the inner return against the outer binding accepted
+    // a map the inner contribution replaces — the other direction of the shadowing the previous
+    // commit fixed, and the reason both sides now have to agree on scope.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  const installed = provideSatoriExtensions({\n' +
+        '    components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n' +
+        '  });\n' +
+        '  if (globalThis) {\n' +
+        '    const installed = actualContribution();\n' +
+        '    return installed;\n' +
+        '  }\n' +
+        '  return provideSatoriExtensions({',
+    ),
+  }),
+  null,
+  /a `return installed` whose installed contribution could not be determined/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a nested `return provideSatoriExtensions(…)` needs no name, so it is still read',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // The scope rule applies to identifier returns, not to a call returned directly: there is no
+    // binding to shadow. Rejecting every nested return would have failed this legitimate shape,
+    // and it is the only contribution here, so the adopted set is not empty either.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  if (globalThis) {\n    return provideSatoriExtensions({',
+    ).replace(/\n  \}\);\n\}/, '\n    });\n  }\n}'),
+  }),
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',
