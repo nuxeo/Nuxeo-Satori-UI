@@ -13,7 +13,7 @@ import { AdminUsersGroupsPageComponent } from './admin-users-groups-page.compone
 
 /** A stand-in replacement, distinct from the packaged page so the assertions can tell them apart. */
 @Component({
-  selector: 'test-replacement-users-groups-page',
+  selector: 'lib-replacement-users-groups-page',
   standalone: true,
   template: '<p>replacement</p>',
 })
@@ -61,9 +61,7 @@ describe('AdminUsersGroupsPageComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(
-      fixture.nativeElement.querySelector('test-replacement-users-groups-page'),
-    ).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('lib-replacement-users-groups-page')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('nxs-admin-users-groups-page')).toBeNull();
   });
 
