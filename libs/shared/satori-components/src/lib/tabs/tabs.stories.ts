@@ -14,7 +14,7 @@ const FILE_TABS: readonly NxsTab[] = [
 ];
 
 const BODY = `
-  <nxs-tabs [tabs]="tabs" [label]="label" [selectedIndex]="selectedIndex" (selectedTabChange)="selectedTabChange($event)" style="height: 220px">
+  <nxs-tabs [tabs]="tabs" [label]="label" [selectedIndex]="selectedIndex" [selectHandler]="selectHandler" (selectedTabChange)="selectedTabChange($event)" style="height: 220px">
     <ng-template nxsTabBody let-tab>
       <p style="padding: 16px">The {{ tab.label }} tab body, rendered for <code>{{ tab.id }}</code>.</p>
     </ng-template>
@@ -35,6 +35,7 @@ const meta: Meta<NxsTabsComponent> = {
     tabs: FILE_TABS,
     label: 'Document views',
     selectedIndex: 0,
+    selectHandler: fn(),
     selectedTabChange: fn(),
   },
   argTypes: {
@@ -43,6 +44,15 @@ const meta: Meta<NxsTabsComponent> = {
     selectedIndex: {
       control: { type: 'number', min: 0, max: 4 },
       description: 'The selected tab’s position. Two-way.',
+    },
+    body: {
+      control: false,
+      description:
+        'The template every body renders from. These stories mark one with `nxsTabBody` instead; a host rendering the ID through an outlet passes it here.',
+    },
+    selectHandler: {
+      control: false,
+      description: 'Called with the selected tab and its position whenever the selection changes.',
     },
     selectedTabChange: { control: false, description: 'The tab selected, by ID.' },
   },

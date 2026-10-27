@@ -1,0 +1,25 @@
+:host {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.nxs-satori-action-bar__group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+// Satori dims only a natively disabled button, and a disabled entry here is `aria-disabled` so that
+// it stays focusable. The same dimming, and no hover layer, which would read as "you can press this".
+.nxs-satori-action-bar__action[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.nxs-satori-action-bar__action[aria-disabled='true']:hover {
+  background-color: transparent;
+}
+
+.nxs-satori-action-bar__action--active {
+  color: var(--mat-sys-primary);
+}

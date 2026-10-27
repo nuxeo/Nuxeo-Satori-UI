@@ -78,6 +78,11 @@ sat-breadcrumbs {
   gap: 8px;
   flex-shrink: 0;
 
+  // The fallback toolbar renders beside an unresolved outlet, which would otherwise add a gap.
+  &--unresolved {
+    display: none;
+  }
+
   button {
     color: var(--mat-sys-on-surface-variant);
   }
@@ -152,11 +157,23 @@ sat-breadcrumbs {
 
 // The tab header stays #fff in every packaged theme; the panel toggle's focus ring
 // (`document-detail-panel-toggle-focus.scss`) assumes that surface.
+// Set on the outlet that renders `nxs.primitives.tabs` and on its fallback; the tokens reach the
+// strip either way. The outlet fills the column as the strip does, so a body still scrolls itself.
 .detail-tabs {
   --nxs-tabs-header-surface: #fff;
   --nxs-tabs-header-border: #e0e0e0;
   --nxs-tabs-focus-outline: var(--agentic-document-detail-panel-toggle-focus-outline);
   --nxs-tabs-icon-color: #6366f1;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+
+  // The fallback renders beside an unresolved outlet; an empty flex child would share the space.
+  &--unresolved {
+    display: none;
+  }
 }
 
 // A contributed View tab body brings no layout of its own; the tab body clips, so it scrolls here.
