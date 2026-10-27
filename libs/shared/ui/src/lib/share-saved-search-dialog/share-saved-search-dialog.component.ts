@@ -45,6 +45,11 @@ export interface PermissionEntry {
   /** The ACE's own instants, so an edit that leaves the dates alone can write them back. */
   begin?: string | null;
   end?: string | null;
+  /**
+   * Whether the entry grants or denies. `Document.ReplacePermission` only ever writes a grant, so
+   * a deny must never be editable: submitting one unchanged would invert it.
+   */
+  granted?: boolean;
 }
 
 interface PermissionSummary {
@@ -71,6 +76,19 @@ interface AceLike {
   externalUser?: boolean;
   begin?: string | null;
   end?: string | null;
+  /** Absent means granted; Nuxeo sends `false` only for a deny. */
+  granted?: boolean;
+}
+
+/**
+ * Nuxeo's inheritance-blocking marker: a deny-`Everything` ACE for `Everyone`.
+ *
+ * The same predicate as `isInheritanceMarker` in `nxs-permissions-panel`, which is internal to
+ * `satori-components`; exporting it to share three comparisons would add a customer-visible export.
+ */
+function isInheritanceMarker(ace: AceLike): boolean {
+  const principal = (ace.username ?? '').replace(/^group:/, '');
+  return principal === 'Everyone' && ace.permission === 'Everything' && ace.granted === false;
 }
 
 export interface ShareSavedSearchDialogData {
@@ -186,19 +204,27 @@ export class ShareSavedSearchDialogComponent implements OnInit {
   }
 
   private localRowsOf(aces: readonly AceLike[]): PermissionEntry[] {
-    return aces
-      .filter((ace) => !ace.externalUser)
-      .map((ace, index: number) => ({
-        // The ACE id, not the position: a re-read must not move an open edit onto another row.
-        id: ace.id || `local-${index}`,
-        aceId: ace.id,
-        userGroup: ace.username || ace.email || 'Unknown',
-        right: ace.permission || 'Read',
-        timeFrame: this.toTimeFrameLabel(ace.begin, ace.end),
-        grantedBy: ace.creator || 'System',
-        begin: ace.begin,
-        end: ace.end,
-      }));
+    return (
+      aces
+        .filter((ace) => !ace.externalUser)
+        // Blocked inheritance is not a flag in Nuxeo: it is a deny-`Everything` ACE for `Everyone`,
+        // which `isInheritanceBlocked` already represents and the toggle maintains. Listed as an
+        // ordinary row it was editable, and `Document.ReplacePermission` writes a grant — so
+        // submitting it unchanged would have granted Everyone full access.
+        .filter((ace) => !isInheritanceMarker(ace))
+        .map((ace, index: number) => ({
+          // The ACE id, not the position: a re-read must not move an open edit onto another row.
+          id: ace.id || `local-${index}`,
+          aceId: ace.id,
+          userGroup: ace.username || ace.email || 'Unknown',
+          right: ace.permission || 'Read',
+          timeFrame: this.toTimeFrameLabel(ace.begin, ace.end),
+          grantedBy: ace.creator || 'System',
+          begin: ace.begin,
+          end: ace.end,
+          granted: ace.granted !== false,
+        }))
+    );
   }
 
   /**
@@ -403,6 +429,17 @@ export class ShareSavedSearchDialogComponent implements OnInit {
    * an English label in `right` look reasonable. The document, collection and browse tables all go
    * through this helper; an unlabelled permission still shows its identifier, as Web UI's does.
    */
+  /**
+   * Whether a row may be edited: it has to exist on the server, and it has to be a grant.
+   *
+   * Nuxeo's write operations only grant, so there is no way to replace a deny without inverting
+   * it. Hiding the control is not the control — `editRow` checks this too, and the server checks
+   * every write regardless.
+   */
+  protected isEditable(row: PermissionEntry): boolean {
+    return !!row.aceId && row.granted !== false;
+  }
+
   protected permissionLabel(permission: string): string {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
@@ -508,7 +545,9 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     const row = this.permissions().find((r) => r.id === id);
     // Not while a write or its re-read is in flight: the ACL is mid-change, and submitting into it
     // used to be dropped by the guard below without telling anyone. The button is disabled too.
-    if (!row || this.saving()) return;
+    // Never a deny entry: `Document.ReplacePermission` writes a grant, so an edit would invert it.
+    // `nxs-permissions-panel` refuses the same thing (`refusalsFor`, reason `deny-entry`).
+    if (!row || this.saving() || !this.isEditable(row)) return;
 
     this.dialog
       .open<

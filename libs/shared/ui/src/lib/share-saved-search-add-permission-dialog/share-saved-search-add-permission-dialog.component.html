@@ -70,7 +70,7 @@
     }}</span>
     <mat-radio-group
       [(ngModel)]="timeFrameMode"
-      (ngModelChange)="onDatesChanged()"
+      (ngModelChange)="onTimeFrameModeChanged()"
       class="time-frame-radios"
     >
       <mat-radio-button value="permanent">{{
@@ -91,7 +91,7 @@
         matInput
         [matDatepicker]="fromPicker"
         [(ngModel)]="beginDate"
-        (ngModelChange)="onDatesChanged()"
+        (ngModelChange)="onBeginChanged()"
         [disabled]="timeFrameMode === 'permanent'"
       />
       <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
@@ -106,7 +106,7 @@
         matInput
         [matDatepicker]="toPicker"
         [(ngModel)]="endDate"
-        (ngModelChange)="onDatesChanged()"
+        (ngModelChange)="onEndChanged()"
         [disabled]="timeFrameMode === 'permanent'"
       />
       <mat-datepicker-toggle matIconSuffix [for]="toPicker" />

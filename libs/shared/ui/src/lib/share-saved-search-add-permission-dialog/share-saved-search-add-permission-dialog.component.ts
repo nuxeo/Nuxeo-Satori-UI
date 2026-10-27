@@ -107,7 +107,10 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   /** The instants the entry arrived with, written back when the user leaves the dates alone. */
   private originalBegin: string | null = null;
   private originalEnd: string | null = null;
-  private datesTouched = false;
+  // Tracked per endpoint: a shared flag meant changing one boundary rewrote the other from its
+  // instant to a day, which Nuxeo re-anchors at its own midnight and so moves it.
+  private beginTouched = false;
+  private endTouched = false;
   sendNotify = true;
   notifyComment = '';
   private readonly createdEntries: ShareSavedSearchAddPermissionResult[] = [];
@@ -171,7 +174,8 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     this.timeFrameMode = this.originalBegin || this.originalEnd ? 'date-based' : 'permanent';
     this.beginDate = this.toPickerDate(this.originalBegin);
     this.endDate = this.toPickerDate(this.originalEnd);
-    this.datesTouched = false;
+    this.beginTouched = false;
+    this.endTouched = false;
 
     this.sendNotify = false;
   }
@@ -280,16 +284,27 @@ export class ShareSavedSearchAddPermissionDialogComponent {
       right: this.right,
       timeFrame,
       grantedBy,
-      begin: this.datesTouched ? from : (this.originalBegin ?? from),
-      end: this.datesTouched ? to : (this.originalEnd ?? to),
+      begin: this.beginTouched ? from : (this.originalBegin ?? from),
+      end: this.endTouched ? to : (this.originalEnd ?? to),
       notify,
       comment,
     };
   }
 
-  /** The date controls call this, so an untouched entry keeps its own instants. */
-  onDatesChanged(): void {
-    this.datesTouched = true;
+  /** The From picker calls this, so the To endpoint keeps its own instant. */
+  onBeginChanged(): void {
+    this.beginTouched = true;
+  }
+
+  /** The To picker calls this, so the From endpoint keeps its own instant. */
+  onEndChanged(): void {
+    this.endTouched = true;
+  }
+
+  /** Switching between permanent and date-based rewrites both endpoints. */
+  onTimeFrameModeChanged(): void {
+    this.beginTouched = true;
+    this.endTouched = true;
   }
 
   private resetForm(): void {
@@ -301,7 +316,8 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     this.endDate = null;
     this.originalBegin = null;
     this.originalEnd = null;
-    this.datesTouched = false;
+    this.beginTouched = false;
+    this.endTouched = false;
     this.sendNotify = true;
     this.notifyComment = '';
     this.suggestions.set([]);

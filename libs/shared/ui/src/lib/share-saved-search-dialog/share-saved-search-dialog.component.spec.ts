@@ -430,6 +430,90 @@ describe('ShareSavedSearchDialogComponent', () => {
       expect(component().saving()).toBe(false);
     });
 
+    // `Document.ReplacePermission` writes a grant, so a deny can never be replaced without
+    // inverting it. The inheritance marker is a deny-`Everything` for `Everyone`: listed as an
+    // ordinary row it was editable, and submitting it unchanged would have granted Everyone
+    // full access. `nxs-permissions-panel` refuses the same thing.
+    describe('deny entries', () => {
+      const MARKER = { ...ace('Everyone', 'Everything'), granted: false };
+      const DENY = { ...ace('powerusers', 'Write'), granted: false };
+      const withDenies = {
+        ...SAVED_SEARCH,
+        contextParameters: {
+          ...(SAVED_SEARCH.contextParameters as object),
+          acls: [{ name: 'local', aces: [MARKER, DENY, ace('members', 'Read')] }],
+        },
+      } as unknown as NuxeoDocument;
+
+      it('does not list the inheritance marker as an editable row', async () => {
+        await mount(withDenies);
+
+        expect(
+          component()
+            .permissions()
+            .map((r) => r.userGroup),
+        ).toEqual(['powerusers', 'members']);
+        expect(component().isInheritanceBlocked()).toBe(true);
+      });
+
+      it('writes nothing when editRow is called on a deny entry', async () => {
+        await mount(withDenies);
+        const deny = component()
+          .permissions()
+          .find((r) => r.userGroup === 'powerusers');
+        if (!deny) throw new Error('the deny row is not shown');
+        dialog.open.mockClear();
+
+        component().editRow(deny.id);
+
+        expect(dialog.open).not.toHaveBeenCalled();
+        expect(documents['replacePermission']).not.toHaveBeenCalled();
+      });
+
+      it('recognises the marker when the principal is group-prefixed', async () => {
+        // Nuxeo reports a group either bare or as `group:<name>` depending on the enricher.
+        const prefixed = { ...ace('group:Everyone', 'Everything'), granted: false };
+        await mount({
+          ...SAVED_SEARCH,
+          contextParameters: {
+            ...(SAVED_SEARCH.contextParameters as object),
+            acls: [{ name: 'local', aces: [prefixed, ace('members', 'Read')] }],
+          },
+        } as unknown as NuxeoDocument);
+
+        expect(
+          component()
+            .permissions()
+            .map((r) => r.userGroup),
+        ).toEqual(['members']);
+      });
+
+      it('keeps an entry that names no principal, rather than reading it as the marker', async () => {
+        // A deny-`Everything` with no username is not the marker, and dropping it would hide an
+        // entry. It stays listed and, being a deny, is not editable.
+        const nameless = { ...ace('', 'Everything'), username: undefined, granted: false };
+        await mount({
+          ...SAVED_SEARCH,
+          contextParameters: {
+            ...(SAVED_SEARCH.contextParameters as object),
+            acls: [{ name: 'local', aces: [nameless, ace('members', 'Read')] }],
+          },
+        } as unknown as NuxeoDocument);
+
+        const rows = component().permissions();
+        expect(rows).toHaveLength(2);
+        expect(component().isEditable(rows[0])).toBe(false);
+      });
+
+      it('treats a deny as not editable and a grant as editable', async () => {
+        await mount(withDenies);
+        const rows = component().permissions();
+
+        expect(component().isEditable(rows[0])).toBe(false);
+        expect(component().isEditable(rows[1])).toBe(true);
+      });
+    });
+
     it('refuses to open while a write or its re-read is pending', async () => {
       // Submitting into an ACL that is mid-change used to be dropped silently by the guard in
       // `afterClosed`. The dialog is not opened at all now, and the Edit button is disabled.

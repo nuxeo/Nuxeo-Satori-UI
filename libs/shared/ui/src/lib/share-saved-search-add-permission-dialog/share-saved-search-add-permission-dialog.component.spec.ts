@@ -250,18 +250,49 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     it('returns the picked days once the user changes them', async () => {
       const result = await submit({}, (d) => {
         d.beginDate = new Date(2026, 2, 1);
+        d.onBeginChanged();
         d.endDate = new Date(2026, 2, 31);
-        d.onDatesChanged();
+        d.onEndChanged();
       });
       expect(result).toMatchObject({ begin: '2026-03-01', end: '2026-03-31' });
+    });
+
+    // One flag for both endpoints meant changing the start rewrote the end from its instant to a
+    // day, which Nuxeo re-anchors at its own midnight — moving a boundary nobody touched.
+    it('keeps the end instant when only the start changes', async () => {
+      const result = await submit({}, (d) => {
+        d.beginDate = new Date(2026, 2, 1);
+        d.onBeginChanged();
+      });
+      expect(result).toMatchObject({ begin: '2026-03-01', end: END });
+    });
+
+    it('keeps the start instant when only the end changes', async () => {
+      const result = await submit({}, (d) => {
+        d.endDate = new Date(2026, 2, 31);
+        d.onEndChanged();
+      });
+      expect(result).toMatchObject({ begin: BEGIN, end: '2026-03-31' });
     });
 
     it('clears both dates when the user makes the entry permanent', async () => {
       const result = await submit({}, (d) => {
         d.timeFrameMode = 'permanent';
-        d.onDatesChanged();
+        d.onTimeFrameModeChanged();
       });
       expect(result).toMatchObject({ timeFrame: 'Permanent', begin: null, end: null });
+    });
+
+    it('writes both as days when the user switches back to date-based', async () => {
+      // Switching mode rewrites both endpoints, so neither keeps a stale instant.
+      const result = await submit({}, (d) => {
+        d.timeFrameMode = 'permanent';
+        d.onTimeFrameModeChanged();
+        d.timeFrameMode = 'date-based';
+        d.onTimeFrameModeChanged();
+      });
+      expect(result.begin).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(result.end).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
     it('opens a dated entry in date-based mode, from the instants not the label', async () => {
