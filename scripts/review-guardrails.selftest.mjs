@@ -9923,6 +9923,44 @@ expectGreen(
   }),
 );
 
+/**
+ * A reassigned binding, which the initializer no longer describes at `return`.
+ *
+ * Resolving `p` to its initializer ignores the assignment, so the first map is read and whatever
+ * the helper adds is adopted at runtime and unguarded here. Only a `const` binding still holds
+ * its initializer at the return, so a mutable one leaves the return unresolvable and is reported.
+ * The second control is the pair: the `const` form this depends on must keep working.
+ */
+expectRed(
+  'a reassigned provider binding is reported, since its initializer is not what is returned',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  let installed = provideSatoriExtensions({',
+    ).replace(
+      /\n  \}\);\n\}/,
+      '\n  });\n  installed = addTagProvider(installed);\n  return installed;\n}',
+    ),
+  }),
+  null,
+  /a `return installed` whose installed contribution could not be determined/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a `const` provider binding that is returned is read, not rejected',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // Saving the provider and returning it unchanged is a legitimate shape and must keep working;
+    // the `const`-only rule above would otherwise have closed the hole by rejecting both forms.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  const installed = provideSatoriExtensions({',
+    ).replace(/\n  \}\);\n\}/, '\n  });\n  return installed;\n}'),
+  }),
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',

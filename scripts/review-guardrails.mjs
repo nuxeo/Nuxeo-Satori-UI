@@ -9965,13 +9965,21 @@ function componentsContributionsIn(source) {
   // that matters: saving the real provider, then making a discarded call that maps `richTooltip`
   // to the avatar wrapper, and returning the saved one, let the discarded call win here and left
   // rich-tooltip unguarded. Only what the provider returns is installed.
+  // `const` only. Resolving a `let` to its initializer ignores every later assignment, so
+  // `let p = provideSatoriExtensions(…); p = addTagProvider(p); return p;` read the original map
+  // and missed whatever the helper added — its primitive adopted at runtime and unguarded here. A
+  // binding that cannot be reassigned is the one case where the initializer is still what the
+  // name holds at `return`; anything else leaves `return p` unresolvable, which is reported.
   const saved = new Map();
   const findSaved = (node) => {
     if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
       node.initializer !== undefined &&
-      isProvideCall(node.initializer)
+      isProvideCall(node.initializer) &&
+      node.parent !== undefined &&
+      ts.isVariableDeclarationList(node.parent) &&
+      (node.parent.flags & ts.NodeFlags.Const) !== 0
     ) {
       saved.set(node.name.text, node.initializer);
     }
