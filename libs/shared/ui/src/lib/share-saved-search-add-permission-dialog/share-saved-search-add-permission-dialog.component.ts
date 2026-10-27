@@ -1,6 +1,5 @@
 import { NxsDateInputComponent, nxsOfferedRights } from '@nuxeo/satori-platform/components';
 import { ChangeDetectionStrategy, viewChild, Component, inject, signal } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { FormsModule, NgModel } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -46,7 +45,6 @@ export interface ShareSavedSearchAddPermissionResult {
   standalone: true,
   imports: [
     NxsDateInputComponent,
-    DescriptorLabelPipe,
     TranslatePipe,
     FormsModule,
     MatDialogModule,
