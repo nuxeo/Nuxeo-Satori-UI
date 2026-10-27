@@ -615,6 +615,20 @@ try {
       const url = `${base}/${h.book}/iframe.html?id=${h.story}&viewMode=story`;
       try {
         const { errors, iconFont } = await open(page, url, h.selector);
+        // Grow the viewport until the documented element fits, before anything measures or crops
+        // it. `crop()` clamps to the viewport, so an element below the fold comes out truncated —
+        // or, if it starts below the fold entirely, with a negative clip height. A component whose
+        // story shows it alone already fits, and `fitViewport` returns without touching anything in
+        // that case, so this changes no existing capture; it matters for a section whose story
+        // renders several components, where the documented one can be last. The card's is.
+        const fitted = await fitViewport(page, [h.selector]);
+        const fits = fitted.some((b) => b.ok && b.bottom + 24 <= page.viewportSize().height);
+        record(
+          subject,
+          `<${h.selector}> fits the viewport, so the crop is the whole element`,
+          fits,
+          `viewport ${page.viewportSize().width}×${page.viewportSize().height}`,
+        );
         let opened = null;
         if (c.captured === 'Opened from the keyboard')
           opened = await openFromKeyboard(page, h.selector);
