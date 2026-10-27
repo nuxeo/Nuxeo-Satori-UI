@@ -1,0 +1,95 @@
+name: Set up the repository
+description: >-
+  Node 24, `npm ci` against GitHub Packages, a warm Nx cache, and the affected SHAs present in
+  this job's own checkout. The caller must have run `actions/checkout` first.
+
+# Every job in ci.yml needs all of these before it can do anything, and ci.yml went from one job
+# to six. Five copies of the same steps is the shape where one copy gets a fix and the others do
+# not — the same argument the `agent-mirror` gate makes about `.cursor/`, `.claude/` and
+# `.agent/`. One definition, five callers.
+#
+# `actions/checkout` is deliberately NOT here, even though all five callers need it with
+# `fetch-depth: 0`. A local composite action is loaded from the workspace by path, so the runner
+# cannot resolve `./.github/actions/setup` until the repository is already on disk — putting the
+# checkout inside the thing that needs the checkout to be found fails with "Can't find
+# 'action.yml'" before any step runs. Each caller does its own checkout immediately above.
+#
+# Composite actions cannot read `secrets`, so the GitHub Packages token is an input the caller
+# passes from `secrets`. Nothing here echoes it.
+
+inputs:
+  github-packages-token:
+    description: >-
+      A token with `read:packages` for the @hylandsoftware scope. `npm ci` resolves that scope
+      from GitHub Packages and `.npmrc` names both variables below, so npm refuses to start when
+      either is unset.
+    required: true
+  nx-cache-key:
+    description: >-
+      Per-job suffix for the Nx cache key. The jobs run different targets, so one shared key
+      would have each job overwrite the others' cache with its own partial one and every job
+      would restore a cache missing most of what it wanted.
+    required: true
+  base:
+    description: NX_BASE, so `git diff` and `nx affected` can reach that commit in this checkout.
+    required: true
+  head:
+    description: NX_HEAD, for the same reason.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: npm
+        registry-url: https://npm.pkg.github.com
+        scope: '@hylandsoftware'
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.github-packages-token }}
+        SATORI_GH_READONLY_TOKEN: ${{ inputs.github-packages-token }}
+
+    # nx.json marks six targets cacheable and nothing has ever persisted the cache between
+    # runs — no `actions/cache`, no Nx Cloud — so lint, build, test and typecheck recomputed
+    # from cold on every run, and the push and pull_request runs of the same commit could not
+    # share a single computed result between them.
+    #
+    # `.nx/cache` is the Nx 23 default and is gitignored. Restoring a cache is advisory: a
+    # miss costs nothing but the recompute that happens today, so this cannot turn a green
+    # run red. The key carries `github.sha` so each run writes a fresh entry and
+    # `restore-keys` falls back to the newest entry for this job, which is the standard
+    # read-newest/write-always pattern. Nx validates its own entries by task hash, so a
+    # restored cache cannot hand a job a result computed from different inputs.
+    - name: Restore the Nx computation cache
+      uses: actions/cache@v4
+      with:
+        path: .nx/cache
+        key: nx-${{ runner.os }}-${{ inputs.nx-cache-key }}-${{ github.sha }}
+        restore-keys: |
+          nx-${{ runner.os }}-${{ inputs.nx-cache-key }}-
+
+    # `fetch-depth: 0` brings the branch history, but a pull_request run is built on an
+    # ephemeral merge ref whose parents are not always reachable from it, and `nx affected`
+    # and every `git diff --name-only "$NX_BASE...$NX_HEAD"` in ci.yml need both commits
+    # present locally. Carried over verbatim from the single-job workflow.
+    - name: Ensure affected SHAs are available
+      shell: bash
+      env:
+        NX_BASE: ${{ inputs.base }}
+        NX_HEAD: ${{ inputs.head }}
+      run: |
+        set -euo pipefail
+        git fetch --no-tags --prune origin
+
+        if ! git cat-file -e "$NX_BASE^{commit}" 2>/dev/null; then
+          git fetch --no-tags origin "$NX_BASE"
+        fi
+
+        if ! git cat-file -e "$NX_HEAD^{commit}" 2>/dev/null; then
+          git fetch --no-tags origin "$NX_HEAD"
+        fi

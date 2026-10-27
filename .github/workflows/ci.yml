@@ -10,6 +10,14 @@ on:
   # Long-lived feature branches are validated on push as well as on PR, so work in
   # progress is never only "green on my machine". nx-set-shas falls back to comparing
   # against the default branch when a push has no previous successful run to diff from.
+  #
+  # NOTE: a branch with an open PR is therefore gated twice, once per event, and the two runs
+  # do not cancel each other because `github.ref` is `refs/heads/<branch>` on push and
+  # `refs/pull/<n>/merge` on a pull_request, which puts them in different concurrency groups.
+  # That duplication is deliberate only up to a point — the push run is the sole gate before a
+  # PR exists, and it is redundant after — and it is NOT addressed here. Measured on
+  # 2026-10-27: push run 40393849591 and pull_request run 40393859028 of the same commit ran
+  # the same 21 steps to the same conclusions with every duration within 10% of its pair.
   push:
     branches: [main, 'feature/**', 'fix/**', 'integration/**']
 
@@ -31,42 +39,90 @@ permissions:
   # tightening permissions broke the build on the very next push.
   actions: read
 
+# This was one `lint-build-test` job running 21 steps in sequence, and four of those steps were
+# 82% of its wall clock: Storybook interactions 413 s, affected tests 329 s, the static beta
+# gates 328 s and the i18n guardrail controls 212 s, out of 1555 s total (run 40393849591,
+# 2026-10-27). None of the four needs anything another produces — the three non-Storybook ones
+# are plain `node scripts/...` invocations that need `node_modules` and nothing else — so the
+# sum was paid for no reason other than them sharing a runner.
+#
+# Split into five work jobs behind one cheap `base` job, the wall clock becomes the longest
+# chain rather than the total: about 9.5 minutes, bounded by Storybook, against 26. The trade is
+# runner minutes, which go UP by roughly 5 per run, because each job pays its own ~70 s of
+# checkout plus `npm ci`. That is the whole of the cost and it is worth naming rather than
+# discovering.
+#
+# Second, smaller consequence, and an improvement: a failure no longer short-circuits the steps
+# after it. A red static gate used to mean the Storybook and test steps never ran, so one
+# failure hid every other, and the Storybook timeouts recorded below were masked on
+# `integration/**` by exactly that. Each job now reports its own verdict on every run.
+#
+# Two orderings are load-bearing and are preserved INSIDE their jobs, not across them; both are
+# commented where they live. The whole job graph:
+#
+#   base ──┬── guardrails     ~5 min   review guardrails and the offline controls
+#          ├── static-gates   ~6.5 min the static beta gates
+#          ├── verify         ~3.5 min lint, build, typecheck, package, bundle size
+#          ├── test           ~6.5 min affected tests
+#          └── storybook      ~9 min   token-free build, publication gate, interactions
 jobs:
-  lint-build-test:
+  # nx-set-shas resolved ONCE and handed to every job, rather than in each of the five.
+  #
+  # Not a micro-optimisation: it asks the workflow-runs API for the last successful run of this
+  # workflow to diff against, so five concurrent calls can legitimately return different answers
+  # if a run completes while they are in flight. The affected set would then differ between the
+  # lint job and the test job, which fails as "lint ran for a project its tests did not" — a
+  # genuinely baffling report. One resolution, five consumers, no divergence possible.
+  #
+  # No `npm ci` here: nx-set-shas is a bundled JS action. ~25 s, and it is the only serial
+  # section of the graph.
+  base:
     runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.shas.outputs.base }}
+      head: ${{ steps.shas.outputs.head }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          registry-url: https://npm.pkg.github.com
-          scope: '@hylandsoftware'
-
-      - name: Install dependencies
-        run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
-          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
-
       - uses: nrwl/nx-set-shas@v4
 
-      - name: Ensure affected SHAs are available
+      # Read back from the environment nx-set-shas exports rather than from its declared
+      # action outputs. $NX_BASE/$NX_HEAD is the contract the single-job workflow relied on for
+      # every one of its steps, so it is the half proven in this repository.
+      - name: Publish the affected SHAs to the dependent jobs
+        id: shas
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags --prune origin
+          test -n "${NX_BASE:-}" || { echo "nx-set-shas did not export NX_BASE"; exit 1; }
+          test -n "${NX_HEAD:-}" || { echo "nx-set-shas did not export NX_HEAD"; exit 1; }
+          echo "base=$NX_BASE" >> "$GITHUB_OUTPUT"
+          echo "head=$NX_HEAD" >> "$GITHUB_OUTPUT"
+          echo "NX_BASE=$NX_BASE NX_HEAD=$NX_HEAD"
 
-          if ! git cat-file -e "$NX_BASE^{commit}" 2>/dev/null; then
-            git fetch --no-tags origin "$NX_BASE"
-          fi
+  # The review guardrails and the controls that prove each of them can still fail.
+  guardrails:
+    needs: base
+    runs-on: ubuntu-latest
+    env:
+      NX_BASE: ${{ needs.base.outputs.base }}
+      NX_HEAD: ${{ needs.base.outputs.head }}
+    steps:
+      # Must precede the local composite action below. The runner resolves
+      # ./.github/actions/setup from the workspace, so the repository has to be on disk
+      # before that step can be loaded at all.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-          if ! git cat-file -e "$NX_HEAD^{commit}" 2>/dev/null; then
-            git fetch --no-tags origin "$NX_HEAD"
-          fi
+      - uses: ./.github/actions/setup
+        with:
+          github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          nx-cache-key: guardrails
+          base: ${{ needs.base.outputs.base }}
+          head: ${{ needs.base.outputs.head }}
 
       - name: Run review guardrails
         run: npm run review:guardrails -- --base=$NX_BASE --head=$NX_HEAD
@@ -98,17 +154,38 @@ jobs:
           npm run docs:links-selftest
           npm run docs:storage-selftest
 
-      # Static checks that `beta:gate` has run locally since Phase 5 and that had
-      # never run here. They are seconds each and they close a specific hole: the local
-      # gate and CI were two different gates, so "green locally" and "green in CI" made
-      # different claims and neither said so. A check that only ever runs on one
-      # developer's machine is a check that stops running the day they stop running it.
-      #
-      # The sanitizer pair below reproduced that hole exactly. Both were registered in
-      # `verify-gate.mjs`'s ALL_GATES and in `review:preflight`, and CI invokes neither — it
-      # runs individual scripts. So "registered as a gate" meant local-only, and review had
-      # to point out that the gate guarding a shipped XSS-adjacent defect could not block a
-      # merge. Registering a check in ALL_GATES is not the same as running it.
+  # Static checks that `beta:gate` has run locally since Phase 5 and that had
+  # never run here. They are seconds each and they close a specific hole: the local
+  # gate and CI were two different gates, so "green locally" and "green in CI" made
+  # different claims and neither said so. A check that only ever runs on one
+  # developer's machine is a check that stops running the day they stop running it.
+  #
+  # The sanitizer pair below reproduced that hole exactly. Both were registered in
+  # `verify-gate.mjs`'s ALL_GATES and in `review:preflight`, and CI invokes neither — it
+  # runs individual scripts. So "registered as a gate" meant local-only, and review had
+  # to point out that the gate guarding a shipped XSS-adjacent defect could not block a
+  # merge. Registering a check in ALL_GATES is not the same as running it.
+  static-gates:
+    needs: base
+    runs-on: ubuntu-latest
+    env:
+      NX_BASE: ${{ needs.base.outputs.base }}
+      NX_HEAD: ${{ needs.base.outputs.head }}
+    steps:
+      # Must precede the local composite action below. The runner resolves
+      # ./.github/actions/setup from the workspace, so the repository has to be on disk
+      # before that step can be loaded at all.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          nx-cache-key: static-gates
+          base: ${{ needs.base.outputs.base }}
+          head: ${{ needs.base.outputs.head }}
+
       - name: Static beta gates (evidence, reference drift, Satori comparison page, customer guardrails, supply chain, sanitizers, lockfile and dependency-tree controls)
         env:
           # The sanitizer budget ratchet compares against the merge base with `origin/main` by
@@ -194,120 +271,44 @@ jobs:
           # without it CI verifies the audit runs, not that it can fail.
           npm run beta:sanitizers-selftest
 
+  # Lint, build and typecheck, then the published-package checks and the bundle ceiling.
+  #
+  # These five steps stay in ONE job because the last three share `dist/` and the ordering
+  # between them is load-bearing — see the two comments inside. Splitting them would mean
+  # rebuilding `platform` and `nuxeo-ui` in separate jobs to no benefit: together they are
+  # ~130 s, nowhere near the Storybook critical path.
+  verify:
+    needs: base
+    runs-on: ubuntu-latest
+    env:
+      NX_BASE: ${{ needs.base.outputs.base }}
+      NX_HEAD: ${{ needs.base.outputs.head }}
+    steps:
+      # Must precede the local composite action below. The runner resolves
+      # ./.github/actions/setup from the workspace, so the repository has to be on disk
+      # before that step can be loaded at all.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          nx-cache-key: verify
+          base: ${{ needs.base.outputs.base }}
+          head: ${{ needs.base.outputs.head }}
+
       - name: Lint affected projects
         run: npx nx affected -t lint --base=$NX_BASE --head=$NX_HEAD
 
       - name: Build affected projects
         run: npx nx affected -t build --base=$NX_BASE --head=$NX_HEAD
 
-      - name: Test affected projects
-        run: |
-          npx nx run document-detail:test --output-style=stream
-          npx nx run knowledge-discovery:test --output-style=stream
-          npx nx run search:test --output-style=stream
-          npx nx run browse:test --output-style=stream
-          npx nx affected -t test --base=$NX_BASE --head=$NX_HEAD --output-style=stream --parallel=1 --exclude=browse,document-detail,knowledge-discovery,search
-
       # `test` does NOT typecheck — vitest strips types through esbuild — and most
       # libraries have no `build` target, so before this step a type error confined to a
       # library reached `main` unless `nuxeo-ui`'s build happened to import it.
       - name: Typecheck affected projects
         run: npx nx affected -t typecheck --base=$NX_BASE --head=$NX_HEAD
-
-      # The `nxs-` library's Storybook must build without a GitHub Packages token (NXSAT-308, plan
-      # section 9.4). Built here with `@hylandsoftware` and `@alfresco` REMOVED from node_modules,
-      # because with them installed an accidental Satori import compiles and the claim is untested.
-      # `checkSatoriComponentsDependencies` holds the same rule statically; this is the build that
-      # proves it. About a minute, so only when the library is affected, or the interaction runner
-      # below, its dialog layout check or the publication gate changed — a script outside every
-      # project affects none. A skip says so.
-      #
-      # Then the publication gate, which storybook-pages.yml runs before publishing this build to
-      # GitHub Pages: here, whenever this step builds, it fails the pull request instead.
-      - name: Storybook builds without GitHub Packages and carries no Satori (satori-components)
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Captured first, so a failing query fails the step instead of reading as "not affected".
-          affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
-          runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
-          gate="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- 'scripts/storybook-publication-gate*.mjs')"
-          if ! grep -qx satori-components <<<"$affected" && [ -z "$runner" ] && [ -z "$gate" ]; then
-            echo "satori-components is not affected and the runner and publication gate are unchanged: Storybook build and publication gate NOT RUN"
-            exit 0
-          fi
-          hidden="$RUNNER_TEMP/github-packages-scopes"
-          mkdir -p "$hidden"
-          restore() { for scope in "$hidden"/@*; do if [ -e "$scope" ]; then mv "$scope" node_modules/; fi; done; }
-          trap restore EXIT
-          # A scope the tree no longer installs is already absent, which is what this build tests.
-          for scope in @hylandsoftware @alfresco; do
-            if [ -e "node_modules/$scope" ]; then mv "node_modules/$scope" "$hidden"/; fi
-          done
-          npx nx run satori-components:build-storybook:ci --skip-nx-cache
-          node scripts/storybook-publication-gate.mjs dist/storybook/satori-components
-
-      # The stories' play functions, run in Chromium against the Storybook just built (Codex audit
-      # F08). Storybook runs a play function only when someone opens the story, so one that started
-      # failing stayed green everywhere. Fails on a throwing play — watched as its own event, because
-      # Storybook reports `storyFinished: success` even then — a render error, an uncaught page error
-      # or an untranslated key. axe results from the a11y addon are printed, never judged:
-      # docs/accessibility.md gives that verdict to the axe runtime layer. Only the token-free
-      # Storybook; the Satori adapter's needs GitHub Packages and is not run. Playwright is installed
-      # with --no-save, so the lockfile and `npm ci` are untouched. Every `Dialogs/` story is also
-      # checked for MatDialog's layout at 1280 and 320 px (`storybook-dialog-layout.mjs`), after
-      # that check's own negative controls have run.
-      #
-      # The suite is about four and a half minutes — 268.9 s for all 214 stories, measured in run
-      # 39914726264 — and it is NOT what spends this step's budget. `playwright install --with-deps`
-      # is: the apt fetch of its 25.9 MB set (CJK fonts, NSS, xvfb) from the Azure Ubuntu mirror was
-      # recorded at 90.9 kB/s (4m45s), 82.9 kB/s (5m13s) and 49.2 kB/s (8m47s) in three runs on
-      # 2026-10-23, so everything before the suite took up to 9m42s and the step would have needed
-      # about 14m10s while `timeout-minutes` said 10. All three were killed without one story or
-      # layout failure between them — one printing `214 of 214 stories passed` in the same second as
-      # the timeout — which reads as a broken suite and is a download that went slowly. They were
-      # masked on `integration/**` by the static-gate failure skipping this step, so this surfaces
-      # on new branches: `nx-set-shas` has no previous successful run to diff from and falls back to
-      # the default branch, which makes the affected set wide enough to reach `satori-components`
-      # even on a branch that did not touch it.
-      #
-      # So 25 minutes, and it is not headroom over the suite: the suite already has its own budget.
-      # `storybook-interactions.mjs` defaults to `--budget 600000`, a hard 10-minute cap measured
-      # from browser launch after which every remaining story is FAILED rather than skipped, so a
-      # suite that slows down goes red on its own terms and this timeout can never be what hides
-      # it. 25 = that 10-minute self-cap plus 15 minutes for everything before it, which is 1.5x the
-      # slowest pre-suite phase on record. Do not trim it back towards the suite's duration: the
-      # install is the unbounded half, it answers to a mirror's throughput rather than to anything
-      # in this repository, and `registry-auth.yml` already allows 25 for the same reason.
-      - name: Storybook interactions (satori-components)
-        shell: bash
-        timeout-minutes: 25
-        env:
-          # `.npmrc` reads both; npm refuses to start when a variable it names is unset.
-          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
-          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
-        run: |
-          set -euo pipefail
-          affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
-          runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
-          if ! grep -qx satori-components <<<"$affected" && [ -z "$runner" ]; then
-            echo "satori-components is not affected and the runner is unchanged: Storybook interactions NOT RUN"
-            exit 0
-          fi
-          version="$(node --input-type=module -e "import { PLAYWRIGHT_TEST_VERSION } from './a11y/versions.mjs'; console.log(PLAYWRIGHT_TEST_VERSION)")"
-          npm install --no-save --no-audit --no-fund "@playwright/test@${version}"
-          npx playwright install --with-deps chromium
-          # The dialog layout check's negative controls first: a check that cannot fail proves nothing.
-          node --test scripts/storybook-dialog-layout.selftest.mjs
-          node scripts/storybook-interactions.mjs --json "$RUNNER_TEMP/storybook-interactions.json"
-
-      - name: Upload the Storybook interaction results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: storybook-interactions
-          path: ${{ runner.temp }}/storybook-interactions.json
-          if-no-files-found: ignore
 
       # The three checks that guard the published package. Run unconditionally rather
       # than only when affected: they are ~30s in total, and they are the checks that
@@ -415,3 +416,223 @@ jobs:
           else
             echo "nuxeo-ui is not affected; skipping bundle size check."
           fi
+
+  test:
+    needs: base
+    runs-on: ubuntu-latest
+    env:
+      NX_BASE: ${{ needs.base.outputs.base }}
+      NX_HEAD: ${{ needs.base.outputs.head }}
+    steps:
+      # Must precede the local composite action below. The runner resolves
+      # ./.github/actions/setup from the workspace, so the repository has to be on disk
+      # before that step can be loaded at all.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          nx-cache-key: test
+          base: ${{ needs.base.outputs.base }}
+          head: ${{ needs.base.outputs.head }}
+
+      # `--parallel=1` is kept deliberately (f7ab1f78a): the Vitest and Karma projects
+      # intermittently exited under runner contention with no useful failure output when run
+      # concurrently with each other. This job having a runner to itself does not change that —
+      # the contention was between the test projects, not between tests and the other steps —
+      # so serialising them is still the right call and this is not the place to revisit it.
+      # Giving each project its own JOB would be, and is a separate change.
+      - name: Test affected projects
+        run: |
+          npx nx run document-detail:test --output-style=stream
+          npx nx run knowledge-discovery:test --output-style=stream
+          npx nx run search:test --output-style=stream
+          npx nx run browse:test --output-style=stream
+          npx nx affected -t test --base=$NX_BASE --head=$NX_HEAD --output-style=stream --parallel=1 --exclude=browse,document-detail,knowledge-discovery,search
+
+  # The critical path of the whole workflow, ~9 minutes of the ~9.5, so this job is what the
+  # wall clock is now waiting on. Both steps stay together: the interactions run against the
+  # Storybook the first step builds.
+  storybook:
+    needs: base
+    runs-on: ubuntu-latest
+    env:
+      NX_BASE: ${{ needs.base.outputs.base }}
+      NX_HEAD: ${{ needs.base.outputs.head }}
+    steps:
+      # Must precede the local composite action below. The runner resolves
+      # ./.github/actions/setup from the workspace, so the repository has to be on disk
+      # before that step can be loaded at all.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          nx-cache-key: storybook
+          base: ${{ needs.base.outputs.base }}
+          head: ${{ needs.base.outputs.head }}
+
+      # The `nxs-` library's Storybook must build without a GitHub Packages token (NXSAT-308, plan
+      # section 9.4). Built here with `@hylandsoftware` and `@alfresco` REMOVED from node_modules,
+      # because with them installed an accidental Satori import compiles and the claim is untested.
+      # `checkSatoriComponentsDependencies` holds the same rule statically; this is the build that
+      # proves it. About a minute, so only when the library is affected, or the interaction runner
+      # below, its dialog layout check or the publication gate changed — a script outside every
+      # project affects none. A skip says so.
+      #
+      # Then the publication gate, which storybook-pages.yml runs before publishing this build to
+      # GitHub Pages: here, whenever this step builds, it fails the pull request instead.
+      # The affected set and the two script diffs, resolved ONCE for this job.
+      #
+      # The build step and the interactions step each computed these for themselves, so every run
+      # paid for two `nx show projects --affected` queries and carried two copies of a condition
+      # that differ by exactly one term. Resolving them here also gives the Playwright cache below
+      # something to condition on, which it needs: ungated it would restore a ~170 MB browser
+      # archive on every run, including the majority where nothing touches satori-components and
+      # both steps below are skipped.
+      #
+      # `nx show projects` is captured into a variable before it is tested, so a failing query
+      # fails this step instead of reading as "not affected" — carried over from the originals,
+      # along with the exact `grep -qx` match and the unquoted `--base`/`--head` they used.
+      - name: Resolve what this job needs to run
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
+          runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
+          gate="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- 'scripts/storybook-publication-gate*.mjs')"
+
+          satori=false
+          if grep -qx satori-components <<<"$affected"; then satori=true; fi
+
+          build=false
+          if [ "$satori" = true ] || [ -n "$runner" ] || [ -n "$gate" ]; then build=true; fi
+
+          # The publication gate diff deliberately does NOT appear here: a change to the gate
+          # needs the build it inspects, not the browser suite. Same asymmetry as before.
+          interactions=false
+          if [ "$satori" = true ] || [ -n "$runner" ]; then interactions=true; fi
+
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "interactions=$interactions" >> "$GITHUB_OUTPUT"
+
+          # Said out loud. A step skipped by `if:` renders as "nothing happened", and this
+          # repository treats a check that did not run as its own result rather than as a pass —
+          # so the two NOT RUN lines the original steps printed are printed here instead.
+          if [ "$build" != true ]; then
+            echo "satori-components is not affected and the runner and publication gate are unchanged: Storybook build and publication gate NOT RUN"
+          fi
+          if [ "$interactions" != true ]; then
+            echo "satori-components is not affected and the runner is unchanged: Storybook interactions NOT RUN"
+          fi
+
+      - name: Storybook builds without GitHub Packages and carries no Satori (satori-components)
+        if: steps.scope.outputs.build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          hidden="$RUNNER_TEMP/github-packages-scopes"
+          mkdir -p "$hidden"
+          restore() { for scope in "$hidden"/@*; do if [ -e "$scope" ]; then mv "$scope" node_modules/; fi; done; }
+          trap restore EXIT
+          # A scope the tree no longer installs is already absent, which is what this build tests.
+          for scope in @hylandsoftware @alfresco; do
+            if [ -e "node_modules/$scope" ]; then mv "node_modules/$scope" "$hidden"/; fi
+          done
+          npx nx run satori-components:build-storybook:ci --skip-nx-cache
+          node scripts/storybook-publication-gate.mjs dist/storybook/satori-components
+
+      # Read from the one runtime source for the pin (a11y/versions.mjs) so the cache key below
+      # cannot drift from the version the next step installs — a cache keyed on a stale version
+      # would restore the wrong browser and the install would quietly re-download it anyway.
+      - name: Resolve the pinned Playwright version
+        id: playwright
+        if: steps.scope.outputs.interactions == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node --input-type=module -e "import { PLAYWRIGHT_TEST_VERSION } from './a11y/versions.mjs'; console.log(PLAYWRIGHT_TEST_VERSION)")"
+          test -n "$version" || { echo "could not read PLAYWRIGHT_TEST_VERSION"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "pinned @playwright/test: $version"
+
+      # Caches the Chromium BUILD ONLY, which is the half that lives under ~/.cache/ms-playwright.
+      #
+      # Read the step below before assuming this fixes the download problem recorded there: it
+      # does not. The cost documented in that comment is `--with-deps`, an apt fetch of a 25.9 MB
+      # set of system packages — CJK fonts, NSS, xvfb — that install into system directories this
+      # cache does not cover and cannot. A browser-binary hit removes roughly the 170 MB Chromium
+      # download and nothing else; the apt half still answers to the Azure Ubuntu mirror's
+      # throughput, which was measured at 49-91 kB/s across three runs on 2026-10-23.
+      #
+      # The fix for the apt half is a container image that ships both
+      # (`mcr.microsoft.com/playwright:v<version>-noble`), which is a larger change than this one
+      # and is NOT made here. So `timeout-minutes: 25` below stays exactly where it is.
+      - name: Cache the pinned Playwright browser
+        if: steps.scope.outputs.interactions == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      # The stories' play functions, run in Chromium against the Storybook just built (Codex audit
+      # F08). Storybook runs a play function only when someone opens the story, so one that started
+      # failing stayed green everywhere. Fails on a throwing play — watched as its own event, because
+      # Storybook reports `storyFinished: success` even then — a render error, an uncaught page error
+      # or an untranslated key. axe results from the a11y addon are printed, never judged:
+      # docs/accessibility.md gives that verdict to the axe runtime layer. Only the token-free
+      # Storybook; the Satori adapter's needs GitHub Packages and is not run. Playwright is installed
+      # with --no-save, so the lockfile and `npm ci` are untouched. Every `Dialogs/` story is also
+      # checked for MatDialog's layout at 1280 and 320 px (`storybook-dialog-layout.mjs`), after
+      # that check's own negative controls have run.
+      #
+      # The suite is about four and a half minutes — 268.9 s for all 214 stories, measured in run
+      # 39914726264 — and it is NOT what spends this step's budget. `playwright install --with-deps`
+      # is: the apt fetch of its 25.9 MB set (CJK fonts, NSS, xvfb) from the Azure Ubuntu mirror was
+      # recorded at 90.9 kB/s (4m45s), 82.9 kB/s (5m13s) and 49.2 kB/s (8m47s) in three runs on
+      # 2026-10-23, so everything before the suite took up to 9m42s and the step would have needed
+      # about 14m10s while `timeout-minutes` said 10. All three were killed without one story or
+      # layout failure between them — one printing `214 of 214 stories passed` in the same second as
+      # the timeout — which reads as a broken suite and is a download that went slowly. They were
+      # masked on `integration/**` by the static-gate failure skipping this step; splitting the
+      # workflow into independent jobs removes that masking, since a red static gate no longer
+      # prevents this job from running and reporting.
+      #
+      # So 25 minutes, and it is not headroom over the suite: the suite already has its own budget.
+      # `storybook-interactions.mjs` defaults to `--budget 600000`, a hard 10-minute cap measured
+      # from browser launch after which every remaining story is FAILED rather than skipped, so a
+      # suite that slows down goes red on its own terms and this timeout can never be what hides
+      # it. 25 = that 10-minute self-cap plus 15 minutes for everything before it, which is 1.5x the
+      # slowest pre-suite phase on record. Do not trim it back towards the suite's duration: the
+      # install is the unbounded half, it answers to a mirror's throughput rather than to anything
+      # in this repository, and `registry-auth.yml` already allows 25 for the same reason. The
+      # browser cache above does not change this: it covers the Chromium binary, not the apt set.
+      - name: Storybook interactions (satori-components)
+        if: steps.scope.outputs.interactions == 'true'
+        shell: bash
+        timeout-minutes: 25
+        env:
+          # `.npmrc` reads both; npm refuses to start when a variable it names is unset.
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          PLAYWRIGHT_TEST_VERSION: ${{ steps.playwright.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund "@playwright/test@${PLAYWRIGHT_TEST_VERSION}"
+          npx playwright install --with-deps chromium
+          # The dialog layout check's negative controls first: a check that cannot fail proves nothing.
+          node --test scripts/storybook-dialog-layout.selftest.mjs
+          node scripts/storybook-interactions.mjs --json "$RUNNER_TEMP/storybook-interactions.json"
+
+      - name: Upload the Storybook interaction results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-interactions
+          path: ${{ runner.temp }}/storybook-interactions.json
+          if-no-files-found: ignore
