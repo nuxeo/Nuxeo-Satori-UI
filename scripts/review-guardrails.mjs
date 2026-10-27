@@ -9965,30 +9965,43 @@ function componentsContributionsIn(source) {
   // that matters: saving the real provider, then making a discarded call that maps `richTooltip`
   // to the avatar wrapper, and returning the saved one, let the discarded call win here and left
   // rich-tooltip unguarded. Only what the provider returns is installed.
-  // `const` only. Resolving a `let` to its initializer ignores every later assignment, so
-  // `let p = provideSatoriExtensions(…); p = addTagProvider(p); return p;` read the original map
-  // and missed whatever the helper added — its primitive adopted at runtime and unguarded here. A
-  // binding that cannot be reassigned is the one case where the initializer is still what the
-  // name holds at `return`; anything else leaves `return p` unresolvable, which is reported.
-  const saved = new Map();
-  const findSaved = (node) => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined &&
-      isProvideCall(node.initializer) &&
-      node.parent !== undefined &&
-      ts.isVariableDeclarationList(node.parent) &&
-      (node.parent.flags & ts.NodeFlags.Const) !== 0
-    ) {
-      saved.set(node.name.text, node.initializer);
-    }
-    ts.forEachChild(node, findSaved);
-  };
-  findSaved(provider);
-
   const problems = [];
   const installed = new Set();
+  const body = providerBodyOf(provider);
+
+  /**
+   * `const <name> = provideSatoriExtensions(…)` among the provider body's own statements.
+   *
+   * Scoped and `const`, and both halves of that are load-bearing.
+   *
+   * Scoped, because matching by name anywhere in the provider let an uncalled helper answer for
+   * the outer return: a helper declaring `const installed = provideSatoriExtensions(…)` beside an
+   * outer `const installed = actualContribution()` had its map accepted, instead of the outer
+   * `return installed` being reported as unresolvable — the real contribution's primitives
+   * unguarded. Only a binding the return can actually see counts, and a block-scoped one does not
+   * count either: it leaves the return unresolvable, which is reported.
+   *
+   * `const`, because resolving a `let` to its initializer ignores every later assignment, so
+   * `let p = provideSatoriExtensions(…); p = addTagProvider(p); return p;` read the original map
+   * and missed whatever the helper added. A binding that cannot be reassigned is the one case
+   * where the initializer is still what the name holds at the return.
+   */
+  const saved = new Map();
+  if (body !== undefined && ts.isBlock(body)) {
+    for (const statement of body.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          ts.isIdentifier(declaration.name) &&
+          declaration.initializer !== undefined &&
+          isProvideCall(declaration.initializer)
+        ) {
+          saved.set(declaration.name.text, declaration.initializer);
+        }
+      }
+    }
+  }
 
   const takeReturned = (returned) => {
     if (isProvideCall(returned)) {
@@ -10008,9 +10021,8 @@ function componentsContributionsIn(source) {
   // crossing into one would count a contribution that may install nothing. Such a call is still
   // in `all`, so it is reported below as a result that is never returned.
   //
-  // Resolved to the body first, because the nested-function rule would otherwise skip the
-  // provider itself when it is written as an arrow.
-  const body = providerBodyOf(provider);
+  // `body` is resolved above rather than walked from `provider`, because the nested-function rule
+  // would otherwise skip the provider itself when it is written as an arrow.
   if (body === undefined) {
     problems.push(`a \`${PROVIDER_FUNCTION}\` whose body could not be read`);
   } else if (!ts.isBlock(body)) {

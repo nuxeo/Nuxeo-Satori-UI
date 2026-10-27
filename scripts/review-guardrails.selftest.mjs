@@ -9961,6 +9961,54 @@ expectGreen(
   }),
 );
 
+expectRed(
+  'a helper’s shadowing binding cannot answer for the provider’s own return',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // An uncalled helper declares `installed` and the provider's own `installed` is something
+    // this cannot read. Matching by name anywhere in the provider accepted the helper's map and
+    // reported nothing, leaving the real contribution's primitives unguarded. The outer return
+    // must be reported instead.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  function unused() {\n' +
+        '    const installed = provideSatoriExtensions({\n' +
+        '      components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n' +
+        '    });\n' +
+        '    return installed;\n' +
+        '  }\n' +
+        '  void unused;\n' +
+        '  const installed = actualContribution();\n' +
+        '  return installed;\n' +
+        '  return provideSatoriExtensions({',
+    ),
+  }),
+  null,
+  /a `return installed` whose installed contribution could not be determined/,
+);
+
+expectRed(
+  'a block-scoped binding the return cannot see is not resolved',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // `const installed` lives inside an `if` block, so it is not in scope at the outer return.
+    // Walking the whole body rather than its own statements would have resolved it anyway.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '  return provideSatoriExtensions({',
+      '  if (globalThis) {\n' +
+        '    const installed = provideSatoriExtensions({\n' +
+        '      components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n' +
+        '    });\n' +
+        '    void installed;\n' +
+        '  }\n' +
+        '  return installed;\n' +
+        '  return provideSatoriExtensions({',
+    ),
+  }),
+  null,
+  /a `return installed` whose installed contribution could not be determined/,
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',
