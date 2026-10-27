@@ -1,18 +1,23 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { provideTranslateService } from '@ngx-translate/core';
-import {
-  NXS_ADMIN_USERS_GROUPS_PAGE_ID,
-  NxsAdminUsersGroupsPageComponent,
-} from '@nuxeo/satori-platform/components';
+import { NXS_ADMIN_USERS_GROUPS_PAGE_ID } from '@nuxeo/satori-platform/components';
 import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';
 import { UserService } from '@nuxeo/satori-platform/nuxeo-client';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 
 import { AdminUsersGroupsPageComponent } from './admin-users-groups-page.component';
+
+/** A stand-in replacement, distinct from the packaged page so the assertions can tell them apart. */
+@Component({
+  selector: 'test-replacement-users-groups-page',
+  standalone: true,
+  template: '<p>replacement</p>',
+})
+class ReplacementUsersGroupsPageComponent {}
 
 describe('AdminUsersGroupsPageComponent', () => {
   let fixture: ComponentFixture<AdminUsersGroupsPageComponent>;
@@ -40,6 +45,8 @@ describe('AdminUsersGroupsPageComponent', () => {
     }).compileComponents();
     fixture = TestBed.createComponent(AdminUsersGroupsPageComponent);
     fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
   });
 
   it('renders the packaged page when no registration resolves the ID', () => {
@@ -48,12 +55,15 @@ describe('AdminUsersGroupsPageComponent', () => {
 
   it('renders a registered replacement in place of the packaged page', async () => {
     TestBed.inject(ExtensionComponentRegistry).register({
-      [NXS_ADMIN_USERS_GROUPS_PAGE_ID]: NxsAdminUsersGroupsPageComponent,
+      [NXS_ADMIN_USERS_GROUPS_PAGE_ID]: ReplacementUsersGroupsPageComponent,
     });
     fixture = TestBed.createComponent(AdminUsersGroupsPageComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('test-replacement-users-groups-page'),
+    ).not.toBeNull();
     expect(fixture.nativeElement.querySelector('nxs-admin-users-groups-page')).toBeNull();
   });
 
