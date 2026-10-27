@@ -1,0 +1,30 @@
+<div class="dashboard-page">
+  <lib-widget-container
+    [title]="'dashboard.recently-edited' | translate"
+    icon="edit"
+    iconColor="var(--mat-sys-primary)"
+  >
+    <table class="widget-table">
+      <thead>
+        <tr>
+          <th>Title</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="widget-row">
+          <td><span class="contributor-cell">Document</span></td>
+        </tr>
+        <tr>
+          <td class="empty-row">No documents</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="widget-empty">No pending tasks</div>
+    <div class="task-card">
+      <div class="task-action">Review</div>
+      <div class="task-doc-title">Document</div>
+      <div class="task-workflow">Workflow</div>
+    </div>
+  </lib-widget-container>
+  <button class="ai-kpi-card"><p class="ai-kpi-text">Insight</p></button>
+</div>
