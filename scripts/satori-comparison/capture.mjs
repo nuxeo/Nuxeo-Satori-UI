@@ -732,7 +732,12 @@ try {
   // The "Primitives/By registered ID" story in both Storybooks: the whole viewport, as it renders,
   // and a close-up of every primitive together for the side-by-side.
   const full = {};
-  // One host per `NXS_PRIMITIVE_IDS` entry, in the story's order; the story renders each ID once.
+  // One host per ID the "Primitives/By registered ID" story renders, in the story's order — not one
+  // per `NXS_PRIMITIVE_IDS` entry, which is a longer list: `banner` and `chipSet` are registered but
+  // have no Satori twin, so the story leaves them out and this is the set with two sides to compare.
+  // `primitiveCount` below is this length, and the count check further down asserts the story
+  // resolved exactly this many `nxs-satori-*` hosts — so an ID added to the story without being
+  // added here fails that check rather than being quietly cropped out of the screenshots.
   const PRIMITIVE_HOSTS = {
     without: [
       'nxs-avatar',
@@ -743,6 +748,7 @@ try {
       'nxs-error-state',
       'nxs-tabs',
       'nxs-document-toolbar',
+      'nxs-card',
     ],
     with: [
       'nxs-satori-avatar',
@@ -753,6 +759,7 @@ try {
       'nxs-satori-error-state',
       'nxs-satori-tabs',
       'nxs-satori-action-bar',
+      'nxs-satori-card',
     ],
   };
   const primitiveCount = PRIMITIVE_HOSTS.with.length;
