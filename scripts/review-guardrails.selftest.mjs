@@ -9411,6 +9411,20 @@ const REFUSED = [
     /is not imported by name from a relative module/,
   ],
   [
+    'registers one primitive twice',
+    // Legal JS: the later wins, so only the avatar wrapper installs. Collecting both would guard
+    // `@hylandsoftware/satori-ui/tag` — which nothing registers any more — and fail legitimate
+    // direct imports of it. This row is the one refusal that prevents a false positive rather
+    // than a missed bypass.
+    (registry) =>
+      registry.replace(
+        '      [NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,',
+        '      [NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,\n' +
+          '      [NXS_PRIMITIVE_IDS.tag]: NxsSatoriAvatarComponent,',
+      ),
+    /it registers `tag` more than once/,
+  ],
+  [
     'reaches a registered class through a barrel',
     (registry) => registry.replace("from './tag/satori-tag.component'", "from './tag'"),
     /`\.\/tag`, which registers `tag`, does not resolve to a file declaring `NxsSatoriTagComponent`/,

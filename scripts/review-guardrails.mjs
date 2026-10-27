@@ -9949,10 +9949,15 @@ function adoptedSatoriEntryPoints() {
           '`[NXS_PRIMITIVE_IDS.<id>]: <ImportedClass>`',
       );
     }
-    registrations.push({
-      primitive: property.name.expression.name.text,
-      className: property.initializer.text,
-    });
+    const primitive = property.name.expression.name.text;
+    // Duplicate keys are legal and the later wins, so collecting both would union the entry
+    // points of a registration the runtime discards — guarding what the overwritten class wraps
+    // and failing legitimate direct imports of it. Refused rather than resolved: taking the last
+    // is the sort of reading this rule exists to stop doing.
+    if (registrations.some((registration) => registration.primitive === primitive)) {
+      return refuse(`it registers \`${primitive}\` more than once`);
+    }
+    registrations.push({ primitive, className: property.initializer.text });
   }
   if (registrations.length === 0) {
     return refuse('its `components` object is empty, so no primitive is adopted');
