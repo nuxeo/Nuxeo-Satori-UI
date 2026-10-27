@@ -66,6 +66,7 @@
                     [attr.aria-label]="
                       'shared-ui.share-saved-search-dialog.edit-permission' | translate
                     "
+                    [disabled]="saving() || !row.aceId"
                     (click)="editRow(row.id)"
                   >
                     <mat-icon svgIcon="pencil" />

@@ -436,18 +436,18 @@ export class ShareSavedSearchDialogComponent implements OnInit {
 
         // The dialog returns the server's own identifiers, so they are sent as they are: the
         // display-label mapping would turn `Write` into the broader `ReadWrite`.
-        const requests = result.map((entry) => {
-          const [begin, end] = this.parseTimeFrame(entry.timeFrame);
-
-          return this.detailService.addPermission(this.data.id, {
+        const requests = result.map((entry) =>
+          this.detailService.addPermission(this.data.id, {
             username: entry.userGroup,
             permission: entry.right,
-            begin: begin || null,
-            end: end || null,
-            notify: false,
-            comment: '',
-          });
-        });
+            // The dialog's own resolved values, rather than its rendered label parsed back.
+            begin: entry.begin,
+            end: entry.end,
+            // The dialog asks whether to notify, so the answer is honoured rather than dropped.
+            notify: entry.notify,
+            comment: entry.comment ?? '',
+          }),
+        );
 
         forkJoin(requests)
           .pipe(
@@ -506,7 +506,9 @@ export class ShareSavedSearchDialogComponent implements OnInit {
 
   editRow(id: string): void {
     const row = this.permissions().find((r) => r.id === id);
-    if (!row) return;
+    // Not while a write or its re-read is in flight: the ACL is mid-change, and submitting into it
+    // used to be dropped by the guard below without telling anyone. The button is disabled too.
+    if (!row || this.saving()) return;
 
     this.dialog
       .open<
@@ -542,14 +544,6 @@ export class ShareSavedSearchDialogComponent implements OnInit {
           ),
         );
 
-        // An untouched time frame writes the server's own instants back. Writing the rendered day
-        // instead re-anchors it at the server's midnight, which moves an entry written from
-        // another zone — the same trap `dateToWrite` handles in nxs-permissions-panel.
-        const untouched = updatedEntry.timeFrame === row.timeFrame;
-        const [parsedBegin, parsedEnd] = this.parseTimeFrame(updatedEntry.timeFrame);
-        const begin = untouched ? (row.begin ?? null) : parsedBegin || null;
-        const end = untouched ? (row.end ?? null) : parsedEnd || null;
-
         this.saving.set(true);
         this.detailService
           .replacePermission(uid, {
@@ -558,10 +552,13 @@ export class ShareSavedSearchDialogComponent implements OnInit {
             // The dialog returns the server's own identifier, written as it is: the display-label
             // mapping would turn `Write` into the broader `ReadWrite` (NXSAT-334).
             permission: updatedEntry.right,
-            begin,
-            end,
-            notify: false,
-            comment: null,
+            // Already resolved by the dialog: a day the user picked, or this entry's own instant
+            // where they left it alone. Reading them back out of the rendered `timeFrame` only
+            // worked in English, and cleared a one-sided range in every other locale.
+            begin: updatedEntry.begin,
+            end: updatedEntry.end,
+            notify: updatedEntry.notify,
+            comment: updatedEntry.comment,
           })
           .pipe(
             map(() => true),
@@ -571,23 +568,40 @@ export class ShareSavedSearchDialogComponent implements OnInit {
               this.permissions.update((rows) => rows.map((r) => (r.id === id ? row : r)));
               return of(false);
             }),
+            // `replaced` has to reach the subscriber: a write that never happened and a write
+            // whose re-read failed both arrive with no document, but only the second one leaves
+            // the row's ACE id stale.
             switchMap((replaced) =>
               !replaced
-                ? of(null)
+                ? of({ replaced, doc: null as NuxeoDocument | null })
                 : this.detailService.getDocumentPermissions(uid).pipe(
+                    map((doc) => ({ replaced, doc: doc as NuxeoDocument | null })),
                     catchError((error) => {
                       console.error('Error re-reading permissions after an update:', error);
-                      return of(null);
+                      return of({ replaced, doc: null as NuxeoDocument | null });
                     }),
                   ),
             ),
             finalize(() => this.saving.set(false)),
             takeUntilDestroyed(this.destroyRef),
           )
-          .subscribe((doc) => {
+          .subscribe(({ replaced, doc }) => {
             // Nuxeo answers 200 to replacing an id it no longer holds and changes nothing, so only
             // the re-read shows what actually took.
-            if (doc) this.parsePermissionsFromDocument(doc);
+            if (doc) {
+              this.parsePermissionsFromDocument(doc);
+              return;
+            }
+            // Nothing was written, and the row has already been put back with its id intact.
+            if (!replaced) return;
+            // The write took but the re-read did not. An ACE id encodes the permission and the
+            // dates, so the one on screen is now stale, and a further edit or removal would
+            // address an entry the server no longer has — which Nuxeo answers 200 to, changing
+            // nothing. Drop it: a row with no ACE id offers no actions, the same state a row
+            // never read from the ACL is in.
+            this.permissions.update((rows) =>
+              rows.map((r) => (r.id === id ? { ...r, aceId: undefined } : r)),
+            );
           });
       });
   }

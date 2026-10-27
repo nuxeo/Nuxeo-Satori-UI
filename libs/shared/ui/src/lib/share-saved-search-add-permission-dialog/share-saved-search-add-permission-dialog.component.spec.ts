@@ -12,6 +12,7 @@ import {
 import {
   ShareSavedSearchAddPermissionDialogComponent,
   type ShareSavedSearchAddPermissionDialogData,
+  type ShareSavedSearchAddPermissionResult,
 } from './share-saved-search-add-permission-dialog.component';
 
 const MEMBERS: UserGroupSuggestion = {
@@ -191,6 +192,135 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
           timeFrame: 'Permanent',
         }),
       ]);
+    });
+  });
+
+  // NXSAT-334, second round: the dates used to be read back out of the rendered `timeFrame`, which
+  // is a *translated* label. Only English parsed, so in any other locale a one-sided range became
+  // `Permanent` and the boundary was cleared. The label is now never parsed — `begin`/`end` carry
+  // the instants — and this is the round trip the parent relies on.
+  describe('dates round-tripping through an edit', () => {
+    // A day written at CET midnight, which Nuxeo holds as 23:00 UTC the day before.
+    const BEGIN = '2026-01-14T23:00:00.000Z';
+    const END = '2026-02-19T23:00:00.000Z';
+
+    const submit = async (
+      initial: Partial<ShareSavedSearchAddPermissionDialogData['initialData']> = {},
+      act: (d: ShareSavedSearchAddPermissionDialogComponent) => void = () => undefined,
+    ) => {
+      const dialog = await open({
+        permissions: SAVED_SEARCH_VISIBLE,
+        initialData: {
+          userGroup: 'powerusers',
+          right: 'Write',
+          timeFrame: 'ignored',
+          begin: BEGIN,
+          end: END,
+          ...initial,
+        },
+      });
+      act(dialog);
+      dialog.create(false);
+      const close = TestBed.inject(MatDialogRef).close as unknown as {
+        mock: { calls: unknown[][] };
+      };
+      return (close.mock.calls[0]?.[0] as ShareSavedSearchAddPermissionResult[])?.[0];
+    };
+
+    it('returns both original instants when the user leaves the dates alone', async () => {
+      const result = await submit();
+      expect(result).toMatchObject({ right: 'Write', begin: BEGIN, end: END });
+    });
+
+    it.each([
+      ['a translated range', 'Du 15 janv. 2026 au 20 févr. 2026'],
+      ['a translated one-sided range', "Jusqu'au 20 févr. 2026"],
+      ['a translated open start', 'À partir du 15 janv. 2026'],
+    ])('ignores %s in the label and keeps the instants', async (_what, timeFrame) => {
+      const result = await submit({ timeFrame });
+      expect(result).toMatchObject({ begin: BEGIN, end: END });
+    });
+
+    it('keeps a one-sided range one-sided rather than clearing it', async () => {
+      const result = await submit({ begin: null, end: END, timeFrame: "Jusqu'au 20 févr. 2026" });
+      expect(result).toMatchObject({ begin: null, end: END });
+      expect(result.timeFrame).not.toBe('Permanent');
+    });
+
+    it('returns the picked days once the user changes them', async () => {
+      const result = await submit({}, (d) => {
+        d.beginDate = new Date(2026, 2, 1);
+        d.endDate = new Date(2026, 2, 31);
+        d.onDatesChanged();
+      });
+      expect(result).toMatchObject({ begin: '2026-03-01', end: '2026-03-31' });
+    });
+
+    it('clears both dates when the user makes the entry permanent', async () => {
+      const result = await submit({}, (d) => {
+        d.timeFrameMode = 'permanent';
+        d.onDatesChanged();
+      });
+      expect(result).toMatchObject({ timeFrame: 'Permanent', begin: null, end: null });
+    });
+
+    it('opens a dated entry in date-based mode, from the instants not the label', async () => {
+      const dated = await open({
+        permissions: SAVED_SEARCH_VISIBLE,
+        initialData: { userGroup: 'powerusers', right: 'Write', timeFrame: 'x', end: END },
+      });
+      expect(dated.timeFrameMode).toBe('date-based');
+      expect(dated.beginDate).toBeNull();
+      expect(dated.endDate).not.toBeNull();
+    });
+
+    it('opens an entry with no dates as permanent', async () => {
+      const undated = await open({
+        permissions: SAVED_SEARCH_VISIBLE,
+        initialData: { userGroup: 'members', right: 'Read', timeFrame: 'x' },
+      });
+      expect(undated.timeFrameMode).toBe('permanent');
+      expect(undated.beginDate).toBeNull();
+      expect(undated.endDate).toBeNull();
+    });
+
+    it('shows no date for an instant it cannot parse, but still writes it back', async () => {
+      // A value the server sent that is not a date leaves the picker empty rather than showing
+      // `Invalid Date`; untouched, it is still returned as it came, so nothing is destroyed.
+      const dialog = await open({
+        permissions: SAVED_SEARCH_VISIBLE,
+        initialData: {
+          userGroup: 'powerusers',
+          right: 'Write',
+          timeFrame: 'x',
+          begin: 'not-a-date',
+        },
+      });
+      expect(dialog.beginDate).toBeNull();
+
+      dialog.create(false);
+
+      const close = TestBed.inject(MatDialogRef).close as unknown as {
+        mock: { calls: unknown[][] };
+      };
+      const result = (close.mock.calls[0]?.[0] as ShareSavedSearchAddPermissionResult[])?.[0];
+      expect(result.begin).toBe('not-a-date');
+    });
+
+    it('carries the notification choices the dialog collected', async () => {
+      const result = await submit({}, (d) => {
+        d.sendNotify = true;
+        d.notifyComment = '  please review  ';
+      });
+      expect(result).toMatchObject({ notify: true, comment: 'please review' });
+    });
+
+    it('sends no comment when notification is off', async () => {
+      const result = await submit({}, (d) => {
+        d.sendNotify = false;
+        d.notifyComment = 'dropped';
+      });
+      expect(result).toMatchObject({ notify: false, comment: null });
     });
   });
 

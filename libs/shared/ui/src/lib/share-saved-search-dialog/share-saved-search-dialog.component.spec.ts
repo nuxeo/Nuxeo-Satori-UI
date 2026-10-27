@@ -106,6 +106,24 @@ describe('ShareSavedSearchDialogComponent', () => {
 
   const component = () => fixture.componentInstance;
 
+  /**
+   * What the add/edit dialog closes with. Built here in the shape that dialog really returns —
+   * resolved `begin`/`end` instants or days, plus the notification choices — so a host test cannot
+   * pass a shape the dialog never produces. The round trip through the real dialog is asserted in
+   * `share-saved-search-add-permission-dialog.component.spec.ts`.
+   */
+  const dialogResult = (over: Record<string, unknown> = {}) => ({
+    userGroup: 'members',
+    right: 'Everything',
+    timeFrame: 'Permanent',
+    grantedBy: 'Group',
+    begin: null,
+    end: null,
+    notify: false,
+    comment: null,
+    ...over,
+  });
+
   describe('removing a local entry', () => {
     it('removes that one entry by its id, leaving the other entry its principal holds', async () => {
       await mount(SAVED_SEARCH);
@@ -172,24 +190,22 @@ describe('ShareSavedSearchDialogComponent', () => {
       ]);
     });
 
-    it('applies an edit opened before the re-read to the row it was opened on', async () => {
+    it('applies an edit opened after the re-read to the row it was opened on', async () => {
+      // A removal re-reads and re-indexes the rows. The edit must still address the ACE the dialog
+      // was opened on, not whichever row now sits at its old position. (Opening an edit *during*
+      // the re-read is refused outright — see "refuses to open while a write ... is pending".)
       await mount(SAVED_SEARCH);
       const [read, writeVersion] = component().permissions();
-      const reread = new Subject<NuxeoDocument>();
-      documents['getDocumentPermissions'].mockReturnValueOnce(reread);
+      documents['getDocumentPermissions'].mockReturnValueOnce(
+        of(readAfter(['members:Read:true:Administrator::'])),
+      );
       const edited = new Subject<unknown>();
       dialog.open.mockReturnValueOnce({ afterClosed: () => edited });
 
       component().removeRow(read.id);
       component().editRow(writeVersion.id);
-      // The re-read lands while the edit dialog is still open, then the edit is submitted.
-      reread.next(readAfter(['members:Read:true:Administrator::']));
-      reread.complete();
-      edited.next([
-        { userGroup: 'members', right: 'Everything', timeFrame: 'Permanent', grantedBy: 'Group' },
-      ]);
+      edited.next([dialogResult()]);
 
-      // Written against the ACE the dialog was opened on, not whichever row now sits at its index.
       expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
         UID,
         expect.objectContaining({
@@ -320,7 +336,7 @@ describe('ShareSavedSearchDialogComponent', () => {
     async function submitEdit(result: Record<string, unknown>) {
       await mount(SAVED_SEARCH);
       const row = component().permissions()[0];
-      dialog.open.mockReturnValueOnce({ afterClosed: () => of([{ ...result }]) });
+      dialog.open.mockReturnValueOnce({ afterClosed: () => of([dialogResult(result)]) });
 
       component().editRow(row.id);
       return row;
@@ -378,15 +394,7 @@ describe('ShareSavedSearchDialogComponent', () => {
       await mount(SAVED_SEARCH);
       const row = component().permissions()[0];
       dialog.open.mockReturnValueOnce({
-        afterClosed: () =>
-          of([
-            {
-              userGroup: 'members',
-              right: 'Everything',
-              timeFrame: 'Permanent',
-              grantedBy: 'Group',
-            },
-          ]),
+        afterClosed: () => of([dialogResult()]),
       });
 
       component().editRow(row.id);
@@ -399,33 +407,51 @@ describe('ShareSavedSearchDialogComponent', () => {
       ).toEqual(['Read', 'WriteVersion']);
     });
 
-    it('keeps the edit on screen when the write took but the re-read failed', async () => {
-      // The write succeeded, so the staged row is the best information there is; clearing it would
-      // claim the edit did not happen.
+    it('drops the stale ACE id when the write took but the re-read failed', async () => {
+      // The write succeeded, so the staged row is the best information there is. But an ACE id
+      // encodes the permission and dates, so the one held is now stale: a further edit or removal
+      // would address an entry the server no longer has, and Nuxeo answers 200 to that, changing
+      // nothing. Without the id the row's buttons are disabled until a successful re-read.
       await mount(SAVED_SEARCH);
       const row = component().permissions()[0];
       documents['getDocumentPermissions'].mockReturnValueOnce(
         throwError(() => new Error('re-read failed')),
       );
       dialog.open.mockReturnValueOnce({
-        afterClosed: () =>
-          of([
-            {
-              userGroup: 'members',
-              right: 'Everything',
-              timeFrame: 'Permanent',
-              grantedBy: 'Group',
-            },
-          ]),
+        afterClosed: () => of([dialogResult()]),
       });
 
       component().editRow(row.id);
 
       expect(documents['replacePermission']).toHaveBeenCalledOnce();
       expect(component().permissions()[0]).toEqual(
-        expect.objectContaining({ aceId: row.aceId, right: 'Everything' }),
+        expect.objectContaining({ aceId: undefined, right: 'Everything' }),
       );
       expect(component().saving()).toBe(false);
+    });
+
+    it('refuses to open while a write or its re-read is pending', async () => {
+      // Submitting into an ACL that is mid-change used to be dropped silently by the guard in
+      // `afterClosed`. The dialog is not opened at all now, and the Edit button is disabled.
+      await mount(SAVED_SEARCH);
+      const [read, writeVersion] = component().permissions();
+      const pending = new Subject<NuxeoDocument>();
+      documents['getDocumentPermissions'].mockReturnValueOnce(pending);
+
+      component().removeRow(read.id);
+      expect(component().saving()).toBe(true);
+      dialog.open.mockClear();
+
+      component().editRow(writeVersion.id);
+
+      expect(dialog.open).not.toHaveBeenCalled();
+
+      // Once the removal's re-read lands, editing is available again.
+      pending.next(readAfter(['members:Read:true:Administrator::']));
+      pending.complete();
+      expect(component().saving()).toBe(false);
+      component().editRow(writeVersion.id);
+      expect(dialog.open).toHaveBeenCalledOnce();
     });
 
     it('writes nothing for a row that was never read from the ACL', async () => {
@@ -434,14 +460,7 @@ describe('ShareSavedSearchDialogComponent', () => {
       const row = component().permissions()[0];
       dialog.open.mockReturnValueOnce({
         afterClosed: () =>
-          of([
-            {
-              userGroup: row.userGroup,
-              right: 'Read',
-              timeFrame: 'Permanent',
-              grantedBy: 'System',
-            },
-          ]),
+          of([dialogResult({ userGroup: row.userGroup, right: 'Read', grantedBy: 'System' })]),
       });
 
       component().editRow(row.id);
@@ -455,15 +474,7 @@ describe('ShareSavedSearchDialogComponent', () => {
       const row = component().permissions()[0];
       documents['replacePermission'] = vi.fn(() => throwError(() => new Error('403')));
       dialog.open.mockReturnValueOnce({
-        afterClosed: () =>
-          of([
-            {
-              userGroup: 'members',
-              right: 'Everything',
-              timeFrame: 'Permanent',
-              grantedBy: 'Group',
-            },
-          ]),
+        afterClosed: () => of([dialogResult()]),
       });
 
       component().editRow(row.id);
@@ -493,12 +504,12 @@ describe('ShareSavedSearchDialogComponent', () => {
         dialog.open.mockReturnValueOnce({
           afterClosed: () =>
             of([
-              {
+              dialogResult({
                 userGroup: 'powerusers',
-                right: 'Everything',
                 timeFrame: row.timeFrame,
-                grantedBy: 'Group',
-              },
+                begin: DATED.begin,
+                end: DATED.end,
+              }),
             ]),
         });
 
@@ -518,15 +529,7 @@ describe('ShareSavedSearchDialogComponent', () => {
         await mount(withDated);
         const row = component().permissions()[0];
         dialog.open.mockReturnValueOnce({
-          afterClosed: () =>
-            of([
-              {
-                userGroup: 'powerusers',
-                right: 'Write',
-                timeFrame: 'Permanent',
-                grantedBy: 'Group',
-              },
-            ]),
+          afterClosed: () => of([dialogResult({ userGroup: 'powerusers', right: 'Write' })]),
         });
 
         component().editRow(row.id);
@@ -543,12 +546,13 @@ describe('ShareSavedSearchDialogComponent', () => {
         dialog.open.mockReturnValueOnce({
           afterClosed: () =>
             of([
-              {
+              dialogResult({
                 userGroup: 'powerusers',
                 right: 'Write',
                 timeFrame: '2026-03-01 - 2026-03-31',
-                grantedBy: 'Group',
-              },
+                begin: '2026-03-01',
+                end: '2026-03-31',
+              }),
             ]),
         });
 

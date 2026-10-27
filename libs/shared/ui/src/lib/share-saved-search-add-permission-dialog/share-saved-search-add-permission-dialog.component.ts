@@ -31,6 +31,13 @@ export interface ShareSavedSearchAddPermissionDialogData {
     right: string;
     timeFrame: string;
     grantedBy?: string;
+    /**
+     * The entry's own ACE instants. The authority on its dates: `timeFrame` is a **translated**
+     * label, so reading the dates back out of it only worked in English, and a one-sided range in
+     * any other locale parsed as permanent and cleared the boundary.
+     */
+    begin?: string | null;
+    end?: string | null;
   };
 }
 
@@ -39,6 +46,16 @@ export interface ShareSavedSearchAddPermissionResult {
   right: string;
   timeFrame: string;
   grantedBy: string;
+  /**
+   * What to write. A day the user picked, `YYYY-MM-DD`; or, when they left the dates alone, the
+   * entry's original instant, so an edit of something else cannot re-anchor it at the server's
+   * midnight and move it.
+   */
+  begin: string | null;
+  end: string | null;
+  /** The notification choices, which the caller is responsible for honouring. */
+  notify: boolean;
+  comment: string | null;
 }
 
 @Component({
@@ -87,6 +104,10 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   timeFrameMode: 'permanent' | 'date-based' = 'permanent';
   beginDate: Date | null = null;
   endDate: Date | null = null;
+  /** The instants the entry arrived with, written back when the user leaves the dates alone. */
+  private originalBegin: string | null = null;
+  private originalEnd: string | null = null;
+  private datesTouched = false;
   sendNotify = true;
   notifyComment = '';
   private readonly createdEntries: ShareSavedSearchAddPermissionResult[] = [];
@@ -144,49 +165,31 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     // outside a hardcoded four — `WriteSecurity` among them — to `Read` (NXSAT-334).
     this.right = data.right;
 
-    if (data.timeFrame === 'Permanent') {
-      this.timeFrameMode = 'permanent';
-      this.beginDate = null;
-      this.endDate = null;
-    } else {
-      this.timeFrameMode = 'date-based';
-      if (data.timeFrame.startsWith('Until ')) {
-        this.beginDate = null;
-        this.endDate = this.parseDate(data.timeFrame.slice(6).trim());
-      } else if (data.timeFrame.startsWith('From ')) {
-        this.beginDate = this.parseDate(data.timeFrame.slice(5).trim());
-        this.endDate = null;
-      } else {
-        const dateRange = data.timeFrame.split(' - ');
-        if (dateRange.length === 2) {
-          this.beginDate = this.parseDate(dateRange[0].trim());
-          this.endDate = this.parseDate(dateRange[1].trim());
-        }
-      }
-    }
+    // From the instants, never from the translated `timeFrame` label.
+    this.originalBegin = data.begin ?? null;
+    this.originalEnd = data.end ?? null;
+    this.timeFrameMode = this.originalBegin || this.originalEnd ? 'date-based' : 'permanent';
+    this.beginDate = this.toPickerDate(this.originalBegin);
+    this.endDate = this.toPickerDate(this.originalEnd);
+    this.datesTouched = false;
 
     this.sendNotify = false;
   }
 
-  private parseDate(dateStr: string): Date | null {
-    if (!dateStr) return null;
-    try {
-      // YYYY-MM-DD (ISO date)
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-        const [yyyy, mm, dd] = dateStr.split('-');
-        return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
-      }
-      // MM/DD/YYYY (legacy format)
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-        const [mm, dd, yyyy] = dateStr.split('/');
-        return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
-      }
-      // ISO or other date-like strings
-      const parsed = new Date(dateStr);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    } catch {
-      return null;
-    }
+  /**
+   * An ACE instant as a date for the picker.
+   *
+   * Nuxeo stores a day as midnight in the writer's zone and returns it in UTC, and the zone is not
+   * recorded, so the day is only recoverable exactly for a reader in that zone — a day written at
+   * CET midnight is held as 23:00 UTC the day before. The picker shows the day that instant falls
+   * on in the reader's own zone, which is right for an entry written there. Either way the write
+   * preserves the original instant unless the user actually picks a new day, so a misread day is
+   * never written back.
+   */
+  private toPickerDate(instant: string | null): Date | null {
+    if (!instant) return null;
+    const parsed = new Date(instant);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
   onSearchChange(value: string): void {
@@ -242,12 +245,19 @@ export class ShareSavedSearchAddPermissionDialogComponent {
           ? 'Group'
           : 'User';
 
+    const notify = this.sendNotify;
+    const comment = this.sendNotify ? this.notifyComment.trim() || null : null;
+
     if (this.timeFrameMode === 'permanent') {
       return {
         userGroup,
         right: this.right,
         timeFrame: 'Permanent',
         grantedBy,
+        begin: null,
+        end: null,
+        notify,
+        comment,
       };
     }
 
@@ -263,12 +273,23 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     } else {
       timeFrame = 'Permanent';
     }
+    // An endpoint the user did not touch keeps the entry's own instant; one they picked is the day
+    // they picked. `timeFrame` stays a human string and is never parsed back into a date.
     return {
       userGroup,
       right: this.right,
       timeFrame,
       grantedBy,
+      begin: this.datesTouched ? from : (this.originalBegin ?? from),
+      end: this.datesTouched ? to : (this.originalEnd ?? to),
+      notify,
+      comment,
     };
+  }
+
+  /** The date controls call this, so an untouched entry keeps its own instants. */
+  onDatesChanged(): void {
+    this.datesTouched = true;
   }
 
   private resetForm(): void {
@@ -278,6 +299,9 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     this.timeFrameMode = 'permanent';
     this.beginDate = null;
     this.endDate = null;
+    this.originalBegin = null;
+    this.originalEnd = null;
+    this.datesTouched = false;
     this.sendNotify = true;
     this.notifyComment = '';
     this.suggestions.set([]);
