@@ -1,3 +1,4 @@
+import { MatIconModule } from '@angular/material/icon';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { expect } from 'storybook/test';
@@ -25,7 +26,7 @@ const meta: Meta = {
     applicationConfig({
       providers: [provideStoryRouter(), provideNxsComponents()],
     }),
-    moduleMetadata({ imports: [ExtensionOutletComponent] }),
+    moduleMetadata({ imports: [ExtensionOutletComponent, MatIconModule] }),
   ],
 };
 
@@ -76,6 +77,11 @@ export const MaterialRegistration: StoryObj = {
           { id: 'app.toolbar.export', label: 'Export', icon: 'import_export', overflow: true },
         ],
       },
+      // The card takes its handlers as inputs, like every other ID: the outlet binds no outputs.
+      // These do nothing — the story is the card's appearance — but an `openHandler` is what makes
+      // the card one that opens something, which is how browse and search render it.
+      openCard: () => undefined,
+      selectCard: () => undefined,
     },
     template: `
       <div style="display: grid; gap: 16px; justify-items: start">
@@ -103,6 +109,23 @@ export const MaterialRegistration: StoryObj = {
           [componentInputs]="{ tabs, label: 'Document views', selectedIndex: 0, body: tabBody }"
         />
         <lib-extension-outlet [componentId]="ids.actionBar" [componentInputs]="actionBar" />
+        <ng-template #cardMedia>
+          <mat-icon aria-hidden="true" style="font-size: 40px; width: 40px; height: 40px"
+            >description</mat-icon
+          >
+        </ng-template>
+        <lib-extension-outlet
+          style="display: block; inline-size: 200px"
+          [componentId]="ids.card"
+          [componentInputs]="{
+            heading: 'Claim 42 — water damage.pdf',
+            subheading: 'File',
+            selectionLabel: 'Select Claim 42 — water damage.pdf',
+            selectionHandler: selectCard,
+            openHandler: openCard,
+            media: cardMedia
+          }"
+        />
       </div>
     `,
   }),
