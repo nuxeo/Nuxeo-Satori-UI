@@ -9783,18 +9783,34 @@ function fileDeclaringSymbol(path, symbol, seen = new Set()) {
 }
 
 /**
+ * Every `NXS_PRIMITIVE_IDS` value is `nxs.primitives.` followed by its own property name, so the
+ * suffix of a written-out id *is* the primitive name — see `NXS_PRIMITIVE_IDS` in
+ * `libs/shared/satori-components/src/lib/primitives.ts`.
+ */
+const NXS_PRIMITIVE_ID_VALUE = /^nxs\.primitives\.([A-Za-z][A-Za-z0-9]*)$/;
+
+/**
  * The primitive id a `components` key names: `'tag'`, `null`, or `undefined`.
  *
  * Three outcomes, and the difference between the last two is the whole point. `undefined` means
- * the key has nothing to do with `NXS_PRIMITIVE_IDS` and belongs to some other object literal —
- * skip it and keep walking. `null` means it *does* read off `NXS_PRIMITIVE_IDS` but does not name
- * one id, which the caller reports: leaving such a key out of the adopted set silently unguards
- * that primitive while the rest keep the emptiness check satisfied.
+ * the key names no primitive and belongs to some other object literal — skip it and keep walking.
+ * `null` means it *does* address `NXS_PRIMITIVE_IDS` but does not name one id, which the caller
+ * reports: leaving such a key out of the adopted set silently unguards that primitive while the
+ * rest keep the emptiness check satisfied.
  *
- * `[NXS_PRIMITIVE_IDS.tag]` and `[NXS_PRIMITIVE_IDS['tag']]` are the same registration, so both
- * read. A computed accessor — `[NXS_PRIMITIVE_IDS[key]]` — cannot be resolved here and is `null`.
+ * Four spellings register the same thing, because `NXS_PRIMITIVE_IDS.tag` *is* the string
+ * `'nxs.primitives.tag'`: `[NXS_PRIMITIVE_IDS.tag]`, `[NXS_PRIMITIVE_IDS['tag']]`,
+ * `'nxs.primitives.tag'` and `['nxs.primitives.tag']`. Reading only the first two left a written
+ * -out id registering at runtime and absent from the adopted set. A computed accessor —
+ * `[NXS_PRIMITIVE_IDS[key]]` — cannot be resolved here and is `null`.
  */
 function primitiveIdOfKey(node, source) {
+  // A string literal, computed or not, carries the id itself.
+  const literal = ts.isComputedPropertyName(node.name) ? node.name.expression : node.name;
+  if (ts.isStringLiteralLike(literal)) {
+    return NXS_PRIMITIVE_ID_VALUE.exec(literal.text)?.[1];
+  }
+
   if (!ts.isComputedPropertyName(node.name)) return undefined;
   const key = node.name.expression;
 
@@ -9804,7 +9820,9 @@ function primitiveIdOfKey(node, source) {
   if (ts.isElementAccessExpression(key)) {
     if (key.expression.getText(source) !== 'NXS_PRIMITIVE_IDS') return undefined;
     const accessor = key.argumentExpression;
-    return ts.isStringLiteralLike(accessor) ? accessor.text : null;
+    return ts.isStringLiteralLike(accessor)
+      ? (NXS_PRIMITIVE_ID_VALUE.exec(accessor.text)?.[1] ?? accessor.text)
+      : null;
   }
   return undefined;
 }

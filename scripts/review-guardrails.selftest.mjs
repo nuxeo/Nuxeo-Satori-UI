@@ -9468,6 +9468,48 @@ expectRed(
   /has a `components` key `\[NXS_PRIMITIVE_IDS\[tagKey\]\]` that reads off `NXS_PRIMITIVE_IDS` without naming one id/,
 );
 
+/**
+ * The id written out instead of read off the constant.
+ *
+ * `NXS_PRIMITIVE_IDS.tag` *is* the string `'nxs.primitives.tag'`, so both spellings below
+ * register identically at runtime. Reading only the computed-access forms left a written-out id
+ * registered and absent from the adopted set, with `avatar` keeping `guarded` non-empty so the
+ * "registers nothing" check stayed quiet.
+ */
+for (const [shape, key] of [
+  ['a plain string key', "'nxs.primitives.tag':"],
+  ['a computed string key', "['nxs.primitives.tag']:"],
+]) {
+  expectRed(
+    `${shape} is the same registration and still guards its primitive`,
+    'checkAdoptedPatternsNotBypassed',
+    adoption({
+      [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+        '[NXS_PRIMITIVE_IDS.tag]:',
+        key,
+      ),
+      [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+    }),
+    null,
+    /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+  );
+}
+
+falsePositiveControls += 1;
+expectGreen(
+  'an ordinary string key in the registry is not read as a primitive id',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // `components` and `nxs.something.else` are string keys that name no primitive. Treating any
+    // string key as an id would make these registrations of a primitive called `else`, or worse
+    // report them as unreadable.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '    components: {',
+      "    meta: { 'nxs.something.else': 1, plain: 2 },\n    components: {",
+    ),
+  }),
+);
+
 expectGreen(
   'a site in `ADOPTION_BASELINE` predates the guardrail and is exempt',
   'checkAdoptedPatternsNotBypassed',
