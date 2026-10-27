@@ -9596,6 +9596,9 @@ function checkSatoriPrimitivesRegisteredInOrder() {
 const SATORI_ADOPTION_REGISTRY =
   'libs/shared/satori-components-satori/src/lib/provide-nxs-satori-components.ts';
 
+/** The one function whose contributions decide what is adopted. */
+const PROVIDER_FUNCTION = 'provideNxsSatoriComponents';
+
 /**
  * The only two trees allowed to name a Satori entry point for an adopted pattern.
  *
@@ -9790,36 +9793,92 @@ function fileDeclaringSymbol(path, symbol, seen = new Set()) {
  * later with the same keys, registers nothing and must not be able to redirect a primitive at
  * another component's entry point.
  *
- * `undefined` when the call or the `components` object is not there, which the caller reports
- * rather than treating as an empty adopted set.
+ * Scoped to `provideNxsSatoriComponents` and to every `provideSatoriExtensions` call inside it,
+ * concatenated in source order. Taking the first such call anywhere in the module could read an
+ * unrelated helper's contribution, or stop at the first of several and leave a primitive the
+ * later one adopts outside the guarded set — with the baselined entry points still present, so
+ * nothing looked wrong. Source order is provider order, and the caller's `Map` lets a later
+ * contribution override an earlier one exactly as the runtime does.
+ *
+ * `properties` is `undefined` when the provider or any contribution at all is missing, which the
+ * caller reports rather than treating as an empty adopted set. `problems` are shapes that could
+ * hide a registration; the caller fails on each.
  */
-function componentsContributionIn(source) {
-  let properties;
-  const visit = (node) => {
-    if (properties !== undefined) return;
+function componentsContributionsIn(source) {
+  const provider = source.statements.find(
+    (statement) =>
+      (ts.isFunctionDeclaration(statement) && statement.name?.text === PROVIDER_FUNCTION) ||
+      (ts.isVariableStatement(statement) &&
+        statement.declarationList.declarations.some(
+          (declaration) =>
+            ts.isIdentifier(declaration.name) && declaration.name.text === PROVIDER_FUNCTION,
+        )),
+  );
+  if (provider === undefined) return { properties: undefined, problems: [] };
+
+  const calls = [];
+  const findCalls = (node) => {
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
-      node.expression.text === 'provideSatoriExtensions' &&
-      node.arguments.length > 0 &&
-      ts.isObjectLiteralExpression(node.arguments[0])
+      node.expression.text === 'provideSatoriExtensions'
     ) {
-      for (const property of node.arguments[0].properties) {
-        if (
-          ts.isPropertyAssignment(property) &&
-          !ts.isComputedPropertyName(property.name) &&
-          property.name.getText(source) === 'components' &&
-          ts.isObjectLiteralExpression(property.initializer)
-        ) {
-          properties = property.initializer.properties;
-          return;
-        }
-      }
+      calls.push(node);
     }
-    ts.forEachChild(node, visit);
+    ts.forEachChild(node, findCalls);
   };
-  visit(source);
-  return properties;
+  findCalls(provider);
+  if (calls.length === 0) return { properties: undefined, problems: [] };
+
+  const properties = [];
+  const problems = [];
+  for (const call of calls) {
+    const argument = call.arguments[0];
+    if (argument === undefined || !ts.isObjectLiteralExpression(argument)) {
+      problems.push(
+        'a `provideSatoriExtensions(…)` argument that is not an object literal, so its ' +
+          'contribution could not be read',
+      );
+      continue;
+    }
+
+    let componentsAt = -1;
+    for (const [index, property] of argument.properties.entries()) {
+      if (
+        !ts.isPropertyAssignment(property) ||
+        ts.isComputedPropertyName(property.name) ||
+        property.name.getText(source) !== 'components'
+      ) {
+        continue;
+      }
+      if (!ts.isObjectLiteralExpression(property.initializer)) {
+        problems.push(
+          `a \`components\` value \`${property.initializer.getText(source)}\` that is not an ` +
+            'object literal, so the primitives it registers could not be read',
+        );
+        continue;
+      }
+      componentsAt = index;
+      properties.push(...property.initializer.properties);
+    }
+
+    // A spread later in the contribution object can replace `components` wholesale, and the
+    // entries read above would then be whatever the literal said rather than what registers.
+    // Preserving the literal's entries while adding one more is the dangerous case: the baseline
+    // still resolves, so only the added primitive silently escapes. `componentsAt` of -1 makes
+    // this catch a spread in an object with no literal `components` at all, which can introduce
+    // one just as easily.
+    const spreadAt = argument.properties.findIndex(
+      (property, index) => ts.isSpreadAssignment(property) && index > componentsAt,
+    );
+    if (spreadAt !== -1) {
+      problems.push(
+        `a \`${argument.properties[spreadAt].getText(source)}\` spread at or after \`components\` ` +
+          'in a `provideSatoriExtensions(…)` argument, which can replace the map this reads',
+      );
+    }
+  }
+  return { properties, problems };
 }
 
 /**
@@ -9971,13 +10030,24 @@ function adoptedSatoriEntryPoints() {
   // in some other map would point the rich-tooltip primitive at the avatar's entry point, and
   // direct rich-tooltip imports would pass. Reading written-out ids widened that surface to any
   // object in the file carrying an `nxs.primitives.*` key, so the scope is what keeps it closed.
-  const registrations = componentsContributionIn(source);
+  const { properties: registrations, problems } = componentsContributionsIn(source);
+
+  // Each of these can hide a registration, so each is its own failure. They do not stop the read:
+  // whatever is readable is still guarded, and reporting the rest is what keeps a hidden entry
+  // from passing as an absent one.
+  for (const problem of problems) {
+    fail(
+      `${SATORI_ADOPTION_REGISTRY} has ${problem}, so a primitive it adopts could be left out ` +
+        'of the guarded set and direct use of what that one wraps would not be caught.',
+    );
+  }
+
   if (registrations === undefined) {
     fail(
-      `${SATORI_ADOPTION_REGISTRY} has no \`components\` object inside a ` +
-        '`provideSatoriExtensions({ … })` call, so the adopted set could not be read and this ' +
-        'guardrail would check nothing. Either the registration moved, or its shape changed and ' +
-        'the AST read here no longer matches it.',
+      `${SATORI_ADOPTION_REGISTRY} has no \`provideSatoriExtensions(…)\` call inside ` +
+        `\`${PROVIDER_FUNCTION}()\`, so the adopted set could not be read and this guardrail ` +
+        'would check nothing. Either the registration moved, or its shape changed and the AST ' +
+        'read here no longer matches it.',
     );
     return { guarded: new Map(), located: false };
   }

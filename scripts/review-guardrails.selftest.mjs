@@ -9559,16 +9559,32 @@ expectRed(
 );
 
 expectRed(
-  'the `components` contribution is gone, so nothing could be read',
+  'a contribution with no `components` adopts nothing, so the gate says it checked nothing',
   'checkAdoptedPatternsNotBypassed',
   adoption({
+    // `provideSatoriExtensions` may legitimately contribute things other than components, so a
+    // call without that key is not itself an error — it just leaves the adopted set empty, which
+    // the emptiness check reports. There is no separate "no components key" failure on purpose.
     [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
       'components: {',
       'other: {',
     ),
   }),
   null,
-  /has no `components` object inside a `provideSatoriExtensions\(\{ … \}\)` call/,
+  /yielded no Satori entry point for any adopted primitive, so this guardrail checked nothing/,
+);
+
+expectRed(
+  'the provider has no contribution at all, so the adopted set could not be read',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      /return provideSatoriExtensions\(\{[\s\S]*?\n  \}\);/,
+      'return undefined;',
+    ),
+  }),
+  null,
+  /has no `provideSatoriExtensions\(…\)` call inside `provideNxsSatoriComponents\(\)`/,
 );
 
 /**
@@ -9611,6 +9627,78 @@ expectGreen(
       '    components: {',
       "    components: {\n      'acme.widget': NxsSatoriAvatarComponent,\n" +
         "      ['acme.other']: NxsSatoriAvatarComponent,",
+    ),
+  }),
+);
+
+/**
+ * An unrelated `provideSatoriExtensions` call earlier in the file.
+ *
+ * Only `provideNxsSatoriComponents` decides what is adopted. Taking the first such call anywhere
+ * in the module read this helper's contribution instead, and `tag` left the guarded set while the
+ * avatar registration here kept it non-empty.
+ */
+const UNRELATED_HELPER =
+  'export function somethingElse() {\n  return provideSatoriExtensions({ components: {} });\n}\n\n';
+
+expectRed(
+  'an unrelated earlier contribution is not mistaken for the adoption provider',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: UNRELATED_HELPER + ADOPTION_REGISTRY,
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+);
+
+expectRed(
+  'a second contribution in the provider is read too, not just the first',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // `avatar` moves to a first call and `tag` stays in the returned one, so stopping at the
+    // first contribution reads only `avatar` — non-empty, nothing obviously wrong, and `tag`
+    // unguarded. Ordered this way on purpose: with `tag` in the first call the control would
+    // pass even when only one contribution is read, and would prove nothing.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '      [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent,\n',
+      '',
+    ).replace(
+      '  return provideSatoriExtensions({',
+      '  provideSatoriExtensions({\n' +
+        '    components: { [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent },\n' +
+        '  });\n' +
+        '  return provideSatoriExtensions({',
+    ),
+    [NOT_BASELINED]: "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /search\.ts:1 imports `@hylandsoftware\/satori-ui\/tag` directly[\s\S]*adopted primitive `tag`/,
+);
+
+expectRed(
+  'a spread after `components` in the outer object can replace the map, so it is reported',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '    },\n  });',
+      '    },\n    ...override,\n  });',
+    ),
+  }),
+  null,
+  /has a `\.\.\.override` spread at or after `components`[\s\S]*can replace the map this reads/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a spread before `components` cannot replace it, so it is not reported',
+  'checkAdoptedPatternsNotBypassed',
+  adoption({
+    // The literal `components` is written after the spread, so it wins at runtime and the entries
+    // this reads are the ones that register. Failing here would reject a legitimate shape.
+    [`${SATORI_LIB}/provide-nxs-satori-components.ts`]: ADOPTION_REGISTRY.replace(
+      '    components: {',
+      '    ...base,\n    components: {',
     ),
   }),
 );
