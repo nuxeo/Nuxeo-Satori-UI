@@ -1,4 +1,8 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
+  NxsBannerComponent,
+  NxsChipSetComponent,
+  type NxsChipItem,
   NxsDateInputComponent,
   NxsDocTypeIconComponent,
   NxsDropzoneComponent,
@@ -30,7 +34,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -170,6 +173,9 @@ const DIALOG_SIZE = {
   standalone: true,
   imports: [
     NxsDateInputComponent,
+    NgTemplateOutlet,
+    NxsBannerComponent,
+    NxsChipSetComponent,
     NxsDocTypeIconComponent,
     NxsDropzoneComponent,
     NxsSpinnerComponent,
@@ -181,7 +187,6 @@ const DIALOG_SIZE = {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatChipsModule,
     MatProgressBarModule,
     MatSlideToggleModule,
     MatCheckboxModule,
@@ -778,6 +783,38 @@ export class CreateImportDialogComponent implements OnInit {
     const parent = this.subjectEntries().find((e) => e.id === parentId);
     const parentLabel = parent?.properties.label_en ?? parentId;
     return `${parentLabel}/${label}`;
+  }
+
+  /** The subject chips, one per subject the file holds, in the order it holds them. */
+  subjectChips(): NxsChipItem[] {
+    return this.subjects.map((id) => {
+      const label = this.subjectPillLabel(id);
+      return {
+        id,
+        label,
+        removeLabel: this.translate.instant('shared.remove-item', { name: label }),
+      };
+    });
+  }
+
+  /** The nature chip: one when the file has a nature, shown as its pill label. */
+  natureChips(): NxsChipItem[] {
+    return this.nature ? [this.chipFor(this.nature, this.naturePillLabel(this.nature))] : [];
+  }
+
+  /** The coverage chip: one when the file has a coverage, shown as its pill label. */
+  coverageChips(): NxsChipItem[] {
+    return this.coverage
+      ? [this.chipFor(this.coverage, this.coveragePillLabel(this.coverage))]
+      : [];
+  }
+
+  private chipFor(id: string, label: string): NxsChipItem {
+    return {
+      id,
+      label,
+      removeLabel: this.translate.instant('shared.remove-item', { name: label }),
+    };
   }
 
   naturePillLabel(id: string): string {
