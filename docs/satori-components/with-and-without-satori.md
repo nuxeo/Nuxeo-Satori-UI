@@ -222,7 +222,7 @@ The same icon, heading, message and projected action in both; the theme sets the
 
 A folder listing the server failed to answer: the same icon, heading, explanation and Retry button in both. The theme sets the type, the icon's error colour and the button's style.
 
-It has four variants, chosen by the status of the request that failed: the session has ended, the user has no access, the item is not there, or something went wrong. Retry appears only for the last, because asking again after the first three gets the same answer. It is registered under an ID, so a customer can replace it. Satori 1.0.0-alpha.171 provides `NxsSatoriErrorStateComponent`, which re-registers the same ID with a Satori-specific implementation that uses Satori's `<sat-error-state>`. The Material implementation continues to use Angular Material components.
+It has four variants, chosen by the status of the request that failed: the session has ended, the user has no access, the item is not there, or something went wrong. Retry appears only for the last, because asking again after the first three gets the same answer. It is registered under an ID, so a customer can replace it. `NxsSatoriErrorStateComponent` re-registers the same ID on Satori, rendering `<sat-401-error-state>`, `<sat-403-error-state>`, `<sat-404-error-state>` or `<sat-500-error-state>` for the status it is given; the screenshots show the 500. The Material implementation continues to use Angular Material components.
 
 ### Banner
 
