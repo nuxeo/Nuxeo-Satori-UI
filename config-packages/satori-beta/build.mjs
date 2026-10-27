@@ -80,7 +80,9 @@ if (OUT === BUNDLE || OUT.startsWith(BUNDLE + sep)) {
 }
 
 const problems = [];
-const problem = (file, message) => problems.push(`${relative(HERE, file) || '.'}: ${message}`);
+// Reported with `/`, as package entry names are, so a build reads the same on every platform.
+const problem = (file, message) =>
+  problems.push(`${relative(HERE, file).split(sep).join('/') || '.'}: ${message}`);
 
 /** Whether `path` is a symbolic link, reported if so: one is refused, not followed. */
 function isLink(path) {
