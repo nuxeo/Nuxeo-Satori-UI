@@ -42,6 +42,9 @@ export interface PermissionEntry {
   right: string;
   timeFrame: string;
   grantedBy: string;
+  /** The ACE's own instants, so an edit that leaves the dates alone can write them back. */
+  begin?: string | null;
+  end?: string | null;
 }
 
 interface PermissionSummary {
@@ -193,6 +196,8 @@ export class ShareSavedSearchDialogComponent implements OnInit {
         right: ace.permission || 'Read',
         timeFrame: this.toTimeFrameLabel(ace.begin, ace.end),
         grantedBy: ace.creator || 'System',
+        begin: ace.begin,
+        end: ace.end,
       }));
   }
 
@@ -518,9 +523,11 @@ export class ShareSavedSearchDialogComponent implements OnInit {
       })
       .afterClosed()
       .subscribe((result) => {
-        if (!result || result.length === 0) return;
+        if (!result || result.length === 0 || !this.data.id || !row.aceId || this.saving()) return;
 
         const updatedEntry = result[0];
+        const uid = this.data.id;
+        // Show the edit at once, then let the re-read below replace it with the server's own row.
         this.permissions.update((rows) =>
           rows.map((r) =>
             r.id === id
@@ -534,6 +541,54 @@ export class ShareSavedSearchDialogComponent implements OnInit {
               : r,
           ),
         );
+
+        // An untouched time frame writes the server's own instants back. Writing the rendered day
+        // instead re-anchors it at the server's midnight, which moves an entry written from
+        // another zone — the same trap `dateToWrite` handles in nxs-permissions-panel.
+        const untouched = updatedEntry.timeFrame === row.timeFrame;
+        const [parsedBegin, parsedEnd] = this.parseTimeFrame(updatedEntry.timeFrame);
+        const begin = untouched ? (row.begin ?? null) : parsedBegin || null;
+        const end = untouched ? (row.end ?? null) : parsedEnd || null;
+
+        this.saving.set(true);
+        this.detailService
+          .replacePermission(uid, {
+            id: row.aceId,
+            username: row.userGroup,
+            // The dialog returns the server's own identifier, written as it is: the display-label
+            // mapping would turn `Write` into the broader `ReadWrite` (NXSAT-334).
+            permission: updatedEntry.right,
+            begin,
+            end,
+            notify: false,
+            comment: null,
+          })
+          .pipe(
+            map(() => true),
+            catchError((error) => {
+              console.error('Error updating permission:', error);
+              // Put the row back as the server last showed it.
+              this.permissions.update((rows) => rows.map((r) => (r.id === id ? row : r)));
+              return of(false);
+            }),
+            switchMap((replaced) =>
+              !replaced
+                ? of(null)
+                : this.detailService.getDocumentPermissions(uid).pipe(
+                    catchError((error) => {
+                      console.error('Error re-reading permissions after an update:', error);
+                      return of(null);
+                    }),
+                  ),
+            ),
+            finalize(() => this.saving.set(false)),
+            takeUntilDestroyed(this.destroyRef),
+          )
+          .subscribe((doc) => {
+            // Nuxeo answers 200 to replacing an id it no longer holds and changes nothing, so only
+            // the re-read shows what actually took.
+            if (doc) this.parsePermissionsFromDocument(doc);
+          });
       });
   }
 

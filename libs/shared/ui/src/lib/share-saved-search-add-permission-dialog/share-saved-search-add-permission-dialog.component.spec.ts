@@ -157,13 +157,41 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
         });
         const mockDialogRef = TestBed.inject(MatDialogRef);
 
+        // Actually move the dates, so this exercises the date-based branch rather than returning
+        // through the permanent one — the permission must survive a change to something else.
+        dialog.timeFrameMode = 'date-based';
+        dialog.beginDate = new Date(2026, 0, 15);
+        dialog.endDate = new Date(2026, 1, 20);
+
         dialog.create(false);
 
         expect(mockDialogRef.close).toHaveBeenCalledWith([
-          expect.objectContaining({ userGroup: 'members', right: permission }),
+          expect.objectContaining({
+            userGroup: 'members',
+            right: permission,
+            timeFrame: '2026-01-15 - 2026-02-20',
+          }),
         ]);
       },
     );
+
+    it.each(OUTSIDE)('returns %s unchanged for a permanent entry', async (permission) => {
+      const dialog = await open({
+        permissions: SAVED_SEARCH_VISIBLE,
+        initialData: { userGroup: 'members', right: permission, timeFrame: 'Permanent' },
+      });
+      const mockDialogRef = TestBed.inject(MatDialogRef);
+
+      dialog.create(false);
+
+      expect(mockDialogRef.close).toHaveBeenCalledWith([
+        expect.objectContaining({
+          userGroup: 'members',
+          right: permission,
+          timeFrame: 'Permanent',
+        }),
+      ]);
+    });
   });
 
   it('falls back to Read when an empty permissions list is provided', async () => {

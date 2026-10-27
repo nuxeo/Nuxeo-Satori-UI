@@ -4690,6 +4690,8 @@ interface PermissionEntry {
     right: string;
     timeFrame: string;
     grantedBy: string;
+    begin?: string | null;
+    end?: string | null;
     }
 }
 interface PictureInfo {
@@ -4854,7 +4856,7 @@ class WidgetContainerComponent {
     readonly title: import("@angular/core").InputSignal<string>;
     readonly icon: import("@angular/core").InputSignal<string | undefined>;
     readonly iconColor: import("@angular/core").InputSignal<string>;
-    readonly headingLevel: import("@angular/core").InputSignal<3 | 2>;
+    readonly headingLevel: import("@angular/core").InputSignal<2 | 3>;
     static ɵfac: i0.ɵɵFactoryDeclaration<WidgetContainerComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<WidgetContainerComponent, "lib-widget-container", never, {
     "title": {

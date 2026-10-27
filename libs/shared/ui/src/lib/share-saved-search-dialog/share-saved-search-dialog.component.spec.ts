@@ -67,13 +67,15 @@ describe('ShareSavedSearchDialogComponent', () => {
   let documents: Record<string, ReturnType<typeof vi.fn>>;
   let dialog: { open: ReturnType<typeof vi.fn> };
 
-  async function mount(read: NuxeoDocument | Error) {
+  async function mount(read: NuxeoDocument | Error, isAdministrator = true) {
     documents = {
       getDocumentPermissions: vi.fn(() =>
         read instanceof Error ? throwError(() => read) : of(read),
       ),
       removePermission: vi.fn(() => of({})),
       removePermissionById: vi.fn(() => of({})),
+      replacePermission: vi.fn(() => of({})),
+      addPermission: vi.fn(() => of({})),
     };
     dialog = { open: vi.fn(() => ({ afterClosed: () => of(null) })) };
     await TestBed.configureTestingModule({
@@ -88,7 +90,7 @@ describe('ShareSavedSearchDialogComponent', () => {
           provide: UserService,
           useValue: {
             getUser: vi.fn(() =>
-              of({ id: 'Administrator', isAdministrator: true, properties: { groups: [] } }),
+              of({ id: 'Administrator', isAdministrator, properties: { groups: [] } }),
             ),
           },
         },
@@ -187,12 +189,14 @@ describe('ShareSavedSearchDialogComponent', () => {
         { userGroup: 'members', right: 'Everything', timeFrame: 'Permanent', grantedBy: 'Group' },
       ]);
 
-      expect(component().permissions()).toEqual([
+      // Written against the ACE the dialog was opened on, not whichever row now sits at its index.
+      expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
+        UID,
         expect.objectContaining({
-          aceId: 'members:WriteVersion:true:Administrator::',
-          right: 'Everything',
+          id: 'members:WriteVersion:true:Administrator::',
+          permission: 'Everything',
         }),
-      ]);
+      );
     });
 
     it('keeps row ids unique when the re-read brings in an entry the dialog had not shown', async () => {
@@ -308,9 +312,260 @@ describe('ShareSavedSearchDialogComponent', () => {
     );
   });
 
-  // NXSAT-334: `save()` replays every row, so a lossy permission map rewrote entries nobody
-  // touched. NXSAT-300's second acceptance criterion forbids that.
-  describe('saving', () => {
+  // NXSAT-334, on the path a user actually takes: Edit on a row, then Update in the dialog.
+  // Before this, submitting an edit only updated the `permissions` signal and nothing wrote it, so
+  // the edit was discarded when the dialog closed.
+  describe('submitting an edit', () => {
+    /** Opens the edit dialog on the first row and submits `result`. */
+    async function submitEdit(result: Record<string, unknown>) {
+      await mount(SAVED_SEARCH);
+      const row = component().permissions()[0];
+      dialog.open.mockReturnValueOnce({ afterClosed: () => of([{ ...result }]) });
+
+      component().editRow(row.id);
+      return row;
+    }
+
+    const GRANTABLE = [
+      'Read',
+      'ReadWrite',
+      'Everything',
+      'Write',
+      'ReadVersion',
+      'WriteVersion',
+      'AddChildren',
+      'RemoveChildren',
+      'Remove',
+      'Version',
+      'WriteSecurity',
+      'Unlock',
+      'SetRetention',
+      'UnsetRetention',
+    ];
+
+    it.each(GRANTABLE)('writes %s to the server as it is', async (permission) => {
+      const row = await submitEdit({
+        userGroup: 'members',
+        right: permission,
+        timeFrame: 'Permanent',
+        grantedBy: 'Group',
+      });
+
+      expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
+        UID,
+        expect.objectContaining({ id: row.aceId, username: 'members', permission }),
+      );
+    });
+
+    it('writes the edit by ACE id, so it cannot land on another entry', async () => {
+      const row = await submitEdit({
+        userGroup: 'members',
+        right: 'Everything',
+        timeFrame: 'Permanent',
+        grantedBy: 'Group',
+      });
+
+      expect(row.aceId).toBe('members:Read:true:Administrator::');
+      expect(documents['replacePermission']).toHaveBeenCalledWith(
+        UID,
+        expect.objectContaining({ id: 'members:Read:true:Administrator::' }),
+      );
+    });
+
+    it('shows the server’s own row afterwards, not the staged edit', async () => {
+      // Nuxeo answers 200 to replacing an id it no longer holds and changes nothing, so a staged
+      // edit left on screen would claim a change that did not happen.
+      await mount(SAVED_SEARCH);
+      const row = component().permissions()[0];
+      dialog.open.mockReturnValueOnce({
+        afterClosed: () =>
+          of([
+            {
+              userGroup: 'members',
+              right: 'Everything',
+              timeFrame: 'Permanent',
+              grantedBy: 'Group',
+            },
+          ]),
+      });
+
+      component().editRow(row.id);
+
+      // The re-read is the unchanged fixture: the write did not take.
+      expect(
+        component()
+          .permissions()
+          .map((r) => r.right),
+      ).toEqual(['Read', 'WriteVersion']);
+    });
+
+    it('keeps the edit on screen when the write took but the re-read failed', async () => {
+      // The write succeeded, so the staged row is the best information there is; clearing it would
+      // claim the edit did not happen.
+      await mount(SAVED_SEARCH);
+      const row = component().permissions()[0];
+      documents['getDocumentPermissions'].mockReturnValueOnce(
+        throwError(() => new Error('re-read failed')),
+      );
+      dialog.open.mockReturnValueOnce({
+        afterClosed: () =>
+          of([
+            {
+              userGroup: 'members',
+              right: 'Everything',
+              timeFrame: 'Permanent',
+              grantedBy: 'Group',
+            },
+          ]),
+      });
+
+      component().editRow(row.id);
+
+      expect(documents['replacePermission']).toHaveBeenCalledOnce();
+      expect(component().permissions()[0]).toEqual(
+        expect.objectContaining({ aceId: row.aceId, right: 'Everything' }),
+      );
+      expect(component().saving()).toBe(false);
+    });
+
+    it('writes nothing for a row that was never read from the ACL', async () => {
+      // The fallback row has no ACE id, so there is nothing for Nuxeo to replace.
+      await mount(new Error('no read'));
+      const row = component().permissions()[0];
+      dialog.open.mockReturnValueOnce({
+        afterClosed: () =>
+          of([
+            {
+              userGroup: row.userGroup,
+              right: 'Read',
+              timeFrame: 'Permanent',
+              grantedBy: 'System',
+            },
+          ]),
+      });
+
+      component().editRow(row.id);
+
+      expect(row.aceId).toBeUndefined();
+      expect(documents['replacePermission']).not.toHaveBeenCalled();
+    });
+
+    it('puts the row back when the write fails', async () => {
+      await mount(SAVED_SEARCH);
+      const row = component().permissions()[0];
+      documents['replacePermission'] = vi.fn(() => throwError(() => new Error('403')));
+      dialog.open.mockReturnValueOnce({
+        afterClosed: () =>
+          of([
+            {
+              userGroup: 'members',
+              right: 'Everything',
+              timeFrame: 'Permanent',
+              grantedBy: 'Group',
+            },
+          ]),
+      });
+
+      component().editRow(row.id);
+
+      expect(component().permissions()[0]).toEqual(row);
+    });
+
+    describe('dates', () => {
+      const DATED = {
+        ...ace('powerusers', 'Write'),
+        begin: '2026-01-14T23:00:00.000Z',
+        end: '2026-02-19T23:00:00.000Z',
+      };
+      const withDated = {
+        ...SAVED_SEARCH,
+        contextParameters: {
+          ...(SAVED_SEARCH.contextParameters as object),
+          acls: [{ name: 'local', aces: [DATED] }],
+        },
+      } as unknown as NuxeoDocument;
+
+      it('writes the server’s own instants back when the time frame is untouched', async () => {
+        // A day written at CET midnight is held as 23:00 UTC the day before. Writing the rendered
+        // day back would re-anchor it at the server's midnight and move the entry.
+        await mount(withDated);
+        const row = component().permissions()[0];
+        dialog.open.mockReturnValueOnce({
+          afterClosed: () =>
+            of([
+              {
+                userGroup: 'powerusers',
+                right: 'Everything',
+                timeFrame: row.timeFrame,
+                grantedBy: 'Group',
+              },
+            ]),
+        });
+
+        component().editRow(row.id);
+
+        expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
+          UID,
+          expect.objectContaining({
+            permission: 'Everything',
+            begin: '2026-01-14T23:00:00.000Z',
+            end: '2026-02-19T23:00:00.000Z',
+          }),
+        );
+      });
+
+      it('clears both dates when the user makes a dated entry permanent', async () => {
+        await mount(withDated);
+        const row = component().permissions()[0];
+        dialog.open.mockReturnValueOnce({
+          afterClosed: () =>
+            of([
+              {
+                userGroup: 'powerusers',
+                right: 'Write',
+                timeFrame: 'Permanent',
+                grantedBy: 'Group',
+              },
+            ]),
+        });
+
+        component().editRow(row.id);
+
+        expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
+          UID,
+          expect.objectContaining({ permission: 'Write', begin: null, end: null }),
+        );
+      });
+
+      it('writes the new days when the user changed the time frame', async () => {
+        await mount(withDated);
+        const row = component().permissions()[0];
+        dialog.open.mockReturnValueOnce({
+          afterClosed: () =>
+            of([
+              {
+                userGroup: 'powerusers',
+                right: 'Write',
+                timeFrame: '2026-03-01 - 2026-03-31',
+                grantedBy: 'Group',
+              },
+            ]),
+        });
+
+        component().editRow(row.id);
+
+        expect(documents['replacePermission']).toHaveBeenCalledExactlyOnceWith(
+          UID,
+          expect.objectContaining({ begin: '2026-03-01', end: '2026-03-31' }),
+        );
+      });
+    });
+  });
+
+  // `save()` is a public member of this component and stays for API compatibility, but nothing in
+  // the dialog calls it — the Update button persists one entry by id, as Web UI's does. These
+  // cover the method itself; the live path is the `submitting an edit` block above.
+  describe('save()', () => {
     it('writes an untouched entry on the permission it already holds', async () => {
       await mount(SAVED_SEARCH);
       documents['replacePermission'] = vi.fn(() => of({}));
@@ -323,6 +578,28 @@ describe('ShareSavedSearchDialogComponent', () => {
         (call) => (call[1] as { username: string; permission: string }).permission,
       );
       expect(written).toEqual(['Read', 'WriteVersion']);
+    });
+
+    // The map is kept only so a label left in state by an older build resolves to an identifier
+    // rather than reaching the server verbatim. Asserted so that claim is in code, not just prose.
+    it.each([
+      ['Edit', 'ReadWrite'],
+      ['Manage', 'Everything'],
+      ['Manage everything', 'Everything'],
+      ['Can collect', 'ReadCanCollect'],
+    ])('resolves the legacy label %s to %s', async (label, permission) => {
+      await mount(SAVED_SEARCH);
+      documents['replacePermission'] = vi.fn(() => of({}));
+      component().permissions.update((rows) =>
+        rows.map((row, i) => (i === 0 ? { ...row, right: label } : row)),
+      );
+
+      component().save();
+
+      expect(documents['replacePermission']).toHaveBeenCalledWith(
+        UID,
+        expect.objectContaining({ username: 'members', permission }),
+      );
     });
 
     // The guarantee above — "never rewrite a permission Nuxeo defines" — holds only while no key
@@ -413,6 +690,13 @@ describe('ShareSavedSearchDialogComponent', () => {
       expect(component().permissions()).toEqual([expect.objectContaining({ right: 'Everything' })]);
       // Still reads the same to a person, now through the translation.
       expect(rightCells()).toEqual(['Manage everything']);
+    });
+
+    it('falls back to Read for a user who is not an administrator', async () => {
+      await mount(new Error('no read'), false);
+
+      expect(component().permissions()).toEqual([expect.objectContaining({ right: 'Read' })]);
+      expect(rightCells()).toEqual(['Read']);
     });
   });
 
