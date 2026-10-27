@@ -151,6 +151,7 @@ export {
   type NxsAvatarSize,
   type NxsBreadcrumbItem,
   type NxsBreadcrumbsInputs,
+  type NxsCardInputs,
   type NxsErrorStateInputs,
   type NxsRichTooltipInputs,
   type NxsStatusTagInputs,
@@ -184,4 +185,5 @@ export {
   type NxsSavedSearchChoice,
 } from './lib/saved-search-select/saved-search-select.component';
 export { NxsSavedSearchActionsComponent } from './lib/saved-search-actions/saved-search-actions.component';
+export { NxsCardComponent } from './lib/card/card.component';
 // satori:export:components — `satori-component` inserts above this line

@@ -1216,7 +1216,7 @@ expectRed(
 // The guardrail keeps its own list of the primitives a customer may override, because it cannot
 // read the platform's source in their CI. Nothing compared it with `NXS_PRIMITIVE_IDS`, and an ID
 // it lacks is one it refuses to let them override ("the platform has no … to override") — the
-// status tag, the tabs and the action bar all were.
+// status tag, the tabs, the action bar and the card all were.
 {
   positive += 1;
   const ids = readFileSync(PRIMITIVES, 'utf8');
@@ -1259,6 +1259,7 @@ for (const [id, contract] of [
   ['statusTag', 'NxsStatusTagInputs'],
   ['tabs', 'NxsTabsInputs'],
   ['actionBar', 'NxsActionBarInputs'],
+  ['card', 'NxsCardInputs'],
 ]) {
   const override = (implementsClause) =>
     library({

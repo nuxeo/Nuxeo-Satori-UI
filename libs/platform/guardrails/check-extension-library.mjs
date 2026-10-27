@@ -370,6 +370,7 @@ const PRIMITIVE_CONTRACTS = {
   errorState: 'NxsErrorStateInputs',
   tabs: 'NxsTabsInputs',
   actionBar: 'NxsActionBarInputs',
+  card: 'NxsCardInputs',
 };
 
 const COMPONENTS_KEY = String.raw`(?:\bcomponents|'components'|"components")\s*:\s*`;
