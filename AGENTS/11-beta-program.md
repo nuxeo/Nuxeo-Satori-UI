@@ -700,8 +700,8 @@ Beyond the standing rules in `AGENTS.md`:
 
 ### Running the harness on Windows
 
-Use the same `npm run beta:gate -- --base origin/integration/nxsat-308` command in
-PowerShell as on macOS/Linux. Package-tool subprocesses go through
+Use the same `npm run beta:gate` command in PowerShell as on macOS/Linux; its base
+defaults to `origin/main`. Package-tool subprocesses go through
 `scripts/beta-harness/package-command.mjs`, using Node's executable and the tool's
 JavaScript entry script without shell interpolation. Use `spawnToolSync`,
 `execToolSync` or `spawnTool`; gate descriptors use `tool: 'npm'` or `tool: 'npx'`.
