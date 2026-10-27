@@ -622,12 +622,28 @@ try {
         // that case, so this changes no existing capture; it matters for a section whose story
         // renders several components, where the documented one can be last. The card's is.
         const fitted = await fitViewport(page, [h.selector]);
-        const fits = fitted.some((b) => b.ok && b.bottom + 24 <= page.viewportSize().height);
+        // Every edge, not just the bottom. `crop()` clamps to the viewport on both axes, so a
+        // target wider than it comes out cut off horizontally while a bottom-only predicate still
+        // certifies "the whole element" — and a negative `top` or `left`, which is what a target
+        // scrolled partly above the fold has, passed that predicate too. `fitViewport` can only
+        // grow the height, so a width overflow is reported rather than fixed: it means the story
+        // renders the component wider than 1280px and the story is what has to change.
+        const vp = () => page.viewportSize();
+        const clipped = fitted.filter(
+          (b) =>
+            !b.ok ||
+            b.top < 0 ||
+            b.left < 0 ||
+            b.bottom > vp().height + 1 ||
+            b.right > vp().width + 1,
+        );
         record(
           subject,
           `<${h.selector}> fits the viewport, so the crop is the whole element`,
-          fits,
-          `viewport ${page.viewportSize().width}×${page.viewportSize().height}`,
+          fitted.length > 0 && clipped.length === 0,
+          clipped.length
+            ? clipped.map((b) => `${b.sel}: ${b.why ?? 'outside the capture'}`).join(', ')
+            : `viewport ${vp().width}×${vp().height}`,
         );
         let opened = null;
         if (c.captured === 'Opened from the keyboard')
