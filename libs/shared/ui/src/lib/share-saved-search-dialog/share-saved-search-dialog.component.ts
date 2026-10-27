@@ -21,6 +21,7 @@ import {
   CURRENT_USERNAME,
   UserService,
   DocumentDetailService,
+  permissionRightLabel,
   type NuxeoUser,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -41,6 +42,14 @@ export interface PermissionEntry {
   right: string;
   timeFrame: string;
   grantedBy: string;
+  /** The ACE's own instants, so an edit that leaves the dates alone can write them back. */
+  begin?: string | null;
+  end?: string | null;
+  /**
+   * Whether the entry grants or denies. `Document.ReplacePermission` only ever writes a grant, so
+   * a deny must never be editable: submitting one unchanged would invert it.
+   */
+  granted?: boolean;
 }
 
 interface PermissionSummary {
@@ -67,6 +76,19 @@ interface AceLike {
   externalUser?: boolean;
   begin?: string | null;
   end?: string | null;
+  /** Absent means granted; Nuxeo sends `false` only for a deny. */
+  granted?: boolean;
+}
+
+/**
+ * Nuxeo's inheritance-blocking marker: a deny-`Everything` ACE for `Everyone`.
+ *
+ * The same predicate as `isInheritanceMarker` in `nxs-permissions-panel`, which is internal to
+ * `satori-components`; exporting it to share three comparisons would add a customer-visible export.
+ */
+function isInheritanceMarker(ace: AceLike): boolean {
+  const principal = (ace.username ?? '').replace(/^group:/, '');
+  return principal === 'Everyone' && ace.permission === 'Everything' && ace.granted === false;
 }
 
 export interface ShareSavedSearchDialogData {
@@ -182,17 +204,27 @@ export class ShareSavedSearchDialogComponent implements OnInit {
   }
 
   private localRowsOf(aces: readonly AceLike[]): PermissionEntry[] {
-    return aces
-      .filter((ace) => !ace.externalUser)
-      .map((ace, index: number) => ({
-        // The ACE id, not the position: a re-read must not move an open edit onto another row.
-        id: ace.id || `local-${index}`,
-        aceId: ace.id,
-        userGroup: ace.username || ace.email || 'Unknown',
-        right: ace.permission || 'Read',
-        timeFrame: this.toTimeFrameLabel(ace.begin, ace.end),
-        grantedBy: ace.creator || 'System',
-      }));
+    return (
+      aces
+        .filter((ace) => !ace.externalUser)
+        // Blocked inheritance is not a flag in Nuxeo: it is a deny-`Everything` ACE for `Everyone`,
+        // which `isInheritanceBlocked` already represents and the toggle maintains. Listed as an
+        // ordinary row it was editable, and `Document.ReplacePermission` writes a grant — so
+        // submitting it unchanged would have granted Everyone full access.
+        .filter((ace) => !isInheritanceMarker(ace))
+        .map((ace, index: number) => ({
+          // The ACE id, not the position: a re-read must not move an open edit onto another row.
+          id: ace.id || `local-${index}`,
+          aceId: ace.id,
+          userGroup: ace.username || ace.email || 'Unknown',
+          right: ace.permission || 'Read',
+          timeFrame: this.toTimeFrameLabel(ace.begin, ace.end),
+          grantedBy: ace.creator || 'System',
+          begin: ace.begin,
+          end: ace.end,
+          granted: ace.granted !== false,
+        }))
+    );
   }
 
   /**
@@ -360,7 +392,10 @@ export class ShareSavedSearchDialogComponent implements OnInit {
       {
         id: String(this.nextId++),
         userGroup: this.toDisplayName(user),
-        right: user.isAdministrator ? 'Manage everything' : 'Read',
+        // A permission identifier, not its label: `right` is also what an edit round-trips and
+        // what `save()` writes, so a label here could not be told from a permission (NXSAT-334).
+        // The table renders it through `permissionLabel`, so it still reads "Manage everything".
+        right: user.isAdministrator ? 'Everything' : 'Read',
         timeFrame: 'Permanent',
         grantedBy: 'System',
       },
@@ -386,6 +421,27 @@ export class ShareSavedSearchDialogComponent implements OnInit {
         grantedBy: 'Parent',
       })),
     );
+  }
+
+  /**
+   * A permission as a person reads it. This table rendered `row.right` raw, so it alone showed
+   * Nuxeo identifiers — `ReadWrite`, `WriteSecurity` — in every locale, which is what made storing
+   * an English label in `right` look reasonable. The document, collection and browse tables all go
+   * through this helper; an unlabelled permission still shows its identifier, as Web UI's does.
+   */
+  /**
+   * Whether a row may be edited: it has to exist on the server, and it has to be a grant.
+   *
+   * Nuxeo's write operations only grant, so there is no way to replace a deny without inverting
+   * it. Hiding the control is not the control — `editRow` checks this too, and the server checks
+   * every write regardless.
+   */
+  protected isEditable(row: PermissionEntry): boolean {
+    return !!row.aceId && row.granted !== false;
+  }
+
+  protected permissionLabel(permission: string): string {
+    return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
 
   private toDisplayName(user: NuxeoUser): string {
@@ -417,18 +473,18 @@ export class ShareSavedSearchDialogComponent implements OnInit {
 
         // The dialog returns the server's own identifiers, so they are sent as they are: the
         // display-label mapping would turn `Write` into the broader `ReadWrite`.
-        const requests = result.map((entry) => {
-          const [begin, end] = this.parseTimeFrame(entry.timeFrame);
-
-          return this.detailService.addPermission(this.data.id, {
+        const requests = result.map((entry) =>
+          this.detailService.addPermission(this.data.id, {
             username: entry.userGroup,
             permission: entry.right,
-            begin: begin || null,
-            end: end || null,
-            notify: false,
-            comment: '',
-          });
-        });
+            // The dialog's own resolved values, rather than its rendered label parsed back.
+            begin: entry.begin,
+            end: entry.end,
+            // The dialog asks whether to notify, so the answer is honoured rather than dropped.
+            notify: entry.notify,
+            comment: entry.comment ?? '',
+          }),
+        );
 
         forkJoin(requests)
           .pipe(
@@ -487,7 +543,11 @@ export class ShareSavedSearchDialogComponent implements OnInit {
 
   editRow(id: string): void {
     const row = this.permissions().find((r) => r.id === id);
-    if (!row) return;
+    // Not while a write or its re-read is in flight: the ACL is mid-change, and submitting into it
+    // used to be dropped by the guard below without telling anyone. The button is disabled too.
+    // Never a deny entry: `Document.ReplacePermission` writes a grant, so an edit would invert it.
+    // `nxs-permissions-panel` refuses the same thing (`refusalsFor`, reason `deny-entry`).
+    if (!row || this.saving() || !this.isEditable(row)) return;
 
     this.dialog
       .open<
@@ -504,9 +564,11 @@ export class ShareSavedSearchDialogComponent implements OnInit {
       })
       .afterClosed()
       .subscribe((result) => {
-        if (!result || result.length === 0) return;
+        if (!result || result.length === 0 || !this.data.id || !row.aceId || this.saving()) return;
 
         const updatedEntry = result[0];
+        const uid = this.data.id;
+        // Show the edit at once, then let the re-read below replace it with the server's own row.
         this.permissions.update((rows) =>
           rows.map((r) =>
             r.id === id
@@ -520,6 +582,66 @@ export class ShareSavedSearchDialogComponent implements OnInit {
               : r,
           ),
         );
+
+        this.saving.set(true);
+        this.detailService
+          .replacePermission(uid, {
+            id: row.aceId,
+            username: row.userGroup,
+            // The dialog returns the server's own identifier, written as it is: the display-label
+            // mapping would turn `Write` into the broader `ReadWrite` (NXSAT-334).
+            permission: updatedEntry.right,
+            // Already resolved by the dialog: a day the user picked, or this entry's own instant
+            // where they left it alone. Reading them back out of the rendered `timeFrame` only
+            // worked in English, and cleared a one-sided range in every other locale.
+            begin: updatedEntry.begin,
+            end: updatedEntry.end,
+            notify: updatedEntry.notify,
+            comment: updatedEntry.comment,
+          })
+          .pipe(
+            map(() => true),
+            catchError((error) => {
+              console.error('Error updating permission:', error);
+              // Put the row back as the server last showed it.
+              this.permissions.update((rows) => rows.map((r) => (r.id === id ? row : r)));
+              return of(false);
+            }),
+            // `replaced` has to reach the subscriber: a write that never happened and a write
+            // whose re-read failed both arrive with no document, but only the second one leaves
+            // the row's ACE id stale.
+            switchMap((replaced) =>
+              !replaced
+                ? of({ replaced, doc: null as NuxeoDocument | null })
+                : this.detailService.getDocumentPermissions(uid).pipe(
+                    map((doc) => ({ replaced, doc: doc as NuxeoDocument | null })),
+                    catchError((error) => {
+                      console.error('Error re-reading permissions after an update:', error);
+                      return of({ replaced, doc: null as NuxeoDocument | null });
+                    }),
+                  ),
+            ),
+            finalize(() => this.saving.set(false)),
+            takeUntilDestroyed(this.destroyRef),
+          )
+          .subscribe(({ replaced, doc }) => {
+            // Nuxeo answers 200 to replacing an id it no longer holds and changes nothing, so only
+            // the re-read shows what actually took.
+            if (doc) {
+              this.parsePermissionsFromDocument(doc);
+              return;
+            }
+            // Nothing was written, and the row has already been put back with its id intact.
+            if (!replaced) return;
+            // The write took but the re-read did not. An ACE id encodes the permission and the
+            // dates, so the one on screen is now stale, and a further edit or removal would
+            // address an entry the server no longer has — which Nuxeo answers 200 to, changing
+            // nothing. Drop it: a row with no ACE id offers no actions, the same state a row
+            // never read from the ACL is in.
+            this.permissions.update((rows) =>
+              rows.map((r) => (r.id === id ? { ...r, aceId: undefined } : r)),
+            );
+          });
       });
   }
 
@@ -566,11 +688,17 @@ export class ShareSavedSearchDialogComponent implements OnInit {
       });
   }
 
+  /**
+   * The permission to write for a row.
+   *
+   * `save()` replays every row, so this runs over entries the user never touched — which is why it
+   * must never rewrite a permission Nuxeo defines. It used to map `Write` to `ReadWrite`, widening
+   * an untouched entry's access on any save, and the labels below were indistinguishable from
+   * identifiers (NXSAT-334). Rows now carry identifiers; the map is kept only so a label left in
+   * state by an older build still resolves rather than reaching the server verbatim.
+   */
   private normalizePermissionForApi(perm: PermissionEntry): { right: string; timeFrame: string } {
-    // Normalize right values to API format
-    const rightMap: Record<string, string> = {
-      Read: 'Read',
-      Write: 'ReadWrite',
+    const legacyLabelToPermission: Record<string, string> = {
       Edit: 'ReadWrite',
       Manage: 'Everything',
       'Manage everything': 'Everything',
@@ -578,7 +706,7 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     };
 
     return {
-      right: rightMap[perm.right] || perm.right,
+      right: legacyLabelToPermission[perm.right] ?? perm.right,
       timeFrame: perm.timeFrame,
     };
   }

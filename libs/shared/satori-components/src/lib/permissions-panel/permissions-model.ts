@@ -7,8 +7,9 @@ import {
 
 /**
  * The grants the external review asked for (NXSAT-300): Nuxeo's twelve permission levels and the
- * retention pair. Offered after the server's own suggestions for the document type, and checked
- * against the permissions the server defines whenever the read can establish that set.
+ * retention pair. Offered under "All permissions", after the server's own suggestions for the
+ * document type, and checked against the permissions the server defines whenever the read can
+ * establish that set. Not part of the default list, which is the server's own, as Web UI offers it.
  */
 export const NXS_STANDARD_PERMISSIONS: readonly string[] = [
   'Read',
@@ -227,7 +228,10 @@ export function readSnapshot(doc: NuxeoDocument): NxsPermissionsSnapshot {
   };
 }
 
-/** `[...suggested, ...standard, ...other]`, plus `current` when the catalogue does not hold it. */
+/**
+ * Everything the panel offers under "All permissions": `[...suggested, ...standard, ...other]`,
+ * plus `current` when the catalogue does not hold it.
+ */
 export function offeredPermissions(catalogue: NxsPermissionCatalogue, current?: string): string[] {
   const all = [...catalogue.suggested, ...catalogue.standard, ...catalogue.other];
   return current && !all.includes(current) ? [...all, current] : all;

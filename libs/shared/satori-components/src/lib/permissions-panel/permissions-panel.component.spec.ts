@@ -139,6 +139,13 @@ class TwoPanelsHostComponent {}
 })
 class TypeOfferHostComponent {}
 
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  template: `<nxs-permissions-panel documentId="doc-1" offer="all" />`,
+})
+class AllOfferHostComponent {}
+
 /** A Collection as a stock server reads it: its type's four, and 34 permissions held. */
 function collectionDoc(local: Ace[], visible: string[] | undefined): NuxeoDocument {
   const doc = serverDoc(local, { permissions: [...ALL, 'ReadCanCollect'] });
@@ -236,27 +243,148 @@ describe('NxsPermissionsPanelComponent', () => {
       expect(inherited[1]).toContain('Read');
     });
 
-    it('offers every standard permission in an entry select, grouped as the server orders them', async () => {
-      await mount(PARITY);
-      const trigger = el().querySelector<HTMLElement>('tr[role="row"] .mat-mdc-select-trigger');
-      trigger?.click();
+    /** Opens the first entry's permission select and returns the overlay it opened. */
+    async function openFirstEntrySelect(): Promise<HTMLElement> {
+      el().querySelector<HTMLElement>('tr[role="row"] .mat-mdc-select-trigger')?.click();
       await render();
-      const overlay = document.querySelector('.cdk-overlay-container') as HTMLElement;
-      const options = Array.from(overlay.querySelectorAll('mat-option')).map(
-        (o) => o.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      return document.querySelector('.cdk-overlay-container') as HTMLElement;
+    }
+    const groupLabels = (overlay: HTMLElement) =>
+      Array.from(overlay.querySelectorAll('.mat-mdc-optgroup-label')).map((g) =>
+        g.textContent?.trim(),
       );
-      for (const permission of ALL.slice(0, 14)) {
-        expect(options.some((o) => o.endsWith(permission) || o === permission)).toBe(true);
-      }
-      expect(
-        Array.from(overlay.querySelectorAll('.mat-mdc-optgroup-label')).map((g) =>
-          g.textContent?.trim(),
-        ),
-      ).toEqual([
+    const offeredNames = (overlay: HTMLElement) =>
+      Array.from(overlay.querySelectorAll<HTMLElement>('mat-option')).map(
+        (o) => o.getAttribute('data-permission') ?? '',
+      );
+
+    it('offers only the type suggestions in an entry select by default', async () => {
+      await mount(PARITY);
+      const overlay = await openFirstEntrySelect();
+      expect(groupLabels(overlay)).toEqual(['Suggested for this document type']);
+      // parity-user's own AddChildren is not a suggestion, so it leads as that entry's extra option.
+      expect(offeredNames(overlay)).toEqual(['AddChildren', 'Read', 'ReadWrite', 'Everything']);
+    });
+
+    it('offers every standard permission, grouped as the server orders them, under All permissions', async () => {
+      await mount(PARITY);
+      const checkbox = el().querySelector<HTMLInputElement>('mat-checkbox input');
+      expect(checkbox?.checked).toBe(false);
+      checkbox?.click();
+      await render();
+      const overlay = await openFirstEntrySelect();
+      expect(groupLabels(overlay)).toEqual([
         'Suggested for this document type',
         'Standard permissions',
         'Other permissions on this server',
       ]);
+      for (const permission of ALL.slice(0, 14)) {
+        expect(offeredNames(overlay)).toContain(permission);
+      }
+    });
+
+    it("offers Web UI's three rights, with no empty select, when the type suggests nothing", async () => {
+      const doc = serverDoc([{ username: 'jdoe', permission: 'Read' }]);
+      contextOf(doc)['userVisiblePermissions'] = [];
+      await mount(doc);
+      const checkbox = el().querySelector<HTMLInputElement>('mat-checkbox input');
+      expect(checkbox?.checked).toBe(false);
+      expect(checkbox?.disabled).toBe(false);
+      const overlay = await openFirstEntrySelect();
+      expect(groupLabels(overlay)).toEqual(['Suggested for this document type']);
+      expect(offeredNames(overlay)).toEqual(['Read', 'ReadWrite', 'Everything']);
+    });
+
+    it('starts with the whole set ticked, and fixed, when offer is all', async () => {
+      documents.getDocumentPermissions.mockReturnValue(of(PARITY));
+      const page = TestBed.createComponent(AllOfferHostComponent);
+      page.detectChanges();
+      await page.whenStable();
+      page.detectChanges();
+      const checkbox = page.nativeElement.querySelector('mat-checkbox input') as HTMLInputElement;
+      expect(checkbox.checked).toBe(true);
+      expect(checkbox.disabled).toBe(true);
+    });
+
+    it('keeps a staged change to a permission outside the default list selectable', async () => {
+      await mount(serverDoc([{ username: 'jdoe', permission: 'Read' }]));
+      const target = panel()['snapshot']()?.local[0];
+      if (!target) throw new Error('no entry to stage');
+      panel()['staged'].set(
+        new Map([
+          [target.id, { kind: 'replace', target, permission: 'Write', begin: null, end: null }],
+        ]),
+      );
+      await render();
+      expect(panel()['localItems']()[0].extraPermissions).toEqual(['Write']);
+    });
+
+    it('keeps the editor selectable on a permission picked while All permissions was ticked', async () => {
+      await mount(PARITY);
+      panel()['openAdd']();
+      panel()['allPermissions'].set(true);
+      panel()['editorPermission'].set('Write');
+      panel()['allPermissions'].set(false);
+      await render();
+      expect(panel()['editorExtraPermissions']()).toEqual(['Write']);
+    });
+
+    it('keeps a standard permission an entry already holds, as its own option, by default', async () => {
+      await mount(serverDoc([{ username: 'jdoe', permission: 'Write' }]));
+      expect(panel()['localItems']()[0].extraPermissions).toEqual(['Write']);
+      const overlay = await openFirstEntrySelect();
+      expect(offeredNames(overlay)).toEqual(['Write', 'Read', 'ReadWrite', 'Everything']);
+    });
+
+    it('starts a new document with its own default, not the expanded list', async () => {
+      await mount(PARITY);
+      panel()['allPermissions'].set(true);
+      documents.getDocumentPermissions.mockReturnValueOnce(
+        of(serverDoc([], { uid: 'doc-2', title: 'Other document' })),
+      );
+      fixture.componentInstance.uid.set('doc-2');
+      await render();
+      expect(panel()['allPermissions']()).toBe(false);
+    });
+
+    it('keeps an entry’s own grant selectable when All permissions is unticked under its editor', async () => {
+      await mount(serverDoc([{ username: 'jdoe', permission: 'Write' }]));
+      panel()['allPermissions'].set(true);
+      panel()['openEdit'](panel()['localItems']()[0]);
+      panel()['editorPermission'].set('Unlock');
+      panel()['allPermissions'].set(false);
+      await render();
+      expect(panel()['editorExtraPermissions']()).toEqual(['Write', 'Unlock']);
+    });
+
+    it('keeps a staged replacement selectable in its editor after All permissions is unticked', async () => {
+      await mount(serverDoc([{ username: 'jdoe', permission: 'Read' }]));
+      panel()['allPermissions'].set(true);
+      const target = panel()['snapshot']()?.local[0];
+      if (!target) throw new Error('no entry to stage');
+      panel()['staged'].set(
+        new Map([
+          [target.id, { kind: 'replace', target, permission: 'Write', begin: null, end: null }],
+        ]),
+      );
+      panel()['openEdit'](panel()['localItems']()[0]);
+      panel()['editorPermission'].set('Unlock');
+      panel()['allPermissions'].set(false);
+      await render();
+      expect(panel()['editorExtraPermissions']()).toEqual(['Write', 'Unlock']);
+    });
+
+    it('lists the three rights once, not twice, when All permissions is ticked and the type suggests nothing', async () => {
+      const doc = serverDoc([{ username: 'jdoe', permission: 'Read' }]);
+      contextOf(doc)['userVisiblePermissions'] = [];
+      await mount(doc);
+      panel()['allPermissions'].set(true);
+      await render();
+      const overlay = await openFirstEntrySelect();
+      const names = offeredNames(overlay);
+      expect(names.filter((n) => n === 'Read')).toHaveLength(1);
+      expect(names.filter((n) => n === 'ReadWrite')).toHaveLength(1);
+      expect(names.filter((n) => n === 'Everything')).toHaveLength(1);
     });
 
     describe('with offer="type"', () => {

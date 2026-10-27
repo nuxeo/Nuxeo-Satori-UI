@@ -334,6 +334,18 @@ describe('permissionCatalogue', () => {
     for (const permission of NXS_STANDARD_PERMISSIONS) expect(offered).toContain(permission);
   });
 
+  // The default list is the server's list for each type, as Web UI offers it. These are what
+  // Nuxeo 2025.26.16 reported for each type on a live read (NXSAT-651, 2026-10-22).
+  it.each([
+    ['Workspace', ['Read', 'ReadWrite', 'Everything']],
+    ['Folder', ['Read', 'ReadWrite', 'Everything']],
+    ['File', ['Read', 'ReadWrite', 'Everything']],
+    ['Section root', ['Read', 'ReadWrite', 'Everything', 'CanAskForPublishing']],
+  ])('defaults to the server list for a %s', (_type, listed) => {
+    const catalogue = permissionCatalogue(doc([], { userVisiblePermissions: listed }));
+    expect(catalogue.suggested).toEqual(listed);
+  });
+
   it('puts the section-root suggestion first, as the server orders it', () => {
     const catalogue = permissionCatalogue(
       doc([], {

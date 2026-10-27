@@ -1,5 +1,5 @@
 import { CdkAriaLive } from '@angular/cdk/a11y';
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -7,6 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import type { NxsActionBarInputs } from '../primitives';
+import { nxsActionBarView } from './action-bar-view';
 
 /** One control on a document toolbar, already resolved by the host. */
 export interface NxsToolbarAction {
@@ -73,38 +74,6 @@ export class NxsDocumentToolbarComponent implements NxsActionBarInputs {
   /** The entry the user ran. Never a disabled one. */
   readonly selected = output<NxsToolbarAction>();
 
-  protected readonly inline = computed(() => this.actions().filter((action) => !action.overflow));
-  protected readonly overflow = computed(() => this.actions().filter((action) => action.overflow));
-  protected readonly ownLabel = computed(() => this.label().trim());
-  protected readonly ownMoreLabel = computed(() => this.moreLabel().trim());
-
-  /** A tooltip only when there is one to show: Material renders an empty one as a blank bubble. */
-  protected tooltipOf(action: NxsToolbarAction): string {
-    return (action.tooltip ?? '').trim() || action.label;
-  }
-
-  /** What the tooltip adds to the label, if anything — "Locked by Jane on 3 May" on Unlock. */
-  protected extraOf(action: NxsToolbarAction): string {
-    const tip = (action.tooltip ?? '').trim();
-    return tip && tip !== action.label ? tip : '';
-  }
-
-  /**
-   * An icon button's accessible name: its label, then what its tooltip adds, so a keyboard or
-   * screen-reader user hears the lock owner a mouse user reads.
-   */
-  protected nameOf(action: NxsToolbarAction): string {
-    const extra = this.extraOf(action);
-    return extra ? `${action.label}. ${extra}` : action.label;
-  }
-
-  /**
-   * Inline buttons are `disabledInteractive`, so a click on a disabled one still arrives here and
-   * is refused here.
-   */
-  protected run(action: NxsToolbarAction): void {
-    if (action.disabled) return;
-    this.selected.emit(action);
-    this.actionHandler()?.(action);
-  }
+  /** Grouping, names and running, shared with Satori's action bar. */
+  protected readonly view = nxsActionBarView(this);
 }

@@ -1,9 +1,9 @@
 <div
   class="nxs-satori-action-bar__group"
   role="group"
-  [attr.aria-label]="ownLabel() || ('satori-components.document-toolbar.label' | translate)"
+  [attr.aria-label]="view.ownLabel() || ('satori-components.document-toolbar.label' | translate)"
 >
-  @for (action of inline(); track action.id) {
+  @for (action of view.inline(); track action.id) {
     <!-- `[disabled]` is SatActionBarButton's input, which only styles the button: the native
          attribute is never set, so a disabled entry stays focusable and its tooltip readable. -->
     <button
@@ -14,32 +14,32 @@
       [attr.data-action-id]="action.id"
       [disabled]="!!action.disabled"
       [attr.aria-disabled]="action.disabled ? 'true' : null"
-      [attr.aria-label]="action.icon ? nameOf(action) : null"
-      [matTooltip]="tooltipOf(action)"
-      (click)="run(action)"
+      [attr.aria-label]="action.icon ? view.nameOf(action) : null"
+      [matTooltip]="view.tooltipOf(action)"
+      (click)="view.run(action)"
     >
       @if (action.icon) {
         <mat-icon aria-hidden="true" [svgIcon]="action.icon" />
       } @else {
         {{ action.label }}
-        @if (extraOf(action); as extra) {
+        @if (view.extraOf(action); as extra) {
           <span class="cdk-visually-hidden">. {{ extra }}</span>
         }
       }
     </button>
   }
 
-  @if (overflow().length > 0) {
+  @if (view.overflow().length > 0) {
     <button
       satActionBarButton
       type="button"
       class="nxs-satori-action-bar__more"
       [matMenuTriggerFor]="moreMenu"
       [attr.aria-label]="
-        ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
+        view.ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
       "
       [matTooltip]="
-        ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
+        view.ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
       "
     >
       <mat-icon aria-hidden="true" svgIcon="more_vert" />
@@ -48,7 +48,7 @@
 </div>
 
 <mat-menu #moreMenu="matMenu" class="nxs-satori-action-bar__menu">
-  @for (action of overflow(); track action.id) {
+  @for (action of view.overflow(); track action.id) {
     <button
       mat-menu-item
       type="button"
@@ -57,7 +57,7 @@
       [matTooltip]="action.tooltip ?? ''"
       [matTooltipDisabled]="!action.tooltip"
       matTooltipPosition="left"
-      (click)="run(action)"
+      (click)="view.run(action)"
     >
       @if (action.icon) {
         <mat-icon aria-hidden="true" [svgIcon]="action.icon" />

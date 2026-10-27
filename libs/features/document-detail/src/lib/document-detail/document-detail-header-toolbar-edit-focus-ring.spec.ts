@@ -24,7 +24,7 @@ describe('DocumentDetailComponent — header Edit toolbar focus ring (NXSAT-542)
   );
 
   function inlineLoopMarkup(html: string): string {
-    const start = html.indexOf('@for (action of inline()');
+    const start = html.indexOf('@for (action of view.inline()');
     expect(start, 'inline actions @for block').toBeGreaterThan(-1);
     const end = html.indexOf('[matMenuTriggerFor]="moreMenu"', start);
     expect(end, 'end of inline actions @for block').toBeGreaterThan(start);
