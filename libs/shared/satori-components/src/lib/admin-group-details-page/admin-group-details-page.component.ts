@@ -18,7 +18,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { filter, type Subscription, switchMap } from 'rxjs';
+import { type Subscription, switchMap } from 'rxjs';
 
 import {
   DocumentDetailService,
@@ -30,15 +30,7 @@ import {
   UserService,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import {
-  NxsConfirmDialogComponent,
-  type NxsConfirmDialogData,
-} from '../confirm-dialog/confirm-dialog.component';
-import {
-  NxsGroupFormDialogComponent,
-  type NxsGroupFormDialogData,
-  type NxsGroupFormDialogResult,
-} from '../group-form-dialog/group-form-dialog.component';
+import { type NxsConfirmDialogData } from '../confirm-dialog/confirm-dialog.component';
 
 /** Permission rows per page, in the permissions table. */
 const PERMISSIONS_PAGE_SIZE = 10;
@@ -67,6 +59,8 @@ export const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = 'nxs.components.adminGroupDetails
  * It does not navigate. A deletion calls `deleted` so the host can return to the list, and choosing a
  * member, a nested group or a document calls its callback with the id for the host to route to.
  */
+import { saveEditedGroup, confirmAction } from '../admin-edit-flows';
+
 @Component({
   selector: 'nxs-admin-group-details-page',
   standalone: true,
@@ -195,23 +189,8 @@ export class NxsAdminGroupDetailsPageComponent {
   protected edit(): void {
     const group = this.group();
     if (!group) return;
-    this.dialog
-      .open<
-        NxsGroupFormDialogComponent,
-        NxsGroupFormDialogData,
-        NxsGroupFormDialogResult | undefined
-      >(NxsGroupFormDialogComponent, { width: '480px', data: { mode: 'edit', group } })
-      .afterClosed()
-      .pipe(
-        filter((result): result is NxsGroupFormDialogResult => !!result && result.mode === 'edit'),
-        switchMap((result) =>
-          this.userService.updateGroup(group.groupname, {
-            grouplabel: result.grouplabel,
-            memberUsers: [...result.memberUsers],
-          }),
-        ),
-        takeUntilDestroyed(this.destroyRef),
-      )
+    saveEditedGroup(this.dialog, this.userService, group)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => this.finish('satori-components.admin-group-details-page.group-saved', false),
         error: () => this.finish('satori-components.admin-group-details-page.update-failed', true),
@@ -300,16 +279,7 @@ export class NxsAdminGroupDetailsPageComponent {
       ),
       confirmLabel: this.translate.instant('satori-components.admin-group-details-page.delete'),
     };
-    return this.dialog
-      .open<NxsConfirmDialogComponent, NxsConfirmDialogData, true | undefined>(
-        NxsConfirmDialogComponent,
-        {
-          width: '400px',
-          data,
-        },
-      )
-      .afterClosed()
-      .pipe(filter((ok): ok is true => ok === true));
+    return confirmAction(this.dialog, data);
   }
 
   /** Reports the outcome on the status line, and reloads the group so the page shows the change. */

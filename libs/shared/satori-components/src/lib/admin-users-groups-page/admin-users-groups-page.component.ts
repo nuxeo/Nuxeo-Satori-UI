@@ -34,10 +34,7 @@ import {
   UserService,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import {
-  NxsConfirmDialogComponent,
-  type NxsConfirmDialogData,
-} from '../confirm-dialog/confirm-dialog.component';
+import { type NxsConfirmDialogData } from '../confirm-dialog/confirm-dialog.component';
 import {
   NxsGroupFormDialogComponent,
   type NxsGroupFormDialogData,
@@ -77,6 +74,8 @@ export const NXS_ADMIN_USERS_GROUPS_PAGE_ID = 'nxs.components.adminUsersGroupsPa
  * and the host routes to its details page. Outcomes appear in a status line on the page, which stays
  * on screen until the next action, so a refusal is not lost the way a snackbar's timeout would lose it.
  */
+import { saveEditedUser, saveEditedGroup, confirmAction } from '../admin-edit-flows';
+
 @Component({
   selector: 'nxs-admin-users-groups-page',
   standalone: true,
@@ -309,26 +308,8 @@ export class NxsAdminUsersGroupsPageComponent implements OnInit {
   }
 
   protected openEditUser(user: NuxeoUser): void {
-    this.dialog
-      .open<NxsUserFormDialogComponent, NxsUserFormDialogData, NxsUserFormDialogResult | undefined>(
-        NxsUserFormDialogComponent,
-        { width: '480px', maxHeight: '90vh', data: { mode: 'edit', user } },
-      )
-      .afterClosed()
-      .pipe(
-        filter((result): result is NxsUserFormDialogResult => !!result && result.mode === 'edit'),
-        switchMap((result) =>
-          this.userService.updateUser(user.id, {
-            firstName: result.firstName,
-            lastName: result.lastName,
-            company: result.company,
-            email: result.email,
-            password: result.password,
-            groups: [...result.groups],
-          }),
-        ),
-        takeUntilDestroyed(this.destroyRef),
-      )
+    saveEditedUser(this.dialog, this.userService, user)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => this.finish('satori-components.admin-users-groups-page.user-updated', false),
         error: () => this.finish('satori-components.admin-users-groups-page.update-failed', true),
@@ -384,23 +365,8 @@ export class NxsAdminUsersGroupsPageComponent implements OnInit {
   }
 
   protected openEditGroup(group: NuxeoGroup): void {
-    this.dialog
-      .open<
-        NxsGroupFormDialogComponent,
-        NxsGroupFormDialogData,
-        NxsGroupFormDialogResult | undefined
-      >(NxsGroupFormDialogComponent, { width: '480px', data: { mode: 'edit', group } })
-      .afterClosed()
-      .pipe(
-        filter((result): result is NxsGroupFormDialogResult => !!result && result.mode === 'edit'),
-        switchMap((result) =>
-          this.userService.updateGroup(group.groupname, {
-            grouplabel: result.grouplabel,
-            memberUsers: [...result.memberUsers],
-          }),
-        ),
-        takeUntilDestroyed(this.destroyRef),
-      )
+    saveEditedGroup(this.dialog, this.userService, group)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => this.finish('satori-components.admin-users-groups-page.group-updated', false),
         error: () => this.finish('satori-components.admin-users-groups-page.update-failed', true),
@@ -449,16 +415,7 @@ export class NxsAdminUsersGroupsPageComponent implements OnInit {
       message: this.translate.instant(names.message, { name: names.name }),
       confirmLabel: this.translate.instant('satori-components.admin-users-groups-page.delete'),
     };
-    return this.dialog
-      .open<NxsConfirmDialogComponent, NxsConfirmDialogData, true | undefined>(
-        NxsConfirmDialogComponent,
-        {
-          width: '400px',
-          data,
-        },
-      )
-      .afterClosed()
-      .pipe(filter((ok): ok is true => ok === true));
+    return confirmAction(this.dialog, data);
   }
 
   /** Reports the outcome on the status line and refreshes both lists. */

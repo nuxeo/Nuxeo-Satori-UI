@@ -36,15 +36,7 @@ import {
   NxsChangePasswordDialogComponent,
   type NxsChangePasswordDialogData,
 } from '../change-password-dialog/change-password-dialog.component';
-import {
-  NxsConfirmDialogComponent,
-  type NxsConfirmDialogData,
-} from '../confirm-dialog/confirm-dialog.component';
-import {
-  NxsUserFormDialogComponent,
-  type NxsUserFormDialogData,
-  type NxsUserFormDialogResult,
-} from '../user-form-dialog/user-form-dialog.component';
+import { type NxsConfirmDialogData } from '../confirm-dialog/confirm-dialog.component';
 
 /** Permission rows per page, in each permissions table. */
 const PERMISSIONS_PAGE_SIZE = 10;
@@ -80,6 +72,8 @@ export const NXS_ADMIN_USER_DETAILS_PAGE_ID = 'nxs.components.adminUserDetailsPa
  * group or a document calls its callback with the id for the host to route to. Outcomes appear on a status line that stays
  * until the next action.
  */
+import { saveEditedUser, confirmAction } from '../admin-edit-flows';
+
 @Component({
   selector: 'nxs-admin-user-details-page',
   standalone: true,
@@ -255,26 +249,8 @@ export class NxsAdminUserDetailsPageComponent {
   protected edit(): void {
     const user = this.user();
     if (!user) return;
-    this.dialog
-      .open<NxsUserFormDialogComponent, NxsUserFormDialogData, NxsUserFormDialogResult | undefined>(
-        NxsUserFormDialogComponent,
-        { width: '480px', maxHeight: '90vh', data: { mode: 'edit', user } },
-      )
-      .afterClosed()
-      .pipe(
-        filter((result): result is NxsUserFormDialogResult => !!result && result.mode === 'edit'),
-        switchMap((result) =>
-          this.userService.updateUser(user.id, {
-            firstName: result.firstName,
-            lastName: result.lastName,
-            company: result.company,
-            email: result.email,
-            password: result.password,
-            groups: [...result.groups],
-          }),
-        ),
-        takeUntilDestroyed(this.destroyRef),
-      )
+    saveEditedUser(this.dialog, this.userService, user)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => this.finish('satori-components.admin-user-details-page.user-updated', false),
         error: () => this.finish('satori-components.admin-user-details-page.update-failed', true),
@@ -356,16 +332,7 @@ export class NxsAdminUserDetailsPageComponent {
       ),
       confirmLabel: this.translate.instant('satori-components.admin-user-details-page.delete'),
     };
-    return this.dialog
-      .open<NxsConfirmDialogComponent, NxsConfirmDialogData, true | undefined>(
-        NxsConfirmDialogComponent,
-        {
-          width: '400px',
-          data,
-        },
-      )
-      .afterClosed()
-      .pipe(filter((ok): ok is true => ok === true));
+    return confirmAction(this.dialog, data);
   }
 
   /** Reports the outcome on the status line, and reloads the user so the page shows the change. */
