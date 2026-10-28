@@ -247,6 +247,33 @@ describe('SearchService — lookups', () => {
       expect(suggestion.displayLabelHighlights).toEqual([{ text: 'plain', matched: false }]);
     });
 
+    it('drops an empty match and keeps the text around it', async () => {
+      const [suggestion] = await suggest([
+        { uid: 'd', title: 'D', highlights: [{ field: 'dc:title', segments: ['<em></em>plain'] }] },
+      ]);
+      expect(suggestion.displayLabelHighlights).toEqual([{ text: 'plain', matched: false }]);
+    });
+
+    it('keeps the raw text when no template can parse it', async () => {
+      const create = document.createElement.bind(document);
+      const spy = vi.spyOn(document, 'createElement').mockImplementation((tag: string, options) => {
+        if (tag === 'template') throw new Error('no template');
+        return create(tag, options);
+      });
+      try {
+        const [suggestion] = await suggest([
+          {
+            uid: 'd',
+            title: 'D',
+            highlights: [{ field: 'dc:title', segments: ['<em>Board</em>'] }],
+          },
+        ]);
+        expect(suggestion.displayLabelHighlights).toEqual([{ text: 'Board', matched: true }]);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     it('answers an empty list when the suggesters fail', async () => {
       const result = firstValueFrom(service.suggest('con'));
       http.expectOne(SUGGESTERS).flush('no', { status: 500, statusText: 'Server Error' });
