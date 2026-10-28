@@ -396,18 +396,39 @@ for (const name of [...satoriImporters].filter((name) => name !== SATORI_IMPORTE
   );
 }
 
-const SAT_TYPE = /\bSat[A-Z]\w*/g;
-const withoutComments = (text) =>
-  text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-const satControl =
-  '/** SatAvatar in a comment */\nexport declare function f(): SatAvatarCategory;\n';
-const rawControlHits = satControl.match(SAT_TYPE) ?? [];
-const strippedControlHits = withoutComments(satControl).match(SAT_TYPE) ?? [];
-if (rawControlHits.length !== 2 || strippedControlHits.join() !== 'SatAvatarCategory') {
-  fail(
-    'The Sat* matcher no longer separates a comment from a type. Its control is a comment ' +
-      'mentioning `SatAvatar` and a declaration of `SatAvatarCategory`.',
-  );
+/**
+ * `Sat*` identifiers in a declaration file, read from the TypeScript syntax tree. A regex over the
+ * text cannot tell a comment from a string literal: `'/*'` hides everything after it, and a trailing
+ * `// SatAvatar` is wrongly reported. The parser sees neither, because only identifiers count.
+ */
+const satIdentifiersIn = (text, file) => {
+  const hits = [];
+  const visit = (node) => {
+    if (ts.isIdentifier(node) && /^Sat[A-Z]/.test(node.text)) hits.push(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true));
+  return hits;
+};
+
+// Controls: comments and string literals must be ignored, and a real declaration must still be seen.
+const satControls = [
+  ['/** SatAvatar in a JSDoc block */\nexport declare function f(): void;\n', []],
+  [
+    "export declare const route: '/*';\nexport declare function f(): SatAvatarCategory;\n",
+    ['SatAvatarCategory'],
+  ],
+  ['export declare function g(): void; // SatAvatar\n', []],
+];
+for (const [source, expected] of satControls) {
+  const found = satIdentifiersIn(source, 'control.d.ts');
+  if (found.join() !== expected.join()) {
+    fail(
+      'The Sat* identifier check no longer matches its controls.\n' +
+        `    Source: ${JSON.stringify(source)}\n` +
+        `    Expected ${JSON.stringify(expected)}, found ${JSON.stringify(found)}`,
+    );
+  }
 }
 
 const dtsFilesUnder = (dir) =>
@@ -417,7 +438,7 @@ const dtsFilesUnder = (dir) =>
     return entry.name.endsWith('.d.ts') ? [path] : [];
   });
 for (const file of dtsFilesUnder(join(DIST, 'types'))) {
-  const hits = withoutComments(readFileSync(file, 'utf8')).match(SAT_TYPE) ?? [];
+  const hits = satIdentifiersIn(readFileSync(file, 'utf8'), file);
   if (hits.length > 0) {
     fail(
       `${relative(DIST, file)} declares or references ${[...new Set(hits)].join(', ')} outside a comment.\n` +
