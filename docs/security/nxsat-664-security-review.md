@@ -56,7 +56,7 @@ Severity follows the reviewers' ratings. "Verified" means the author re-read the
 **L4. A late comment-save response is applied to whichever document is shown by then.**
 
 - `comments/comments.component.ts:444-463`, called from `submitComment` at `:326`. Nothing compares the request's uid with the current one.
-- Effect: display and `threadChange` integrity. The write consequence is wider than display: `DocumentDetailService.createReply()` (`document-detail.service.ts:858-862`) addresses the parent comment's id directly, not the current document uid. A reply written while A's create response sits under B's thread can therefore persist under A.
+- Effect: display and `threadChange` integrity. The write consequence is wider than display: `DocumentDetailService.createReply()` (`document-detail.service.ts:858-862`) addresses the parent comment's id directly, not the current document uid. A reply written while A's create response sits under B's thread can therefore persist under A. Comparing document uids is not enough: after an A → B → A transition, a superseded save from the first A looks current, so its late response can be appended again and emitted through `threadChange`. The guard needs an incrementing generation, captured when each write starts and invalidated on every document transition.
 
 **L5. Saved-search list can be overwritten by a stale response.**
 
@@ -104,6 +104,6 @@ Summarised by concern. Full reviewer notes are in the NXSAT-664 review session t
 2. M2: make a permissions save finish, or report partial completion, when the panel is destroyed.
 3. M3: restrict thumbnail blob MIME types or re-wrap the blob.
 4. L1 and L2: ignore errors from superseded loads (not a `src` comparison), and stop `discard`/`drop` from revoking URLs other holders still show.
-5. L4 and L5: guard late responses with a generation token, not a field comparison. For L4, the token is the document uid, and the reply path must use the current document. For L5, it is invalidated by both `refresh` and `pageProvider`, or the earlier request is cancelled with `switchMap`.
+5. L4 and L5: guard late responses with a generation token, not a field comparison. For L4, the token is an incrementing generation captured when each write starts and invalidated on every document transition, not a uid comparison; the reply path must use the current document. For L5, it is invalidated by both `refresh` and `pageProvider`, or the earlier request is cancelled with `switchMap`.
 6. L6: make Drive installer URLs configurable through Layer 0/1.
 7. I1 to I5: hygiene items, as listed above.
