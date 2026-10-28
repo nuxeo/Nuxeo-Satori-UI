@@ -80,6 +80,7 @@
                 | translate: { name: group.label }
             "
             [matTooltip]="'satori-components.admin-user-details-page.remove-group' | translate"
+            [disabled]="removingGroup()"
             (click)="removeFromGroup(group.id)"
           >
             <mat-icon svgIcon="x_large" />

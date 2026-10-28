@@ -246,4 +246,10 @@ describe('NxsGroupFormDialogComponent', () => {
     method('onMemberSearch')({ id: 'anna', properties: {} });
     expect(signalOf<string>('memberQuery')()).toBe('ann');
   });
+
+  it('cancels with undefined, so a caller sees no submission', async () => {
+    await create({ mode: 'create' });
+    button('Cancel').click();
+    expect(close.mock.calls).toEqual([[undefined]]);
+  });
 });

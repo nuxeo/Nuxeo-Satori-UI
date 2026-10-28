@@ -19,7 +19,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { catchError, filter, forkJoin, of, switchMap } from 'rxjs';
+import { catchError, filter, forkJoin, of, type Subscription, switchMap } from 'rxjs';
 
 import {
   DocumentDetailService,
@@ -130,6 +130,8 @@ export class NxsAdminUserDetailsPageComponent {
   protected readonly localPage = signal(0);
   protected readonly groupPermissions = signal<Record<string, PrincipalPermissionPage>>({});
   protected readonly groupPermissionsLoading = signal<Record<string, boolean>>({});
+
+  protected readonly removingGroup = signal(false);
 
   constructor() {
     effect(() => {
@@ -274,16 +276,21 @@ export class NxsAdminUserDetailsPageComponent {
   /** Takes the user out of one group, by sending the groups that remain. */
   protected removeFromGroup(groupId: string): void {
     const user = this.user();
-    if (!user) return;
+    if (!user || this.removingGroup()) return;
     const remaining = (user.properties.groups ?? []).filter((id) => id !== groupId);
+    this.removingGroup.set(true);
     this.userService
       .updateUser(user.id, { groups: remaining })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: () =>
-          this.finish('satori-components.admin-user-details-page.removed-from-group', false),
-        error: () =>
-          this.finish('satori-components.admin-user-details-page.could-not-update-groups', true),
+        next: () => {
+          this.removingGroup.set(false);
+          this.finish('satori-components.admin-user-details-page.removed-from-group', false);
+        },
+        error: () => {
+          this.removingGroup.set(false);
+          this.finish('satori-components.admin-user-details-page.could-not-update-groups', true);
+        },
       });
   }
 

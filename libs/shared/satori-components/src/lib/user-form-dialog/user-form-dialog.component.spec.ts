@@ -390,4 +390,10 @@ describe('NxsUserFormDialogComponent', () => {
       expect(button('Create').disabled).toBe(false);
     });
   });
+
+  it('cancels with undefined, so a caller sees no submission', async () => {
+    await create({ mode: 'create', groups: [] } as unknown as NxsUserFormDialogData);
+    button('Cancel').click();
+    expect(close.mock.calls).toEqual([[undefined]]);
+  });
 });

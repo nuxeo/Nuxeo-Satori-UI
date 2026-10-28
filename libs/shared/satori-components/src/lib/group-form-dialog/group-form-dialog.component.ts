@@ -22,7 +22,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { TranslatePipe } from '@ngx-translate/core';
-import { catchError, debounceTime, distinctUntilChanged, of, Subject, switchMap } from 'rxjs';
+import { catchError, debounceTime, of, Subject, switchMap } from 'rxjs';
 
 import { NuxeoGroup, NuxeoUser, UserService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -108,7 +108,6 @@ export class NxsGroupFormDialogComponent implements OnInit {
     this.searchTerms
       .pipe(
         debounceTime(250),
-        distinctUntilChanged(),
         switchMap((query) =>
           this.userService.searchUsersPaged(query.trim() || '*', 30, 0).pipe(
             // A failed request is an empty result, so the next search still runs.
@@ -192,6 +191,11 @@ export class NxsGroupFormDialogComponent implements OnInit {
   protected removeMember(id: string): void {
     this.members.update((members) => members.filter((member) => member !== id));
     this.searchTerms.next(this.memberQuery());
+  }
+
+  /** Cancel closes with nothing: undefined, so a caller checking for a result sees no submission. */
+  protected cancel(): void {
+    this.dialogRef.close(undefined);
   }
 
   protected submit(createAnother = false): void {

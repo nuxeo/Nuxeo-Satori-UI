@@ -9,7 +9,7 @@ import {
   type NuxeoGroup,
   type NuxeoUser,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { NxsAdminUserDetailsPageComponent } from './admin-user-details-page.component';
@@ -256,5 +256,14 @@ describe('NxsAdminUserDetailsPageComponent', () => {
     await render();
     expect(text()).toContain('No local permissions.');
     expect(text()).not.toContain('satori-components.admin-user-details-page.no-local');
+  });
+
+  it('ignores a second group removal while the first is still in flight', () => {
+    const pending = new Subject<unknown>();
+    userService['updateUser'].mockReturnValueOnce(pending);
+    const page = fixture.componentInstance as unknown as { removeFromGroup(id: string): void };
+    page.removeFromGroup('members');
+    page.removeFromGroup('reviewers');
+    expect(userService['updateUser']).toHaveBeenCalledTimes(1);
   });
 });

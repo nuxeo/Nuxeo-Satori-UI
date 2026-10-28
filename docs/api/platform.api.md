@@ -343,6 +343,7 @@ class NxsAdminUserDetailsPageComponent {
     protected readonly localPage: import("@angular/core").WritableSignal<number>;
     protected readonly groupPermissions: import("@angular/core").WritableSignal<Record<string, PrincipalPermissionPage>>;
     protected readonly groupPermissionsLoading: import("@angular/core").WritableSignal<Record<string, boolean>>;
+    protected readonly removingGroup: import("@angular/core").WritableSignal<boolean>;
     constructor();
     protected pageChanged(groupId: string | null, event: PageEvent): void;
     protected changePassword(): void;
@@ -1776,6 +1777,7 @@ class NxsGroupFormDialogComponent implements OnInit {
     protected onMemberSelected(event: MatAutocompleteSelectedEvent): void;
     protected addMemberFromInput(event: MatChipInputEvent): void;
     protected removeMember(id: string): void;
+    protected cancel(): void;
     protected submit(createAnother?: boolean): void;
     protected userDisplayLine(user: NuxeoUser): string;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsGroupFormDialogComponent, never>;
@@ -2872,6 +2874,7 @@ class NxsUserFormDialogComponent implements OnInit {
     protected addGroupFromInput(event: MatChipInputEvent): void;
     protected removeGroup(groupname: string): void;
     protected setPasswordEnabled(enabled: boolean): void;
+    protected cancel(): void;
     protected submit(createAnother?: boolean): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsUserFormDialogComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsUserFormDialogComponent, "nxs-user-form-dialog", never, {}, {}, never, never, true, never>;

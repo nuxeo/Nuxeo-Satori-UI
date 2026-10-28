@@ -266,6 +266,11 @@ export class NxsUserFormDialogComponent implements OnInit {
     }
   }
 
+  /** Cancel closes with nothing: undefined, so a caller checking for a result sees no submission. */
+  protected cancel(): void {
+    this.dialogRef.close(undefined);
+  }
+
   protected submit(createAnother = false): void {
     if (!this.canSave()) return;
     const password = this.password().trim();

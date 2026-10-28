@@ -80,7 +80,7 @@
     </mat-form-field>
     <mat-form-field appearance="outline" class="nxs-user-form-dialog__field">
       <mat-label>{{ 'satori-components.user-form-dialog.groups' | translate }}</mat-label>
-      <mat-chip-grid #groupChipGrid>
+      <mat-chip-grid #groupChipGrid [disabled]="saving()">
         @for (group of groups(); track group) {
           <mat-chip-row (removed)="removeGroup(group)">
             {{ group }}
@@ -177,7 +177,7 @@
     }
   </mat-dialog-content>
   <mat-dialog-actions align="end" class="nxs-user-form-dialog__actions">
-    <button type="button" mat-button mat-dialog-close [disabled]="saving()">
+    <button type="button" mat-button (click)="cancel()" [disabled]="saving()">
       {{ 'satori-components.user-form-dialog.cancel' | translate }}
     </button>
     @if (data.mode === 'create') {
