@@ -9926,6 +9926,175 @@ expectGreen(
   },
 );
 
+/* --- findings from the review of #494, each confirmed against the check before it was fixed --- */
+
+falsePositiveControls += 1;
+expectGreen(
+  'the reversed operand order reads `ref_name` as `ref_name`, not as `ref` plus a suffix',
+  'checkWorkflowRefGates',
+  {
+    // `(ref|ref_name)` matched `ref` as a prefix when nothing followed the context name, so
+    // `'main' == github.ref_name` was read as a comparison against `github.ref` and failed the
+    // shape rule on a valid condition. The forward order never had the bug because the `==` that
+    // must follow forces a backtrack — an asymmetry that made it easy to miss.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("${{ 'main' == github.ref_name }}"),
+    ),
+  },
+);
+
+expectRed(
+  'a branch filter written as an inline flow mapping is read, not skipped',
+  'checkWorkflowRefGates',
+  {
+    // Only subsequent LINES were searched for `branches:`, so `push: { branches: [...] }` was read
+    // as an event with no filter — silently exempting the exact shape this guardrail exists to
+    // catch, with no gate needed to hide it.
+    '.github/workflows/deploy.yml': workflow("on:\n  push: { branches: ['integration/nxsat-308'] }\n"),
+  },
+  null,
+  /triggers on `push` only for `integration\/nxsat-308`/,
+);
+
+expectRed(
+  'an `if:` whose expression continues on the next line is folded in, not read as `${{`',
+  'checkWorkflowRefGates',
+  {
+    // A multi-line plain scalar. The gate used to be recorded as the three characters `${{`, no
+    // comparison was found in it, and the tripwire reads only the `if:` line — so a stale
+    // ticket-branch gate written this way passed completely.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  deploy:
+    needs: build
+    if: \${{
+      github.ref == 'refs/heads/integration/nxsat-308'
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deploy
+`,
+  },
+  null,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a workflow whose only condition is not a ref comparison is not judged by the ref rules',
+  'checkWorkflowRefGates',
+  {
+    // `gates` holds every `if:` in the file, so judging by `gates.length` made a valid
+    // `!wip/**` filter fail the unsupported-pattern rule purely because some job had
+    // `if: always()`. The pattern and filter rules are about ref gates; a workflow with none must
+    // not be held to them.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main, '!wip/**']\n",
+      gatedJob('always()'),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  '`github.ref_name` may be a tag name once the workflow filters tags',
+  'checkWorkflowRefGates',
+  {
+    // `ref_name` is the short name of whatever ref triggered the run, tag or branch. Checking a
+    // tag name against the branch allowlist rejected a valid `v1.0.0` gate on a tag-triggered
+    // workflow. A `github.ref` literal stays unambiguous, because `refs/heads/…` is a branch
+    // whatever else the workflow triggers on.
+    '.github/workflows/release.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n    tags: ['v*']\n",
+      gatedJob("github.ref_name == 'v1.0.0'"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'one branch of an `||` is not a branch the job requires',
+  'checkWorkflowRefGates',
+  {
+    // Satisfiable on `main`, so the job is reachable; the isolated `staging` equality was being
+    // read as a required inclusion gate.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a negated comparison names the branch EXCLUDED, not the branch required',
+  'checkWorkflowRefGates',
+  {
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("!(github.ref == 'refs/heads/staging')"),
+    ),
+  },
+);
+
+expectRed(
+  '`&& !cancelled()` does not disable the ticket-branch rule',
+  'checkWorkflowRefGates',
+  {
+    // The control that keeps the fix for the two above from going too far. Negation is tested per
+    // COMPARISON, not per expression: a `!` somewhere else in the condition is one of the
+    // commonest shapes in `.github/workflows`, and treating the whole expression as negated would
+    // have re-opened NXSAT-649 itself.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/integration/nxsat-308' && !cancelled()"),
+    ),
+  },
+  null,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`, which is a ticket branch/,
+);
+
+expectRed(
+  'a branch gate in a `pull_request`-only workflow, where `github.ref` is never a branch',
+  'checkWorkflowRefGates',
+  {
+    // `pull_request` supplies `refs/pull/<number>/merge`. A `branches:` filter names the pull
+    // request's TARGET, not the ref the job runs on, and reading the two as the same thing is the
+    // mistake — the gate is false on every event and the run still goes green.
+    '.github/workflows/deploy.yml': workflow(
+      'on:\n  pull_request:\n    branches: [main]\n',
+      gatedJob("github.ref == 'refs/heads/main'"),
+    ),
+  },
+  null,
+  /but `pull_request` is the only trigger/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  '`pull_request_target` does run with the base branch as `github.ref`',
+  'checkWorkflowRefGates',
+  {
+    // The deliberate exclusion from the rule above, pinned so it is not widened by accident.
+    '.github/workflows/deploy.yml': workflow(
+      'on:\n  pull_request_target:\n    branches: [main]\n',
+      gatedJob("github.ref == 'refs/heads/main'"),
+    ),
+  },
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

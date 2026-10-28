@@ -10370,16 +10370,51 @@ function githubBranchFilterToRegExp(pattern) {
  * stays true for every future branch in that namespace, so it is not the pinned-to-one-branch
  * shape this guards. That is a known gap, not an oversight — closing it would require deciding
  * whether a prefix is "a branch", which it is not.
+ *
+ * `ref_name` is listed BEFORE `ref` in both alternations, and both are closed with `\b`. In the
+ * reversed-operand order nothing follows the context name, so `(ref|ref_name)` matched `ref` as a
+ * prefix and read `'main' == github.ref_name` as a comparison against `github.ref` — which then
+ * failed the shape rule on a perfectly valid condition. Caught in review on #494. The forward
+ * order never had the bug, because the `==` that must follow forces the regex to backtrack to the
+ * longer alternative; relying on that asymmetry is what made it easy to miss.
  */
 const REF_COMPARISON =
-  /github\.(ref|ref_name)\s*(==|!=)\s*(['"])(.*?)\3|(['"])(.*?)\5\s*(==|!=)\s*github\.(ref|ref_name)/g;
+  /github\.(ref_name|ref)\b\s*(==|!=)\s*(['"])(.*?)\3|(['"])(.*?)\5\s*(==|!=)\s*github\.(ref_name|ref)\b/g;
 
 function refComparisons(expression) {
   return [...expression.matchAll(REF_COMPARISON)].map((match) =>
     match[1] !== undefined
-      ? { context: match[1], operator: match[2], literal: match[4] }
-      : { context: match[8], operator: match[7], literal: match[6] },
+      ? { context: match[1], operator: match[2], literal: match[4], index: match.index }
+      : { context: match[8], operator: match[7], literal: match[6], index: match.index },
   );
+}
+
+/**
+ * `||` anywhere in the expression, ignoring string literals (a branch name may contain a `|`).
+ *
+ * Coarse on purpose, and it under-reaches: `github.ref == 'refs/heads/main' && (success() ||
+ * failure())` is not judged either, though the comparison there is required. Scoping `||` to the
+ * right operand needs real precedence parsing, and the direction of this error is the safe one —
+ * a rule that declines to speak, not one that rejects a valid workflow. The shape that caused
+ * NXSAT-649 was a bare single comparison, so the rule still fires where it matters.
+ */
+const expressionHasAlternative = (expression) =>
+  /\|\|/.test(expression.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""'));
+
+/**
+ * Whether the comparison AT `index` is the one being negated.
+ *
+ * Per-comparison, not per-expression, and that distinction is load-bearing: `if: github.ref ==
+ * 'refs/heads/integration/x' && !cancelled()` contains a `!`, and treating the whole expression as
+ * negated would have skipped the ticket-branch rule on one of the commonest shapes in
+ * `.github/workflows` — re-opening the exact bug this guardrail exists to catch. Only a `!`
+ * reached by walking back over whitespace and opening parentheses counts, so `!(github.ref == …)`
+ * is negated and `… && !cancelled()` is not.
+ */
+function comparisonIsNegated(expression, index) {
+  let i = index - 1;
+  while (i >= 0 && /[\s(]/.test(expression[i])) i -= 1;
+  return i >= 0 && expression[i] === '!';
 }
 
 /**
@@ -10399,7 +10434,33 @@ function parseWorkflowTriggersAndGates(body) {
   const onIndex = lines.findIndex((line) => /^(?:on|'on'|"on")\s*:/.test(line));
   if (onIndex === -1) return null;
 
-  /** @type {Map<string, {branches: string[]|null, unparsed: boolean, ignore: boolean}>} */
+  const NO_FILTER = { branches: null, unparsed: false, ignore: false, tags: false };
+
+  /**
+   * A branch filter written as part of an inline flow mapping, e.g.
+   * `push: { branches: ['integration/nxsat-308'] }`.
+   *
+   * Only subsequent LINES used to be searched, so an inline mapping read as an event with no
+   * filter at all — which bypassed both the reachability rule and the ticket-branch trigger rule,
+   * silently, on the exact shape this guardrail exists to catch. Caught in review on #494.
+   *
+   * A `branches` key whose value cannot be read returns `unparsed`, so the caller fails loudly
+   * instead of calling it absent.
+   */
+  const inlineFilter = (text) => {
+    const key = /\b(branches|branches-ignore)\s*:/.exec(text);
+    const tags = /\btags(?:-ignore)?\s*:/.test(text);
+    if (!key) return text.trim() === '' ? null : { ...NO_FILTER, tags };
+    const items = parseYamlFlowSequence(text.slice(key.index + key[0].length));
+    return {
+      branches: items,
+      unparsed: items === null || items.length === 0,
+      ignore: key[1] === 'branches-ignore',
+      tags,
+    };
+  };
+
+  /** @type {Map<string, {branches: string[]|null, unparsed: boolean, ignore: boolean, tags: boolean}>} */
   const events = new Map();
   const inline = lines[onIndex].slice(lines[onIndex].indexOf(':') + 1).trim();
   if (inline !== '') {
@@ -10407,9 +10468,7 @@ function parseWorkflowTriggersAndGates(body) {
     const names = inline.startsWith('[')
       ? (parseYamlFlowSequence(inline) ?? [])
       : [unquoteYamlScalar(inline)];
-    for (const name of names.filter(Boolean)) {
-      events.set(name, { branches: null, unparsed: false, ignore: false });
-    }
+    for (const name of names.filter(Boolean)) events.set(name, NO_FILTER);
   } else {
     const onEnd = yamlBlockEnd(lines, onIndex, yamlIndent(lines[onIndex]));
     const indents = lines
@@ -10424,13 +10483,22 @@ function parseWorkflowTriggersAndGates(body) {
       const key = /^\s*([A-Za-z_][\w-]*)\s*:/.exec(lines[i]);
       if (!key) continue;
       const eventEnd = yamlBlockEnd(lines, i, eventIndent);
-      let filter = { branches: null, unparsed: false, ignore: false };
-      for (let j = i + 1; j < eventEnd; j += 1) {
-        const match = /^\s*(branches|branches-ignore)\s*:/.exec(lines[j]);
-        if (!match) continue;
-        const list = parseYamlStringList(lines, j, yamlIndent(lines[j]));
-        filter = { branches: list, unparsed: list === null, ignore: match[1] === 'branches-ignore' };
-        break;
+      // An inline flow mapping on the key's own line is read first, then the block form below.
+      let filter = inlineFilter(lines[i].slice(lines[i].indexOf(':', yamlIndent(lines[i])) + 1));
+      if (filter === null) {
+        filter = NO_FILTER;
+        for (let j = i + 1; j < eventEnd; j += 1) {
+          if (/^\s*tags(?:-ignore)?\s*:/.test(lines[j])) filter = { ...filter, tags: true };
+          const match = /^\s*(branches|branches-ignore)\s*:/.exec(lines[j]);
+          if (!match) continue;
+          const list = parseYamlStringList(lines, j, yamlIndent(lines[j]));
+          filter = {
+            ...filter,
+            branches: list,
+            unparsed: list === null,
+            ignore: match[1] === 'branches-ignore',
+          };
+        }
       }
       events.set(key[1], filter);
       i = eventEnd - 1;
@@ -10465,9 +10533,20 @@ function parseWorkflowTriggersAndGates(body) {
       if (!gate) continue;
 
       let expression = gate[1].trim();
-      if (/^[>|][-+]?\d*$/.test(expression)) {
-        // A block scalar — the expression is on the following, more-indented lines.
-        const folded = [];
+      /* The expression continues on the following, more-indented lines in two shapes, and both
+       * have to be folded in or the gate is read as a fragment that compares nothing:
+       *
+       *   - a block scalar (`if: >` / `if: |`);
+       *   - a multi-line PLAIN scalar, which is how `if: ${{` followed by an indented expression
+       *     and a closing `}}` is written. That one was missed: the gate was recorded as the three
+       *     characters `${{`, no comparison was found in it, and the tripwire below looks only at
+       *     the `if:` line — so a stale ticket-branch gate written this way passed completely.
+       *     Caught in review on #494. */
+      const isBlockScalar = /^[>|][-+]?\d*$/.test(expression);
+      const isUnclosedExpression =
+        (expression.match(/\$\{\{/g) ?? []).length > (expression.match(/\}\}/g) ?? []).length;
+      if (isBlockScalar || isUnclosedExpression) {
+        const folded = isBlockScalar ? [] : [expression];
         for (
           let j = i + 1;
           j < jobsEnd && (lines[j].trim() === '' || yamlIndent(lines[j]) > indent);
@@ -10598,7 +10677,9 @@ function checkWorkflowRefGates() {
     const allowlists = [];
     const unfiltered = [];
     let unparsedFilter = null;
+    let hasTagFilter = false;
     for (const [event, filter] of events) {
+      if (filter.tags) hasTagFilter = true;
       if (!BRANCH_FILTERED_EVENTS.includes(event)) {
         unfiltered.push(event);
       } else if (filter.unparsed) {
@@ -10611,6 +10692,15 @@ function checkWorkflowRefGates() {
         allowlists.push([event, filter.branches]);
       }
     }
+
+    /* A workflow whose ONLY trigger is `pull_request` never sees a branch ref: `github.ref` is
+     * `refs/pull/<number>/merge` and `github.ref_name` is `<number>/merge`. So a gate comparing
+     * either to a branch is false on every event the workflow can receive — the branch filter
+     * describes the pull request's TARGET, not the ref the job runs on, and the two being equal
+     * is the mistake. `pull_request_target` is excluded deliberately: that one does run with the
+     * base branch as `github.ref`, so a branch gate there is legitimate. Found in review on
+     * #494, where this shape passed the check completely. */
+    const pullRequestOnly = events.size > 0 && [...events.keys()].every((e) => e === 'pull_request');
 
     /* Rule 3, trigger half. An allowlist made only of ticket branches stops matching anything the
      * day they merge, and then the workflow does not run at all — which is how the push half of
@@ -10655,7 +10745,13 @@ function checkWorkflowRefGates() {
       );
     }
 
-    if (gates.length === 0) continue;
+    /* Only the gates that actually compare a ref. `gates` holds EVERY `if:` in the file, including
+     * `always()` and conditions on step outputs, and judging a workflow by `gates.length` made a
+     * valid `branches: [main, '!wip/**']` fail the unsupported-pattern rule below purely because
+     * some job had an `if: always()`. The pattern and filter rules are about ref gates; a workflow
+     * that has none must not be judged by them. Caught in review on #494. */
+    const refGates = gates.filter((gate) => refComparisons(gate.expression).length > 0);
+    if (refGates.length === 0) continue;
 
     const unmodelled = allowlists
       .flatMap(([, patterns]) => patterns)
@@ -10682,7 +10778,7 @@ function checkWorkflowRefGates() {
       );
     }
 
-    for (const gate of gates) {
+    for (const gate of refGates) {
       // `job` is null only for an `if:` that precedes any job key, which is malformed rather than
       // impossible — named generically so the message never reads "the `null` job".
       const where =
@@ -10692,7 +10788,20 @@ function checkWorkflowRefGates() {
             ? `the \`${gate.job}\` job's \`if:\``
             : `a step \`if:\` in the \`${gate.job}\` job`;
 
-      for (const { context, operator, literal } of refComparisons(gate.expression)) {
+      /* Is one comparison, on its own, what decides whether the job runs?
+       *
+       * Only if the expression neither makes it optional nor inverts it. With `||` the job still
+       * runs when another alternative holds, and under `!` the branch named is the one EXCLUDED —
+       * so `github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'` and
+       * `!(github.ref == 'refs/heads/staging')` are both satisfiable on `main`, and both were
+       * rejected as unreachable. Caught in review on #494. `&&` is fine: a comparison joined by
+       * `&&` is still required, which is why negation is tested per comparison rather than per
+       * expression — see `comparisonIsNegated`.
+       *
+       * Rule 1 below does not consult this — a constant is a constant inside any expression. */
+      const hasAlternative = expressionHasAlternative(gate.expression);
+
+      for (const { context, operator, literal, index } of refComparisons(gate.expression)) {
         /* Rule 1 — shape. `github.ref` is `refs/heads/main`; `github.ref_name` is `main`. Mixing
          * them is a constant, and the two directions fail differently: a constant-false `==` never
          * runs the job, a constant-true `!=` never gates it. Both are silent. */
@@ -10721,7 +10830,32 @@ function checkWorkflowRefGates() {
         // `<number>/merge`, which is not a branch either.
         if (context === 'ref' && !literal.startsWith('refs/heads/')) continue;
         if (context === 'ref_name' && /^\d+\/merge$/.test(literal)) continue;
+        /* `github.ref_name` is the short name of whatever ref triggered the run — a TAG name just
+         * as readily as a branch name. So once the workflow filters tags, a `ref_name` literal
+         * cannot be assumed to be a branch, and checking it against the branch allowlist rejected
+         * a valid `if: github.ref_name == 'v1.0.0'` on a workflow triggered by `tags: ['v*']`.
+         * Caught in review on #494. A `github.ref` literal stays unambiguous: `refs/heads/…` is a
+         * branch whatever else the workflow triggers on. */
+        if (context === 'ref_name' && hasTagFilter) continue;
         const branch = context === 'ref' ? literal.slice('refs/heads/'.length) : literal;
+
+        if (hasAlternative || comparisonIsNegated(gate.expression, index)) continue;
+
+        /* A branch gate in a `pull_request`-only workflow. Never true: the event supplies
+         * `refs/pull/<number>/merge`. */
+        if (pullRequestOnly) {
+          fail(
+            `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, but ` +
+              '`pull_request` is the only trigger — so `github.ref` is ' +
+              '`refs/pull/<number>/merge` and `github.ref_name` is `<number>/merge`, never a ' +
+              'branch. The gate is false on every event the workflow can receive, the job is ' +
+              'SKIPPED, and the run still goes green.\n' +
+              `    A \`branches:\` filter names the pull request's TARGET, not the ref the job ` +
+              'runs on. Use `github.base_ref` for the target, or `pull_request_target` if the job ' +
+              'really must run with the base branch checked out.',
+          );
+          continue;
+        }
 
         /* Rule 3 — a pinned ticket branch. The rule that catches the incident. */
         if (isTransientBranch(branch)) {
