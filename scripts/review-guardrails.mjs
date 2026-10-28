@@ -10158,6 +10158,623 @@ function checkAdoptedPatternsNotBypassed() {
   }
 }
 
+/**
+ * Drop a trailing `#` comment from one YAML line, tracking quotes so a `#` inside a string stays.
+ *
+ * `stripYamlComments` removes WHOLE-LINE comments, which is all a token search needs. The workflow
+ * parser below reads specific lines and has to be stricter, because `.github/workflows` is
+ * commented heavily and the comments discuss the very syntax being parsed. `storybook-pages.yml`
+ * carried `# TODO(NXSAT-649): move this and the deploy job's \`if:\` to \`main\``, which a naive
+ * `if:` scan reads as a gate, and `ci.yml`, `build-marketplace.yml` and `publish-config-package.yml`
+ * all explain `github.ref` in prose. A parser that reads comments reports the documentation instead
+ * of the configuration — and would have reported this workflow as gated on `main` while it was
+ * gated on a deleted branch.
+ *
+ * @param {string} line one line of YAML
+ * @returns {string} the same line truncated at the first unquoted `#`
+ */
+function stripTrailingYamlComment(line) {
+  let quote = null;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (quote !== null) {
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === '#' && (i === 0 || /\s/.test(line[i - 1]))) return line.slice(0, i);
+  }
+  return line;
+}
+
+/**
+ * A workflow as lines, with comments blanked rather than removed.
+ *
+ * **Blanked, so index `i` is always line `i + 1`.** `stripYamlComments` filters comment lines out,
+ * which shifts every line number after the first comment — and `.github/workflows` is mostly
+ * comment, so the shift is large. The first version of the parser tripwire below used that helper
+ * and reported `storybook-pages.yml:61` for a gate on line 85, which is both a wrong citation and
+ * a false failure. One function, used by the parser and by the tripwire that checks the parser, so
+ * the two numberings cannot disagree again.
+ *
+ * @param {string} body workflow source
+ * @returns {string[]}
+ */
+function workflowLines(body) {
+  return body
+    .split('\n')
+    .map((line) => (/^\s*#/.test(line) ? '' : stripTrailingYamlComment(line)));
+}
+
+const yamlIndent = (line) => line.length - line.trimStart().length;
+
+/** The exclusive end of the block nested under `lines[start]`, whose key sits at `keyIndent`. */
+function yamlBlockEnd(lines, start, keyIndent) {
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end];
+    if (line.trim() !== '' && yamlIndent(line) <= keyIndent) break;
+    end += 1;
+  }
+  return end;
+}
+
+const unquoteYamlScalar = (value) => value.trim().replace(/^(['"])([\s\S]*)\1$/, '$2');
+
+/**
+ * The items of a YAML flow sequence, scanned rather than matched with a regex.
+ *
+ * `/\[([^\]]*)\]/` was the first attempt and it is wrong for the values this has to read: a branch
+ * filter may contain a character range, so `branches: [main, 'rel[0-9]']` ends at the `]` INSIDE
+ * the pattern and yields `'rel[0-9`. A selftest control caught it. Splitting on every comma has
+ * the same shape of bug for a pattern containing one, so the scan tracks quotes and nesting and
+ * only breaks at a top-level comma.
+ *
+ * Returns `null` for an unterminated sequence, so the caller can fail loudly.
+ *
+ * @returns {string[]|null}
+ */
+function parseYamlFlowSequence(text) {
+  const start = text.indexOf('[');
+  if (start === -1) return null;
+  const items = [];
+  let current = '';
+  let quote = null;
+  let depth = 0;
+
+  for (let i = start; i < text.length; i += 1) {
+    const char = text[i];
+    if (quote !== null) {
+      current += char;
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      current += char;
+    } else if (char === '[') {
+      depth += 1;
+      if (depth > 1) current += char;
+    } else if (char === ']') {
+      depth -= 1;
+      if (depth > 0) {
+        current += char;
+      } else {
+        items.push(current);
+        return items.map(unquoteYamlScalar).filter((item) => item !== '');
+      }
+    } else if (char === ',' && depth === 1) {
+      items.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  return null;
+}
+
+/**
+ * A YAML string list in any of the three forms `.github/workflows` actually uses: a flow sequence
+ * on the key's own line (`branches: [main]`), a flow sequence spanning lines, or a block sequence
+ * of `- item` lines.
+ *
+ * Returns `null` when the value is none of those, so the caller can fail loudly rather than read
+ * "I could not parse the filter" as "there is no filter". That confusion is the whole defect class
+ * this guardrail exists to catch: an unreadable branch allowlist treated as an absent one makes
+ * every job reachable and the check green on everything.
+ *
+ * @returns {string[]|null}
+ */
+function parseYamlStringList(lines, index, keyIndent) {
+  const line = lines[index];
+  const after = line.slice(line.indexOf(':', yamlIndent(line)) + 1).trim();
+
+  if (after.startsWith('[')) {
+    const items = parseYamlFlowSequence(
+      lines.slice(index, yamlBlockEnd(lines, index, keyIndent)).join(' '),
+    );
+    return items === null || items.length === 0 ? null : items;
+  }
+  if (after !== '') return [unquoteYamlScalar(after)];
+
+  const items = [];
+  for (let i = index + 1; i < yamlBlockEnd(lines, index, keyIndent); i += 1) {
+    if (lines[i].trim() === '') continue;
+    const entry = /^\s*-\s*(.+)$/.exec(lines[i]);
+    if (!entry) return null;
+    items.push(unquoteYamlScalar(entry[1]));
+  }
+  return items.length > 0 ? items : null;
+}
+
+/** The events that accept a branch filter. Every other event is unfiltered by construction. */
+const BRANCH_FILTERED_EVENTS = ['push', 'pull_request', 'pull_request_target'];
+
+/**
+ * Branch namespaces whose branches are deleted the moment their ticket merges.
+ *
+ * `claude/` is here because this repository's agent sessions work on `claude/<name>` branches and
+ * they go away with the session. `release/` is deliberately absent: a release branch is often
+ * long-lived, so pinning one is not self-evidently a mistake.
+ */
+const TRANSIENT_BRANCH_NAMESPACES = [
+  'integration/',
+  'feature/',
+  'fix/',
+  'bugfix/',
+  'hotfix/',
+  'chore/',
+  'claude/',
+  'dependabot/',
+  'renovate/',
+];
+
+const isTransientBranch = (branch) =>
+  TRANSIENT_BRANCH_NAMESPACES.some((namespace) => branch.startsWith(namespace));
+
+/** A filter pattern that names exactly one branch, rather than a family of them. */
+const isLiteralBranchPattern = (pattern) =>
+  !/[*?+[\]]/.test(pattern) && !pattern.startsWith('!');
+
+/**
+ * A GitHub branch-filter pattern as a `RegExp`, or `null` for syntax this does not model.
+ *
+ * `**` crosses `/`, `*` and `?` do not — so `integration/**` matches `integration/nxsat-308` and
+ * `integration/*` matches it too, while `integration/*` does NOT match `integration/a/b`. Matching
+ * by substring instead gets this wrong in both directions: `main` would "match" `maintenance`, and
+ * `integration/**` would not match anything.
+ *
+ * Character ranges, `+`, and `!` negation return `null`. The caller fails loudly on `null` rather
+ * than guessing, because a mismatched pattern here silently converts "this job can never run" into
+ * "this job is fine".
+ */
+function githubBranchFilterToRegExp(pattern) {
+  if (/[+[\]]/.test(pattern) || pattern.startsWith('!')) return null;
+  const source = pattern
+    .replace(/[.^${}()|\\]/g, '\\$&')
+    .replace(/\*\*/g, '\u0000')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\u0000/g, '.*')
+    .replace(/\?/g, '[^/]');
+  return new RegExp(`^${source}$`);
+}
+
+/**
+ * Every `github.ref` / `github.ref_name` comparison against a string literal in an expression.
+ *
+ * Both operand orders are read, and `!=` as well as `==`. `startsWith(github.ref, '…')` and
+ * `contains(…)` are deliberately NOT matched: a prefix test against `refs/heads/integration/`
+ * stays true for every future branch in that namespace, so it is not the pinned-to-one-branch
+ * shape this guards. That is a known gap, not an oversight — closing it would require deciding
+ * whether a prefix is "a branch", which it is not.
+ */
+const REF_COMPARISON =
+  /github\.(ref|ref_name)\s*(==|!=)\s*(['"])(.*?)\3|(['"])(.*?)\5\s*(==|!=)\s*github\.(ref|ref_name)/g;
+
+function refComparisons(expression) {
+  return [...expression.matchAll(REF_COMPARISON)].map((match) =>
+    match[1] !== undefined
+      ? { context: match[1], operator: match[2], literal: match[4] }
+      : { context: match[8], operator: match[7], literal: match[6] },
+  );
+}
+
+/**
+ * The trigger events with their branch filters, and every `if:` inside `jobs:`, of one workflow.
+ *
+ * Hand-parsed rather than YAML-parsed for the reason `crowdinFileEntries` gives above: no YAML
+ * parser is a declared dependency of this repository, and a guardrail that imports an undeclared
+ * package goes red for a reason unrelated to what it guards the first time the tree resolves
+ * differently.
+ *
+ * Returns `null` when there is no `on:` block to read, so the caller can say so instead of
+ * reporting a workflow with no triggers as a workflow with nothing wrong.
+ */
+function parseWorkflowTriggersAndGates(body) {
+  const lines = workflowLines(body);
+
+  const onIndex = lines.findIndex((line) => /^(?:on|'on'|"on")\s*:/.test(line));
+  if (onIndex === -1) return null;
+
+  /** @type {Map<string, {branches: string[]|null, unparsed: boolean, ignore: boolean}>} */
+  const events = new Map();
+  const inline = lines[onIndex].slice(lines[onIndex].indexOf(':') + 1).trim();
+  if (inline !== '') {
+    // `on: push` or `on: [push, pull_request]` — a shorthand that carries no branch filter.
+    const names = inline.startsWith('[')
+      ? (parseYamlFlowSequence(inline) ?? [])
+      : [unquoteYamlScalar(inline)];
+    for (const name of names.filter(Boolean)) {
+      events.set(name, { branches: null, unparsed: false, ignore: false });
+    }
+  } else {
+    const onEnd = yamlBlockEnd(lines, onIndex, yamlIndent(lines[onIndex]));
+    const indents = lines
+      .slice(onIndex + 1, onEnd)
+      .filter((line) => line.trim() !== '')
+      .map(yamlIndent);
+    if (indents.length === 0) return null;
+    const eventIndent = Math.min(...indents);
+
+    for (let i = onIndex + 1; i < onEnd; i += 1) {
+      if (lines[i].trim() === '' || yamlIndent(lines[i]) !== eventIndent) continue;
+      const key = /^\s*([A-Za-z_][\w-]*)\s*:/.exec(lines[i]);
+      if (!key) continue;
+      const eventEnd = yamlBlockEnd(lines, i, eventIndent);
+      let filter = { branches: null, unparsed: false, ignore: false };
+      for (let j = i + 1; j < eventEnd; j += 1) {
+        const match = /^\s*(branches|branches-ignore)\s*:/.exec(lines[j]);
+        if (!match) continue;
+        const list = parseYamlStringList(lines, j, yamlIndent(lines[j]));
+        filter = { branches: list, unparsed: list === null, ignore: match[1] === 'branches-ignore' };
+        break;
+      }
+      events.set(key[1], filter);
+      i = eventEnd - 1;
+    }
+  }
+
+  /** @type {{job: string|null, line: number, level: 'job'|'step', expression: string}[]} */
+  const gates = [];
+  const jobsIndex = lines.findIndex((line) => /^jobs\s*:/.test(line));
+  if (jobsIndex !== -1) {
+    const jobsEnd = yamlBlockEnd(lines, jobsIndex, yamlIndent(lines[jobsIndex]));
+    const jobIndents = lines
+      .slice(jobsIndex + 1, jobsEnd)
+      .filter((line) => line.trim() !== '')
+      .map(yamlIndent);
+    const jobIndent = jobIndents.length === 0 ? 0 : Math.min(...jobIndents);
+    let job = null;
+    // The indent of a job's own keys, taken from the first one seen rather than assumed to be
+    // `jobIndent + 2`, so `if:` is attributed to the job or to a step correctly under any style.
+    let jobKeyIndent = null;
+
+    for (let i = jobsIndex + 1; i < jobsEnd; i += 1) {
+      if (lines[i].trim() === '') continue;
+      const indent = yamlIndent(lines[i]);
+      if (indent === jobIndent) {
+        job = /^\s*([A-Za-z_][\w-]*)\s*:/.exec(lines[i])?.[1] ?? job;
+        jobKeyIndent = null;
+        continue;
+      }
+      if (jobKeyIndent === null) jobKeyIndent = indent;
+      const gate = /^\s*(?:-\s+)?if\s*:\s*(.+)$/.exec(lines[i]);
+      if (!gate) continue;
+
+      let expression = gate[1].trim();
+      if (/^[>|][-+]?\d*$/.test(expression)) {
+        // A block scalar — the expression is on the following, more-indented lines.
+        const folded = [];
+        for (
+          let j = i + 1;
+          j < jobsEnd && (lines[j].trim() === '' || yamlIndent(lines[j]) > indent);
+          j += 1
+        ) {
+          folded.push(lines[j].trim());
+        }
+        expression = folded.join(' ').trim();
+      }
+      gates.push({
+        job,
+        line: i + 1,
+        level: indent === jobKeyIndent ? 'job' : 'step',
+        expression,
+      });
+    }
+  }
+
+  return { events, gates };
+}
+
+/**
+ * A workflow's ref gates must name a branch that can actually carry the workflow.
+ *
+ * ## The incident
+ *
+ * `storybook-pages.yml` published the public Material Storybook from `integration/nxsat-308`:
+ *
+ *     on:
+ *       push:
+ *         branches: ['integration/nxsat-308']
+ *       workflow_dispatch:
+ *     jobs:
+ *       deploy:
+ *         if: github.ref == 'refs/heads/integration/nxsat-308'
+ *
+ * That branch merged into `main` and was deleted. https://nuxeo.github.io/agentic-ui-poc/ then went
+ * un-refreshed from 2026-10-23 until NXSAT-649, and the failure mode is the nastiest kind: a
+ * `workflow_dispatch` from `main` still checked out, still built the Storybook, still passed
+ * `scripts/storybook-publication-gate.mjs` — and then **skipped** `deploy`, because its `if:` was
+ * false. A skipped job leaves the run **green**. So there was a green run, a stale site, and no
+ * route to publish at all. Nothing in this repository's tooling could see it, and the only reason
+ * it was found is that somebody looked at the live page.
+ *
+ * `actionlint` cannot see it either: version 1.7.12 exits 0 on that exact file, verified before
+ * this check was written. It validates expression syntax and context names, not whether a ref a
+ * gate names is a ref that can exist. That is why this guardrail has to exist rather than being a
+ * line in an actionlint config.
+ *
+ * ## Why this reads the whole tree, not the diff
+ *
+ * Most checks here are diff-scoped. This one cannot be. **The file did not change — the world
+ * changed.** The workflow was correct the day it was written and became wrong when a branch was
+ * deleted in a different pull request that touched no workflow at all. A diff-scoped check sees
+ * nothing on the commit that breaks it, and nothing on any commit afterwards.
+ *
+ * ## Which rules are errors, and why
+ *
+ * Load-bearing, `error`, and each fires identically in a fresh CI clone because each is decided
+ * from the workflow text alone:
+ *
+ * 1. **Shape.** `github.ref` is always a full ref (`refs/heads/main`) and `github.ref_name` is
+ *    always the short name (`main`). Comparing either to the other form is a constant: `==` can
+ *    never be true, and `!=` can never be false, so the gate either never runs or never gates.
+ * 2. **Unreachable.** The gated branch matches none of the workflow's own `push` /`pull_request`
+ *    branch allowlists, and no unfiltered trigger could supply that ref either. The job can never
+ *    run. Conditioned on there being no `workflow_dispatch` / `schedule` on purpose: with a manual
+ *    dispatch the gate IS reachable, by dispatching from that branch, so claiming otherwise would
+ *    be the overstatement this programme keeps getting caught on.
+ * 3. **Transient.** The gate pins one literal branch in a namespace whose branches are deleted
+ *    when their ticket merges, or a branch allowlist contains nothing but such branches. This is
+ *    the rule that catches the incident above, and it is static: it does not ask whether the branch
+ *    exists today, it says that pinning a ticket branch is a bomb with the fuse already lit.
+ *
+ * Rule 2 alone would NOT have caught the incident — the trigger and the `if:` named the same
+ * branch, so they agreed with each other perfectly. They were both wrong. Catching "the two
+ * disagree" is worth having, but it is not the bug that cost five days; rule 3 is.
+ *
+ * And one rule that is explicitly NOT load-bearing:
+ *
+ * 4. **No such ref** — `warn`, and silent unless the clone can resolve its own default branch.
+ *    `actions/checkout` fetches one ref by default, so in CI `refs/heads/main` usually does not
+ *    exist and the question is unanswerable; asking it anyway would warn about every correct
+ *    workflow in the repository. It is kept because locally it catches a dead branch that rules 1
+ *    to 3 cannot — a plain name like `develop` in no transient namespace — and it is pinned by a
+ *    control in the selftest so it cannot rot into decoration. It is a developer aid. It is not
+ *    the gate; rules 1 to 3 are.
+ */
+function checkWorkflowRefGates() {
+  const DIR = '.github/workflows';
+  const workflows = walk(DIR, (path) => /\.ya?ml$/.test(path)).sort();
+  if (workflows.length === 0) {
+    fail(
+      `No workflow found under ${DIR}, so this gate asserted nothing. If the workflows moved, ` +
+        'point this check at them rather than leaving it inert.',
+    );
+    return;
+  }
+
+  // Rule 4's precondition, asked once. A clone that cannot see its own default branch cannot
+  // answer "does this branch exist", so the question is not asked at all there.
+  const branchRefExists = (branch) =>
+    [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`].some((ref) => {
+      try {
+        git(['show-ref', '--verify', '--quiet', ref]);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  const refsAreKnowable = ['main', 'master'].some(branchRefExists);
+
+  for (const workflow of workflows) {
+    const body = read(workflow);
+    const parsed = parseWorkflowTriggersAndGates(body);
+    if (!parsed) {
+      fail(
+        `${workflow} has no \`on:\` block this guardrail can read, so its ref gates were not ` +
+          'checked. Teach `parseWorkflowTriggersAndGates` the shape it uses — do not leave a ' +
+          'workflow silently exempt from a check that exists because a silent exemption cost ' +
+          'five days of a stale published site.',
+      );
+      continue;
+    }
+    const { events, gates } = parsed;
+
+    /** @type {[string, string[]][]} */
+    const allowlists = [];
+    const unfiltered = [];
+    let unparsedFilter = null;
+    for (const [event, filter] of events) {
+      if (!BRANCH_FILTERED_EVENTS.includes(event)) {
+        unfiltered.push(event);
+      } else if (filter.unparsed) {
+        unparsedFilter = event;
+      } else if (filter.branches === null || filter.ignore) {
+        // No allowlist, or a `branches-ignore` denylist: any branch not named can trigger it, so
+        // nothing about reachability can be concluded.
+        unfiltered.push(event);
+      } else {
+        allowlists.push([event, filter.branches]);
+      }
+    }
+
+    /* Rule 3, trigger half. An allowlist made only of ticket branches stops matching anything the
+     * day they merge, and then the workflow does not run at all — which is how the push half of
+     * the incident above went unnoticed: no failed run, just no run. A glob (`integration/**`) is
+     * fine, and so is a list that also names a long-lived branch. */
+    for (const [event, patterns] of allowlists) {
+      const transient = patterns.filter(
+        (pattern) => isLiteralBranchPattern(pattern) && isTransientBranch(pattern),
+      );
+      if (transient.length === 0 || transient.length !== patterns.length) continue;
+      fail(
+        `${workflow} triggers on \`${event}\` only for ` +
+          `${transient.map((pattern) => `\`${pattern}\``).join(', ')}, ` +
+          `${
+            transient.length === 1
+              ? 'which is a ticket branch and is deleted when it merges'
+              : 'which are ticket branches and are deleted when they merge'
+          }.\n` +
+          `    The workflow then stops running on \`${event}\` entirely — no failed run to ` +
+          'notice, just no run. Name a long-lived branch, or a glob such as ' +
+          '`integration/**` that keeps matching.',
+      );
+    }
+
+    /* A crude whole-file scan must not see a comparison the structured parse missed. Both read the
+     * same text, so this is not a second opinion — it is a tripwire on the parser, the one part of
+     * this check that can fail open. Restricted to `if:`-shaped lines so a `github.ref ==` written
+     * in an `env:` or a `run:` script is not mistaken for a missed gate.
+     *
+     * Deliberately BEFORE the `gates.length === 0` return below. It used to sit after it, which
+     * made it useless in the one case it exists for: a parser that reads no gates at all skipped
+     * its own tripwire and the workflow was reported clean. */
+    const seenLines = new Set(gates.map((gate) => gate.line));
+    const commentless = workflowLines(body);
+    for (let i = 0; i < commentless.length; i += 1) {
+      if (!/^\s*(?:-\s+)?if\s*:/.test(commentless[i])) continue;
+      if (refComparisons(commentless[i]).length === 0 || seenLines.has(i + 1)) continue;
+      fail(
+        `${workflow}:${i + 1} compares \`github.ref\` in an \`if:\` that ` +
+          '`parseWorkflowTriggersAndGates` did not read, so that gate was not checked. Fix the ' +
+          'parser: a ref gate this check cannot see is exactly the gate that goes stale unnoticed.',
+      );
+    }
+
+    if (gates.length === 0) continue;
+
+    const unmodelled = allowlists
+      .flatMap(([, patterns]) => patterns)
+      .filter((pattern) => githubBranchFilterToRegExp(pattern) === null);
+    if (unmodelled.length > 0) {
+      fail(
+        `${workflow} filters branches with ` +
+          `${[...new Set(unmodelled)].map((pattern) => `\`${pattern}\``).join(', ')}, which ` +
+          '`githubBranchFilterToRegExp` does not model (character ranges, `+`, `!` negation), ' +
+          'and the workflow gates a job on a ref. Teach the matcher that syntax rather than ' +
+          'letting the reachability rule guess.',
+      );
+    }
+    const reachabilityIsDecidable =
+      allowlists.length > 0 &&
+      unfiltered.length === 0 &&
+      unparsedFilter === null &&
+      unmodelled.length === 0;
+    if (unparsedFilter !== null) {
+      fail(
+        `${workflow} has a \`${unparsedFilter}.branches\` value this guardrail cannot read, and ` +
+          'the workflow gates a job on a ref, so that gate was not checked for reachability. ' +
+          'Teach `parseYamlStringList` the shape it uses.',
+      );
+    }
+
+    for (const gate of gates) {
+      // `job` is null only for an `if:` that precedes any job key, which is malformed rather than
+      // impossible — named generically so the message never reads "the `null` job".
+      const where =
+        gate.job === null
+          ? 'an `if:`'
+          : gate.level === 'job'
+            ? `the \`${gate.job}\` job's \`if:\``
+            : `a step \`if:\` in the \`${gate.job}\` job`;
+
+      for (const { context, operator, literal } of refComparisons(gate.expression)) {
+        /* Rule 1 — shape. `github.ref` is `refs/heads/main`; `github.ref_name` is `main`. Mixing
+         * them is a constant, and the two directions fail differently: a constant-false `==` never
+         * runs the job, a constant-true `!=` never gates it. Both are silent. */
+        const isFullRef = literal.startsWith('refs/');
+        if ((context === 'ref') !== isFullRef) {
+          fail(
+            `${workflow}:${gate.line} gates ${where} on ` +
+              `\`github.${context} ${operator} '${literal}'\`, which is a constant: ` +
+              `\`github.${context}\` is always ` +
+              `${context === 'ref' ? 'a full ref such as `refs/heads/main`' : 'a short name such as `main`'}` +
+              `, so this is always ${operator === '==' ? 'false' : 'true'}.\n` +
+              `    ${
+                operator === '=='
+                  ? 'The job is skipped on every event, and a skipped job leaves the run green.'
+                  : 'The gate excludes nothing, so the job runs on every event it was meant to skip.'
+              } Compare \`github.${context}\` to ` +
+              `\`${context === 'ref' ? `refs/heads/${literal}` : literal.replace(/^refs\/heads\//, '')}\`.`,
+          );
+          continue;
+        }
+
+        // Only `==` can silently skip. A stale `!=` makes the gate always true, which runs the job
+        // rather than hiding it — wrong, but not invisible, and not this bug.
+        if (operator !== '==') continue;
+        // A tag or pull-ref gate is not a branch gate. `github.ref_name` on a `pull_request` is
+        // `<number>/merge`, which is not a branch either.
+        if (context === 'ref' && !literal.startsWith('refs/heads/')) continue;
+        if (context === 'ref_name' && /^\d+\/merge$/.test(literal)) continue;
+        const branch = context === 'ref' ? literal.slice('refs/heads/'.length) : literal;
+
+        /* Rule 3 — a pinned ticket branch. The rule that catches the incident. */
+        if (isTransientBranch(branch)) {
+          fail(
+            `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, which is a ` +
+              'ticket branch and is deleted when its ticket merges.\n' +
+              '    From then on the gate is false on every event, the job is SKIPPED, and a ' +
+              'skipped job leaves the run green — so the workflow reports success while doing ' +
+              'nothing. `storybook-pages.yml` published the public Storybook this way and the ' +
+              'site went stale for five days behind green runs (NXSAT-649). Gate on a long-lived ' +
+              'branch, and keep the gate and the push trigger naming the same one.',
+          );
+          continue;
+        }
+
+        /* Rule 2 — unreachable under this workflow's own triggers. */
+        if (reachabilityIsDecidable) {
+          const allowed = allowlists.some(([, patterns]) =>
+            patterns.some((pattern) => githubBranchFilterToRegExp(pattern).test(branch)),
+          );
+          if (!allowed) {
+            fail(
+              `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, which none ` +
+                'of the workflow\'s own branch filters admit:\n' +
+                allowlists
+                  .map(
+                    ([event, patterns]) =>
+                      `      ${event}: ${patterns.map((pattern) => `\`${pattern}\``).join(', ')}`,
+                  )
+                  .join('\n') +
+                '\n    No unfiltered trigger could supply that ref either, so the job can never ' +
+                'run: every event that starts this workflow leaves the gate false, and a skipped ' +
+                'job leaves the run green. Make the gate and the trigger name the same branch.',
+            );
+            continue;
+          }
+        }
+
+        /* Rule 4 — no such ref. A warning, and only where the question can be answered. */
+        if (refsAreKnowable && !branchRefExists(branch)) {
+          warn(
+            `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, and no ` +
+              `\`refs/heads/${branch}\` or \`refs/remotes/origin/${branch}\` exists in this ` +
+              'clone. If the branch is gone, the job is skipped on every event and the run still ' +
+              'goes green. A warning rather than a failure because a CI clone fetches one ref ' +
+              'and cannot tell a deleted branch from an unfetched one.',
+          );
+        }
+      }
+    }
+  }
+}
+
 const GUARDRAILS = [
   checkThemeTokens,
   checkDocsNumbering,
@@ -10210,6 +10827,7 @@ const GUARDRAILS = [
   checkSatoriFallbackEntryPoint,
   checkSatoriPrimitivesRegisteredInOrder,
   checkAdoptedPatternsNotBypassed,
+  checkWorkflowRefGates,
 ];
 
 /**
