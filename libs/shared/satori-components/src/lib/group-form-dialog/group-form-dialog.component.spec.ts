@@ -226,6 +226,14 @@ describe('NxsGroupFormDialogComponent', () => {
     expect(searchUsersPaged.mock.calls.map((c) => c[0])).toContain('al');
     expect(signalOf<unknown[]>('memberOptions')().length).toBeGreaterThan(0);
   });
+  it('adds a typed member after a mouse pick, once the text starts a new query', async () => {
+    await create({ mode: 'create' });
+    method('onMemberSelected')({ option: { value: { id: 'ann' }, deselect: vi.fn() } });
+    method('onMemberSearch')('dave');
+    method('addMemberFromInput')({ value: 'dave', chipInput: { clear: vi.fn() } });
+    expect(signalOf<string[]>('members')()).toEqual(['ann', 'dave']);
+  });
+
   it('keeps every member picked one after another from blank results', async () => {
     await create({ mode: 'create' });
     method('onMemberSelected')({ option: { value: { id: 'ann' }, deselect: vi.fn() } });

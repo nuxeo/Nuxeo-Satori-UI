@@ -29,6 +29,8 @@ export interface NxsConfirmDialogData {
 })
 export class NxsConfirmDialogComponent {
   private readonly dialogRef = inject<MatDialogRef<NxsConfirmDialogComponent, true>>(MatDialogRef);
+  /** Cancel closes with nothing: undefined, so a caller checking for a result sees no confirmation. */
+  protected readonly cancelResult = undefined;
   protected readonly data = inject<NxsConfirmDialogData>(MAT_DIALOG_DATA);
 
   protected confirm(): void {

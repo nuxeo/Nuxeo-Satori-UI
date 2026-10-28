@@ -141,6 +141,8 @@ export class NxsUserFormDialogComponent implements OnInit {
   private readonly groupSearchTerms = new Subject<string>();
   /** Set by a choice from the autocomplete, so the same Enter does not also add the typed text. */
   private skipNextChipInput = false;
+  /** Groups as they stood before the current search began, so a pick never drops one of them. */
+  private groupsBeforeQuery = new Set<string>();
   private readonly groupChipInput = viewChild(MatChipInput);
 
   ngOnInit(): void {
@@ -188,6 +190,11 @@ export class NxsUserFormDialogComponent implements OnInit {
   }
 
   protected onGroupSearch(query: string): void {
+    // Typed text starts a new entry, so an earlier pick's pending Enter-skip no longer applies.
+    if (query?.trim()) this.skipNextChipInput = false;
+    if (!this.groupQuery()) {
+      this.groupsBeforeQuery = new Set(this.groups());
+    }
     this.groupQuery.set(query);
     this.groupSearchTerms.next(query?.trim() ?? '');
   }
@@ -207,9 +214,20 @@ export class NxsUserFormDialogComponent implements OnInit {
     this.skipNextChipInput = true;
     const groupname = (event.option.value as string)?.trim();
     if (groupname) {
-      // The autocomplete can add a partial prefix chip first; keep only the full name.
-      const kept = this.groups().filter((g) => g === groupname || !groupname.startsWith(g));
+      // The autocomplete can add the typed text as a partial chip first. Drop only that chip, and only when
+      // this search added it: a group already on the list, or picked from blank results, is never dropped.
+      const typed = this.groupQuery().trim();
+      const kept = this.groups().filter(
+        (g) =>
+          !(
+            g === typed &&
+            g !== groupname &&
+            groupname.startsWith(g) &&
+            !this.groupsBeforeQuery.has(g)
+          ),
+      );
       this.groups.set(kept.includes(groupname) ? kept : [...kept, groupname]);
+      this.groupsBeforeQuery = new Set(this.groups());
     }
     this.clearGroupSearch();
     event.option.deselect();

@@ -130,6 +130,8 @@ export class NxsGroupFormDialogComponent implements OnInit {
   protected onMemberSearch(query: string): void {
     // Choosing an autocomplete option emits its user object through this binding, not text; it is not a search.
     if (typeof query !== 'string') return;
+    // Typed text starts a new entry, so an earlier pick's pending Enter-skip no longer applies.
+    if (query.trim()) this.skipNextChipInput = false;
     if (!this.memberQuery()) {
       this.membersBeforeQuery = new Set(this.members());
     }

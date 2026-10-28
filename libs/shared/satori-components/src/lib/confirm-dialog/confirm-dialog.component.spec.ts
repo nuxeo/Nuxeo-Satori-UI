@@ -56,6 +56,7 @@ describe('NxsConfirmDialogComponent', () => {
 
   it('closes with nothing when the user cancels', () => {
     button('Cancel').click();
+    expect(close.mock.calls).toEqual([[undefined]]);
     expect(close).not.toHaveBeenCalledWith(true);
   });
 });

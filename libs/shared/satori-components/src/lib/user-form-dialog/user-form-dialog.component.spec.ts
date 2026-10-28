@@ -229,6 +229,22 @@ describe('NxsUserFormDialogComponent', () => {
       );
     });
 
+    it('keeps a group already on the list when a prefixed group is picked', async () => {
+      await render();
+      (component()['groups'] as { set: (v: string[]) => void }).set(['sales']);
+      method('onGroupSearch')('sales');
+      method('onGroupSelected')({ option: { value: 'sales-emea', deselect: vi.fn() } });
+      expect((component()['groups'] as () => string[])()).toEqual(['sales', 'sales-emea']);
+    });
+
+    it('adds a typed group after a mouse pick, once the text starts a new query', async () => {
+      await render();
+      method('onGroupSelected')({ option: { value: 'members', deselect: vi.fn() } });
+      method('onGroupSearch')('managers');
+      method('addGroupFromInput')({ value: 'managers', chipInput: { clear: vi.fn() } });
+      expect((component()['groups'] as () => string[])()).toEqual(['members', 'managers']);
+    });
+
     it('adds a typed group as a chip on Enter', async () => {
       const clear = vi.fn();
       await render();
@@ -247,6 +263,8 @@ describe('NxsUserFormDialogComponent', () => {
 
     it('adds the group chosen from the autocomplete and not the typed prefix', () => {
       const groupsOf = component()['groups'] as () => string[];
+      method('onGroupSearch')('man');
+      // The partial chip is created while this search is under way, so it is not a member from before it.
       (component()['groups'] as { set: (v: string[]) => void }).set(['man']);
       const deselect = vi.fn();
       method('onGroupSelected')({ option: { value: 'managers', deselect } });
