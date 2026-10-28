@@ -10124,6 +10124,197 @@ expectGreen(
   },
 );
 
+/* --- second review round on #494: YAML shapes and GitHub expression semantics --- */
+
+expectRed(
+  'a root-level flow mapping `on:` is refused, not read as one event named after the mapping',
+  'checkWorkflowRefGates',
+  {
+    // `on: { push: { branches: [...] } }` registered a single "event" whose name was the whole
+    // mapping text. That matches no branch-filtered event, so the trigger counted as unfiltered
+    // and a ticket-only trigger passed with nothing to hide it. Refused rather than parsed —
+    // nested flow mappings are real work to read, and a loud refusal naming the parser is what
+    // this file prefers to a quiet exemption.
+    '.github/workflows/deploy.yml':
+      "name: Fixture\n\non: { push: { branches: ['integration/nxsat-308'] } }\n\n" + WORKFLOW_JOB,
+  },
+  null,
+  /has no `on:` block this guardrail can read/,
+);
+
+expectRed(
+  'a plain multi-line `if:` with no expression markers is folded in',
+  'checkWorkflowRefGates',
+  {
+    // `if: github.ref ==` with the literal on the next line. There is no `${{` to notice here, so
+    // the earlier unbalanced-marker test could not see it; the gate was recorded as
+    // `github.ref ==`, compared nothing, and the tripwire reads only the `if:` line. The fix
+    // follows YAML's own rule — a scalar continues on every line indented past its key — rather
+    // than guessing at completeness.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  deploy:
+    needs: build
+    if: github.ref ==
+      'refs/heads/integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deploy
+`,
+  },
+  null,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`/,
+);
+
+expectRed(
+  '`?` in a branch filter is refused, because it quantifies the preceding character',
+  'checkWorkflowRefGates',
+  {
+    // In a GitHub filter pattern `?` means zero or one of the PRECEDING character, not "any one
+    // character" as in a shell glob. So `release/10?` admits `release/1` and `release/10` and not
+    // `release/10x` — and modelling it as `[^/]` got both ends wrong, rejecting the two branches
+    // the pattern admits and admitting one it does not. This fixture is the admitted-one-it-does-
+    // not case, which used to pass silently.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: ['release/10?']\n",
+      gatedJob("github.ref == 'refs/heads/release/10x'"),
+    ),
+  },
+  null,
+  /filters branches with `release\/10\?`, which `githubBranchFilterToRegExp` does not model/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a reversed-order comparison after another string literal reads only its own literal',
+  'checkWorkflowRefGates',
+  {
+    // `github.event_name == 'push' && 'main' == github.ref_name`. The lazy `(.*?)` with a quote
+    // backreference backtracked across two literals and read the branch name as `push' && 'main`,
+    // which no filter admits — so a valid compound condition failed as unreachable.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.event_name == 'push' && 'main' == github.ref_name"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'YAML inside a `run:` block scalar is shell, not workflow keys',
+  'checkWorkflowRefGates',
+  {
+    // A script that writes a workflow. The heredoc's `if:` line was recorded as a step condition
+    // and failed the ticket-branch rule, on a workflow with no ref gate at all. Block-scalar
+    // bodies are now blanked in `workflowLines`, which fixes the jobs scan and the tripwire
+    // together — the reason they share that function.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a workflow
+        run: |
+          cat > generated.yml <<'YAML'
+          jobs:
+            deploy:
+              if: github.ref == 'refs/heads/integration/nxsat-308'
+          YAML
+`,
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a YAML-quoted `if:` scalar is unwrapped before the expression is analysed',
+  'checkWorkflowRefGates',
+  {
+    // The quoted form of the `||` control above. With the quotes left on, the two analyses
+    // contradicted each other over the same text: `expressionHasAlternative` blanks string
+    // literals before looking for `||`, so it blanked the whole scalar and found none, while
+    // `refComparisons` still pulled both comparisons out — and `staging` was called unreachable.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob(`"github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'"`),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'GitHub compares expression strings without case, so `refs/heads/MAIN` reaches `main`',
+  'checkWorkflowRefGates',
+  {
+    // `==` in an Actions expression ignores case, so this job does run on `main` and calling it
+    // unreachable was wrong. Note the asymmetry the fix has to respect: git refs themselves are
+    // case-sensitive, so the leniency belongs in the pattern match and the ref lookup — both of
+    // which model what the workflow sees — and nowhere else.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.ref == 'refs/heads/MAIN'"),
+    ),
+  },
+);
+
+expectRed(
+  "a sibling step key is not part of the condition above it",
+  'checkWorkflowRefGates',
+  {
+    // Continuation lines are measured from the KEY's indent, not the line's. In a sequence item
+    // the `-` sits further left than the key, so measuring from the line would fold the step's own
+    // `run:` into the expression — and here that would drag in a shell `||`, which makes the gate
+    // look like an alternative and silences the ticket-branch rule entirely.
+    //
+    // Mutation testing found this one: the fix was in place and nothing was asserting it.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - if: github.ref == 'refs/heads/integration/nxsat-308'
+        run: echo a || echo b
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is a ticket branch/,
+);
+
+expectRed(
+  'a differently cased ticket branch is still a ticket branch',
+  'checkWorkflowRefGates',
+  {
+    // The other side of case-insensitivity: the leniency must not become a way round the rule.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/Integration/NXSAT-308'"),
+    ),
+  },
+  null,
+  /on the branch `Integration\/NXSAT-308`, which is a ticket branch/,
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

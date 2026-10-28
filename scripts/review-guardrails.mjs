@@ -10276,7 +10276,7 @@ function stripTrailingYamlComment(line) {
 }
 
 /**
- * A workflow as lines, with comments blanked rather than removed.
+ * A workflow as lines, with comments and opaque block-scalar bodies blanked rather than removed.
  *
  * **Blanked, so index `i` is always line `i + 1`.** `stripYamlComments` filters comment lines out,
  * which shifts every line number after the first comment — and `.github/workflows` is mostly
@@ -10285,13 +10285,38 @@ function stripTrailingYamlComment(line) {
  * a false failure. One function, used by the parser and by the tripwire that checks the parser, so
  * the two numberings cannot disagree again.
  *
+ * ## Why block scalars go too
+ *
+ * The body of a `run: |` is shell, not YAML, and reading it as YAML is not a theoretical problem:
+ * a script that writes a workflow — `cat > generated.yml <<'YAML'` with an `if: github.ref == …`
+ * inside it — had its heredoc line recorded as a step condition and failed the ticket-branch rule,
+ * on a workflow with no ref gate at all. Caught in review on #494. Blanking the body here fixes the
+ * jobs scan and the tripwire together, which is the point of them sharing this function.
+ *
+ * `if:` is the one block-scalar key kept, because there the body IS the expression and the gate
+ * parser folds it in deliberately.
+ *
  * @param {string} body workflow source
  * @returns {string[]}
  */
 function workflowLines(body) {
-  return body
-    .split('\n')
-    .map((line) => (/^\s*#/.test(line) ? '' : stripTrailingYamlComment(line)));
+  const raw = body.split('\n');
+  // Detected on the RAW lines: comment blanking would strip the indentation these boundaries are
+  // measured by, and a blanked line would end a block scalar early.
+  const opaque = new Array(raw.length).fill(false);
+  for (let i = 0; i < raw.length; i += 1) {
+    if (opaque[i]) continue;
+    const key = /^(\s*)(?:-\s+)?([A-Za-z_][\w.-]*)\s*:\s*[|>][-+]?\d*\s*$/.exec(raw[i]);
+    if (!key || key[2] === 'if') continue;
+    const keyIndent = key[1].length;
+    for (let j = i + 1; j < raw.length; j += 1) {
+      if (raw[j].trim() !== '' && yamlIndent(raw[j]) <= keyIndent) break;
+      opaque[j] = true;
+    }
+  }
+  return raw.map((line, i) =>
+    opaque[i] || /^\s*#/.test(line) ? '' : stripTrailingYamlComment(line),
+  );
 }
 
 const yamlIndent = (line) => line.length - line.trimStart().length;
@@ -10417,8 +10442,9 @@ const TRANSIENT_BRANCH_NAMESPACES = [
   'renovate/',
 ];
 
+// Case-insensitive to match GitHub's expression `==`, so `Integration/NXSAT-308` is recognised.
 const isTransientBranch = (branch) =>
-  TRANSIENT_BRANCH_NAMESPACES.some((namespace) => branch.startsWith(namespace));
+  TRANSIENT_BRANCH_NAMESPACES.some((namespace) => branch.toLowerCase().startsWith(namespace));
 
 /** A filter pattern that names exactly one branch, rather than a family of them. */
 const isLiteralBranchPattern = (pattern) =>
@@ -10427,24 +10453,35 @@ const isLiteralBranchPattern = (pattern) =>
 /**
  * A GitHub branch-filter pattern as a `RegExp`, or `null` for syntax this does not model.
  *
- * `**` crosses `/`, `*` and `?` do not — so `integration/**` matches `integration/nxsat-308` and
- * `integration/*` matches it too, while `integration/*` does NOT match `integration/a/b`. Matching
- * by substring instead gets this wrong in both directions: `main` would "match" `maintenance`, and
+ * `**` crosses `/` and `*` does not — so `integration/**` matches `integration/nxsat-308`, and so
+ * does `integration/*`, while `integration/*` does NOT match `integration/a/b`. Matching by
+ * substring instead gets this wrong in both directions: `main` would "match" `maintenance`, and
  * `integration/**` would not match anything.
  *
- * Character ranges, `+`, and `!` negation return `null`. The caller fails loudly on `null` rather
- * than guessing, because a mismatched pattern here silently converts "this job can never run" into
- * "this job is fine".
+ * **Case-insensitive**, because GitHub's expression `==` ignores case for strings: with
+ * `branches: [main]`, `if: github.ref == 'refs/heads/MAIN'` does run the job, and a case-sensitive
+ * test reported it as unreachable. Caught in review on #494. Note the asymmetry — git refs
+ * themselves are case-sensitive, so this leniency belongs here, where an Actions expression is
+ * being modelled, and not in the ref-existence lookup.
+ *
+ * Character ranges, `+`, `?`, and `!` negation return `null`. `?` is in that list rather than
+ * translated: in GitHub filter patterns `?` means **zero or one of the PRECEDING character**, not
+ * "any one character" as in a shell glob, so `release/10?` admits `release/1` and `release/10` and
+ * not `release/10x`. Modelling it as `[^/]` got both ends wrong — it rejected the two branches the
+ * pattern admits and admitted one it does not. Refusing to guess is the behaviour the rest of this
+ * function already has, and no workflow here uses `?`.
+ *
+ * The caller fails loudly on `null`, because a mismatched pattern silently converts "this job can
+ * never run" into "this job is fine".
  */
 function githubBranchFilterToRegExp(pattern) {
-  if (/[+[\]]/.test(pattern) || pattern.startsWith('!')) return null;
+  if (/[+?[\]]/.test(pattern) || pattern.startsWith('!')) return null;
   const source = pattern
     .replace(/[.^${}()|\\]/g, '\\$&')
     .replace(/\*\*/g, '\u0000')
     .replace(/\*/g, '[^/]*')
-    .replace(/\u0000/g, '.*')
-    .replace(/\?/g, '[^/]');
-  return new RegExp(`^${source}$`);
+    .replace(/\u0000/g, '.*');
+  return new RegExp(`^${source}$`, 'i');
 }
 
 /**
@@ -10462,16 +10499,56 @@ function githubBranchFilterToRegExp(pattern) {
  * failed the shape rule on a perfectly valid condition. Caught in review on #494. The forward
  * order never had the bug, because the `==` that must follow forces the regex to backtrack to the
  * longer alternative; relying on that asymmetry is what made it easy to miss.
+ *
+ * The literal is a character class closed on its own quote, not `(.*?)` with a backreference. The
+ * lazy form could span two literals: in `github.event_name == 'push' && 'main' == github.ref_name`
+ * it backtracked until the reversed order matched, and read the branch name as `push' && 'main`.
+ * Also caught on #494. A doubled quote — GitHub's escape inside an expression string — is part of
+ * the literal and is unescaped below.
  */
-const REF_COMPARISON =
-  /github\.(ref_name|ref)\b\s*(==|!=)\s*(['"])(.*?)\3|(['"])(.*?)\5\s*(==|!=)\s*github\.(ref_name|ref)\b/g;
+const EXPRESSION_STRING = "'((?:[^']|'')*)'|\"((?:[^\"]|\"\")*)\"";
+const REF_COMPARISON = new RegExp(
+  `github\\.(ref_name|ref)\\b\\s*(==|!=)\\s*(?:${EXPRESSION_STRING})` +
+    `|(?:${EXPRESSION_STRING})\\s*(==|!=)\\s*github\\.(ref_name|ref)\\b`,
+  'g',
+);
 
 function refComparisons(expression) {
-  return [...expression.matchAll(REF_COMPARISON)].map((match) =>
-    match[1] !== undefined
-      ? { context: match[1], operator: match[2], literal: match[4], index: match.index }
-      : { context: match[8], operator: match[7], literal: match[6], index: match.index },
-  );
+  return [...expression.matchAll(REF_COMPARISON)].map((match) => {
+    const forward = match[1] !== undefined;
+    return {
+      context: forward ? match[1] : match[8],
+      operator: forward ? match[2] : match[7],
+      literal: (forward ? (match[3] ?? match[4]) : (match[5] ?? match[6]))
+        .replace(/''/g, "'")
+        .replace(/""/g, '"'),
+      index: match.index,
+    };
+  });
+}
+
+/**
+ * An `if:` value with its enclosing YAML quotes removed, so what is analysed is the Actions
+ * expression rather than the scalar that carries it.
+ *
+ * Leaving them on produced a contradiction rather than a near miss:
+ * `if: "github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'"` has the whole
+ * expression inside one double-quoted scalar, so `expressionHasAlternative` — which blanks string
+ * literals before looking for `||` — blanked the entire thing and found no `||`, while
+ * `refComparisons` still pulled both comparisons out of it. The two disagreed about the same text
+ * and `staging` was reported unreachable. Caught in review on #494.
+ *
+ * Only a value that both opens and closes with the same quote is treated as a quoted scalar; in
+ * YAML a quoted scalar cannot be followed by more content, so that is the shape, not a guess.
+ */
+function unquoteYamlExpression(value) {
+  if (value.length > 1 && value.startsWith('"') && value.endsWith('"')) {
+    return value.slice(1, -1).replace(/\\"/g, '"');
+  }
+  if (value.length > 1 && value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replace(/''/g, "'");
+  }
+  return value;
 }
 
 /**
@@ -10549,6 +10626,15 @@ function parseWorkflowTriggersAndGates(body) {
   const events = new Map();
   const inline = lines[onIndex].slice(lines[onIndex].indexOf(':') + 1).trim();
   if (inline !== '') {
+    /* `on: { push: { branches: [...] } }` is a flow MAPPING, not a list of event names. It used to
+     * be registered as a single event whose name was the whole mapping text — which matches no
+     * branch-filtered event, so the trigger counted as unfiltered and a ticket-only trigger passed
+     * with nothing to hide it. Caught in review on #494.
+     *
+     * Refused rather than parsed: nested flow mappings are real work to read, the caller's failure
+     * names this function and says what to do, and a loud refusal is the behaviour this file
+     * already prefers to a quiet exemption. No workflow here uses the form. */
+    if (inline.startsWith('{')) return null;
     // `on: push` or `on: [push, pull_request]` — a shorthand that carries no branch filter.
     const names = inline.startsWith('[')
       ? (parseYamlFlowSequence(inline) ?? [])
@@ -10617,35 +10703,35 @@ function parseWorkflowTriggersAndGates(body) {
       const gate = /^\s*(?:-\s+)?if\s*:\s*(.+)$/.exec(lines[i]);
       if (!gate) continue;
 
-      let expression = gate[1].trim();
-      /* The expression continues on the following, more-indented lines in two shapes, and both
-       * have to be folded in or the gate is read as a fragment that compares nothing:
+      /* Fold in the continuation lines, unconditionally.
        *
-       *   - a block scalar (`if: >` / `if: |`);
-       *   - a multi-line PLAIN scalar, which is how `if: ${{` followed by an indented expression
-       *     and a closing `}}` is written. That one was missed: the gate was recorded as the three
-       *     characters `${{`, no comparison was found in it, and the tripwire below looks only at
-       *     the `if:` line — so a stale ticket-branch gate written this way passed completely.
-       *     Caught in review on #494. */
-      const isBlockScalar = /^[>|][-+]?\d*$/.test(expression);
-      const isUnclosedExpression =
-        (expression.match(/\$\{\{/g) ?? []).length > (expression.match(/\}\}/g) ?? []).length;
-      if (isBlockScalar || isUnclosedExpression) {
-        const folded = isBlockScalar ? [] : [expression];
-        for (
-          let j = i + 1;
-          j < jobsEnd && (lines[j].trim() === '' || yamlIndent(lines[j]) > indent);
-          j += 1
-        ) {
-          folded.push(lines[j].trim());
-        }
-        expression = folded.join(' ').trim();
+       * A YAML scalar value continues on every following line indented further than its key, in
+       * both shapes this has to read: a block scalar (`if: >` / `if: |`) and a multi-line PLAIN
+       * scalar, which is what `if: ${{` with the expression below it is — and also plain
+       * `if: github.ref ==` with the literal on the next line, which has no expression markers to
+       * notice at all. Both were read as a first line only, so the gate compared nothing and the
+       * tripwire, which reads the `if:` line, could not see it either. Caught in review on #494;
+       * the earlier version looked for an unbalanced `${{`, which the marker-less form does not
+       * have. Following YAML's own rule instead of guessing at completeness covers both.
+       *
+       * The key's indent, not the line's: for a sequence item (`- if: …`) the `-` sits further
+       * left than the key, so measuring from the line would treat the step's own sibling keys as
+       * continuations and fold `run: echo` into the expression. */
+      const keyIndent = (/^(\s*-\s+)/.exec(lines[i])?.[1] ?? '').length || indent;
+      const isBlockScalar = /^[>|][-+]?\d*$/.test(gate[1].trim());
+      const folded = isBlockScalar ? [] : [gate[1].trim()];
+      for (
+        let j = i + 1;
+        j < jobsEnd && (lines[j].trim() === '' || yamlIndent(lines[j]) > keyIndent);
+        j += 1
+      ) {
+        folded.push(lines[j].trim());
       }
       gates.push({
         job,
         line: i + 1,
         level: indent === jobKeyIndent ? 'job' : 'step',
-        expression,
+        expression: unquoteYamlExpression(folded.join(' ').trim()),
       });
     }
   }
@@ -10731,17 +10817,32 @@ function checkWorkflowRefGates() {
     return;
   }
 
-  // Rule 4's precondition, asked once. A clone that cannot see its own default branch cannot
-  // answer "does this branch exist", so the question is not asked at all there.
-  const branchRefExists = (branch) =>
-    [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`].some((ref) => {
+  /* Rule 4's precondition, asked once. A clone that cannot see its own default branch cannot
+   * answer "does this branch exist", so the question is not asked at all there.
+   *
+   * One `for-each-ref` rather than a `show-ref` per branch, lower-cased: GitHub's expression `==`
+   * ignores case, so a gate on `refs/heads/MAIN` names the branch `main` as far as the workflow is
+   * concerned, and warning that it does not exist would be wrong for the same reason the
+   * reachability rule had to become case-insensitive. */
+  let knownRefs = null;
+  const branchRefExists = (branch) => {
+    if (knownRefs === null) {
       try {
-        git(['show-ref', '--verify', '--quiet', ref]);
-        return true;
+        knownRefs = new Set(
+          git(['for-each-ref', '--format=%(refname)', 'refs/heads/', 'refs/remotes/origin/'])
+            .split('\n')
+            .filter(Boolean)
+            .map((ref) => ref.toLowerCase()),
+        );
       } catch {
-        return false;
+        knownRefs = new Set();
       }
-    });
+    }
+    return (
+      knownRefs.has(`refs/heads/${branch}`.toLowerCase()) ||
+      knownRefs.has(`refs/remotes/origin/${branch}`.toLowerCase())
+    );
+  };
   const refsAreKnowable = ['main', 'master'].some(branchRefExists);
 
   for (const workflow of workflows) {
@@ -10845,9 +10946,12 @@ function checkWorkflowRefGates() {
       fail(
         `${workflow} filters branches with ` +
           `${[...new Set(unmodelled)].map((pattern) => `\`${pattern}\``).join(', ')}, which ` +
-          '`githubBranchFilterToRegExp` does not model (character ranges, `+`, `!` negation), ' +
-          'and the workflow gates a job on a ref. Teach the matcher that syntax rather than ' +
-          'letting the reachability rule guess.',
+          '`githubBranchFilterToRegExp` does not model (character ranges, `+`, `?`, `!` ' +
+          'negation), and the workflow gates a job on a ref. Note that `?` and `+` quantify the ' +
+          'PRECEDING character in a GitHub filter pattern — `release/10?` admits `release/1` and ' +
+          '`release/10`, not `release/10x` — so they are refused rather than read as glob ' +
+          'wildcards. Teach the matcher that syntax rather than letting the reachability rule ' +
+          'guess.',
       );
     }
     const reachabilityIsDecidable =
