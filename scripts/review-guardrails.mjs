@@ -10303,6 +10303,21 @@ function workflowLines(body) {
   const raw = body.split('\n');
   // Detected on the RAW lines: comment blanking would strip the indentation these boundaries are
   // measured by, and a blanked line would end a block scalar early.
+  /* The column job IDs sit at, so a JOB may be called `env` without its body being blanked.
+   *
+   * `jobs:\n  env:\n    if: …` named a job after a configuration field, and the data rule below
+   * blanked the whole job — ticket-branch gate included — which made both the gate scan and its
+   * tripwire blind to it. Reported on #494. A job ID is a key directly under the column-0 `jobs:`
+   * key, so one indent is enough to tell the two apart; anything deeper is configuration. */
+  const jobsIndex = raw.findIndex((line) => /^jobs\s*:/.test(line));
+  const jobIdIndent =
+    jobsIndex === -1
+      ? -1
+      : (raw
+          .slice(jobsIndex + 1)
+          .find((line) => line.trim() !== '' && !/^\s*#/.test(line))
+          ?.search(/\S/) ?? -1);
+
   const opaque = new Array(raw.length).fill(false);
   for (let i = 0; i < raw.length; i += 1) {
     if (opaque[i]) continue;
@@ -10311,15 +10326,21 @@ function workflowLines(body) {
     // script body back into the YAML the parser reads. Indentation is still measured from the raw
     // lines, because comment blanking would erase the indentation the boundary depends on.
     const header = stripTrailingYamlComment(raw[i]);
-    const key =
-      /^(\s*)((?:-\s+)?)['"]?([A-Za-z_][\w.-]*)['"]?\s*:\s*[|>][-+]?\d*\s*$/.exec(header) ??
-      /* A mapping whose VALUE is opaque data rather than workflow structure. Its body is blanked
-       * for the same reason a `run:` script is: the gate scan treats any `if:` under `jobs:` as a
-       * condition, so a job declaring `env.if` — or a `with:` input named `if` — had that data read
-       * as a step condition and failed the shape rule, on a workflow with nothing conditional in
-       * it. Reported on #494. None of these keys can contain a job or a step, so nothing the
-       * parser needs is lost. */
+    const blockScalar =
+      /^(\s*)((?:-\s+)?)['"]?([A-Za-z_][\w.-]*)['"]?\s*:\s*[|>][-+]?\d*\s*$/.exec(header);
+    /* A mapping whose VALUE is opaque data rather than workflow structure. Its body is blanked for
+     * the same reason a `run:` script is: the gate scan treats any `if:` under `jobs:` as a
+     * condition, so a job declaring `env.if` — or a `with:` input named `if` — had that data read
+     * as a step condition and failed the shape rule, on a workflow with nothing conditional in it.
+     * Reported on #494. None of these keys can contain a job or a step, so nothing the parser
+     * needs is lost — unless the key is a job ID, which `jobIdIndent` excludes. */
+    const dataField =
+      blockScalar ??
       /^(\s*)((?:-\s+)?)['"]?(env|with|outputs|inputs|secrets|strategy)['"]?\s*:\s*$/.exec(header);
+    const key =
+      dataField && dataField !== blockScalar && dataField[1].length === jobIdIndent
+        ? null
+        : dataField;
     if (!key || key[3] === 'if') continue;
     /* The KEY's column, not the dash's. For `- run: |` the dash sits further left than the key, so
      * measuring from the dash swallowed the step's own sibling keys as script — and a ticket-branch
@@ -10327,6 +10348,15 @@ function workflowLines(body) {
      * The same off-by-a-dash as the condition folding below; it was fixed there and not here. */
     const keyIndent = key[1].length + key[2].length;
     for (let j = i + 1; j < raw.length; j += 1) {
+      /* A full-line comment is not a boundary. A comment sits wherever its author put it, and one
+       * written at the key's own column — `    # Environment variables` under a job's `    env:` —
+       * ended the region early and handed the rest of the mapping back to the gate scan, which
+       * then read an `env` field called `if` as a step condition. Reported on #494.
+       *
+       * This does not over-reach: a key at or below the column still ends the region, so a step's
+       * own `if:` written after a `run: |` and a comment is still read. There is a control for
+       * exactly that, because it is the shape this could have broken. */
+      if (/^\s*#/.test(raw[j])) continue;
       if (raw[j].trim() !== '' && yamlIndent(raw[j]) <= keyIndent) break;
       opaque[j] = true;
     }

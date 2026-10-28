@@ -10820,6 +10820,92 @@ expectRed(
   /If `staging` is itself long-lived, add it to `LONG_LIVED_BRANCHES`/,
 );
 
+/* --- the data-key blanking, and the two ways it was wrong --- */
+
+expectRed(
+  'a job may be CALLED `env` without its own condition being blanked',
+  'checkWorkflowRefGates',
+  {
+    // The data rule blanks the body of `env:`, `with:`, `outputs:` and friends so a field named
+    // `if` is not read as a condition. A job ID matches the same pattern, so naming a job `env`
+    // blanked the whole job — ticket-branch gate included — and both the gate scan and its
+    // tripwire went blind. A job ID is a key directly under the column-0 `jobs:` key, so one
+    // indent distinguishes it from configuration.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  env:
+    if: github.ref == 'refs/heads/integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /gates the `env` job's `if:` on the branch `integration\/nxsat-308`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a comment at the data key\'s own column does not end the opaque region',
+  'checkWorkflowRefGates',
+  {
+    // A comment sits wherever its author put it, and one written at the key's column ended the
+    // region early — handing the rest of the mapping back to the gate scan, which read an `env`
+    // field called `if` as a step condition and failed the shape rule.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+    # Environment variables
+      if: github.ref == 'main'
+    steps:
+      - run: echo hi
+`,
+  },
+);
+
+expectRed(
+  'skipping comments does not swallow the condition after a script',
+  'checkWorkflowRefGates',
+  {
+    // The control that keeps the fix above from over-reaching, and it was written before the fix
+    // to find out whether it would. A comment between a `run: |` script and the step's own `if:`
+    // must not extend the script over the condition — a key at or below the column still ends the
+    // region, so only the comment is skipped.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Script
+        run: |
+          echo a
+        # a comment between the script and the condition
+        if: github.ref == 'refs/heads/integration/nxsat-308'
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;
