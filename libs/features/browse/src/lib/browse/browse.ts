@@ -1553,7 +1553,15 @@ export class BrowseComponent {
 
     let added = 0;
     let additions: NuxeoDocument[] = [];
-    const previousEntryCount = this.entries().length;
+    // The rows on screen, not `entries().length`.
+    //
+    // The guard below asks "is the total a complete count of this listing?", and it asks it of the
+    // number the total is displayed beside. Against the raw entry count it stopped being true for
+    // good after one non-matching paste: that row joins `entries()` and is deliberately left out
+    // of both the total and the rows, so the two counts diverge by one and never meet again — and
+    // the *next* paste, one that does match, could then never raise the total. Two rows, "1
+    // result". Unfiltered the two are the same number, so nothing changes there.
+    const previousVisibleCount = this.filteredEntries().length;
     const previousTotalSize = this.totalSize();
     this.entries.update((entries) => {
       const existingUids = new Set(entries.map((entry) => entry.uid));
@@ -1569,7 +1577,7 @@ export class BrowseComponent {
       const shown = this.filtersActive()
         ? additions.filter((doc) => this.matchesFilters(doc)).length
         : added;
-      if (shown > 0 && previousTotalSize === previousEntryCount) {
+      if (shown > 0 && previousTotalSize === previousVisibleCount) {
         this.totalSize.update((count) => count + shown);
       }
     }

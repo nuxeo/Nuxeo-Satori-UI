@@ -1086,6 +1086,51 @@ describe('BrowseComponent — rendered document list', () => {
   });
 
   /**
+   * A non-matching paste must not poison the count for the pastes after it.
+   *
+   * The total is only adjusted while it is a complete count of the listing, and that test used to
+   * be made against the raw entry count. A hidden optimistic row joins `entries()` while being
+   * left out of both the rows and the total, so the two counts diverged by one and never met
+   * again — and the next paste, one the filter *does* match, could then never raise the total.
+   */
+  it('still counts a matching paste after a non-matching one', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
+        totalSize: 1,
+        serverFiltered: true,
+      }),
+    );
+    const component = await render();
+    component.filterText.set('report');
+    await settleFilter();
+    const context = TestBed.inject(BrowseContextService);
+
+    // First paste: excluded by the filter, so neither a row nor part of the count.
+    context.notifyClipboardPasteComplete({
+      targetUid: folder.uid,
+      action: 'copy',
+      documents: [doc({ uid: 'p-1', title: 'Invoice' })],
+    });
+    await settle();
+    expect(rowTitles()).toEqual(['Q1 Report']);
+    expect(component.listTotalSize()).toBe(1);
+
+    // Second paste: matches, so it is both.
+    context.notifyClipboardPasteComplete({
+      targetUid: folder.uid,
+      action: 'copy',
+      documents: [doc({ uid: 'p-2', title: 'Q2 Report' })],
+    });
+    await settle();
+
+    expect(rowTitles()).toEqual(['Q1 Report', 'Q2 Report']);
+    expect(component.listTotalSize()).toBe(2);
+    expect(query('.result-count')?.textContent).toContain('2 results');
+  });
+
+  /**
    * The other half of carrying optimistic rows under a server-side filter: retracting them.
    *
    * A pending copy keeps the title it was pasted under, and a filtered query never returns the uid
