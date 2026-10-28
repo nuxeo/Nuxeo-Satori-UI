@@ -41,7 +41,7 @@ Severity follows the reviewers' ratings. "Verified" means the author re-read the
 
 - `thumbnail/thumbnail.component.ts:78-82` (`broken()`) acts on the current `url()`, not on the `src` that failed (`thumbnail.component.html:2`).
 - In cache mode a document switch can replay a cached URL synchronously while the `<img>` element is reused, so a late error for document A can discard and revoke B's URL. In owned mode the race is not reachable: `clear()` sets `url` to null before the fetch, so the `<img>` is removed first.
-- Fix: take the failing `src` from the event and act only if it equals `url()`.
+- Fix: ignore errors from superseded loads, for example by recreating the `<img>` when its URL changes, or by keeping a load-generation token. Comparing `event.target.src` with `url()` is not enough: a native image `error` event does not carry the failed request's URL, and in the reused-element race `event.target.src` can already be B's URL, so the comparison would still discard B's URL.
 
 **L2. `discard()` and `drop()` revoke a URL that other holders still display.** Verified.
 
@@ -56,11 +56,11 @@ Severity follows the reviewers' ratings. "Verified" means the author re-read the
 **L4. A late comment-save response is applied to whichever document is shown by then.**
 
 - `comments/comments.component.ts:444-463`, called from `submitComment` at `:326`. Nothing compares the request's uid with the current one.
-- Effect: display and `threadChange` integrity only. Nothing is written to the server with the wrong uid.
+- Effect: display and `threadChange` integrity. The write consequence is wider than display: `DocumentDetailService.createReply()` (`document-detail.service.ts:858-862`) addresses the parent comment's id directly, not the current document uid. A reply written while A's create response sits under B's thread can therefore persist under A.
 
 **L5. Saved-search list can be overwritten by a stale response.**
 
-- `saved-search-select/saved-search-select.component.ts:86-104`: a `refresh` or `pageProvider` change resets state but does not cancel the earlier `getSavedSearches` request, so whichever answers last wins.
+- `saved-search-select/saved-search-select.component.ts:86-104`: a `refresh` or `pageProvider` change resets state but does not cancel the earlier `getSavedSearches` request, so whichever answers last wins. Comparing the provider alone does not fix this: two requests started on either side of a `refresh` change share a provider, so the older response would still pass that check.
 
 **L6. Drive installer URLs are hardcoded to an external host and cannot be configured.** Verified.
 
@@ -103,7 +103,7 @@ Summarised by concern. Full reviewer notes are in the NXSAT-664 review session t
 1. M1 and L3: make in-flight permission and rename/version writes non-cancellable on close (or disable close while saving), and emit the outcome to the host either way.
 2. M2: make a permissions save finish, or report partial completion, when the panel is destroyed.
 3. M3: restrict thumbnail blob MIME types or re-wrap the blob.
-4. L1 and L2: act on the failing `src` in `broken()`, and stop `discard`/`drop` from revoking URLs other holders still show.
-5. L4 and L5: compare request uid and provider with the current ones before applying a late response.
+4. L1 and L2: ignore errors from superseded loads (not a `src` comparison), and stop `discard`/`drop` from revoking URLs other holders still show.
+5. L4 and L5: guard late responses with a generation token, not a field comparison. For L4, the token is the document uid, and the reply path must use the current document. For L5, it is invalidated by both `refresh` and `pageProvider`, or the earlier request is cancelled with `switchMap`.
 6. L6: make Drive installer URLs configurable through Layer 0/1.
 7. I1 to I5: hygiene items, as listed above.
