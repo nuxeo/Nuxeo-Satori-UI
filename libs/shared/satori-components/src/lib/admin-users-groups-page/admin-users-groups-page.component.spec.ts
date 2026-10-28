@@ -282,4 +282,117 @@ describe('NxsAdminUsersGroupsPageComponent', () => {
     expect(second).not.toBe(first);
     expect(second?.textContent).toContain('some.outcome');
   });
+  it('reports a failed user page change and empties the list', async () => {
+    userService['searchUsersPaged'].mockReturnValueOnce(throwError(() => new Error('down')));
+    page()['onUsersPage']({ pageIndex: 1, pageSize: 10, length: 20 });
+    await render();
+    expect(page()['usersError']()).toBe(true);
+    expect(page()['users']()).toEqual([]);
+  });
+
+  it('loads the next group page, and reports a failed one', async () => {
+    page()['onGroupsPage']({ pageIndex: 1, pageSize: 10, length: 20 });
+    await render();
+    expect(userService['searchGroupsPaged']).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.any(Number),
+      1,
+    );
+    userService['searchGroupsPaged'].mockReturnValueOnce(throwError(() => new Error('down')));
+    page()['onGroupsPage']({ pageIndex: 2, pageSize: 10, length: 30 });
+    await render();
+    expect(page()['groupsError']()).toBe(true);
+  });
+
+  it('shows no recent rows when the recent list cannot be loaded', async () => {
+    userService['getRecentlyCreatedUsersAndGroups'].mockReturnValueOnce(
+      throwError(() => new Error('down')),
+    );
+    page()['loadRecent']();
+    await render();
+    expect(page()['recent']()).toEqual([]);
+    expect(page()['recentLoading']()).toBe(false);
+  });
+
+  it('routes a recent user or group to its callback', () => {
+    const userChosen = vi.fn();
+    const groupChosen = vi.fn();
+    fixture.componentRef.setInput('userChosen', userChosen);
+    fixture.componentRef.setInput('groupChosen', groupChosen);
+    page()['openRecent']({ kind: 'user', name: 'Jane', identifier: 'jdoe', email: '' });
+    page()['openRecent']({ kind: 'group', name: 'Editors', identifier: 'editors', email: '' });
+    expect(userChosen).toHaveBeenCalledWith('jdoe');
+    expect(groupChosen).toHaveBeenCalledWith('editors');
+  });
+
+  it('moves the recent list to the page it is asked for', () => {
+    page()['onRecentPage']({ pageIndex: 2, pageSize: 10, length: 30 });
+    expect(page()['recentPage']()).toBe(2);
+  });
+
+  it('reports an invitation sent', async () => {
+    dialogResults.push({ mode: 'create', username: 'newbie', invited: true, createAnother: false });
+    page()['openCreateUser']();
+    await render();
+    expect(page()['status']()).toEqual({
+      text: 'satori-components.admin-users-groups-page.invitation-sent',
+      error: false,
+    });
+  });
+
+  it('opens the create dialog again when the admin asks to create another user', async () => {
+    dialogResults.push(
+      { mode: 'create', username: 'newbie', invited: false, createAnother: true },
+      undefined,
+    );
+    page()['openCreateUser']();
+    await render();
+    expect(page()['status']()).toEqual({
+      text: 'satori-components.admin-users-groups-page.user-created',
+      error: false,
+    });
+  });
+
+  it('reports a refused user update as an alert', async () => {
+    dialogResults.push({
+      mode: 'edit',
+      username: 'jdoe',
+      firstName: 'J',
+      lastName: 'D',
+      company: '',
+      email: 'j@acme.test',
+      groups: [],
+    });
+    userService['updateUser'].mockReturnValueOnce(throwError(() => new Error('no')));
+    page()['openEditUser'](USER);
+    await render();
+    expect(page()['status']()).toEqual({
+      text: 'satori-components.admin-users-groups-page.update-failed',
+      error: true,
+    });
+  });
+
+  it('reports a refused group update and a refused group deletion as alerts', async () => {
+    dialogResults.push({
+      mode: 'edit',
+      groupname: 'editors',
+      grouplabel: 'Editors',
+      memberUsers: [],
+    });
+    userService['updateGroup'].mockReturnValueOnce(throwError(() => new Error('no')));
+    page()['openEditGroup'](GROUP);
+    await render();
+    expect(page()['status']()).toEqual({
+      text: 'satori-components.admin-users-groups-page.update-failed',
+      error: true,
+    });
+    dialogResults.push(true);
+    userService['deleteGroup'].mockReturnValueOnce(throwError(() => new Error('no')));
+    page()['deleteGroup'](GROUP);
+    await render();
+    expect(page()['status']()).toEqual({
+      text: 'satori-components.admin-users-groups-page.delete-failed',
+      error: true,
+    });
+  });
 });
