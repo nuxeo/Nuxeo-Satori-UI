@@ -2,17 +2,34 @@
 
 ## Current State
 
-| Metric                | Value                          |
-| --------------------- | ------------------------------ |
-| **Adoption Score**    | 73.11                          |
-| Angular version       | 22.2.3 (compliant)             |
-| Satori UI version     | 1.0.0-alpha.171 (compliant)    |
-| Design language       | MDS3 (all MDS2 checks passing) |
-| Material font icons   | 513 (0 Satori SVG)             |
-| Satori components     | 105                            |
-| Material components   | 1,469                          |
-| DS-internal overrides | 167 (9.05 per 1k LOC)          |
-| A11y overrides        | 0                              |
+**Do not trust the numbers below without checking the date.** They are a snapshot, and the first
+version of this table was believed for long enough to be wrong by 26 points: it still said 73.11,
+with 513 Material icons and 167 overrides, after the icon migration and the override cleanup had
+both landed. The command is the source of truth, and it takes about a minute:
+
+```bash
+npm run satori:check          # the breakdown below
+npm run satori:score          # the number alone
+npx sdsc check all --json     # the snapshot the dashboard reads
+```
+
+Measured 2026-10-28, from `npx sdsc check all --json`:
+
+| Metric                | Value                        | Check |
+| --------------------- | ---------------------------- | ----- |
+| **Adoption Score**    | **99.69**                    |       |
+| Angular version       | 22.2.3                       | ✅    |
+| Satori UI version     | 1.0.0-alpha.171              | ✅    |
+| Design language       | 3.0 — all MDS2 checks pass   | ✅    |
+| Icons                 | 6 Material font, 492 Satori  | ❌    |
+| Componentry           | 0 legacy of 1,604 components | ✅    |
+| DS-internal overrides | 1 (0.05 per 1k of 18,488)    | ❌    |
+| A11y overrides        | 0 — not penalised            | —     |
+
+Of the 1,604 components the checker counts, 100 are Satori and 1,261 Material. Neither number
+moves the score: adoption measures _conformance_ — supported versions, the MDS3 design language,
+Satori's SVG icons rather than Material's font icons, and CSS that does not reach into design-system
+internals. A Material component used correctly costs nothing; one overridden CSS internal does.
 
 ## Dashboard
 
@@ -82,18 +99,29 @@ sdsc check all --json  →  adoption-data/<product>/        → Dashboard reads
 
 ## Score Breakdown and Path to 100
 
-The score formula weights six KPIs. Current gaps:
+The score weights six KPIs. Four pass outright; two have a remainder:
 
-| KPI                    | Status | Gap                       | Path to fix                          |
-| ---------------------- | ------ | ------------------------- | ------------------------------------ |
-| Angular version        | 100%   | —                         | Already compliant                    |
-| Satori UI version      | 100%   | —                         | Already compliant                    |
-| Design language (MDS3) | 100%   | —                         | All MDS2 checks passing              |
-| Icon adoption          | 0%     | 513 Material font icons   | Migrate to Satori SVG icons          |
-| Componentry            | 100%   | —                         | No legacy component violations       |
-| Styling hygiene        | ~82%   | 167 DS-internal overrides | Remove CSS overrides of DS internals |
+| KPI                    | Check | Remainder              | Path to fix                          |
+| ---------------------- | ----- | ---------------------- | ------------------------------------ |
+| Angular version        | ✅    | —                      | Already compliant                    |
+| Satori UI version      | ✅    | —                      | Already compliant                    |
+| Design language (MDS3) | ✅    | —                      | All MDS2 checks passing              |
+| Icon adoption          | ❌    | 6 Material font icons  | Migrate to Satori SVG icons          |
+| Componentry            | ✅    | —                      | No legacy component violations       |
+| Styling hygiene        | ❌    | 1 DS-internal override | Remove CSS overrides of DS internals |
 
-### Biggest opportunities
+The per-KPI weights are the checker's, not ours, so this table deliberately gives raw counts rather
+than percentages. The earlier version quoted "0%" and "~82%" against figures that no longer held,
+which made both the weighting and the gap look authoritative when neither had been checked.
 
-1. **Icon migration (513 icons → 0)** — largest scoring impact. Run `npm run satori:icons` for the full list of 122 distinct Material icons to map to Satori SVG equivalents.
-2. **DS-internal overrides (167)** — CSS rules that override Material/Satori internal selectors or custom properties. Run `npm run lint:styles` to see each one.
+### What is left
+
+Two items, and both are small enough to finish:
+
+1. **6 Material font icons.** `npm run satori:icons` lists the distinct ones to map to Satori SVG
+   equivalents. Down from 513.
+2. **1 DS-internal override** — a CSS rule reaching into a Material or Satori internal selector or
+   custom property. `npm run lint:styles` points at it. Down from 167.
+
+Finishing both would make `no-ds-internals-overrides` safe to promote from `warning` to `error` in
+`.stylelintrc.mjs`, which is the condition that comment has been waiting on.
