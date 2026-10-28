@@ -142,6 +142,22 @@ card's open and selection handlers and its thumbnail and action templates. The b
 unions (`NxsAvatarColor` and the rest) are asserted equal to Satori's at compile time in
 `/components-satori`, since `/components` may not import Satori to check.
 
+**Picker selection modes (NXSAT-656).** `nxs-user-group-picker` and
+`nxs-document-reference-input` accept `multiple`, matching `nxs-vocabulary-select`: the same
+`value` model and form accessor carry ordered arrays in multiple mode and scalar/null values in
+single mode. Material chip grids own keyboard focus and removal; pending text remains a
+`nxsChooseFromList` error even alongside selected chips. Principal identity is `prefixedId`;
+document identity follows `idProperty`. Unreadable stored document references remain selected.
+`documentChange` continues to report an individual selection or null; use `valueChange` for
+all ids. Each picker's `MultipleFromTheKeyboard` story runs the keyboard path in Chromium with no
+mouse, starting with focus placed in the input: choosing with ↓ and Enter, Backspace into the chips,
+arrows across chips and remove buttons, Backspace/Delete/Enter removal, where focus lands after each
+removal, and no required error until focus leaves. Keys are dispatched events carrying `keyCode`, as
+Material reads it; Tab order is Material's and no story asserts it. A picker reports leaving
+(`onTouched`) when focus leaves its host, not its input, so chip-only edits reach `updateOn: 'blur'`.
+Focus lost for nowhere counts only if it has not come back a task later, because Chromium reports a
+focused chip's removal that way before Material refocuses its neighbour.
+
 **Storybook 10** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
 <https://nuxeo.github.io/agentic-ui-poc/>. Each component has an Overview, an API page and its
 stories, after a Getting started page:

@@ -73,6 +73,30 @@ export class NxsPickerControl<T> {
   }
 
   /**
+   * Focus left an element of the picker, whose `host` holds the input and every chip. Moving
+   * between them is not leaving; anywhere else is, even when the input never had focus — a chip
+   * removed with the mouse is otherwise never reported to a form that updates on blur.
+   *
+   * Focus leaving for nowhere is decided a task later. Chromium reports a focused chip's removal
+   * that way, then Material focuses its neighbour or the input; counting it would mark the field
+   * touched, and show its errors, while the user is still in it. It is leaving if focus has not
+   * come back inside by then, or the window lost focus, as a native input counts it.
+   */
+  focusLeft(host: HTMLElement, event: FocusEvent): void {
+    const next = event.relatedTarget;
+    if (next instanceof Node && host.contains(next)) return;
+    if (next) {
+      this.blurred();
+      return;
+    }
+    setTimeout(() => {
+      const document = host.ownerDocument;
+      if (!host.isConnected) return;
+      if (!document.hasFocus() || !host.contains(document.activeElement)) this.blurred();
+    });
+  }
+
+  /**
    * Touched as the form says, when there is one: leaving the field reaches it through `onTouched`,
    * and so do `markAllAsTouched()` on submit and `reset()` or `markAsUntouched()` after one — which
    * a flag kept here as well would outlive, leaving a cleared field showing its `required` error.
