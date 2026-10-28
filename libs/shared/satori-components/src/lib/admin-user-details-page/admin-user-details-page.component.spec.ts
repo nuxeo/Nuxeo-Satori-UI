@@ -248,7 +248,7 @@ describe('NxsAdminUserDetailsPageComponent', () => {
     expect(text()).toContain('Permission removed');
   });
   it('shows the translated message for an empty direct table, not the key', async () => {
-    permissions.listLocalPermissionRows = vi.fn(() =>
+    permissions['listLocalPermissionRows'] = vi.fn(() =>
       of({ ...EMPTY, rows: [], totalDocuments: 0 }),
     );
     fixture = TestBed.createComponent(NxsAdminUserDetailsPageComponent);
