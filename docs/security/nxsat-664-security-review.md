@@ -32,7 +32,7 @@ Severity follows the reviewers' ratings. "Verified" means the author re-read the
 
 - `thumbnail/thumbnail.component.ts:86-89` and `thumbnail/thumbnail-cache.ts:128` call `URL.createObjectURL(blob)` on the response of `/@rendition/thumbnail` (`libs/shared/nuxeo-client/src/lib/services/document-detail.service.ts:76-79`, `responseType: 'blob'`) without checking `blob.type`.
 - Inside `<img [src]>` a script does not run, so the rendered page is safe. A top-level navigation to the blob URL (for example "open image in new tab") would run any script in an SVG, same origin.
-- Conditions: a writer must set a document's thumbnail to an `image/svg+xml` file containing script, and a viewer must take the explicit open-in-new-tab action. Rating is Medium per the reviewer; the author would accept Low-to-Medium given those conditions.
+- Conditions: a writer must set a document's thumbnail to an `image/svg+xml` file containing script, and a viewer must take the explicit open-in-new-tab action. Rating is Medium per the reviewer; the author would accept Low-to-Medium given those conditions. Exploitability was not reproduced in a browser, and the severity needs confirmation by the security owner before wider-use sign-off.
 - Fix options: allow-list raster MIME types, or re-wrap the bytes as `new Blob([blob], { type: 'image/png' })` so an SVG fails to decode and the fallback shows.
 
 ### Low
