@@ -24,7 +24,15 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { TranslatePipe } from '@ngx-translate/core';
-import { debounceTime, distinctUntilChanged, finalize, Subject, switchMap } from 'rxjs';
+import {
+  catchError,
+  debounceTime,
+  distinctUntilChanged,
+  finalize,
+  of,
+  Subject,
+  switchMap,
+} from 'rxjs';
 
 import { NuxeoUser, UserService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -160,9 +168,11 @@ export class NxsUserFormDialogComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((query) => {
           this.loadingGroupOptions.set(true);
-          return this.userService
-            .searchGroupsPaged(query || '*', 30, 0)
-            .pipe(finalize(() => this.loadingGroupOptions.set(false)));
+          return this.userService.searchGroupsPaged(query || '*', 30, 0).pipe(
+            // A failed request is an empty result, so the next search still runs.
+            catchError(() => of({ entries: [] })),
+            finalize(() => this.loadingGroupOptions.set(false)),
+          );
         }),
         takeUntilDestroyed(this.destroyRef),
       )
@@ -173,7 +183,6 @@ export class NxsUserFormDialogComponent implements OnInit {
             this.optionsFrom(res.entries ?? []).filter((g) => !chosen.has(g.groupname)),
           );
         },
-        error: () => this.groupOptions.set([]),
       });
   }
 

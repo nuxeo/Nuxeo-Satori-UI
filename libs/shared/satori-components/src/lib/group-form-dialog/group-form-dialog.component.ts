@@ -22,7 +22,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { TranslatePipe } from '@ngx-translate/core';
-import { debounceTime, distinctUntilChanged, Subject, switchMap } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, of, Subject, switchMap } from 'rxjs';
 
 import { NuxeoGroup, NuxeoUser, UserService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -94,6 +94,8 @@ export class NxsGroupFormDialogComponent implements OnInit {
   private readonly searchTerms = new Subject<string>();
   /** Set by a choice from the autocomplete, so the same Enter does not also add the typed text. */
   private skipNextChipInput = false;
+  /** Members as they stood before the current search began, so a pick never drops one of them. */
+  private membersBeforeQuery = new Set<string>();
   private readonly memberChipInput = viewChild(MatChipInput);
 
   ngOnInit(): void {
@@ -107,7 +109,12 @@ export class NxsGroupFormDialogComponent implements OnInit {
       .pipe(
         debounceTime(250),
         distinctUntilChanged(),
-        switchMap((query) => this.userService.searchUsersPaged(query.trim() || '*', 30, 0)),
+        switchMap((query) =>
+          this.userService.searchUsersPaged(query.trim() || '*', 30, 0).pipe(
+            // A failed request is an empty result, so the next search still runs.
+            catchError(() => of({ entries: [] })),
+          ),
+        ),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
@@ -117,11 +124,13 @@ export class NxsGroupFormDialogComponent implements OnInit {
             (res.entries ?? []).filter((user) => user.id && !chosen.has(user.id)),
           );
         },
-        error: () => this.memberOptions.set([]),
       });
   }
 
   protected onMemberSearch(query: string): void {
+    if (!this.memberQuery()) {
+      this.membersBeforeQuery = new Set(this.members());
+    }
     this.memberQuery.set(query);
     this.searchTerms.next(query);
   }
@@ -138,7 +147,10 @@ export class NxsGroupFormDialogComponent implements OnInit {
     const userId = (event.option.value as NuxeoUser)?.id?.trim();
     if (userId) {
       // The autocomplete can add a partial prefix chip first; keep only the full username.
-      const kept = this.members().filter((id) => id === userId || !userId.startsWith(id));
+      // Only a partial chip typed during this search is dropped; a member who was already there is kept.
+      const kept = this.members().filter(
+        (id) => id === userId || this.membersBeforeQuery.has(id) || !userId.startsWith(id),
+      );
       this.members.set(kept.includes(userId) ? kept : [...kept, userId]);
     }
     this.clearMemberSearch();

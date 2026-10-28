@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 import { UserService, type NuxeoGroup, type NuxeoUser } from '@nuxeo/satori-platform/nuxeo-client';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import {
@@ -205,5 +205,25 @@ describe('NxsGroupFormDialogComponent', () => {
   it('refuses to save in edit mode without a group', async () => {
     await create({ mode: 'edit' });
     expect(button('Save').disabled).toBe(true);
+  });
+  it('keeps a member already on the list when a username that starts with theirs is picked', async () => {
+    await create({ mode: 'create' });
+    (component()['members'] as { set: (v: string[]) => void }).set(['ann']);
+    method('onMemberSearch')('anna');
+    method('onMemberSelected')({ option: { value: { id: 'anna' }, deselect: vi.fn() } });
+    expect(signalOf<string[]>('members')()).toEqual(['ann', 'anna']);
+  });
+
+  it('keeps searching after a failed search', async () => {
+    await create({ mode: 'create' });
+    searchUsersPaged.mockReturnValueOnce(throwError(() => new Error('offline')));
+    method('onMemberSearch')('x');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(signalOf<unknown[]>('memberOptions')()).toEqual([]);
+    method('onMemberSearch')('al');
+    // The search waits 250 ms for typing to settle; poll rather than guess how long that takes under load.
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(searchUsersPaged.mock.calls.map((c) => c[0])).toContain('al');
+    expect(signalOf<unknown[]>('memberOptions')().length).toBeGreaterThan(0);
   });
 });
