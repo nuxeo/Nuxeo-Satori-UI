@@ -1,7 +1,18 @@
+// The page backdrop is a *container* surface, not `--mat-sys-surface`.
+//
+// `--mat-sys-surface` is what `.widget` paints itself with (widget-container.component.scss), so
+// using it here too made both resolve to the same `#f9f9fc` and the widgets lost their fill
+// against the page — they were separated only by their border. The differing hardcoded fallbacks
+// (`#f4f5f7` here, `#ffffff` on the widget) hid it in review, because they only diverge when the
+// token is undefined, and it is defined.
+//
+// The old fallback shows the intent was already a dimmer page; this names the token that means
+// that. `light-dark()` carries both schemes, so the separation holds in dark mode as well, and it
+// matches the backdrop the shell already paints on `body`.
 :host {
   display: block;
   min-height: 100%;
-  background: var(--mat-sys-surface, #f4f5f7);
+  background: var(--mat-sys-surface-container-low, #f4f3f7);
   color: var(--mat-sys-on-surface, #1a1c1e);
 }
 
@@ -47,7 +58,7 @@
     border-bottom: 1px solid var(--mat-sys-outline-variant, #e8eaef);
     position: sticky;
     top: 0;
-    background: var(--mat-sys-surface, #ffffff);
+    background: var(--mat-sys-surface-container-lowest, #ffffff);
     z-index: 1;
   }
 
@@ -308,7 +319,7 @@
   padding: 16px 18px;
   border-radius: 12px;
   border: 1px solid var(--mat-sys-outline-variant, #e8eaef);
-  background: var(--mat-sys-surface, #fff);
+  background: var(--mat-sys-surface-container-lowest, #fff);
   font: inherit;
   text-align: left;
   cursor: pointer;

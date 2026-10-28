@@ -100,6 +100,11 @@
                     | translate: { count }
                 }}</span>
               }
+              @if (filterScanTruncated()) {
+                <span class="filter-scan-note" role="status">{{
+                  'browse.browse.filter-scan-truncated' | translate: { count: filterScanLimit }
+                }}</span>
+              }
               <div class="toolbar-spacer"></div>
 
               <mat-form-field
@@ -141,6 +146,17 @@
                     [placeholder]="'browse.browse.to' | translate"
                   />
                 </mat-date-range-input>
+                @if (filterModifiedFrom() || filterModifiedTo()) {
+                  <button
+                    matSuffix
+                    mat-icon-button
+                    [attr.aria-label]="'browse.browse.clear-modified' | translate"
+                    (click)="clearModifiedRange()"
+                    class="filter-clear-btn"
+                  >
+                    <mat-icon svgIcon="x_large" />
+                  </button>
+                }
                 <mat-datepicker-toggle matIconSuffix [for]="modifiedPicker" />
                 <mat-date-range-picker #modifiedPicker />
               </mat-form-field>
@@ -173,7 +189,11 @@
                 subscriptSizing="dynamic"
               >
                 <mat-label>{{ 'browse.browse.all-types' | translate }}</mat-label>
-                <mat-select [ngModel]="filterType()" (ngModelChange)="filterType.set($event)">
+                <mat-select
+                  [ngModel]="filterType()"
+                  (ngModelChange)="filterType.set($event)"
+                  (openedChange)="$event && ensureFolderScan()"
+                >
                   <mat-option value="">{{ 'browse.browse.all-types' | translate }}</mat-option>
                   @for (t of distinctTypes(); track t) {
                     <mat-option [value]="t">{{ t }}</mat-option>
@@ -250,10 +270,10 @@
                   "
                   [sort]="listSort()"
                   [selectedIds]="listSelectedIds()"
-                  [pageIndex]="pageIndex()"
+                  [pageIndex]="listPageIndex()"
                   [pageSize]="pageSize"
-                  [totalSize]="totalSize()"
-                  [hasNextPage]="hasNextPage()"
+                  [totalSize]="listTotalSize()"
+                  [hasNextPage]="listHasNextPage()"
                   [loading]="loading()"
                   [error]="error() ? errorStatus() : null"
                   [errorHeading]="error() ?? ''"
@@ -360,11 +380,11 @@
                 }
               </div>
               <nxs-pager
-                [pageIndex]="pageIndex()"
+                [pageIndex]="listPageIndex()"
                 [pageSize]="pageSize"
                 [itemCount]="filteredEntries().length"
-                [totalSize]="totalSize()"
-                [hasNextPage]="hasNextPage()"
+                [totalSize]="listTotalSize()"
+                [hasNextPage]="listHasNextPage()"
                 (pageChange)="goToPage($event)"
               />
             }

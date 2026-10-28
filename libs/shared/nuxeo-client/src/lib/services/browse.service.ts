@@ -60,6 +60,24 @@ export interface BrowseFolderContents {
   redirectTo?: string;
 }
 
+/**
+ * How many children a toolbar filter may walk before it stops asking for more pages.
+ *
+ * A bound rather than "all of them": a folder with tens of thousands of children would otherwise
+ * turn one keystroke into hundreds of requests. When the walk stops early the caller is told
+ * ({@link BrowseFolderEntrySet.truncated}) so the UI can say the filter covered part of the folder
+ * instead of implying it searched all of it.
+ */
+export const BROWSE_FILTER_SCAN_LIMIT = 500;
+
+/** Every child of a folder the filters could match, and whether the scan was cut short. */
+export interface BrowseFolderEntrySet {
+  folder: NuxeoDocument | null;
+  entries: NuxeoDocument[];
+  /** True when {@link BROWSE_FILTER_SCAN_LIMIT} stopped the walk while Nuxeo still had pages. */
+  truncated: boolean;
+}
+
 /** True for Domain documents attached directly under the repository root. */
 function isTopLevelDomain(doc: NuxeoDocument | null | undefined): boolean {
   if (!doc || doc.type !== 'Domain') {
@@ -224,6 +242,57 @@ export class BrowseService {
           })),
         );
       }),
+    );
+  }
+
+  /**
+   * Every child of `nuxeoPath`, paged through to the end or to `maxDocuments`.
+   *
+   * For the toolbar filters on the browse page, which used to sift only the page already on
+   * screen: a folder of 66 children renders 50, so a document on the unseen remainder could not be
+   * found by typing its exact title. Measured on `/default-domain/workspaces`, "Project Reports"
+   * returned "0 results" while sitting in the folder.
+   *
+   * It walks `getBrowseFolderContents` rather than `getChildren` so every container kind keeps the
+   * listing it already had — `Root` via `tree_children`, `Collection`/`Favorites` via their member
+   * query, everything else via `@children`. That matters more than the extra `getByPath` per page
+   * costs: an NXQL rewrite was measured against this repository and the search index disagreed with
+   * `@children` **in both directions** — 91 documents against 66, and 13 of the 66 missing from the
+   * index entirely. Filtering through the index would therefore have dropped documents that are
+   * really there, so the filter scans the same listing the user is looking at.
+   */
+  getAllBrowseFolderEntries(
+    nuxeoPath: string,
+    maxDocuments = BROWSE_FILTER_SCAN_LIMIT,
+    pageSize = 50,
+  ): Observable<BrowseFolderEntrySet> {
+    type Step = BrowseFolderContents & { pageIndex: number };
+
+    const fetchPage = (pageIndex: number): Observable<Step> =>
+      this.getBrowseFolderContents(nuxeoPath, pageSize, { currentPageIndex: pageIndex }).pipe(
+        map((page) => ({ ...page, pageIndex })),
+      );
+
+    return fetchPage(0).pipe(
+      expand((page) =>
+        page.hasNextPage === true && (page.pageIndex + 1) * pageSize < maxDocuments
+          ? fetchPage(page.pageIndex + 1)
+          : EMPTY,
+      ),
+      reduce<Step, BrowseFolderEntrySet>(
+        (acc, page) => ({
+          folder: page.folder,
+          entries: [...acc.entries, ...(page.entries ?? [])],
+          // The last page reached decides this: if the folder ran out, its `hasNextPage` is false.
+          truncated: page.hasNextPage === true,
+        }),
+        { folder: null, entries: [], truncated: false },
+      ),
+      map((set) => ({
+        folder: set.folder,
+        entries: set.entries.slice(0, maxDocuments),
+        truncated: set.truncated && set.entries.length >= maxDocuments,
+      })),
     );
   }
 

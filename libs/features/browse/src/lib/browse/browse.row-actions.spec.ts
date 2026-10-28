@@ -95,6 +95,9 @@ describe('BrowseComponent — row actions', () => {
   const dialogOpen = vi.fn();
   const browse = {
     getByPath: vi.fn(() => of(folder)),
+    // Never resolves on purpose: the folder scan stays pending, so the toolbar filters fall back to
+    // the loaded page exactly as they did before cross-folder filtering existed.
+    getAllBrowseFolderEntries: vi.fn(() => EMPTY),
     getBrowseFolderContents: vi.fn(() =>
       of({ folder, entries: [report, note, readOnly, subfolder, publication], totalSize: 5 }),
     ),

@@ -17,6 +17,9 @@ describe('AuthService poweruser access', () => {
   beforeEach(() => {
     sessionStorage.clear();
     localStorage.clear();
+    // The "/nuxeo/logout is absent" memo is static, so without this a test that flushes a 404
+    // would silently suppress the probe in every test after it.
+    AuthService.resetNuxeoLogoutProbe();
     TestBed.configureTestingModule({
       imports: [testTranslateModule(), HttpClientTestingModule],
       providers: [{ provide: NUXEO_API_ORIGIN, useValue: '' }],
@@ -29,6 +32,65 @@ describe('AuthService poweruser access', () => {
     httpMock.verify();
     sessionStorage.clear();
     localStorage.clear();
+  });
+
+  /**
+   * A Nuxeo with no JSF web module 404s `/nuxeo/logout`. Measured on the local Docker stack, where
+   * `/nuxeo/logout`, `/nuxeo/logout.faces` and `/nuxeo/nxstartup.faces?nxo=logout` all 404. Login
+   * still has to work, and the probe must not re-fire on every subsequent sign-in and hydration —
+   * each failed attempt logged a console error that looked like a defect in whatever was being
+   * debugged at the time.
+   */
+  it('still signs in when /nuxeo/logout is absent, and stops probing it', () => {
+    service.login('member01', 'secret', false).subscribe();
+
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/logout'))
+      .flush('not found', { status: 404, statusText: 'Not Found' });
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials)
+      .flush({ id: 'member01', properties: { username: 'member01', groups: ['members'] } });
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
+      .flush({ id: 'member01' });
+
+    expect(service.isAuthenticated()).toBe(true);
+    expect(service.username()).toBe('member01');
+
+    // Second sign-in: no logout request at all this time.
+    service.login('member01', 'secret', false).subscribe();
+    httpMock.expectNone((r) => r.url.includes('/nuxeo/logout'));
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials)
+      .flush({ id: 'member01', properties: { username: 'member01', groups: ['members'] } });
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
+      .flush({ id: 'member01' });
+
+    expect(service.isAuthenticated()).toBe(true);
+  });
+
+  it('keeps probing /nuxeo/logout when it answers normally', () => {
+    service.login('member01', 'secret', false).subscribe();
+    httpMock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials)
+      .flush({ id: 'member01', properties: { username: 'member01', groups: ['members'] } });
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
+      .flush({ id: 'member01' });
+
+    // A 200 is not a reason to stop clearing a stale cookie session.
+    service.login('member01', 'secret', false).subscribe();
+    httpMock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials)
+      .flush({ id: 'member01', properties: { username: 'member01', groups: ['members'] } });
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
+      .flush({ id: 'member01' });
+
+    expect(service.isAuthenticated()).toBe(true);
   });
 
   it('sets isPowerUser and hasAdministrationAccess after login', () => {

@@ -46,6 +46,7 @@ import {
   NuxeoAce,
   AuditEntry,
   DirectoryEntry,
+  BROWSE_FILTER_SCAN_LIMIT,
   BrowseService,
   BrowseContextService,
   ClipboardTargetService,
@@ -581,13 +582,53 @@ export class BrowseComponent {
   readonly filterModifiedTo = signal<Date | null>(null);
   readonly filterContributor = signal('');
 
+  /**
+   * Every child of the folder, fetched the first time a filter is applied to it.
+   *
+   * `null` means "not scanned": the filters then fall back to the loaded page, which is what the
+   * toolbar did for every folder before. The scan is keyed to a path and does **not** depend on
+   * what was typed — it collects the folder's children, and the filtering happens here — so adding
+   * a character never refetches anything.
+   */
+  private readonly scannedEntries = signal<NuxeoDocument[] | null>(null);
+  private readonly scannedPath = signal<string | null>(null);
+  /** The cap the template names when a scan was cut short. */
+  readonly filterScanLimit = BROWSE_FILTER_SCAN_LIMIT;
+  /** True when {@link BROWSE_FILTER_SCAN_LIMIT} cut the scan short, so a filter saw only part. */
+  readonly filterScanTruncated = signal(false);
+  readonly filterScanning = signal(false);
+
+  /** Whether a toolbar filter is narrowing the listing. */
+  readonly filtersActive = computed(
+    () =>
+      !!this.filterText() ||
+      !!this.filterType() ||
+      !!this.filterModifiedFrom() ||
+      !!this.filterModifiedTo() ||
+      !!this.filterContributor(),
+  );
+
+  /**
+   * What the filters run over: the whole folder once scanned, else the page on screen.
+   *
+   * The fallback is deliberate rather than a loading state — the rows stay filtered while the
+   * scan is in flight instead of blanking — and it is also the behaviour for a folder whose scan
+   * failed.
+   */
+  private readonly filterScope = computed<NuxeoDocument[]>(() => {
+    const scanned = this.scannedEntries();
+    return scanned && this.scannedPath() === this.browsePath() ? scanned : this.entries();
+  });
+
   readonly distinctTypes = computed(() => {
-    const types = new Set(this.entries().map((e) => e.type));
+    // From the scanned folder where there is one: built from the loaded page, this dropdown could
+    // not offer a type that happened to appear only past the first fifty rows.
+    const types = new Set(this.filterScope().map((e) => e.type));
     return Array.from(types).sort();
   });
 
   readonly filteredEntries = computed(() => {
-    let docs = this.entries();
+    let docs = this.filterScope();
     const text = this.filterText();
     const type = this.filterType();
     const modFrom = this.filterModifiedFrom();
@@ -621,25 +662,101 @@ export class BrowseComponent {
     return docs;
   });
 
-  /** Whether a toolbar filter narrows the page on screen. */
-  readonly filtersActive = computed(
+  /**
+   * True while a filter is showing the whole folder rather than one page of it, which is when the
+   * server pager must not be offered: its next page belongs to the unfiltered listing, so it used
+   * to stay enabled beside zero filtered rows.
+   */
+  readonly filteredAcrossFolder = computed(
     () =>
-      !!this.filterText() ||
-      !!this.filterType() ||
-      !!this.filterModifiedFrom() ||
-      !!this.filterModifiedTo() ||
-      !!this.filterContributor(),
+      // `scannedEntries() !== null` and not merely "a scan was started": while the scan is in
+      // flight the rows still come from the loaded page, so claiming folder-wide coverage would
+      // suppress the pager over a listing that is still only one page.
+      this.filtersActive() &&
+      this.scannedEntries() !== null &&
+      this.scannedPath() === this.browsePath(),
+  );
+
+  // Paging facts the listing is handed. While a filter covers the whole folder the filtered set is
+  // complete, so there is no next page to offer and the total is what the filter left. Handing the
+  // server's `hasNextPage` through in that state is what left the next-page control enabled beside
+  // zero filtered rows: the pager described the unfiltered listing, the rows described the filter.
+  readonly listPageIndex = computed(() => (this.filteredAcrossFolder() ? 0 : this.pageIndex()));
+  readonly listTotalSize = computed(() =>
+    this.filteredAcrossFolder() ? this.filteredEntries().length : this.totalSize(),
+  );
+  readonly listHasNextPage = computed(() =>
+    this.filteredAcrossFolder() ? false : this.hasNextPage(),
   );
 
   /**
-   * The count beside the toolbar: what a filter left of this page, else Nuxeo's total, else
-   * nothing — a page of fifty from a folder Nuxeo did not count is not "50 results".
+   * The count beside the toolbar: what the filters left, else Nuxeo's total, else nothing — a page
+   * of fifty from a folder Nuxeo did not count is not "50 results".
    */
   readonly resultCount = computed<number | null>(() => {
     if (this.filtersActive()) return this.filteredEntries().length;
     const total = this.totalSize();
     return total >= 0 ? total : null;
   });
+
+  /**
+   * Scans the folder the first time a filter is applied to it.
+   *
+   * Keyed on the path, so switching folders invalidates it and re-typing does not. Writes
+   * `scannedPath` before subscribing so a second run cannot start the same scan twice.
+   */
+  private readonly scanFolderWhenFiltering = effect(() => {
+    const path = this.browsePath();
+    if (!this.filtersActive()) return;
+    if (untracked(() => this.scannedPath()) === path) return;
+    untracked(() => this.startFolderScan(path));
+  });
+
+  /**
+   * Scan the folder now, if it has not been scanned.
+   *
+   * Called when the type dropdown opens. Without it the list of types was built from the loaded
+   * page right up until a filter was applied — so the first type a user could pick came from a
+   * narrower set than the one they would be filtering over a moment later.
+   */
+  ensureFolderScan(): void {
+    const path = this.browsePath();
+    if (this.scannedPath() === path) return;
+    this.startFolderScan(path);
+  }
+
+  private startFolderScan(path: string): void {
+    this.scannedPath.set(path);
+    this.scannedEntries.set(null);
+    this.filterScanTruncated.set(false);
+    this.filterScanning.set(true);
+    this.browseService
+      .getAllBrowseFolderEntries(path)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (set) => {
+          if (this.scannedPath() !== path) return;
+          this.scannedEntries.set(set.entries);
+          this.filterScanTruncated.set(set.truncated);
+          this.filterScanning.set(false);
+        },
+        // A failed scan leaves `scannedEntries` null, so the filters fall back to the loaded page
+        // — narrower than asked for, but never wrong about what it did show.
+        error: () => {
+          if (this.scannedPath() !== path) return;
+          this.scannedPath.set(null);
+          this.filterScanning.set(false);
+        },
+      });
+  }
+
+  /** Drop a scan once it can no longer be trusted: another folder, or changed content. */
+  private invalidateFolderScan(): void {
+    this.scannedPath.set(null);
+    this.scannedEntries.set(null);
+    this.filterScanTruncated.set(false);
+    this.filterScanning.set(false);
+  }
 
   /** The visible columns as the document list takes them: translated, sortable where the server sorts. */
   readonly listColumns = computed<readonly NxsDocumentListColumn[]>(() => {
@@ -833,6 +950,8 @@ export class BrowseComponent {
       )
       .subscribe((nuxeoPath) => {
         this.resetBrowseTabState();
+        // Another folder's children are not this folder's; a stale scan would filter the wrong set.
+        this.invalidateFolderScan();
         this.currentNuxeoPath = nuxeoPath;
         this.browsePath.set(nuxeoPath);
         this.pageIndex.set(0);
@@ -912,6 +1031,9 @@ export class BrowseComponent {
         return;
       }
       untracked(() => {
+        // The folder's contents changed, so a scan taken before the change is stale. Dropping it
+        // lets the effect re-scan while a filter is still applied.
+        this.invalidateFolderScan();
         if (this.currentNuxeoPath) {
           this.loadContent();
         }
@@ -1554,6 +1676,18 @@ export class BrowseComponent {
     this.filterModifiedFrom.set(null);
     this.filterModifiedTo.set(null);
     this.filterContributor.set('');
+  }
+
+  /**
+   * Clears the Modified range on its own.
+   *
+   * The title and contributor filters each had a clear suffix; this one had only the calendar
+   * toggle, so the only ways out of a chosen range were "clear filters" — which also discards the
+   * other three — or emptying both inputs by hand.
+   */
+  clearModifiedRange(): void {
+    this.filterModifiedFrom.set(null);
+    this.filterModifiedTo.set(null);
   }
 
   // ── CSV export (server-side via Nuxeo Bulk Action) ──

@@ -1,9 +1,25 @@
+// The spacing lives here, on the host, and not on the `<p>` — deliberately.
+//
+// With `margin: 0 0 12px` on the note the measured gap to the breadcrumb above was 0px, so the
+// banner read as attached to the breadcrumb rather than as its own block. Setting `margin: 12px 0`
+// on the note did **not** fix it: the theme ships
+// `html[data-app-theme="nuxeo"] .mat-body-large p { margin: 0 0 0.75em }`, whose specificity
+// (0,2,2) beats a scoped class selector's (0,2,0), so the computed margin stayed 0px/9.75px. That
+// is why the measured value matched neither the old nor the new declaration.
+//
+// The host is not a `<p>`, so that rule cannot reach it, and the note's own margin is zeroed so
+// only one thing controls the spacing.
 :host {
   display: block;
+  margin: 12px 0;
 }
 
-.nxs-domain-hint__note {
-  margin: 0 0 12px;
+// `:host` prefix on purpose. A bare `.nxs-domain-hint__note { margin: 0 }` compiles to
+// specificity (0,2,0) and loses to the theme's `.mat-body-large p` (0,2,2), which left 9.75px
+// under the note — so the block measured 12px above and 21.75px below. With the host attribute in
+// the selector it is (0,3,0) and wins, and the host's margin is then the only spacing in play.
+:host .nxs-domain-hint__note {
+  margin: 0;
   padding: 10px 12px;
   border-radius: 6px;
   background: var(--mat-sys-primary-container);

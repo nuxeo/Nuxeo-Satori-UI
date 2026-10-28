@@ -483,6 +483,10 @@
       "retry": "Retry",
       "root": "Root"
     },
+    "not-found": {
+      "go-to-dashboard": "Go to the dashboard",
+      "heading": "That page does not exist"
+    },
     "nuxeo-drive-page": {
       "application": "Application",
       "created": "Created",
@@ -642,6 +646,7 @@
       "card-view": "Card view",
       "category": "Category",
       "clear": "Clear",
+      "clear-modified": "Clear the modified date range",
       "clear-uploads": "Clear",
       "close-column-picker": "Close column picker",
       "close-panel": "Close panel",
@@ -661,6 +666,7 @@
       "edit": "Edit",
       "export-csv": "Export CSV",
       "filter-by-title": "Filter by title...",
+      "filter-scan-truncated": "Filtered the first {{ count }} items in this folder",
       "from": "From",
       "granted-by": "Granted by",
       "if-you-want-to-explicitly-control": "If you want to explicitly control the access to this document you can block the permissions inheritance. Any change made on parent document will not affect the access conditions to this document. You and the administrators will be added to local permissions.",
@@ -729,7 +735,9 @@
       "reset": "Reset"
     },
     "create-import": {
-      "types-load-failed": "Could not load creatable document types for this folder."
+      "types-folder-missing": "This folder no longer exists. Go back and pick another location.",
+      "types-forbidden": "You do not have permission to add content to this folder. Pick a different location, or ask an administrator for access.",
+      "types-load-failed": "Could not load the document types for this folder. Check your connection and try again."
     },
     "create-import-dialog": {
       "add-more-files": "Add more files",

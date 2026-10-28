@@ -85,6 +85,9 @@ const emptyAuditLog = {
 
 const browse = {
   getByPath: vi.fn((): BrowseReturn<'getByPath'> => of(folder)),
+  // Never resolves on purpose: the folder scan stays pending, so the toolbar filters fall back to
+  // the loaded page exactly as they did before cross-folder filtering existed.
+  getAllBrowseFolderEntries: vi.fn(() => EMPTY),
   getBrowseFolderContents: vi.fn(
     (
       ..._args: Parameters<BrowseService['getBrowseFolderContents']>
@@ -710,6 +713,98 @@ describe('BrowseComponent — rendered document list', () => {
 
     expect(rowTitles()).toEqual(['Q1 Report', 'Q2 Report']);
     expect(query('.result-count')?.textContent).toContain('2 results');
+  });
+
+  /**
+   * The defect: a filter sifted only the rows already fetched, so a document further down the
+   * folder could not be found by typing its exact title. Measured against a live Nuxeo on
+   * `/default-domain/workspaces` — 66 children, 50 rendered — "Project Reports" gave "0 results"
+   * while sitting in the folder.
+   */
+  it('finds a document that is in the folder but not on the loaded page', async () => {
+    const onPage = [doc({ uid: 'c-1', title: 'Q1 Report' }), doc({ uid: 'c-2', title: 'Invoice' })];
+    const offPage = doc({ uid: 'c-99', title: 'Project Reports' });
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: onPage, totalSize: -1, hasNextPage: true }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: [...onPage, offPage], truncated: false }),
+    );
+
+    const component = await render();
+    expect(rowTitles()).toEqual(['Q1 Report', 'Invoice']);
+
+    component.filterText.set('project reports');
+    await settle();
+
+    // Case-insensitively, and from beyond the loaded page.
+    expect(rowTitles()).toEqual(['Project Reports']);
+    expect(query('.result-count')?.textContent).toContain('1 result');
+    // The server's next page belongs to the unfiltered listing, so it must not be offered here.
+    expect(component.listHasNextPage()).toBe(false);
+    expect(component.listTotalSize()).toBe(1);
+  });
+
+  it('keeps filtering the loaded page while the folder scan is still pending', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Q1 Report' }), doc({ uid: 'c-2', title: 'Invoice' })],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+    // Never resolves: the scan is in flight.
+    browse.getAllBrowseFolderEntries.mockReturnValue(EMPTY);
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+
+    // Rows still filter, from the page — blanking the list until a scan returns would be worse.
+    expect(rowTitles()).toEqual(['Q1 Report']);
+    // And folder-wide coverage is NOT claimed, so the pager still reflects the server.
+    expect(component.filteredAcrossFolder()).toBe(false);
+    expect(component.listHasNextPage()).toBe(true);
+  });
+
+  it('builds the type dropdown from the whole folder once scanned', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'A', type: 'File' })], totalSize: -1 }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({
+        folder,
+        entries: [
+          doc({ uid: 'c-1', title: 'A', type: 'File' }),
+          doc({ uid: 'c-2', title: 'B', type: 'Workspace' }),
+        ],
+        truncated: false,
+      }),
+    );
+
+    const component = await render();
+    component.filterText.set('a');
+    await settle();
+
+    // 'Workspace' appears only off-page; built from the page alone it could never be selected.
+    expect(component.distinctTypes()).toEqual(['File', 'Workspace']);
+  });
+
+  it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: true }),
+    );
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+
+    expect(component.filterScanTruncated()).toBe(true);
+    expect(query('.filter-scan-note')?.textContent).toContain('500');
   });
 
   /** A checkbox in the open column picker, by its visible label. */

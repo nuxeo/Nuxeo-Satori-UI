@@ -56,14 +56,31 @@ describe('dashboard theme surfaces (NXSAT-215)', () => {
         // Also exercises the default light-dark() palette under both browser schemes.
         document.documentElement.style.colorScheme = scheme;
         const root = fixture.nativeElement as HTMLElement;
-        const surface = resolvedToken('--mat-sys-surface');
+        const widgetSurface = resolvedToken('--mat-sys-surface-container-lowest');
+        const pageSurface = resolvedToken('--mat-sys-surface-container-low');
         const foreground = resolvedToken('--mat-sys-on-surface');
         const secondary = resolvedToken('--mat-sys-on-surface-variant');
-        expect(getComputedStyle(root).backgroundColor).toBe(surface);
+
+        // Two distinct surfaces: the page paints `--mat-sys-surface-container-low` and a widget
+        // paints `--mat-sys-surface-container-lowest` — white in a light scheme, which is how the
+        // shipped Web UI looks.
+        //
+        // Both used to be asserted against `--mat-sys-surface`. That kept the theme wiring honest
+        // but locked in a visual defect: page and widget resolved to the same `#f9f9fc`, so every
+        // widget lost its fill and was separated only by its border. Measured distance: 0.0.
+        //
+        // The intent of the check — nothing hardcoded, everything tracks the active palette — is
+        // unchanged, since both values are still resolved palette tokens. The inequality is what
+        // stops the two collapsing back together in any theme, and `light-dark()` means it holds
+        // under both schemes rather than only the light one.
+        expect(pageSurface)
+          .withContext(`page and widget surfaces must differ (${theme ?? 'default'}, ${scheme})`)
+          .not.toBe(widgetSurface);
+        expect(getComputedStyle(root).backgroundColor).toBe(pageSurface);
         for (const selector of ['.widget', '.widget-header', '.widget-table th', '.ai-kpi-card']) {
           expect(getComputedStyle(root.querySelector(selector)!).backgroundColor)
             .withContext(`${selector} surface`)
-            .toBe(surface);
+            .toBe(widgetSurface);
         }
         for (const selector of [
           '.widget-header-title',

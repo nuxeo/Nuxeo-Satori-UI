@@ -339,6 +339,16 @@ sat-breadcrumbs {
   white-space: nowrap;
 }
 
+// Shown only when the filter scan hit its cap, so the count beside it is not read as the whole
+// folder. Same scale as the count; `warning`-ish colour would overstate it, since nothing failed.
+.filter-scan-note {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--mat-sys-on-surface-variant, #474551);
+  white-space: nowrap;
+  margin-inline-start: 8px;
+}
+
 .toolbar-spacer {
   flex: 1;
 }
@@ -360,14 +370,43 @@ sat-breadcrumbs {
   }
 }
 
+// Shrunk to fit the dense toolbar field — but shrinking it with `!important` dropped three things
+// `mat-icon-button` normally provides, each of which was a reported defect:
+//
+//   * the padding that insets the glyph, so the × sat 0.0px from the field's outline and read as
+//     being outside the control;
+//   * the centring, so all 8px of slack fell on the left and the hover/click target sat 8px to
+//     the left of the glyph you aim at;
+//   * the state layer, so hovering changed nothing at all (measured `rgba(0,0,0,0)` either side).
+//
+// `place-items` centres the glyph in its own hit area, `margin-inline-end` restores the inset, and
+// the state layer is re-declared because the size override suppresses Material's own.
 .filter-clear-btn {
   width: 24px !important;
   height: 24px !important;
-  line-height: 24px !important;
+  padding: 0 !important;
+  display: grid;
+  place-items: center;
+  margin-inline-end: 4px;
+  border-radius: 50%;
+
   mat-icon {
     font-size: 16px;
     width: 16px;
     height: 16px;
+    // Without this the glyph box reports 24px tall and stretches out of the centred cell: the
+    // button's `line-height` was inherited straight through the `height: 16px`.
+    line-height: 16px;
+    margin: 0;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--mat-sys-on-surface, #1a1c1e) 8%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 1px;
   }
 }
 
@@ -621,9 +660,23 @@ sat-breadcrumbs {
 // ── Card view ──
 // Each card is `nxs-card`, or whatever is registered under its ID; it draws itself. The grid lays
 // out the cards, and the media template's thumbnail is sized here because browse declares it.
+// 200px, not 160px, because of how the card splits its header row.
+//
+// Measured on `/browse/default-domain` at a 160px card: the title box
+// (`.sat-interactive-card-titles`) received **82px**, after a fixed 40px selection control and
+// ~38px of card padding. "Configuration" needs ~95px at `title-small`, so ordinary one-word
+// folder names wrapped onto a second line and broke mid-character — "Configuratio / n",
+// "Workspace / s". The break threshold sat between 9 and 10 characters.
+//
+// The character break itself is `overflow-wrap: anywhere` in `satori-card.component.scss`, and
+// that is deliberately left alone: unlike `break-word` it lowers the box's intrinsic min-content
+// width, which is the only reason the title can shrink inside Satori's `min-width: auto` flex
+// item instead of blowing the card out. Its own comment records that. Giving the grid 40px more
+// hands the title ~122px, so the common case no longer needs to break, while `anywhere` stays as
+// the safety net for a long unbroken file name.
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
   padding: 8px 0;
 }

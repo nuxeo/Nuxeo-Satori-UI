@@ -129,6 +129,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'browse.browse.actions': 'Actions',
   'browse.browse.card-view': 'Card view',
   'browse.browse.clear': 'Clear',
+  'browse.browse.clear-modified': 'Clear the modified date range',
   'browse.browse.close-column-picker': 'Close column picker',
   'browse.browse.close-panel': 'Close panel',
   'browse.browse.collection-actions': 'Collection actions',
