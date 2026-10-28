@@ -1397,6 +1397,13 @@ describe('BrowseComponent — rendered document list', () => {
 
     // The new name is findable, and the stale pending copy has not come back.
     expect(rowTitles()).toEqual(['Renamed Pasted Report']);
+
+    // Selection must agree with the row, not with the stale optimistic copy still in `entries()`.
+    component.onListSelectionChange(['c-50']);
+    await settle();
+    expect(component.singleSelectedEntry()?.title).toBe('Renamed Pasted Report');
+    expect(TestBed.inject(SelectionService).selectedItems()[0].name).toBe('Renamed Pasted Report');
+
     component.filterText.set('report');
     await settle();
     expect(rowTitles()).not.toContain('Pasted Report');
@@ -1456,6 +1463,48 @@ describe('BrowseComponent — rendered document list', () => {
     // Re-scanned, and the rows come back in the server's order rather than the merged one.
     expect(browse.getAllBrowseFolderEntries.mock.calls.length).toBeGreaterThan(callsBefore);
     expect(rowTitles()).toEqual(['Banana', 'Zebra']);
+  });
+
+  /**
+   * A scan taken only to widen the type dropdown must survive.
+   *
+   * With a sort selected and a page beyond the scan cap, the merge breaks the order — but with no
+   * filter active `scanFolderWhenFiltering` will not re-scan, so invalidating here left the open
+   * dropdown falling back to the current page's types.
+   */
+  it('keeps a type-options scan when no filter is active and the order breaks', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Apple', type: 'File' })],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({
+        folder,
+        entries: [
+          doc({ uid: 'c-2', title: 'Banana', type: 'Workspace' }),
+          doc({ uid: 'c-3', title: 'Cherry', type: 'Note' }),
+        ],
+        truncated: true,
+      }),
+    );
+
+    const component = await render();
+    component.onListSortChange({ key: 'title', direction: 'asc' });
+    await settle();
+    component.ensureFolderScan();
+    await settle();
+
+    // The page document is not in the scan, so the merge changes it — with a sort selected, that
+    // is precisely the condition that used to invalidate the scan.
+    expect(component.distinctTypes()).toEqual(['File', 'Note', 'Workspace']);
+
+    await settle();
+    // Still the wide list: the scan was not thrown away.
+    expect(component.distinctTypes()).toEqual(['File', 'Note', 'Workspace']);
   });
 
   it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {

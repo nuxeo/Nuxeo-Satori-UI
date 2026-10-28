@@ -760,13 +760,15 @@ export class BrowseComponent {
    * off-page Collection fell through to the parent folder's metadata. The page wins on collision,
    * because its rows carry the fresher enrichers.
    */
-  private readonly selectableEntries = computed<NuxeoDocument[]>(() => {
-    const scanned = this.scanForCurrentFolder();
-    if (!scanned) return this.entries();
-    const byId = new Map(scanned.map((doc) => [doc.uid, doc]));
-    for (const doc of this.entries()) byId.set(doc.uid, doc);
-    return [...byId.values()];
-  });
+  private readonly selectableEntries = computed<NuxeoDocument[]>(
+    // The reconciled scope itself, which already folds the page in with the right precedence.
+    //
+    // This used to re-apply `entries()` over it unconditionally, which undid that reconciliation:
+    // in the off-page paste-then-rename case the page still holds the stale optimistic copy, so
+    // the row displayed "Renamed Pasted Report" while selection recorded "Pasted Report" — and
+    // header actions read that row's stale permission enrichers.
+    () => this.scanForCurrentFolder() ?? this.entries(),
+  );
 
   readonly filteredEntries = computed(() => {
     let docs = this.filterScope();
@@ -967,6 +969,12 @@ export class BrowseComponent {
    * back the same stale copy, and without the guard that would re-scan forever.
    */
   private readonly rescanWhenMergeBreaksOrder = effect(() => {
+    // Only while filtering. `ensureFolderScan()` also scans with no filter active, to widen the
+    // type dropdown; in a sorted folder past the scan cap the page merges in, the order breaks and
+    // this would invalidate that scan — but `scanFolderWhenFiltering` will not re-scan without a
+    // filter, so the open dropdown silently fell back to the current page's types. Order does not
+    // matter to a set of types, and the rows come from `entries()` when nothing is filtered.
+    if (!this.filtersActive()) return;
     if (!this.mergeBrokeRequestedOrder()) return;
     untracked(() => {
       if (this.lastReorderStamp === this.entriesStamp) return;
