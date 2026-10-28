@@ -1836,6 +1836,38 @@ describe('BrowseComponent — rendered document list', () => {
       await settleOutlets();
     }
 
+    /**
+     * The card view reads `filteredEntries()`, the same source as the list, including the
+     * off-page documents a folder scan contributes. Asserted rather than reasoned about, because
+     * the last review asked whether a filtered card view could come out blank.
+     */
+    it('renders the filtered set, off-page documents included', async () => {
+      const page = [doc({ uid: 'c-1', title: 'Q1 Report' })];
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder, entries: page, totalSize: -1, hasNextPage: true }),
+      );
+      browse.getAllBrowseFolderEntries.mockReturnValue(
+        of({
+          folder,
+          entries: [...page, doc({ uid: 'c-99', title: 'Project Reports' })],
+          truncated: false,
+        }),
+      );
+
+      await render([provideNxsComponents()]);
+      (query('button[aria-label="Card view"]') as HTMLButtonElement).click();
+      await settleOutlets();
+      expect(fixture.nativeElement.querySelectorAll('.card-grid nxs-card').length).toBe(1);
+
+      // A filter matching only the off-page document: one card, and it is that document.
+      fixture.componentInstance.filterText.set('project');
+      await settleOutlets();
+
+      const cards = fixture.nativeElement.querySelectorAll('.card-grid nxs-card');
+      expect(cards.length).toBe(1);
+      expect(cards[0].textContent).toContain('Project Reports');
+    });
+
     // The heading is the name of the control that opens the card, so it is never blank.
     it('names an untitled document by its path, on the card and on its checkbox', async () => {
       browse.getBrowseFolderContents.mockReturnValue(
