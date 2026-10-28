@@ -11229,6 +11229,66 @@ jobs:
   },
 );
 
+/* --- tenth round: an inversion need not be spelled `!` --- */
+
+/**
+ * `(github.ref == '…') == false` excludes that branch exactly as `!(…)` does.
+ *
+ * Reading it as a required inclusion gate rejected a reachable job. Three spellings, because the
+ * fix has to cover the operand order and the `!= true` form as well — and the two guards below
+ * matter more than the three fixes, since `== true` and `!= false` are NOT inversions and getting
+ * the polarity backwards would switch the reachability rule off wherever anyone wrote one.
+ */
+for (const [spelling, condition] of Object.entries({
+  '`(…) == false`': "${{ (github.ref == 'refs/heads/staging') == false }}",
+  'the reversed `false == (…)`': "${{ false == (github.ref == 'refs/heads/staging') }}",
+  '`(…) != true`': "${{ (github.ref == 'refs/heads/staging') != true }}",
+})) {
+  falsePositiveControls += 1;
+  expectGreen(
+    `a ref equality inverted with ${spelling} is not a branch the job requires`,
+    'checkWorkflowRefGates',
+    {
+      '.github/workflows/deploy.yml': workflow(
+        "on:\n  push:\n    branches: [main]\n",
+        gatedJob(condition),
+      ),
+    },
+  );
+}
+
+expectRed(
+  '`== true` is not an inversion, so the gate is still unreachable',
+  'checkWorkflowRefGates',
+  {
+    // The polarity guard. `(github.ref == 'refs/heads/staging') == true` requires `staging` just
+    // as the bare comparison does, and with `branches: [main]` the job can never run.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("${{ (github.ref == 'refs/heads/staging') == true }}"),
+    ),
+  },
+  null,
+  /on the branch `staging`, which none of the workflow's own branch filters admit/,
+);
+
+expectRed(
+  'an `== false` somewhere else in the condition does not excuse a pinned branch',
+  'checkWorkflowRefGates',
+  {
+    // The scope guard, and the same shape as the `&& !cancelled()` control: the inversion has to
+    // apply to THIS comparison's own enclosing group. `cancelled() == false` inverts nothing about
+    // the ref, and treating any `== false` in the expression as an inversion would have re-opened
+    // NXSAT-649 for the fourth time.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("${{ github.ref == 'refs/heads/integration/nxsat-308' && cancelled() == false }}"),
+    ),
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

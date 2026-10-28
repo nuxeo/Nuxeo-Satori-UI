@@ -10736,19 +10736,45 @@ const expressionHasAlternative = (expression) => {
  */
 function comparisonIsNegated(expression, index) {
   const inside = stringLiteralMask(expression);
+
+  /** `!` immediately before `position`, e.g. the `!` of `!(github.ref == …)`. */
   const introducedByBang = (position) => {
     let i = position - 1;
     while (i >= 0 && /\s/.test(expression[i])) i -= 1;
     return i >= 0 && expression[i] === '!' && !inside[i];
   };
 
+  /* `(…) == false` and `(…) != true`, in either operand order.
+   *
+   * An inversion does not have to be spelled `!`. `(github.ref == 'refs/heads/staging') == false`
+   * excludes `staging` exactly as `!(…)` does, and reading it as a required inclusion gate rejected
+   * a reachable job. Reported on #494. `== true` and `!= false` are NOT inversions and must keep
+   * working — there is a control for `== true` precisely because this is easy to get backwards. */
+  const invertedByBooleanCompare = (open, close) => {
+    const after = expression.slice(close + 1).match(/^\s*(==|!=)\s*(true|false)\b/i);
+    if (after) return (after[1] === '==') === (after[2].toLowerCase() === 'false');
+    const before = expression.slice(0, open).match(/(true|false)\s*(==|!=)\s*$/i);
+    if (before) return (before[2] === '==') === (before[1].toLowerCase() === 'false');
+    return false;
+  };
+
+  // Every group that encloses `index`, as a span, so what FOLLOWS the group can be read too.
+  const open = [];
   const enclosing = [];
-  for (let i = 0; i < index; i += 1) {
+  for (let i = 0; i < expression.length; i += 1) {
     if (inside[i]) continue;
-    if (expression[i] === '(') enclosing.push(introducedByBang(i));
-    else if (expression[i] === ')') enclosing.pop();
+    if (expression[i] === '(') {
+      open.push(i);
+    } else if (expression[i] === ')') {
+      const start = open.pop();
+      if (start !== undefined && start < index && i > index) enclosing.push([start, i]);
+    }
   }
-  return enclosing.some(Boolean) || introducedByBang(index);
+
+  return (
+    introducedByBang(index) ||
+    enclosing.some(([start, end]) => introducedByBang(start) || invertedByBooleanCompare(start, end))
+  );
 }
 
 /**
