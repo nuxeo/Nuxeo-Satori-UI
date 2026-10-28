@@ -1,0 +1,117 @@
+// A flex column, so the card fills the cell a grid gives it — or, rendered by ID, the cell its
+// outlet's parent gives it — and every card in a row is as tall as the tallest. The same rule the
+// Material card carries, because the hosts that render the ID lay both out the same way.
+:host {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nxs-satori-card__surface {
+  flex: 1;
+  min-width: 0;
+}
+
+// Satori draws `cursor: pointer` on every interactive card. A card with no `openHandler` opens
+// nothing, so it says so.
+:host(:not(.nxs-satori-card--interactive)) .nxs-satori-card__surface {
+  cursor: default;
+}
+
+// Satori gives the header one slot for a control, so the checkbox and the host's corner control
+// share it, in that order.
+.nxs-satori-card__corner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+// Wrapped and clamped, not one line with an ellipsis as the Material card's is.
+//
+// Satori's `.sat-interactive-card-titles` is a flex item with the default `min-width: auto`, so a
+// `nowrap` title makes that box as wide as the whole string and the card's `overflow: hidden` then
+// cuts it off mid-word with no ellipsis to show it was cut. That box is in Satori's own view, where
+// a scoped stylesheet cannot reach it. Letting the text wrap sidesteps it: the automatic minimum of
+// a wrapping box is its longest word, so it shrinks to the card and the clamp puts the ellipsis on
+// the second line. `anywhere` covers a long unbroken file name, which has no short word to shrink to.
+.nxs-satori-card__heading,
+.nxs-satori-card__subheading {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.nxs-satori-card__heading {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.nxs-satori-card__subheading {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+// The heading is Satori's title, so it keeps Satori's type and colour: only the button's own
+// chrome is reset, and the pointer says it opens something.
+.nxs-satori-card__open {
+  appearance: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  // The heading as the card's one control, exactly as the Material card does it: `::after` stretches
+  // its hit area over the whole card, so a click on the background or the thumbnail opens the item
+  // and the browser — not Satori's click listener — is what delivers it. `.sat-interactive-card` is
+  // positioned and none of Satori's intervening boxes are, so this covers the card.
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+}
+
+// IBM Equal Access's style_focus_visible reads `:focus` only, so the ring is drawn on both. Satori
+// styles `.sat-interactive-card-title:focus-visible` already; this adds the `:focus` half with the
+// same token.
+.nxs-satori-card__open:focus,
+.nxs-satori-card__open:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
+// Above the heading's stretched hit area, so the checkbox, the corner control and the footer buttons
+// take their own clicks rather than opening the item. Unlike the Material card's, they are not faded
+// until the card is hovered: in Satori's layout they sit beside the title rather than over the
+// media, so there is nothing for them to obscure.
+.nxs-satori-card__corner,
+.nxs-satori-card__actions {
+  position: relative;
+  z-index: 1;
+}
+
+// A frame of a fixed height, as the Material card gives its media, so thumbnails of different
+// shapes still line the grid up row by row.
+//
+// `:host` for the specificity, and `padding: 0` and `box-sizing` on purpose: Satori's
+// `.sat-interactive-card-content` sets `padding: 16px` at the same specificity as this class, so
+// without the extra weight whichever stylesheet loaded last would win. Left in, that padding sits
+// outside the 120px and a thumbnail sized to the frame is cut off at the bottom.
+:host .nxs-satori-card__media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  height: 120px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--mat-sys-surface-container);
+}

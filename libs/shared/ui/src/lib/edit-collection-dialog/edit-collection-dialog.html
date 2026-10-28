@@ -22,21 +22,17 @@
     >
       <mat-select-trigger>
         @if (nature; as natureId) {
-          <mat-chip-set class="vocab-trigger-chips">
-            <mat-chip (removed)="clearNature()">
-              {{ naturePillLabel(natureId) }}
-              <button
-                type="button"
-                matChipRemove
-                [attr.aria-label]="
-                  'shared.remove-item' | translate: { name: naturePillLabel(natureId) }
-                "
-                (click)="$event.stopPropagation(); clearNature()"
-              >
-                <mat-icon svgIcon="circle_x" />
-              </button>
-            </mat-chip>
-          </mat-chip-set>
+          <nxs-chip-set
+            class="vocab-trigger-chips"
+            [items]="[
+              {
+                id: natureId,
+                label: naturePillLabel(natureId),
+                removeLabel: 'shared.remove-item' | translate: { name: naturePillLabel(natureId) },
+              },
+            ]"
+            (removed)="clearNature()"
+          />
         }
       </mat-select-trigger>
       <div class="vocab-panel__search">
@@ -67,21 +63,11 @@
       (openedChange)="onSubjectsPanelOpen($event)"
     >
       <mat-select-trigger>
-        <mat-chip-set class="vocab-trigger-chips">
-          @for (id of subjects; track id) {
-            <mat-chip (removed)="removeSubject(id)">
-              {{ subjectPillLabel(id) }}
-              <button
-                type="button"
-                matChipRemove
-                [attr.aria-label]="'shared.remove-item' | translate: { name: subjectPillLabel(id) }"
-                (click)="$event.stopPropagation()"
-              >
-                <mat-icon svgIcon="circle_x" />
-              </button>
-            </mat-chip>
-          }
-        </mat-chip-set>
+        <nxs-chip-set
+          class="vocab-trigger-chips"
+          [items]="subjectChips()"
+          (removed)="removeSubject($event.id)"
+        />
       </mat-select-trigger>
       <div class="vocab-panel__search">
         <input
@@ -117,21 +103,18 @@
     >
       <mat-select-trigger>
         @if (coverage; as coverageId) {
-          <mat-chip-set class="vocab-trigger-chips">
-            <mat-chip (removed)="clearCoverage()">
-              {{ coveragePillLabel(coverageId) }}
-              <button
-                type="button"
-                matChipRemove
-                [attr.aria-label]="
-                  'shared.remove-item' | translate: { name: coveragePillLabel(coverageId) }
-                "
-                (click)="$event.stopPropagation(); clearCoverage()"
-              >
-                <mat-icon svgIcon="circle_x" />
-              </button>
-            </mat-chip>
-          </mat-chip-set>
+          <nxs-chip-set
+            class="vocab-trigger-chips"
+            [items]="[
+              {
+                id: coverageId,
+                label: coveragePillLabel(coverageId),
+                removeLabel:
+                  'shared.remove-item' | translate: { name: coveragePillLabel(coverageId) },
+              },
+            ]"
+            (removed)="clearCoverage()"
+          />
         }
       </mat-select-trigger>
       <div class="vocab-panel__search">

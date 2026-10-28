@@ -1,0 +1,28 @@
+@let level = headingLevel();
+<sat-empty-state>
+  @if (icon()) {
+    <mat-icon satEmptyStateIllustration class="nxs-satori-empty-state__icon" [svgIcon]="icon()" />
+  }
+  @if (level === 1) {
+    <h1 satEmptyStateHeadline>{{ heading() }}</h1>
+  } @else if (level === 3) {
+    <h3 satEmptyStateHeadline>{{ heading() }}</h3>
+  } @else if (level === 4) {
+    <h4 satEmptyStateHeadline>{{ heading() }}</h4>
+  } @else if (level === 5) {
+    <h5 satEmptyStateHeadline>{{ heading() }}</h5>
+  } @else if (level === 6) {
+    <h6 satEmptyStateHeadline>{{ heading() }}</h6>
+  } @else {
+    <h2 satEmptyStateHeadline>{{ heading() }}</h2>
+  }
+  @if (message()) {
+    <p satEmptyStateDescription>{{ message() }}</p>
+  }
+  <div satEmptyStateAction class="nxs-satori-empty-state__actions">
+    @if (actions(); as actionsTemplate) {
+      <ng-container [ngTemplateOutlet]="actionsTemplate" />
+    }
+    <ng-content />
+  </div>
+</sat-empty-state>

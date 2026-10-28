@@ -221,6 +221,29 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
     expect(component.subjectPillLabel('cinema')).toBe('Art/Cinema');
   });
 
+  it('builds a removable chip per subject, named for its own remove button', async () => {
+    await setup();
+    component.subjects = ['cinema', 'not-in-vocabulary'];
+
+    expect(component.subjectChips()).toEqual([
+      expect.objectContaining({
+        id: 'cinema',
+        label: 'Art/Cinema',
+        removeLabel: expect.any(String),
+      }),
+      expect.objectContaining({ id: 'not-in-vocabulary', label: 'not-in-vocabulary' }),
+    ]);
+  });
+
+  it('removes a subject when its chip is removed, leaving the others', async () => {
+    await setup();
+    component.subjects = ['cinema', 'not-in-vocabulary'];
+
+    component.removeSubject(component.subjectChips()[0].id);
+
+    expect(component.subjects).toEqual(['not-in-vocabulary']);
+  });
+
   it('clearNature and clearCoverage empty the bound values', async () => {
     await setup();
     component.nature = 'contract';

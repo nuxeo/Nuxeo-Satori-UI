@@ -12,6 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { NxsFileDropTracker } from '../file-drop';
+import type { NxsUploadInputs } from '../primitives';
 
 let nextId = 0;
 
@@ -20,6 +21,10 @@ let nextId = 0;
  *
  * The button is the keyboard's way in, since dragging files has none. Only a drag of files is
  * taken: a drag of text or a link is left to the browser, and nothing lights up for it.
+ *
+ * Registered as `nxs.primitives.upload`, so a customer can replace it by ID. The outlet that
+ * renders an ID binds no outputs, so the files also go to a `filesHandler` input; a host using the
+ * element can keep binding `(files)`, and both are called.
  */
 @Component({
   selector: 'nxs-dropzone',
@@ -38,7 +43,7 @@ let nextId = 0;
     '(drop)': 'onDrop($event)',
   },
 })
-export class NxsDropzoneComponent {
+export class NxsDropzoneComponent implements NxsUploadInputs {
   /** What the zone says, already translated, such as "Drag and drop files here". */
   readonly label = input.required<string>();
   /** The button's text, already translated. Blank says "Choose files" or "Choose a file". */
@@ -49,6 +54,12 @@ export class NxsDropzoneComponent {
   readonly accept = input('');
   /** Takes nothing, from the button or a drop. Accepts a bare attribute. */
   readonly disabled = input(false, { transform: booleanAttribute });
+
+  /**
+   * Called with the files chosen or dropped. The outlet that renders this by ID binds no outputs,
+   * so this is how the ID's host is told; it is called alongside `files`, never instead of it.
+   */
+  readonly filesHandler = input<((files: readonly File[]) => void) | null>(null);
 
   /** Files chosen or dropped: one when `multiple` is off, however many were dropped. */
   readonly files = output<readonly File[]>();
@@ -79,6 +90,8 @@ export class NxsDropzoneComponent {
 
   private emit(files: File[]): void {
     if (files.length === 0 || this.disabled()) return;
-    this.files.emit(this.multiple() ? files : files.slice(0, 1));
+    const taken = this.multiple() ? files : files.slice(0, 1);
+    this.filesHandler()?.(taken);
+    this.files.emit(taken);
   }
 }

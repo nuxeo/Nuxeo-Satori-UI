@@ -16,7 +16,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 
 import {
@@ -38,7 +37,12 @@ import {
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
-import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
+import {
+  NxsChipSetComponent,
+  type NxsChipItem,
+  NxsToastService,
+  provideNxsToast,
+} from '@nuxeo/satori-platform/components';
 
 export interface EditMetadataDialogData {
   uid: string;
@@ -56,6 +60,7 @@ export interface EditMetadataDialogData {
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   imports: [
     DateMaskPipe,
+    NxsChipSetComponent,
     TranslatePipe,
     FormsModule,
     MatDialogModule,
@@ -65,7 +70,6 @@ export interface EditMetadataDialogData {
     MatSelectModule,
     MatDatepickerModule,
     MatProgressSpinnerModule,
-    MatChipsModule,
     MatIconModule,
   ],
   templateUrl: './edit-metadata-dialog.html',
@@ -243,6 +247,18 @@ export class EditMetadataDialogComponent {
 
   subjectPillLabel(id: string): string {
     return formatHierarchicalL10nLabel(id, this.subjectOptions());
+  }
+
+  /** The subject chips, one per subject the entry holds, in the order it holds them. */
+  subjectChips(): NxsChipItem[] {
+    return this.subjects.map((id) => {
+      const label = this.subjectPillLabel(id);
+      return {
+        id,
+        label,
+        removeLabel: this.translate.instant('shared.remove-item', { name: label }),
+      };
+    });
   }
 
   coveragePillLabel(id: string): string {

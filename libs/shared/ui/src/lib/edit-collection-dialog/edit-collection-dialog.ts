@@ -17,7 +17,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { forkJoin } from 'rxjs';
 
@@ -39,7 +38,12 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
-import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
+import {
+  NxsChipSetComponent,
+  type NxsChipItem,
+  NxsToastService,
+  provideNxsToast,
+} from '@nuxeo/satori-platform/components';
 import { DateMaskPipe } from '../date-adapter/date-mask.pipe';
 import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';
 
@@ -52,6 +56,7 @@ export interface EditCollectionDialogData {
   standalone: true,
   imports: [
     DateMaskPipe,
+    NxsChipSetComponent,
     TranslatePipe,
     FormsModule,
     MatDialogModule,
@@ -61,7 +66,6 @@ export interface EditCollectionDialogData {
     MatButtonModule,
     MatDatepickerModule,
     MatProgressSpinnerModule,
-    MatChipsModule,
     MatIconModule,
   ],
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
@@ -169,6 +173,18 @@ export class EditCollectionDialogComponent implements OnInit {
 
   subjectPillLabel(id: string): string {
     return formatHierarchicalL10nLabel(id, this.subjectEntries());
+  }
+
+  /** The subject chips, one per subject the collection holds, in the order it holds them. */
+  subjectChips(): NxsChipItem[] {
+    return this.subjects.map((id) => {
+      const label = this.subjectPillLabel(id);
+      return {
+        id,
+        label,
+        removeLabel: this.translate.instant('shared.remove-item', { name: label }),
+      };
+    });
   }
 
   coveragePillLabel(id: string): string {

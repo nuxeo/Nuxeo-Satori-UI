@@ -16,9 +16,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { Subject, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
 
 import {
@@ -38,6 +37,8 @@ import {
   type NxsFacetOption,
   type NxsSearchFilters,
 } from './search-filters.model';
+import { NxsChipSetComponent } from '../chip-set/chip-set.component';
+import type { NxsChipItem } from '../primitives';
 
 /** A group of checkboxes, and which field of the filters it edits. */
 type CheckboxField = 'modified' | 'nature' | 'subjects' | 'coverage' | 'size';
@@ -89,7 +90,7 @@ let nextId = 0;
     MatAutocompleteModule,
     MatButtonModule,
     MatCheckboxModule,
-    MatChipsModule,
+    NxsChipSetComponent,
     MatIconModule,
     NgTemplateOutlet,
     TranslatePipe,
@@ -114,6 +115,7 @@ export class NxsSearchFiltersComponent {
   readonly saveAs = output<void>();
 
   private readonly searchService = inject(SearchService);
+  private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly ids = (() => {
@@ -284,6 +286,20 @@ export class NxsSearchFiltersComponent {
 
   protected removeChoice(field: ChoiceField, value: string): void {
     this.update({ [field]: this.filters()[field].filter((entry) => entry !== value) });
+  }
+
+  /** The chips for one field's chosen values: a collection shows its title, anything else its value. */
+  protected chipItems(field: ChoiceField, values: readonly string[]): NxsChipItem[] {
+    return values.map((value) => {
+      const label = field === 'collections' ? this.collectionTitle(value) : value;
+      return {
+        id: value,
+        label,
+        removeLabel: this.translate.instant('satori-components.search-filters.remove', {
+          value: label,
+        }),
+      };
+    });
   }
 
   protected onCollectionsFocus(): void {
