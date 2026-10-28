@@ -10455,6 +10455,42 @@ expectGreen(
   },
 );
 
+/* --- fourth review round on #494: negation that encloses rather than adjoins --- */
+
+falsePositiveControls += 1;
+expectGreen(
+  'an enclosing `!` counts even when the comparison follows another operand',
+  'checkWorkflowRefGates',
+  {
+    // `!(github.event_name == 'push' && github.ref == 'refs/heads/staging')` excludes `staging`,
+    // so the job is reachable on `main`. Walking back over whitespace and parentheses found the
+    // `!` only while the `(` was adjacent to the comparison; put anything in front of it inside
+    // the group and the walk stopped at the `&`. `comparisonIsNegated` now tracks every enclosing
+    // group and whether a `!` introduces it.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("!(github.event_name == 'push' && github.ref == 'refs/heads/staging')"),
+    ),
+  },
+);
+
+expectRed(
+  'parentheses on their own are not a negation',
+  'checkWorkflowRefGates',
+  {
+    // The control that stops the fix above from going too far. A group that no `!` introduces
+    // changes nothing: `(github.ref == 'refs/heads/staging')` with `branches: [main]` really is a
+    // job that can never run, and treating every enclosing paren as a negation would have turned
+    // the whole reachability rule off wherever anyone added brackets for readability.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("(github.ref == 'refs/heads/staging')"),
+    ),
+  },
+  null,
+  /on the branch `staging`, which none of the workflow's own branch filters admit/,
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

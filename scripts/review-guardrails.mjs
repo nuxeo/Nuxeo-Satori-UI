@@ -10619,19 +10619,41 @@ const expressionHasAlternative = (expression) => {
 };
 
 /**
- * Whether the comparison AT `index` is the one being negated.
+ * Whether the comparison AT `index` sits under a negation.
  *
  * Per-comparison, not per-expression, and that distinction is load-bearing: `if: github.ref ==
  * 'refs/heads/integration/x' && !cancelled()` contains a `!`, and treating the whole expression as
  * negated would have skipped the ticket-branch rule on one of the commonest shapes in
- * `.github/workflows` — re-opening the exact bug this guardrail exists to catch. Only a `!`
- * reached by walking back over whitespace and opening parentheses counts, so `!(github.ref == …)`
- * is negated and `… && !cancelled()` is not.
+ * `.github/workflows` — re-opening the exact bug this guardrail exists to catch.
+ *
+ * ## Why this tracks groups rather than walking back
+ *
+ * The first version walked back over whitespace and opening parentheses, which finds the `!` in
+ * `!(github.ref == …)` only because the `(` is adjacent. Put anything in front of the comparison
+ * inside that group — `!(github.event_name == 'push' && github.ref == 'refs/heads/staging')` — and
+ * the walk stops at the `&`, the enclosing negation is missed, and a reachable job is rejected.
+ * Reported on #494 after the third round.
+ *
+ * So every group open before `index` is pushed with whether a `!` introduces it, and a comparison
+ * is negated if ANY enclosing group is. Parentheses that are not negated still mean nothing —
+ * `(github.ref == 'refs/heads/staging')` on its own really is unreachable, and must stay caught.
+ * Characters inside string literals are ignored, so a `(` or `!` in a branch name does not count.
  */
 function comparisonIsNegated(expression, index) {
-  let i = index - 1;
-  while (i >= 0 && /[\s(]/.test(expression[i])) i -= 1;
-  return i >= 0 && expression[i] === '!';
+  const inside = stringLiteralMask(expression);
+  const introducedByBang = (position) => {
+    let i = position - 1;
+    while (i >= 0 && /\s/.test(expression[i])) i -= 1;
+    return i >= 0 && expression[i] === '!' && !inside[i];
+  };
+
+  const enclosing = [];
+  for (let i = 0; i < index; i += 1) {
+    if (inside[i]) continue;
+    if (expression[i] === '(') enclosing.push(introducedByBang(i));
+    else if (expression[i] === ')') enclosing.pop();
+  }
+  return enclosing.some(Boolean) || introducedByBang(index);
 }
 
 /**
