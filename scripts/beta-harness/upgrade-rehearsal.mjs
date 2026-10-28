@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { execToolSync } from './package-command.mjs';
+
 /**
  * The upgrade rehearsal: install, customise, upgrade, and prove the customisation survived.
  *
@@ -343,7 +345,7 @@ if (!breakSlot) {
 /** `npm pack` the built package and unpack it, the way an install leaves it. */
 function unpackInto(target) {
   mkdirSync(target, { recursive: true });
-  const packed = execFileSync('npm', ['pack', DIST, '--pack-destination', STAGE], {
+  const packed = execToolSync('npm', ['pack', DIST, '--pack-destination', STAGE], {
     cwd: ROOT,
     encoding: 'utf8',
   })
@@ -415,7 +417,7 @@ function compileCustomerApp(installed, label, when) {
   );
 
   try {
-    execFileSync('npx', ['ngc', '-p', configPath], { cwd: ROOT, stdio: 'pipe', encoding: 'utf8' });
+    execToolSync('npx', ['ngc', '-p', configPath], { cwd: ROOT, stdio: 'pipe', encoding: 'utf8' });
     notes.push(`the customer app compiles against ${label} (${when})`);
   } catch (error) {
     const output = `${error.stdout ?? ''}${error.stderr ?? ''}`.trim();

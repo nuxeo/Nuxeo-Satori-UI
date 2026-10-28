@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   type DoCheck,
+  ElementRef,
   booleanAttribute,
   computed,
   effect,
@@ -23,10 +24,11 @@ import type {
 } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
+import { MatChipGrid, MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInput, MatInputModule } from '@angular/material/input';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { Subject, catchError, map, of, switchMap, type Observable } from 'rxjs';
+import { Subject, catchError, from, map, mergeMap, of, switchMap, type Observable } from 'rxjs';
 
 import {
   NuxeoApiBase,
@@ -37,6 +39,7 @@ import {
 import { NxsDocTypeIconComponent } from '../doc-type-icon/doc-type-icon.component';
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
 import { nxsSearchAsYouType } from '../pickers/search-as-you-type';
+import type { NxsPickerItem, NxsPickerOption } from '../pickers/suggestion-view';
 
 /** A document the input offered: what it shows, and what `documentChange` reports. */
 export interface NxsDocumentReference {
@@ -49,6 +52,7 @@ export interface NxsDocumentReference {
 /** Web UI's document suggestion: three characters, twenty results. */
 const WEB_UI_MIN_CHARS = 3;
 const WEB_UI_PAGE_SIZE = 20;
+let nextId = 0;
 
 /**
  * The query Web UI's `default_document_suggestion` page provider runs, for `term`: a full-text
@@ -87,11 +91,12 @@ function lookupQuery(id: string, idProperty: 'uid' | 'path'): string {
 @Component({
   selector: 'nxs-document-reference-input',
   standalone: true,
-  templateUrl: './document-reference-input.component.html',
+  templateUrl: '../pickers/suggestion-picker.html',
   styleUrl: './document-reference-input.component.scss',
   imports: [
     MatAutocompleteModule,
     MatButtonModule,
+    MatChipsModule,
     MatIconModule,
     MatInputModule,
     NxsDocTypeIconComponent,
@@ -99,13 +104,15 @@ function lookupQuery(id: string, idProperty: 'uid' | 'path'): string {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: nxsPickerProviders(() => NxsDocumentReferenceInputComponent),
-  host: { class: 'nxs-document-reference-input' },
+  host: { class: 'nxs-document-reference-input', '(focusout)': 'blurred($event)' },
 })
 export class NxsDocumentReferenceInputComponent
   implements ControlValueAccessor, Validator, DoCheck
 {
   /** The field's label, already translated. Required: the input has no other name. */
   readonly label = input.required<string>();
+  /** Choose several documents, shown as removable chips. The value is then an ordered array. */
+  readonly multiple = input(false, { transform: booleanAttribute });
   /** Offer only documents of these types, such as `['File', 'Note']`. Every type when empty. */
   readonly documentTypes = input<readonly string[]>([]);
   /** What the value holds, as Web UI's `idProperty`: the document's uid (the default) or its path. */
@@ -116,8 +123,8 @@ export class NxsDocumentReferenceInputComponent
   readonly required = input(false, { transform: booleanAttribute });
   /** Shown but not editable. A form's `disable()` does the same. */
   readonly disabled = input(false, { transform: booleanAttribute });
-  /** The uid (or path) of the document chosen, or `null`. Two-way; a form control carries it too. */
-  readonly value = model<string | null>(null);
+  /** The uid (or path) chosen, or `null`; with `multiple`, the ordered ids chosen. Two-way. */
+  readonly value = model<string | readonly string[] | null>(null);
   /** The document the user chose, or `null` when the choice was cleared. */
   readonly documentChange = output<NxsDocumentReference | null>();
 
@@ -125,21 +132,37 @@ export class NxsDocumentReferenceInputComponent
   private readonly api = inject(NuxeoApiBase);
   private readonly announcer = inject(LiveAnnouncer);
   private readonly translate = inject(TranslateService);
-  private readonly input = viewChild.required(MatInput);
-  private readonly control = new NxsPickerControl<string | null>();
-  private readonly lookups = new Subject<string>();
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly inputId = `nxs-document-reference-input-${nextId++}`;
+  private readonly input = viewChild(MatInput);
+  private readonly grid = viewChild(MatChipGrid);
+  private readonly control = new NxsPickerControl<string | readonly string[] | null>();
+  private readonly lookups = new Subject<{ ids: readonly string[]; idProperty: 'uid' | 'path' }>();
   /** The value the field last set itself, so its own changes are not mistaken for a host's. */
-  private committed: string | null = null;
+  private committed: string | readonly string[] | null = null;
+  private committedMultiple = false;
+  private lookupProperty: 'uid' | 'path' = 'uid';
 
   /** The document the value names, once known: chosen here, or looked up from a stored uid. */
   protected readonly document = signal<NxsDocumentReference | null>(null);
+  protected readonly references = signal<ReadonlyMap<string, NxsDocumentReference>>(new Map());
   protected readonly text = signal('');
   protected readonly finder = nxsSearchAsYouType<NxsDocumentReference>(
     (term) => this.find(term),
     () => WEB_UI_MIN_CHARS,
   );
   protected readonly isDisabled = computed(() => this.disabled() || this.control.formDisabled());
-  protected readonly unmatched = computed(() => !this.value() && this.text().trim() !== '');
+  protected readonly chosen = computed<readonly string[]>(() => {
+    const value = this.value();
+    return typeof value === 'string' ? (value ? [value] : []) : (value ?? []);
+  });
+  protected readonly options = computed(() => {
+    const taken = new Set(this.multiple() ? this.chosen() : []);
+    return this.finder.state().results.filter((document) => !taken.has(this.idOf(document)));
+  });
+  protected readonly unmatched = computed(
+    () => this.text().trim() !== '' && (this.multiple() || this.chosen().length === 0),
+  );
   protected readonly errorState = {
     isErrorState: () =>
       this.control.wasTouched() &&
@@ -148,51 +171,88 @@ export class NxsDocumentReferenceInputComponent
   protected readonly displayWith = (document: NxsDocumentReference | string | null): string =>
     typeof document === 'string' ? document : (document?.title ?? '');
 
+  protected readonly pickerKind: 'principal' | 'document' = 'document';
+  protected readonly minimumCharacters = () => this.minChars;
+  protected readonly chosenItems = computed<readonly NxsPickerItem<string>[]>(() =>
+    this.chosen().map((id) => ({ value: id, key: id, label: this.labelOf(id) })),
+  );
+  protected readonly optionItems = computed<readonly NxsPickerOption<NxsDocumentReference>[]>(() =>
+    this.options().map((document) => ({
+      value: document,
+      key: document.uid,
+      label: document.title,
+      detail: document.path,
+      documentType: document.type,
+    })),
+  );
+
   constructor() {
     this.lookups
       .pipe(
-        switchMap((id) =>
-          this.api.nxqlSearch(lookupQuery(id, this.idProperty()), 1).pipe(
-            map((list) => ({ id, found: list.entries?.[0] ? toReference(list.entries[0]) : null })),
-            catchError(() => of({ id, found: null })),
+        switchMap(({ ids, idProperty }) =>
+          from(ids).pipe(
+            mergeMap(
+              (id) =>
+                this.api.nxqlSearch(lookupQuery(id, idProperty), 1).pipe(
+                  map((list) => ({
+                    id,
+                    found: list.entries?.[0] ? toReference(list.entries[0]) : null,
+                  })),
+                  catchError(() => of({ id, found: null })),
+                ),
+              4,
+            ),
           ),
         ),
         takeUntilDestroyed(),
       )
       .subscribe(({ id, found }) => {
-        if (this.value() !== id || !found) return;
-        this.document.set(found);
-        this.text.set(found.title);
+        if (!this.chosen().includes(id) || !found) return;
+        this.references.update((references) => new Map(references).set(id, found));
+        // A single field shows only the first stored id, whichever lookup answers last.
+        if (!this.multiple() && id === this.chosen()[0]) {
+          this.document.set(found);
+          this.text.set(found.title);
+        }
       });
-    // A value set from outside is shown by its id at once, then by its title once looked up.
+    // Every host value replaces the complete selection. Cancel lookups even for an empty value.
     effect(() => {
       const value = this.value();
+      const idProperty = this.idProperty();
+      const multiple = this.multiple();
       untracked(() => {
-        if (value === this.committed) return;
+        if (
+          value === this.committed &&
+          idProperty === this.lookupProperty &&
+          multiple === this.committedMultiple
+        )
+          return;
         this.committed = value;
+        this.committedMultiple = multiple;
+        this.lookupProperty = idProperty;
+        this.finder.reset();
         this.document.set(null);
-        this.text.set(value ?? '');
-        if (value) this.lookups.next(value);
+        this.references.set(new Map());
+        this.text.set(multiple ? '' : (this.chosen()[0] ?? ''));
+        this.lookups.next({ ids: this.chosen(), idProperty });
       });
     });
     effect(() => {
-      const { status, results } = this.finder.state();
+      const { status } = this.finder.state();
+      const count = this.options().length;
       untracked(() => {
         const key =
-          status === 'found'
-            ? results.length === 1
+          status === 'found' && count > 0
+            ? count === 1
               ? 'satori-components.pickers.results-one'
               : 'satori-components.pickers.results-many'
-            : status === 'none'
+            : status === 'none' || (status === 'found' && count === 0)
               ? 'satori-components.pickers.no-results'
               : status === 'failed'
                 ? 'satori-components.pickers.failed'
                 : null;
         if (key) {
-          void this.announcer.announce(
-            this.translate.instant(key, { count: results.length }),
-            'polite',
-          );
+          void this.announcer.announce(this.translate.instant(key, { count }), 'polite');
         }
       });
     });
@@ -204,14 +264,24 @@ export class NxsDocumentReferenceInputComponent
 
   /** `MatInput` recomputes its error state only with a form control of its own. */
   ngDoCheck(): void {
-    this.input().updateErrorState();
+    this.input()?.updateErrorState();
+    this.grid()?.updateErrorState();
   }
 
-  writeValue(value: string | null): void {
-    this.value.set(value || null);
+  writeValue(value: string | readonly string[] | null): void {
+    this.value.set(value || (this.multiple() ? [] : null));
+    this.finder.reset();
+    if (!this.chosen().length) {
+      this.document.set(null);
+      this.references.set(new Map());
+      this.lookups.next({ ids: [], idProperty: this.idProperty() });
+      // The titles are gone, so the host writing the previous value again must look it up again.
+      this.committed = this.value();
+    }
+    this.text.set(this.multiple() ? '' : this.labelOf(this.chosen()[0] ?? ''));
   }
 
-  registerOnChange(fn: (value: string | null) => void): void {
+  registerOnChange(fn: (value: string | readonly string[] | null) => void): void {
     this.control.registerOnChange(fn);
   }
 
@@ -232,38 +302,76 @@ export class NxsDocumentReferenceInputComponent
   }
 
   protected missing(): boolean {
-    return this.control.missing(this.required(), this.value() === null);
+    return this.control.missing(this.required(), this.chosen().length === 0);
   }
 
   protected onInput(event: Event): void {
     const typed = (event.target as HTMLInputElement).value;
-    const shown = this.document()?.title ?? this.value();
+    const shown = this.document()?.title ?? this.chosen()[0];
     this.text.set(typed);
-    if (this.value() && typed !== shown) this.choose(null);
+    if (!this.multiple() && this.chosen().length && typed !== shown) this.choose(null);
     this.finder.query(typed);
   }
 
   protected choose(document: NxsDocumentReference | null): void {
-    const id = document ? (this.idProperty() === 'path' ? document.path : document.uid) : null;
-    this.committed = id;
-    this.value.set(id);
-    this.document.set(document);
-    if (document) {
-      this.text.set(document.title);
+    if (this.isDisabled()) return;
+    const id = document ? this.idOf(document) : null;
+    if (document && id !== null)
+      this.references.update((references) => new Map(references).set(id, document));
+    if (this.multiple()) {
+      if (!document || id === null || this.chosen().includes(id)) return;
+      // Clear the search first: the form validates inside `commit`, and must not see it pending.
+      this.text.set('');
       this.finder.reset();
+      this.commit([...this.chosen(), id]);
+    } else {
+      // Show the choice before `commit`: a form may reset the field from inside it, and the reset
+      // must be what stays on screen.
+      this.document.set(document);
+      if (document) {
+        this.text.set(document.title);
+        this.finder.reset();
+      }
+      this.commit(id);
     }
-    this.control.changed(id);
     this.documentChange.emit(document);
+  }
+
+  protected labelOf(id: string): string {
+    return this.references().get(id)?.title ?? id;
+  }
+
+  protected remove(id: string): void {
+    if (this.isDisabled()) return;
+    this.commit(this.chosen().filter((chosen) => chosen !== id));
+    this.documentChange.emit(null);
   }
 
   protected clear(): void {
     this.text.set('');
     this.finder.reset();
-    this.choose(null);
+    this.document.set(null);
+    this.references.set(new Map());
+    this.commit(this.multiple() ? [] : null);
+    this.documentChange.emit(null);
   }
 
-  protected blurred(): void {
-    this.control.blurred();
+  private idOf(document: NxsDocumentReference): string {
+    return this.idProperty() === 'path' ? document.path : document.uid;
+  }
+
+  private commit(value: string | readonly string[] | null): void {
+    this.committed = value;
+    this.value.set(value);
+    this.control.changed(value);
+    this.lookups.next({
+      ids: this.chosen().filter((id) => !this.references().has(id)),
+      idProperty: this.idProperty(),
+    });
+  }
+
+  protected blurred(event: FocusEvent): void {
+    this.control.focusLeft(this.host.nativeElement, event);
   }
 
   private find(term: string): Observable<readonly NxsDocumentReference[]> {

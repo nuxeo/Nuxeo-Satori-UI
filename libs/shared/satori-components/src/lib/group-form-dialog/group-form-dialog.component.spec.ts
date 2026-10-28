@@ -232,4 +232,10 @@ describe('NxsGroupFormDialogComponent', () => {
     method('onMemberSelected')({ option: { value: { id: 'anna' }, deselect: vi.fn() } });
     expect(signalOf<string[]>('members')()).toEqual(['ann', 'anna']);
   });
+  it('ignores a chosen option that arrives as the search value, and keeps the typed query', async () => {
+    await create({ mode: 'create' });
+    method('onMemberSearch')('ann');
+    method('onMemberSearch')({ id: 'anna', properties: {} });
+    expect(signalOf<string>('memberQuery')()).toBe('ann');
+  });
 });

@@ -395,7 +395,7 @@ expectRed(
     'src/lib/claims/index.ts': "export { AcmeClaimsComponent } from './claims';\n",
     'src/lib/claims/claims.ts': panel({ selector: 'nxs-claims' }),
   }),
-  /claims\/claims\.ts declares selector `nxs-claims`/,
+  /claims[\\/]claims\.ts declares selector `nxs-claims`/,
 );
 
 expectRed(
@@ -414,7 +414,7 @@ expectRed(
     'src/lib/extensions.ts': extensions(BARREL_LAZY),
     'src/lib/claims/index.ts': "export type { AcmeClaimsComponent } from './claims';\n",
   }),
-  /as `AcmeClaimsComponent`, which .*claims\/index\.ts does not export/,
+  /as `AcmeClaimsComponent`, which .*claims[\\/]index\.ts does not export/,
 );
 
 expectRed(
@@ -424,7 +424,7 @@ expectRed(
     'src/lib/claims/index.ts': "export * from './more';\n",
     'src/lib/claims/more.ts': "export * from './index';\n",
   }),
-  /as `AcmeClaimsComponent`, which .*claims\/index\.ts does not export/,
+  /as `AcmeClaimsComponent`, which .*claims[\\/]index\.ts does not export/,
 );
 
 expectRed(
