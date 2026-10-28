@@ -62,8 +62,8 @@ const meta: Meta<NxsAdminUsersGroupsPageComponent> = {
       source: {
         language: 'html',
         code: `<nxs-admin-users-groups-page
-  (userOpened)="router.navigate(['/administration/users-groups/user', $event])"
-  (groupOpened)="router.navigate(['/administration/users-groups/group', $event])"
+  [userChosen]="openUser"
+  [groupChosen]="openGroup"
 />`,
       },
     },

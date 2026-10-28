@@ -196,7 +196,13 @@
   </table>
   @if (page.rows.length === 0) {
     <p class="nxs-udp__empty">
-      {{ 'satori-components.admin-user-details-page.no-permissions' | translate: { name: empty } }}
+      @if (groupId) {
+        {{
+          'satori-components.admin-user-details-page.no-permissions' | translate: { name: empty }
+        }}
+      } @else {
+        {{ empty | translate }}
+      }
     </p>
   }
   <mat-paginator

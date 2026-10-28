@@ -32,13 +32,16 @@
 </form>
 
 @if (status(); as current) {
-  <p
-    class="nxs-ugp__status"
-    [class.nxs-ugp__status--error]="current.error"
-    [attr.role]="current.error ? 'alert' : 'status'"
-  >
-    {{ current.text | translate }}
-  </p>
+  <!-- Tracked by the status object itself, so each outcome replaces the element: a repeated message is announced again. -->
+  @for (line of [current]; track line) {
+    <p
+      class="nxs-ugp__status"
+      [class.nxs-ugp__status--error]="line.error"
+      [attr.role]="line.error ? 'alert' : 'status'"
+    >
+      {{ line.text | translate }}
+    </p>
+  }
 }
 
 <section class="nxs-ugp__recent" aria-labelledby="nxs-ugp-recent-title">

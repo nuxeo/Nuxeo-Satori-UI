@@ -271,4 +271,15 @@ describe('NxsAdminUsersGroupsPageComponent', () => {
     await render();
     expect(page().selectedTab()).toBe(1);
   });
+
+  it('replaces the status line on each outcome, so a repeated message is announced again', async () => {
+    page()['finish']('some.outcome', false);
+    await render();
+    const first = el().querySelector('.nxs-ugp__status');
+    page()['finish']('some.outcome', false);
+    await render();
+    const second = el().querySelector('.nxs-ugp__status');
+    expect(second).not.toBe(first);
+    expect(second?.textContent).toContain('some.outcome');
+  });
 });

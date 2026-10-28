@@ -250,4 +250,14 @@ describe('NxsAdminUserDetailsPageComponent', () => {
     });
     expect(text()).toContain('Permission removed');
   });
+  it('shows the translated message for an empty direct table, not the key', async () => {
+    permissions.listLocalPermissionRows = vi.fn(() =>
+      of({ ...EMPTY, rows: [], totalDocuments: 0 }),
+    );
+    fixture = TestBed.createComponent(NxsAdminUserDetailsPageComponent);
+    fixture.componentRef.setInput('userId', 'jdoe');
+    await render();
+    expect(text()).toContain('No local permissions.');
+    expect(text()).not.toContain('satori-components.admin-user-details-page.no-local');
+  });
 });

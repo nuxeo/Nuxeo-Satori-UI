@@ -67,9 +67,10 @@ const meta: Meta<NxsAdminGroupDetailsPageComponent> = {
         language: 'html',
         code: `<nxs-admin-group-details-page
   [groupId]="groupName"
-  (deleted)="router.navigate(['/administration/users-groups'])"
-  (userOpened)="router.navigate(['/administration/users-groups/user', $event])"
-  (groupOpened)="router.navigate(['/administration/users-groups/group', $event])"
+  [deleted]="backToList"
+  [userChosen]="openUser"
+  [groupChosen]="openGroup"
+  [documentChosen]="openDocument"
   (documentOpened)="router.navigate(['/doc', $event])"
 />`,
       },
