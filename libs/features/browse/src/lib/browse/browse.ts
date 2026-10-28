@@ -328,6 +328,15 @@ export class BrowseComponent {
   private lastSeenClipboardPasteTick = -1;
   /** Clipboard paste results not yet visible in @children (eventual consistency on Cloud). */
   private readonly pendingPasteEntries = new Map<string, NuxeoDocument>();
+  /**
+   * The same pending rows as a signal.
+   *
+   * The map alone is invisible to `computed()`, and the scanned folder needs them: a paste is
+   * optimistic because `@children` is eventually consistent, so the new rows live only in
+   * `entries()` until the server catches up. Without this a just-pasted document was missing from
+   * a filtered listing even though it was sitting in the page behind the filter.
+   */
+  private readonly pendingPasteList = signal<NuxeoDocument[]>([]);
   readonly browsePath = signal('/');
   private readonly browsePath$ = new Subject<{ nuxeoPath: string; pageIndex: number }>();
 
@@ -646,7 +655,15 @@ export class BrowseComponent {
     const scanned = this.scannedEntries();
     if (!scanned) return null;
     if (this.scannedPath() !== this.browsePath()) return null;
-    return this.scannedSortKey() === this.serverSortKey() ? scanned : null;
+    if (this.scannedSortKey() !== this.serverSortKey()) return null;
+    // Optimistic paste rows belong here too. The scan reads the same eventually-consistent
+    // `@children` the page does, so a document pasted a moment ago is in neither until Nuxeo
+    // catches up — and `reconcilePendingPasteEntries` only patches `entries()`.
+    const pending = this.pendingPasteList();
+    if (pending.length === 0) return scanned;
+    const seen = new Set(scanned.map((doc) => doc.uid));
+    const additions = pending.filter((doc) => doc.uid && !seen.has(doc.uid));
+    return additions.length > 0 ? [...scanned, ...additions] : scanned;
   });
 
   /**
@@ -1264,6 +1281,7 @@ export class BrowseComponent {
     this.permissionsLoading.set(false);
     this.activeTabIndex.set(0);
     this.pendingPasteEntries.clear();
+    this.syncPendingPasteList();
     this.clearFilters();
     this.selectionService.clear();
   }
@@ -1553,6 +1571,11 @@ export class BrowseComponent {
   }
 
   /** Merge clipboard copy/move API results into the visible folder (Web UI updates listing immediately). */
+  /** Mirror the pending-paste map into its signal; the map is not reactive on its own. */
+  private syncPendingPasteList(): void {
+    this.pendingPasteList.set([...this.pendingPasteEntries.values()]);
+  }
+
   private applyClipboardPasteToListing(documents: NuxeoDocument[]): void {
     if (documents.length === 0) {
       return;
@@ -1563,6 +1586,7 @@ export class BrowseComponent {
         this.pendingPasteEntries.set(doc.uid, doc);
       }
     }
+    this.syncPendingPasteList();
 
     let added = 0;
     let additions: NuxeoDocument[] = [];
@@ -1592,6 +1616,7 @@ export class BrowseComponent {
     for (const uid of serverUids) {
       this.pendingPasteEntries.delete(uid);
     }
+    this.syncPendingPasteList();
 
     const pending = [...this.pendingPasteEntries.values()];
     if (pending.length === 0) {

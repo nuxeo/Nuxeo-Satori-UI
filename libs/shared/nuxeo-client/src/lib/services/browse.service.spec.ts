@@ -1201,6 +1201,23 @@ describe('BrowseService', () => {
       expect(result.truncated).toBe(true);
     });
 
+    it('bounds the walk by documents actually returned, not by an assumed page size', async () => {
+      const path = '/default-domain/workspaces';
+      // A branch that hands back more rows than the requested page size — the root fallback pages
+      // a full list in memory, a Domain keeps only its folders — so `(pageIndex + 1) * pageSize`
+      // under-counts what has been pulled. Cap 5, requested page size 1, 4 rows per page: the cap
+      // must stop this after the second page rather than letting it run to page five.
+      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 5, 1));
+
+      flushPage(path, 0, [{ uid: 'a' }, { uid: 'b' }, { uid: 'c' }, { uid: 'd' }], true);
+      flushPage(path, 1, [{ uid: 'e' }, { uid: 'f' }, { uid: 'g' }, { uid: 'h' }], true);
+
+      const result = await result$;
+      expect(result.entries.map((e) => e.uid)).toEqual(['a', 'b', 'c', 'd', 'e']);
+      expect(result.truncated).toBe(true);
+      // `httpMock.verify()` in afterEach proves no third page was requested.
+    });
+
     it('forwards the requested sort to every page it walks', async () => {
       const path = '/default-domain/workspaces';
       const sort = [{ sortBy: 'dc:title', sortOrder: 'ASC' as const }];

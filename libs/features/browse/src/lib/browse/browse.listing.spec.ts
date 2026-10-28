@@ -1220,6 +1220,41 @@ describe('BrowseComponent — rendered document list', () => {
     expect(query('.filter-scan-note')).toBeNull();
   });
 
+  /**
+   * A paste is optimistic: `@children` is eventually consistent, so the new row is added to
+   * `entries()` and kept there until the server lists it. The scan reads that same listing, so
+   * without folding the pending rows in, a document pasted a moment ago was missing from a
+   * filtered listing even though it sat in the page behind the filter.
+   */
+  it('shows a freshly pasted document to an active filter', async () => {
+    const page = [doc({ uid: 'c-1', title: 'Q1 Report' })];
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: page, totalSize: -1, hasNextPage: true }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: page, truncated: false }),
+    );
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+    expect(rowTitles()).toEqual(['Q1 Report']);
+
+    // What a paste into the open folder does, before Nuxeo lists the new child.
+    TestBed.inject(BrowseContextService).notifyClipboardPasteComplete({
+      targetUid: folder.uid,
+      documents: [doc({ uid: 'c-50', title: 'Pasted Report' })],
+      action: 'copy',
+    });
+    await settle();
+
+    expect(rowTitles()).toContain('Pasted Report');
+    // And it is selectable, so its row actions resolve to the document.
+    component.onListSelectionChange(['c-50']);
+    await settle();
+    expect(component.singleSelectedEntry()?.title).toBe('Pasted Report');
+  });
+
   it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),

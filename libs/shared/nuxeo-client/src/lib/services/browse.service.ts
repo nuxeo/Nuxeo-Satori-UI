@@ -267,22 +267,35 @@ export class BrowseService {
     pageSize = 50,
     sort?: BrowseSortEntry[],
   ): Observable<BrowseFolderEntrySet> {
-    type Step = BrowseFolderContents & { pageIndex: number };
+    type Step = BrowseFolderContents & { pageIndex: number; fetched: number };
 
     // `sort` is forwarded so a scanned listing keeps the order the user asked for. Without it the
     // scan returned the source's default order, so applying a filter silently replaced a sorted
     // page — and a later click on a sort header changed only the indicator, because the filtered
     // rows no longer came from `entries()`.
-    const fetchPage = (pageIndex: number): Observable<Step> =>
+    // `fetched` counts the documents actually returned, which is what bounds the walk.
+    //
+    // The guard used to be `(pageIndex + 1) * pageSize < maxDocuments` — an *assumed* count. Not
+    // every branch of `listBrowseFolderEntries` hands back exactly `pageSize` rows: the root
+    // fallback pages a full list in memory and a Domain keeps only its folders, so the assumption
+    // can under-count what has been pulled and let the traversal run past the cap it exists to
+    // enforce. Counting the real rows cannot drift from them.
+    const fetchPage = (pageIndex: number, fetchedBefore: number): Observable<Step> =>
       this.getBrowseFolderContents(nuxeoPath, pageSize, {
         currentPageIndex: pageIndex,
         sort,
-      }).pipe(map((page) => ({ ...page, pageIndex })));
+      }).pipe(
+        map((page) => ({
+          ...page,
+          pageIndex,
+          fetched: fetchedBefore + (page.entries?.length ?? 0),
+        })),
+      );
 
-    return fetchPage(0).pipe(
+    return fetchPage(0, 0).pipe(
       expand((page) =>
-        page.hasNextPage === true && (page.pageIndex + 1) * pageSize < maxDocuments
-          ? fetchPage(page.pageIndex + 1)
+        page.hasNextPage === true && page.fetched < maxDocuments
+          ? fetchPage(page.pageIndex + 1, page.fetched)
           : EMPTY,
       ),
       reduce<Step, BrowseFolderEntrySet>(
