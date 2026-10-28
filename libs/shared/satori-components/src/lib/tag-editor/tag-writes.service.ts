@@ -13,7 +13,7 @@ import {
 } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { CURRENT_USERNAME, TagService } from '@nuxeo/satori-platform/nuxeo-client';
-import { catchError, concatMap, defer, map, of, Subject, type Observable } from 'rxjs';
+import { catchError, concatMap, defer, map, of, Subject, takeUntil, type Observable } from 'rxjs';
 
 import { NxsToastService, provideNxsToast } from '../toast/toast.service';
 
@@ -82,6 +82,7 @@ export class NxsTagWrites {
   private readonly unheard = new Set<string>();
   /** Every write not yet answered, whoever made it. */
   private readonly queued = signal<readonly NxsTagWrite[]>([]);
+  private readonly sessionEnded = new Subject<void>();
   /** Bumped at each change of user, which ends the session the writes were made in. */
   private readonly session = signal(0);
 
@@ -91,17 +92,22 @@ export class NxsTagWrites {
   );
   /** Each answer, as it arrives. An editor that hears one for its document calls `heard`. */
   readonly answers: Observable<NxsTagAnswer> = this.answered.asObservable();
+  /** Fires when the session a read or a write was made in has ended, so it must not finish. */
+  readonly sessionsEnded: Observable<void> = this.sessionEnded.asObservable();
 
   constructor() {
     // The user is read through a plain function, so the only sign of a sign-out is the app's signal
     // changing under this effect. Each change ends the session, and with it every answer kept for
-    // the session before: nothing from one session may be sent, shown or kept under the next.
+    // the session before, and every request still on its way: nothing from one session may be sent,
+    // shown, kept or answered under the next.
     effect(() => {
       this.user();
       untracked(() => {
         this.session.update((session) => session + 1);
         this.unheard.clear();
         this.known.clear();
+        this.queued.update((writes) => writes.filter((write) => write.session === this.session()));
+        this.sessionEnded.next();
       });
     });
     // When the provider goes, no change is taken any more, but those already made are still sent
@@ -164,9 +170,12 @@ export class NxsTagWrites {
         write.change === 'add'
           ? this.tagService.addTag(write.uid, write.label)
           : this.tagService.removeTag(write.uid, write.label);
+      // Cancelled when its session ends, so the request never reaches a session it was not made in.
+      // Completing without an answer lets the queue move on, and the write is no longer pending.
       return call.pipe(
         map((tags) => ({ write, tags })),
         catchError((error: unknown) => of({ write, error })),
+        takeUntil(this.sessionEnded),
       );
     });
   }

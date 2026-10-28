@@ -66,6 +66,7 @@
  *   node scripts/beta-harness/upgrade-rehearsal.mjs --break-slot navbar   # negative control
  */
 
+import { shellArgument } from './shell-argument.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
@@ -343,11 +344,15 @@ if (!breakSlot) {
 /** `npm pack` the built package and unpack it, the way an install leaves it. */
 function unpackInto(target) {
   mkdirSync(target, { recursive: true });
-  const packed = execFileSync('npm', ['pack', DIST, '--pack-destination', STAGE], {
-    shell: process.platform === 'win32',
-    cwd: ROOT,
-    encoding: 'utf8',
-  })
+  const packed = execFileSync(
+    'npm',
+    ['pack', shellArgument(DIST), '--pack-destination', shellArgument(STAGE)],
+    {
+      shell: process.platform === 'win32',
+      cwd: ROOT,
+      encoding: 'utf8',
+    },
+  )
     .trim()
     .split('\n')
     .pop();
@@ -416,7 +421,7 @@ function compileCustomerApp(installed, label, when) {
   );
 
   try {
-    execFileSync('npx', ['ngc', '-p', configPath], {
+    execFileSync('npx', ['ngc', '-p', shellArgument(configPath)], {
       cwd: ROOT,
       stdio: 'pipe',
       encoding: 'utf8',

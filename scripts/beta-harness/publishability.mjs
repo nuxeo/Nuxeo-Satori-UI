@@ -68,6 +68,7 @@
  * in `dist/` is still refused by npm.
  */
 
+import { shellArgument } from './shell-argument.mjs';
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -545,6 +546,7 @@ try {
      * Imports use the **package specifiers a customer writes**, which makes the probe the
      * shape of real consumption rather than a relative-path approximation.
      */
+    let diagnostics = '';
     const stage = join(process.cwd(), '.tmp-publishability');
     const subpaths = Object.keys(pkg.exports ?? {}).filter((s) => s !== './package.json');
     try {
@@ -594,9 +596,8 @@ try {
           )}\nexport type Probed = [${subpaths.map((_, i) => `typeof e${i}`).join(', ')}];\n`,
       );
 
-      var diagnostics = '';
       try {
-        execFileSync('npx', ['tsc', '-p', join(stage, 'tsconfig.json')], {
+        execFileSync('npx', ['tsc', '-p', shellArgument(join(stage, 'tsconfig.json'))], {
           shell: process.platform === 'win32',
           cwd: process.cwd(),
           encoding: 'utf8',

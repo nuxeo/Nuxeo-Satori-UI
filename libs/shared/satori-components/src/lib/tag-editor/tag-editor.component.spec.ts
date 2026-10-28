@@ -673,6 +673,58 @@ describe('NxsTagEditorComponent', () => {
       expect(tags.tagsOf).not.toHaveBeenCalled();
     });
 
+    it('does not store a read for a document the editor has left, even after coming back to it', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      const first = new Subject<string[]>();
+      const second = new Subject<string[]>();
+      tags.tagsOf.mockReturnValueOnce(first).mockReturnValueOnce(second);
+      await mount();
+      host.uid.set('doc-2');
+      await settle();
+      host.uid.set('doc-1');
+      await settle();
+      expect(tags.tagsOf).toHaveBeenCalledTimes(2);
+
+      // The read started before the document changed answers last: it must not win.
+      first.next(['stale']);
+      first.complete();
+      second.next(['contract', 'invoice']);
+      second.complete();
+      await settle();
+
+      expect(chips()).toEqual(['contract', 'invoice']);
+      expect(host.changes).toEqual([['contract', 'invoice']]);
+    });
+
+    it('cancels a change still on its way when its user signs out', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      expect(added.observed).toBe(true);
+
+      user.set(null);
+      user.set('bob');
+      TestBed.flushEffects();
+      await settle();
+
+      expect(added.observed).toBe(false);
+      expect(toastShow).not.toHaveBeenCalled();
+    });
+
     it('reads again on the next open when the read failed', async () => {
       const added = new Subject<string[]>();
       tags.addTag.mockReturnValueOnce(added);

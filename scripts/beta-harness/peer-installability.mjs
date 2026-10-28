@@ -41,6 +41,7 @@
  * Usage: node scripts/beta-harness/peer-installability.mjs   (after `npx nx build platform`)
  */
 
+import { shellArgument } from './shell-argument.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
   cpSync,
@@ -108,11 +109,22 @@ function pack(label, mutate) {
   writeFileSync(join(copy, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   const out = join(work, `${label}-tarball`);
   mkdirSync(out);
-  execFileSync('npm', ['pack', copy, '--pack-destination', out, '--ignore-scripts', '--silent'], {
-    shell: process.platform === 'win32',
-    env: anonymousEnv(),
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  execFileSync(
+    'npm',
+    [
+      'pack',
+      shellArgument(copy),
+      '--pack-destination',
+      shellArgument(out),
+      '--ignore-scripts',
+      '--silent',
+    ],
+    {
+      shell: process.platform === 'win32',
+      env: anonymousEnv(),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
   return join(
     out,
     readdirSync(out).find((f) => f.endsWith('.tgz')),
@@ -151,7 +163,7 @@ try {
   }
 
   // ---------------------------------------------------------------- 1. install ----
-  const tarball = pack('as-built', () => {});
+  const tarball = pack('as-built', () => undefined);
   const asBuilt = install('as-built', tarball);
   if (asBuilt.status !== 0) {
     fail(

@@ -33,14 +33,17 @@ import {
   catchError,
   debounceTime,
   distinctUntilChanged,
+  EMPTY,
   filter,
   finalize,
   map,
+  merge,
   of,
   Subject,
   switchMap,
   takeUntil,
   tap,
+  type Observable,
 } from 'rxjs';
 
 import { NxsSpinnerComponent } from '../spinner/spinner.component';
@@ -159,11 +162,13 @@ export class NxsTagEditorComponent {
 
     // An answer may have come while no editor for this document was open to hear it. Neither the
     // host's copy nor that answer is known to be current, so Nuxeo is asked for the tags instead.
+    // A read is replaced when the document changes, so only the current document's tags are stored.
     toObservable(this.documentUid)
-      .pipe(takeUntilDestroyed())
-      .subscribe((uid) => {
-        if (this.writes.takeUnheard(uid)) this.refresh(uid);
-      });
+      .pipe(
+        switchMap((uid) => (this.writes.takeUnheard(uid) ? this.refresh(uid) : EMPTY)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((tags) => this.store(tags));
 
     this.terms
       .pipe(
@@ -238,33 +243,24 @@ export class NxsTagEditorComponent {
   /**
    * The document's tags as Nuxeo holds them now. A saved change for the document that is answered
    * first is newer than this read, so it wins and the read is dropped. A read that fails, is
-   * interrupted or lands after the document changed keeps the mark, so the next editor reads again.
+   * interrupted (the document changed, the session ended, the editor closed) keeps the mark, so the
+   * next editor reads again.
    */
-  private refresh(uid: string): void {
+  private refresh(uid: string): Observable<readonly string[]> {
     let answered = false;
     let stored = false;
-    this.tagService
-      .tagsOf(uid)
-      .pipe(
-        takeUntil(
-          this.writes.answers.pipe(
-            filter((answer) => answer.write.uid === uid && 'tags' in answer),
-            tap(() => (answered = true)),
-          ),
-        ),
-        finalize(() => {
-          if (!answered && !stored) this.writes.keepUnheard(uid);
-        }),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: (tags) => {
-          if (uid !== this.documentUid()) return;
-          stored = true;
-          this.store(tags);
-        },
-        error: () => undefined,
-      });
+    const answer = this.writes.answers.pipe(
+      filter((saved) => saved.write.uid === uid && 'tags' in saved),
+      tap(() => (answered = true)),
+    );
+    return this.tagService.tagsOf(uid).pipe(
+      tap(() => (stored = true)),
+      catchError(() => EMPTY),
+      takeUntil(merge(answer, this.writes.sessionsEnded)),
+      finalize(() => {
+        if (!answered && !stored) this.writes.keepUnheard(uid);
+      }),
+    );
   }
 
   private store(tags: readonly string[]): void {

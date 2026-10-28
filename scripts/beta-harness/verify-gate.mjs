@@ -491,6 +491,8 @@ for (const gate of selected) {
   const started = Date.now();
   const proc = spawnSync(gate.cmd, gate.argv, {
     encoding: 'utf8',
+    // npm and npx are .cmd shims on Windows, which Node will not spawn without a shell.
+    shell: process.platform === 'win32',
     maxBuffer: 64 * 1024 * 1024,
     env: {
       ...process.env,

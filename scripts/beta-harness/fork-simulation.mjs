@@ -44,6 +44,7 @@
  *   node scripts/beta-harness/fork-simulation.mjs
  */
 
+import { shellArgument } from './shell-argument.mjs';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -140,7 +141,7 @@ console.log(
 );
 
 try {
-  execFileSync('npx', ['ngc', '-p', configPath], {
+  execFileSync('npx', ['ngc', '-p', shellArgument(configPath)], {
     shell: process.platform === 'win32',
     cwd: ROOT,
     stdio: 'pipe',
