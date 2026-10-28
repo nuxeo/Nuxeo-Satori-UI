@@ -10780,7 +10780,7 @@ function parseWorkflowTriggersAndGates(body) {
      * Refused rather than parsed: nested flow mappings are real work to read, the caller's failure
      * names this function and says what to do, and a loud refusal is the behaviour this file
      * already prefers to a quiet exemption. No workflow here uses the form. */
-    if (inline.startsWith('{')) return null;
+    if (inline.startsWith('{') || /^[&*]/.test(inline)) return null;
     // `on: push` or `on: [push, pull_request]` — a shorthand that carries no branch filter.
     const names = inline.startsWith('[')
       ? (parseYamlFlowSequence(inline) ?? [])
@@ -10817,6 +10817,12 @@ function parseWorkflowTriggersAndGates(body) {
        * to the inline parser, and `branches:` with a `- main` sequence under it has no `[…]` for
        * that parser to find, which would turn every block filter into "unreadable". */
       const ownValue = lines[i].slice(lines[i].indexOf(':', yamlIndent(lines[i])) + 1);
+      /* An anchor or alias on the event value — `push: &publish_trigger`, `push: *triggers` — is
+       * refused, not read. An anchor is a non-empty value with no `branches` in it, so the event
+       * counted as unfiltered and a ticket-only trigger passed. Reported on #494. Refused rather
+       * than resolved: following an alias means carrying a document-wide anchor table, which is a
+       * YAML implementation, and not being one is the whole constraint this parser works under. */
+      if (/^\s*[&*]/.test(ownValue)) return null;
       let filter = inlineFilter(
         ownValue.trim().startsWith('{') ? [ownValue, ...lines.slice(i + 1, eventEnd)].join(' ') : ownValue,
       );
@@ -10844,6 +10850,13 @@ function parseWorkflowTriggersAndGates(body) {
   const gates = [];
   const jobsIndex = lines.findIndex((line) => /^jobs\s*:/.test(line));
   if (jobsIndex !== -1) {
+    /* `jobs:` with anything on its own line is a flow mapping or an anchor, and it is refused.
+     * `jobs: { deploy: { if: … } }` produced no gates at all — the line scan below finds no keys
+     * to attribute and the tripwire only looks at `if:`-shaped lines — so a ticket-branch gate
+     * written that way passed in silence. Reported on #494. Refused rather than parsed, for the
+     * reason the anchors above are: a flow mapping nested inside a flow mapping is a YAML reader,
+     * and the failure names this function so whoever meets it knows what to do. */
+    if (lines[jobsIndex].slice(lines[jobsIndex].indexOf(':') + 1).trim() !== '') return null;
     const jobsEnd = yamlBlockEnd(lines, jobsIndex, yamlIndent(lines[jobsIndex]));
     const jobIndents = lines
       .slice(jobsIndex + 1, jobsEnd)
@@ -10859,6 +10872,11 @@ function parseWorkflowTriggersAndGates(body) {
       if (lines[i].trim() === '') continue;
       const indent = yamlIndent(lines[i]);
       if (indent === jobIndent) {
+        // A job whose body is a flow mapping or an alias — `deploy: { if: … }` — is refused for
+        // the same reason `jobs:` is above: its keys never reach the scan, so a gate inside it is
+        // invisible rather than merely misread.
+        const jobValue = lines[i].slice(lines[i].indexOf(':', indent) + 1).trim();
+        if (/^[{&*]/.test(jobValue)) return null;
         job = /^\s*['"]?([A-Za-z_][\w-]*)['"]?\s*:/.exec(lines[i])?.[1] ?? job;
         jobKeyIndent = null;
         continue;
@@ -11029,17 +11047,41 @@ function checkWorkflowRefGates() {
       return true;
     }
   })();
-  const existenceIsProvable = refsAreKnowable && !cloneIsShallow;
+  /* A clone can be complete in history and still incomplete in BRANCHES. `git clone
+   * --single-branch` is not shallow and resolves `main` perfectly well, while tracking only
+   * `+refs/heads/main:refs/remotes/origin/main` — so `origin/develop` is absent even though
+   * `develop` exists in the origin, and a valid gate on it was reported as a dead branch.
+   * Reported on #494, and it is the false positive this severity promotion could most easily
+   * have introduced.
+   *
+   * A wildcard fetch refspec is what says "this clone tracks every branch". No remote at all also
+   * qualifies: then `refs/heads/*` is the whole truth and there is nothing absent to miss, which is
+   * the case in every selftest fixture. Anything narrower keeps the finding advisory — the safe
+   * direction, because a guardrail that rejects a valid workflow gets switched off. */
+  const tracksEveryBranch = (() => {
+    try {
+      const refspecs = git(['config', '--get-all', 'remote.origin.fetch'])
+        .split('\n')
+        .filter(Boolean);
+      return refspecs.length === 0 || refspecs.some((spec) => spec.includes('refs/heads/*'));
+    } catch {
+      // No remote configured: every branch is local, so the local refs are complete.
+      return true;
+    }
+  })();
+  const existenceIsProvable = refsAreKnowable && !cloneIsShallow && tracksEveryBranch;
 
   for (const workflow of workflows) {
     const body = read(workflow);
     const parsed = parseWorkflowTriggersAndGates(body);
     if (!parsed) {
       fail(
-        `${workflow} has no \`on:\` block this guardrail can read, so its ref gates were not ` +
-          'checked. Teach `parseWorkflowTriggersAndGates` the shape it uses — do not leave a ' +
-          'workflow silently exempt from a check that exists because a silent exemption cost ' +
-          'five days of a stale published site.',
+        `${workflow} is written in YAML this guardrail cannot read, so neither its triggers nor ` +
+          'its ref gates were checked. It expects `on:` and `jobs:` as block mappings; it refuses ' +
+          'a flow mapping, an anchor or an alias in their place rather than guessing.\n' +
+          '    Teach `parseWorkflowTriggersAndGates` the shape it uses, or write the block form — ' +
+          'but do not leave a workflow silently exempt from a check that exists because a silent ' +
+          'exemption cost five days of a stale published site.',
       );
       continue;
     }
@@ -11049,9 +11091,24 @@ function checkWorkflowRefGates() {
     const allowlists = [];
     const unfiltered = [];
     let unparsedFilter = null;
-    let hasTagFilter = false;
+    /* Can a TAG start this workflow? If so, `github.ref_name` may be a tag name and not a branch.
+     *
+     * An explicit `tags:` filter is the obvious case. The one that was missed is a `push` with no
+     * filters at all — `on: push` admits tag pushes too, so a perfectly good
+     * `github.ref_type == 'tag' && github.ref_name == 'v1.0.0'` was judged as pinning a branch
+     * called `v1.0.0`. Reported on #494. A `push` WITH a `branches:` filter does not admit tags,
+     * which is why this asks about the filter rather than about the event. */
+    let tagsArePossible = false;
     for (const [event, filter] of events) {
-      if (filter.tags) hasTagFilter = true;
+      if (filter.tags) tagsArePossible = true;
+      if (
+        BRANCH_FILTERED_EVENTS.includes(event) &&
+        !filter.unparsed &&
+        filter.branches === null &&
+        !filter.ignore
+      ) {
+        tagsArePossible = true;
+      }
       if (!BRANCH_FILTERED_EVENTS.includes(event)) {
         unfiltered.push(event);
       } else if (filter.unparsed) {
@@ -11228,7 +11285,26 @@ function checkWorkflowRefGates() {
          * a valid `if: github.ref_name == 'v1.0.0'` on a workflow triggered by `tags: ['v*']`.
          * Caught in review on #494. A `github.ref` literal stays unambiguous: `refs/heads/…` is a
          * branch whatever else the workflow triggers on. */
-        if (context === 'ref_name' && hasTagFilter) continue;
+        /* `github.ref_name` where a tag could have started the run.
+         *
+         * If the condition says it is a tag, it is a tag, and there is nothing here to judge. If it
+         * does NOT say, the literal is genuinely ambiguous — and the honest answer is to say so
+         * rather than pick. Guessing either way has a cost this review has already paid: treating
+         * it as a branch rejects valid tag gates, and treating it as a tag lets a pinned ticket
+         * branch through in silence. A warning names the ambiguity and points at `github.ref`,
+         * which cannot be mistaken either way. */
+        if (context === 'ref_name' && tagsArePossible) {
+          if (!/github\.ref_type\s*==\s*(['"])tag\1/.test(gate.expression)) {
+            warn(
+              `${workflow}:${gate.line} gates ${where} on \`github.ref_name == '${literal}'\`, ` +
+                'and a tag can start this workflow, so this guardrail cannot tell whether ' +
+                `\`${literal}\` is a branch or a tag and has judged neither.\n` +
+                "    Compare `github.ref` to `refs/heads/…` or `refs/tags/…` — that form says " +
+                'which it is — or assert `github.ref_type` alongside this comparison.',
+            );
+          }
+          continue;
+        }
         const branch = context === 'ref' ? literal.slice('refs/heads/'.length) : literal;
 
         if (hasAlternative || comparisonIsNegated(gate.expression, index)) continue;

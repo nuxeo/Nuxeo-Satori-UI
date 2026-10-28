@@ -166,6 +166,29 @@ function withFixture(files, mutate, run, options = {}) {
         encoding: 'utf8',
       }).stdout.trim();
       if (confirm !== 'true') throw new Error(`fixture clone is not shallow (got ${confirm})`);
+    } else if (options.singleBranch) {
+      /* A clone that is complete in HISTORY and incomplete in BRANCHES. `options.singleBranch` is
+       * the list of branches to create in the origin first, none of which the clone will track —
+       * which is the shape that made `checkWorkflowRefGates` call a live branch dead, because not
+       * being shallow is not the same as having every ref. */
+      for (const branch of options.singleBranch) git(['branch', branch]);
+      runDir = `${dir}-single`;
+      const clone = spawnSync(
+        'git',
+        [
+          'clone', '--quiet', '--single-branch', '--branch', initialBranch,
+          '--no-local', `file://${dir}`, runDir,
+        ],
+        { encoding: 'utf8' },
+      );
+      if (clone.status !== 0) throw new Error(`single-branch clone failed: ${clone.stderr}`);
+      const refspec = spawnSync('git', ['config', '--get', 'remote.origin.fetch'], {
+        cwd: runDir,
+        encoding: 'utf8',
+      }).stdout.trim();
+      if (refspec.includes('refs/heads/*')) {
+        throw new Error(`fixture clone tracks every branch (refspec ${refspec})`);
+      }
     }
 
     return run((guardrail) => {
@@ -196,6 +219,7 @@ function withFixture(files, mutate, run, options = {}) {
   } finally {
     rmSync(dir, { recursive: true, force: true });
     rmSync(`${dir}-shallow`, { recursive: true, force: true });
+    rmSync(`${dir}-single`, { recursive: true, force: true });
   }
 }
 
@@ -9861,6 +9885,20 @@ expectWarn(
 );
 
 expectWarn(
+  'the same gate only warns in a non-shallow SINGLE-BRANCH clone, where refs are incomplete',
+  'checkWorkflowRefGates',
+  MISSING_BRANCH_WORKFLOW,
+  null,
+  /A warning rather than a failure/,
+  // A clone can be complete in history and incomplete in BRANCHES: `--single-branch` is not
+  // shallow and resolves `main` perfectly well while tracking only
+  // `+refs/heads/main:refs/remotes/origin/main`. `develop` exists in the origin here and the clone
+  // simply does not have it — so calling it dead was the false positive the severity promotion
+  // most easily introduced. A wildcard fetch refspec is what establishes branch coverage.
+  { singleBranch: ['develop'] },
+);
+
+expectWarn(
   'the same gate only warns in a shallow clone, which is what a `fetch-depth: 1` job has',
   'checkWorkflowRefGates',
   MISSING_BRANCH_WORKFLOW,
@@ -10214,7 +10252,7 @@ expectRed(
       "name: Fixture\n\non: { push: { branches: ['integration/nxsat-308'] } }\n\n" + WORKFLOW_JOB,
   },
   null,
-  /has no `on:` block this guardrail can read/,
+  /is written in YAML this guardrail cannot read/,
 );
 
 expectRed(
@@ -10904,6 +10942,95 @@ jobs:
   },
   null,
   /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+/* --- seventh round: shapes that are REFUSED rather than parsed, and two severity corrections --- */
+
+/**
+ * Four shapes that produced no finding at all, each now refused with a diagnostic.
+ *
+ * They are grouped because the fix is one decision, not four: an anchor, an alias, or a flow
+ * mapping where this parser expects a block mapping is **refused**, not read. Every one of these
+ * hid a ticket-only trigger or a ticket-branch gate in silence — the `jobs: { … }` pair produced no
+ * gates at all, so the tripwire had nothing to compare against either.
+ *
+ * Refusing is the point. Following an alias means carrying a document-wide anchor table, and
+ * reading a flow mapping nested in a flow mapping means being a YAML implementation; this parser
+ * is explicitly not one, because no YAML parser is a declared dependency of this repository. A
+ * loud refusal naming the function is the honest end of that constraint, and it is what stops the
+ * next shape from being a silent exemption instead of a failure.
+ */
+const REFUSED_SHAPES = {
+  'an anchor on an event value': `name: Fixture\n\non:\n  push: &publish_trigger\n    branches: ['integration/nxsat-308']\n\n${WORKFLOW_JOB}`,
+  'an anchor on the root `on:` value': `name: Fixture\n\non: &triggers\n  push:\n    branches: ['integration/nxsat-308']\n\n${WORKFLOW_JOB}`,
+  '`jobs:` as a flow mapping':
+    "name: Fixture\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\n" +
+    "jobs: { deploy: { runs-on: ubuntu-latest, if: \"github.ref == 'refs/heads/integration/nxsat-308'\" } }\n",
+  'a job body as a flow mapping':
+    "name: Fixture\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\njobs:\n" +
+    "  deploy: { runs-on: ubuntu-latest, if: \"github.ref == 'refs/heads/integration/nxsat-308'\" }\n",
+};
+
+for (const [shape, body] of Object.entries(REFUSED_SHAPES)) {
+  expectRed(
+    `${shape} is refused with a diagnostic, not read as nothing`,
+    'checkWorkflowRefGates',
+    { '.github/workflows/storybook-pages.yml': body },
+    null,
+    /is written in YAML this guardrail cannot read/,
+  );
+}
+
+falsePositiveControls += 1;
+expectGreen(
+  'a tag gate on a workflow with no branch filter at all is not read as a branch',
+  'checkWorkflowRefGates',
+  {
+    // `on: push` with no filters admits TAG pushes as well as branch pushes, so
+    // `github.ref_name == 'v1.0.0'` beside `github.ref_type == 'tag'` is a tag gate — and it was
+    // being judged as pinning a branch called `v1.0.0`. The tag question is asked of the FILTER,
+    // not the event: a `push` with a `branches:` filter does not admit tags.
+    '.github/workflows/release.yml': `name: Fixture
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  release:
+    if: github.ref_type == 'tag' && github.ref_name == 'v1.0.0'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo release
+`,
+  },
+);
+
+expectWarn(
+  'an ambiguous `ref_name` is named as ambiguous rather than guessed either way',
+  'checkWorkflowRefGates',
+  {
+    // The same workflow without the `ref_type` assertion. Guessing has a cost in both directions,
+    // and this review has paid both: read as a branch it rejects valid tag gates, read as a tag it
+    // lets a pinned ticket branch through in silence. So it says so and judges neither, pointing at
+    // `github.ref`, which cannot be mistaken.
+    '.github/workflows/release.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: github.ref_name == 'v1.0.0'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo release
+`,
+  },
+  null,
+  /cannot tell whether `v1\.0\.0` is a branch or a tag and has judged neither/,
 );
 
 /* ---------------- report ---------------- */
