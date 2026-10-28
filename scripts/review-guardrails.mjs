@@ -11097,16 +11097,17 @@ function checkWorkflowRefGates() {
      * filters at all — `on: push` admits tag pushes too, so a perfectly good
      * `github.ref_type == 'tag' && github.ref_name == 'v1.0.0'` was judged as pinning a branch
      * called `v1.0.0`. Reported on #494. A `push` WITH a `branches:` filter does not admit tags,
-     * which is why this asks about the filter rather than about the event. */
+     * which is why this asks about the filter rather than about the event.
+     *
+     * **`push` only.** The first version asked this of every branch-filtered event, and
+     * `pull_request` and `pull_request_target` admit no tag push at all — so an unfiltered
+     * `on: pull_request` with `if: github.ref_name == 'main'` became advisory and skipped the
+     * pull-request-only rule entirely, and a ticket `ref_name` gate on an unfiltered
+     * `pull_request_target` escaped the branch rules. A fail-open introduced by the fix for a
+     * false positive, reported on #494 in the round after it. */
     let tagsArePossible = false;
     for (const [event, filter] of events) {
-      if (filter.tags) tagsArePossible = true;
-      if (
-        BRANCH_FILTERED_EVENTS.includes(event) &&
-        !filter.unparsed &&
-        filter.branches === null &&
-        !filter.ignore
-      ) {
+      if (event === 'push' && (filter.tags || (!filter.unparsed && filter.branches === null && !filter.ignore))) {
         tagsArePossible = true;
       }
       if (!BRANCH_FILTERED_EVENTS.includes(event)) {
@@ -11279,22 +11280,36 @@ function checkWorkflowRefGates() {
         // ticket branch written that way skipped every rule below.
         if (context === 'ref' && !/^refs\/heads\//i.test(literal)) continue;
         if (context === 'ref_name' && /^\d+\/merge$/.test(literal)) continue;
+
+        /* Not individually load-bearing → nothing below applies. Moved ABOVE the tag reasoning: it
+         * used to sit after it, so a comparison under an `||` drew an ambiguity warning on its way
+         * to being skipped anyway, which is a warning about a gate the check had already decided
+         * not to judge. */
+        if (hasAlternative || comparisonIsNegated(gate.expression, index)) continue;
+
         /* `github.ref_name` is the short name of whatever ref triggered the run — a TAG name just
-         * as readily as a branch name. So once the workflow filters tags, a `ref_name` literal
-         * cannot be assumed to be a branch, and checking it against the branch allowlist rejected
-         * a valid `if: github.ref_name == 'v1.0.0'` on a workflow triggered by `tags: ['v*']`.
-         * Caught in review on #494. A `github.ref` literal stays unambiguous: `refs/heads/…` is a
-         * branch whatever else the workflow triggers on. */
-        /* `github.ref_name` where a tag could have started the run.
+         * as readily as a branch name. So where a tag could have started the workflow, a
+         * `ref_name` literal cannot be assumed to be a branch: checking it against the branch
+         * allowlist rejected a valid `github.ref_name == 'v1.0.0'`. A `github.ref` literal stays
+         * unambiguous, because `refs/heads/…` says which it is.
          *
-         * If the condition says it is a tag, it is a tag, and there is nothing here to judge. If it
-         * does NOT say, the literal is genuinely ambiguous — and the honest answer is to say so
-         * rather than pick. Guessing either way has a cost this review has already paid: treating
-         * it as a branch rejects valid tag gates, and treating it as a tag lets a pinned ticket
-         * branch through in silence. A warning names the ambiguity and points at `github.ref`,
-         * which cannot be mistaken either way. */
-        if (context === 'ref_name' && tagsArePossible) {
-          if (!/github\.ref_type\s*==\s*(['"])tag\1/.test(gate.expression)) {
+         * What the CONDITION says settles it where it says anything. `ref_type == 'tag'` means
+         * there is nothing here to judge; `ref_type == 'branch'` means the branch rules apply in
+         * full — that second one was missing, so `github.ref_type == 'branch' && github.ref_name
+         * == 'integration/nxsat-308'` came back advisory even though no tag can satisfy it.
+         * Reported on #494. Both assertions must be required rather than optional, which is why
+         * this sits after the `||` and negation test above.
+         *
+         * With neither assertion the literal is genuinely ambiguous, and the honest answer is to
+         * say so rather than pick. Guessing either way has a cost this review has already paid:
+         * as a branch it rejects valid tag gates, as a tag it lets a pinned ticket branch through
+         * in silence. The warning names the ambiguity and points at `github.ref`. */
+        const assertsRefType = (type) =>
+          [...gate.expression.matchAll(new RegExp(`github\\.ref_type\\s*==\\s*(['"])${type}\\1`, 'g'))]
+            .some((match) => !comparisonIsNegated(gate.expression, match.index));
+
+        if (context === 'ref_name' && tagsArePossible && !assertsRefType('branch')) {
+          if (!assertsRefType('tag')) {
             warn(
               `${workflow}:${gate.line} gates ${where} on \`github.ref_name == '${literal}'\`, ` +
                 'and a tag can start this workflow, so this guardrail cannot tell whether ' +
@@ -11306,8 +11321,6 @@ function checkWorkflowRefGates() {
           continue;
         }
         const branch = context === 'ref' ? literal.slice('refs/heads/'.length) : literal;
-
-        if (hasAlternative || comparisonIsNegated(gate.expression, index)) continue;
 
         /* A branch gate in a `pull_request`-only workflow. Never true: the event supplies
          * `refs/pull/<number>/merge`. */

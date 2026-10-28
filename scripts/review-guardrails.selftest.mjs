@@ -11046,6 +11046,102 @@ jobs:
   /cannot tell whether `v1\.0\.0` is a branch or a tag and has judged neither/,
 );
 
+/* --- eighth round: the tag inference, narrowed to where tags can actually arrive --- */
+
+expectRed(
+  'an unfiltered `pull_request` admits no tag, so the pull-request-only rule still fires',
+  'checkWorkflowRefGates',
+  {
+    // The tag inference was asked of every branch-filtered event, and `pull_request` admits no tag
+    // push at all — so an unfiltered `on: pull_request` became advisory and skipped the
+    // pull-request-only rule entirely. A fail-open introduced by the previous round's fix for a
+    // false positive, which is the fourth time in this review that closing one hole opened another.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on: pull_request
+
+jobs:
+  release:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /but `pull_request` is the only trigger/,
+);
+
+expectRed(
+  'an unfiltered `pull_request_target` admits no tag either',
+  'checkWorkflowRefGates',
+  {
+    // The same inference, the other event. `pull_request_target` runs with the base branch as
+    // `github.ref`, so the branch rules apply in full and a pinned ticket branch must not escape
+    // them by way of a tag question that cannot arise.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on: pull_request_target
+
+jobs:
+  release:
+    if: github.ref_name == 'integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+expectRed(
+  '`ref_type == \'branch\'` settles the ambiguity, so the branch rules apply in full',
+  'checkWorkflowRefGates',
+  {
+    // Only `ref_type == 'tag'` was honoured, so a condition that says in as many words that the
+    // ref is a BRANCH still came back advisory — even though no tag can satisfy it. The assertion
+    // has to be required rather than optional, which is why it is read after the `||` and negation
+    // test; there is a control below for the negated form, which must not count.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: github.ref_type == 'branch' && github.ref_name == 'integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+expectWarn(
+  'a NEGATED branch assertion does not settle anything',
+  'checkWorkflowRefGates',
+  {
+    // The control that keeps the fix above from reading any mention of `ref_type` as an assertion.
+    // `!(github.ref_type == 'branch')` says the opposite, so the literal is ambiguous again and
+    // the advisory path is the right one.
+    '.github/workflows/release.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: !(github.ref_type == 'branch') && github.ref_name == 'v1.0.0'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /cannot tell whether `v1\.0\.0` is a branch or a tag and has judged neither/,
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;
