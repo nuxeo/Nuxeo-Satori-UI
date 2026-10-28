@@ -1347,6 +1347,117 @@ describe('BrowseComponent — rendered document list', () => {
     expect(rowTitles()).toEqual([]);
   });
 
+  /**
+   * An off-page paste, renamed, then rescanned.
+   *
+   * `reconcilePendingPasteEntries()` only clears what the *page* lists, so a pasted document
+   * outside the current page stays pending indefinitely. Merging that original paste response back
+   * over a scan that has since seen the rename restored the old title and made the new one
+   * unfindable.
+   */
+  it('does not let a stale pending paste override the rescanned document', async () => {
+    const pasted = doc({ uid: 'c-50', title: 'Pasted Report' });
+    // The page never lists it — it is off-page — so it stays pending.
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: false }),
+    );
+
+    const component = await render();
+    TestBed.inject(BrowseContextService).notifyClipboardPasteComplete({
+      targetUid: folder.uid,
+      documents: [pasted],
+      action: 'copy',
+    });
+    await settle();
+
+    // A later scan observes it under its new name.
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({
+        folder,
+        entries: [
+          doc({ uid: 'c-1', title: 'Q1 Report' }),
+          doc({ uid: 'c-50', title: 'Renamed Pasted Report' }),
+        ],
+        truncated: false,
+      }),
+    );
+    TestBed.inject(BrowseContextService).requestContentRefresh();
+    await settle();
+
+    component.filterText.set('renamed pasted');
+    await settle();
+
+    // The new name is findable, and the stale pending copy has not come back.
+    expect(rowTitles()).toEqual(['Renamed Pasted Report']);
+    component.filterText.set('report');
+    await settle();
+    expect(rowTitles()).not.toContain('Pasted Report');
+  });
+
+  /**
+   * The merge cannot be trusted to hold a requested order.
+   *
+   * A title-ascending scan of Apple, Banana becomes Zebra, Banana once a newer page supplies
+   * Apple's renamed copy — in Apple's old position, under a sort indicator still claiming the
+   * column. Sorting the merged set in the browser is the wrong answer here (`filteredEntries`
+   * records why), so the server is asked to re-order it.
+   */
+  it('rescans when the merge breaks the order the server was asked for', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Apple' })],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Apple' }), doc({ uid: 'c-2', title: 'Banana' })],
+        truncated: false,
+      }),
+    );
+
+    const component = await render();
+    component.filterText.set('a');
+    component.onListSortChange({ key: 'title', direction: 'asc' });
+    await settle();
+    const callsBefore = browse.getAllBrowseFolderEntries.mock.calls.length;
+    expect(callsBefore).toBeGreaterThan(0);
+
+    // A page read brings Apple back renamed, which would sit in Apple's old position.
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Zebra' })],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-2', title: 'Banana' }), doc({ uid: 'c-1', title: 'Zebra' })],
+        truncated: false,
+      }),
+    );
+    component.loadContent();
+    await settle();
+
+    // Re-scanned, and the rows come back in the server's order rather than the merged one.
+    expect(browse.getAllBrowseFolderEntries.mock.calls.length).toBeGreaterThan(callsBefore);
+    expect(rowTitles()).toEqual(['Banana', 'Zebra']);
+  });
+
   it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),

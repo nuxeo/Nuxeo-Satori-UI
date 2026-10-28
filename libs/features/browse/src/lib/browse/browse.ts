@@ -691,16 +691,29 @@ export class BrowseComponent {
     // screen under that very name. Always preferring the page is equally wrong: a scan that
     // finished after a content refresh is the newer read.
     //
-    // Pending paste rows are optimistic and local, so they only ever fill a gap — never override.
+    // An optimistic paste row fills a gap and never overrides — for real this time.
+    //
+    // A pasted document off the current page stays pending indefinitely, because
+    // `reconcilePendingPasteEntries()` only clears what the *page* lists. Once a scan observes its
+    // renamed copy, merging the original paste response back over it restored the old title and
+    // made the new one unfindable. The optimistic copy is also appended to `entries()`, so it has
+    // to be excluded there too, not only in `pendingPasteList()`.
     const seenInScan = new Set(scanned.map((doc) => doc.uid));
+    const pendingUids = new Set(this.pendingPasteList().map((doc) => doc.uid));
     const pageIsFresher = this.entriesStamp > this.scanStamp;
     const fresher = new Map<string, NuxeoDocument>();
     for (const doc of this.pendingPasteList()) {
-      if (doc.uid) fresher.set(doc.uid, doc);
+      if (doc.uid && !seenInScan.has(doc.uid)) fresher.set(doc.uid, doc);
     }
     for (const doc of this.entries()) {
       if (!doc.uid) continue;
-      if (pageIsFresher || !seenInScan.has(doc.uid)) fresher.set(doc.uid, doc);
+      if (!seenInScan.has(doc.uid)) {
+        fresher.set(doc.uid, doc);
+        continue;
+      }
+      // In the scan already: only a genuinely newer *server* read may replace it, which an
+      // optimistic row is not however recently it was appended.
+      if (pageIsFresher && !pendingUids.has(doc.uid)) fresher.set(doc.uid, doc);
     }
 
     // Scan order preserved — it is the order the server was asked for — with each document
@@ -925,6 +938,42 @@ export class BrowseComponent {
     this.scannedEntries.set(set.entries);
     this.filterScanTruncated.set(set.truncated);
   }
+
+  /**
+   * True when the merge has changed the scan while a server sort is selected.
+   *
+   * Then the rows are no longer in the order the server was asked for: a title-ascending scan of
+   * Apple, Banana becomes Zebra, Banana once a newer page supplies Apple's renamed copy, and an
+   * appended row lands at the end regardless of where it sorts — while the sort indicator still
+   * claims the column.
+   */
+  private readonly mergeBrokeRequestedOrder = computed(() => {
+    if (!this.serverSortKey()) return false;
+    const scanned = this.scannedEntries();
+    const merged = this.scanForCurrentFolder();
+    return !!scanned && !!merged && merged !== scanned;
+  });
+
+  private lastReorderStamp = -1;
+
+  /**
+   * Re-scans when the merge has broken the requested order, so the server re-orders it.
+   *
+   * Sorting the merged set here instead was the other option, and it is the wrong one for this
+   * repository: `filteredEntries` carries the note that sorting a page in the browser once hid a
+   * sort the server had dropped. The server stays the authority on order.
+   *
+   * Guarded to once per page read. A folder whose listing is still eventually consistent can hand
+   * back the same stale copy, and without the guard that would re-scan forever.
+   */
+  private readonly rescanWhenMergeBreaksOrder = effect(() => {
+    if (!this.mergeBrokeRequestedOrder()) return;
+    untracked(() => {
+      if (this.lastReorderStamp === this.entriesStamp) return;
+      this.lastReorderStamp = this.entriesStamp;
+      this.invalidateFolderScan();
+    });
+  });
 
   /** Scan this folder again after a failure, from the message the failure puts on screen. */
   retryFolderScan(): void {
