@@ -1507,6 +1507,29 @@ describe('BrowseComponent — rendered document list', () => {
     expect(component.distinctTypes()).toEqual(['File', 'Note', 'Workspace']);
   });
 
+  /**
+   * One request, not ten. Every page the walk asks for is a full folder-contents call, and on a
+   * restricted repository root that falls back to a bootstrap which re-fetches the whole
+   * accessible list each time — so fifties turned one list into ten bootstraps.
+   */
+  it('asks for the whole folder in a single page', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: false }),
+    );
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+
+    const call = browse.getAllBrowseFolderEntries.mock.calls.at(-1);
+    expect(call).toBeDefined();
+    // maxDocuments and pageSize are the same, so one page covers the cap.
+    expect(call?.[2]).toBe(call?.[1]);
+  });
+
   it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),

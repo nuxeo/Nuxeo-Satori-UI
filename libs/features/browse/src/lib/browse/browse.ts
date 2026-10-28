@@ -1278,10 +1278,22 @@ export class BrowseComponent {
         // newer scan's results.
         switchMap((request) =>
           this.browseService
+            // One page the size of the cap, not ten pages of `PAGE_SIZE`.
+            //
+            // Each page the walk asks for is a full `getBrowseFolderContents()` call, and on the
+            // repository root for a restricted user that falls back to `getNavTreeBootstrap()`,
+            // which re-fetches the **whole** accessible list every time and then pages it in
+            // memory. Walking it in fifties therefore repeated that bootstrap up to ten times to
+            // assemble a list the first call already held.
+            //
+            // Measured against this Nuxeo: `@children` reports `maxPageSize: 1000` and answers a
+            // 66-child folder in one request at `pageSize: 500`, with `isNextPageAvailable:
+            // false`. The cap maths is page-size agnostic — the walk counts rows actually
+            // returned — so this only changes how many round trips it costs.
             .getAllBrowseFolderEntries(
               request.path,
               BROWSE_FILTER_SCAN_LIMIT,
-              PAGE_SIZE,
+              BROWSE_FILTER_SCAN_LIMIT,
               request.sort,
             )
             .pipe(
