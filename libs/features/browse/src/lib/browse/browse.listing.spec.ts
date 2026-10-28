@@ -1530,6 +1530,39 @@ describe('BrowseComponent — rendered document list', () => {
     expect(call?.[2]).toBe(call?.[1]);
   });
 
+  /**
+   * The Modified range's clear control.
+   *
+   * It had no unit test: the only verification was in the temporary Playwright sweep, which is
+   * gone. `main` then replaced the single `mat-date-range-input` with two `nxs-date-input`s, which
+   * expose no suffix slot, so the button moved out of the fields and into the toolbar — exactly
+   * the kind of move that silently drops a feature when nothing asserts it.
+   */
+  it('offers one control that clears both ends of the Modified range', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: 1 }),
+    );
+
+    const component = await render();
+    expect(query('.filter-clear-btn--standalone')).toBeNull();
+
+    component.filterModifiedFrom.set(new Date('2026-10-21T00:00:00Z'));
+    component.filterModifiedTo.set(new Date('2026-10-29T00:00:00Z'));
+    await settle();
+
+    const clear = query('.filter-clear-btn--standalone') as HTMLButtonElement | null;
+    expect(clear).not.toBeNull();
+    expect(clear?.getAttribute('aria-label')).toBe('Clear the modified date range');
+
+    clear!.click();
+    await settle();
+
+    expect(component.filterModifiedFrom()).toBeNull();
+    expect(component.filterModifiedTo()).toBeNull();
+    // And it withdraws once there is nothing to clear.
+    expect(query('.filter-clear-btn--standalone')).toBeNull();
+  });
+
   it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),

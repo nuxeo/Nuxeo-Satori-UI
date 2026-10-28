@@ -366,6 +366,15 @@ sat-breadcrumbs {
   padding: 0 8px;
 }
 
+// The Modified clear, which now sits in the toolbar rather than inside a form field: `main`
+// replaced the range input with two `nxs-date-input`s and that component has no suffix slot. So it
+// aligns itself against the fields instead of borrowing their padding.
+.filter-clear-btn--standalone {
+  align-self: center;
+  margin-inline-start: -4px;
+  margin-inline-end: 0;
+}
+
 .toolbar-spacer {
   flex: 1;
 }

@@ -1,4 +1,43 @@
 import {
+  NxsDateInputComponent,
+  NXS_PERMISSIONS_PANEL_ID,
+  NXS_PRIMITIVE_IDS,
+  NxsActionMenuComponent,
+  NxsBreadcrumbsComponent,
+  NxsCardComponent,
+  NxsColumnPickerComponent,
+  NxsDocumentListComponent,
+  NxsDomainHintComponent,
+  NxsDriveDialogComponent,
+  NxsFolderPickerDialogComponent,
+  NxsRenameDialogComponent,
+  NxsErrorStateComponent,
+  NxsFolderHeaderComponent,
+  NxsPagerComponent,
+  NxsPermissionsPanelComponent,
+  NxsSpinnerComponent,
+  NxsThumbnailComponent,
+  NxsUploadQueue,
+  NxsUploadQueueComponent,
+  nxsErrorStatus,
+  provideNxsThumbnailCache,
+  type NxsBreadcrumbItem,
+  type NxsDocumentListColumn,
+  type NxsDocumentListRowAction,
+  type NxsDocumentListSort,
+  type NxsDriveDialogData,
+  type NxsErrorStatus,
+  type NxsFolderPickerDialogData,
+  type NxsFolderPickerDialogResult,
+  type NxsRenameDialogData,
+  type NxsMenuAction,
+  type NxsPickableColumn,
+  NxsToastService,
+  nxsVisibleText,
+  provideNxsToast,
+} from '@nuxeo/satori-platform/components';
+
+import {
   Component,
   DestroyRef,
   LOCALE_ID,
@@ -36,7 +75,6 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 
@@ -146,43 +184,6 @@ import {
 } from '../edit-metadata-dialog/edit-metadata-dialog';
 import { CreateImportDialogComponent } from '../create-import/create-import-dialog.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import {
-  NXS_PERMISSIONS_PANEL_ID,
-  NXS_PRIMITIVE_IDS,
-  NxsActionMenuComponent,
-  NxsBreadcrumbsComponent,
-  NxsCardComponent,
-  NxsColumnPickerComponent,
-  NxsDocumentListComponent,
-  NxsDomainHintComponent,
-  NxsDriveDialogComponent,
-  NxsFolderPickerDialogComponent,
-  NxsRenameDialogComponent,
-  NxsErrorStateComponent,
-  NxsFolderHeaderComponent,
-  NxsPagerComponent,
-  NxsPermissionsPanelComponent,
-  NxsSpinnerComponent,
-  NxsThumbnailComponent,
-  NxsUploadQueue,
-  NxsUploadQueueComponent,
-  nxsErrorStatus,
-  provideNxsThumbnailCache,
-  type NxsBreadcrumbItem,
-  type NxsDocumentListColumn,
-  type NxsDocumentListRowAction,
-  type NxsDocumentListSort,
-  type NxsDriveDialogData,
-  type NxsErrorStatus,
-  type NxsFolderPickerDialogData,
-  type NxsFolderPickerDialogResult,
-  type NxsRenameDialogData,
-  type NxsMenuAction,
-  type NxsPickableColumn,
-  NxsToastService,
-  nxsVisibleText,
-  provideNxsToast,
-} from '@nuxeo/satori-platform/components';
 
 /**
  * The packaged column set as descriptors, for an injector where Layer 1
@@ -236,6 +237,7 @@ const PAGE_SIZE = 50;
     provideNxsThumbnailCache(),
   ],
   imports: [
+    NxsDateInputComponent,
     NxsActionMenuComponent,
     NxsBreadcrumbsComponent,
     NxsCardComponent,
@@ -265,7 +267,6 @@ const PAGE_SIZE = 50;
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatDatepickerModule,
     MatChipsModule,
     MatAutocompleteModule,
     SatAvatarModule,

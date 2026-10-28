@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnTool } from '../../scripts/beta-harness/package-command.mjs';
+
 /**
  * Record one Beta screencast.
  *
@@ -23,7 +25,7 @@
  *   node tools/video/record.mjs all
  */
 
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -53,7 +55,7 @@ function fail(message) {
 
 /** Serve a directory statically, and resolve once it actually answers. */
 export async function serve(dir, port) {
-  const child = spawn('npx', ['--yes', 'http-server', dir, '-p', String(port), '-s', '-c-1'], {
+  const child = spawnTool('npx', ['--yes', 'http-server', dir, '-p', String(port), '-s', '-c-1'], {
     cwd: ROOT,
     stdio: 'ignore',
     detached: false,
@@ -85,7 +87,8 @@ export async function playDeck(page, { from = 0, to = Infinity } = {}) {
   for (let i = from; i <= last; i += 1) {
     await page.evaluate((n) => window.deck.show(n), i);
     const words = await page.evaluate(
-      () => document.querySelector('.slide[data-active="true"]')?.innerText.split(/\s+/).length ?? 0,
+      () =>
+        document.querySelector('.slide[data-active="true"]')?.innerText.split(/\s+/).length ?? 0,
     );
     // ~3.6 words per second, 2.6s floor, 11s ceiling.
     const dwell = Math.min(11000, Math.max(2600, Math.round((words / 3.6) * 1000)));
@@ -131,7 +134,9 @@ async function record(sceneName) {
   try {
     ({ chromium } = await import('@playwright/test'));
   } catch {
-    fail('Playwright is not installed.\n\n  npm install --no-save @playwright/test\n  npx playwright install chromium');
+    fail(
+      'Playwright is not installed.\n\n  npm install --no-save @playwright/test\n  npx playwright install chromium',
+    );
   }
 
   mkdirSync(OUT_DIR, { recursive: true });

@@ -145,40 +145,45 @@
                   </button>
                 }
               </mat-form-field>
-              <mat-form-field
+              <nxs-date-input
                 class="toolbar-filter-field toolbar-filter-date"
-                appearance="outline"
-                subscriptSizing="dynamic"
-              >
-                <mat-label>{{ 'browse.browse.modified' | translate }}</mat-label>
-                <mat-date-range-input [rangePicker]="modifiedPicker">
-                  <input
-                    matStartDate
-                    [ngModel]="filterModifiedFrom()"
-                    (ngModelChange)="filterModifiedFrom.set($event)"
-                    [placeholder]="'browse.browse.from' | translate"
-                  />
-                  <input
-                    matEndDate
-                    [ngModel]="filterModifiedTo()"
-                    (ngModelChange)="filterModifiedTo.set($event)"
-                    [placeholder]="'browse.browse.to' | translate"
-                  />
-                </mat-date-range-input>
-                @if (filterModifiedFrom() || filterModifiedTo()) {
-                  <button
-                    matSuffix
-                    mat-icon-button
-                    [attr.aria-label]="'browse.browse.clear-modified' | translate"
-                    (click)="clearModifiedRange()"
-                    class="filter-clear-btn"
-                  >
-                    <mat-icon svgIcon="x_large" />
-                  </button>
-                }
-                <mat-datepicker-toggle matIconSuffix [for]="modifiedPicker" />
-                <mat-date-range-picker #modifiedPicker />
-              </mat-form-field>
+                [label]="
+                  ('browse.browse.modified' | translate) +
+                  ' — ' +
+                  ('browse.browse.from' | translate)
+                "
+                [max]="filterModifiedTo()"
+                [ngModel]="filterModifiedFrom()"
+                (ngModelChange)="filterModifiedFrom.set($event)"
+              />
+              <nxs-date-input
+                class="toolbar-filter-field toolbar-filter-date"
+                [label]="
+                  ('browse.browse.modified' | translate) + ' — ' + ('browse.browse.to' | translate)
+                "
+                [min]="filterModifiedFrom()"
+                [ngModel]="filterModifiedTo()"
+                (ngModelChange)="filterModifiedTo.set($event)"
+              />
+              <!--
+                One clear control for the pair, outside both fields.
+
+                `main` replaced the single `mat-date-range-input` with two `nxs-date-input`s, and
+                that component exposes no suffix slot, so the clear cannot sit inside a field the
+                way it did before. One button for the whole range also reads better than two, since
+                the From/To inputs are a single filter.
+              -->
+              @if (filterModifiedFrom() || filterModifiedTo()) {
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="filter-clear-btn filter-clear-btn--standalone"
+                  [attr.aria-label]="'browse.browse.clear-modified' | translate"
+                  (click)="clearModifiedRange()"
+                >
+                  <mat-icon svgIcon="x_large" />
+                </button>
+              }
               <mat-form-field
                 class="toolbar-filter-field"
                 appearance="outline"
@@ -565,28 +570,18 @@
                   />
                   <mat-icon matPrefix svgIcon="user" />
                 </mat-form-field>
-                <mat-form-field appearance="outline" class="filter-field" subscriptSizing="dynamic">
-                  <mat-label>{{ 'browse.browse.from' | translate }}</mat-label>
-                  <input
-                    matInput
-                    [matDatepicker]="histFrom"
-                    [ngModel]="filterDateFrom()"
-                    (ngModelChange)="filterDateFrom.set($event)"
-                  />
-                  <mat-datepicker-toggle matIconSuffix [for]="histFrom" />
-                  <mat-datepicker #histFrom />
-                </mat-form-field>
-                <mat-form-field appearance="outline" class="filter-field" subscriptSizing="dynamic">
-                  <mat-label>{{ 'browse.browse.to' | translate }}</mat-label>
-                  <input
-                    matInput
-                    [matDatepicker]="histTo"
-                    [ngModel]="filterDateTo()"
-                    (ngModelChange)="filterDateTo.set($event)"
-                  />
-                  <mat-datepicker-toggle matIconSuffix [for]="histTo" />
-                  <mat-datepicker #histTo />
-                </mat-form-field>
+                <nxs-date-input
+                  class="filter-field"
+                  [label]="'browse.browse.from' | translate"
+                  [ngModel]="filterDateFrom()"
+                  (ngModelChange)="filterDateFrom.set($event)"
+                />
+                <nxs-date-input
+                  class="filter-field"
+                  [label]="'browse.browse.to' | translate"
+                  [ngModel]="filterDateTo()"
+                  (ngModelChange)="filterDateTo.set($event)"
+                />
                 <mat-form-field appearance="outline" class="filter-field" subscriptSizing="dynamic">
                   <mat-label>{{ 'browse.browse.action' | translate }}</mat-label>
                   <mat-select [ngModel]="filterAction()" (ngModelChange)="filterAction.set($event)">
