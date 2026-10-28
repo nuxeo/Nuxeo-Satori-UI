@@ -925,6 +925,176 @@ describe('BrowseComponent — rendered document list', () => {
     expect(rowTitles()).toEqual(['Project Reports']);
   });
 
+  it('scans on demand for the type dropdown, before any filter is applied', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'A', type: 'File' })], totalSize: -1 }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({
+        folder,
+        entries: [
+          doc({ uid: 'c-1', title: 'A', type: 'File' }),
+          doc({ uid: 'c-2', title: 'B', type: 'Workspace' }),
+        ],
+        truncated: false,
+      }),
+    );
+
+    const component = await render();
+    // The page alone offers one type; the dropdown opening is what widens it.
+    expect(component.distinctTypes()).toEqual(['File']);
+
+    component.ensureFolderScan();
+    await settle();
+
+    expect(component.distinctTypes()).toEqual(['File', 'Workspace']);
+    // Rows are untouched: no filter is active, so the scan is not the row source.
+    expect(rowTitles()).toEqual(['A']);
+  });
+
+  it('does not re-scan a folder it has already scanned in the same order', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'A' })], totalSize: -1 }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'A' })], truncated: false }),
+    );
+
+    const component = await render();
+    component.ensureFolderScan();
+    await settle();
+    const calls = browse.getAllBrowseFolderEntries.mock.calls.length;
+
+    component.ensureFolderScan();
+    component.filterText.set('a');
+    await settle();
+
+    // Opening the dropdown again, then filtering, reuses the scan already in hand.
+    expect(browse.getAllBrowseFolderEntries.mock.calls.length).toBe(calls);
+  });
+
+  /**
+   * A scan that fails must leave the filters on the loaded page: narrower than asked for, but
+   * never wrong about what it did show, and never a blank table.
+   */
+  it('falls back to the loaded page when the folder scan fails', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Q1 Report' }), doc({ uid: 'c-2', title: 'Invoice' })],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(throwError(() => new Error('scan failed')));
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+
+    expect(rowTitles()).toEqual(['Q1 Report']);
+    expect(component.filteredAcrossFolder()).toBe(false);
+    expect(component.filterScanning()).toBe(false);
+    // The server pager stays in charge, because the listing is still one page.
+    expect(component.listHasNextPage()).toBe(true);
+  });
+
+  /**
+   * Out-of-order scan completion.
+   *
+   * A content refresh starts a second scan for the same path and sort while the first is still in
+   * flight, and those two keys cannot tell the two apart — only the generation can. Without that
+   * check a late pre-refresh result overwrote the fresh rows.
+   */
+  it('ignores a scan result that a content refresh has already superseded', async () => {
+    const page = [doc({ uid: 'c-1', title: 'Q1 Report' })];
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: page, totalSize: -1, hasNextPage: true }),
+    );
+
+    type ScanSet = { folder: typeof folder; entries: NuxeoDocument[]; truncated: boolean };
+    const pending: Subject<ScanSet>[] = [];
+    browse.getAllBrowseFolderEntries.mockImplementation(() => {
+      const subject = new Subject<ScanSet>();
+      pending.push(subject);
+      return subject.asObservable();
+    });
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+    expect(pending.length).toBe(1);
+
+    // A rename lands: generation bumps and a second scan starts for the same path and sort.
+    TestBed.inject(BrowseContextService).requestContentRefresh();
+    await settle();
+    expect(pending.length).toBe(2);
+
+    // The *newer* scan answers first, with the renamed document.
+    pending[1].next({
+      folder,
+      entries: [doc({ uid: 'c-1', title: 'Q1 Report (renamed)' })],
+      truncated: false,
+    });
+    await settle();
+    expect(rowTitles()).toEqual(['Q1 Report (renamed)']);
+
+    // The stale one answers afterwards and must be discarded.
+    pending[0].next({
+      folder,
+      entries: [
+        doc({ uid: 'c-1', title: 'Q1 Report' }),
+        doc({ uid: 'c-9', title: 'Stale Report' }),
+      ],
+      truncated: true,
+    });
+    await settle();
+
+    expect(rowTitles()).toEqual(['Q1 Report (renamed)']);
+    expect(component.filterScanTruncated()).toBe(false);
+  });
+
+  /** The mirror case: a stale scan's *error* must not invalidate the newer scan. */
+  it('ignores a scan error that a content refresh has already superseded', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+
+    type ScanSet = { folder: typeof folder; entries: NuxeoDocument[]; truncated: boolean };
+    const pending: Subject<ScanSet>[] = [];
+    browse.getAllBrowseFolderEntries.mockImplementation(() => {
+      const subject = new Subject<ScanSet>();
+      pending.push(subject);
+      return subject.asObservable();
+    });
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+    TestBed.inject(BrowseContextService).requestContentRefresh();
+    await settle();
+
+    pending[1].next({
+      folder,
+      entries: [doc({ uid: 'c-1', title: 'Q1 Report' }), doc({ uid: 'c-2', title: 'Q2 Report' })],
+      truncated: false,
+    });
+    await settle();
+    expect(component.filteredAcrossFolder()).toBe(true);
+
+    pending[0].error(new Error('stale scan failed'));
+    await settle();
+
+    // Still covering the folder: the newer scan's result stands.
+    expect(component.filteredAcrossFolder()).toBe(true);
+    expect(rowTitles()).toEqual(['Q1 Report', 'Q2 Report']);
+  });
+
   it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),

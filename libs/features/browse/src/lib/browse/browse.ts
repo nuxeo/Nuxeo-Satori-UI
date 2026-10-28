@@ -803,12 +803,23 @@ export class BrowseComponent {
     this.scannedEntries.set(null);
     this.filterScanTruncated.set(false);
     this.filterScanning.set(true);
+    /**
+     * The generation too, not just path and sort.
+     *
+     * A content refresh can start a second scan for the *same* path and sort while the first is
+     * still in flight, and those two keys cannot tell them apart. A late pre-refresh result would
+     * then overwrite the fresh rows, and a late pre-refresh error would null out the newer scan.
+     */
+    const superseded = () =>
+      this.scannedPath() !== path ||
+      this.scannedSortKey() !== sortKey ||
+      this.scannedGeneration !== generation;
     this.browseService
       .getAllBrowseFolderEntries(path, BROWSE_FILTER_SCAN_LIMIT, PAGE_SIZE, this.serverSort())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (set) => {
-          if (this.scannedPath() !== path || this.scannedSortKey() !== sortKey) return;
+          if (superseded()) return;
           this.scannedEntries.set(set.entries);
           this.filterScanTruncated.set(set.truncated);
           this.filterScanning.set(false);
@@ -816,7 +827,7 @@ export class BrowseComponent {
         // A failed scan leaves `scannedEntries` null, so the filters fall back to the loaded page
         // — narrower than asked for, but never wrong about what it did show.
         error: () => {
-          if (this.scannedPath() !== path || this.scannedSortKey() !== sortKey) return;
+          if (superseded()) return;
           this.scannedPath.set(null);
           this.scannedSortKey.set(null);
           this.filterScanning.set(false);
@@ -1977,7 +1988,7 @@ export class BrowseComponent {
       return;
     }
     this.currentDoc.set(updatedDoc);
-    this.loadContent();
+    this.reloadAfterContentChange();
   }
 
   isCollectionEntry(doc: NuxeoDocument): boolean {
@@ -2016,7 +2027,7 @@ export class BrowseComponent {
             .subscribe((updatedDoc) => {
               if (updatedDoc) {
                 this.browseContext.requestTreeRefresh();
-                this.loadContent();
+                this.reloadAfterContentChange();
                 this.toast.show(this.translate.instant('browse.message.collection-updated'));
               }
             });
@@ -2061,7 +2072,7 @@ export class BrowseComponent {
                   next: () => {
                     this.selectionService.clear();
                     this.browseContext.requestTreeRefresh();
-                    this.loadContent();
+                    this.reloadAfterContentChange();
                     this.toast.show(
                       this.translate.instant('browse.message.collection-moved-to-trash'),
                     );
@@ -2321,7 +2332,7 @@ export class BrowseComponent {
             );
           }
           this.browseContext.requestTreeRefresh();
-          this.loadContent();
+          this.reloadAfterContentChange();
         },
         error: () => this.toast.error(this.translate.instant('browse.message.failed-to-delete')),
       });
