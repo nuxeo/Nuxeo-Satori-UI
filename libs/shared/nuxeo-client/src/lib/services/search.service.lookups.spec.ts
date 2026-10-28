@@ -209,9 +209,20 @@ describe('SearchService — lookups', () => {
       });
       const [hit, rest] = suggestion.displayLabelHighlights ?? [];
       expect(hit).toEqual({ text: 'Board', matched: true });
-      // The text after a match loses its leading space to the HTML parser; not asserted here.
-      expect(rest?.matched).toBe(false);
-      expect(rest?.text.trim()).toBe('minutes');
+      expect(rest).toEqual({ text: ' minutes', matched: false });
+    });
+
+    it('keeps the space between a match and the text that follows it', async () => {
+      const [suggestion] = await suggest([
+        {
+          uid: 'd',
+          title: 'D',
+          highlights: [{ field: 'dc:title', segments: ['<em>Board</em> and <em>minutes</em>'] }],
+        },
+      ]);
+      expect(suggestion.displayLabelHighlights?.map((part) => part.text).join('')).toBe(
+        'Board and minutes',
+      );
     });
 
     it('finds suggestions nested in containers, and caps them at the page size', async () => {
