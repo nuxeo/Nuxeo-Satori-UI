@@ -287,11 +287,17 @@ describe('BrowseComponent — rendered document list', () => {
   }
 
   /**
-   * Wait until the component issues another folder request, whatever timer it is on.
+   * Wait until the component issues another folder request, whatever timer it is on, and **fail**
+   * if it never does.
    *
    * Used for both of the component's own timers — the filter debounce and the paste's deferred
-   * reload — so neither test has to name a duration. The deadline only exists so a genuine failure
-   * reports as an assertion instead of hanging.
+   * reload — so neither test has to name a duration.
+   *
+   * The assertion is the load-bearing half, not the loop. A waiter that merely stopped at its
+   * deadline turned "the reload never happened" into a pass for every test whose expectation is
+   * that something did *not* change — `keeps a pasted row through the paste's own deferred reload`
+   * asserts the row is still there, which is trivially true if no reload ever ran. That is the
+   * same vacuity as a fixed sleep, just better disguised, so the waiter states what it waited for.
    */
   async function waitForFolderRequest(deadlineMs = 4000): Promise<void> {
     const before = browse.getBrowseFolderContents.mock.calls.length;
@@ -299,6 +305,7 @@ describe('BrowseComponent — rendered document list', () => {
     while (browse.getBrowseFolderContents.mock.calls.length === before && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    expect(browse.getBrowseFolderContents.mock.calls.length).toBeGreaterThan(before);
     await settle();
   }
 
