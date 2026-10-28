@@ -8,7 +8,7 @@
 
 ## Verdict
 
-**0 critical, 0 high.** The "Done when" threshold is met. Three medium-rated items and several low and informational items are recorded for follow-up. None blocks the library from wider use, but the first two are real behaviour defects with data-integrity consequences and should be ticketed.
+**0 critical, 0 high.** The "Done when" threshold is met. Three medium-rated items and several low and informational items are recorded for follow-up. The first two are real behaviour defects with data-integrity consequences and should be ticketed. Wider-use sign-off is pending security-owner confirmation of M3's severity (see M3); the static finding counts above do not depend on that confirmation.
 
 ## Findings
 
