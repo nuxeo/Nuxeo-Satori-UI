@@ -1,26 +1,32 @@
-# Satori Storybook on a private Pages site — draft for review
+# Both themes at one URL, on a private Pages site — draft for review
 
 A proposal, not a live configuration. Nothing in this directory runs: the workflow is at
 `workflows/pages.yml`, **not** under `.github/workflows/`, precisely so this repository does not
 execute it. The files are laid out ready to copy into a new private repository once the shape is
 agreed.
 
-## Why a second repository at all
+## The requirement, and what is possible
 
-`nuxeo/agentic-ui-poc` is public (`gh repo view` → `"visibility":"PUBLIC"`). A repository gets one
-Pages site, so anything served under `nuxeo.github.io/agentic-ui-poc/…` — any path, including a
-tucked-away one — ships inside that public site's artifact and is readable by anyone. GitHub Pages
-has no per-path access control.
+Wanted: `baseUrl/satori` and `baseUrl/material` on one host, deployed manually from Actions rather
+than on every push.
 
-The two Satori Storybooks bundle compiled `@hylandsoftware` modules, `--sat-*` tokens and Satori's
-fonts. We may consume those; we may not redistribute them. That is what
-`scripts/storybook-publication-gate.mjs` enforces in the public repository, and this proposal does
-not touch it — the public site keeps serving the Material Storybook only, and the gate keeps
-refusing everything else.
+Two paths in one Pages site is **entirely possible** — a Pages artifact is just a directory tree,
+so two Storybooks in two sub-directories is a `cp` and nothing more. Manual-only is possible too:
+`workflow_dispatch` with no `push` and no `schedule`. Neither is the hard part.
 
-So: a separate **private** repository with its own Pages site, restricted by GitHub's Pages access
-control to people who can read the repository. The `nuxeo` org is on the `enterprise` plan, so
-that feature is available.
+The only real question is which `baseUrl`. It cannot be `nuxeo.github.io/agentic-ui-poc/`, and the
+reason is not technical: a repository gets exactly one Pages site, so `…/satori` would ship inside
+**that public repository's** artifact and be readable by anyone. GitHub Pages has no per-path
+access control — a sub-path of a public site is as public as its root. The Satori build bundles
+compiled `@hylandsoftware` modules, `--sat-*` tokens and Satori's fonts, which we may consume but
+not redistribute; `scripts/storybook-publication-gate.mjs` exists in the public repository to stop
+exactly that, and this proposal leaves it alone.
+
+So the `baseUrl` is a **private** repository's Pages site, access-controlled to people who can read
+the repository. The `nuxeo` org is on the `enterprise` plan, so that feature is available. Both
+requested paths then work exactly as asked, on one host, with one manual dispatch — and the
+comparison is better than it would have been on the public site, which can only ever serve one of
+the two themes.
 
 ## The direction of travel
 
@@ -48,24 +54,49 @@ Suggested name `nuxeo/agentic-ui-satori-storybook`. Visibility **private**.
 ## The site it produces
 
 ```
-/                      landing page — internal-only notice, source ref, commit, build time
-/satori-theme/         satori-components:build-storybook:satori
-/satori-components/    satori-components-satori:build-storybook:ci
+/             landing page — internal-only notice, source ref, commit, build time
+/satori/      satori-components:build-storybook:satori
+/material/    satori-components:build-storybook:ci
 ```
 
-Both Storybooks sit at sub-paths. That is already proven to work: the public site serves a
-Storybook from the `/agentic-ui-poc/` sub-path today, so Storybook's relative asset paths handle
-nesting.
+The same library and the same stories, built twice under the two themes, so a component can be
+compared by editing one word in the address bar.
+
+Sub-paths are already proven to work: the public site serves a Storybook from the
+`/agentic-ui-poc/` sub-path today, so Storybook's relative asset paths handle nesting.
+
+`satori-components-satori` — the components that exist only under Satori — is a third build that
+also cannot be published publicly. It is deliberately **not** in this draft, which does the two
+paths that were asked for. Adding it is one entry in the `STORYBOOKS` table in
+`scripts/assemble-site.mjs` plus a build step, if it turns out to be wanted.
 
 The landing page is deliberately plain — system fonts, no external stylesheet, no webfont. The
-Satori fonts belong to the builds it frames, not to the frame.
+Satori fonts belong to the build it frames, not to the frame.
+
+### Manual only
+
+`workflow_dispatch` is the sole trigger: no `push`, no `schedule`. This repository holds no source,
+so a push to it would mean nothing, and a site carrying licensed assets is better published when
+somebody decides to than on a timer nobody watches. The dispatch takes a `ref` of
+`nuxeo/agentic-ui-poc` (default `main`), so every deployment is attributable to a person and a
+commit, and the landing page records which.
+
+### Why `/material` is built with the packages taken away
+
+`/material` would be a poor comparison if it were built differently from the real thing. So the
+workflow builds Satori first, while GitHub Packages is in `node_modules`, then **moves those scopes
+out** and builds Material — which is exactly what the public workflow does. Built with the packages
+still present, a stray Satori import would compile into `/material` and the comparison would be
+against something the public site never serves. This way `/material` is the real build, and a Satori
+import fails it here just as it would there.
 
 ## The guard, and why it is the load-bearing part
 
 Everything here rests on one fact: that this repository and its Pages site are private. That fact
 is mutable, and the failure mode is silent and total — somebody flips the repository to public, or
-Pages visibility resets, and the next scheduled run quietly publishes licensed assets to the open
-internet. Nothing else in the pipeline would notice.
+Pages visibility resets, and the next dispatch quietly publishes licensed assets to the open
+internet. Nothing else in the pipeline would notice, and the person who dispatched it would have no
+reason to suspect anything had changed.
 
 `scripts/assert-private.mjs` is the mirror image of the public repository's publication gate. That
 one asks "does this build carry Satori?" and fails when it does. This one asks "is the destination
@@ -142,8 +173,9 @@ These need repository-admin rights, so they are yours to run, not mine:
   complaint, the fix is to read visibility from `GET /repos/{owner}/{repo}` alone — `private` is
   the field that actually gates access — and drop the `/pages` assertion to a warning. The guard
   already distinguishes those two failures by message.
-- **Build time and cost.** Two Storybook builds plus Compodoc, no Nx cache, on a weekly schedule.
-  Worth watching once and then deciding whether weekly is right.
+- **Build time.** Two Storybook builds of the same library plus Compodoc, with no Nx cache. Only
+  ever on a manual dispatch, so it costs nothing when nobody is asking for it — but it does mean a
+  wait between pressing the button and seeing the site.
 
 ## One thing worth knowing separately
 

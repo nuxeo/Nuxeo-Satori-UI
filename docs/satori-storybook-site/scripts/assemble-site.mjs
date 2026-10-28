@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 /**
- * Lays the two Satori Storybooks out under one site and writes the landing page.
+ * Lays both themes of the component library out under one site and writes the landing page.
+ *
+ * `/satori` and `/material` are the same stories from the same library, built twice under the two
+ * themes, so one host serves both and you can compare them by editing the path. That is the whole
+ * point of the site: the public Storybook can only ever show one of the two.
  *
  * A shell `cp -R` with interpolated paths is how a blank site gets published: a renamed output
  * directory copies nothing, the deploy succeeds, and the site is an empty shell nobody notices
@@ -19,25 +23,29 @@ import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node
 import { join, resolve } from 'node:path';
 
 /**
- * The two builds that may not go to the public site. Both carry Satori — the first is the shared
- * component library re-themed, the second the Satori-only components.
+ * The two halves of the site, in the order the workflow builds them.
+ *
+ * Only `/satori` carries Satori. `/material` is byte-for-byte the build that goes to the public
+ * site — the workflow builds it with GitHub Packages moved out of `node_modules`, exactly as the
+ * public workflow does, so it is the real comparison and not a lookalike built against packages
+ * the public build never sees.
  */
 const STORYBOOKS = [
   {
-    path: 'satori-theme',
+    path: 'satori',
     dist: 'dist/storybook/satori-components-satori-theme',
     target: 'satori-components:build-storybook:satori',
-    title: 'Satori theme',
+    title: 'Satori',
     blurb:
-      'The shared <code>nxs-</code> component library rendered under Satori’s theme — the same stories as the public Storybook, themed.',
+      'The <code>nxs-</code> component library under Satori’s theme. Cannot be published publicly: it carries Satori’s tokens and fonts.',
   },
   {
-    path: 'satori-components',
-    dist: 'dist/storybook/satori-components-satori',
-    target: 'satori-components-satori:build-storybook:ci',
-    title: 'Satori components',
+    path: 'material',
+    dist: 'dist/storybook/satori-components',
+    target: 'satori-components:build-storybook:ci',
+    title: 'Material',
     blurb:
-      'The components that exist only under Satori, built on <code>@hylandsoftware/satori-ui</code>.',
+      'The same library and the same stories under Angular Material — identical to what the public Storybook serves.',
   },
 ];
 

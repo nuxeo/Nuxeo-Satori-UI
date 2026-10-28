@@ -9,8 +9,9 @@
  * Satori's fonts, which we may consume but not redistribute.
  *
  * The failure it exists for is silent and total: somebody flips this repository to public, or
- * resets Pages visibility, and the next scheduled run quietly publishes licensed third-party
- * assets to the open internet. Nothing else in the pipeline would notice.
+ * resets Pages visibility, and the next dispatch quietly publishes licensed third-party assets to
+ * the open internet. Nothing else in the pipeline would notice, and whoever pressed the button
+ * would have no reason to suspect anything had changed.
  *
  * Fails closed. Anything it cannot establish — a non-200, an absent field, no token, Pages not
  * configured — is a failure, never a pass. "Nothing was checked" is not "nothing was wrong".

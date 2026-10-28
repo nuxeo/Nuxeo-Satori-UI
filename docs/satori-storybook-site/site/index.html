@@ -5,7 +5,7 @@
   must not spell one out, or it would trip that check itself.
 
   Self-contained on purpose: system fonts, no external stylesheet, no webfont. The Satori fonts in
-  this site belong to the Storybook builds under /satori-theme/ and /satori-components/; the page
+  this site belong to the Storybook build under /satori/; the page
   that frames them does not need them, and keeping it plain means the shell renders even when a
   build is mid-deploy.
 -->
@@ -142,16 +142,18 @@
   </head>
   <body>
     <main>
-      <h1>Satori Storybook</h1>
+      <h1>Component library — both themes</h1>
       <p class="lede">
-        The two Storybook builds that cannot go on the public site, published here instead.
+        The same stories from the same library, built twice. Swap <code>/satori</code> for
+        <code>/material</code> in the address bar to compare any component side by side.
       </p>
 
       <div class="notice">
         <strong>Internal to Hyland — do not redistribute</strong>
-        These builds bundle licensed Satori assets: compiled <code>@hylandsoftware</code> modules,
-        <code>--sat-*</code> tokens and Satori’s fonts. We may consume them; we may not pass them
-        on. Do not copy this site, re-host it, or share its contents outside Hyland.
+        <code>/satori</code> bundles licensed Satori assets: <code>--sat-*</code> tokens, Satori’s
+        fonts and compiled <code>@hylandsoftware</code> modules. We may consume them; we may not
+        pass them on. That is why this site is access-controlled and the public one carries only
+        <code>/material</code>. Do not copy this site, re-host it, or share it outside Hyland.
       </div>
 
       <div class="cards">__CARDS__</div>

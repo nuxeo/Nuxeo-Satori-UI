@@ -14,6 +14,10 @@ name: Satori Storybook on private Pages
 # `scripts/assert-private.mjs` asserts it against the GitHub API in both jobs and fails closed, so
 # the day somebody flips this repository to public the deployment stops instead of redistributing.
 
+# Manual only, by choice. There is no `push` trigger and no `schedule`: this repository holds no
+# source, so a push here would mean nothing, and a site carrying licensed assets should go out when
+# somebody decides to publish it, not on a timer nobody is watching. Every deployment is therefore
+# attributable to a person and a ref.
 on:
   workflow_dispatch:
     inputs:
@@ -21,9 +25,6 @@ on:
         description: Ref of nuxeo/agentic-ui-poc to build
         required: false
         default: main
-  # Weekly, so the site does not drift silently behind the library.
-  schedule:
-    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
@@ -51,8 +52,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # The product source, public, so no token. Pinned to the dispatched ref — a scheduled run has
-      # no inputs, hence the fallback.
+      # The product source, public, so no token. Pinned to the dispatched ref; the fallback covers
+      # a dispatch whose optional input was cleared rather than left at its default.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ env.SOURCE_REPOSITORY }}
@@ -82,16 +83,30 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
           SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
 
-      # Unlike the public workflow, GitHub Packages stays in node_modules: these builds are
-      # supposed to carry Satori. `satori-components:build-storybook` depends on `compodoc`, which
-      # Nx runs first on its own.
+      # Satori FIRST, while GitHub Packages is still in node_modules. `satori-components:
+      # build-storybook` depends on `compodoc`, which Nx runs before either build on its own.
       - name: Build the Satori-themed Storybook
         working-directory: source
         run: npx nx run satori-components:build-storybook:satori --skip-nx-cache
 
-      - name: Build the Satori components Storybook
+      # Then take GitHub Packages away again, so the Material build below cannot reach Satori even
+      # by accident. The order is the point: built with those packages present, a stray Satori
+      # import would compile into /material and the comparison would be against something the
+      # public site never serves. This is what the public workflow does for the same build, so
+      # /material is the real thing and a Satori import fails it here too.
+      - name: Hide GitHub Packages before the Material build
+        shell: bash
+        run: |
+          set -euo pipefail
+          hidden="$RUNNER_TEMP/github-packages-scopes"
+          mkdir -p "$hidden"
+          for scope in @hylandsoftware @alfresco; do
+            if [ -e "source/node_modules/$scope" ]; then mv "source/node_modules/$scope" "$hidden"/; fi
+          done
+
+      - name: Build the Material Storybook without GitHub Packages
         working-directory: source
-        run: npx nx run satori-components-satori:build-storybook:ci --skip-nx-cache
+        run: npx nx run satori-components:build-storybook:ci --skip-nx-cache
 
       # Refuses a missing or empty Storybook, so a renamed outputDir cannot publish a blank site.
       - name: Assemble the site
