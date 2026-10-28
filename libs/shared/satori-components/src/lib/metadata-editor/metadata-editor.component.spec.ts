@@ -50,8 +50,8 @@ const l10n = (id: string, label: string, parent = ''): L10nDirectoryEntry => ({
 
 const SUBJECTS = [
   l10n('art', 'Art'),
-  l10n('art/cinema', 'Cinema', 'art'),
-  l10n('art/music', 'Music', 'art'),
+  l10n('cinema', 'Cinema', 'art'),
+  l10n('music', 'Music', 'art'),
 ];
 
 const DOCUMENT_VALUES: NxsEditorValues = {
@@ -193,7 +193,7 @@ describe('NxsMetadataEditorComponent', () => {
   const field = <T extends HTMLElement = HTMLInputElement>(xpath: string): T => {
     const found = element.querySelector<T>(`[data-xpath="${xpath}"]`);
     if (!found) throw new Error(`no field ${xpath}`);
-    return found;
+    return (found.tagName === 'NXS-DATE-INPUT' ? found.querySelector('input') : found) as T;
   };
   const type = async (xpath: string, text: string) => {
     const input = field<HTMLInputElement | HTMLTextAreaElement>(xpath);
@@ -235,7 +235,7 @@ describe('NxsMetadataEditorComponent', () => {
   it('shows the Dublin Core fields with the current values, vocabulary values by label', () => {
     expect(field('dc:title').value).toBe('Quarterly report');
     expect(field<HTMLTextAreaElement>('dc:description').value).toBe('Figures');
-    expect(field('dc:nature').textContent).toContain('Report');
+    expect(field('dc:nature').querySelector('input')?.value).toBe('Report');
     expect(field('dc:subjects').textContent).toContain('Art/Cinema');
     expect(field('dc:expired').value).not.toBe('');
     const labels = [...element.querySelectorAll('mat-label')].map((node) =>
@@ -260,6 +260,47 @@ describe('NxsMetadataEditorComponent', () => {
       'l10ncoverage',
       'l10nsubjects',
     ]);
+  });
+
+  it('asks once for a directory every row of a repeatable group uses, and again in a new editor', async () => {
+    const asked = (directory: string) =>
+      directories.getEntries.mock.calls.filter(([name]) => name === directory).length;
+    host.sections.set([
+      {
+        id: 'topics',
+        heading: 'Topics',
+        fields: [
+          {
+            xpath: 'tp:rows',
+            label: 'Rows',
+            definition: {
+              type: 'complex[]',
+              fields: { topic: { type: 'string', directory: 'topics' } },
+            },
+          },
+        ],
+      },
+    ]);
+    host.values.set({ 'tp:rows': [{ topic: 'report' }, { topic: 'invoice' }, { topic: null }] });
+    await settle();
+    expect(element.querySelectorAll('nxs-vocabulary-select[data-xpath^="tp:rows/"]')).toHaveLength(
+      3,
+    );
+    field<HTMLFieldSetElement>('tp:rows')
+      .querySelector<HTMLButtonElement>('.nxs-metadata-editor__add')
+      ?.click();
+    await settle();
+    expect(element.querySelectorAll('nxs-vocabulary-select[data-xpath^="tp:rows/"]')).toHaveLength(
+      4,
+    );
+    expect(asked('topics')).toBe(1);
+    expect(asked('nature')).toBe(1);
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(HostComponent);
+    element = fixture.nativeElement;
+    await settle();
+    expect(asked('nature')).toBe(2);
   });
 
   it('renders a section under a heading at the given level, skipping a field Dublin Core has', () => {
@@ -327,7 +368,7 @@ describe('NxsMetadataEditorComponent', () => {
 
   it('says so when a date field holds text that is not a date', async () => {
     await type('dc:expired', 'not a date');
-    expect(errors()).toContain('Enter a valid date for Expires.');
+    expect(errors()).toContain(`Enter a date like 12/31/${new Date().getFullYear()}`);
   });
 
   it('shows a file read-only by its name, and never sends it', () => {
@@ -423,13 +464,13 @@ describe('NxsMetadataEditorComponent', () => {
   });
 
   it('lists a vocabulary in its panel, filtered by the search box', async () => {
-    field<HTMLElement>('dc:nature').querySelector<HTMLElement>('.mat-mdc-select-trigger')?.click();
+    field<HTMLElement>('dc:nature').querySelector<HTMLInputElement>('input')?.focus();
     await settle();
     const options = () =>
       [...document.querySelectorAll('mat-option')].map((node) => node.textContent?.trim());
     expect(options()).toEqual(['Invoice', 'Report']);
-    const search = document.querySelector<HTMLInputElement>('.nxs-vocabulary-panel__search input');
-    expect(search?.getAttribute('aria-label')).toBe('Search Nature');
+    const search = field<HTMLElement>('dc:nature').querySelector<HTMLInputElement>('input');
+    expect(labelsOf(search as HTMLInputElement)).toEqual(['Nature']);
     if (search) {
       search.value = 'rep';
       search.dispatchEvent(new Event('input'));
@@ -465,6 +506,35 @@ describe('NxsMetadataEditorComponent', () => {
     await type('dc:description', 'Shorter');
     expect(errors()).not.toContain('Too long.');
     expect(host.editor().validate()).toBe(true);
+  });
+
+  it('ties a server message on a date or vocabulary field to its input, which takes focus', async () => {
+    host.editor().showServerErrors({
+      'dc:subjects': 'Not an allowed subject.',
+      'dc:expired': 'Must be in the future.',
+    });
+    await settle();
+    await settle();
+    const describedBy = (input: Element | null | undefined) =>
+      (input?.getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .map((id) => element.querySelector(`[id="${id}"]`)?.textContent?.trim());
+    const subjects = field<HTMLElement>('dc:subjects').querySelector('input');
+    expect(describedBy(subjects)).toContain('Not an allowed subject.');
+    expect(describedBy(field('dc:expired'))).toContain('Must be in the future.');
+    expect(element.querySelectorAll('p.nxs-metadata-editor__error')).toHaveLength(0);
+    expect(document.activeElement).toBe(subjects);
+  });
+
+  it('focuses the text typed into a vocabulary field that already has a chip, not the chip', async () => {
+    const subjects = field<HTMLElement>('dc:subjects').querySelector('input') as HTMLInputElement;
+    subjects.value = 'unlisted';
+    subjects.dispatchEvent(new Event('input'));
+    await settle();
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(field('dc:subjects').querySelector('mat-chip-row')).not.toBeNull();
+    expect(document.activeElement).toBe(subjects);
   });
 
   it('shows a message filed under a complex field on the group, tied to it', async () => {
@@ -686,7 +756,7 @@ describe('NxsMetadataEditorComponent, typed dates', () => {
 
   const expires = (): HTMLInputElement =>
     (fixture.nativeElement as HTMLElement).querySelector(
-      'input[data-xpath="dc:expired"]',
+      '[data-xpath="dc:expired"] input',
     ) as HTMLInputElement;
 
   async function setup(locale: string, host: Type<DatesHostComponent> = DatesHostComponent) {
@@ -769,7 +839,7 @@ describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS 
   const editor = () => fixture.componentInstance.editor();
   const expires = (): HTMLInputElement =>
     (fixture.nativeElement as HTMLElement).querySelector(
-      'input[data-xpath="dc:expired"]',
+      '[data-xpath="dc:expired"] input',
     ) as HTMLInputElement;
 
   async function render(): Promise<void> {
@@ -811,6 +881,20 @@ describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS 
     expect(editor().dirtyProperties()).toEqual({
       'dc:expired': new Date(2027, 4, 6).toISOString(),
     });
+  });
+
+  it('keeps the property’s time of day when its date is cleared and typed again', async () => {
+    const day = written(new Date(EXPIRES));
+    expires().value = '';
+    expires().dispatchEvent(new Event('input'));
+    await render();
+    expect(editor().dirtyProperties()).toEqual({ 'dc:expired': null });
+    expires().value = day;
+    expires().dispatchEvent(new Event('input'));
+    expires().dispatchEvent(new Event('blur'));
+    await render();
+    expect(expires().value).toBe(day);
+    expect(editor().properties()['dc:expired']).toBe(EXPIRES);
   });
 
   it('writes a day picked from the calendar as an ISO instant', async () => {

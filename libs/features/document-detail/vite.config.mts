@@ -23,6 +23,10 @@ export default defineConfig(() => ({
     // Pin the worker pool explicitly: the Vitest default pool crashes under
     // Node 20 in Nx/CI for this project before any test output is emitted.
     pool: 'threads',
+    // Keep warnings/errors on the worker's native streams: Vitest 4's intercepted
+    // console can leave onUserConsoleLog RPCs pending when a Windows worker closes.
+    // This preserves console output and does not ignore unhandled test errors.
+    disableConsoleIntercept: true,
     // zone.js keeps the Node.js event loop alive after Angular TestBed teardown;
     // forceExit ensures Vitest can always exit cleanly in CI.
     forceExit: true,

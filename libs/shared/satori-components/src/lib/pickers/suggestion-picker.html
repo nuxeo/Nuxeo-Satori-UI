@@ -1,0 +1,132 @@
+<mat-form-field appearance="outline" class="nxs-picker__field" subscriptSizing="dynamic">
+  <mat-label>{{ label() }}</mat-label>
+  @if (multiple()) {
+    <mat-chip-grid
+      #grid
+      [attr.aria-label]="label()"
+      [disabled]="isDisabled()"
+      [required]="required()"
+      [errorStateMatcher]="errorState"
+    >
+      @for (item of chosenItems(); track item.key) {
+        <mat-chip-row
+          [attr.data-principal]="pickerKind === 'principal' ? item.key : null"
+          [attr.data-document]="pickerKind === 'document' ? item.key : null"
+          (removed)="remove(item.value)"
+        >
+          {{ item.label }}
+          <button
+            matChipRemove
+            type="button"
+            [attr.aria-label]="'satori-components.pickers.remove' | translate: { name: item.label }"
+          >
+            <mat-icon aria-hidden="true" svgIcon="x_large" />
+          </button>
+        </mat-chip-row>
+      }
+    </mat-chip-grid>
+    <!-- A combobox is a sibling of the grid so its children remain chip rows. -->
+    <input
+      autocomplete="off"
+      [id]="inputId"
+      [matChipInputFor]="grid"
+      [matAutocomplete]="auto"
+      [value]="text()"
+      (input)="onInput($event)"
+    />
+  } @else {
+    <input
+      matInput
+      type="text"
+      autocomplete="off"
+      [id]="inputId"
+      [matAutocomplete]="auto"
+      [value]="text()"
+      [required]="required()"
+      [disabled]="isDisabled()"
+      [errorStateMatcher]="errorState"
+      (input)="onInput($event)"
+    />
+    @if (chosenItems().length && !isDisabled()) {
+      <button
+        matIconSuffix
+        mat-icon-button
+        type="button"
+        class="nxs-picker__clear"
+        [attr.aria-label]="'satori-components.pickers.clear' | translate"
+        (click)="clear()"
+      >
+        <mat-icon aria-hidden="true" svgIcon="x_large" />
+      </button>
+    }
+  }
+  @if (unmatched()) {
+    <mat-error>{{ 'satori-components.pickers.choose-from-list' | translate }}</mat-error>
+  } @else if (missing()) {
+    <mat-error>{{ 'satori-components.pickers.required' | translate }}</mat-error>
+  }
+  @if (finder.state().status === 'short') {
+    <mat-hint>{{
+      (minimumCharacters() === 1
+        ? 'satori-components.pickers.min-chars-one'
+        : 'satori-components.pickers.min-chars-many'
+      ) | translate: { count: minimumCharacters() }
+    }}</mat-hint>
+  } @else if (hint()) {
+    <mat-hint>{{ hint() }}</mat-hint>
+  }
+  <mat-autocomplete
+    #auto="matAutocomplete"
+    [class]="pickerKind === 'principal' ? 'nxs-picker__panel' : ''"
+    [displayWith]="displayWith"
+    (optionSelected)="choose($event.option.value)"
+  >
+    @switch (finder.state().status) {
+      @case ('searching') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.searching' | translate
+        }}</mat-option>
+      }
+      @case ('none') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.no-results' | translate
+        }}</mat-option>
+      }
+      @case ('failed') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.failed' | translate
+        }}</mat-option>
+      }
+      @case ('found') {
+        @for (option of optionItems(); track option.key) {
+          <mat-option
+            [value]="option.value"
+            [attr.data-principal]="pickerKind === 'principal' ? option.key : null"
+            [attr.data-uid]="pickerKind === 'document' ? option.key : null"
+          >
+            @if (pickerKind === 'document') {
+              <nxs-doc-type-icon
+                class="nxs-document-reference-input__icon"
+                [type]="option.documentType ?? ''"
+              />
+            } @else {
+              <mat-icon aria-hidden="true" [svgIcon]="option.icon ?? ''" />
+            }
+            <span class="nxs-picker__option">
+              <span class="nxs-picker__option-label">{{ option.label }}</span
+              >&ngsp;
+              <span class="nxs-picker__option-detail"
+                >{{ option.detailKey ? (option.detailKey | translate) : ''
+                }}{{ option.detail }}</span
+              >
+            </span>
+          </mat-option>
+        } @empty {
+          <mat-option disabled class="nxs-picker__status">{{
+            'satori-components.pickers.no-results' | translate
+          }}</mat-option>
+        }
+      }
+    }
+  </mat-autocomplete>
+</mat-form-field>
