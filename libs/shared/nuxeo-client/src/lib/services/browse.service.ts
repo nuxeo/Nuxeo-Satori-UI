@@ -64,17 +64,26 @@ export function browseFolderFiltersActive(filters?: BrowseFolderFilters): boolea
 /**
  * Escape a value for use inside a single-quoted NXQL `LIKE`/`ILIKE` **pattern**.
  *
- * `escapeNxqlLiteral` closes the quote and backslash holes; this closes the wildcards, which it
- * deliberately leaves to the caller. Measured against the server: `ILIKE '%P_oject%'` and
- * `ILIKE '%Pro%ect%'` both match "Project Reports", so an unescaped `_` or `%` typed into the
- * filter box silently becomes a wildcard — and `ILIKE '%Pro\%ect%'` matches nothing, so a
- * backslash is what makes them literal. There is no `ESCAPE` clause: `ESCAPE '!'` is rejected.
+ * Four characters, in one pass: the backslash and the quote that would end the literal, and the
+ * two wildcards. Measured against the server: `ILIKE '%P_oject%'` and `ILIKE '%Pro%ect%'` both
+ * match "Project Reports", so an unescaped `_` or `%` typed into the filter box silently becomes a
+ * wildcard — and `ILIKE '%Pro\%ect%'` matches nothing, so a backslash is what makes them literal.
+ * There is no `ESCAPE` clause: `ESCAPE '!'` is rejected.
  *
- * Order matters and is inherited: `escapeNxqlLiteral` doubles backslashes first, so the ones added
- * here are unambiguously escapes rather than data.
+ * ## One pass, not `escapeNxqlLiteral` plus the wildcards
+ *
+ * It used to be `escapeNxqlLiteral(value).replace(/[%_]/g, '\\$&')`, which produces an identical
+ * string — verified over every interesting input and 60k fuzzed ones — but only because
+ * `escapeNxqlLiteral` happens to double backslashes *first*. The correctness of this function
+ * therefore lived in another function's internal ordering, where nothing would catch a change to
+ * it, and CodeQL read the visible half as an incomplete escape (alert 63) because that is what it
+ * is in isolation.
+ *
+ * A single pass over the original string cannot re-process a backslash it just inserted, so the
+ * order that mattered no longer exists.
  */
 export function escapeNxqlPattern(value: string): string {
-  return escapeNxqlLiteral(value).replace(/[%_]/g, '\\$&');
+  return value.replace(/[\\'%_]/g, '\\$&');
 }
 
 /** One server-side sort key: a Nuxeo property name such as `dc:title`, and its direction. */

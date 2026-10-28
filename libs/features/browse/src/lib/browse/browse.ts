@@ -1042,7 +1042,10 @@ export class BrowseComponent {
         this.serverFiltered.set(payload.result.serverFiltered === true);
         this.hasNextPage.set(payload.result.hasNextPage === true);
         this.reconcilePendingPasteEntries(entries);
-        const pendingCount = this.pendingPasteEntries.size;
+        // Only the pending rows the listing is actually showing. Counting all of them added a
+        // document the filter excludes to the total on every refresh, so one visible row read
+        // "2 results" — and the query can never clear it, because it never returns its uid.
+        const pendingCount = this.visiblePendingPasteCount();
         this.totalSize.set(totalSize === entries.length ? totalSize + pendingCount : totalSize);
         this.loading.set(false);
         this.filtering.set(false);
@@ -1099,8 +1102,12 @@ export class BrowseComponent {
         return;
       }
       untracked(() => {
-        // The folder's contents changed, so which types it holds may have changed with them.
+        // Something outside this page changed the folder — the detail panel, the tree, a created
+        // domain. Which types it holds may have changed with it, and an optimistic paste copy may
+        // now describe a document that has been renamed, moved or trashed since. A paste bumps
+        // only `clipboardPasteTick`, so clearing them here cannot cut its own bridge.
         this.invalidateFolderTypes();
+        this.clearPendingPasteEntries();
         if (this.currentNuxeoPath) {
           this.loadContent();
         }
@@ -1128,7 +1135,9 @@ export class BrowseComponent {
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe(() => {
               if (this.currentDoc()?.uid === paste.targetUid && this.currentNuxeoPath) {
-                this.reloadAfterContentChange();
+                // The reload the optimistic rows are waiting for: it is what clears each one that
+                // the server has caught up with, so it must not discard the ones it has not.
+                this.reloadAfterContentChange({ keepOptimisticPasteRows: true });
               }
             });
         }
@@ -1210,9 +1219,22 @@ export class BrowseComponent {
    * Still separate from `loadContent()`, which is also how paging and re-ordering reload: those
    * cannot change which types the folder holds, and these can, so the dropdown's collected types
    * are dropped here and nowhere else.
+   *
+   * It also forgets the optimistic paste rows, and that default is the point: a mutation makes a
+   * pasted row's copy stale, so renaming one out of the active filter, moving it, or trashing it
+   * used to leave it on screen under its old title — or after deletion — because a filtered query
+   * never returns its uid for {@link reconcilePendingPasteEntries} to clear. Clearing here covers
+   * every mutation path without naming them one by one, and the single caller that *must* keep
+   * them says so.
+   *
+   * @param keepOptimisticPasteRows the paste's own deferred reload, and only that: it is the
+   *   reload the rows are waiting for, so dropping them there would defeat the bridge entirely.
    */
-  private reloadAfterContentChange(): void {
+  private reloadAfterContentChange(options?: { keepOptimisticPasteRows?: boolean }): void {
     this.invalidateFolderTypes();
+    if (!options?.keepOptimisticPasteRows) {
+      this.clearPendingPasteEntries();
+    }
     this.loadContent();
   }
 
@@ -1489,6 +1511,34 @@ export class BrowseComponent {
     this.pendingPasteList.set([...this.pendingPasteEntries.values()]);
   }
 
+  /**
+   * How many optimistic paste rows the listing is actually showing.
+   *
+   * What the count may add to the server's total. An unfiltered listing shows all of them; a
+   * filtered one shows only those that match, because {@link filteredEntries} judges exactly these
+   * rows — so counting the rest inflated the total beside rows that did not include them.
+   */
+  private visiblePendingPasteCount(): number {
+    const pending = [...this.pendingPasteEntries.values()];
+    if (!this.filtersActive()) return pending.length;
+    return pending.filter((doc) => this.matchesFilters(doc)).length;
+  }
+
+  /**
+   * Forget the optimistic paste rows.
+   *
+   * They exist to bridge one gap: `@children` may not list a just-pasted document yet, and
+   * {@link reconcilePendingPasteEntries} drops each one as soon as the server's answer includes
+   * its uid. Under a server-side filter that inference does not hold — a row the filter excludes
+   * is absent from every answer, so absence stops meaning "not committed yet" — and a pending copy
+   * that is never cleared goes on being re-appended with whatever title it was pasted under.
+   */
+  private clearPendingPasteEntries(): void {
+    if (this.pendingPasteEntries.size === 0) return;
+    this.pendingPasteEntries.clear();
+    this.syncPendingPasteList();
+  }
+
   private applyClipboardPasteToListing(documents: NuxeoDocument[]): void {
     if (documents.length === 0) {
       return;
@@ -1513,8 +1563,14 @@ export class BrowseComponent {
     });
 
     if (added > 0) {
-      if (previousTotalSize === previousEntryCount) {
-        this.totalSize.update((count) => count + added);
+      // Only the rows the listing will show. Pasting a document the active filter excludes left
+      // one visible row reporting "2 results", because the count rose and `filteredEntries` — the
+      // thing that judges exactly these optimistic rows — correctly left it out.
+      const shown = this.filtersActive()
+        ? additions.filter((doc) => this.matchesFilters(doc)).length
+        : added;
+      if (shown > 0 && previousTotalSize === previousEntryCount) {
+        this.totalSize.update((count) => count + shown);
       }
     }
   }

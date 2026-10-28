@@ -1072,13 +1072,115 @@ describe('BrowseComponent — rendered document list', () => {
     await settle();
 
     expect(rowTitles()).toEqual(['Q1 Report']);
+    // And the count agrees with the rows. It used to say "2 results" beside the one row, because
+    // the paste raised the total while `filteredEntries` correctly left the document out.
+    expect(query('.result-count')?.textContent).toContain('1 result');
+    expect(component.listTotalSize()).toBe(1);
+
+    // Every filtered refresh used to add it again: the query never returns its uid, so nothing
+    // cleared it from the pending map that the total was derived from.
+    component.loadContent();
+    await settle();
+    expect(rowTitles()).toEqual(['Q1 Report']);
+    expect(component.listTotalSize()).toBe(1);
   });
 
   /**
-   * The server's rows are taken as they are. `ILIKE` folds case in the database's collation and
-   * `toLowerCase()` in the browser's, so re-checking them here could hide a row the server
-   * matched — the exact class of difference that moving the filter to the server removes.
+   * The other half of carrying optimistic rows under a server-side filter: retracting them.
+   *
+   * A pending copy keeps the title it was pasted under, and a filtered query never returns the uid
+   * of a document the filter excludes — so renaming a pasted row out of the filter, moving it or
+   * trashing it left the stale copy on screen for ever, re-appended by every reload. Any mutation
+   * now drops the optimistic rows, and only the paste's own deferred reload keeps them.
+   *
+   * `restoreDocument` stands in for the mutations generally: it is the one that reaches
+   * `reloadAfterContentChange()` without going through a dialog, and that method is where every
+   * in-page mutation converges.
    */
+  it('drops a pasted row once any other mutation has made it stale', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [], totalSize: 0, serverFiltered: true }),
+    );
+    browse.restoreDocument.mockReturnValue(of(doc({ uid: 'r-1', title: 'Restored' })));
+    const component = await render();
+    component.filterText.set('report');
+    await settleFilter();
+
+    TestBed.inject(BrowseContextService).notifyClipboardPasteComplete({
+      targetUid: folder.uid,
+      action: 'copy',
+      documents: [doc({ uid: 'p-1', title: 'Pasted Report' })],
+    });
+    await settle();
+    expect(rowTitles()).toEqual(['Pasted Report']);
+    expect(component.listTotalSize()).toBe(1);
+
+    // The server still answers the filter with nothing, as it would for a document renamed out of
+    // the filter or trashed. The optimistic copy's own title matches, which is what used to keep
+    // it visible for ever.
+    component.restoreDocument(doc({ uid: 'r-1', title: 'Restored' }));
+    await settle();
+
+    expect(rowTitles()).toEqual([]);
+    expect(component.listTotalSize()).toBe(0);
+  });
+
+  /**
+   * The bridge the retraction above must not cut.
+   *
+   * A paste schedules its own reload 1.5s later, and that reload is the one the optimistic rows are
+   * waiting for — it clears each one the server has caught up with. Without the explicit opt-out it
+   * would discard the ones the server has *not* caught up with as well, so a pasted document would
+   * appear and then vanish a second and a half later. The wait is real because the timer is.
+   */
+  it('keeps a pasted row through the paste’s own deferred reload', async () => {
+    // The server never lists it, which is the case the optimistic row exists for.
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [], totalSize: 0, serverFiltered: true }),
+    );
+    const component = await render();
+    component.filterText.set('report');
+    await settleFilter();
+
+    TestBed.inject(BrowseContextService).notifyClipboardPasteComplete({
+      targetUid: folder.uid,
+      action: 'copy',
+      documents: [doc({ uid: 'p-1', title: 'Pasted Report' })],
+    });
+    await settle();
+    expect(rowTitles()).toEqual(['Pasted Report']);
+
+    // Past the component's own 1500ms timer.
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    await settle();
+
+    expect(rowTitles()).toEqual(['Pasted Report']);
+    expect(component.listTotalSize()).toBe(1);
+  });
+
+  /** The same retraction for a change made outside this page, which reaches it as a refresh tick. */
+  it('drops a pasted row when something outside the page changes the folder', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [], totalSize: 0, serverFiltered: true }),
+    );
+    const component = await render();
+    component.filterText.set('report');
+    await settleFilter();
+
+    TestBed.inject(BrowseContextService).notifyClipboardPasteComplete({
+      targetUid: folder.uid,
+      action: 'copy',
+      documents: [doc({ uid: 'p-1', title: 'Pasted Report' })],
+    });
+    await settle();
+    expect(rowTitles()).toEqual(['Pasted Report']);
+
+    TestBed.inject(BrowseContextService).requestContentRefresh();
+    await settle();
+
+    expect(rowTitles()).toEqual([]);
+  });
+
   it('does not re-judge the rows the server filtered', async () => {
     const matched = doc({ uid: 'c-1', title: 'DİYARBAKIR' });
     browse.getBrowseFolderContents.mockReturnValue(
