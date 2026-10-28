@@ -1295,6 +1295,58 @@ describe('BrowseComponent — rendered document list', () => {
     expect(component.singleSelectedEntry()?.title).toBe('Pasted Report');
   });
 
+  /**
+   * Freshness on a uid collision.
+   *
+   * A rename updates the page; a scan taken before it still holds the old document. Keeping the
+   * scan's copy meant the filtered rows showed the stale title *and* the filters matched on it, so
+   * searching for the new name missed a row that was on screen under that very name.
+   */
+  it('prefers the page copy of a document the scan holds an older version of', async () => {
+    // The order that exposes it: the scan lands first with the old copy, then a page load brings
+    // the renamed one. `loadContent()` is the paging path, so it refreshes the page *without*
+    // invalidating the scan — which is exactly how the two can disagree.
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Old Report' })],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Old Report' })], truncated: false }),
+    );
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+    expect(rowTitles()).toEqual(['Old Report']);
+
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Renamed Report' })],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+    component.loadContent();
+    await settle();
+
+    // Rendered with the new title, and only once — not two rows for one document.
+    expect(rowTitles()).toEqual(['Renamed Report']);
+    expect(component.resultCount()).toBe(1);
+
+    // The filters match on the fresh copy too, not the stale one the scan still holds.
+    component.filterText.set('renamed');
+    await settle();
+    expect(rowTitles()).toEqual(['Renamed Report']);
+    component.filterText.set('old report');
+    await settle();
+    expect(rowTitles()).toEqual([]);
+  });
+
   it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),

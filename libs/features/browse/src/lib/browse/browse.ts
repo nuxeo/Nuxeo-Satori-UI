@@ -337,6 +337,19 @@ export class BrowseComponent {
    * a filtered listing even though it was sitting in the page behind the filter.
    */
   private readonly pendingPasteList = signal<NuxeoDocument[]>([]);
+  /**
+   * Which of the two document sources was populated most recently.
+   *
+   * Needed because neither is inherently fresher. A scan that finishes after a content refresh
+   * carries the newer copy of a renamed document; a page reloaded after the scan carries it
+   * instead. Picking a side by assumption got one of those two cases wrong whichever side was
+   * chosen, so the collision is settled by read order. Plain fields, written immediately before
+   * the signal they describe — the recompute is driven by that signal, so these cannot be read
+   * stale.
+   */
+  private sourceClock = 0;
+  private entriesStamp = 0;
+  private scanStamp = 0;
   readonly browsePath = signal('/');
   private readonly browsePath$ = new Subject<{ nuxeoPath: string; pageIndex: number }>();
 
@@ -672,15 +685,37 @@ export class BrowseComponent {
      * any other way the scan falls behind the page. Everything merged is a child of this same
      * folder, so nothing foreign can enter.
      */
-    const merged = [...scanned];
-    const seen = new Set(scanned.map((doc) => doc.uid));
-    for (const doc of [...this.entries(), ...this.pendingPasteList()]) {
-      if (doc.uid && !seen.has(doc.uid)) {
-        seen.add(doc.uid);
+    // Freshest copy wins on a uid collision, decided by which source was read last. Keeping the
+    // scan's copy unconditionally meant a renamed document kept its old title in the filtered rows
+    // *and* in what the filters matched on, so searching for the new name missed a row that was on
+    // screen under that very name. Always preferring the page is equally wrong: a scan that
+    // finished after a content refresh is the newer read.
+    //
+    // Pending paste rows are optimistic and local, so they only ever fill a gap — never override.
+    const seenInScan = new Set(scanned.map((doc) => doc.uid));
+    const pageIsFresher = this.entriesStamp > this.scanStamp;
+    const fresher = new Map<string, NuxeoDocument>();
+    for (const doc of this.pendingPasteList()) {
+      if (doc.uid) fresher.set(doc.uid, doc);
+    }
+    for (const doc of this.entries()) {
+      if (!doc.uid) continue;
+      if (pageIsFresher || !seenInScan.has(doc.uid)) fresher.set(doc.uid, doc);
+    }
+
+    // Scan order preserved — it is the order the server was asked for — with each document
+    // replaced by its fresher copy where one exists.
+    const merged = scanned.map((doc) => (doc.uid && fresher.get(doc.uid)) || doc);
+    let added = false;
+    for (const [uid, doc] of fresher) {
+      if (!seenInScan.has(uid)) {
         merged.push(doc);
+        added = true;
       }
     }
-    return merged.length === scanned.length ? scanned : merged;
+
+    // Identity back when nothing changed, so downstream computeds do not recompute for nothing.
+    return added || merged.some((doc, index) => doc !== scanned[index]) ? merged : scanned;
   });
 
   /**
@@ -886,6 +921,7 @@ export class BrowseComponent {
       this.filterScanFailed.set(true);
       return;
     }
+    this.scanStamp = ++this.sourceClock;
     this.scannedEntries.set(set.entries);
     this.filterScanTruncated.set(set.truncated);
   }
@@ -1165,6 +1201,7 @@ export class BrowseComponent {
         this.openedPath = payload.nuxeoPath;
         this.unopenedPath.set(null);
         this.browseContext.setFromNuxeoPath(folder.path);
+        this.entriesStamp = ++this.sourceClock;
         this.entries.set(entries);
         this.hasNextPage.set(payload.result.hasNextPage === true);
         this.reconcilePendingPasteEntries(entries);
@@ -1609,6 +1646,7 @@ export class BrowseComponent {
     let additions: NuxeoDocument[] = [];
     const previousEntryCount = this.entries().length;
     const previousTotalSize = this.totalSize();
+    this.entriesStamp = ++this.sourceClock;
     this.entries.update((entries) => {
       const existingUids = new Set(entries.map((entry) => entry.uid));
       additions = documents.filter((doc) => doc.uid && !existingUids.has(doc.uid));
@@ -1640,6 +1678,7 @@ export class BrowseComponent {
       return;
     }
 
+    this.entriesStamp = ++this.sourceClock;
     this.entries.update((current) => {
       const currentUids = new Set(current.map((entry) => entry.uid));
       const additions = pending.filter((doc) => doc.uid && !currentUids.has(doc.uid));
