@@ -1102,4 +1102,101 @@ describe('BrowseService', () => {
 
     expect(await result$).toBe(false);
   });
+
+  describe('getAllBrowseFolderEntries', () => {
+    /**
+     * Backs the browse toolbar filters, which used to sift only the page already fetched: on
+     * `/default-domain/workspaces` (66 children, 50 rendered) a document further down the folder
+     * could not be found by typing its exact title.
+     */
+    const folderDoc = (path: string) => ({
+      uid: 'ws-1',
+      title: 'Workspaces',
+      type: 'WorkspaceRoot',
+      path,
+      properties: {},
+    });
+
+    /** One page: the folder read `getBrowseFolderContents` does, then the `@children` page. */
+    function flushPage(
+      path: string,
+      pageIndex: number,
+      entries: { uid: string }[],
+      isNextPageAvailable: boolean,
+    ) {
+      httpMock.expectOne((r) => r.url === `/nuxeo/api/v1/path${path}`).flush(folderDoc(path));
+      httpMock
+        .expectOne(
+          (r) =>
+            r.url === `/nuxeo/api/v1/path${path}/@children` &&
+            r.params.get('currentPageIndex') === String(pageIndex),
+        )
+        .flush({
+          entries: entries.map((e) => ({
+            ...e,
+            title: e.uid,
+            type: 'File',
+            path: `${path}/${e.uid}`,
+            properties: {},
+          })),
+          totalSize: -2,
+          currentPageSize: entries.length,
+          currentPageIndex: pageIndex,
+          numberOfPages: 1,
+          isNextPageAvailable,
+        });
+    }
+
+    it('walks every page and concatenates the entries', async () => {
+      const path = '/default-domain/workspaces';
+      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 10, 1));
+
+      flushPage(path, 0, [{ uid: 'a' }], true);
+      flushPage(path, 1, [{ uid: 'b' }], true);
+      flushPage(path, 2, [{ uid: 'c' }], false);
+
+      const result = await result$;
+      expect(result.entries.map((e) => e.uid)).toEqual(['a', 'b', 'c']);
+      expect(result.truncated).toBe(false);
+      expect(result.folder?.uid).toBe('ws-1');
+    });
+
+    it('stops at the cap and says the scan was cut short', async () => {
+      const path = '/default-domain/workspaces';
+      // Cap of 2 at one document per page: two pages are requested, and Nuxeo still has more.
+      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 2, 1));
+
+      flushPage(path, 0, [{ uid: 'a' }], true);
+      flushPage(path, 1, [{ uid: 'b' }], true);
+
+      const result = await result$;
+      expect(result.entries.map((e) => e.uid)).toEqual(['a', 'b']);
+      expect(result.truncated).toBe(true);
+    });
+
+    it('does not report a truncated scan when the folder simply ran out at the cap', async () => {
+      const path = '/default-domain/workspaces';
+      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 2, 1));
+
+      flushPage(path, 0, [{ uid: 'a' }], true);
+      // Exactly as many documents as the cap, and no further page: nothing was missed.
+      flushPage(path, 1, [{ uid: 'b' }], false);
+
+      const result = await result$;
+      expect(result.entries).toHaveLength(2);
+      expect(result.truncated).toBe(false);
+    });
+
+    it('asks for one page only when the folder fits in one', async () => {
+      const path = '/default-domain/workspaces';
+      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 500, 50));
+
+      flushPage(path, 0, [{ uid: 'a' }, { uid: 'b' }], false);
+
+      const result = await result$;
+      expect(result.entries).toHaveLength(2);
+      expect(result.truncated).toBe(false);
+      // `httpMock.verify()` in afterEach is what proves no second page was requested.
+    });
+  });
 });

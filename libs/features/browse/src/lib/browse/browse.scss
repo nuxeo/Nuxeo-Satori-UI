@@ -387,7 +387,9 @@ sat-breadcrumbs {
   padding: 0 !important;
   display: grid;
   place-items: center;
-  margin-inline-end: 4px;
+  // 6px, so the glyph lands ~10px from the field's outline once its own 4px of padding is added.
+  // At 4px the × read as pinned to the border.
+  margin-inline-end: 6px;
   border-radius: 50%;
 
   mat-icon {
@@ -398,6 +400,23 @@ sat-breadcrumbs {
     // button's `line-height` was inherited straight through the `height: 16px`.
     line-height: 16px;
     margin: 0;
+  }
+
+  // The glyph itself, not just its box.
+  //
+  // `svgIcon` makes Angular Material insert an `<svg>` into the `mat-icon` at runtime, and that
+  // SVG keeps the registered icon's own 24px intrinsic size — the `width`/`height` above apply to
+  // `mat-icon` and do not reach inside it. Measured: a 24px glyph inside the 24px button, so it
+  // filled the circle edge to edge with no padding at all, which is why the control read as a
+  // heavy × crammed against the field instead of a small × inside a round target.
+  //
+  // `::ng-deep` because the SVG is created imperatively and carries no `_ngcontent` attribute, so
+  // a scoped descendant selector cannot match it.
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  ::ng-deep mat-icon svg {
+    display: block;
+    width: 16px;
+    height: 16px;
   }
 
   &:hover {
