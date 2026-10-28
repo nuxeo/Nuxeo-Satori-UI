@@ -126,11 +126,6 @@ export class NxsGroupFormDialogComponent implements OnInit {
     this.searchTerms.next(query);
   }
 
-  protected onMemberInputFocus(): void {
-    // Ask again even when the field reopens with the same query, so the list is fresh.
-    this.searchTerms.next(this.memberQuery());
-  }
-
   protected onMemberInputKeydown(event: KeyboardEvent): void {
     // Enter should pick from the search results, not commit the typed text as a member.
     if (event.key === 'Enter' && this.memberQuery().trim() && this.memberOptions().length > 0) {

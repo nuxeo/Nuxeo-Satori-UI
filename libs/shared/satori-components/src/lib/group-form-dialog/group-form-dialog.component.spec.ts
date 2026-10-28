@@ -164,8 +164,7 @@ describe('NxsGroupFormDialogComponent', () => {
       expect(signalOf<string[]>('members')()).toEqual([]);
     });
 
-    it('asks for results on focus, and when the query changes', async () => {
-      method('onMemberInputFocus')();
+    it('asks for results when the query changes, not on focus', async () => {
       method('onMemberSearch')('al');
       // The search waits 250 ms for typing to settle.
       await new Promise((resolve) => setTimeout(resolve, 300));
