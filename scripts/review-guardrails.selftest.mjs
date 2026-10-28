@@ -10315,6 +10315,146 @@ expectRed(
   /on the branch `Integration\/NXSAT-308`, which is a ticket branch/,
 );
 
+/* --- third review round on #494: the dash, quoted keys, ref case, and expression strings --- */
+
+expectRed(
+  'a block scalar as a step\'s FIRST key does not swallow the sibling `if:` below it',
+  'checkWorkflowRefGates',
+  {
+    // `- run: |` puts the dash further left than the key, so measuring the body's extent from the
+    // dash blanked the step's own `if:` as script — invisible to the gate scan and to the tripwire
+    // that is supposed to catch exactly that. The same off-by-a-dash as the condition folding,
+    // which had been fixed there and not here.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo hello
+        if: github.ref == 'refs/heads/integration/nxsat-308'
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is a ticket branch/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a comment after a block scalar indicator still marks the body as script',
+  'checkWorkflowRefGates',
+  {
+    // `run: | # generate a workflow` is a valid header. Requiring the indicator to end the line
+    // missed it, which put the heredoc back into the YAML the parser reads and turned its `if:`
+    // into a fictitious step condition. The header is matched on a comment-stripped copy while
+    // indentation is still measured from the raw lines.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a workflow
+        run: | # generate a workflow
+          cat > generated.yml <<'YAML'
+          jobs:
+            deploy:
+              if: github.ref == 'refs/heads/integration/nxsat-308'
+          YAML
+`,
+  },
+);
+
+expectRed(
+  'a quoted event key means what the unquoted one means',
+  'checkWorkflowRefGates',
+  {
+    // `'push':` matched nothing and was SKIPPED, leaving the event map empty — so the trigger the
+    // unquoted form is rejected for passed unnoticed. An entry that still does not match is now
+    // refused outright rather than skipped: skipping is how a parser quietly stops enforcing,
+    // because every shape it does not know becomes an exemption with nothing to show for it.
+    '.github/workflows/deploy.yml':
+      "name: Fixture\n\non:\n  'push':\n    branches: ['integration/nxsat-308']\n\n" + WORKFLOW_JOB,
+  },
+  null,
+  /triggers on `push` only for `integration\/nxsat-308`/,
+);
+
+expectRed(
+  'a mixed-case `refs/HEADS/` prefix is still a branch gate',
+  'checkWorkflowRefGates',
+  {
+    // A fail-open, not a cosmetic slip: the literal was discarded as "not a branch ref", so a
+    // pinned ticket branch written this way skipped every rule.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/HEADS/integration/nxsat-308'"),
+    ),
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is a ticket branch/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  '`REFS/HEADS/main` is a full ref, because the expression comparison ignores case',
+  'checkWorkflowRefGates',
+  {
+    // The other direction of the same prefix test: read case-sensitively, this looked like a bare
+    // branch name compared to `github.ref` and was reported as a constant-false gate.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.ref == 'REFS/HEADS/main'"),
+    ),
+  },
+);
+
+expectRed(
+  'a YAML-quoted condition is still read as a condition',
+  'checkWorkflowRefGates',
+  {
+    // The fail-open hiding behind the two fixes above, found by mutation testing: once string
+    // literals are masked so comparison TEXT is not mistaken for a gate, an `if:` left wrapped in
+    // its YAML quotes has every comparison inside it masked too — so a pinned ticket branch
+    // written this way becomes invisible rather than merely misread. Unwrapping the scalar is what
+    // keeps masking safe, and before this control nothing asserted the pair worked together: the
+    // existing quoted-`||` control passes either way.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob(`"github.ref == 'refs/heads/integration/nxsat-308'"`),
+    ),
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is a ticket branch/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'comparison text passed to a function is a string, not a gate',
+  'checkWorkflowRefGates',
+  {
+    // `contains(github.event.head_commit.message, 'github.ref == ''main''')` gates on nothing.
+    // The scan read the comparison inside the literal and reported `github.ref == ''` failing the
+    // shape rule. A doubled quote is GitHub's escape, so that whole operand is ONE string — which
+    // is also why `expressionHasAlternative` now blanks literals through the same mask rather than
+    // with a regex of its own that does not know it.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("contains(github.event.head_commit.message, 'github.ref == ''main''')"),
+    ),
+  },
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

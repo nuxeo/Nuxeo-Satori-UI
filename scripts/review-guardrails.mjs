@@ -10306,9 +10306,19 @@ function workflowLines(body) {
   const opaque = new Array(raw.length).fill(false);
   for (let i = 0; i < raw.length; i += 1) {
     if (opaque[i]) continue;
-    const key = /^(\s*)(?:-\s+)?([A-Za-z_][\w.-]*)\s*:\s*[|>][-+]?\d*\s*$/.exec(raw[i]);
-    if (!key || key[2] === 'if') continue;
-    const keyIndent = key[1].length;
+    // The trailing comment is dropped for the HEADER MATCH only — `run: | # generate a workflow`
+    // is a valid header, and requiring the indicator to end the raw line missed it, which put the
+    // script body back into the YAML the parser reads. Indentation is still measured from the raw
+    // lines, because comment blanking would erase the indentation the boundary depends on.
+    const key = /^(\s*)((?:-\s+)?)([A-Za-z_][\w.-]*)\s*:\s*[|>][-+]?\d*\s*$/.exec(
+      stripTrailingYamlComment(raw[i]),
+    );
+    if (!key || key[3] === 'if') continue;
+    /* The KEY's column, not the dash's. For `- run: |` the dash sits further left than the key, so
+     * measuring from the dash swallowed the step's own sibling keys as script — and a ticket-branch
+     * `if:` written after the script was blanked, invisible to the gate scan AND to the tripwire.
+     * The same off-by-a-dash as the condition folding below; it was fixed there and not here. */
+    const keyIndent = key[1].length + key[2].length;
     for (let j = i + 1; j < raw.length; j += 1) {
       if (raw[j].trim() !== '' && yamlIndent(raw[j]) <= keyIndent) break;
       opaque[j] = true;
@@ -10513,18 +10523,55 @@ const REF_COMPARISON = new RegExp(
   'g',
 );
 
+/**
+ * Which characters of an expression sit inside a string literal, quotes included.
+ *
+ * A doubled quote is GitHub's escape, so it does not end the literal — which is what makes
+ * `'github.ref == ''main'''` a single string and not a comparison. Needed because the scan below
+ * would otherwise read the comparison TEXT inside it:
+ * `contains(github.event.head_commit.message, 'github.ref == ''main''')` gates on nothing, and was
+ * reported as `github.ref == ''` failing the shape rule. Caught in review on #494.
+ */
+function stringLiteralMask(expression) {
+  const inside = new Uint8Array(expression.length);
+  for (let i = 0; i < expression.length; i += 1) {
+    const quote = expression[i];
+    if (quote !== "'" && quote !== '"') continue;
+    const start = i;
+    i += 1;
+    while (i < expression.length) {
+      if (expression[i] !== quote) {
+        i += 1;
+      } else if (expression[i + 1] === quote) {
+        i += 2;
+      } else {
+        break;
+      }
+    }
+    for (let j = start; j <= Math.min(i, expression.length - 1); j += 1) inside[j] = 1;
+  }
+  return inside;
+}
+
 function refComparisons(expression) {
-  return [...expression.matchAll(REF_COMPARISON)].map((match) => {
+  const inside = stringLiteralMask(expression);
+  const found = [];
+  for (const match of expression.matchAll(REF_COMPARISON)) {
     const forward = match[1] !== undefined;
-    return {
+    // The CONTEXT has to be outside a string literal. Its operand is a literal, of course, so the
+    // match's own start is only the right place to ask in the forward order.
+    const contextIndex = forward ? match.index : match.index + match[0].lastIndexOf('github.');
+    if (inside[contextIndex]) continue;
+    found.push({
       context: forward ? match[1] : match[8],
       operator: forward ? match[2] : match[7],
       literal: (forward ? (match[3] ?? match[4]) : (match[5] ?? match[6]))
         .replace(/''/g, "'")
         .replace(/""/g, '"'),
       index: match.index,
-    };
-  });
+    });
+  }
+  return found;
 }
 
 /**
@@ -10560,8 +10607,16 @@ function unquoteYamlExpression(value) {
  * a rule that declines to speak, not one that rejects a valid workflow. The shape that caused
  * NXSAT-649 was a bare single comparison, so the rule still fires where it matters.
  */
-const expressionHasAlternative = (expression) =>
-  /\|\|/.test(expression.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""'));
+const expressionHasAlternative = (expression) => {
+  // Blanked through `stringLiteralMask`, the same function `refComparisons` filters by. The two
+  // used to disagree about one string — a `'…'` regex here does not know a doubled quote is an
+  // escape — and two analyses of the same text reaching different conclusions is the shape of
+  // defect that produced the quoted-scalar bug.
+  const inside = stringLiteralMask(expression);
+  return /\|\|/.test(
+    [...expression].map((character, i) => (inside[i] ? ' ' : character)).join(''),
+  );
+};
 
 /**
  * Whether the comparison AT `index` is the one being negated.
@@ -10651,8 +10706,16 @@ function parseWorkflowTriggersAndGates(body) {
 
     for (let i = onIndex + 1; i < onEnd; i += 1) {
       if (lines[i].trim() === '' || yamlIndent(lines[i]) !== eventIndent) continue;
-      const key = /^\s*([A-Za-z_][\w-]*)\s*:/.exec(lines[i]);
-      if (!key) continue;
+      /* A quoted event key is valid YAML — `'push':` means exactly what `push:` means. It used to
+       * match nothing and be SKIPPED, which left the event map empty and let the very trigger the
+       * unquoted form is rejected for pass unnoticed.
+       *
+       * And an entry that still does not match is now `null` rather than skipped. Skipping is how
+       * a parser quietly stops enforcing: every unrecognised shape became an exemption, and the
+       * only sign was a check that said nothing. Failing names this function and says what to do. */
+      const key = /^\s*(?:(['"])([A-Za-z_][\w-]*)\1|([A-Za-z_][\w-]*))\s*:/.exec(lines[i]);
+      if (!key) return null;
+      const event = key[2] ?? key[3];
       const eventEnd = yamlBlockEnd(lines, i, eventIndent);
       // An inline flow mapping on the key's own line is read first, then the block form below.
       let filter = inlineFilter(lines[i].slice(lines[i].indexOf(':', yamlIndent(lines[i])) + 1));
@@ -10671,7 +10734,7 @@ function parseWorkflowTriggersAndGates(body) {
           };
         }
       }
-      events.set(key[1], filter);
+      events.set(event, filter);
       i = eventEnd - 1;
     }
   }
@@ -10994,7 +11057,10 @@ function checkWorkflowRefGates() {
         /* Rule 1 — shape. `github.ref` is `refs/heads/main`; `github.ref_name` is `main`. Mixing
          * them is a constant, and the two directions fail differently: a constant-false `==` never
          * runs the job, a constant-true `!=` never gates it. Both are silent. */
-        const isFullRef = literal.startsWith('refs/');
+        // Case-insensitive, like the pattern match and for the same reason: GitHub's `==` ignores
+        // case, so `REFS/HEADS/main` IS a full ref as far as the expression is concerned. Reading
+        // it as a bare name rejected a valid condition as a constant.
+        const isFullRef = /^refs\//i.test(literal);
         if ((context === 'ref') !== isFullRef) {
           fail(
             `${workflow}:${gate.line} gates ${where} on ` +
@@ -11017,7 +11083,10 @@ function checkWorkflowRefGates() {
         if (operator !== '==') continue;
         // A tag or pull-ref gate is not a branch gate. `github.ref_name` on a `pull_request` is
         // `<number>/merge`, which is not a branch either.
-        if (context === 'ref' && !literal.startsWith('refs/heads/')) continue;
+        // Case-insensitive too, and this one was a fail-open rather than a false positive:
+        // `refs/HEADS/integration/nxsat-308` was discarded as "not a branch ref", so a pinned
+        // ticket branch written that way skipped every rule below.
+        if (context === 'ref' && !/^refs\/heads\//i.test(literal)) continue;
         if (context === 'ref_name' && /^\d+\/merge$/.test(literal)) continue;
         /* `github.ref_name` is the short name of whatever ref triggered the run — a TAG name just
          * as readily as a branch name. So once the workflow filters tags, a `ref_name` literal
