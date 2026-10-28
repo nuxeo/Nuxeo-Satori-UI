@@ -4,9 +4,10 @@ import { InjectionToken } from '@angular/core';
  * Knowledge Enrichment automation ops exposed by the Hyland Content
  * Intelligence Connector (`nuxeo-labs-content-intelligence-connector`).
  *
- * We currently use the synchronous `HylandKnowledgeEnrichment.Enrich` op from
- * the browser. It accepts multipart input with a blob part named `input` and a
- * JSON request part named `request`, letting Angular route KE calls through the
+ * We currently use the synchronous `AgenticKnowledgeEnrichment.Enrich` op from
+ * the browser. It is backed by the CIC Java SDK (`cic-ke`) on the server. It
+ * accepts multipart input with a blob part named `input` and a JSON request part
+ * named `request`, letting Angular route KE calls through the
  * existing authenticated Nuxeo session without shipping tenant secrets to the
  * browser.
  */
@@ -20,7 +21,7 @@ export interface KeCicOperations {
 }
 
 export const DEFAULT_KE_CIC_OPERATIONS: KeCicOperations = {
-  enrich: 'HylandKnowledgeEnrichment.Enrich',
+  enrich: 'AgenticKnowledgeEnrichment.Enrich',
   sendForEnrichment: 'HylandKnowledgeEnrichment.SendForEnrichment',
   getEnrichmentResults: 'HylandKnowledgeEnrichment.GetEnrichmentResults',
   uploadFile: 'HylandKnowledgeEnrichment.UploadFile',

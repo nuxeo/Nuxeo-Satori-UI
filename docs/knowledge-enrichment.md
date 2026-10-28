@@ -1,17 +1,25 @@
 # Knowledge Enrichment
 
-Knowledge Enrichment (KE) in this repo runs through the **Hyland Content Intelligence Connector (CIC)** installed on Nuxeo. The Angular app does not call a separate backend for KE. Instead, it:
+Knowledge Enrichment (KE) in this repo runs through **`AgenticKnowledgeEnrichment.Enrich`**, a Nuxeo automation operation in `nuxeo-agentic-core`. The operation calls the **Hyland CIC Java SDK** (`org.hyland.sdk:cic-ke`), which handles the token request and the Context API calls. The Angular app does not call a separate backend for KE. Instead, it:
 
 1. fetches the current document blob from Nuxeo
-2. posts that blob to a Nuxeo automation op
-3. lets the connector handle KE authentication and Context API calls
+2. posts that blob to `AgenticKnowledgeEnrichment.Enrich`
+3. the operation calls the CIC Java SDK, which authenticates and calls the Context API
 4. writes the returned enrichment back into Nuxeo metadata
+
+The Hyland Content Intelligence Connector is no longer on the KE path. It is still installed for Knowledge Discovery and Ingest.
 
 ## Supported UI flows
 
-The document detail page exposes KE actions in the top-right header area of the document preview.
+The document detail page exposes KE actions in the top-right header area of the document preview. The text actions show for the document types listed under "Document types" below. The image action shows for images.
 
-### PDF
+### Document types
+
+The text actions (classify, extract entities, summarize) show for the MIME types in `KE_TEXT_MIME_TYPES` in `document-detail.ts`: PDF, Word, PowerPoint, Excel, RTF, OpenDocument text, presentation and spreadsheet, plain text, HTML, Markdown and CSV. The SDK accepts all Data Curation formats, but Hyland publishes no list, so this set is a guess and has not been tested for each type. Video and audio show no KE buttons.
+
+The image action shows for any `image/*` MIME type or a picture document. A Note has no file, so it shows no KE buttons.
+
+### Classification (PDF and other text types)
 
 - `text-classification` -> persisted to `dc:nature` and shown as `Document Category`
   - Candidate classes are loaded live from the Nuxeo `nature` vocabulary
@@ -30,9 +38,9 @@ The document detail page exposes KE actions in the top-right header area of the 
 
 ### Image
 
-- `image-description` + `named-entity-recognition-image` run together from one action
+- `imageDescription` + `namedEntityRecognitionImage` run together from one action
 - description is persisted to `dc:description`
-- image entities are persisted to `nxtag:tags`
+- image entities are persisted to `nxtag:tags`. If the Context API finds no entities, the tags are empty and no error is shown, so a successful call can save only the description.
 
 This mapping follows the KE end-user guide linked from `NXSAT-143` and keeps the results visible in the existing properties panel without introducing CSX components.
 
@@ -40,38 +48,27 @@ This mapping follows the KE end-user guide linked from `NXSAT-143` and keeps the
 
 Shared client: `@agentic-ui/shared/ke-client`
 
-Primary automation op:
+Automation op:
 
-- `HylandKnowledgeEnrichment.Enrich`
+- `AgenticKnowledgeEnrichment.Enrich`, registered in `nuxeo-agentic-core` (`OSGI-INF/knowledge-enrichment-operation-contrib.xml`)
+- Implemented by `KnowledgeEnrichmentOperation.java`, which calls `KEService.enrich` from `org.hyland.sdk:cic-ke` 1.1.0
+- Client credentials and environment come from `nuxeo.hyland.cic.*` properties; see "Required Nuxeo config" below
 
-Other verified KE-related ops available on the live Nuxeo server:
-
-- `HylandKnowledgeEnrichment.SendForEnrichment`
-- `HylandKnowledgeEnrichment.GetEnrichmentResults`
-- `HylandKnowledgeEnrichment.UploadFile`
-- `HylandKnowledgeEnrichment.Invoke`
-- `HylandKnowledgeEnrichment.Configure`
-- `HylandContentIntelligence.GetContributionNames`
-
-`HylandKnowledgeEnrichment.Enrich` accepts multipart input:
+The op accepts multipart input:
 
 - a JSON part named `request`
 - a blob part named `input`
 
-This was verified live against the local Nuxeo container. When KE config is missing, the op currently fails with:
+Requests that fail in the Context API return HTTP 500 from Nuxeo with the Context API's status and reason in the message, for example `Knowledge Enrichment failed: HTTP 400: ...`. The operation maps `maxWordCount` only to `textSummarization`, because the image actions reject it.
 
-```text
-No authentication info for calling the Enrichment service.
-```
-
-That proves the browser-to-Nuxeo multipart shape is correct and the remaining blocker is server-side KE configuration, not the Angular request format.
+The connector's ops (`HylandKnowledgeEnrichment.*`) are no longer called by the app. They remain installed for Knowledge Discovery and Ingest.
 
 ## Request shape
 
 The shared client posts multipart form data to:
 
 ```text
-/nuxeo/site/automation/HylandKnowledgeEnrichment.Enrich
+/nuxeo/site/automation/AgenticKnowledgeEnrichment.Enrich
 ```
 
 The `request` part contains:
@@ -134,7 +131,7 @@ Some connector builds may also wrap that in a generic:
 
 ## Required Nuxeo config
 
-The KE contribution inside the CIC bundle reads these properties:
+`AgenticKnowledgeEnrichment.Enrich` reads these properties. The SDK requests a token from `nuxeo.hyland.cic.auth.baseUrl` with `/connect/token` appended, using the grant type and scope below:
 
 ```conf
 nuxeo.hyland.cic.auth.baseUrl=...
@@ -143,7 +140,12 @@ nuxeo.hyland.cic.enrichment.clientId=...
 nuxeo.hyland.cic.enrichment.clientSecret=...
 nuxeo.hyland.cic.enrichment.auth.grantType=client_credentials
 nuxeo.hyland.cic.enrichment.auth.scope=environment_authorization
+nuxeo.hyland.cic.enrichment.environment=...
 ```
+
+`nuxeo.hyland.cic.enrichment.environment` is the HXP environment ID. If it is unset, the operation falls back to `nuxeo.hyland.cic.ingest.environment`. Both should point at the same Content Intelligence environment.
+
+Config files must use Unix line endings. A Windows `CRLF` line in `50-hyland-cic.conf` left the environment key unread in the local container.
 
 The KE upload path also uses the CIC ingest contribution:
 
@@ -203,7 +205,7 @@ Fix:
    nuxeo.hyland.cic.enrichment.clientSecret=<new-secret>
    ```
 
-4. Restart Nuxeo (`docker restart nuxeo`) so the connector reloads the new credentials, then re-run
+4. Restart Nuxeo (`docker restart nuxeo`) so it reloads the new credentials, then re-run
    `./scripts/verify-ke-dev-connectivity.sh`. Expected output:
 
    ```text
@@ -239,47 +241,29 @@ Application binding in step 1 is wrong — pick a different `Application*` value
 
 ## Verification steps
 
-1. Confirm the connector exposes KE contributions:
+1. Confirm the operation is registered. An unauthenticated POST returns 401 when it exists, and 404 when it doesn't:
 
 ```bash
-docker exec nuxeo curl -s -u Administrator:Administrator \
-  -X POST -H "Content-Type: application/json" \
-  http://localhost:8080/nuxeo/site/automation/HylandContentIntelligence.GetContributionNames \
-  -d '{"params":{"which":"knowledgeEnrichment"}}'
+curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  "http://localhost:8080/nuxeo/site/automation/AgenticKnowledgeEnrichment.Enrich"
 ```
 
-Expected result:
-
-```json
-{ "knowledgeEnrichment": ["default"] }
-```
-
-2. Smoke test the multipart KE op:
+2. Run the connectivity check. It requests a token and calls the presigned-URL endpoint. Both should succeed:
 
 ```bash
-printf 'KE smoke test' >/tmp/ke-sample.txt
-
-curl -sS -u Administrator:Administrator \
-  -X POST "http://localhost:8080/nuxeo/site/automation/HylandKnowledgeEnrichment.Enrich" \
-  -H "Accept: application/json" \
-  -F "request={\"params\":{\"actions\":\"textSummarization\"}};type=application/json" \
-  -F "input=@/tmp/ke-sample.txt;type=text/plain"
+export KE_ENRICHMENT_CLIENT_ID=<client id>
+export KE_ENRICHMENT_CLIENT_SECRET=<client secret>
+bash scripts/verify-ke-dev-connectivity.sh
 ```
 
-If config is still missing, the current expected failure is the connector error above. Once KE credentials are configured, this should return a JSON result payload instead.
-
-If it returns a generic connector envelope like this:
-
-```json
-{ "response": {}, "responseMessage": "Forbidden", "responseCode": 403 }
-```
-
-the connector reached the Context API, but the configured KE service account is not authorized for the Context API presigned upload endpoint.
+Expected output: `OK: Dev IDP issued a KE access token.` and `OK: Context Enrichment presigned URL endpoint returned HTTP 200.`
 
 3. In the UI, upload:
 
-- a PDF for classification, entity extraction, and summarization
+- a PDF, or another supported text type, for classification, entity extraction, and summarization
 - an image for description and image entity extraction
+
+A 500 from the operation means the Context API rejected the request. The message names the HTTP status and the reason. A 403 usually means the KE client lacks the Context API permissions, and the section on separate External Applications explains the fix.
 
 4. After each action, verify the properties panel refreshes:
 

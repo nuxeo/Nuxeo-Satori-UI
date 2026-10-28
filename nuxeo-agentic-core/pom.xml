@@ -14,7 +14,37 @@
   <name>Nuxeo Agentic Core</name>
   <description>OSGi bundle: startup page, auth config, notification URL codec, and the configuration service that serves packaged UI configuration for Agentic UI</description>
 
+  <properties>
+    <cic-java-sdk.version>1.1.0</cic-java-sdk.version>
+  </properties>
+
+  <repositories>
+    <!-- GitHub Packages. Reading needs a PAT with read:packages, authorized for the Hyland org (SSO). -->
+    <repository>
+      <id>github-hyland-cic-java-sdk</id>
+      <url>https://maven.pkg.github.com/Hyland/cic-java-sdk</url>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
   <dependencies>
+    <dependency>
+      <groupId>org.hyland.sdk</groupId>
+      <artifactId>cic-ke</artifactId>
+      <version>${cic-java-sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.hyland.sdk</groupId>
+      <artifactId>cic-http-client-jackson2</artifactId>
+      <version>${cic-java-sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.automation</groupId>
+      <artifactId>nuxeo-automation-core</artifactId>
+      <scope>provided</scope>
+    </dependency>
     <dependency>
       <groupId>org.nuxeo.ecm.core</groupId>
       <artifactId>nuxeo-core-api</artifactId>

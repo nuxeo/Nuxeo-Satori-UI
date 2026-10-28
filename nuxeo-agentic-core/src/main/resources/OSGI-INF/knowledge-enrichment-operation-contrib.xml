@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.ke.operation">
+
+  <documentation>
+    Registers AgenticKnowledgeEnrichment.Enrich, the Knowledge Enrichment operation backed by the
+    Hyland CIC Java SDK (org.hyland.sdk:cic-ke). The Agentic UI calls it in place of the
+    Content Intelligence Connector's HylandKnowledgeEnrichment.Enrich.
+  </documentation>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">
+    <operation class="org.nuxeo.agentic.ke.KnowledgeEnrichmentOperation" />
+  </extension>
+
+</component>
