@@ -395,6 +395,108 @@ describe('BrowseService', () => {
     expect(result.entries.map((e) => e.title)).toEqual(['Domain', 'Domain-5']);
   });
 
+  /**
+   * The restricted-root fallback cannot page its source: `getAccessibleTopLevelNavNodes` asks for
+   * one page and `nxqlSearch` takes no page index, so every page index re-requests page zero.
+   * `hasNextPage` therefore has to mean "there is a page of rows to go to", not "the server holds
+   * more" — it used to be `paged.hasNextPage || hasMore`, which offered a next page that rendered
+   * nothing and still offered another, for ever.
+   */
+  describe('the restricted-root fallback, whose source it cannot page', () => {
+    /** Drives `/path/` to 403 twice and the domain NXQL and tree provider to empty. */
+    function reachNavNodesFallback(): void {
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/path/')
+        .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/path/')
+        .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+      httpMock
+        .expectOne(
+          (r) =>
+            r.url === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
+            r.params.get('query')?.includes('FROM Domain') === true,
+        )
+        .flush({
+          entries: [],
+          totalSize: 0,
+          currentPageSize: 0,
+          currentPageIndex: 0,
+          numberOfPages: 0,
+        });
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/search/pp/tree_children/execute')
+        .flush({
+          entries: [],
+          totalSize: 0,
+          currentPageSize: 0,
+          currentPageIndex: 0,
+          numberOfPages: 1,
+          isNextPageAvailable: false,
+        });
+    }
+
+    /** Two accessible nodes and `isNextPageAvailable`, i.e. a source with more it cannot reach. */
+    function flushTruncatedNavNodes(): void {
+      httpMock
+        .expectOne(
+          (r) =>
+            r.url === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
+            r.params.get('query')?.includes("ecm:primaryType IN ('Domain', 'Workspace'") === true,
+        )
+        .flush({
+          entries: [
+            {
+              uid: 'ws-1',
+              title: 'One',
+              type: 'Workspace',
+              path: '/default-domain/UserWorkspaces/one',
+              parentRef: 'uwr',
+              properties: {},
+            },
+            {
+              uid: 'ws-2',
+              title: 'Two',
+              type: 'Workspace',
+              path: '/default-domain/UserWorkspaces/two',
+              parentRef: 'uwr',
+              properties: {},
+            },
+          ],
+          totalSize: 2,
+          currentPageSize: 2,
+          currentPageIndex: 0,
+          numberOfPages: 1,
+          // The source holds more than it handed over.
+          isNextPageAvailable: true,
+        });
+    }
+
+    it('offers no next page it cannot deliver', async () => {
+      const result$ = firstValueFrom(service.getBrowseFolderContents('/', 2));
+      reachNavNodesFallback();
+      flushTruncatedNavNodes();
+
+      const result = await result$;
+      expect(result.entries.map((e) => e.uid)).toEqual(['ws-1', 'ws-2']);
+      // Page one would slice past a two-element array and render nothing.
+      expect(result.hasNextPage).toBe(false);
+    });
+
+    it('does not keep offering one when a later page has already come back empty', async () => {
+      const result$ = firstValueFrom(
+        service.getBrowseFolderContents('/', 2, { currentPageIndex: 1 }),
+      );
+      reachNavNodesFallback();
+      flushTruncatedNavNodes();
+
+      const result = await result$;
+      // The defect this guards: no rows, and a next page offered anyway.
+      expect(result.entries).toEqual([]);
+      expect(result.hasNextPage).toBe(false);
+    });
+  });
+
   it('getBrowseFolderContents redirects workspace-only users from repository root', async () => {
     const result$ = firstValueFrom(service.getBrowseFolderContents('/'));
 

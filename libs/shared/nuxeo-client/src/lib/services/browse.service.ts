@@ -297,15 +297,26 @@ export class BrowseService {
           return throwError(() => error);
         }
         return this.getNavTreeBootstrap(pageSize).pipe(
-          map(({ root, entries, hasMore }) => {
+          map(({ root, entries }) => {
             const paged = pageOfFullList(entries, pageSize, page);
             return {
               folder: root,
+              // `...paged` carries `hasNextPage`, and is deliberately the only thing that sets it.
+              //
+              // It used to be `paged.hasNextPage || hasMore === true`, so the folder scan could
+              // tell a truncated bootstrap from a complete one. The scan is gone, and for the
+              // pager — now the only reader — that OR was a defect:
+              // `getAccessibleTopLevelNavNodes` fetches **one** page and `nxqlSearch` takes no
+              // page index, so wherever `hasMore` was true, page 1 sliced past a `pageSize`-long
+              // array, rendered no rows, and still offered a next page. Endless empty pages, each
+              // one re-requesting page zero.
+              //
+              // So this reports only pages it can actually hand over. Where the bootstrap source
+              // was truncated, the listing then shows its first `pageSize` accessible nodes and
+              // says nothing about the rest — a real limitation, and the lesser one, because this
+              // fallback cannot page its source at all. `getNavTreeBootstrap` still returns
+              // `hasMore` for a caller that pages the list itself.
               ...paged,
-              // `pageOfFullList` can only reason about the slice it was given, so the source's own
-              // "there is more" has to survive the fallback or a scan reports a complete answer it
-              // does not have.
-              hasNextPage: paged.hasNextPage || hasMore === true,
               redirectTo: entries.length === 1 ? entries[0].path : undefined,
               // The bootstrap is not a query, so the caller still has to narrow this itself. It
               // hands back the whole accessible list, so narrowing it client-side is complete.
