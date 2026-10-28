@@ -766,6 +766,32 @@ describe('NxsTagEditorComponent', () => {
       expect(chips()).toEqual(['contract', 'q3', 'invoice']);
     });
 
+    it('does not read again on a later open when sign-out cut off the read on its way', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      tags.tagsOf.mockReturnValueOnce(new Subject<string[]>());
+      await mount();
+      expect(tags.tagsOf).toHaveBeenCalledTimes(1);
+
+      user.set(null);
+      user.set('bob');
+      TestBed.flushEffects();
+      await settle();
+      fixture.destroy();
+      await mount();
+
+      expect(tags.tagsOf).toHaveBeenCalledTimes(1);
+    });
+
     it('is not cancelled by a change that failed while the read was on its way', async () => {
       const added = new Subject<string[]>();
       tags.addTag.mockReturnValueOnce(added);

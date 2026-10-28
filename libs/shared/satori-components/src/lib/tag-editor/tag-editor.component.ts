@@ -249,16 +249,19 @@ export class NxsTagEditorComponent {
   private refresh(uid: string): Observable<readonly string[]> {
     let answered = false;
     let stored = false;
+    // A sign-out ends the read too, and its mark was cleared for the new session: it must not come back.
+    let ended = false;
     const answer = this.writes.answers.pipe(
       filter((saved) => saved.write.uid === uid && 'tags' in saved),
       tap(() => (answered = true)),
     );
+    const signedOut = this.writes.sessionsEnded.pipe(tap(() => (ended = true)));
     return this.tagService.tagsOf(uid).pipe(
       tap(() => (stored = true)),
       catchError(() => EMPTY),
-      takeUntil(merge(answer, this.writes.sessionsEnded)),
+      takeUntil(merge(answer, signedOut)),
       finalize(() => {
-        if (!answered && !stored) this.writes.keepUnheard(uid);
+        if (!answered && !stored && !ended) this.writes.keepUnheard(uid);
       }),
     );
   }

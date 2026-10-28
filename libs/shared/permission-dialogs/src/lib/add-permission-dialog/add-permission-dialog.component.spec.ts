@@ -167,7 +167,7 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
 
 describe('Add permission — rendered principal picker', () => {
   let fixture: ComponentFixture<AddPermissionDialogComponent>;
-  const search = vi.fn(() =>
+  const search = vi.fn((_term: string) =>
     of([
       {
         id: 'legal-team',
@@ -182,6 +182,44 @@ describe('Add permission — rendered principal picker', () => {
   afterEach(() => {
     fixture?.destroy();
     TestBed.resetTestingModule();
+  });
+
+  it('searches only from three typed characters', async () => {
+    vi.clearAllMocks();
+    TestBed.overrideProvider(NxsToastService, { useValue: { show: vi.fn(), error: vi.fn() } });
+    await TestBed.configureTestingModule({
+      imports: [AddPermissionDialogComponent, testTranslateModule()],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: MAT_DIALOG_DATA, useValue: { documentUid: 'doc-1' } },
+        { provide: MatDialogRef, useValue: { close: vi.fn() } },
+        {
+          provide: DocumentDetailService,
+          useValue: { searchUsersGroups: search, addPermissionWithNotification: add },
+        },
+        { provide: UserService, useValue: {} },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(AddPermissionDialogComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const box: HTMLInputElement = fixture.nativeElement.querySelector(
+      'nxs-user-group-picker input',
+    );
+    const typeText = async (text: string): Promise<void> => {
+      box.focus();
+      box.value = text;
+      box.dispatchEvent(new Event('input'));
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    };
+
+    await typeText('le');
+    expect(search).not.toHaveBeenCalled();
+    await typeText('leg');
+    expect(search.mock.calls[0]?.[0]).toBe('leg');
   });
 
   it('sends the selected raw group id and clears the form, error-free, after create-and-add-another', async () => {

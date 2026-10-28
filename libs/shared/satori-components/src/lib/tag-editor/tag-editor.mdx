@@ -25,8 +25,8 @@ The tag editor is a document's tags, added and removed in place. It is the count
 - **Never lost with the view.** A change is kept until Nuxeo answers it, even if the tab or panel
   holding the editor closes, or the host moves to another document, first, and its toast still
   shows. List `provideNxsTagWrites()` once in the application's providers and the next editor for
-  that document also shows what Nuxeo stored, and passes it on in `tagsChange`, unless the host has
-  loaded the document again since; without it, that editor shows the tags its host passes in until
+  that document also shows what Nuxeo stored, read from Nuxeo rather than the host's copy, and passes
+  it on in `tagsChange`. Without the provider, that editor shows the tags its host passes in until
   the host reloads the document.
 - **Never across users.** A change still waiting when its user signs out is dropped, not sent as
   whoever signs in next, and an answer that arrives after sign-out is neither shown nor kept. The
