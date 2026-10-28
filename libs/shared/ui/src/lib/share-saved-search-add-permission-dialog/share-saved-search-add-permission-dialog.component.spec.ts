@@ -106,8 +106,9 @@ describe('Saved-search sharing — principal picker integration', () => {
   it('clears the picker, error-free, after create-and-add-another and accumulates entries', async () => {
     await render();
     await pick();
-    // Leaving the picker for the button touches it.
-    box().dispatchEvent(new FocusEvent('blur'));
+    // Leaving the picker for the button touches it: focus moves out of the picker's host.
+    const button = fixture.nativeElement.querySelector('button[mat-flat-button]') as HTMLElement;
+    box().dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: button }));
     fixture.componentInstance.create(true);
     await settle();
     expect(box().value).toBe('');

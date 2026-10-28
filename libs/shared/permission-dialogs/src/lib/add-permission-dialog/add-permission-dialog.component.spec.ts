@@ -258,8 +258,9 @@ describe('Add permission — rendered principal picker', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(fixture.componentInstance.selectedUser()?.kind).toBe('group');
-    // Leaving the picker for the button touches it.
-    box.dispatchEvent(new FocusEvent('blur'));
+    // Leaving the picker for the button touches it: focus moves out of the picker's host.
+    const button = fixture.nativeElement.querySelector('button[mat-flat-button]') as HTMLElement;
+    box.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: button }));
     fixture.detectChanges();
     fixture.componentInstance.create(true);
     fixture.detectChanges();
