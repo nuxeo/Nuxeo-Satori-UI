@@ -160,11 +160,15 @@ Satori import fails the build rather than compiling. Only the opt-in `:satori` c
 `typecheck` type-checks the stories too.
 
 **Publishing.** `.github/workflows/storybook-pages.yml` builds the default configuration the same
-token-free way and deploys it to GitHub Pages on every push to `integration/nxsat-308` (to `main`
-once that merges, NXSAT-649). **Only that build may be published.** `satori-components-satori`'s
-Storybook bundles compiled `@hylandsoftware/*` modules, `--sat-*` tokens and Satori's fonts, and the
-`:satori` configuration the tokens and fonts; we may consume them but not redistribute them. This
-repository is public, so a workflow artifact is published too: neither build may be uploaded as one.
+token-free way and deploys it to GitHub Pages on every push to `main`. Its push trigger and its
+`deploy` job's `if:` name that branch twice and must be changed together: both still said
+`integration/nxsat-308` after it merged and was deleted, and because the second gates the
+deployment as well, not even a `workflow_dispatch` from `main` could refresh the site — it built,
+passed the publication gate, and stopped. **Only that build may be published.**
+`satori-components-satori`'s Storybook bundles compiled `@hylandsoftware/*` modules, `--sat-*`
+tokens and Satori's fonts, and the `:satori` configuration the tokens and fonts; we may consume them
+but not redistribute them. This repository is public, so a workflow artifact is published too:
+neither build may be uploaded as one.
 `scripts/storybook-publication-gate.mjs` refuses an artifact carrying any of them before upload, and
 CI runs it after its own build of this Storybook, so a change to the library that would block the
 deployment fails its pull request first. Its allowances are explicit and few: the Getting started
