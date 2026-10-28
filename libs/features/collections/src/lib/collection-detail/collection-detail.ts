@@ -1,11 +1,37 @@
 import {
+  NxsDateInputComponent,
+  NXS_PERMISSIONS_PANEL_ID,
+  NXS_PRIMITIVE_IDS,
+  NxsBreadcrumbsComponent,
+  NxsDeletePermissionDialogComponent,
+  NxsDocumentListComponent,
+  NxsFolderHeaderComponent,
+  NxsPermissionsPanelComponent,
+  NxsShareExternalDialogComponent,
+  NxsSpinnerComponent,
+  NxsUpdatePermissionDialogComponent,
+  nxsAceTimeFrame,
+  nxsErrorStatus,
+  provideNxsThumbnailCache,
+  NxsToastService,
+  provideNxsToast,
+  type NxsBreadcrumbItem,
+  type NxsDeletePermissionDialogData,
+  type NxsDocumentListColumn,
+  type NxsDocumentListSort,
+  type NxsErrorStatus,
+  type NxsShareExternalDialogData,
+  type NxsUpdatePermissionDialogData,
+} from '@nuxeo/satori-platform/components';
+
+import {
+  ChangeDetectionStrategy,
   Component,
   DestroyRef,
   LOCALE_ID,
   inject,
   signal,
   computed,
-  ChangeDetectionStrategy,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
@@ -24,7 +50,6 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 
 import {
   NuxeoDocument,
@@ -69,37 +94,12 @@ import {
   ConfirmDialogData,
   EditCollectionDialogComponent,
   EditCollectionDialogData,
-  DateMaskPipe,
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import {
-  NXS_PERMISSIONS_PANEL_ID,
-  NXS_PRIMITIVE_IDS,
-  NxsBreadcrumbsComponent,
-  NxsDeletePermissionDialogComponent,
-  NxsDocumentListComponent,
-  NxsFolderHeaderComponent,
-  NxsPermissionsPanelComponent,
-  NxsShareExternalDialogComponent,
-  NxsSpinnerComponent,
-  NxsUpdatePermissionDialogComponent,
-  nxsAceTimeFrame,
-  nxsErrorStatus,
-  provideNxsThumbnailCache,
-  NxsToastService,
-  provideNxsToast,
-  type NxsBreadcrumbItem,
-  type NxsDeletePermissionDialogData,
-  type NxsDocumentListColumn,
-  type NxsDocumentListSort,
-  type NxsErrorStatus,
-  type NxsShareExternalDialogData,
-  type NxsUpdatePermissionDialogData,
-} from '@nuxeo/satori-platform/components';
 
 /**
  * The property each member column sorts by on the server: the three columns this page shows, each
@@ -124,7 +124,7 @@ const MEMBER_PAGE_SIZE = 50;
     provideNxsThumbnailCache(),
   ],
   imports: [
-    DateMaskPipe,
+    NxsDateInputComponent,
     ExtensionOutletComponent,
     NxsBreadcrumbsComponent,
     NxsDocumentListComponent,
@@ -146,7 +146,6 @@ const MEMBER_PAGE_SIZE = 50;
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatDatepickerModule,
     SatAvatarModule,
   ],
   templateUrl: './collection-detail.html',

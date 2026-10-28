@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   type DoCheck,
+  ElementRef,
   booleanAttribute,
   computed,
   effect,
@@ -22,6 +23,7 @@ import type {
 } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
+import { MatChipGrid, MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInput, MatInputModule } from '@angular/material/input';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -35,8 +37,10 @@ import {
   type UserGroupSuggestion,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { NxsDocTypeIconComponent } from '../doc-type-icon/doc-type-icon.component';
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
 import { nxsSearchAsYouType } from '../pickers/search-as-you-type';
+import type { NxsPickerItem, NxsPickerOption } from '../pickers/suggestion-view';
 
 /** A user or a group, as the picker offers and returns it. */
 export interface NxsPrincipal {
@@ -55,6 +59,7 @@ export type NxsPrincipalSearch = 'users-and-groups' | 'users' | 'groups';
 
 /** Web UI's user suggestion starts searching at three characters. */
 const WEB_UI_MIN_CHARS = 3;
+let nextId = 0;
 
 /**
  * A field that finds a user or a group as the user types, and returns the one chosen — the picker
@@ -69,16 +74,26 @@ const WEB_UI_MIN_CHARS = 3;
 @Component({
   selector: 'nxs-user-group-picker',
   standalone: true,
-  templateUrl: './user-group-picker.component.html',
+  templateUrl: '../pickers/suggestion-picker.html',
   styleUrl: './user-group-picker.component.scss',
-  imports: [MatAutocompleteModule, MatButtonModule, MatIconModule, MatInputModule, TranslatePipe],
+  imports: [
+    MatAutocompleteModule,
+    MatButtonModule,
+    MatChipsModule,
+    MatIconModule,
+    MatInputModule,
+    NxsDocTypeIconComponent,
+    TranslatePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: nxsPickerProviders(() => NxsUserGroupPickerComponent),
-  host: { class: 'nxs-user-group-picker' },
+  host: { class: 'nxs-user-group-picker', '(focusout)': 'blurred($event)' },
 })
 export class NxsUserGroupPickerComponent implements ControlValueAccessor, Validator, DoCheck {
   /** The field's label, already translated. Required: the input has no other name. */
   readonly label = input.required<string>();
+  /** Choose several principals, shown as removable chips. The value is then an ordered array. */
+  readonly multiple = input(false, { transform: booleanAttribute });
   /** Whom to search: users and groups (the default), users only, or groups only. */
   readonly search = input<NxsPrincipalSearch>('users-and-groups');
   /** Characters typed before the server is asked. Web UI's three by default. */
@@ -89,15 +104,21 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
   readonly required = input(false, { transform: booleanAttribute });
   /** Shown but not editable. A form's `disable()` does the same. */
   readonly disabled = input(false, { transform: booleanAttribute });
-  /** The principal chosen, or `null`. Two-way; a form control carries the same value. */
-  readonly value = model<NxsPrincipal | null>(null);
+  /** The principal chosen, or `null`; with `multiple`, the ordered principals chosen. Two-way. */
+  readonly value = model<NxsPrincipal | readonly NxsPrincipal[] | null>(null);
 
-  private readonly input = viewChild.required(MatInput);
+  protected readonly inputId = `nxs-user-group-picker-${nextId++}`;
+  private readonly input = viewChild(MatInput);
+  private readonly grid = viewChild(MatChipGrid);
   private readonly documents = inject(DocumentDetailService);
   private readonly users = inject(UserService);
   private readonly announcer = inject(LiveAnnouncer);
   private readonly translate = inject(TranslateService);
-  private readonly control = new NxsPickerControl<NxsPrincipal | null>();
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly control = new NxsPickerControl<NxsPrincipal | readonly NxsPrincipal[] | null>();
+
+  private committed: NxsPrincipal | readonly NxsPrincipal[] | null = null;
+  private committedMultiple = false;
 
   /** What the input shows: the chosen principal's label, or what the user is typing. */
   protected readonly text = signal('');
@@ -106,8 +127,20 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
     () => this.minChars(),
   );
   protected readonly isDisabled = computed(() => this.disabled() || this.control.formDisabled());
-  /** Text typed and no principal chosen for it. */
-  protected readonly unmatched = computed(() => !this.value() && this.text().trim() !== '');
+  protected readonly chosen = computed<readonly NxsPrincipal[]>(() => {
+    const value = this.value();
+    return value && 'prefixedId' in value ? [value] : (value ?? []);
+  });
+  protected readonly options = computed(() => {
+    const taken = new Set(
+      this.multiple() ? this.chosen().map((principal) => principal.prefixedId) : [],
+    );
+    return this.finder.state().results.filter((principal) => !taken.has(principal.prefixedId));
+  });
+  /** In multiple mode the text is always a new, uncommitted choice. */
+  protected readonly unmatched = computed(
+    () => this.text().trim() !== '' && (this.multiple() || this.chosen().length === 0),
+  );
   protected readonly errorState = {
     isErrorState: () =>
       this.control.wasTouched() &&
@@ -116,16 +149,42 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
   protected readonly displayWith = (principal: NxsPrincipal | string | null): string =>
     typeof principal === 'string' ? principal : (principal?.label ?? '');
 
+  protected readonly pickerKind: 'principal' | 'document' = 'principal';
+  protected readonly minimumCharacters = this.minChars;
+  protected readonly chosenItems = computed<readonly NxsPickerItem<NxsPrincipal>[]>(() =>
+    this.chosen().map((principal) => ({
+      value: principal,
+      key: principal.prefixedId,
+      label: principal.label,
+    })),
+  );
+  protected readonly optionItems = computed<readonly NxsPickerOption<NxsPrincipal>[]>(() =>
+    this.options().map((principal) => ({
+      value: principal,
+      key: principal.prefixedId,
+      label: principal.label,
+      icon: principal.kind === 'group' ? 'user_group' : 'user',
+      detailKey: `satori-components.user-group-picker.${principal.kind}`,
+      detail: principal.email ? ' · ' + principal.email : '',
+    })),
+  );
+
   constructor() {
     effect(() => {
-      const chosen = this.value();
+      const value = this.value();
+      const multiple = this.multiple();
       untracked(() => {
-        if (chosen) this.text.set(chosen.label);
+        if (value === this.committed && multiple === this.committedMultiple) return;
+        this.committed = value;
+        this.committedMultiple = multiple;
+        this.finder.reset();
+        this.text.set(multiple ? '' : (this.chosen()[0]?.label ?? ''));
       });
     });
     effect(() => {
-      const { status, results } = this.finder.state();
-      untracked(() => this.announce(status, results.length));
+      const { status } = this.finder.state();
+      const count = this.options().length;
+      untracked(() => this.announce(status === 'found' && !count ? 'none' : status, count));
     });
     effect(() => {
       this.unmatched();
@@ -138,7 +197,8 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
    * one has none — the form is on the picker — so the picker asks it to on every check.
    */
   ngDoCheck(): void {
-    this.input().updateErrorState();
+    this.input()?.updateErrorState();
+    this.grid()?.updateErrorState();
   }
 
   validate(control: AbstractControl): ValidationErrors | null {
@@ -150,15 +210,16 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
   }
 
   protected missing(): boolean {
-    return this.control.missing(this.required(), this.value() === null);
+    return this.control.missing(this.required(), this.chosen().length === 0);
   }
 
-  writeValue(value: NxsPrincipal | null): void {
-    this.value.set(value ?? null);
-    this.text.set(value?.label ?? '');
+  writeValue(value: NxsPrincipal | readonly NxsPrincipal[] | null): void {
+    this.value.set(value ?? (this.multiple() ? [] : null));
+    this.text.set(this.multiple() ? '' : (this.chosen()[0]?.label ?? ''));
+    this.finder.reset();
   }
 
-  registerOnChange(fn: (value: NxsPrincipal | null) => void): void {
+  registerOnChange(fn: (value: NxsPrincipal | readonly NxsPrincipal[] | null) => void): void {
     this.control.registerOnChange(fn);
   }
 
@@ -173,27 +234,50 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
   protected onInput(event: Event): void {
     const typed = (event.target as HTMLInputElement).value;
     this.text.set(typed);
-    if (this.value() && typed !== this.value()?.label) this.choose(null);
+    if (!this.multiple() && this.chosen().length && typed !== this.chosen()[0].label)
+      this.choose(null);
     this.finder.query(typed);
   }
 
   protected choose(principal: NxsPrincipal | null): void {
-    this.value.set(principal);
-    if (principal) {
-      this.text.set(principal.label);
+    if (this.isDisabled()) return;
+    if (this.multiple()) {
+      if (!principal || this.chosen().some((chosen) => chosen.prefixedId === principal.prefixedId))
+        return;
+      // Clear the search first: the form validates inside `commit`, and must not see it pending.
+      this.text.set('');
       this.finder.reset();
+      this.commit([...this.chosen(), principal]);
+    } else {
+      // Show the choice before `commit`: a form may reset the field from inside it, and the reset
+      // must be what stays on screen.
+      if (principal) {
+        this.text.set(principal.label);
+        this.finder.reset();
+      }
+      this.commit(principal);
     }
-    this.control.changed(principal);
   }
 
   protected clear(): void {
     this.text.set('');
     this.finder.reset();
-    this.choose(null);
+    this.commit(this.multiple() ? [] : null);
   }
 
-  protected blurred(): void {
-    this.control.blurred();
+  protected remove(principal: NxsPrincipal): void {
+    if (this.isDisabled()) return;
+    this.commit(this.chosen().filter((chosen) => chosen.prefixedId !== principal.prefixedId));
+  }
+
+  private commit(value: NxsPrincipal | readonly NxsPrincipal[] | null): void {
+    this.committed = value;
+    this.value.set(value);
+    this.control.changed(value);
+  }
+
+  protected blurred(event: FocusEvent): void {
+    this.control.focusLeft(this.host.nativeElement, event);
   }
 
   private find(term: string): Observable<readonly NxsPrincipal[]> {

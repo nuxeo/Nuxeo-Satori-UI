@@ -1,0 +1,101 @@
+name: Cross-platform Beta tooling
+
+on:
+  pull_request:
+    branches: [main, 'integration/**']
+  push:
+    # Match CodeQL's triggers: a new feature branch has no analysis until its PR opens.
+    branches: [main, 'integration/**']
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+  security-events: read
+
+jobs:
+  arguments:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Argument transport and negative-control tests
+        run: node --test scripts/beta-harness/package-command.selftest.mjs scripts/beta-harness/sanitizer-path.selftest.mjs scripts/e2e-negative-control.selftest.mjs
+
+  windows-gate:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      NX_DAEMON: 'false'
+      NX_ISOLATE_PLUGINS: 'false'
+      GH_TOKEN: ${{ github.token }}
+      SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+      AGENTIC_UI_EVIDENCE_DIR: ${{ github.workspace }}/gate-evidence
+      NX_BASE: ${{ github.event.pull_request.base.sha || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'origin/main' }}
+      SANITIZER_AUDIT_BASE_REF: ${{ github.event.pull_request.base.sha || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'origin/main' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install the locked dependency tree
+        run: npm ci
+      - name: Generate the documentation imported by spec typechecks
+        run: npx nx run satori-components:compodoc
+      - name: Build the application required by the bundle gate
+        run: npx nx build nuxeo-ui
+      - name: CodeQL wait controls
+        run: node --test scripts/beta-harness/windows-codeql-wait.selftest.mjs
+      - name: Native console transport and fatal-error controls
+        run: node --test scripts/beta-harness/windows-console.selftest.mjs
+      - name: Wait for CodeQL on this revision
+        id: wait-codeql
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headSha = context.payload.pull_request?.head.sha ?? context.sha;
+            const prNumber = context.payload.pull_request?.number;
+            const deadline = Date.now() + 15 * 60_000;
+            while (Date.now() < deadline) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                ...context.repo, workflow_id: 'codeql.yml', head_sha: headSha,
+                event: context.eventName, per_page: 100,
+              });
+              const run = data.workflow_runs.find((candidate) => candidate.head_sha === headSha && (
+                prNumber ? candidate.pull_requests.some((pr) => pr.number === prNumber)
+                  : candidate.head_branch === context.ref.replace('refs/heads/', '')
+              ));
+              if (run?.status === 'completed') {
+                if (run.conclusion !== 'success') {
+                  throw new Error(`CodeQL ended with ${run.conclusion}: ${run.html_url}`);
+                }
+                const { data: analyses } = await github.rest.codeScanning.listRecentAnalyses({
+                  ...context.repo, ref: context.ref, per_page: 100,
+                });
+                if (analyses.some((analysis) => analysis.ref === context.ref &&
+                  analysis.commit_sha === context.sha && analysis.tool.name === 'CodeQL')) {
+                  core.info(`CodeQL completed for ${context.ref} at ${context.sha}`);
+                  return;
+                }
+              }
+              core.info(`Waiting for CodeQL and its analysis of ${context.ref} at ${context.sha}`);
+              await new Promise((resolve) => setTimeout(resolve, 15_000));
+            }
+            throw new Error(`No completed CodeQL analysis of ${context.ref} at ${context.sha} within 15 minutes`);
+      - name: Full Beta gate on Windows
+        run: npm run beta:gate -- --phase windows-ci --require-complete
+      - name: Preserve gate verdict and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-beta-gate
+          path: gate-evidence/beta/gates/
+          if-no-files-found: warn

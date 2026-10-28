@@ -34,31 +34,21 @@
   }
 
   <div class="nxs-update-permission-dialog__dates">
-    <mat-form-field appearance="outline">
-      <mat-label>{{ 'satori-components.permission-dialogs.from' | translate }}</mat-label>
-      <input
-        matInput
-        [matDatepicker]="beginPicker"
-        [disabled]="!dated()"
-        [value]="beginField()"
-        (dateChange)="begin.set(fieldDay($event.value))"
-      />
-      <mat-datepicker-toggle matIconSuffix [for]="beginPicker" />
-      <mat-datepicker #beginPicker />
-    </mat-form-field>
-    <mat-form-field appearance="outline">
-      <mat-label>{{ 'satori-components.permission-dialogs.to' | translate }}</mat-label>
-      <input
-        matInput
-        [matDatepicker]="endPicker"
-        [required]="external"
-        [disabled]="!dated()"
-        [value]="endField()"
-        (dateChange)="end.set(fieldDay($event.value))"
-      />
-      <mat-datepicker-toggle matIconSuffix [for]="endPicker" />
-      <mat-datepicker #endPicker />
-    </mat-form-field>
+    <nxs-date-input
+      #beginDateControl="ngModel"
+      [label]="'satori-components.permission-dialogs.from' | translate"
+      [disabled]="!dated()"
+      [ngModel]="begin()"
+      (ngModelChange)="begin.set($event)"
+    />
+    <nxs-date-input
+      #endDateControl="ngModel"
+      [label]="'satori-components.permission-dialogs.to' | translate"
+      [required]="external"
+      [disabled]="!dated()"
+      [ngModel]="end()"
+      (ngModelChange)="end.set($event)"
+    />
   </div>
   @if (endBeforeBegin()) {
     <p class="nxs-update-permission-dialog__error" role="alert">
@@ -95,7 +85,7 @@
     mat-flat-button
     type="button"
     class="nxs-update-permission-dialog__update"
-    [disabled]="!valid() || saving()"
+    [disabled]="!datesValid() || !valid() || saving()"
     (click)="update()"
   >
     @if (saving()) {

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync } from './package-command.mjs';
+
 /**
  * Dependency-tree gate — NXSAT-308 acceptance criterion 3: *no adf-hx, adf-core, adf-extensions
  * or js-api package remains in the dependency tree, checked in CI.*
@@ -70,7 +72,6 @@
  * clean tree · 2 a location could not be inspected.
  */
 
-import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
@@ -204,7 +205,7 @@ const notes = [];
         'the gate cannot say the installed tree is clean when there is none.',
     );
   } else {
-    const proc = spawnSync('npm', ['ls', '--all', '--json', '--long'], {
+    const proc = spawnToolSync('npm', ['ls', '--all', '--json', '--long'], {
       cwd: root,
       encoding: 'utf8',
       maxBuffer: 1024 * 1024 * 1024,

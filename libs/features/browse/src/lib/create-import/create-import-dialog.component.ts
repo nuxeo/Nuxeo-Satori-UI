@@ -1,4 +1,18 @@
 import { NgTemplateOutlet } from '@angular/common';
+import {
+  NxsBannerComponent,
+  NxsChipSetComponent,
+  type NxsChipItem,
+  NxsDateInputComponent,
+  NxsDocTypeIconComponent,
+  NxsDropzoneComponent,
+  NxsSpinnerComponent,
+  NxsToastService,
+  NxsUploadQueue,
+  NxsUploadQueueComponent,
+  provideNxsToast,
+} from '@nuxeo/satori-platform/components';
+
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import {
   Component,
@@ -20,7 +34,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -62,22 +75,9 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
-  DateMaskPipe,
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
-import {
-  NxsBannerComponent,
-  NxsChipSetComponent,
-  type NxsChipItem,
-  NxsDocTypeIconComponent,
-  NxsDropzoneComponent,
-  NxsSpinnerComponent,
-  NxsToastService,
-  NxsUploadQueue,
-  NxsUploadQueueComponent,
-  provideNxsToast,
-} from '@nuxeo/satori-platform/components';
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */
@@ -172,7 +172,7 @@ const DIALOG_SIZE = {
   selector: 'lib-create-import-dialog',
   standalone: true,
   imports: [
-    DateMaskPipe,
+    NxsDateInputComponent,
     NgTemplateOutlet,
     NxsBannerComponent,
     NxsChipSetComponent,
@@ -187,7 +187,6 @@ const DIALOG_SIZE = {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatDatepickerModule,
     MatProgressBarModule,
     MatSlideToggleModule,
     MatCheckboxModule,

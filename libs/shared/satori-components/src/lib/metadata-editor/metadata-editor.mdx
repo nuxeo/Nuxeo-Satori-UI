@@ -27,7 +27,8 @@ dialogs.
 - **Only what changed.** `dirtyProperties()` returns the fields the user edited, so an edit sends
   nothing it did not touch. `properties()` returns everything, for a create.
 - **Server errors on their fields.** `showServerErrors()` places Nuxeo's validation messages on the
-  fields they name and hands back any it cannot place.
+  fields they name, each tied to its field's input by `aria-describedby`, and hands back any it
+  cannot place.
 - **Sections or tabs.** The type's sections follow one another under headings, or become tabs.
 
 ## Demo showcase
@@ -65,7 +66,7 @@ export const usageTs = `save(editor: NxsMetadataEditorComponent): void {
 <Source language="ts" dark code={usageTs} />
 
 The host owns the buttons and the request. The editor needs `DirectoryService` for vocabulary
-entries, and provides its own date adapter: a typed date is read in the order the user's locale
+entries, asking once per directory while it is open however many fields use one, and provides its own date adapter: a typed date is read in the order the user's locale
 writes dates — `03/04/2026` is 3 April in French — unless the host provides a date adapter of its
 own, which the editor then uses. That adapter's dates need not be JS `Date`s; a Luxon `DateTime`
 or another library's date works too. `properties()` and `dirtyProperties()` give a date as an ISO

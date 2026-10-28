@@ -123,10 +123,10 @@ function toDate(value: unknown): Date | null {
 }
 
 /**
- * The instant each date control was built from, for a date adapter that does not hold JS dates. A
- * Nuxeo date property is an instant, and the datepicker edits only its day; an adapter holding JS
- * dates keeps the instant in the control's value itself, but one holding calendar days does not.
- * So the instant is written back while the control still names its day, as it is for JS dates.
+ * The instant each date control was built from. A Nuxeo date property is an instant, and the date
+ * field edits only its day: whatever the adapter, a day typed or picked arrives as a JS `Date` at
+ * local midnight, and an adapter holding calendar days never held the time at all. So the instant
+ * is written back while the control still names its day — cleared and typed again included.
  */
 const builtInstants = new WeakMap<AbstractControl, Date>();
 
@@ -258,9 +258,11 @@ export function propertyValue(
       propertyValue({ ...definition, type: 'complex' }, item, adapter, depth),
     );
   }
+  // Before the generic `Date` branch: `nxs-date-input` gives a JS `Date` whatever the adapter, and
+  // only `dateProperty` keeps the time of day of an instant whose day is unchanged.
+  if (kind === 'date') return dateProperty(control, adapter);
   const value: unknown = control.value;
   if (value instanceof Date) return value.toISOString();
-  if (kind === 'date') return dateProperty(control, adapter);
   if (typeof value === 'string') {
     if (value.trim() === '') return null;
     return multiline ? value : value.trim();
@@ -281,7 +283,7 @@ export function firstError(control: AbstractControl): FieldError | null {
   if (typeof errors['server'] === 'string')
     return { key: 'server', params: { message: errors['server'] } };
   if (errors['required']) return { key: 'required', params: {} };
-  if (errors['matDatepickerParse']) return { key: 'date', params: {} };
+  if (errors['nxsDateParse']) return { key: 'date', params: {} };
   for (const key of ['number', 'integer', 'pattern', 'item']) {
     if (errors[key]) return { key, params: {} };
   }

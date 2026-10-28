@@ -7,7 +7,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatIconModule } from '@angular/material/icon';
 import { Subject, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
@@ -17,7 +16,7 @@ import {
   permissionRightLabel,
   type UserGroupSuggestion,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { nxsOfferedRights } from '@nuxeo/satori-platform/components';
+import { NxsDateInputComponent, nxsOfferedRights } from '@nuxeo/satori-platform/components';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
 import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';
@@ -62,6 +61,7 @@ export interface ShareSavedSearchAddPermissionResult {
   selector: 'lib-share-saved-search-add-permission-dialog',
   standalone: true,
   imports: [
+    NxsDateInputComponent,
     TranslatePipe,
     FormsModule,
     MatDialogModule,
@@ -71,7 +71,6 @@ export interface ShareSavedSearchAddPermissionResult {
     MatButtonModule,
     MatRadioModule,
     MatCheckboxModule,
-    MatDatepickerModule,
     MatAutocompleteModule,
     MatIconModule,
   ],

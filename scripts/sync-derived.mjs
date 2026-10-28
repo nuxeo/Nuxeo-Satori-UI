@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync } from './beta-harness/package-command.mjs';
+
 /**
  * Regenerate the repository's shared derived files after merging a base branch — never hand-merge
  * them.
@@ -121,7 +123,7 @@ function main() {
   const base = option('--base') ?? process.env.NX_BASE ?? 'origin/main';
 
   const run = (cmd, args, { capture = false } = {}) =>
-    spawnSync(cmd, args, {
+    spawnToolSync(cmd, args, {
       cwd: root,
       encoding: 'utf8',
       stdio: capture ? 'pipe' : 'inherit',
