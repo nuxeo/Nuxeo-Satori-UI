@@ -656,14 +656,31 @@ export class BrowseComponent {
     if (!scanned) return null;
     if (this.scannedPath() !== this.browsePath()) return null;
     if (this.scannedSortKey() !== this.serverSortKey()) return null;
-    // Optimistic paste rows belong here too. The scan reads the same eventually-consistent
-    // `@children` the page does, so a document pasted a moment ago is in neither until Nuxeo
-    // catches up — and `reconcilePendingPasteEntries` only patches `entries()`.
-    const pending = this.pendingPasteList();
-    if (pending.length === 0) return scanned;
+
+    /**
+     * The scan, plus anything the loaded page or an optimistic paste has that it lacks.
+     *
+     * A scan can genuinely be missing a child the page already holds, and the paste path shows
+     * why: `@children` is eventually consistent, so a scan that finished before Nuxeo listed a
+     * pasted document ends up without it. `reconcilePendingPasteEntries()` then drops the
+     * optimistic row the moment the **page** includes it — which left the document in `entries()`
+     * and absent from the scan the filter reads, so it disappeared from filtered results.
+     *
+     * Folding only the pending rows in was not enough, because reconciliation is keyed on the page
+     * rather than on the scan. Merging both makes this scope a superset of the unfiltered listing,
+     * so a filter can never show less than browsing the folder would — which closes that race and
+     * any other way the scan falls behind the page. Everything merged is a child of this same
+     * folder, so nothing foreign can enter.
+     */
+    const merged = [...scanned];
     const seen = new Set(scanned.map((doc) => doc.uid));
-    const additions = pending.filter((doc) => doc.uid && !seen.has(doc.uid));
-    return additions.length > 0 ? [...scanned, ...additions] : scanned;
+    for (const doc of [...this.entries(), ...this.pendingPasteList()]) {
+      if (doc.uid && !seen.has(doc.uid)) {
+        seen.add(doc.uid);
+        merged.push(doc);
+      }
+    }
+    return merged.length === scanned.length ? scanned : merged;
   });
 
   /**

@@ -1255,6 +1255,46 @@ describe('BrowseComponent — rendered document list', () => {
     expect(component.singleSelectedEntry()?.title).toBe('Pasted Report');
   });
 
+  /**
+   * The reconciliation race, in the completion order that exposes it.
+   *
+   * The page has caught up and lists the pasted document, so
+   * `reconcilePendingPasteEntries()` has dropped the optimistic row — but the scan finished
+   * earlier, before Nuxeo listed it, so the scan does not have it. Reading the scan alone made the
+   * document vanish from filtered results while `entries()` still held it.
+   */
+  it('keeps a pasted document in filtered results when the page has it but the scan does not', async () => {
+    const pasted = doc({ uid: 'c-50', title: 'Pasted Report' });
+    // The page has caught up...
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Q1 Report' }), pasted],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+    // ...while the scan, which finished first, has not.
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: false }),
+    );
+
+    const component = await render();
+    // Nothing is pending: the page listing it is exactly what reconciliation removes it for.
+    expect(rowTitles()).toEqual(['Q1 Report', 'Pasted Report']);
+
+    component.filterText.set('report');
+    await settle();
+
+    // A filter must not show less than browsing the folder does.
+    expect(rowTitles()).toContain('Pasted Report');
+    expect(component.filteredAcrossFolder()).toBe(true);
+    expect(component.singleSelectedEntry()).toBeNull();
+    component.onListSelectionChange(['c-50']);
+    await settle();
+    expect(component.singleSelectedEntry()?.title).toBe('Pasted Report');
+  });
+
   it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),
