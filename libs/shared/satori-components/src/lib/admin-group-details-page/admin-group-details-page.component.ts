@@ -95,6 +95,8 @@ export class NxsAdminGroupDetailsPageComponent {
   private loadRequest?: Subscription;
   private loadedId?: string;
   private permissionsRequest?: Subscription;
+  /** The latest member or nested-group removal, dropped when another group is opened so its answer cannot land on that group. */
+  private mutationRequest?: Subscription;
 
   /** The group name to show. Changing it loads that group. */
   readonly groupId = input.required<string>();
@@ -141,7 +143,10 @@ export class NxsAdminGroupDetailsPageComponent {
   private load(id: string): void {
     this.loadRequest?.unsubscribe();
     this.permissionsRequest?.unsubscribe();
-    if (id !== this.loadedId) this.status.set(null);
+    if (id !== this.loadedId) {
+      this.mutationRequest?.unsubscribe();
+      this.status.set(null);
+    }
     this.loadedId = id;
     this.permissionsLoading.set(false);
     this.loading.set(true);
@@ -231,7 +236,7 @@ export class NxsAdminGroupDetailsPageComponent {
     const group = this.group();
     if (!group) return;
     const remaining = (group.memberUsers ?? []).filter((id) => id !== userId);
-    this.userService
+    this.mutationRequest = this.userService
       .updateGroup(group.groupname, { memberUsers: remaining })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -245,7 +250,7 @@ export class NxsAdminGroupDetailsPageComponent {
     const group = this.group();
     if (!group) return;
     const remaining = (group.memberGroups ?? []).filter((id) => id !== nestedId);
-    this.userService
+    this.mutationRequest = this.userService
       .updateGroup(group.groupname, { memberGroups: remaining })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
