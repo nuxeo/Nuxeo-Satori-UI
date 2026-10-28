@@ -16,33 +16,19 @@
     <mat-hint>{{ 'satori-components.document-history.user-hint' | translate }}</mat-hint>
   </mat-form-field>
 
-  <mat-form-field appearance="outline" subscriptSizing="dynamic">
-    <mat-label>{{ 'satori-components.document-history.from' | translate }}</mat-label>
-    <input
-      matInput
-      name="from"
-      [matDatepicker]="fromPicker"
-      [placeholder]="'common.date-mask' | translate | nxsDateMask"
-      [ngModel]="filters().from"
-      (ngModelChange)="setFilter('from', $event)"
-    />
-    <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
-    <mat-datepicker #fromPicker />
-  </mat-form-field>
+  <nxs-date-input
+    [label]="'satori-components.document-history.from' | translate"
+    name="from"
+    [ngModel]="filters().from"
+    (ngModelChange)="setFilter('from', $event)"
+  />
 
-  <mat-form-field appearance="outline" subscriptSizing="dynamic">
-    <mat-label>{{ 'satori-components.document-history.to' | translate }}</mat-label>
-    <input
-      matInput
-      name="to"
-      [matDatepicker]="toPicker"
-      [placeholder]="'common.date-mask' | translate | nxsDateMask"
-      [ngModel]="filters().to"
-      (ngModelChange)="setFilter('to', $event)"
-    />
-    <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
-    <mat-datepicker #toPicker />
-  </mat-form-field>
+  <nxs-date-input
+    [label]="'satori-components.document-history.to' | translate"
+    name="to"
+    [ngModel]="filters().to"
+    (ngModelChange)="setFilter('to', $event)"
+  />
 
   <mat-form-field appearance="outline" subscriptSizing="dynamic">
     <mat-label>{{ 'satori-components.document-history.action' | translate }}</mat-label>

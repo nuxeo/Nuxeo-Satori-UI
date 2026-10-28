@@ -28,7 +28,7 @@
  *   npm run docs:satori-comparison:capture -- --storybooks <dir>   # reuse a kept build
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawnToolSync } from '../beta-harness/package-command.mjs';
 import { createHash } from 'node:crypto';
 import {
   createReadStream,
@@ -159,7 +159,7 @@ function buildStorybooks() {
     const started = Date.now();
     process.stdout.write(`  build  ${name.padEnd(12)} ${target} (${label}) … `);
     const log = join(OUT, `build-${name}.log`);
-    const res = spawnSync(
+    const res = spawnToolSync(
       'npx',
       ['nx', 'run', target, `--outputDir=${join(dir, name)}`, '--skip-nx-cache'],
       {

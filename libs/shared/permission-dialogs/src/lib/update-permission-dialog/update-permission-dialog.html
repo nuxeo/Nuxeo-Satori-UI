@@ -31,30 +31,20 @@
   }
 
   <div class="date-fields">
-    <mat-form-field appearance="outline">
-      <mat-label>{{ 'permissions.update-permission-dialog.from' | translate }}</mat-label>
-      <input
-        matInput
-        [matDatepicker]="fromPicker"
-        [(ngModel)]="beginDate"
-        [disabled]="!isExternal && timeFrame === 'permanent'"
-      />
-      <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
-      <mat-datepicker #fromPicker />
-    </mat-form-field>
+    <nxs-date-input
+      #beginDateControl="ngModel"
+      [label]="'permissions.update-permission-dialog.from' | translate"
+      [(ngModel)]="beginDate"
+      [disabled]="!isExternal && timeFrame === 'permanent'"
+    />
 
-    <mat-form-field appearance="outline">
-      <mat-label>{{ 'permissions.update-permission-dialog.to' | translate }}</mat-label>
-      <input
-        matInput
-        [matDatepicker]="toPicker"
-        [(ngModel)]="endDate"
-        [disabled]="!isExternal && timeFrame === 'permanent'"
-        [required]="isExternal"
-      />
-      <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
-      <mat-datepicker #toPicker />
-    </mat-form-field>
+    <nxs-date-input
+      #endDateControl="ngModel"
+      [label]="'permissions.update-permission-dialog.to' | translate"
+      [(ngModel)]="endDate"
+      [disabled]="!isExternal && timeFrame === 'permanent'"
+      [required]="isExternal"
+    />
   </div>
 
   @if (!isExternal) {
@@ -95,7 +85,7 @@
   <button
     mat-flat-button
     color="primary"
-    [disabled]="saving() || (isExternal && !endDate)"
+    [disabled]="!datesValid() || saving() || (isExternal && !endDate)"
     (click)="update()"
   >
     @if (saving()) {

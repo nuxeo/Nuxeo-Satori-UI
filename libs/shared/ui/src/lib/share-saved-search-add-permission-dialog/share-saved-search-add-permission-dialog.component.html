@@ -83,37 +83,21 @@
   </div>
 
   <div class="date-fields">
-    <mat-form-field appearance="outline">
-      <mat-label>{{
-        'shared-ui.share-saved-search-add-permission-dialog.from' | translate
-      }}</mat-label>
-      <input
-        matInput
-        [matDatepicker]="fromPicker"
-        [(ngModel)]="beginDate"
-        #fromModel="ngModel"
-        (ngModelChange)="onBeginChanged()"
-        [disabled]="timeFrameMode === 'permanent'"
-      />
-      <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
-      <mat-datepicker #fromPicker />
-    </mat-form-field>
+    <nxs-date-input
+      #fromModel="ngModel"
+      [label]="'shared-ui.share-saved-search-add-permission-dialog.from' | translate"
+      [(ngModel)]="beginDate"
+      (ngModelChange)="onBeginChanged()"
+      [disabled]="timeFrameMode === 'permanent'"
+    />
 
-    <mat-form-field appearance="outline">
-      <mat-label>{{
-        'shared-ui.share-saved-search-add-permission-dialog.to' | translate
-      }}</mat-label>
-      <input
-        matInput
-        [matDatepicker]="toPicker"
-        [(ngModel)]="endDate"
-        #toModel="ngModel"
-        (ngModelChange)="onEndChanged()"
-        [disabled]="timeFrameMode === 'permanent'"
-      />
-      <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
-      <mat-datepicker #toPicker />
-    </mat-form-field>
+    <nxs-date-input
+      #toModel="ngModel"
+      [label]="'shared-ui.share-saved-search-add-permission-dialog.to' | translate"
+      [(ngModel)]="endDate"
+      (ngModelChange)="onEndChanged()"
+      [disabled]="timeFrameMode === 'permanent'"
+    />
   </div>
 
   <mat-checkbox [(ngModel)]="sendNotify">{{

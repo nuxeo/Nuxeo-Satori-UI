@@ -33,19 +33,18 @@
   </mat-form-field>
 
   <div class="date-fields">
-    <mat-form-field appearance="outline">
-      <mat-label>{{ 'shared-ui.share-saved-search-external-dialog.from' | translate }}</mat-label>
-      <input matInput [matDatepicker]="fromPicker" [(ngModel)]="beginDate" />
-      <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
-      <mat-datepicker #fromPicker />
-    </mat-form-field>
+    <nxs-date-input
+      #beginDateControl="ngModel"
+      [label]="'shared-ui.share-saved-search-external-dialog.from' | translate"
+      [(ngModel)]="beginDate"
+    />
 
-    <mat-form-field appearance="outline">
-      <mat-label>{{ 'shared-ui.share-saved-search-external-dialog.to' | translate }}</mat-label>
-      <input matInput [matDatepicker]="toPicker" [(ngModel)]="endDate" required />
-      <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
-      <mat-datepicker #toPicker />
-    </mat-form-field>
+    <nxs-date-input
+      #endDateControl="ngModel"
+      [label]="'shared-ui.share-saved-search-external-dialog.to' | translate"
+      required
+      [(ngModel)]="endDate"
+    />
   </div>
 
   <div class="notify-section">
@@ -75,7 +74,7 @@
     <button
       mat-flat-button
       color="primary"
-      [disabled]="!isValid() || saving()"
+      [disabled]="!datesValid() || !isValid() || saving()"
       (click)="create(true)"
     >
       {{ 'shared-ui.share-saved-search-external-dialog.create-and-add-another' | translate }}
@@ -84,7 +83,7 @@
   <button
     mat-flat-button
     color="primary"
-    [disabled]="!isValid() || saving()"
+    [disabled]="!datesValid() || !isValid() || saving()"
     (click)="create(false)"
   >
     {{ isEditMode ? ('ui.update' | translate) : ('ui.create' | translate) }}

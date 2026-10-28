@@ -698,6 +698,25 @@ Beyond the standing rules in `AGENTS.md`:
 
 ## 8. Where things live
 
+### Running the harness on Windows
+
+Use the same `npm run beta:gate` command in PowerShell as on macOS/Linux; its base
+defaults to `origin/main`. Package-tool subprocesses go through
+`scripts/beta-harness/package-command.mjs`, using Node's executable and the tool's
+JavaScript entry script without shell interpolation. Use `spawnToolSync`,
+`execToolSync` or `spawnTool`; gate descriptors use `tool: 'npm'` or `tool: 'npx'`.
+`checkPackageToolLaunches` rejects direct launches, including `cmd: 'npm'` entries.
+`.gitattributes` keeps text LF on checkout. The dependency-tree symlink controls need
+Windows Developer Mode or administrator privileges; an EPERM there is an environment
+failure, not a passing control. `beta:e2e-negative-control` is a Node script too.
+The `Cross-platform Beta tooling` workflow exercises arguments on Windows, Linux and
+macOS and runs the full gate on Windows, retaining the gate report on failure.
+Its PR and push triggers match CodeQL's. Before the full gate, it waits for the
+matching CodeQL workflow and an analysis of the exact event ref and revision;
+`code-scanning` uses that ref even in a detached Actions checkout. Empty or stale
+analysis results never satisfy the wait. Run
+`node --test scripts/beta-harness/windows-codeql-wait.selftest.mjs` for its controls.
+
 | Artifact                | Location                                                    |
 | ----------------------- | ----------------------------------------------------------- |
 | Phase evidence runner   | `scripts/beta-harness/phase-runner.mjs`                     |

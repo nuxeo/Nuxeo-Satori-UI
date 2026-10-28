@@ -27,10 +27,10 @@ const flat = (id: string, label: string, ordering = 0): DirectoryEntry => ({
 });
 const NATURE = [flat('invoice', 'Invoice'), flat('contract', 'Contract'), flat('memo', 'Memo')];
 
-const l10n = (id: string, parent: string, label: string): L10nDirectoryEntry => ({
+const l10n = (id: string, parent: string, label: string, ordering = 0): L10nDirectoryEntry => ({
   id,
   directoryName: 'l10ncoverage',
-  properties: { id, parent, ordering: 0, obsolete: 0, label_en: label },
+  properties: { id, parent, ordering, obsolete: 0, label_en: label },
 });
 /** As the server holds `l10ncoverage`: bare ids, each child naming its parent. */
 const COVERAGE = [
@@ -59,13 +59,19 @@ const COVERAGE = [
         [formControl]="many"
       />
     } @else {
-      <nxs-vocabulary-select label="Nature" [directory]="directory()" [formControl]="one" />
+      <nxs-vocabulary-select
+        label="Nature"
+        [directory]="directory()"
+        [error]="message()"
+        [formControl]="one"
+      />
     }
   `,
 })
 class HostComponent {
   readonly directory = signal('nature');
   readonly multiple = signal(false);
+  readonly message = signal('');
   readonly one = new FormControl<string | null>(null, Validators.required);
   readonly many = new FormControl<readonly string[]>([]);
 }
@@ -191,6 +197,16 @@ describe('NxsVocabularySelectComponent', () => {
     );
   });
 
+  it('clears unmatched text when the form resets an already null value', async () => {
+    await type('unlisted');
+    expect(host.one.value).toBeNull();
+    expect(host.one.hasError('nxsChooseFromList')).toBe(true);
+    host.one.reset(null);
+    await render();
+    expect(input().value).toBe('');
+    expect(host.one.hasError('nxsChooseFromList')).toBe(false);
+  });
+
   it('says it could not load the list, and tries again each time the field is focused', async () => {
     const failure = () => throwError(() => ({ status: 500 }));
     directories.getEntries.mockReturnValueOnce(failure()).mockReturnValueOnce(failure());
@@ -210,6 +226,20 @@ describe('NxsVocabularySelectComponent', () => {
     input().dispatchEvent(new Event('blur'));
     await render();
     expect(root().querySelector('mat-error')?.textContent?.trim()).toBe('Required');
+  });
+
+  it('shows a host’s message on a value the form refuses, tied to the input', async () => {
+    host.message.set('Refused by the server.');
+    host.one.setValue('memo');
+    host.one.markAsTouched();
+    await render();
+    expect(root().querySelector('mat-error')).toBeNull();
+    host.one.addValidators(() => ({ server: 'Refused by the server.' }));
+    host.one.updateValueAndValidity();
+    await render();
+    const message = root().querySelector('mat-error');
+    expect(message?.textContent?.trim()).toBe('Refused by the server.');
+    expect(input().getAttribute('aria-describedby')).toContain(message?.id);
   });
 
   describe('a hierarchical vocabulary, several entries', () => {
@@ -260,6 +290,52 @@ describe('NxsVocabularySelectComponent', () => {
       expect(chips()).toEqual(['Europe/France', 'Africa/Kenya', 'Antarctica']);
     });
 
+    it('orders siblings, standalone entries and parent groups by configured order before labels', async () => {
+      const entries = [
+        l10n('africa', '', 'Africa', 20),
+        l10n('antarctica', '', 'Antarctica', 20),
+        l10n('australia', '', 'Australia', 10),
+        l10n('europe', '', 'Europe', 10),
+        l10n('France', 'europe', 'France', 20),
+        l10n('Kenya', 'africa', 'Kenya', 0),
+        l10n('Spain', 'europe', 'Spain', 10),
+      ];
+      const original = [...entries];
+      directories.getAllL10nEntries.mockReturnValue(of(entries));
+      host.directory.set('l10nsubjects');
+      await render();
+      await focus();
+      expect(options()).toEqual(['Australia', 'Antarctica', 'Spain', 'France', 'Kenya']);
+      expect(
+        [...document.querySelectorAll('.mat-mdc-optgroup-label')].map((label) =>
+          label.textContent?.trim(),
+        ),
+      ).toEqual(['Europe', 'Africa']);
+      await type('eur');
+      expect(options()).toEqual(['Spain', 'France']);
+      option('europe/Spain').click();
+      await render();
+      expect(host.many.value).toEqual(['europe/Spain']);
+      expect(chips()).toEqual(['Europe/Spain']);
+      expect(entries).toEqual(original);
+    });
+
+    it('uses labels to break equal ordering values for children and standalone entries', async () => {
+      directories.getAllL10nEntries.mockReturnValue(
+        of([
+          l10n('europe', '', 'Europe'),
+          l10n('australia', '', 'Australia'),
+          l10n('antarctica', '', 'Antarctica'),
+          l10n('Spain', 'europe', 'Spain'),
+          l10n('France', 'europe', 'France'),
+        ]),
+      );
+      host.directory.set('l10nsubjects');
+      await render();
+      await focus();
+      expect(options()).toEqual(['Antarctica', 'Australia', 'France', 'Spain']);
+    });
+
     it('stops offering an entry once chosen', async () => {
       host.many.setValue(['europe/France']);
       await render();
@@ -279,6 +355,25 @@ describe('NxsVocabularySelectComponent', () => {
       host.many.setValue(['europe/France']);
       await render();
       expect(chips()).toEqual(['Europe/France']);
+    });
+
+    it('reads a child stored without its parent as that entry, and keeps the value as stored', async () => {
+      host.many.setValue(['France']);
+      await render();
+      expect(chips()).toEqual(['Europe/France']);
+      await type('eur');
+      expect(options()).toEqual(['Spain']);
+      option('europe/Spain').click();
+      await render();
+      expect(host.many.value).toEqual(['France', 'europe/Spain']);
+    });
+
+    it('leaves a bare id two parents share as it is, and offers both entries', async () => {
+      host.many.setValue(['Georgia']);
+      await render();
+      expect(chips()).toEqual(['Georgia']);
+      await type('georgia');
+      expect(options()).toEqual(['Georgia', 'Georgia']);
     });
 
     it('removes a chip with its named button', async () => {

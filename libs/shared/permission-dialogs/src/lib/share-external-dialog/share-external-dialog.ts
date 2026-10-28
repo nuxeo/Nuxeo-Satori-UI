@@ -1,13 +1,25 @@
-import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  NxsDateInputComponent,
+  NxsToastService,
+  provideNxsToast,
+} from '@nuxeo/satori-platform/components';
+
+import {
+  ChangeDetectionStrategy,
+  viewChild,
+  Component,
+  DestroyRef,
+  inject,
+  signal,
+} from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, NgModel } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import {
@@ -21,7 +33,6 @@ import {
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
-import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
 
 export interface ShareExternalDialogData {
   documentUid: string;
@@ -38,6 +49,7 @@ const PERMISSION_OPTIONS = [
   selector: 'lib-share-external-dialog',
   standalone: true,
   imports: [
+    NxsDateInputComponent,
     DescriptorLabelPipe,
     TranslatePipe,
     FormsModule,
@@ -46,7 +58,6 @@ const PERMISSION_OPTIONS = [
     MatInputModule,
     MatSelectModule,
     MatButtonModule,
-    MatDatepickerModule,
     MatProgressSpinnerModule,
   ],
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
@@ -82,7 +93,7 @@ const PERMISSION_OPTIONS = [
         display: flex;
         gap: 16px;
 
-        mat-form-field {
+        nxs-date-input {
           flex: 1;
         }
       }
@@ -115,6 +126,12 @@ const PERMISSION_OPTIONS = [
   ],
 })
 export class ShareExternalDialogComponent {
+  private readonly beginDateControl = viewChild<NgModel>('beginDateControl');
+  private readonly endDateControl = viewChild<NgModel>('endDateControl');
+  protected datesValid(): boolean {
+    return !this.beginDateControl()?.invalid && !this.endDateControl()?.invalid;
+  }
+
   private readonly dialogRef = inject(MatDialogRef<ShareExternalDialogComponent, boolean>);
   private readonly translate = inject(TranslateService);
   private readonly data = inject<ShareExternalDialogData>(MAT_DIALOG_DATA);
@@ -143,6 +160,7 @@ export class ShareExternalDialogComponent {
   }
 
   create(andAddAnother: boolean): void {
+    if (!this.datesValid()) return;
     if (!this.isValid() || this.saving()) return;
     this.addAnother = andAddAnother;
     this.saving.set(true);
