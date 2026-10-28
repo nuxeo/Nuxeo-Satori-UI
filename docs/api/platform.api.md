@@ -1747,7 +1747,6 @@ class NxsGroupFormDialogComponent implements OnInit {
     protected readonly canSave: import("@angular/core").Signal<boolean>;
     ngOnInit(): void;
     protected onMemberSearch(query: string): void;
-    protected onMemberInputFocus(): void;
     protected onMemberInputKeydown(event: KeyboardEvent): void;
     protected onMemberSelected(event: MatAutocompleteSelectedEvent): void;
     protected addMemberFromInput(event: MatChipInputEvent): void;
