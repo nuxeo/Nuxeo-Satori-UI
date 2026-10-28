@@ -24,6 +24,15 @@ import { isFolderishDocument, isBrowsableNavNode } from './document-import.servi
 export interface NavTreeBootstrap {
   root: NuxeoDocument;
   entries: NuxeoDocument[];
+  /**
+   * Whether the source held more than `entries` — the server's own word, not a guess.
+   *
+   * `pageOfFullList()` can only see the array it is handed, so a full page reads as "nothing
+   * more": with 501 accessible top-level workspaces and a page size of 500 it concluded
+   * `hasNextPage: false`, and a 500-document scan then reported `truncated: false` and silently
+   * omitted the 501st with no partial-scan notice.
+   */
+  hasMore?: boolean;
 }
 
 /** One server-side sort key: a Nuxeo property name such as `dc:title`, and its direction. */
@@ -200,9 +209,10 @@ export class BrowseService {
       switchMap((root) => this.loadNavTreeBootstrapEntries(root, pageSize)),
       catchError(() =>
         this.getAccessibleTopLevelNavNodes(pageSize).pipe(
-          map((entries) => ({
+          map(({ entries, hasMore }) => ({
             root: this.syntheticRepositoryRoot(entries),
             entries,
+            hasMore,
           })),
         ),
       ),
@@ -235,11 +245,18 @@ export class BrowseService {
           return throwError(() => error);
         }
         return this.getNavTreeBootstrap(pageSize).pipe(
-          map(({ root, entries }) => ({
-            folder: root,
-            ...pageOfFullList(entries, pageSize, page),
-            redirectTo: entries.length === 1 ? entries[0].path : undefined,
-          })),
+          map(({ root, entries, hasMore }) => {
+            const paged = pageOfFullList(entries, pageSize, page);
+            return {
+              folder: root,
+              ...paged,
+              // `pageOfFullList` can only reason about the slice it was given, so the source's own
+              // "there is more" has to survive the fallback or a scan reports a complete answer it
+              // does not have.
+              hasNextPage: paged.hasNextPage || hasMore === true,
+              redirectTo: entries.length === 1 ? entries[0].path : undefined,
+            };
+          }),
         );
       }),
     );
@@ -426,21 +443,30 @@ export class BrowseService {
     pageSize: number,
   ): Observable<NavTreeBootstrap> {
     return this.getNavTreeChildren(root, pageSize).pipe(
-      map((list) => list.entries ?? []),
-      switchMap((entries) =>
-        entries.length > 0
-          ? of({ root, entries })
+      switchMap((list) => {
+        const entries = list.entries ?? [];
+        return entries.length > 0
+          ? of({ root, entries, hasMore: list.isNextPageAvailable === true })
           : this.getAccessibleTopLevelNavNodes(pageSize).pipe(
-              map((fallback) => ({ root, entries: fallback })),
-            ),
-      ),
+              map(({ entries: fallback, hasMore }) => ({ root, entries: fallback, hasMore })),
+            );
+      }),
     );
   }
 
-  private getAccessibleTopLevelNavNodes(pageSize: number): Observable<NuxeoDocument[]> {
+  private getAccessibleTopLevelNavNodes(
+    pageSize: number,
+  ): Observable<{ entries: NuxeoDocument[]; hasMore: boolean }> {
     return this.api
       .nxqlSearch(BrowseService.ACCESSIBLE_NAV_NODES_NXQL, pageSize, { properties: '*' })
-      .pipe(map((list) => this.filterTopLevelNavNodes(list.entries ?? [])));
+      .pipe(
+        map((list) => ({
+          entries: this.filterTopLevelNavNodes(list.entries ?? []),
+          // Kept rather than recomputed from the array, which is the whole point: a caller cannot
+          // rediscover "there were more" once the page has been handed over.
+          hasMore: list.isNextPageAvailable === true,
+        })),
+      );
   }
 
   private filterTopLevelNavNodes(entries: NuxeoDocument[]): NuxeoDocument[] {

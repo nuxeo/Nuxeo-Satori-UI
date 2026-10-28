@@ -1218,6 +1218,76 @@ describe('BrowseService', () => {
       // `httpMock.verify()` in afterEach proves no third page was requested.
     });
 
+    /**
+     * The restricted repository root, where `getByPath('/')` is refused and the listing comes from
+     * the NXQL fallback. With more accessible top-level workspaces than the cap, the source says
+     * there are more; `pageOfFullList()` cannot see that, so the fallback has to carry it or the
+     * scan reports a complete answer it does not have.
+     */
+    it('reports truncation on a restricted root whose source held more', async () => {
+      const result$ = firstValueFrom(service.getAllBrowseFolderEntries('/', 2, 2));
+
+      // The root is not readable for this user.
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/path/')
+        .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+      // `getRepositoryRoot()` falls back too.
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/path/')
+        .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+      httpMock
+        .expectOne(
+          (r) =>
+            r.url === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
+            r.params.get('query')?.includes('FROM Domain') === true,
+        )
+        .flush({
+          entries: [],
+          totalSize: 0,
+          currentPageSize: 0,
+          currentPageIndex: 0,
+          numberOfPages: 0,
+        });
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/search/pp/tree_children/execute')
+        .flush({
+          entries: [],
+          totalSize: 0,
+          currentPageSize: 0,
+          currentPageIndex: 0,
+          numberOfPages: 0,
+        });
+
+      // The accessible-workspaces query fills the page **and** says there is more.
+      const ws = (uid: string) => ({
+        uid,
+        title: uid,
+        type: 'Workspace',
+        path: `/${uid}`,
+        facets: ['Folderish'],
+        properties: {},
+      });
+      httpMock
+        .expectOne(
+          (r) =>
+            r.url === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
+            r.params.get('query')?.includes('FROM Domain') !== true,
+        )
+        .flush({
+          entries: [ws('ws-1'), ws('ws-2')],
+          totalSize: 3,
+          currentPageSize: 2,
+          currentPageIndex: 0,
+          numberOfPages: 2,
+          isNextPageAvailable: true,
+        });
+
+      const result = await result$;
+      expect(result.entries).toHaveLength(2);
+      // The notice fires: the scan did not see the whole set.
+      expect(result.truncated).toBe(true);
+    });
+
     it('forwards the requested sort to every page it walks', async () => {
       const path = '/default-domain/workspaces';
       const sort = [{ sortBy: 'dc:title', sortOrder: 'ASC' as const }];
