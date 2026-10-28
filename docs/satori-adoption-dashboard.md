@@ -23,12 +23,16 @@ Measured 2026-10-28, from `npx sdsc check all --json`:
 | Design language       | 3.0 — all MDS2 checks pass   | ✅    |
 | Icons                 | 6 Material font, 492 Satori  | ❌\*  |
 | Componentry           | 0 legacy of 1,604 components | ✅    |
-| DS-internal overrides | 1 (0.05 per 1k of 18,488)    | ❌    |
+| DS-internal overrides | 1 unsuppressed (of 155)      | ❌†   |
 | A11y overrides        | 0 — not penalised            | —     |
 
-\* The icon check fails, but five of its six findings are deliberate and one is not cheap — see
-[The 6 icons are not a migration backlog](#the-6-icons-are-not-a-migration-backlog). Do not read
-that ❌ as a backlog item.
+\* The icon check fails, but five of its six findings are a reverted experiment and one is not
+cheap — see [The 6 icons are not a migration backlog](#the-6-icons-are-not-a-migration-backlog).
+Do not read that ❌ as a backlog item.
+
+† One **unsuppressed** finding. 154 further overrides are suppressed with
+`stylelint-disable-next-line` across 32 files, so 167 → 1 was largely suppression rather than
+removal — see [What is actually left](#what-is-actually-left--and-what-1-override-does-not-mean).
 
 Of the 1,604 components the checker counts, 100 are Satori and 1,261 Material. Neither number
 moves the score: adoption measures _conformance_ — supported versions, the MDS3 design language,
@@ -105,14 +109,14 @@ sdsc check all --json  →  adoption-data/<product>/        → Dashboard reads
 
 The score weights six KPIs. Four pass outright; two have a remainder:
 
-| KPI                    | Check | Remainder              | Is it work?                              |
-| ---------------------- | ----- | ---------------------- | ---------------------------------------- |
-| Angular version        | ✅    | —                      | Already compliant                        |
-| Satori UI version      | ✅    | —                      | Already compliant                        |
-| Design language (MDS3) | ✅    | —                      | All MDS2 checks passing                  |
-| Icon adoption          | ❌    | 6 Material font icons  | Mostly **no** — see below                |
-| Componentry            | ✅    | —                      | No legacy component violations           |
-| Styling hygiene        | ❌    | 1 DS-internal override | Yes — `npm run lint:styles` points at it |
+| KPI                    | Check | Remainder               | Is it work?                    |
+| ---------------------- | ----- | ----------------------- | ------------------------------ |
+| Angular version        | ✅    | —                       | Already compliant              |
+| Satori UI version      | ✅    | —                       | Already compliant              |
+| Design language (MDS3) | ✅    | —                       | All MDS2 checks passing        |
+| Icon adoption          | ❌    | 6 Material font icons   | Mostly **no** — see below      |
+| Componentry            | ✅    | —                       | No legacy component violations |
+| Styling hygiene        | ❌    | 1 unsuppressed override | Yes, but read the caveat below |
 
 The per-KPI weights are the checker's, not ours, so this table deliberately gives raw counts rather
 than percentages. An earlier version quoted "0%" and "~82%" against figures that no longer held,
@@ -130,34 +134,61 @@ This section used to say "migrate to Satori SVG icons", and the heading above us
 | `chip-set.component.html:15`     | `cancel` literal                      | Deliberate                  |
 | `status-tag.component.html:2`    | `{{ icon() }}` — status icon          | Migratable, but not cheaply |
 
-`banner` and `chipSet` are the only two primitives with **no Satori twin** — `provideNxsComponents`'
-own docblock says `provideNxsSatoriComponents()` re-registers "every one but `banner` and
-`chipSet`". They are Material-only, permanently, and NXSAT-677 already tried the other way:
+`banner` and `chipSet` are the two primitives of thirteen with **no Satori twin yet**.
+`provide-nxs-satori-components.ts` is explicit that this is a gap and not a decision — they "keep
+their Material implementations here, **until their Satori wrappers are written**" — and
+`docs/extension-reference.md` §6a says they "have no Satori wrapper **yet**". Do not read the rows
+above as an architectural ban on Satori implementations for these two.
+
+What is settled is the attempt, which NXSAT-677 already made and reverted:
 
 > The chip set and banner are registered on Material only, and their Storybook registers no Satori
 > SVG icons, so a `circle_x` or `svgIcon` name rendered blank and logged lookup errors. Use the
 > Material ligatures instead.
 
-So five of the six are a reverted experiment, not unfinished work. Re-doing it would re-break the
-rendering.
+So five of the six are a reverted experiment rather than untouched work: switching them back today
+re-breaks the rendering. They become migratable when those wrappers are written, not before.
 
-`status-tag` is the exception: it has a Satori twin, so its ligature never renders on a Satori host.
+`status-tag` is the exception, with a caveat. It has a Satori twin, but that only takes effect for
+callers resolving through the extension registry after `provideNxsSatoriComponents()`. Anything
+importing `NxsStatusTagComponent` directly still renders the Material one with its ligature —
+`status-tag.stories.ts` does, and the `:satori` Storybook configuration only swaps the stylesheet
+(`project.json` overrides `outputDir` and `styles`, nothing else), so the ligature does render in
+the Satori-themed Storybook. It is reachable code, not dead code.
+
 Moving it to `svgIcon` would still hit the NXSAT-677 failure in the Material-only Storybook, which
 registers no Satori icon set. Doing it properly means registering that icon set in the token-free
 Material path — **check `scripts/storybook-publication-gate.mjs` first**, whose path rule matches
 `satori-icons`, before assuming that is allowed.
 
-**The icon KPI therefore cannot reach 100 by migrating icons.** It needs either Satori twins for
-`banner` and `chipSet`, or Satori's icon set in the Material-only path. Both are design decisions,
-and neither belongs on a cleanup list.
+**So the icon KPI cannot reach 100 today by migrating icons.** It waits on Satori wrappers for
+`banner` and `chipSet`, or on Satori's icon set reaching the Material-only path. Neither is a
+cleanup item, and neither is blocked forever.
 
 A blind spot while you are here: `card.stories.ts` hard-codes four ligatures (`description`,
 `star_border`, `download`, `more_vert`) that the checker never sees — its globs read the file, but
 the rule only inspects real Angular templates, not template strings. They do not count against the
 score and would render blank on a Satori-only host.
 
-### What is actually left
+### What is actually left — and what "1 override" does not mean
 
-One item: the **single DS-internal override**, down from 167. Fixing it would make
-`no-ds-internals-overrides` safe to promote from `warning` to `error` in `.stylelintrc.mjs`, which is
-the condition that comment has been waiting on.
+The checker's `cssOverridesCount: 1` is **one unsuppressed finding**, not one override in the
+codebase. There are **154 `stylelint-disable-next-line` suppressions of
+`no-ds-internals-overrides`, across 32 files** — `browse.scss`, `tabs.component.scss`,
+`document-detail.scss`, `tasks-page.component.scss`, `note-editor.scss` and more.
+
+That reframes the headline improvement. 167 → 1 was mostly **suppression, not removal**: the
+overrides are still there, each with a comment telling the linter to look away. The score rose
+accordingly, which is worth knowing before anyone reports 99.69 as a cleanup result.
+
+It also means promoting the rule to `error` is **not** the finish line it looks like. A
+`stylelint-disable-next-line` suppresses an error exactly as it suppresses a warning, so the flip
+would change nothing for those 154 and would only bind the one remaining finding plus anything new.
+Worth doing — it stops the count growing — but it is a ratchet, not a cleanup.
+
+So the honest remaining list is:
+
+1. **1 unsuppressed override.** `npm run lint:styles` points at it.
+2. **154 suppressed ones**, if the goal is actually fewer overrides rather than a higher score.
+   Each suppression is a deliberate, reviewable decision; this document takes no view on whether
+   they should be revisited, only on the fact that they exist.
