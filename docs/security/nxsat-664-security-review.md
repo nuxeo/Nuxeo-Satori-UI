@@ -2,7 +2,7 @@
 
 - **Ticket:** NXSAT-664, Goal "independent security review of the component library before it is used more widely".
 - **Scope:** `libs/shared/satori-components/src/lib` as shipped on `main` (non-spec, non-story runtime code, plus `.storybook/` and `test-setup.ts` for credential checks). Concerns: blob URL creation and revocation, subscriptions (`takeUntilDestroyed`), image binding, sanitizer use, credential handling.
-- **Base:** `origin/main` at `e317be02c`. NXSAT-649 (PR #446, "merge the ADF-free platform to main") is merged and an ancestor of that commit.
+- **Base:** reviewed at `origin/main` `e317be02c`. `origin/main` has since advanced to `d4d00fb36`; no file cited here changed in between. NXSAT-649 (PR #446, "merge the ADF-free platform to main") is merged and an ancestor of that commit.
 - **Method:** static review by four read-only reviewers, one per concern, each reading the code rather than its comments. Every finding below was checked against the code by the author of this document. The reviewers and the author are different models from the author of the code under review.
 - **Not done:** `npm audit` (the ticket says "if approved"; it was not approved, so it was not run). Runtime or browser testing of the findings was not done. This is a static review.
 
@@ -30,7 +30,7 @@ Severity follows the reviewers' ratings. "Verified" means the author re-read the
 
 **M3. An SVG thumbnail becomes a same-origin `blob:` URL with no MIME check.** Verified.
 
-- `thumbnail/thumbnail.component.ts:86-89` and `thumbnail/thumbnail-cache.ts:128` call `URL.createObjectURL(blob)` on the response of `/@rendition/thumbnail` (`document-detail.service.ts:76-79`, `responseType: 'blob'`) without checking `blob.type`.
+- `thumbnail/thumbnail.component.ts:86-89` and `thumbnail/thumbnail-cache.ts:128` call `URL.createObjectURL(blob)` on the response of `/@rendition/thumbnail` (`libs/shared/nuxeo-client/src/lib/services/document-detail.service.ts:76-79`, `responseType: 'blob'`) without checking `blob.type`.
 - Inside `<img [src]>` a script does not run, so the rendered page is safe. A top-level navigation to the blob URL (for example "open image in new tab") would run any script in an SVG, same origin.
 - Conditions: a writer must set a document's thumbnail to an `image/svg+xml` file containing script, and a viewer must take the explicit open-in-new-tab action. Rating is Medium per the reviewer; the author would accept Low-to-Medium given those conditions.
 - Fix options: allow-list raster MIME types, or re-wrap the bytes as `new Blob([blob], { type: 'image/png' })` so an SVG fails to decode and the fallback shows.
@@ -40,18 +40,18 @@ Severity follows the reviewers' ratings. "Verified" means the author re-read the
 **L1. Stale `(error)` handler can discard or revoke the next document's good thumbnail URL.** Verified.
 
 - `thumbnail/thumbnail.component.ts:78-82` (`broken()`) acts on the current `url()`, not on the `src` that failed (`thumbnail.component.html:2`).
-- In cache mode a document switch can replay a cached URL synchronously while the `<img>` element is reused, so a late error for document A can discard and revoke B's URL. Owned mode has the same race.
+- In cache mode a document switch can replay a cached URL synchronously while the `<img>` element is reused, so a late error for document A can discard and revoke B's URL. In owned mode the race is not reachable: `clear()` sets `url` to null before the fetch, so the `<img>` is removed first.
 - Fix: take the failing `src` from the event and act only if it equals `url()`.
 
 **L2. `discard()` and `drop()` revoke a URL that other holders still display.** Verified.
 
-- `thumbnail/thumbnail-cache.ts:76-77` (`discard`) calls `drop`, which revokes regardless of `holders` (`:138-148`). Other holders then keep a dead `src` with no refetch. Harmless when the bytes really are undecodable; combined with L1 it can blank a good image for every holder on the page.
+- `thumbnail/thumbnail-cache.ts:76-77` (`discard`) calls `drop`, which revokes regardless of `holders` (`:135-146`). Other holders then keep a dead `src` with no refetch. Harmless when the bytes really are undecodable; combined with L1 it can blank a good image for every holder on the page.
 
 **L3. Rename and create-version have the same abort-on-close race as M1.**
 
 - `rename-dialog/rename-dialog.component.ts:72-82`: Cancel is `(click)="cancel()"` and is not disabled during the request.
 - `create-version-dialog/create-version-dialog.component.ts:75-98`: `mat-dialog-close` is not disabled.
-- Effect: the version may be created or the title changed, while `versionCreated` is never emitted (`manage-versions.component.ts:198`) and the list stays stale.
+- Effect: the version may be created or the title changed, while `versionCreated` is never emitted (`manage-versions.component.ts:199`) and the list stays stale.
 
 **L4. A late comment-save response is applied to whichever document is shown by then.**
 
