@@ -1095,6 +1095,131 @@ describe('BrowseComponent — rendered document list', () => {
     expect(rowTitles()).toEqual(['Q1 Report', 'Q2 Report']);
   });
 
+  /**
+   * The sort cycle A -> B -> A.
+   *
+   * The two A scans share a path, a sort **and** a generation, so no key can tell them apart —
+   * only cancelling the one being replaced can. Before `switchMap`, a late result or error from
+   * the first A passed the generation guard and clobbered the second A's rows.
+   */
+  it('cancels the scan it replaces across a sort cycle', async () => {
+    const page = [doc({ uid: 'c-1', title: 'Q1 Report' })];
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: page, totalSize: -1, hasNextPage: true }),
+    );
+
+    type ScanSet = { folder: typeof folder; entries: NuxeoDocument[]; truncated: boolean };
+    const pending: Subject<ScanSet>[] = [];
+    browse.getAllBrowseFolderEntries.mockImplementation(() => {
+      const subject = new Subject<ScanSet>();
+      pending.push(subject);
+      return subject.asObservable();
+    });
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+    // Sort A, then B, then A again. Each change is a fresh scan request.
+    component.onListSortChange({ key: 'title', direction: 'asc' });
+    await settle();
+    const firstA = pending.length - 1;
+    component.onListSortChange({ key: 'title', direction: 'desc' });
+    await settle();
+    component.onListSortChange({ key: 'title', direction: 'asc' });
+    await settle();
+    const lastA = pending.length - 1;
+    // `firstA` and `lastA` carry the same path, sort key and generation, which is the whole point:
+    // no key can separate them, so only cancellation can. (Not `pending[0]` — that one predates
+    // the sort and its empty sort key would be rejected by the key check anyway, which is how an
+    // earlier version of this test passed without any cancellation at all.)
+    expect(lastA).toBeGreaterThan(firstA);
+
+    pending[lastA].next({
+      folder,
+      entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
+      truncated: false,
+    });
+    await settle();
+    expect(rowTitles()).toEqual(['Q1 Report']);
+
+    pending[firstA].next({
+      folder,
+      entries: [doc({ uid: 'c-9', title: 'Stale Report' })],
+      truncated: true,
+    });
+    await settle();
+    expect(rowTitles()).toEqual(['Q1 Report']);
+    expect(component.filterScanTruncated()).toBe(false);
+
+    // And its late error must not clear the newer scan either.
+    pending[firstA].error(new Error('stale A scan failed'));
+    await settle();
+    expect(component.filteredAcrossFolder()).toBe(true);
+    expect(component.filterScanFailed()).toBe(false);
+  });
+
+  /**
+   * A silent fallback made an off-page match look like no match: the rows narrowed to the loaded
+   * page and the count read "0 results", indistinguishable from a successful empty search.
+   */
+  it('says the folder search failed, and retries from the message', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
+        totalSize: -1,
+        hasNextPage: true,
+      }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(throwError(() => new Error('scan failed')));
+
+    const component = await render();
+    component.filterText.set('project');
+    await settle();
+
+    expect(component.filterScanFailed()).toBe(true);
+    expect(query('.filter-scan-note--failed')?.textContent).toContain('Could not search');
+    const retry = query('.filter-scan-retry') as HTMLButtonElement | null;
+    expect(retry).not.toBeNull();
+
+    // Retrying with a working scan clears the message and widens the rows.
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({
+        folder,
+        entries: [
+          doc({ uid: 'c-1', title: 'Q1 Report' }),
+          doc({ uid: 'c-99', title: 'Project Reports' }),
+        ],
+        truncated: false,
+      }),
+    );
+    retry!.click();
+    await settle();
+
+    expect(component.filterScanFailed()).toBe(false);
+    expect(rowTitles()).toEqual(['Project Reports']);
+  });
+
+  it('withdraws the truncation notice once the folder is no longer filtered', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: true }),
+    );
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+    expect(query('.filter-scan-note')?.textContent).toContain('500');
+
+    component.filterText.set('');
+    await settle();
+
+    // The notice describes filtered rows; unfiltered, it would sit beside a server-paged listing.
+    expect(query('.filter-scan-note')).toBeNull();
+  });
+
   it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),

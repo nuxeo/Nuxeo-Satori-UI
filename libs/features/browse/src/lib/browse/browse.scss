@@ -349,6 +349,23 @@ sat-breadcrumbs {
   margin-inline-start: 8px;
 }
 
+// A failed scan is not an error state for the page — the rows below are still real, just fewer
+// than asked for — so it takes the same scale as the count and `error` only for its text.
+.filter-scan-note--failed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-style: normal;
+  color: var(--mat-sys-error, #b3261e);
+  white-space: normal;
+}
+
+.filter-scan-retry {
+  font-size: 12px;
+  min-width: 0;
+  padding: 0 8px;
+}
+
 .toolbar-spacer {
   flex: 1;
 }

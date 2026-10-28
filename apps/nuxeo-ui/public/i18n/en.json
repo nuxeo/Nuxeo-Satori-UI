@@ -666,6 +666,8 @@
       "edit": "Edit",
       "export-csv": "Export CSV",
       "filter-by-title": "Filter by title...",
+      "filter-scan-failed": "Could not search the whole folder, so these results cover only the page below.",
+      "filter-scan-retry": "Try again",
       "filter-scan-truncated": "Filtered the first {{ count }} items in this folder",
       "from": "From",
       "granted-by": "Granted by",

@@ -100,10 +100,29 @@
                     | translate: { count }
                 }}</span>
               }
-              @if (filterScanTruncated()) {
+              <!--
+                Both notices describe the *filtered* rows, so both are gated on
+                `filteredAcrossFolder()`. Without that, opening All types in a folder of more than
+                500 children, or clearing the last filter after a truncated scan, left "Filtered
+                the first 500 items" sitting beside an unfiltered, server-paged listing.
+              -->
+              @if (filteredAcrossFolder() && filterScanTruncated()) {
                 <span class="filter-scan-note" role="status">{{
                   'browse.browse.filter-scan-truncated' | translate: { count: filterScanLimit }
                 }}</span>
+              }
+              @if (filtersActive() && filterScanFailed()) {
+                <span class="filter-scan-note filter-scan-note--failed" role="status">
+                  {{ 'browse.browse.filter-scan-failed' | translate }}
+                  <button
+                    mat-button
+                    type="button"
+                    class="filter-scan-retry"
+                    (click)="retryFolderScan()"
+                  >
+                    {{ 'browse.browse.filter-scan-retry' | translate }}
+                  </button>
+                </span>
               }
               <div class="toolbar-spacer"></div>
 

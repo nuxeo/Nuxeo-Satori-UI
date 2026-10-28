@@ -557,6 +557,8 @@
   "browse.browse.export-csv": "Accessible name of the icon button that downloads the listing of the current folder as a CSV file. Verb phrase. CSV = comma-separated values, a spreadsheet-style text file format; keep the acronym.",
   "browse.browse.filter-by-title": "Visible text in browse. Rendered in libs/features/browse/src/lib/browse/browse.html.",
   "browse.browse.filter-scan-truncated": "Note beside the result count in the Browse toolbar, shown when a folder holds more children than the filter was allowed to scan, so the filter searched only the first {{ count }} of them. A full SENTENCE without a full stop. `{{ count }}` is a number and must be kept. \"items\" means documents and folders together.",
+  "browse.browse.filter-scan-failed": "Message beside the result count in the Browse toolbar when the attempt to search the whole folder failed, so the filter could only sift the rows already loaded. A full SENTENCE with its full stop, addressed to the user. It exists so a filter that found nothing is not mistaken for \"there is nothing to find\". Shown next to browse.browse.filter-scan-retry.",
+  "browse.browse.filter-scan-retry": "Label of the button beside browse.browse.filter-scan-failed that attempts the folder search again. A VERB phrase, imperative, and as short as the language allows.",
   "browse.browse.from": "The placeholder of a control in browse. Rendered in libs/features/browse/src/lib/browse/browse.html.",
   "browse.browse.granted-by": "Visible text in browse. Rendered in libs/features/browse/src/lib/browse/browse.html.",
   "browse.browse.if-you-want-to-explicitly-control": "Visible text in browse. Rendered in libs/features/browse/src/lib/browse/browse.html.",

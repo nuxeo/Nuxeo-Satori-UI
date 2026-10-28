@@ -47,6 +47,8 @@ import {
   AuditEntry,
   DirectoryEntry,
   BROWSE_FILTER_SCAN_LIMIT,
+  type BrowseFolderEntrySet,
+  type BrowseSortEntry,
   BrowseService,
   BrowseContextService,
   ClipboardTargetService,
@@ -214,6 +216,14 @@ const SORT_FIELDS: Readonly<Record<string, string>> = {
 };
 
 /** One page of a folder: the 50 entries browse has always asked for, now with the rest reachable. */
+/** One folder-scan request. Carries its own sort, so a later re-order cannot rewrite it. */
+interface ScanRequest {
+  path: string;
+  sortKey: string;
+  generation: number;
+  sort: BrowseSortEntry[];
+}
+
 const PAGE_SIZE = 50;
 
 @Component({
@@ -604,6 +614,10 @@ export class BrowseComponent {
    */
   private readonly scanGeneration = signal(0);
   private scannedGeneration = -1;
+  /** Requests, piped through `switchMap`, which is what cancels the scan each one replaces. */
+  private readonly scanRequests$ = new Subject<ScanRequest>();
+  /** True when the last scan for this folder failed, so the rows are only the loaded page. */
+  readonly filterScanFailed = signal(false);
   /** The cap the template names when a scan was cut short. */
   readonly filterScanLimit = BROWSE_FILTER_SCAN_LIMIT;
   /** True when {@link BROWSE_FILTER_SCAN_LIMIT} cut the scan short, so a filter saw only part. */
@@ -796,43 +810,56 @@ export class BrowseComponent {
   }
 
   private startFolderScan(path: string, sortKey: string, generation: number): void {
-    // Written before subscribing, so a second run cannot start the same scan twice.
+    // Written before the request goes out, so a second run cannot start the same scan twice.
     this.scannedPath.set(path);
     this.scannedSortKey.set(sortKey);
     this.scannedGeneration = generation;
     this.scannedEntries.set(null);
     this.filterScanTruncated.set(false);
+    this.filterScanFailed.set(false);
     this.filterScanning.set(true);
-    /**
-     * The generation too, not just path and sort.
-     *
-     * A content refresh can start a second scan for the *same* path and sort while the first is
-     * still in flight, and those two keys cannot tell them apart. A late pre-refresh result would
-     * then overwrite the fresh rows, and a late pre-refresh error would null out the newer scan.
-     */
-    const superseded = () =>
-      this.scannedPath() !== path ||
-      this.scannedSortKey() !== sortKey ||
-      this.scannedGeneration !== generation;
-    this.browseService
-      .getAllBrowseFolderEntries(path, BROWSE_FILTER_SCAN_LIMIT, PAGE_SIZE, this.serverSort())
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (set) => {
-          if (superseded()) return;
-          this.scannedEntries.set(set.entries);
-          this.filterScanTruncated.set(set.truncated);
-          this.filterScanning.set(false);
-        },
-        // A failed scan leaves `scannedEntries` null, so the filters fall back to the loaded page
-        // — narrower than asked for, but never wrong about what it did show.
-        error: () => {
-          if (superseded()) return;
-          this.scannedPath.set(null);
-          this.scannedSortKey.set(null);
-          this.filterScanning.set(false);
-        },
-      });
+    this.scanRequests$.next({ path, sortKey, generation, sort: this.serverSort() });
+  }
+
+  /**
+   * Applies a finished scan, if it is still the one being waited for.
+   *
+   * Two mechanisms, and both are needed. `switchMap` on {@link scanRequests$} tears down the
+   * previous scan when another is requested: that stops obsolete subscriptions fetching pages they
+   * will never use, and it is the only thing that fixes a sort cycle A -> B -> A, where the two A
+   * scans share a path, a sort **and** a generation, so no key could tell them apart and a late
+   * error from the first cleared the second's results.
+   *
+   * The key check below covers what `switchMap` cannot: {@link invalidateFolderScan} clears the
+   * cache without issuing a new request, so an in-flight scan is not cancelled and must not be
+   * allowed to land afterwards.
+   */
+  private applyScanResult(request: ScanRequest, set: BrowseFolderEntrySet | null): void {
+    if (
+      this.scannedPath() !== request.path ||
+      this.scannedSortKey() !== request.sortKey ||
+      this.scannedGeneration !== request.generation
+    ) {
+      return;
+    }
+    this.filterScanning.set(false);
+    if (!set) {
+      // The rows fall back to the loaded page — narrower than asked for, but never wrong about
+      // what it did show. `filterScanFailed` is what stops that reading as a complete answer: an
+      // off-page match would otherwise surface as "0 results", indistinguishable from no match.
+      this.scannedPath.set(null);
+      this.scannedSortKey.set(null);
+      this.filterScanFailed.set(true);
+      return;
+    }
+    this.scannedEntries.set(set.entries);
+    this.filterScanTruncated.set(set.truncated);
+  }
+
+  /** Scan this folder again after a failure, from the message the failure puts on screen. */
+  retryFolderScan(): void {
+    this.filterScanFailed.set(false);
+    this.ensureFolderScan();
   }
 
   /**
@@ -848,6 +875,7 @@ export class BrowseComponent {
     this.scannedSortKey.set(null);
     this.scannedEntries.set(null);
     this.filterScanTruncated.set(false);
+    this.filterScanFailed.set(false);
     this.filterScanning.set(false);
     this.scanGeneration.update((generation) => generation + 1);
   }
@@ -1114,6 +1142,28 @@ export class BrowseComponent {
           this.loadActivity(folder.uid);
         }
       });
+
+    this.scanRequests$
+      .pipe(
+        // `switchMap`, not `mergeMap`: a new request must cancel the scan it replaces, or obsolete
+        // subscriptions go on fetching pages and a late error from one of them can clear the
+        // newer scan's results.
+        switchMap((request) =>
+          this.browseService
+            .getAllBrowseFolderEntries(
+              request.path,
+              BROWSE_FILTER_SCAN_LIMIT,
+              PAGE_SIZE,
+              request.sort,
+            )
+            .pipe(
+              map((set) => ({ request, set: set as BrowseFolderEntrySet | null })),
+              catchError(() => of({ request, set: null as BrowseFolderEntrySet | null })),
+            ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(({ request, set }) => this.applyScanResult(request, set));
 
     this.browsePath$.next({ nuxeoPath: initialPath, pageIndex: 0 });
 
