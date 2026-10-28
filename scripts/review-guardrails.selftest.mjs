@@ -155,9 +155,15 @@ function withFixture(files, mutate, run, options = {}) {
     let runDir = dir;
     if (options.shallow) {
       runDir = `${dir}-shallow`;
+      /* `--no-single-branch` matters: `--depth 1` implies `--single-branch`, which also narrows
+       * the fetch refspec — and `checkWorkflowRefGates` treats a narrow refspec as missing branch
+       * coverage for its own reasons. A clone that is both shallow AND narrow cannot tell which of
+       * the two made the finding advisory, and mutation testing proved the point: with the plain
+       * `--depth 1` clone, removing the shallow test from the check changed no verdict here. This
+       * fixture is shallow with FULL branch coverage, so it isolates shallowness. */
       const clone = spawnSync(
         'git',
-        ['clone', '--quiet', '--depth', '1', '--no-local', `file://${dir}`, runDir],
+        ['clone', '--quiet', '--depth', '1', '--no-single-branch', '--no-local', `file://${dir}`, runDir],
         { encoding: 'utf8' },
       );
       if (clone.status !== 0) throw new Error(`shallow clone failed: ${clone.stderr}`);
@@ -166,6 +172,13 @@ function withFixture(files, mutate, run, options = {}) {
         encoding: 'utf8',
       }).stdout.trim();
       if (confirm !== 'true') throw new Error(`fixture clone is not shallow (got ${confirm})`);
+      const refspec = spawnSync('git', ['config', '--get', 'remote.origin.fetch'], {
+        cwd: runDir,
+        encoding: 'utf8',
+      }).stdout.trim();
+      if (!refspec.includes('refs/heads/*')) {
+        throw new Error(`shallow fixture must still track every branch (refspec ${refspec})`);
+      }
     } else if (options.singleBranch) {
       /* A clone that is complete in HISTORY and incomplete in BRANCHES. `options.singleBranch` is
        * the list of branches to create in the origin first, none of which the clone will track —
