@@ -268,11 +268,49 @@ describe('BrowseComponent — rendered document list', () => {
   /**
    * Let a changed filter's debounce elapse, then render what the reload produced.
    *
-   * Real timers, because the component's own debounce is the thing under test here; the margin is
-   * taken from `FILTER_DEBOUNCE_MS` rather than written out, so the two cannot drift apart.
+   * Two things in order, and the order is the whole point.
+   *
+   * **Change detection first.** The effect that starts the debounce has not run at the moment a
+   * filter signal is written — measured: `filtering()` is still false immediately after the write
+   * and true one macrotask later — so the timer does not exist yet. This used to sleep straight
+   * away, which spent the budget on a timer that had not started: fine on a host where the effect
+   * ran in ~2ms, and a `windows-gate` failure on a loaded CI runner, where the reload landed after
+   * the sleep had already elapsed and the rows were still the unfiltered ones.
+   *
+   * **Then wait for the reload itself, not for a duration.** A fixed sleep is a guess about how
+   * fast the runner is; waiting until the request has actually been issued is not. The deadline is
+   * only there so a genuine failure reports as an assertion rather than hanging.
    */
   async function settleFilter(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, FILTER_DEBOUNCE_MS + 50));
+    await settle();
+    await waitForFolderRequest();
+  }
+
+  /**
+   * Wait until the component issues another folder request, whatever timer it is on.
+   *
+   * Used for both of the component's own timers — the filter debounce and the paste's deferred
+   * reload — so neither test has to name a duration. The deadline only exists so a genuine failure
+   * reports as an assertion instead of hanging.
+   */
+  async function waitForFolderRequest(deadlineMs = 4000): Promise<void> {
+    const before = browse.getBrowseFolderContents.mock.calls.length;
+    const deadline = Date.now() + deadlineMs;
+    while (browse.getBrowseFolderContents.mock.calls.length === before && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await settle();
+  }
+
+  /**
+   * Let the debounce window pass **without** expecting a reload.
+   *
+   * For the cases that assert nothing was asked for, where waiting on a request that must never
+   * arrive would only ever time out. Same leading `settle()`, for the same reason.
+   */
+  async function settleFilterWindow(): Promise<void> {
+    await settle();
+    await new Promise((resolve) => setTimeout(resolve, FILTER_DEBOUNCE_MS + 150));
     await settle();
   }
 
@@ -1365,9 +1403,10 @@ describe('BrowseComponent — rendered document list', () => {
     await settle();
     expect(rowTitles()).toEqual(['Pasted Report']);
 
-    // Past the component's own 1500ms timer.
-    await new Promise((resolve) => setTimeout(resolve, 1800));
-    await settle();
+    // Until the deferred reload actually goes out, rather than for a guessed 1800ms: the timer
+    // starts when the paste effect runs, not when the paste is notified, so a fixed sleep measures
+    // from the wrong moment — which is what made the filter tests fail on a loaded Windows runner.
+    await waitForFolderRequest();
 
     expect(rowTitles()).toEqual(['Pasted Report']);
     expect(component.listTotalSize()).toBe(1);
@@ -1428,8 +1467,9 @@ describe('BrowseComponent — rendered document list', () => {
     const afterNavigation = browse.getBrowseFolderContents.mock.calls.length;
 
     // The navigation's own load already carried the cleared filters; clearing them must not ask
-    // for the same listing again once the debounce elapses.
-    await settleFilter();
+    // for the same listing again once the debounce elapses. The window is waited out rather than
+    // waited *on*, since the whole assertion is that no request arrives.
+    await settleFilterWindow();
     expect(browse.getBrowseFolderContents.mock.calls.length).toBe(afterNavigation);
   });
 
