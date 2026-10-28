@@ -1,169 +1,47 @@
 <h2 mat-dialog-title>{{ 'browse.edit-metadata-dialog.edit' | translate }}</h2>
 
-<mat-dialog-content>
+<mat-dialog-content ngForm #metadataForm="ngForm">
   <mat-form-field appearance="outline" class="full-width">
     <mat-label>{{ 'browse.edit-metadata-dialog.title' | translate }}</mat-label>
-    <input matInput [(ngModel)]="title" required />
+    <input matInput name="title" [(ngModel)]="title" required />
   </mat-form-field>
 
   <mat-form-field appearance="outline" class="full-width">
     <mat-label>{{ 'browse.edit-metadata-dialog.description' | translate }}</mat-label>
-    <textarea matInput [(ngModel)]="description" rows="2"></textarea>
+    <textarea matInput name="description" [(ngModel)]="description" rows="2"></textarea>
   </mat-form-field>
 
-  <mat-form-field appearance="outline" class="full-width vocab-field">
-    <mat-label>{{ 'browse.edit-metadata-dialog.nature' | translate }}</mat-label>
-    <mat-select
-      #natureSelect
-      [(ngModel)]="nature"
-      panelClass="vocab-select-panel"
-      (openedChange)="onNaturePanelOpen($event)"
-      (selectionChange)="natureSelect.close()"
-    >
-      <mat-select-trigger>
-        @if (nature; as natureId) {
-          <nxs-chip-set
-            class="vocab-trigger-chips"
-            [items]="[
-              {
-                id: natureId,
-                label: naturePillLabel(natureId),
-                removeLabel: 'shared.remove-item' | translate: { name: naturePillLabel(natureId) },
-              },
-            ]"
-            (removed)="clearNature()"
-          />
-        }
-      </mat-select-trigger>
-      <div class="vocab-panel__search">
-        <input
-          type="text"
-          [placeholder]="'browse.edit-metadata-dialog.search' | translate"
-          [attr.aria-label]="'browse.edit-metadata-dialog.search-nature' | translate"
-          [(ngModel)]="naturePanelSearch"
-          [ngModelOptions]="{ standalone: true }"
-          (click)="$event.stopPropagation()"
-          (keydown)="$event.stopPropagation()"
-        />
-      </div>
-      <div class="vocab-panel__list">
-        @for (entry of filteredNatureOptions(); track entry.id) {
-          <mat-option [value]="entry.id">{{ directoryPickerLabel(entry) }}</mat-option>
-        }
-      </div>
-    </mat-select>
-  </mat-form-field>
-
-  <mat-form-field appearance="outline" class="full-width vocab-field">
-    <mat-label>{{ 'browse.edit-metadata-dialog.subjects' | translate }}</mat-label>
-    <mat-select
-      [(ngModel)]="subjects"
-      multiple
-      panelClass="vocab-select-panel vocab-grouped-select-panel"
-      (openedChange)="onSubjectsPanelOpen($event)"
-    >
-      <mat-select-trigger>
-        <nxs-chip-set
-          class="vocab-trigger-chips"
-          [items]="subjectChips()"
-          (removed)="removeSubject($event.id)"
-        />
-      </mat-select-trigger>
-      <div class="vocab-panel__search">
-        <input
-          type="text"
-          [placeholder]="'browse.edit-metadata-dialog.search' | translate"
-          [attr.aria-label]="'browse.edit-metadata-dialog.search-subjects' | translate"
-          [(ngModel)]="subjectsPanelSearch"
-          [ngModelOptions]="{ standalone: true }"
-          (click)="$event.stopPropagation()"
-          (keydown)="$event.stopPropagation()"
-        />
-      </div>
-      <div class="vocab-panel__list">
-        @for (group of groupedSubjectOptions(); track group.parentLabel) {
-          <mat-optgroup [label]="group.parentLabel">
-            @for (entry of group.entries; track entry.id) {
-              <mat-option [value]="entry.id">{{ l10nEntryLabel(entry) }}</mat-option>
-            }
-          </mat-optgroup>
-        }
-      </div>
-    </mat-select>
-  </mat-form-field>
-
-  <mat-form-field appearance="outline" class="full-width vocab-field">
-    <mat-label>{{ 'browse.edit-metadata-dialog.coverage' | translate }}</mat-label>
-    <mat-select
-      #coverageSelect
-      [(ngModel)]="coverage"
-      panelClass="vocab-select-panel vocab-grouped-select-panel"
-      (openedChange)="onCoveragePanelOpen($event)"
-      (selectionChange)="coverageSelect.close()"
-    >
-      <mat-select-trigger>
-        @if (coverage; as coverageId) {
-          <nxs-chip-set
-            class="vocab-trigger-chips"
-            [items]="[
-              {
-                id: coverageId,
-                label: coveragePillLabel(coverageId),
-                removeLabel:
-                  'shared.remove-item' | translate: { name: coveragePillLabel(coverageId) },
-              },
-            ]"
-            (removed)="clearCoverage()"
-          />
-        }
-      </mat-select-trigger>
-      <div class="vocab-panel__search">
-        <input
-          type="text"
-          [placeholder]="'browse.edit-metadata-dialog.search' | translate"
-          [attr.aria-label]="'browse.edit-metadata-dialog.search-coverage' | translate"
-          [(ngModel)]="coveragePanelSearch"
-          [ngModelOptions]="{ standalone: true }"
-          (click)="$event.stopPropagation()"
-          (keydown)="$event.stopPropagation()"
-        />
-      </div>
-      <div class="vocab-panel__list">
-        @for (group of groupedCoverageOptions(); track group.parentLabel) {
-          <mat-optgroup [label]="group.parentLabel">
-            @for (entry of group.entries; track entry.id) {
-              <mat-option [value]="entry.id">{{ l10nEntryLabel(entry) }}</mat-option>
-            }
-          </mat-optgroup>
-        }
-      </div>
-    </mat-select>
-  </mat-form-field>
-
-  <mat-form-field
-    appearance="outline"
-    subscriptSizing="dynamic"
+  <nxs-vocabulary-select
     class="full-width"
-    [class.expires-field-invalid]="showExpiresError()"
-  >
-    <mat-label>{{ 'browse.edit-metadata-dialog.expires' | translate }}</mat-label>
-    <input
-      matInput
-      name="expires"
-      [matDatepicker]="picker"
-      [ngModel]="expires"
-      [errorStateMatcher]="expiresErrorMatcher"
-      (ngModelChange)="onExpiresChange($event)"
-      (input)="onExpiresInput($event)"
-      #expiresInput="ngModel"
-      [placeholder]="'common.date-mask' | translate | dateMask"
-    />
-    <mat-datepicker-toggle matIconSuffix [for]="picker" />
-    <mat-datepicker #picker />
-    @if (showExpiresError()) {
-      <mat-error>{{ 'browse.edit-metadata-dialog.enter-a-valid-date' | translate }}</mat-error>
-    }
-  </mat-form-field>
+    directory="nature"
+    [label]="'browse.edit-metadata-dialog.nature' | translate"
+    name="nature"
+    [(ngModel)]="nature"
+  />
+
+  <nxs-vocabulary-select
+    class="full-width"
+    directory="l10nsubjects"
+    [label]="'browse.edit-metadata-dialog.subjects' | translate"
+    name="subjects"
+    [(ngModel)]="subjects"
+    multiple
+  />
+
+  <nxs-vocabulary-select
+    class="full-width"
+    directory="l10ncoverage"
+    [label]="'browse.edit-metadata-dialog.coverage' | translate"
+    name="coverage"
+    [(ngModel)]="coverage"
+  />
+
+  <nxs-date-input
+    class="full-width"
+    [label]="'browse.edit-metadata-dialog.expires' | translate"
+    name="expires"
+    [(ngModel)]="expires"
+  />
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
@@ -173,7 +51,7 @@
   <button
     mat-flat-button
     color="primary"
-    [disabled]="saving() || !title.trim() || !isExpiresValid()"
+    [disabled]="saving() || !title.trim() || metadataForm.invalid || !isExpiresValid()"
     (click)="save()"
   >
     @if (saving()) {
