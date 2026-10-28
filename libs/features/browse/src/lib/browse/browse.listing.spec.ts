@@ -29,6 +29,7 @@ import {
   ClipboardTargetService,
   DirectoryService,
   DocumentDetailService,
+  BrowseContextService,
   SelectionService,
   TagService,
   type NuxeoDocument,
@@ -87,7 +88,17 @@ const browse = {
   getByPath: vi.fn((): BrowseReturn<'getByPath'> => of(folder)),
   // Never resolves on purpose: the folder scan stays pending, so the toolbar filters fall back to
   // the loaded page exactly as they did before cross-folder filtering existed.
-  getAllBrowseFolderEntries: vi.fn(() => EMPTY),
+  // Parameters declared, not just the return type: a zero-arg mock makes `mock.calls` an empty
+  // tuple, so a spec cannot assert which sort the scan was asked for — `spec-types` rejects the
+  // index even though Vitest runs it happily.
+  getAllBrowseFolderEntries: vi.fn(
+    (
+      _nuxeoPath: string,
+      _maxDocuments?: number,
+      _pageSize?: number,
+      _sort?: Parameters<BrowseService['getAllBrowseFolderEntries']>[3],
+    ): BrowseReturn<'getAllBrowseFolderEntries'> => EMPTY,
+  ),
   getBrowseFolderContents: vi.fn(
     (
       ..._args: Parameters<BrowseService['getBrowseFolderContents']>
@@ -789,6 +800,129 @@ describe('BrowseComponent — rendered document list', () => {
 
     // 'Workspace' appears only off-page; built from the page alone it could never be selected.
     expect(component.distinctTypes()).toEqual(['File', 'Workspace']);
+  });
+
+  /**
+   * Review follow-up: selection resolved ids against `entries()` only, so picking an off-page row
+   * found no document — Delete vanished despite the row's permissions, and header Edit on an
+   * off-page Collection fell through to the parent folder's metadata.
+   */
+  it('resolves a selected row that exists only in the scan, not on the page', async () => {
+    const onPage = [doc({ uid: 'c-1', title: 'Q1 Report' })];
+    const offPage = doc({ uid: 'c-99', title: 'Project Reports' });
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: onPage, totalSize: -1, hasNextPage: true }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: [...onPage, offPage], truncated: false }),
+    );
+
+    const component = await render();
+    component.filterText.set('project');
+    await settle();
+    expect(rowTitles()).toEqual(['Project Reports']);
+
+    component.onListSelectionChange(['c-99']);
+    await settle();
+
+    // The id resolves to the document, so the shared service gets its real title and type.
+    expect(TestBed.inject(SelectionService).selectedItems()[0].name).toBe('Project Reports');
+    expect(component.singleSelectedEntry()?.uid).toBe('c-99');
+  });
+
+  /**
+   * Review follow-up: the cached scan stayed the row source after the last filter was cleared, so
+   * the table rendered the whole folder beside a pager still describing 50-row server pages.
+   */
+  it('goes back to the loaded page when the last filter is cleared', async () => {
+    const onPage = [doc({ uid: 'c-1', title: 'Q1 Report' })];
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: onPage, totalSize: -1, hasNextPage: true }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({
+        folder,
+        entries: [...onPage, doc({ uid: 'c-99', title: 'Project Reports' })],
+        truncated: false,
+      }),
+    );
+
+    const component = await render();
+    component.filterText.set('project');
+    await settle();
+    expect(rowTitles()).toEqual(['Project Reports']);
+
+    component.filterText.set('');
+    await settle();
+
+    expect(rowTitles()).toEqual(['Q1 Report']);
+    expect(component.filteredAcrossFolder()).toBe(false);
+    // The server pager is in charge again.
+    expect(component.listHasNextPage()).toBe(true);
+    // The type options may still come from the scan: a wider option list is never wrong.
+    expect(component.distinctTypes().length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Review follow-up: the scan was keyed only by path, so applying a filter replaced a sorted page
+   * with the source's default order, and a later sort click moved the indicator but not the rows.
+   */
+  it('rescans in the new order when the sort changes while filtering', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: false }),
+    );
+
+    const component = await render();
+    component.filterText.set('report');
+    await settle();
+    const callsBefore = browse.getAllBrowseFolderEntries.mock.calls.length;
+    expect(callsBefore).toBeGreaterThan(0);
+
+    component.onListSortChange({ key: 'title', direction: 'desc' });
+    await settle();
+
+    const calls = browse.getAllBrowseFolderEntries.mock.calls;
+    expect(calls.length).toBeGreaterThan(callsBefore);
+    // The order reaches the scan, so the filtered rows are the ones the user asked to see.
+    expect(calls[calls.length - 1][3]).toEqual([{ sortBy: 'dc:title', sortOrder: 'DESC' }]);
+  });
+
+  /**
+   * Review follow-up: clearing the scan on a content refresh did not restart the scanning effect,
+   * which tracks the folder, the order, the filter and a generation — none of which a refresh
+   * changed. An active filter therefore fell back to the loaded page and lost its off-page
+   * matches, and kept showing documents a rename or trash had just changed.
+   */
+  it('rescans while filtering when the folder contents change', async () => {
+    const page = [doc({ uid: 'c-1', title: 'Q1 Report' })];
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: page, totalSize: -1, hasNextPage: true }),
+    );
+    browse.getAllBrowseFolderEntries.mockReturnValue(
+      of({
+        folder,
+        entries: [...page, doc({ uid: 'c-99', title: 'Project Reports' })],
+        truncated: false,
+      }),
+    );
+
+    const component = await render();
+    component.filterText.set('project');
+    await settle();
+    expect(rowTitles()).toEqual(['Project Reports']);
+    const callsBefore = browse.getAllBrowseFolderEntries.mock.calls.length;
+
+    // What a rename, trash, upload or paste does once its request succeeds.
+    TestBed.inject(BrowseContextService).requestContentRefresh();
+    await settle();
+
+    expect(browse.getAllBrowseFolderEntries.mock.calls.length).toBeGreaterThan(callsBefore);
+    // Still filtering across the folder rather than silently narrowing to the page.
+    expect(component.filteredAcrossFolder()).toBe(true);
+    expect(rowTitles()).toEqual(['Project Reports']);
   });
 
   it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {

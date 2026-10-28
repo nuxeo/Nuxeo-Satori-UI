@@ -3089,7 +3089,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-316 exported symbol(s).
+318 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -3233,6 +3233,7 @@ const BLOB_CLIENT_REASON_HEADER = "X-Client-Reason";
 const BLOB_CLIENT_REASON_PARAM = "clientReason";
 const BLOB_HOLDING_DOC_TYPES: ReadonlySet<string>;
 const BLOB_NOT_ATTACHED_ERROR = "File was not attached to the document";
+const BROWSE_FILTER_SCAN_LIMIT = 500;
 type BlobClientReason = 'download' | 'view';
 class BrowseContextService {
     readonly contextPath: import("@angular/core").WritableSignal<string>;
@@ -3251,6 +3252,12 @@ class BrowseContextService {
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
+interface BrowseFolderEntrySet {
+    folder: NuxeoDocument | null;
+    entries: NuxeoDocument[];
+    truncated: boolean;
+    }
+}
 interface BrowsePageRequest {
     currentPageIndex?: number;
     sort?: BrowseSortEntry[];
@@ -3262,6 +3269,7 @@ class BrowseService {
     getRepositoryRoot(): Observable<NuxeoDocument>;
     getNavTreeBootstrap(pageSize?: number): Observable<NavTreeBootstrap>;
     getBrowseFolderContents(nuxeoPath: string, pageSize?: number, page?: BrowsePageRequest): Observable<BrowseFolderContents>;
+    getAllBrowseFolderEntries(nuxeoPath: string, maxDocuments?: number, pageSize?: number, sort?: BrowseSortEntry[]): Observable<BrowseFolderEntrySet>;
     getCollectionMembers(collectionUid: string, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>;
     getFolderContext(nuxeoPath: string): Observable<NuxeoDocument>;
     getCreatableSubtypes(nuxeoPath: string): Observable<string[]>;

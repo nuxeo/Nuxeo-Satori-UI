@@ -52,7 +52,9 @@ const mockBrowseService = {
   getByPath: vi.fn((): ReturnType<BrowseService['getByPath']> => notConnected()),
   // Never resolves on purpose: the folder scan stays pending, so the toolbar filters fall back to
   // the loaded page exactly as they did before cross-folder filtering existed.
-  getAllBrowseFolderEntries: vi.fn(() => EMPTY),
+  getAllBrowseFolderEntries: vi.fn(
+    (): ReturnType<BrowseService['getAllBrowseFolderEntries']> => EMPTY,
+  ),
   getBrowseFolderContents: vi.fn((): ReturnType<BrowseService['getBrowseFolderContents']> =>
     notConnected(),
   ),

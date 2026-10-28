@@ -14,6 +14,12 @@
   margin: 12px 0;
 }
 
+// No note, no space. `display: none` drops the margins with the box, which a `margin: 0` override
+// would not do reliably where the host is a flex item.
+:host(.nxs-domain-hint--empty) {
+  display: none;
+}
+
 // `:host` prefix on purpose. A bare `.nxs-domain-hint__note { margin: 0 }` compiles to
 // specificity (0,2,0) and loses to the theme's `.mat-body-large p` (0,2,2), which left 9.75px
 // under the note — so the block measured 12px above and 21.75px below. With the host attribute in

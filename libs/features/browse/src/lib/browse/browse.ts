@@ -368,7 +368,7 @@ export class BrowseComponent {
     const ids = [...this.selectionService.selectedIds()];
     if (ids.length !== 1) return null;
     const id = ids[0];
-    return this.entries().find((doc) => doc.uid === id) ?? null;
+    return this.selectableEntries().find((doc) => doc.uid === id) ?? null;
   });
   readonly showHeaderEdit = computed(() => {
     const selected = this.singleSelectedEntry();
@@ -586,12 +586,24 @@ export class BrowseComponent {
    * Every child of the folder, fetched the first time a filter is applied to it.
    *
    * `null` means "not scanned": the filters then fall back to the loaded page, which is what the
-   * toolbar did for every folder before. The scan is keyed to a path and does **not** depend on
-   * what was typed — it collects the folder's children, and the filtering happens here — so adding
-   * a character never refetches anything.
+   * toolbar did for every folder before. The scan does **not** depend on what was typed — it
+   * collects the folder's children and the filtering happens here — so adding a character never
+   * refetches anything. It is keyed by path **and** sort order, and invalidated by bumping
+   * {@link scanGeneration}, which is what a content change does.
    */
   private readonly scannedEntries = signal<NuxeoDocument[] | null>(null);
   private readonly scannedPath = signal<string | null>(null);
+  private readonly scannedSortKey = signal<string | null>(null);
+  /**
+   * Bumped whenever a scan can no longer be trusted — a rename, a trash, an upload, a paste.
+   *
+   * It is a signal the scanning effect **reads**, which is the point: clearing `scannedPath` alone
+   * did not restart the effect, because the effect tracks neither it nor anything a refresh
+   * changes, so a filter silently fell back to the loaded page and lost its off-page matches.
+   * Tracking `scannedPath` instead would also re-fire on a failed scan and could spin.
+   */
+  private readonly scanGeneration = signal(0);
+  private scannedGeneration = -1;
   /** The cap the template names when a scan was cut short. */
   readonly filterScanLimit = BROWSE_FILTER_SCAN_LIMIT;
   /** True when {@link BROWSE_FILTER_SCAN_LIMIT} cut the scan short, so a filter saw only part. */
@@ -615,16 +627,49 @@ export class BrowseComponent {
    * scan is in flight instead of blanking — and it is also the behaviour for a folder whose scan
    * failed.
    */
-  private readonly filterScope = computed<NuxeoDocument[]>(() => {
+  /** The scan, but only if it belongs to the folder and order on screen. */
+  private readonly scanForCurrentFolder = computed<NuxeoDocument[] | null>(() => {
     const scanned = this.scannedEntries();
-    return scanned && this.scannedPath() === this.browsePath() ? scanned : this.entries();
+    if (!scanned) return null;
+    if (this.scannedPath() !== this.browsePath()) return null;
+    return this.scannedSortKey() === this.serverSortKey() ? scanned : null;
   });
 
+  /**
+   * The rows the listing shows: the scanned folder **only while a filter is narrowing it**.
+   *
+   * The `filtersActive()` guard is load-bearing. Without it, opening the type dropdown or clearing
+   * the last filter left the cached scan as the row source, so the table rendered up to 500 rows
+   * beside a pager still describing 50-row server pages — and Next then advanced `entries()`
+   * without changing a single visible row.
+   */
+  private readonly filterScope = computed<NuxeoDocument[]>(() =>
+    this.filtersActive() ? (this.scanForCurrentFolder() ?? this.entries()) : this.entries(),
+  );
+
   readonly distinctTypes = computed(() => {
-    // From the scanned folder where there is one: built from the loaded page, this dropdown could
-    // not offer a type that happened to appear only past the first fifty rows.
-    const types = new Set(this.filterScope().map((e) => e.type));
+    // The scanned folder where there is one, filter or no filter: built from the loaded page, this
+    // dropdown could not offer a type that appears only past the first fifty rows, and the user
+    // opens it *before* any filter is active. Unlike the rows, a wider option list is never wrong.
+    const types = new Set((this.scanForCurrentFolder() ?? this.entries()).map((e) => e.type));
     return Array.from(types).sort();
+  });
+
+  /**
+   * Documents the UI can resolve by id: the loaded page plus the scanned folder.
+   *
+   * Selection is made from what is on screen, which while filtering includes off-page rows. The
+   * selection helpers resolved ids against `entries()` only, so selecting an off-page row found no
+   * document: Delete disappeared despite the row's permissions allowing it, and header Edit on an
+   * off-page Collection fell through to the parent folder's metadata. The page wins on collision,
+   * because its rows carry the fresher enrichers.
+   */
+  private readonly selectableEntries = computed<NuxeoDocument[]>(() => {
+    const scanned = this.scanForCurrentFolder();
+    if (!scanned) return this.entries();
+    const byId = new Map(scanned.map((doc) => [doc.uid, doc]));
+    for (const doc of this.entries()) byId.set(doc.uid, doc);
+    return [...byId.values()];
   });
 
   readonly filteredEntries = computed(() => {
@@ -669,12 +714,10 @@ export class BrowseComponent {
    */
   readonly filteredAcrossFolder = computed(
     () =>
-      // `scannedEntries() !== null` and not merely "a scan was started": while the scan is in
-      // flight the rows still come from the loaded page, so claiming folder-wide coverage would
-      // suppress the pager over a listing that is still only one page.
-      this.filtersActive() &&
-      this.scannedEntries() !== null &&
-      this.scannedPath() === this.browsePath(),
+      // `scanForCurrentFolder()` and not merely "a scan was started": while the scan is in flight
+      // the rows still come from the loaded page, so claiming folder-wide coverage would suppress
+      // the pager over a listing that is still only one page.
+      this.filtersActive() && this.scanForCurrentFolder() !== null,
   );
 
   // Paging facts the listing is handed. While a filter covers the whole folder the filtered set is
@@ -699,43 +742,73 @@ export class BrowseComponent {
     return total >= 0 ? total : null;
   });
 
-  /**
-   * Scans the folder the first time a filter is applied to it.
-   *
-   * Keyed on the path, so switching folders invalidates it and re-typing does not. Writes
-   * `scannedPath` before subscribing so a second run cannot start the same scan twice.
-   */
-  private readonly scanFolderWhenFiltering = effect(() => {
-    const path = this.browsePath();
-    if (!this.filtersActive()) return;
-    if (untracked(() => this.scannedPath()) === path) return;
-    untracked(() => this.startFolderScan(path));
+  /** The requested order, as one comparable value, so a scan can be keyed by it. */
+  private readonly serverSortKey = computed(() => {
+    const sort = this.listSort();
+    const field = sort ? SORT_FIELDS[sort.key] : undefined;
+    return sort && field ? `${field}:${sort.direction}` : '';
   });
 
   /**
-   * Scan the folder now, if it has not been scanned.
+   * Scans the folder when a filter is applied, and re-scans when what it holds would be wrong.
    *
-   * Called when the type dropdown opens. Without it the list of types was built from the loaded
-   * page right up until a filter was applied — so the first type a user could pick came from a
-   * narrower set than the one they would be filtering over a moment later.
+   * Tracks four things: the folder, whether a filter is active, the requested order, and
+   * {@link scanGeneration}. Sort is tracked because a scan taken in one order is the wrong set to
+   * show in another; the generation is tracked because clearing `scannedPath` on a content refresh
+   * did not restart this effect at all, leaving an active filter on the loaded page.
+   *
+   * The guard reads its state through `untracked`, so a scan that fails cannot re-trigger the
+   * effect and spin — it stays on the loaded page until the folder, order, filter or generation
+   * changes.
+   */
+  private readonly scanFolderWhenFiltering = effect(() => {
+    const path = this.browsePath();
+    const sortKey = this.serverSortKey();
+    const generation = this.scanGeneration();
+    if (!this.filtersActive()) return;
+    untracked(() => this.startFolderScanIfStale(path, sortKey, generation));
+  });
+
+  /**
+   * Scan the folder now, if what is cached is not already the right set.
+   *
+   * Also called when the type dropdown opens: without it the list of types was built from the
+   * loaded page right up until a filter was applied, so the first type a user could pick came from
+   * a narrower set than the one they would then be filtering over.
    */
   ensureFolderScan(): void {
-    const path = this.browsePath();
-    if (this.scannedPath() === path) return;
-    this.startFolderScan(path);
+    this.startFolderScanIfStale(
+      this.browsePath(),
+      this.serverSortKey(),
+      untracked(() => this.scanGeneration()),
+    );
   }
 
-  private startFolderScan(path: string): void {
+  private startFolderScanIfStale(path: string, sortKey: string, generation: number): void {
+    if (
+      this.scannedPath() === path &&
+      this.scannedSortKey() === sortKey &&
+      this.scannedGeneration === generation
+    ) {
+      return;
+    }
+    this.startFolderScan(path, sortKey, generation);
+  }
+
+  private startFolderScan(path: string, sortKey: string, generation: number): void {
+    // Written before subscribing, so a second run cannot start the same scan twice.
     this.scannedPath.set(path);
+    this.scannedSortKey.set(sortKey);
+    this.scannedGeneration = generation;
     this.scannedEntries.set(null);
     this.filterScanTruncated.set(false);
     this.filterScanning.set(true);
     this.browseService
-      .getAllBrowseFolderEntries(path)
+      .getAllBrowseFolderEntries(path, BROWSE_FILTER_SCAN_LIMIT, PAGE_SIZE, this.serverSort())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (set) => {
-          if (this.scannedPath() !== path) return;
+          if (this.scannedPath() !== path || this.scannedSortKey() !== sortKey) return;
           this.scannedEntries.set(set.entries);
           this.filterScanTruncated.set(set.truncated);
           this.filterScanning.set(false);
@@ -743,19 +816,29 @@ export class BrowseComponent {
         // A failed scan leaves `scannedEntries` null, so the filters fall back to the loaded page
         // — narrower than asked for, but never wrong about what it did show.
         error: () => {
-          if (this.scannedPath() !== path) return;
+          if (this.scannedPath() !== path || this.scannedSortKey() !== sortKey) return;
           this.scannedPath.set(null);
+          this.scannedSortKey.set(null);
           this.filterScanning.set(false);
         },
       });
   }
 
-  /** Drop a scan once it can no longer be trusted: another folder, or changed content. */
+  /**
+   * Drop a scan once it can no longer be trusted: another folder, or changed content.
+   *
+   * Bumping the generation is what makes the effect re-scan while a filter is still applied, which
+   * is the case that matters after a rename, a trash, an upload or a paste: those refresh
+   * `entries()` through `loadContent()`, and without this the filtered rows kept showing deleted
+   * documents and missed newly created matches.
+   */
   private invalidateFolderScan(): void {
     this.scannedPath.set(null);
+    this.scannedSortKey.set(null);
     this.scannedEntries.set(null);
     this.filterScanTruncated.set(false);
     this.filterScanning.set(false);
+    this.scanGeneration.update((generation) => generation + 1);
   }
 
   /** The visible columns as the document list takes them: translated, sortable where the server sorts. */
@@ -1061,7 +1144,7 @@ export class BrowseComponent {
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe(() => {
               if (this.currentDoc()?.uid === paste.targetUid && this.currentNuxeoPath) {
-                this.loadContent();
+                this.reloadAfterContentChange();
               }
             });
         }
@@ -1128,6 +1211,19 @@ export class BrowseComponent {
     this.browsePath$.next({ nuxeoPath: this.currentNuxeoPath, pageIndex: this.pageIndex() });
   }
 
+  /**
+   * Reload after the folder's **contents** changed — a rename, a trash, a restore, an upload, a
+   * paste, a create/import.
+   *
+   * Separate from `loadContent()` on purpose. That one is also how ordinary paging and re-ordering
+   * reload, and those must keep the scan; these must not, or a filtered listing goes on showing
+   * documents that were just deleted and misses ones that were just created.
+   */
+  private reloadAfterContentChange(): void {
+    this.invalidateFolderScan();
+    this.loadContent();
+  }
+
   /** Another page of the same folder, in the same order. */
   goToPage(pageIndex: number): void {
     if (pageIndex < 0 || pageIndex === this.pageIndex()) return;
@@ -1159,7 +1255,7 @@ export class BrowseComponent {
     }
     for (const id of ids) {
       if (current.has(id)) continue;
-      const doc = this.entries().find((entry) => entry.uid === id);
+      const doc = this.selectableEntries().find((entry) => entry.uid === id);
       this.selectionService.toggle(id, doc?.title ?? id, null, doc?.type);
     }
   }
@@ -1231,7 +1327,8 @@ export class BrowseComponent {
 
   private afterDroppedUpload(path: string): void {
     this.browseContext.requestTreeRefresh();
-    if (nuxeoPathsEqualFlexible(path, this.currentDoc()?.path ?? '')) this.loadContent();
+    if (nuxeoPathsEqualFlexible(path, this.currentDoc()?.path ?? ''))
+      this.reloadAfterContentChange();
   }
 
   // ── Row actions ──
@@ -1285,7 +1382,7 @@ export class BrowseComponent {
           this.translate.instant('browse.message.renamed', { name: updated.title ?? doc.title }),
         );
         this.browseContext.requestTreeRefresh();
-        this.loadContent();
+        this.reloadAfterContentChange();
       });
   }
 
@@ -1334,7 +1431,7 @@ export class BrowseComponent {
             this.selectionService.toggle(doc.uid);
           }
           this.browseContext.requestTreeRefresh();
-          this.loadContent();
+          this.reloadAfterContentChange();
         },
         error: (err: unknown) =>
           this.toast.error(
@@ -1381,7 +1478,7 @@ export class BrowseComponent {
           if (this.selectionService.isSelected(doc.uid)) this.selectionService.toggle(doc.uid);
           this.toast.show(this.translate.instant('browse.message.moved-to-trash'));
           this.browseContext.requestTreeRefresh();
-          this.loadContent();
+          this.reloadAfterContentChange();
         },
         error: (err: unknown) =>
           this.toast.error(
@@ -1638,7 +1735,7 @@ export class BrowseComponent {
       next: () => {
         this.toast.show(`"${doc.title}" restored`);
         this.loadTrash();
-        this.loadContent();
+        this.reloadAfterContentChange();
       },
       error: () =>
         this.toast.error(this.translate.instant('browse.message.failed-to-restore-document')),
@@ -1831,7 +1928,7 @@ export class BrowseComponent {
           });
           return;
         }
-        if (result?.refreshed) this.loadContent();
+        if (result?.refreshed) this.reloadAfterContentChange();
       });
   }
 
@@ -2005,11 +2102,11 @@ export class BrowseComponent {
 
   private selectedEntries(): NuxeoDocument[] {
     const ids = new Set(this.selectionService.selectedIds());
-    return this.entries().filter((entry) => ids.has(entry.uid));
+    return this.selectableEntries().filter((entry) => ids.has(entry.uid));
   }
 
   private resolveSelectedDocumentForDelete(uid: string) {
-    const entry = this.entries().find((doc) => doc.uid === uid);
+    const entry = this.selectableEntries().find((doc) => doc.uid === uid);
     if (entry && hasDocumentPermissionsEnricher(entry)) {
       return of(entry);
     }

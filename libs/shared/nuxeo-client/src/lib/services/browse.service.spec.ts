@@ -1187,6 +1187,57 @@ describe('BrowseService', () => {
       expect(result.truncated).toBe(false);
     });
 
+    it('reports truncation when the cap discards documents the walk already fetched', async () => {
+      const path = '/default-domain/workspaces';
+      // Cap of 3 at two per page: page 0 and page 1 give four documents, the slice keeps three.
+      // The second page has no successor, so `hasNextPage` alone would call this complete.
+      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 3, 2));
+
+      flushPage(path, 0, [{ uid: 'a' }, { uid: 'b' }], true);
+      flushPage(path, 1, [{ uid: 'c' }, { uid: 'd' }], false);
+
+      const result = await result$;
+      expect(result.entries.map((e) => e.uid)).toEqual(['a', 'b', 'c']);
+      expect(result.truncated).toBe(true);
+    });
+
+    it('forwards the requested sort to every page it walks', async () => {
+      const path = '/default-domain/workspaces';
+      const sort = [{ sortBy: 'dc:title', sortOrder: 'ASC' as const }];
+      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 10, 1, sort));
+
+      for (const pageIndex of [0, 1]) {
+        httpMock.expectOne((r) => r.url === `/nuxeo/api/v1/path${path}`).flush(folderDoc(path));
+        const req = httpMock.expectOne(
+          (r) =>
+            r.url === `/nuxeo/api/v1/path${path}/@children` &&
+            r.params.get('currentPageIndex') === String(pageIndex),
+        );
+        // Without this the scan returned the default order and silently unsorted a sorted page.
+        expect(req.request.params.get('sortBy')).toBe('dc:title');
+        expect(req.request.params.get('sortOrder')).toBe('ASC');
+        req.flush({
+          entries: [
+            {
+              uid: `p${pageIndex}`,
+              title: `p${pageIndex}`,
+              type: 'File',
+              path: `${path}/p`,
+              properties: {},
+            },
+          ],
+          totalSize: -2,
+          currentPageSize: 1,
+          currentPageIndex: pageIndex,
+          numberOfPages: 1,
+          isNextPageAvailable: pageIndex === 0,
+        });
+      }
+
+      const result = await result$;
+      expect(result.entries.map((e) => e.uid)).toEqual(['p0', 'p1']);
+    });
+
     it('asks for one page only when the folder fits in one', async () => {
       const path = '/default-domain/workspaces';
       const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 500, 50));

@@ -265,13 +265,19 @@ export class BrowseService {
     nuxeoPath: string,
     maxDocuments = BROWSE_FILTER_SCAN_LIMIT,
     pageSize = 50,
+    sort?: BrowseSortEntry[],
   ): Observable<BrowseFolderEntrySet> {
     type Step = BrowseFolderContents & { pageIndex: number };
 
+    // `sort` is forwarded so a scanned listing keeps the order the user asked for. Without it the
+    // scan returned the source's default order, so applying a filter silently replaced a sorted
+    // page — and a later click on a sort header changed only the indicator, because the filtered
+    // rows no longer came from `entries()`.
     const fetchPage = (pageIndex: number): Observable<Step> =>
-      this.getBrowseFolderContents(nuxeoPath, pageSize, { currentPageIndex: pageIndex }).pipe(
-        map((page) => ({ ...page, pageIndex })),
-      );
+      this.getBrowseFolderContents(nuxeoPath, pageSize, {
+        currentPageIndex: pageIndex,
+        sort,
+      }).pipe(map((page) => ({ ...page, pageIndex })));
 
     return fetchPage(0).pipe(
       expand((page) =>
@@ -291,7 +297,11 @@ export class BrowseService {
       map((set) => ({
         folder: set.folder,
         entries: set.entries.slice(0, maxDocuments),
-        truncated: set.truncated && set.entries.length >= maxDocuments,
+        // Either an unvisited page remains, **or** the slice below discards documents this walk
+        // already fetched. The second half matters when the cap falls mid-page: 80 children with
+        // `maxDocuments` 75 and `pageSize` 50 ends on a page with no successor, so reporting only
+        // `hasNextPage` called a result complete while five documents had been dropped.
+        truncated: set.truncated || set.entries.length > maxDocuments,
       })),
     );
   }
