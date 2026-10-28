@@ -1062,6 +1062,17 @@ export class BrowseComponent {
       .pipe(debounceTime(FILTER_DEBOUNCE_MS), takeUntilDestroyed())
       .subscribe(() => {
         this.pageIndex.set(0);
+        // And the selection goes with it, as it already does when the folder changes.
+        //
+        // Every selection helper resolves an id against `entries()`, which a filtered reload
+        // replaces wholesale. A selection the new rows do not contain therefore survives as a
+        // count with nothing behind it, and the header controls read that two different ways:
+        // `showHeaderDelete` finds no removable document and hides Delete, while `showHeaderEdit`
+        // sees `singleSelectedEntry()` go null and falls back to `canWriteCurrentDoc()` — so Edit
+        // stays enabled and quietly retargets from the row the user picked to the folder they are
+        // standing in. Resolving it instead would mean keeping every document of the folder in
+        // hand, which is the scan this replaced.
+        this.selectionService.clear();
         this.browsePath$.next({
           nuxeoPath: this.currentNuxeoPath,
           pageIndex: 0,

@@ -1086,6 +1086,97 @@ describe('BrowseComponent — rendered document list', () => {
   });
 
   /**
+   * The progress indicator must not survive the request it describes being superseded.
+   *
+   * `filtering` is raised the moment a filter changes and lowered when the listing lands, and the
+   * loader drops a payload whose path or page no longer matches *before* lowering it — so the
+   * question is whether any interleaving can leave the indicator spinning for ever. These are the
+   * two that replace a filter reload mid-flight.
+   */
+  it('stops the progress indicator when a page change supersedes a filter reload', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [], totalSize: 0, hasNextPage: true, serverFiltered: true }),
+    );
+    const component = await render();
+
+    component.filterText.set('report');
+    // Mid-debounce, so the filter reload is replaced before it is even issued.
+    component.goToPage(1);
+    await settleFilter();
+
+    expect(component.filtering()).toBe(false);
+    expect(query('.filter-progress')).toBeNull();
+  });
+
+  it('stops it when the folder changes under a filter reload', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [], totalSize: 0, serverFiltered: true }),
+    );
+    const component = await render([
+      { provide: ROUTES, multi: true, useValue: [{ path: '**', children: [] }] },
+    ]);
+
+    component.filterText.set('report');
+    // Let the effect raise it first. Without this the navigation clears the filter before the
+    // effect has run, so `filtering` is never true and the assertion below proves nothing — which
+    // is what this test did on its first attempt.
+    await settle();
+    expect(component.filtering()).toBe(true);
+
+    await TestBed.inject(Router).navigateByUrl('/browse/default-domain/workspaces/other');
+    await settleFilter();
+
+    expect(component.filtering()).toBe(false);
+    expect(query('.filter-progress')).toBeNull();
+  });
+
+  /**
+   * A selection must not outlive the rows it was made from.
+   *
+   * Every selection helper resolves an id against `entries()`, and a filtered reload replaces
+   * those wholesale, so a selection the new rows do not contain became a count with nothing behind
+   * it. The two header controls then disagreed about what was selected: Delete vanished, while Edit
+   * stayed enabled and fell through to the *folder* — so clicking it edited something other than
+   * the row the user had picked.
+   */
+  it('clears a selection the filtered rows no longer contain', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
+        totalSize: 1,
+        serverFiltered: true,
+      }),
+    );
+    const component = await render();
+    const selection = TestBed.inject(SelectionService);
+
+    component.onListSelectionChange(['c-1']);
+    await settle();
+    expect(component.singleSelectedEntry()?.uid).toBe('c-1');
+    expect(selection.selectedCount()).toBe(1);
+
+    // A filter whose answer does not contain the selected row.
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-2', title: 'Invoice' })],
+        totalSize: 1,
+        serverFiltered: true,
+      }),
+    );
+    component.filterText.set('invoice');
+    await settleFilter();
+
+    expect(selection.selectedCount()).toBe(0);
+    expect(component.singleSelectedEntry()).toBeNull();
+    // With nothing selected both controls describe the folder, which is consistent — rather than
+    // Delete hidden on an empty resolution while Edit silently retargets to the folder.
+    expect(component.showHeaderEdit()).toBe(component.canWriteCurrentDoc());
+    expect(component.showHeaderDelete()).toBe(component.canRemoveCurrentDoc());
+  });
+
+  /**
    * A non-matching paste must not poison the count for the pastes after it.
    *
    * The total is only adjusted while it is a complete count of the listing, and that test used to
