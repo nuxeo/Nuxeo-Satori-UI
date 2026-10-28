@@ -102,9 +102,15 @@ const GOOD_TEMPLATE = `<button type="button" [attr.aria-label]="'app.nav.toggle'
  * guardrail is then green on a tree that is broken on purpose — which is a control asserting
  * nothing. Staging the file is what makes it a reintroduction rather than a stray.
  */
-function withFixture(files, mutate, run) {
+function withFixture(files, mutate, run, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'guardrail-selftest-'));
   try {
+    /* `initialBranch` exists for one rule: `checkWorkflowRefGates` decides whether a missing
+     * branch is a FACT or merely unobserved by asking whether this clone resolves its own default
+     * branch. A fixture on `main` can prove it, so the rule fails there; a fixture on any other
+     * name cannot, so the rule warns. Without this option the degraded path had nothing exercising
+     * it, and a severity that is never reached is a severity nobody has checked. */
+    const initialBranch = options.initialBranch ?? 'main';
     const git = (args) => {
       const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
       if (result.status !== 0) {
@@ -118,7 +124,7 @@ function withFixture(files, mutate, run) {
       writeFileSync(path, body);
     };
 
-    git(['init', '--quiet', '--initial-branch=main']);
+    git(['init', '--quiet', `--initial-branch=${initialBranch}`]);
     git(['config', 'user.email', 'selftest@example.invalid']);
     git(['config', 'user.name', 'Guardrail Selftest']);
     git(['config', 'commit.gpgsign', 'false']);
@@ -135,6 +141,32 @@ function withFixture(files, mutate, run) {
     }).stdout.trim();
 
     if (mutate) mutate(write, git);
+
+    /* `shallow` runs the guardrail in a depth-1 clone of the fixture instead of the fixture itself.
+     *
+     * One rule needs it: `checkWorkflowRefGates` fails on a missing branch only where the clone can
+     * PROVE it is missing, which means not shallow. Every fixture here is a full repository, so the
+     * `!cloneIsShallow` half of that condition had nothing exercising it — mutation testing showed
+     * removing it changed no control's verdict. `--no-local` is required: a local clone ignores
+     * `--depth` and would quietly produce a full repository, which is the same shape of silent
+     * no-op this whole guardrail is about.
+     *
+     * Only for controls without a `mutate`, since the clone is taken after the baseline commit. */
+    let runDir = dir;
+    if (options.shallow) {
+      runDir = `${dir}-shallow`;
+      const clone = spawnSync(
+        'git',
+        ['clone', '--quiet', '--depth', '1', '--no-local', `file://${dir}`, runDir],
+        { encoding: 'utf8' },
+      );
+      if (clone.status !== 0) throw new Error(`shallow clone failed: ${clone.stderr}`);
+      const confirm = spawnSync('git', ['rev-parse', '--is-shallow-repository'], {
+        cwd: runDir,
+        encoding: 'utf8',
+      }).stdout.trim();
+      if (confirm !== 'true') throw new Error(`fixture clone is not shallow (got ${confirm})`);
+    }
 
     return run((guardrail) => {
       // The fixture must not inherit the OUTER repository's refs.
@@ -157,12 +189,13 @@ function withFixture(files, mutate, run) {
       const result = spawnSync(
         process.execPath,
         [GUARDRAILS, '--only', guardrail, '--base', base, '--head', 'HEAD'],
-        { cwd: dir, encoding: 'utf8', env },
+        { cwd: runDir, encoding: 'utf8', env },
       );
       return { code: result.status, out: `${result.stdout}${result.stderr}` };
     });
   } finally {
     rmSync(dir, { recursive: true, force: true });
+    rmSync(`${dir}-shallow`, { recursive: true, force: true });
   }
 }
 
@@ -194,7 +227,7 @@ function expectRed(label, guardrail, files, mutate, expected) {
  * outcomes, and a control that only checks the exit code cannot tell them apart — which is how
  * a demoted check quietly becomes no check at all.
  */
-function expectWarn(label, guardrail, files, mutate, expected) {
+function expectWarn(label, guardrail, files, mutate, expected, options) {
   if (!selected(guardrail)) return;
   negative += 1;
   withFixture(files, mutate, (runGuardrail) => {
@@ -209,7 +242,7 @@ function expectWarn(label, guardrail, files, mutate, expected) {
           `    expected /${expected.source}/\n    got: ${out.trim()}`,
       );
     }
-  });
+  }, options);
 }
 
 /** Asserts a correct tree is green — the control that stops a guardrail failing on everything. */
@@ -9623,7 +9656,7 @@ expectRed(
   'checkWorkflowRefGates',
   HISTORICAL,
   null,
-  /storybook-pages\.yml:\d+ gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`, which is a ticket branch/,
+  /storybook-pages\.yml:\d+ gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
 expectRed(
@@ -9636,7 +9669,7 @@ expectRed(
     '.github/workflows/storybook-pages.yml': workflow(HISTORICAL_TRIGGER),
   },
   null,
-  /triggers on `push` only for `integration\/nxsat-308`, which is a ticket branch and is deleted when it merges/,
+  /triggers on `push` only for `integration\/nxsat-308`, which is not `main`/,
 );
 
 expectRed(
@@ -9791,22 +9824,54 @@ expectRed(
   /No workflow found under \.github\/workflows, so this gate asserted nothing/,
 );
 
-expectWarn(
-  'a gate on a branch that does not exist warns, and only warns',
+/* The existence rule's severity follows what the clone can PROVE, and both halves are pinned.
+ *
+ * It used to warn unconditionally. The reasoning was sound — `actions/checkout` fetches one ref,
+ * and a shallow clone cannot tell a deleted branch from an unfetched one — but the consequence was
+ * not: it left the pinned-branch rule as the only one that could fail CI, so every dead branch
+ * that rule did not recognise went green. Reported from a sibling session after five rounds, and
+ * it was the second of the two findings that actually decide whether this prevents the next
+ * NXSAT-649. `develop` is used for both controls because it is long-lived by name, so the
+ * longevity rule passes and the existence rule is the only thing left that can speak. */
+const MISSING_BRANCH_WORKFLOW = {
+  '.github/workflows/deploy.yml': workflow(
+    "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+    gatedJob("github.ref == 'refs/heads/develop'"),
+  ),
+};
+
+expectRed(
+  'a gate on a branch that does not exist FAILS where the clone can prove it',
   'checkWorkflowRefGates',
-  {
-    // Rule 4. A `workflow_dispatch` makes reachability undecidable and `develop` is in no ticket
-    // namespace, so no error rule applies and this is the only thing left that can speak. It is a
-    // warning because `actions/checkout` fetches one ref: in CI the question is unanswerable, so
-    // the check stays silent there rather than warning about every correct workflow. Pinned here so
-    // that it cannot quietly rot into a rule that never runs anywhere.
-    '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
-      gatedJob("github.ref == 'refs/heads/develop'"),
-    ),
-  },
+  MISSING_BRANCH_WORKFLOW,
   null,
-  /no `refs\/heads\/develop` or `refs\/remotes\/origin\/develop` exists in this clone/,
+  /no `refs\/heads\/develop` or `refs\/remotes\/origin\/develop` exists[\s\S]*not shallow and resolves its own default branch/,
+);
+
+expectWarn(
+  'the same gate only warns where no default branch resolves',
+  'checkWorkflowRefGates',
+  MISSING_BRANCH_WORKFLOW,
+  null,
+  /A warning rather than a failure: this clone is shallow or cannot resolve its own default branch/,
+  // The fixture's default branch is not `main` or `master`, so the check cannot resolve a default
+  // branch and will not claim a missing branch is absent. This is the degraded path, and before
+  // this control there was nothing exercising it at all.
+  { initialBranch: 'trunk' },
+);
+
+expectWarn(
+  'the same gate only warns in a shallow clone, which is what a `fetch-depth: 1` job has',
+  'checkWorkflowRefGates',
+  MISSING_BRANCH_WORKFLOW,
+  null,
+  /A warning rather than a failure: this clone is shallow or cannot resolve its own default branch/,
+  // The other half of the condition, and the half that matters in CI: `ci.yml` checks out with
+  // `fetch-depth: 0` so the rule fails there, while `build-marketplace.yml` and
+  // `publish-config-package.yml` use `fetch-depth: 1` and get a warning. Mutation testing found
+  // this half unasserted — dropping `!cloneIsShallow` changed no verdict, because every other
+  // fixture is a full repository.
+  { shallow: true },
 );
 
 /* --- the shapes it must NOT flag --- */
@@ -9886,19 +9951,26 @@ ${gatedJob("github.ref == 'refs/heads/main'")}`,
   },
 );
 
-falsePositiveControls += 1;
-expectGreen(
-  '`**` crosses a slash, so `release/**` admits `release/2026-10`',
+expectRed(
+  '`**` crosses a slash, so `integration/**` admits `integration/nxsat-308`',
   'checkWorkflowRefGates',
   {
-    // The other half of the pattern matcher. `release/` is deliberately NOT a ticket namespace —
-    // a release branch is often long-lived — so nothing else here can go red, and this control
-    // isolates `**`.
+    // The other half of the pattern matcher, and it is pinned by WHICH failure comes back rather
+    // than by passing. The branch is admitted by the trigger, so the reachability rule stays
+    // quiet and the longevity rule speaks; if `**` stopped crossing `/` the reachability rule
+    // would fire instead and this regex would not match.
+    //
+    // It used to be a green control gating on `release/2026-10`, which worked only while
+    // `release/` was outside the ticket-prefix list. Once longevity became an allowlist, every
+    // literal branch except the long-lived ones is flagged, so a green control cannot isolate the
+    // glob any more — this one can.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: ['release/**']\n",
-      gatedJob("github.ref == 'refs/heads/release/2026-10'"),
+      "on:\n  push:\n    branches: ['integration/**']\n",
+      gatedJob("github.ref == 'refs/heads/integration/nxsat-308'"),
     ),
   },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
 falsePositiveControls += 1;
@@ -9909,9 +9981,12 @@ expectGreen(
     // Rule 2 is conditioned on there being no unfiltered trigger, and this is why: a gate on a
     // branch the push filter excludes IS reachable by dispatching from that branch. Claiming
     // otherwise would be exactly the overstatement this programme keeps being caught on.
+    //
+    // The gated branch is `main` — long-lived and present — so the longevity rule cannot preempt
+    // the point. The trigger deliberately does not admit it.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
-      gatedJob("github.ref == 'refs/heads/staging'"),
+      "on:\n  push:\n    branches: ['release/**']\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/main'"),
     ),
   },
 );
@@ -9923,7 +9998,7 @@ expectGreen(
   {
     '.github/workflows/deploy.yml': workflow(
       "on:\n  push:\n    branches-ignore: ['wip/**']\n",
-      gatedJob("github.ref == 'refs/heads/staging'"),
+      gatedJob("github.ref == 'refs/heads/main'"),
     ),
   },
 );
@@ -10092,7 +10167,7 @@ expectRed(
     ),
   },
   null,
-  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`, which is a ticket branch/,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
 expectRed(
@@ -10298,7 +10373,7 @@ jobs:
 `,
   },
   null,
-  /on the branch `integration\/nxsat-308`, which is a ticket branch/,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
 expectRed(
@@ -10312,7 +10387,7 @@ expectRed(
     ),
   },
   null,
-  /on the branch `Integration\/NXSAT-308`, which is a ticket branch/,
+  /on the branch `Integration\/NXSAT-308`, which is not one of this repository's long-lived branches/,
 );
 
 /* --- third review round on #494: the dash, quoted keys, ref case, and expression strings --- */
@@ -10342,7 +10417,7 @@ jobs:
 `,
   },
   null,
-  /on the branch `integration\/nxsat-308`, which is a ticket branch/,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
 falsePositiveControls += 1;
@@ -10402,7 +10477,7 @@ expectRed(
     ),
   },
   null,
-  /on the branch `integration\/nxsat-308`, which is a ticket branch/,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
 falsePositiveControls += 1;
@@ -10435,7 +10510,7 @@ expectRed(
     ),
   },
   null,
-  /on the branch `integration\/nxsat-308`, which is a ticket branch/,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
 falsePositiveControls += 1;
@@ -10665,7 +10740,84 @@ jobs:
 `,
   },
   null,
-  /on the branch `integration\/nxsat-308`, which is a ticket branch/,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+/* --- sixth round: longevity is an allowlist, so no namespace can be forgotten --- */
+
+/**
+ * Every spelling of a dead branch, including ones no prefix list had.
+ *
+ * This is the control that makes the inversion stick. The rule was a list of nine ticket prefixes,
+ * and measured against this repository's own remote it missed five namespaces in use —
+ * `copilot/` (8 branches), `feat/` (7), `product/`, `docs/`, `ci/`. `feat/` is the sharpest,
+ * because `feature/` WAS listed and this repository uses both spellings: a dead `feature/x` gate
+ * failed and a dead `feat/x` gate passed. A bare name with no namespace at all passed too.
+ *
+ * Six of these eight went green before the rule was inverted. Appending five prefixes would have
+ * fixed exactly these six and left the next spelling for the next incident — the same drift this
+ * guardrail exists to prevent, reproduced inside it. Asking instead whether a branch is on a short
+ * list of long-lived ones has no namespace to forget, which is why this control enumerates
+ * spellings rather than naming a rule: if anyone reverts to a prefix list, several of these fail.
+ */
+for (const branch of [
+  'feat/dead-thing',
+  'copilot/dead-thing',
+  'docs/dead-thing',
+  'ci/dead-thing',
+  'product/dead-thing',
+  'renovate/dead-thing',
+  'nxsat-999',
+  'integration/nxsat-308',
+]) {
+  expectRed(
+    `a gate pinning \`${branch}\` is caught whatever its namespace`,
+    'checkWorkflowRefGates',
+    {
+      '.github/workflows/deploy.yml': workflow(
+        "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+        gatedJob(`github.ref == 'refs/heads/${branch}'`),
+      ),
+    },
+    null,
+    new RegExp(
+      `on the branch \`${branch.replace(/[/\-]/g, (c) => `\\${c}`)}\`, ` +
+        "which is not one of this repository's long-lived branches",
+    ),
+  );
+}
+
+falsePositiveControls += 1;
+expectGreen(
+  'every long-lived branch on the allowlist is accepted',
+  'checkWorkflowRefGates',
+  {
+    // `develop` and `gh-pages` are on the list but absent from the fixture, so this also asserts
+    // the two rules are independent: being off the allowlist is what the longevity rule judges,
+    // and the existence rule speaks separately (here as a warning, since a gate under a dispatch
+    // on an absent long-lived branch is still worth saying out loud without failing).
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/main'"),
+    ),
+  },
+);
+
+expectRed(
+  'a long-lived branch that is not declared says to declare it',
+  'checkWorkflowRefGates',
+  {
+    // The escape hatch, pinned. `staging` may well outlive its work, and the rule cannot know
+    // that — so it fails with an instruction rather than silently guessing from the name. Declaring
+    // longevity is a one-line change to a list that moves about once a year; inferring it from a
+    // prefix is what failed five rounds running.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/staging'"),
+    ),
+  },
+  null,
+  /If `staging` is itself long-lived, add it to `LONG_LIVED_BRANCHES`/,
 );
 
 /* ---------------- report ---------------- */

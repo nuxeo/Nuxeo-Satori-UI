@@ -10458,27 +10458,37 @@ function parseYamlStringList(lines, index, keyIndent) {
 const BRANCH_FILTERED_EVENTS = ['push', 'pull_request', 'pull_request_target'];
 
 /**
- * Branch namespaces whose branches are deleted the moment their ticket merges.
+ * The branches that outlive the work done on them. **An allowlist, deliberately.**
  *
- * `claude/` is here because this repository's agent sessions work on `claude/<name>` branches and
- * they go away with the session. `release/` is deliberately absent: a release branch is often
- * long-lived, so pinning one is not self-evidently a mistake.
+ * ## Why this is not a list of ticket namespaces
+ *
+ * It was: nine prefixes — `integration/`, `feature/`, `fix/`, `bugfix/`, `hotfix/`, `chore/`,
+ * `claude/`, `dependabot/`, `renovate/` — and a branch outside them was treated as safe to pin.
+ * Reviewed against this repository's actual remote, that list missed five namespaces in use:
+ *
+ *     fix 107, feature 49, claude 10, copilot 8, feat 7, dependabot 7, chore 6,
+ *     integration 2, product 1, docs 1, ci 1
+ *
+ * `copilot/`, `feat/`, `product/`, `docs/` and `ci/` were all absent, and `feat/` is the sharpest
+ * of them because `feature/` was listed and this repository uses both spellings. A dead
+ * `feat/<ticket>` gate passed; a dead `feature/<ticket>` gate failed. So did a bare `nxsat-999`
+ * with no namespace at all — six of eight dead branches probed went green.
+ *
+ * Appending five more prefixes would have fixed those six and left the next spelling to the next
+ * incident, which is the same drift this guardrail exists to prevent, reproduced inside the
+ * guardrail. Inverted, the question becomes the one with a short and stable answer: a branch that
+ * is **not** on this list is work in progress, and pinning work in progress in a workflow is the
+ * bomb. The list changes when a repository adopts a new permanent branch, roughly never; the set
+ * of namespaces people invent for tickets changes every sprint.
+ *
+ * A branch that genuinely is long-lived and is not here — `staging`, say — fails with a message
+ * saying to add it. That is the point: longevity becomes declared rather than inferred from a
+ * prefix nobody updated.
  */
-const TRANSIENT_BRANCH_NAMESPACES = [
-  'integration/',
-  'feature/',
-  'fix/',
-  'bugfix/',
-  'hotfix/',
-  'chore/',
-  'claude/',
-  'dependabot/',
-  'renovate/',
-];
+const LONG_LIVED_BRANCHES = ['main', 'master', 'develop', 'gh-pages'];
 
-// Case-insensitive to match GitHub's expression `==`, so `Integration/NXSAT-308` is recognised.
-const isTransientBranch = (branch) =>
-  TRANSIENT_BRANCH_NAMESPACES.some((namespace) => branch.toLowerCase().startsWith(namespace));
+// Case-insensitive to match GitHub's expression `==`, so `MAIN` is recognised.
+const isLongLivedBranch = (branch) => LONG_LIVED_BRANCHES.includes(branch.toLowerCase());
 
 /** A filter pattern that names exactly one branch, rather than a family of them. */
 const isLiteralBranchPattern = (pattern) =>
@@ -10969,6 +10979,28 @@ function checkWorkflowRefGates() {
   };
   const refsAreKnowable = ['main', 'master'].some(branchRefExists);
 
+  /* Whether a missing branch is a FACT here, or merely unobserved.
+   *
+   * The existence rule used to warn unconditionally, and the reasoning was sound as far as it went:
+   * `actions/checkout` fetches one ref by default, and a shallow clone cannot tell a deleted branch
+   * from an unfetched one. The consequence was not sound. It left the pinned-branch rule as the
+   * only one that could fail, so any dead branch it did not recognise went green — which is
+   * exactly how the nine-prefix list above came to matter so much.
+   *
+   * A clone that is not shallow AND can resolve its own default branch has the refs to answer the
+   * question, so there a missing branch is evidence rather than a guess. `ci.yml` checks out with
+   * `fetch-depth: 0`, so this is the case in this repository's own CI; `build-marketplace.yml` and
+   * `publish-config-package.yml` use `fetch-depth: 1`, and there it stays a warning. Severity
+   * follows what the clone can prove, instead of assuming the worst everywhere. */
+  const cloneIsShallow = (() => {
+    try {
+      return git(['rev-parse', '--is-shallow-repository']).trim() !== 'false';
+    } catch {
+      return true;
+    }
+  })();
+  const existenceIsProvable = refsAreKnowable && !cloneIsShallow;
+
   for (const workflow of workflows) {
     const body = read(workflow);
     const parsed = parseWorkflowTriggersAndGates(body);
@@ -11012,26 +11044,26 @@ function checkWorkflowRefGates() {
      * #494, where this shape passed the check completely. */
     const pullRequestOnly = events.size > 0 && [...events.keys()].every((e) => e === 'pull_request');
 
-    /* Rule 3, trigger half. An allowlist made only of ticket branches stops matching anything the
-     * day they merge, and then the workflow does not run at all — which is how the push half of
-     * the incident above went unnoticed: no failed run, just no run. A glob (`integration/**`) is
-     * fine, and so is a list that also names a long-lived branch. */
+    /* The trigger half. An allowlist of nothing but pinned work-in-progress branches stops matching
+     * anything the day they merge, and then the workflow does not run at all — which is how the
+     * push half of the incident went unnoticed: no failed run, just no run. A glob
+     * (`integration/**`) is fine, and so is a list that also names a long-lived branch. */
     for (const [event, patterns] of allowlists) {
-      const transient = patterns.filter(
-        (pattern) => isLiteralBranchPattern(pattern) && isTransientBranch(pattern),
+      const pinned = patterns.filter(
+        (pattern) => isLiteralBranchPattern(pattern) && !isLongLivedBranch(pattern),
       );
-      if (transient.length === 0 || transient.length !== patterns.length) continue;
+      if (pinned.length === 0 || pinned.length !== patterns.length) continue;
       fail(
         `${workflow} triggers on \`${event}\` only for ` +
-          `${transient.map((pattern) => `\`${pattern}\``).join(', ')}, ` +
-          `${
-            transient.length === 1
-              ? 'which is a ticket branch and is deleted when it merges'
-              : 'which are ticket branches and are deleted when they merge'
-          }.\n` +
-          `    The workflow then stops running on \`${event}\` entirely — no failed run to ` +
-          'notice, just no run. Name a long-lived branch, or a glob such as ' +
-          '`integration/**` that keeps matching.',
+          `${pinned.map((pattern) => `\`${pattern}\``).join(', ')}, ` +
+          `${pinned.length === 1 ? 'which is not' : 'none of which are'} ` +
+          `${LONG_LIVED_BRANCHES.map((branch) => `\`${branch}\``).join(', ')}.\n` +
+          `    A branch that is not long-lived is deleted when its work merges, and the workflow ` +
+          `then stops running on \`${event}\` entirely — no failed run to notice, just no run. ` +
+          'Name a long-lived branch, or a glob such as `integration/**` that keeps matching. If ' +
+          `${pinned.length === 1 ? 'it is' : 'they are'} long-lived, add ` +
+          `${pinned.length === 1 ? 'it' : 'them'} to \`LONG_LIVED_BRANCHES\` — that list is an ` +
+          'allowlist on purpose, so longevity is declared rather than guessed from a prefix.',
       );
     }
 
@@ -11187,21 +11219,10 @@ function checkWorkflowRefGates() {
           continue;
         }
 
-        /* Rule 3 — a pinned ticket branch. The rule that catches the incident. */
-        if (isTransientBranch(branch)) {
-          fail(
-            `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, which is a ` +
-              'ticket branch and is deleted when its ticket merges.\n' +
-              '    From then on the gate is false on every event, the job is SKIPPED, and a ' +
-              'skipped job leaves the run green — so the workflow reports success while doing ' +
-              'nothing. `storybook-pages.yml` published the public Storybook this way and the ' +
-              'site went stale for five days behind green runs (NXSAT-649). Gate on a long-lived ' +
-              'branch, and keep the gate and the push trigger naming the same one.',
-          );
-          continue;
-        }
-
-        /* Rule 2 — unreachable under this workflow's own triggers. */
+        /* Unreachable under this workflow's own triggers — BEFORE the longevity rule below,
+         * because it is the more specific diagnosis of the two. "The trigger and the gate name
+         * different branches" tells you what to change; "this branch is not long-lived" would be
+         * true of the same gate and less useful. */
         if (reachabilityIsDecidable) {
           const allowed = allowlists.some(([, patterns]) =>
             patterns.some((pattern) => githubBranchFilterToRegExp(pattern).test(branch)),
@@ -11224,15 +11245,53 @@ function checkWorkflowRefGates() {
           }
         }
 
-        /* Rule 4 — no such ref. A warning, and only where the question can be answered. */
-        if (refsAreKnowable && !branchRefExists(branch)) {
-          warn(
-            `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, and no ` +
-              `\`refs/heads/${branch}\` or \`refs/remotes/origin/${branch}\` exists in this ` +
-              'clone. If the branch is gone, the job is skipped on every event and the run still ' +
-              'goes green. A warning rather than a failure because a CI clone fetches one ref ' +
-              'and cannot tell a deleted branch from an unfetched one.',
+        /* The branch a gate pins must be one that outlives the work on it — and, where the clone
+         * can prove it, must actually be there.
+         *
+         * This is the rule that catches NXSAT-649, and it is static: it fires from the workflow
+         * text alone, in a shallow CI clone as readily as here, which is what the existence check
+         * below cannot promise. */
+        const exists = branchRefExists(branch);
+        if (!isLongLivedBranch(branch)) {
+          fail(
+            `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, which is not ` +
+              `one of this repository's long-lived branches ` +
+              `(${LONG_LIVED_BRANCHES.map((b) => `\`${b}\``).join(', ')})` +
+              `${exists ? '' : ', and no such branch exists in this clone'}.\n` +
+              '    A branch that is not long-lived is deleted when its work merges. From then on ' +
+              'the gate is false on every event, the job is SKIPPED, and a skipped job leaves the ' +
+              'run green — so the workflow reports success while doing nothing. ' +
+              '`storybook-pages.yml` published the public Storybook this way and the site went ' +
+              'stale for five days behind green runs (NXSAT-649).\n' +
+              `    Gate on a long-lived branch and keep the gate and the trigger naming the same ` +
+              `one. If \`${branch}\` is itself long-lived, add it to \`LONG_LIVED_BRANCHES\`: ` +
+              'that list is an allowlist so that longevity is declared, not guessed from a ' +
+              'prefix — a list of ticket prefixes missed five of the namespaces this repository ' +
+              'actually uses.',
           );
+          continue;
+        }
+
+        /* A long-lived NAME that is not in the clone. Severity follows what the clone can prove:
+         * a full, non-shallow checkout has the refs to call this dead, and a shallow one cannot
+         * tell a deleted branch from an unfetched one. */
+        if (!exists) {
+          const message =
+            `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, and no ` +
+            `\`refs/heads/${branch}\` or \`refs/remotes/origin/${branch}\` exists. The job is ` +
+            'skipped on every event and the run still goes green.';
+          if (existenceIsProvable) {
+            fail(
+              `${message}\n    This clone is not shallow and resolves its own default branch, so ` +
+                'the branch is absent rather than unfetched.',
+            );
+          } else {
+            warn(
+              `${message}\n    A warning rather than a failure: this clone is shallow or cannot ` +
+                'resolve its own default branch, so a deleted branch and an unfetched one look ' +
+                'the same. In a checkout with `fetch-depth: 0` this is a failure.',
+            );
+          }
         }
       }
     }
