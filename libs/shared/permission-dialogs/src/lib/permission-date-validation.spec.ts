@@ -54,12 +54,12 @@ describe.each([
       AddPermissionDialogComponent | UpdatePermissionDialogComponent;
     component.timeFrame = 'date-based';
     if (component instanceof AddPermissionDialogComponent)
-      component.selectedUser = {
+      component.selectedUser.set({
         id: 'user-1',
-        displayLabel: 'User',
-        type: 'USER_TYPE',
-        prefixed_id: 'user:user-1',
-      };
+        label: 'User',
+        kind: 'user',
+        prefixedId: 'user:user-1',
+      });
     const settle = async () => {
       fixture.detectChanges();
       await fixture.whenStable();
