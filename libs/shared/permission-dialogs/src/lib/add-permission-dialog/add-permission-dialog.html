@@ -38,29 +38,19 @@
   </div>
 
   <div class="date-fields">
-    <mat-form-field appearance="outline">
-      <mat-label>{{ 'permissions.add-permission-dialog.from' | translate }}</mat-label>
-      <input
-        matInput
-        [matDatepicker]="fromPicker"
-        [(ngModel)]="beginDate"
-        [disabled]="timeFrame === 'permanent'"
-      />
-      <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
-      <mat-datepicker #fromPicker />
-    </mat-form-field>
+    <nxs-date-input
+      #beginDateControl="ngModel"
+      [label]="'permissions.add-permission-dialog.from' | translate"
+      [(ngModel)]="beginDate"
+      [disabled]="timeFrame === 'permanent'"
+    />
 
-    <mat-form-field appearance="outline">
-      <mat-label>{{ 'permissions.add-permission-dialog.to' | translate }}</mat-label>
-      <input
-        matInput
-        [matDatepicker]="toPicker"
-        [(ngModel)]="endDate"
-        [disabled]="timeFrame === 'permanent'"
-      />
-      <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
-      <mat-datepicker #toPicker />
-    </mat-form-field>
+    <nxs-date-input
+      #endDateControl="ngModel"
+      [label]="'permissions.add-permission-dialog.to' | translate"
+      [(ngModel)]="endDate"
+      [disabled]="timeFrame === 'permanent'"
+    />
   </div>
 
   <mat-checkbox [(ngModel)]="sendNotify" class="notify-checkbox">
@@ -97,7 +87,7 @@
     mat-flat-button
     color="primary"
     class="create-another-btn"
-    [disabled]="!selectedUser() || saving()"
+    [disabled]="!datesValid() || !selectedUser() || saving()"
     (click)="create(true)"
   >
     @if (saving() && addAnother) {
@@ -109,7 +99,7 @@
   <button
     mat-flat-button
     color="primary"
-    [disabled]="!selectedUser() || saving()"
+    [disabled]="!datesValid() || !selectedUser() || saving()"
     (click)="create(false)"
   >
     @if (saving() && !addAnother) {

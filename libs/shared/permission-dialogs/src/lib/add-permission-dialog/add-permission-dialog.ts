@@ -1,10 +1,18 @@
 import {
+  NxsDateInputComponent,
+  NxsToastService,
+  NxsUserGroupPickerComponent,
+  provideNxsToast,
+  type NxsPrincipal,
+} from '@nuxeo/satori-platform/components';
+
+import {
+  ChangeDetectionStrategy,
   Component,
   DestroyRef,
   inject,
   signal,
   viewChild,
-  ChangeDetectionStrategy,
 } from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -16,7 +24,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import {
@@ -30,12 +38,6 @@ import {
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
-import {
-  NxsToastService,
-  provideNxsToast,
-  NxsUserGroupPickerComponent,
-  type NxsPrincipal,
-} from '@nuxeo/satori-platform/components';
 
 export interface AddPermissionDialogData {
   documentUid: string;
@@ -52,6 +54,7 @@ const PERMISSION_OPTIONS = [
   selector: 'lib-add-permission-dialog',
   standalone: true,
   imports: [
+    NxsDateInputComponent,
     DescriptorLabelPipe,
     TranslatePipe,
     FormsModule,
@@ -62,7 +65,7 @@ const PERMISSION_OPTIONS = [
     MatButtonModule,
     MatRadioModule,
     MatCheckboxModule,
-    MatDatepickerModule,
+    MatIconModule,
     MatProgressSpinnerModule,
     NxsUserGroupPickerComponent,
   ],
@@ -108,7 +111,7 @@ const PERMISSION_OPTIONS = [
         display: flex;
         gap: 16px;
 
-        mat-form-field {
+        nxs-date-input {
           flex: 1;
         }
       }
@@ -145,6 +148,12 @@ const PERMISSION_OPTIONS = [
   ],
 })
 export class AddPermissionDialogComponent {
+  private readonly beginDateControl = viewChild<NgModel>('beginDateControl');
+  private readonly endDateControl = viewChild<NgModel>('endDateControl');
+  protected datesValid(): boolean {
+    return !this.beginDateControl()?.invalid && !this.endDateControl()?.invalid;
+  }
+
   private readonly dialogRef = inject(MatDialogRef<AddPermissionDialogComponent>);
   private readonly translate = inject(TranslateService);
   private readonly data = inject<AddPermissionDialogData>(MAT_DIALOG_DATA);
@@ -168,6 +177,7 @@ export class AddPermissionDialogComponent {
   addAnother = false;
 
   create(andAddAnother: boolean): void {
+    if (!this.datesValid()) return;
     const principal = this.selectedUser();
     if (!principal || this.saving()) return;
     this.addAnother = andAddAnother;

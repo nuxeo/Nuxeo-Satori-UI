@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { execToolSync } from './package-command.mjs';
+
 /**
  * Asserts that `@nuxeo/satori-platform` **can actually be published**.
  *
@@ -68,8 +70,6 @@
  * in `dist/` is still refused by npm.
  */
 
-import { shellArgument } from './shell-argument.mjs';
-import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
@@ -384,8 +384,7 @@ try {
   writeFileSync(join(copy, 'package.json'), JSON.stringify(copied, null, 2));
 
   try {
-    execFileSync('npm', ['publish', '--dry-run', '--registry=https://registry.npmjs.org'], {
-      shell: process.platform === 'win32',
+    execToolSync('npm', ['publish', '--dry-run', '--registry=https://registry.npmjs.org'], {
       cwd: copy,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -546,7 +545,6 @@ try {
      * Imports use the **package specifiers a customer writes**, which makes the probe the
      * shape of real consumption rather than a relative-path approximation.
      */
-    let diagnostics = '';
     const stage = join(process.cwd(), '.tmp-publishability');
     const subpaths = Object.keys(pkg.exports ?? {}).filter((s) => s !== './package.json');
     try {
@@ -596,9 +594,9 @@ try {
           )}\nexport type Probed = [${subpaths.map((_, i) => `typeof e${i}`).join(', ')}];\n`,
       );
 
+      var diagnostics = '';
       try {
-        execFileSync('npx', ['tsc', '-p', shellArgument(join(stage, 'tsconfig.json'))], {
-          shell: process.platform === 'win32',
+        execToolSync('npx', ['tsc', '-p', join(stage, 'tsconfig.json')], {
           cwd: process.cwd(),
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],

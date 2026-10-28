@@ -7,8 +7,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import {
+  NxsDateInputComponent,
   NxsUserGroupPickerComponent,
   nxsOfferedRights,
   type NxsPrincipal,
@@ -58,6 +58,7 @@ export interface ShareSavedSearchAddPermissionResult {
   selector: 'lib-share-saved-search-add-permission-dialog',
   standalone: true,
   imports: [
+    NxsDateInputComponent,
     TranslatePipe,
     FormsModule,
     MatDialogModule,
@@ -67,7 +68,6 @@ export interface ShareSavedSearchAddPermissionResult {
     MatButtonModule,
     MatRadioModule,
     MatCheckboxModule,
-    MatDatepickerModule,
     NxsUserGroupPickerComponent,
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter()],

@@ -114,7 +114,7 @@ const guardedFailures = [];
 
 for (const file of files) {
   const src = await readFile(file, 'utf8');
-  const inRepo = relative(repoRoot, file);
+  const inRepo = relative(repoRoot, file).replaceAll('\\', '/');
   const rel = inRepo.startsWith('..') ? file : inRepo;
   let ast;
   try {

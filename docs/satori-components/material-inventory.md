@@ -7,6 +7,16 @@ The plan's section 3a lists the patterns Satori 1.0 replaces. This record lists 
 those patterns in feature, shared and app code, with its Satori target and the `nxs-` wrapper that should
 own it. It also covers the two wrapper-only patterns, `MatSnackBar` toasts and inline error states.
 
+**NXSAT-655 migration (2026-10-19).** The core slice now uses `nxs-date-input` for every date,
+including the browse modified range (two named date fields), history filters, generated metadata,
+Create/Import, and permission/share dialogs. Only the wrapper owns Material's calendar and imports
+its datepicker module. `TranslatedDatepickerIntl` lives beside that wrapper; the UI entry point
+re-exports it and keeps `provideTranslatedDatepickerIntl()` for screens outside the core slice.
+The two legacy edit dialogs and the generated document editor use `nxs-vocabulary-select`, which
+writes hierarchical values as `parent/child`, reads an unambiguous bare child ID (as Create/Import
+stores it), retains unknown stored IDs, and handles loading errors and retry. The old dropdowns and their duplicated labels, fetching and expiry parsing are removed.
+The historical counts and line numbers below describe the original measurement, before this migration.
+
 ## 1. Read this first
 
 - **The targets were re-checked against the latest alpha.** The `alpha` dist-tag is
@@ -254,7 +264,7 @@ for elsewhere or are not banners:
 
 ### 4.7 Chips → no Satori target → stay Material, owned by the §5 J/K inputs
 
-**Wrapped under NXSAT-677** (`nxs-chip-set`, registered as `nxs.primitives.chipSet`): the display chip sets of removable values. These are the trigger chips in the metadata, collection and create-import dialogs, the metadata editor's trigger, and the search filters' chips. The input chip grids (`mat-chip-grid`: tag editor, tag input, vocabulary select, and the metadata editor's grid) are not display chips and stay on Material. Wrapping them is the §5 J/K work.
+**Wrapped under NXSAT-677** (`nxs-chip-set`, registered as `nxs.primitives.chipSet`): the display chip sets of removable values. These are the trigger chips in the create-import dialog and the search filters' chips. The metadata and collection dialogs' and the metadata editor's vocabulary triggers are not among them: NXSAT-655 replaced those fields with `nxs-vocabulary-select`, which has no trigger chips. The input chip grids (`mat-chip-grid`: tag editor, tag input, vocabulary select, and the metadata editor's grid) are not display chips and stay on Material. Wrapping them is the §5 J/K work.
 
 | Site                                                                                                                         | What it is                                      | Scope     |
 | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | --------- |

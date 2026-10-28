@@ -121,6 +121,38 @@ describe('Saved-search sharing — principal picker integration', () => {
     expect(close.mock.calls[0][0]).toHaveLength(2);
   });
 
+  it('resets date and notification state after adding another', async () => {
+    await render();
+    await pick();
+    const dialog = fixture.componentInstance;
+    dialog.timeFrameMode = 'date-based';
+    dialog.beginDate = new Date(2030, 0, 2);
+    dialog.endDate = new Date(2030, 0, 31);
+    dialog.sendNotify = false;
+    dialog.notifyComment = 'Notify the team';
+
+    dialog.create(true);
+
+    expect(dialog.timeFrameMode).toBe('permanent');
+    expect(dialog.beginDate).toBeNull();
+    expect(dialog.endDate).toBeNull();
+    expect(dialog.sendNotify).toBe(true);
+    expect(dialog.notifyComment).toBe('');
+  });
+
+  it('does not submit without a principal or while saving, and cancels without a result', async () => {
+    await render();
+    const dialog = fixture.componentInstance;
+    dialog.create(false);
+    expect(close).not.toHaveBeenCalled();
+    await pick();
+    dialog.saving.set(true);
+    dialog.create(false);
+    expect(close).not.toHaveBeenCalled();
+    dialog.cancel();
+    expect(close).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
   it('keeps an existing principal read-only and preserves its group kind on edit', async () => {
     await render({
       initialData: {

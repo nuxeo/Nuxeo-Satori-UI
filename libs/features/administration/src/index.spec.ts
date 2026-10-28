@@ -1,11 +1,17 @@
-import { describe, expect, it } from 'vitest';
-import { administrationRoutes, AdministrationShellComponent } from './index';
-import { administrationRoutes as routes } from './lib/lib.routes';
-import { AdministrationShellComponent as ShellComponent } from './lib/administration-shell/administration-shell.component';
+import { AdministrationShellComponent, administrationRoutes } from './index';
 
-describe('administration public entry point', () => {
-  it('exports the feature routes and shell', () => {
-    expect(administrationRoutes).toBe(routes);
-    expect(AdministrationShellComponent).toBe(ShellComponent);
+describe('administration public API', () => {
+  it('exports routes rooted at the public administration shell', () => {
+    expect(administrationRoutes).toHaveLength(1);
+    expect(administrationRoutes[0].path).toBe('');
+    expect(administrationRoutes[0].component).toBe(AdministrationShellComponent);
+  });
+
+  it('preserves the analytics landing route', () => {
+    expect(administrationRoutes[0].children).toContainEqual({
+      path: '',
+      pathMatch: 'full',
+      redirectTo: 'analytics',
+    });
   });
 });

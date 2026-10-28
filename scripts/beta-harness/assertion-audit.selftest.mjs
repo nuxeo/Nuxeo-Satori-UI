@@ -54,6 +54,41 @@ function runAgainst(source) {
 
 const results = [];
 
+// Native Windows relative paths must preserve the story runner's deliberately unguarded scope.
+{
+  const dir = mkdtempSync(join(ROOT, 'scripts', 'collect-evidence', '.assertion-path-'));
+  try {
+    const file = join(dir, 'fixture.mjs');
+    writeFileSync(file, "export function run(h) { h.step('legacy story'); h.check('live', liveValue); }");
+    const run = () => spawnSync(process.execPath, [AUDIT, '--json', file], {
+      cwd: ROOT, encoding: 'utf8',
+    });
+    const baseline = run();
+    results.push({
+      name: 'native paths keep collect-evidence steps outside the identity-guard contract',
+      kind: 'silence',
+      pass: baseline.status === 0,
+      detail: `exit ${baseline.status}`,
+      out: `${baseline.stdout}${baseline.stderr}`,
+    });
+    writeFileSync(file, "export function run(h) { h.step('legacy story'); h.check('vacuous', true); }");
+    const negative = run();
+    const report = JSON.parse(negative.stdout);
+    results.push({
+      name: 'legacy stories still reject vacuous checks and report canonical path keys',
+      kind: 'negative',
+      pass: negative.status === 1 &&
+        report.findings.some((finding) => finding.severity === 'fail') &&
+        report.findings.every((finding) => !finding.file.includes('\\')) &&
+        report.findings.every((finding) => finding.kind !== 'unawaited-step'),
+      detail: `exit ${negative.status}`,
+      out: `${negative.stdout}${negative.stderr}`,
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 /**
  * A control that must make the audit go red, for a named reason.
  *

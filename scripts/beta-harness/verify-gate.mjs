@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync } from './package-command.mjs';
+
 /**
  * Beta phase verification gate.
  *
@@ -18,12 +20,13 @@
  *                    twice while gates were added.
  *   --base <ref>     git base for affected calculation (default origin/main)
  *   --tail <n>       lines of failing output to show (default 40)
+ *   --require-complete  exit 1 unless the verdict is `pass`: every gate ran and passed
  *
  * Examples:
  *   node scripts/beta-harness/verify-gate.mjs --gates guardrails,lint
  *   node scripts/beta-harness/verify-gate.mjs --phase phase-1-config --base main
  *
- * Exit code is 1 if any gate failed.
+ * Exit code is 1 if any gate failed, or with --require-complete if any did not run.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -172,7 +175,7 @@ const ALL_GATES = [
     // Both suites behind one gate, via the npm script, so adding the status report did not add a
     // gate. The count in the verdict line is quoted in docs and in CLAUDE.md; a second entry here
     // would have made all of those wrong for a diagnostic that cannot break the application.
-    cmd: 'npm',
+    tool: 'npm',
     argv: ['run', '--silent', 'review:crowdin-selftest'],
     // The negative/positive split is the evidence, so surface it on a pass too.
     echoOnPass: true,
@@ -269,19 +272,19 @@ const ALL_GATES = [
   {
     id: 'lint',
     label: 'Affected lint',
-    cmd: 'npx',
+    tool: 'npx',
     argv: ['nx', 'affected', '-t', 'lint', `--base=${base}`],
   },
   {
     id: 'test',
     label: 'Affected tests',
-    cmd: 'npx',
+    tool: 'npx',
     argv: ['nx', 'affected', '-t', 'test', `--base=${base}`],
   },
   {
     id: 'build',
     label: 'Affected build',
-    cmd: 'npx',
+    tool: 'npx',
     argv: ['nx', 'affected', '-t', 'build', `--base=${base}`],
   },
   // Libraries have no `build` target — Nx's module-boundary rule forbids a
@@ -292,7 +295,7 @@ const ALL_GATES = [
   {
     id: 'typecheck',
     label: 'Affected typecheck',
-    cmd: 'npx',
+    tool: 'npx',
     argv: ['nx', 'affected', '-t', 'typecheck', `--base=${base}`],
   },
   // `typecheck` above covers library sources only: it runs the per-project targets, which
@@ -450,7 +453,7 @@ const ALL_GATES = [
     label: 'Customer extension guardrails',
     // The npm script, so the gate and CI run the same two things: the guardrail against our
     // reference library, which proves it passes, and its selftest, which proves it can fail.
-    cmd: 'npm',
+    tool: 'npm',
     argv: ['run', '--silent', 'beta:customer-guardrails'],
     echoOnPass: true,
   },
@@ -489,10 +492,8 @@ const results = [];
 for (const gate of selected) {
   process.stdout.write(`[run ] ${gate.label} ... `);
   const started = Date.now();
-  const proc = spawnSync(gate.cmd, gate.argv, {
+  const proc = spawnToolSync(gate.tool ?? gate.cmd, gate.argv, {
     encoding: 'utf8',
-    // npm and npx are .cmd shims on Windows, which Node will not spawn without a shell.
-    shell: process.platform === 'win32',
     maxBuffer: 64 * 1024 * 1024,
     env: {
       ...process.env,
@@ -522,7 +523,7 @@ for (const gate of selected) {
     passed,
     exitCode: proc.status,
     durationMs: ms,
-    command: `${gate.cmd} ${gate.argv.join(' ')}`,
+    command: `${gate.tool ?? gate.cmd} ${gate.argv.join(' ')}`,
     outputTail: lastLines(output, tail),
   });
 
@@ -608,6 +609,13 @@ await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 console.log('');
 for (const line of summaryLines) console.log(line);
 console.log(`\nreport   ${reportPath}`);
+
+// `--require-complete`, for CI that claims the full gate: a green exit must mean every gate ran
+// and passed, so `pass-incomplete` (a gate NOT RUN) and `pass-partial` fail as well.
+if (!anyFailed && args.has('require-complete') && verdict !== 'pass') {
+  console.error(`verdict ${verdict}: --require-complete accepts only every gate run and green`);
+  process.exit(1);
+}
 
 process.exit(anyFailed ? 1 : 0);
 
