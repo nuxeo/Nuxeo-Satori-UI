@@ -1089,27 +1089,36 @@ interface NxsDocumentReference {
 }
 class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly label: import("@angular/core").InputSignal<string>;
+    readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly documentTypes: import("@angular/core").InputSignal<readonly string[]>;
     readonly idProperty: import("@angular/core").InputSignal<"path" | "uid">;
     readonly hint: import("@angular/core").InputSignal<string>;
     readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
-    readonly value: import("@angular/core").ModelSignal<string | null>;
+    readonly value: import("@angular/core").ModelSignal<string | readonly string[] | null>;
     readonly documentChange: import("@angular/core").OutputEmitterRef<NxsDocumentReference | null>;
     protected readonly minChars = 3;
+    protected readonly inputId: string;
     protected readonly document: import("@angular/core").WritableSignal<NxsDocumentReference | null>;
+    protected readonly references: import("@angular/core").WritableSignal<ReadonlyMap<string, NxsDocumentReference>>;
     protected readonly text: import("@angular/core").WritableSignal<string>;
     protected readonly finder: NxsSearchAsYouType<NxsDocumentReference>;
     protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly chosen: import("@angular/core").Signal<readonly string[]>;
+    protected readonly options: import("@angular/core").Signal<NxsDocumentReference[]>;
     protected readonly unmatched: import("@angular/core").Signal<boolean>;
     protected readonly errorState: {
     isErrorState: () => boolean;
     };
     protected readonly displayWith: (document: NxsDocumentReference | string | null) => string;
+    protected readonly pickerKind: 'document' | 'principal';
+    protected readonly minimumCharacters: () => number;
+    protected readonly chosenItems: import("@angular/core").Signal<readonly NxsPickerItem<string>[]>;
+    protected readonly optionItems: import("@angular/core").Signal<readonly NxsPickerOption<NxsDocumentReference>[]>;
     constructor();
     ngDoCheck(): void;
-    writeValue(value: string | null): void;
-    registerOnChange(fn: (value: string | null) => void): void;
+    writeValue(value: string | readonly string[] | null): void;
+    registerOnChange(fn: (value: string | readonly string[] | null) => void): void;
     registerOnTouched(fn: () => void): void;
     setDisabledState(disabled: boolean): void;
     validate(control: AbstractControl): ValidationErrors | null;
@@ -1117,13 +1126,20 @@ class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Valida
     protected missing(): boolean;
     protected onInput(event: Event): void;
     protected choose(document: NxsDocumentReference | null): void;
+    protected labelOf(id: string): string;
+    protected remove(id: string): void;
     protected clear(): void;
-    protected blurred(): void;
+    protected blurred(event: FocusEvent): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentReferenceInputComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentReferenceInputComponent, "nxs-document-reference-input", never, {
     "label": {
     "alias": "label";
     "required": true;
+    "isSignal": true;
+    };
+    "multiple": {
+    "alias": "multiple";
+    "required": false;
     "isSignal": true;
     };
     "documentTypes": {
@@ -2592,38 +2608,52 @@ class NxsUploadQueueComponent {
 type NxsUploadState = 'done' | 'failed' | 'staged' | 'uploading' | 'waiting';
 class NxsUserGroupPickerComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly label: import("@angular/core").InputSignal<string>;
+    readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly search: import("@angular/core").InputSignal<NxsPrincipalSearch>;
     readonly minChars: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly hint: import("@angular/core").InputSignal<string>;
     readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
-    readonly value: import("@angular/core").ModelSignal<NxsPrincipal | null>;
+    readonly value: import("@angular/core").ModelSignal<NxsPrincipal | readonly NxsPrincipal[] | null>;
+    protected readonly inputId: string;
     protected readonly text: import("@angular/core").WritableSignal<string>;
     protected readonly finder: NxsSearchAsYouType<NxsPrincipal>;
     protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly chosen: import("@angular/core").Signal<readonly NxsPrincipal[]>;
+    protected readonly options: import("@angular/core").Signal<NxsPrincipal[]>;
     protected readonly unmatched: import("@angular/core").Signal<boolean>;
     protected readonly errorState: {
     isErrorState: () => boolean;
     };
     protected readonly displayWith: (principal: NxsPrincipal | string | null) => string;
+    protected readonly pickerKind: 'document' | 'principal';
+    protected readonly minimumCharacters: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    protected readonly chosenItems: import("@angular/core").Signal<readonly NxsPickerItem<NxsPrincipal>[]>;
+    protected readonly optionItems: import("@angular/core").Signal<readonly NxsPickerOption<NxsPrincipal>[]>;
     constructor();
     ngDoCheck(): void;
     validate(control: AbstractControl): ValidationErrors | null;
     registerOnValidatorChange(fn: () => void): void;
     protected missing(): boolean;
-    writeValue(value: NxsPrincipal | null): void;
-    registerOnChange(fn: (value: NxsPrincipal | null) => void): void;
+    writeValue(value: NxsPrincipal | readonly NxsPrincipal[] | null): void;
+    registerOnChange(fn: (value: NxsPrincipal | readonly NxsPrincipal[] | null) => void): void;
     registerOnTouched(fn: () => void): void;
     setDisabledState(disabled: boolean): void;
     protected onInput(event: Event): void;
     protected choose(principal: NxsPrincipal | null): void;
     protected clear(): void;
-    protected blurred(): void;
+    protected remove(principal: NxsPrincipal): void;
+    protected blurred(event: FocusEvent): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsUserGroupPickerComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsUserGroupPickerComponent, "nxs-user-group-picker", never, {
     "label": {
     "alias": "label";
     "required": true;
+    "isSignal": true;
+    };
+    "multiple": {
+    "alias": "multiple";
+    "required": false;
     "isSignal": true;
     };
     "search": {
