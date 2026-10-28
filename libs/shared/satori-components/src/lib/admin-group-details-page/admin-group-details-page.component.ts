@@ -91,6 +91,10 @@ export class NxsAdminGroupDetailsPageComponent {
   private permissionsRequest?: Subscription;
   /** The latest member or nested-group removal, dropped when another group is opened so its answer cannot land on that group. */
   private mutationRequest?: Subscription;
+  /** One change at a time: a second membership change built from the same group would undo the first. */
+  private mutationBusy(): boolean {
+    return !!this.mutationRequest && !this.mutationRequest.closed;
+  }
 
   /** The group name to show. Changing it loads that group. */
   readonly groupId = input.required<string>();
@@ -188,8 +192,8 @@ export class NxsAdminGroupDetailsPageComponent {
 
   protected edit(): void {
     const group = this.group();
-    if (!group) return;
-    saveEditedGroup(this.dialog, this.userService, group)
+    if (!group || this.mutationBusy()) return;
+    this.mutationRequest = saveEditedGroup(this.dialog, this.userService, group)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => this.finish('satori-components.admin-group-details-page.group-saved', false),
@@ -200,7 +204,7 @@ export class NxsAdminGroupDetailsPageComponent {
   protected deleteGroup(): void {
     const group = this.group();
     if (!group) return;
-    this.confirm(group.groupname)
+    this.mutationRequest = this.confirm(group.groupname)
       .pipe(
         switchMap(() => this.userService.deleteGroup(group.groupname)),
         takeUntilDestroyed(this.destroyRef),
@@ -214,6 +218,7 @@ export class NxsAdminGroupDetailsPageComponent {
   protected removeMember(userId: string): void {
     const group = this.group();
     if (!group) return;
+    if (this.mutationBusy()) return;
     const remaining = (group.memberUsers ?? []).filter((id) => id !== userId);
     this.mutationRequest = this.userService
       .updateGroup(group.groupname, { memberUsers: remaining })
@@ -228,6 +233,7 @@ export class NxsAdminGroupDetailsPageComponent {
   protected removeNestedGroup(nestedId: string): void {
     const group = this.group();
     if (!group) return;
+    if (this.mutationBusy()) return;
     const remaining = (group.memberGroups ?? []).filter((id) => id !== nestedId);
     this.mutationRequest = this.userService
       .updateGroup(group.groupname, { memberGroups: remaining })
@@ -241,7 +247,7 @@ export class NxsAdminGroupDetailsPageComponent {
   }
 
   protected removePermission(row: PrincipalPermissionRow): void {
-    this.documentDetail
+    this.mutationRequest = this.documentDetail
       .removePermissionById(row.documentUid, row.aceId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
