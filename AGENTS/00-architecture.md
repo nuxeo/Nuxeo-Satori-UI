@@ -71,7 +71,7 @@ libs/
     ui/                          ← Reusable UI components (widgets, dialogs, viewer)
     ai-client/                   ← AI feature flag service + AI backend HTTP client
     kd-client/                   ← Knowledge Discovery client via Nuxeo CIC automation
-    ke-client/                   ← Knowledge Enrichment client via Nuxeo CIC automation
+    ke-client/                   ← Knowledge Enrichment client via AgenticKnowledgeEnrichment.Enrich (CIC Java SDK)
     document-layouts/            ← Per-type layouts: package layout files or schema-generated (NXSAT-311); internal, not in the platform package
     adf-hx-bridge/               ← HxPR bridge + hxp-* UI for adf-hx browse POC (see ARCHITECTURE.md)
 ```

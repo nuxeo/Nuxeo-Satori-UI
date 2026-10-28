@@ -143,14 +143,18 @@ docker exec nuxeo curl -s -u Administrator:Administrator \
 
 ## Knowledge Enrichment config
 
-Knowledge Enrichment uses the same CIC bundle but a different property family
-than Knowledge Discovery:
+Knowledge Enrichment has its own property family. The `AgenticKnowledgeEnrichment.Enrich`
+operation reads these keys and passes them to the Hyland CIC Java SDK. Set
+`nuxeo.hyland.cic.auth.baseUrl` to the identity provider base URL; the SDK appends `/connect/token`.
 
 ```conf
+nuxeo.hyland.cic.auth.baseUrl=...
 nuxeo.hyland.cic.contextEnrichment.baseUrl=...
 nuxeo.hyland.cic.enrichment.clientId=...
 nuxeo.hyland.cic.enrichment.clientSecret=...
+nuxeo.hyland.cic.enrichment.auth.grantType=client_credentials
 nuxeo.hyland.cic.enrichment.auth.scope=environment_authorization
+nuxeo.hyland.cic.enrichment.environment=...
 nuxeo.hyland.cic.ingest.baseUrl=...
 nuxeo.hyland.cic.ingest.clientId=...
 nuxeo.hyland.cic.ingest.clientSecret=...
@@ -193,7 +197,7 @@ Then smoke-test the multipart KE op:
 printf 'KE smoke test' >/tmp/ke-sample.txt
 
 curl -sS -u Administrator:Administrator \
-  -X POST "http://localhost:8080/nuxeo/site/automation/HylandKnowledgeEnrichment.Enrich" \
+  -X POST "http://localhost:8080/nuxeo/site/automation/AgenticKnowledgeEnrichment.Enrich" \
   -H "Accept: application/json" \
   -F "request={\"params\":{\"actions\":\"textSummarization\"}};type=application/json" \
   -F "input=@/tmp/ke-sample.txt;type=text/plain"

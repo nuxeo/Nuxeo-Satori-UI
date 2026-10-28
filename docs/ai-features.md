@@ -310,10 +310,10 @@ Answers natural language questions about document permissions by querying Nuxeo 
 
 **Location:** Document Detail > document preview header (top-right KE action buttons)
 
-Knowledge Enrichment runs through the Hyland Content Intelligence Connector
-installed on Nuxeo. It does not use the OpenAI backend in this repo.
+Knowledge Enrichment runs through the `AgenticKnowledgeEnrichment.Enrich` Nuxeo
+operation, which calls the Hyland CIC Java SDK. It does not use the OpenAI backend in this repo.
 
-- PDF actions:
+- Text actions (PDF and other supported text types):
   - classify document
   - extract named entities
   - summarize document
@@ -328,7 +328,7 @@ installed on Nuxeo. It does not use the OpenAI backend in this repo.
 | KE config + models    | `libs/shared/ke-client/src/lib/`                                           |
 | Nuxeo/CIC setup guide | `docs/knowledge-enrichment.md`                                             |
 
-**API:** `POST /nuxeo/site/automation/HylandKnowledgeEnrichment.Enrich`
+**API:** `POST /nuxeo/site/automation/AgenticKnowledgeEnrichment.Enrich`
 
 The client first downloads the current blob from Nuxeo, then posts a multipart
 automation request:

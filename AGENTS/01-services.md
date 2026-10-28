@@ -185,10 +185,10 @@ getQuestionHistory(agentId: string, pageNumber?: number, pageSize?: number): Obs
 
 ## KeClientService (`ke-client.service.ts`)
 
-Frontend client for Knowledge Enrichment. Talks to the Hyland Content
-Intelligence Connector (`nuxeo-labs-content-intelligence-connector`) via the
-`HylandKnowledgeEnrichment.Enrich` automation op. Unlike KD, KE uses a
-multipart request with a JSON `request` part and a blob `input` part.
+Frontend client for Knowledge Enrichment. Talks to the Nuxeo automation op
+`AgenticKnowledgeEnrichment.Enrich` in `nuxeo-agentic-core`, which calls the
+Hyland CIC Java SDK (`org.hyland.sdk:cic-ke`). Unlike KD, KE uses a multipart
+request with a JSON `request` part and a blob `input` part.
 
 The client normalizes the Context API response fields (`textClassification`,
 `textSummary`, `namedEntityText`, `imageDescription`, `namedEntityImage`) and

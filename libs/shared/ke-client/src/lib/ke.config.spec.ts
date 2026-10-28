@@ -18,7 +18,7 @@ describe('ke.config injection token', () => {
 
     expect(ops).toBe(DEFAULT_KE_CIC_OPERATIONS);
     expect(ops).toEqual({
-      enrich: 'HylandKnowledgeEnrichment.Enrich',
+      enrich: 'AgenticKnowledgeEnrichment.Enrich',
       sendForEnrichment: 'HylandKnowledgeEnrichment.SendForEnrichment',
       getEnrichmentResults: 'HylandKnowledgeEnrichment.GetEnrichmentResults',
       uploadFile: 'HylandKnowledgeEnrichment.UploadFile',

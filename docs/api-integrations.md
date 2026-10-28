@@ -1202,18 +1202,18 @@ that takes `httpMethod`, `endpoint`, `jsonPayloadStr`).
 
 ---
 
-## 25. Knowledge Enrichment (via Nuxeo CIC connector)
+## 25. Knowledge Enrichment (via Nuxeo operation and CIC Java SDK)
 
 | Field           | Value                                                                    |
 | --------------- | ------------------------------------------------------------------------ |
 | **Service**     | `KeClientService` (`libs/shared/ke-client/src/lib/ke-client.service.ts`) |
 | **Methods**     | `enrich`                                                                 |
 | **HTTP Method** | `POST`                                                                   |
-| **Endpoint**    | `/nuxeo/site/automation/HylandKnowledgeEnrichment.Enrich`                |
+| **Endpoint**    | `/nuxeo/site/automation/AgenticKnowledgeEnrichment.Enrich`               |
 
-The Angular app calls Knowledge Enrichment through the **Hyland Content
-Intelligence Connector (CIC)** installed on the Nuxeo server. There is no
-separate KE backend in this repo.
+The Angular app calls `AgenticKnowledgeEnrichment.Enrich` on the Nuxeo server.
+That operation calls the Hyland CIC Java SDK (`org.hyland.sdk:cic-ke`), which
+authenticates and calls the Context API. There is no separate KE backend in this repo.
 
 Unlike Knowledge Discovery, the KE `Enrich` op accepts a **multipart**
 request:
@@ -1231,12 +1231,12 @@ The current UI flow is:
 
 **Supported action mapping:**
 
-| UI action              | KE action(s)                                           | Nuxeo field(s) updated         |
-| ---------------------- | ------------------------------------------------------ | ------------------------------ |
-| PDF classify           | `text-classification`                                  | `dc:nature`                    |
-| PDF extract entities   | `named-entity-recognition-text`                        | `nxtag:tags`                   |
-| PDF summarize          | `text-summarization`                                   | `dc:description`               |
-| Image describe and tag | `image-description` + `named-entity-recognition-image` | `dc:description`, `nxtag:tags` |
+| UI action              | KE action(s)                                       | Nuxeo field(s) updated         |
+| ---------------------- | -------------------------------------------------- | ------------------------------ |
+| Text classify          | `textClassification`                               | `dc:nature`                    |
+| Text extract entities  | `namedEntityRecognitionText`                       | `nxtag:tags`                   |
+| Text summarize         | `textSummarization`                                | `dc:description`               |
+| Image describe and tag | `imageDescription` + `namedEntityRecognitionImage` | `dc:description`, `nxtag:tags` |
 
 **Request payload inside the `request` multipart part:**
 

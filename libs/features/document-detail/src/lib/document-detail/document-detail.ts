@@ -233,6 +233,29 @@ const TAG_CATEGORIES: SatTagCategory[] = [
  */
 const KE_NO_MATCH_SENTINEL = 'not_from_provided_classes';
 
+/**
+ * MIME types the text KE actions run on. The SDK accepts every document format Data Curation
+ * supports but publishes no list, so this is the common office and text set. Each type still
+ * needs a live Context API call before it is relied on.
+ */
+const KE_TEXT_MIME_TYPES: ReadonlySet<string> = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/rtf',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.oasis.opendocument.presentation',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'text/plain',
+  'text/html',
+  'text/markdown',
+  'text/csv',
+]);
+
 type KeUiAction =
   | 'text-classification'
   | 'named-entity-recognition-text'
@@ -883,8 +906,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return (pictureContent?.['mime-type'] as string) ?? '';
   });
 
-  readonly supportsTextKnowledgeEnrichment = computed(
-    () => this.fileMimeType() === 'application/pdf',
+  readonly supportsTextKnowledgeEnrichment = computed(() =>
+    KE_TEXT_MIME_TYPES.has(this.fileMimeType()),
   );
   readonly supportsImageKnowledgeEnrichment = computed(() => {
     const mime = this.fileMimeType();
