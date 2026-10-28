@@ -11142,6 +11142,93 @@ jobs:
   /cannot tell whether `v1\.0\.0` is a branch or a tag and has judged neither/,
 );
 
+/* --- ninth round: the ref_type assertion reads through the shared matcher --- */
+
+/**
+ * `assertsRefType` was its own regex for one round, and reproduced all three defects the ref-gate
+ * matcher had already been fixed for: comparison text inside a string read as a real assertion
+ * (round 5), the reversed operand order missed (round 2), and the literal compared case-sensitively
+ * where GitHub's `==` is not (round 2). Reported on #494 the round after the duplicate was written.
+ *
+ * It reads through `contextComparisons` now — the same function the gates use — so there is one
+ * matcher and one set of fixes. These controls are what makes a second matcher fail rather than
+ * quietly work for the simple cases: each form below is a spelling that the shared matcher handles
+ * and a hand-rolled regex would not.
+ */
+const REF_TYPE_FORMS = {
+  'an upper-case assertion': "github.ref_type == 'BRANCH' && github.ref_name == 'integration/nxsat-308'",
+  'the reversed operand order':
+    "${{ 'branch' == github.ref_type && github.ref_name == 'integration/nxsat-308' }}",
+  'reversed AND upper-case':
+    "${{ 'BRANCH' == github.ref_type && github.ref_name == 'integration/nxsat-308' }}",
+};
+
+for (const [description, condition] of Object.entries(REF_TYPE_FORMS)) {
+  expectRed(
+    `a branch assertion written as ${description} still settles the ambiguity`,
+    'checkWorkflowRefGates',
+    {
+      '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: ${condition}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+    },
+    null,
+    /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+  );
+}
+
+expectWarn(
+  'an assertion quoted INSIDE a string is not an assertion',
+  'checkWorkflowRefGates',
+  {
+    // The false-positive half. `contains('github.ref_type == "branch"', 'branch')` mentions the
+    // assertion without making it, so the literal is still ambiguous and the advisory path is
+    // right — reading it as branch-qualified rejected a valid tag job.
+    '.github/workflows/release.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: contains('github.ref_type == "branch"', 'branch') && github.ref_name == 'v1.0.0'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /cannot tell whether `v1\.0\.0` is a branch or a tag and has judged neither/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a tag assertion is accepted in the reversed and upper-case forms too, and silently',
+  'checkWorkflowRefGates',
+  {
+    // The same spellings on the tag side. Silently matters: an unrecognised tag assertion fell
+    // through to the ambiguity warning, so these forms were noisy as well as unrecognised.
+    '.github/workflows/release.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: \${{ 'TAG' == github.ref_type && github.ref_name == 'v1.0.0' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

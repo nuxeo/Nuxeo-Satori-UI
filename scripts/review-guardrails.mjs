@@ -10581,11 +10581,34 @@ function githubBranchFilterToRegExp(pattern) {
  * the literal and is unescaped below.
  */
 const EXPRESSION_STRING = "'((?:[^']|'')*)'|\"((?:[^\"]|\"\")*)\"";
-const REF_COMPARISON = new RegExp(
-  `github\\.(ref_name|ref)\\b\\s*(==|!=)\\s*(?:${EXPRESSION_STRING})` +
-    `|(?:${EXPRESSION_STRING})\\s*(==|!=)\\s*github\\.(ref_name|ref)\\b`,
-  'g',
-);
+
+/**
+ * The comparison matcher, parameterised by which `github.*` contexts to look for.
+ *
+ * Parameterised because the alternative is a second matcher, and a second matcher is a second set
+ * of the same bugs. `assertsRefType` was written as its own regex and promptly reproduced all
+ * three defects this one had already been fixed for: it read comparison text inside a string as a
+ * real assertion, it missed the reversed operand order, and it compared the literal case-sensitively
+ * where GitHub's `==` does not. Reported on #494, one round after the duplicate was introduced.
+ *
+ * Longest context first in the alternation, and `\b` after it — see `refComparisons` below for what
+ * that prevents.
+ */
+const comparisonPatterns = new Map();
+const comparisonPattern = (contexts) => {
+  const key = contexts.join('|');
+  if (!comparisonPatterns.has(key)) {
+    comparisonPatterns.set(
+      key,
+      new RegExp(
+        `github\\.(${key})\\b\\s*(==|!=)\\s*(?:${EXPRESSION_STRING})` +
+          `|(?:${EXPRESSION_STRING})\\s*(==|!=)\\s*github\\.(${key})\\b`,
+        'g',
+      ),
+    );
+  }
+  return comparisonPatterns.get(key);
+};
 
 /**
  * Which characters of an expression sit inside a string literal, quotes included.
@@ -10617,10 +10640,10 @@ function stringLiteralMask(expression) {
   return inside;
 }
 
-function refComparisons(expression) {
+function contextComparisons(expression, contexts) {
   const inside = stringLiteralMask(expression);
   const found = [];
-  for (const match of expression.matchAll(REF_COMPARISON)) {
+  for (const match of expression.matchAll(comparisonPattern(contexts))) {
     const forward = match[1] !== undefined;
     // The CONTEXT has to be outside a string literal. Its operand is a literal, of course, so the
     // match's own start is only the right place to ask in the forward order.
@@ -10637,6 +10660,9 @@ function refComparisons(expression) {
   }
   return found;
 }
+
+/** Every `github.ref` / `github.ref_name` comparison against a string literal. */
+const refComparisons = (expression) => contextComparisons(expression, ['ref_name', 'ref']);
 
 /**
  * An `if:` value with its enclosing YAML quotes removed, so what is analysed is the Actions
@@ -11304,9 +11330,19 @@ function checkWorkflowRefGates() {
          * say so rather than pick. Guessing either way has a cost this review has already paid:
          * as a branch it rejects valid tag gates, as a tag it lets a pinned ticket branch through
          * in silence. The warning names the ambiguity and points at `github.ref`. */
+        /* Read through `contextComparisons`, the same matcher the ref gates use, rather than a
+         * regex of its own. Its own regex reproduced all three defects that one had already been
+         * fixed for — comparison text inside a string read as a real assertion, the reversed
+         * operand order missed, and the literal compared case-sensitively where GitHub's `==` is
+         * not. Reported on #494 one round after the duplicate was written, which is the clearest
+         * case in this review for sharing the primitive instead of the pattern. */
         const assertsRefType = (type) =>
-          [...gate.expression.matchAll(new RegExp(`github\\.ref_type\\s*==\\s*(['"])${type}\\1`, 'g'))]
-            .some((match) => !comparisonIsNegated(gate.expression, match.index));
+          contextComparisons(gate.expression, ['ref_type']).some(
+            (assertion) =>
+              assertion.operator === '==' &&
+              assertion.literal.toLowerCase() === type &&
+              !comparisonIsNegated(gate.expression, assertion.index),
+          );
 
         if (context === 'ref_name' && tagsArePossible && !assertsRefType('branch')) {
           if (!assertsRefType('tag')) {
