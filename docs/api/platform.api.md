@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-137 exported symbol(s).
+148 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -202,9 +202,13 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly statusTag: "nxs.primitives.statusTag";
     readonly richTooltip: "nxs.primitives.richTooltip";
     readonly errorState: "nxs.primitives.errorState";
+    readonly banner: "nxs.primitives.banner";
+    readonly chipSet: "nxs.primitives.chipSet";
     readonly tabs: "nxs.primitives.tabs";
     readonly actionBar: "nxs.primitives.actionBar";
     readonly card: "nxs.primitives.card";
+    readonly emptyState: "nxs.primitives.emptyState";
+    readonly upload: "nxs.primitives.upload";
     }>;
 }
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
@@ -305,6 +309,58 @@ interface NxsAvatarInputs {
     }
 }
 type NxsAvatarSize = '128' | '18' | '24' | '28' | '36' | '64' | '80';
+interface NxsBannerAction {
+    readonly label: string;
+    readonly icon?: string;
+    readonly emphasis: 'filled' | 'outlined' | 'text';
+    readonly danger?: boolean;
+    readonly disabled?: boolean;
+    readonly cssClass?: string;
+    readonly press: () => void;
+    }
+}
+type NxsBannerAnnounce = 'alert' | 'none' | 'status';
+class NxsBannerComponent implements NxsBannerInputs {
+    readonly message: import("@angular/core").InputSignal<string>;
+    readonly tone: import("@angular/core").InputSignal<NxsBannerTone>;
+    readonly announce: import("@angular/core").InputSignal<NxsBannerAnnounce>;
+    readonly actions: import("@angular/core").InputSignal<readonly NxsBannerAction[]>;
+    protected readonly icon: import("@angular/core").Signal<string>;
+    protected readonly role: import("@angular/core").Signal<string | null>;
+    protected press(action: NxsBannerAction): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsBannerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsBannerComponent, "nxs-banner", never, {
+    "message": {
+    "alias": "message";
+    "required": false;
+    "isSignal": true;
+    };
+    "tone": {
+    "alias": "tone";
+    "required": false;
+    "isSignal": true;
+    };
+    "announce": {
+    "alias": "announce";
+    "required": false;
+    "isSignal": true;
+    };
+    "actions": {
+    "alias": "actions";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsBannerInputs {
+    readonly message: InputSignal<string>;
+    readonly tone: InputSignal<NxsBannerTone>;
+    readonly announce: InputSignal<NxsBannerAnnounce>;
+    readonly actions: InputSignal<readonly NxsBannerAction[]>;
+    }
+}
+type NxsBannerTone = 'error' | 'info' | 'warning';
 interface NxsBreadcrumbItem {
     readonly label: string;
     readonly routerLink?: string | readonly (string | number)[];
@@ -417,6 +473,47 @@ interface NxsCardInputs {
     readonly media: InputSignal<TemplateRef<unknown> | null>;
     readonly headerAction: InputSignal<TemplateRef<unknown> | null>;
     readonly actions: InputSignal<TemplateRef<unknown> | null>;
+    }
+}
+interface NxsChipItem {
+    readonly id: string;
+    readonly label: string;
+    readonly removeLabel: string;
+    readonly disabled?: boolean;
+    }
+}
+class NxsChipSetComponent implements NxsChipSetInputs {
+    readonly items: import("@angular/core").InputSignal<readonly NxsChipItem[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly removeHandler: import("@angular/core").InputSignal<((item: NxsChipItem) => void) | null>;
+    readonly removed: import("@angular/core").OutputEmitterRef<NxsChipItem>;
+    protected pressRemove(item: NxsChipItem): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsChipSetComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsChipSetComponent, "nxs-chip-set", never, {
+    "items": {
+    "alias": "items";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "removeHandler": {
+    "alias": "removeHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "removed": "removed";
+    }, never, never, true, never>;
+    }
+}
+interface NxsChipSetInputs {
+    readonly items: InputSignal<readonly NxsChipItem[]>;
+    readonly label: InputSignal<string>;
+    readonly removeHandler: InputSignal<((item: NxsChipItem) => void) | null>;
     }
 }
 class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
@@ -567,9 +664,12 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     readonly min: import("@angular/core").InputSignal<Date | null>;
     readonly max: import("@angular/core").InputSignal<Date | null>;
     readonly hint: import("@angular/core").InputSignal<string>;
+    readonly error: import("@angular/core").InputSignal<string>;
     readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly value: import("@angular/core").ModelSignal<Date | null>;
+    protected readonly adapterMin: import("@angular/core").Signal<unknown>;
+    protected readonly adapterMax: import("@angular/core").Signal<unknown>;
     protected readonly isDisabled: import("@angular/core").Signal<boolean>;
     protected readonly problem: import("@angular/core").Signal<"max" | "min" | "parse" | null>;
     protected readonly example: import("@angular/core").Signal<string>;
@@ -578,7 +678,7 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     };
     constructor();
     ngDoCheck(): void;
-    writeValue(value: Date | null): void;
+    writeValue(value: unknown): void;
     registerOnChange(fn: (value: Date | null) => void): void;
     registerOnTouched(fn: () => void): void;
     setDisabledState(disabled: boolean): void;
@@ -608,6 +708,11 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     };
     "hint": {
     "alias": "hint";
+    "required": false;
+    "isSignal": true;
+    };
+    "error": {
+    "alias": "error";
     "required": false;
     "isSignal": true;
     };
@@ -984,27 +1089,36 @@ interface NxsDocumentReference {
 }
 class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly label: import("@angular/core").InputSignal<string>;
+    readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly documentTypes: import("@angular/core").InputSignal<readonly string[]>;
     readonly idProperty: import("@angular/core").InputSignal<"path" | "uid">;
     readonly hint: import("@angular/core").InputSignal<string>;
     readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
-    readonly value: import("@angular/core").ModelSignal<string | null>;
+    readonly value: import("@angular/core").ModelSignal<string | readonly string[] | null>;
     readonly documentChange: import("@angular/core").OutputEmitterRef<NxsDocumentReference | null>;
     protected readonly minChars = 3;
+    protected readonly inputId: string;
     protected readonly document: import("@angular/core").WritableSignal<NxsDocumentReference | null>;
+    protected readonly references: import("@angular/core").WritableSignal<ReadonlyMap<string, NxsDocumentReference>>;
     protected readonly text: import("@angular/core").WritableSignal<string>;
     protected readonly finder: NxsSearchAsYouType<NxsDocumentReference>;
     protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly chosen: import("@angular/core").Signal<readonly string[]>;
+    protected readonly options: import("@angular/core").Signal<NxsDocumentReference[]>;
     protected readonly unmatched: import("@angular/core").Signal<boolean>;
     protected readonly errorState: {
     isErrorState: () => boolean;
     };
     protected readonly displayWith: (document: NxsDocumentReference | string | null) => string;
+    protected readonly pickerKind: 'document' | 'principal';
+    protected readonly minimumCharacters: () => number;
+    protected readonly chosenItems: import("@angular/core").Signal<readonly NxsPickerItem<string>[]>;
+    protected readonly optionItems: import("@angular/core").Signal<readonly NxsPickerOption<NxsDocumentReference>[]>;
     constructor();
     ngDoCheck(): void;
-    writeValue(value: string | null): void;
-    registerOnChange(fn: (value: string | null) => void): void;
+    writeValue(value: string | readonly string[] | null): void;
+    registerOnChange(fn: (value: string | readonly string[] | null) => void): void;
     registerOnTouched(fn: () => void): void;
     setDisabledState(disabled: boolean): void;
     validate(control: AbstractControl): ValidationErrors | null;
@@ -1012,13 +1126,20 @@ class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Valida
     protected missing(): boolean;
     protected onInput(event: Event): void;
     protected choose(document: NxsDocumentReference | null): void;
+    protected labelOf(id: string): string;
+    protected remove(id: string): void;
     protected clear(): void;
-    protected blurred(): void;
+    protected blurred(event: FocusEvent): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentReferenceInputComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentReferenceInputComponent, "nxs-document-reference-input", never, {
     "label": {
     "alias": "label";
     "required": true;
+    "isSignal": true;
+    };
+    "multiple": {
+    "alias": "multiple";
+    "required": false;
     "isSignal": true;
     };
     "documentTypes": {
@@ -1160,12 +1281,13 @@ interface NxsDriveDialogData {
     readonly folderPath?: string;
     }
 }
-class NxsDropzoneComponent {
+class NxsDropzoneComponent implements NxsUploadInputs {
     readonly label: import("@angular/core").InputSignal<string>;
     readonly buttonLabel: import("@angular/core").InputSignal<string>;
     readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly accept: import("@angular/core").InputSignal<string>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly filesHandler: import("@angular/core").InputSignal<((files: readonly File[]) => void) | null>;
     readonly files: import("@angular/core").OutputEmitterRef<readonly File[]>;
     protected readonly drop: NxsFileDropTracker;
     protected readonly buttonId: string;
@@ -1196,6 +1318,11 @@ class NxsDropzoneComponent {
     };
     "disabled": {
     "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "filesHandler": {
+    "alias": "filesHandler";
     "required": false;
     "isSignal": true;
     };
@@ -1237,11 +1364,12 @@ interface NxsEditorSection {
     }
 }
 type NxsEditorValues = Readonly<Record<string, unknown>>;
-class NxsEmptyStateComponent {
+class NxsEmptyStateComponent implements NxsEmptyStateInputs {
     readonly heading: InputSignal<string>;
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
     readonly message: InputSignal<string>;
     readonly icon: InputSignal<string>;
+    readonly actions: InputSignal<TemplateRef<unknown> | null>;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsEmptyStateComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsEmptyStateComponent, "nxs-empty-state", never, {
     "heading": {
@@ -1264,7 +1392,20 @@ class NxsEmptyStateComponent {
     "required": false;
     "isSignal": true;
     };
+    "actions": {
+    "alias": "actions";
+    "required": false;
+    "isSignal": true;
+    };
     }, {}, never, ["*"], true, never>;
+    }
+}
+interface NxsEmptyStateInputs {
+    readonly heading: InputSignal<string>;
+    readonly headingLevel: InputSignal<NxsHeadingLevel>;
+    readonly message: InputSignal<string>;
+    readonly icon: InputSignal<string>;
+    readonly actions: InputSignal<TemplateRef<unknown> | null>;
     }
 }
 class NxsErrorStateComponent implements NxsErrorStateInputs {
@@ -1499,13 +1640,10 @@ class NxsMetadataEditorComponent {
     protected readonly submitted: import("@angular/core").WritableSignal<boolean>;
     protected readonly invalidCount: import("@angular/core").WritableSignal<number>;
     protected readonly selectedTab: import("@angular/core").WritableSignal<number>;
-    protected readonly panelSearch: import("@angular/core").WritableSignal<string>;
     protected readonly standardFields: import("@angular/core").Signal<readonly EditorField[]>;
     protected readonly typeSections: import("@angular/core").Signal<readonly NxsEditorSection[]>;
     protected readonly tabs: import("@angular/core").Signal<readonly NxsTab[]>;
     protected readonly errorMatcher: ErrorStateMatcher;
-    protected readonly l10nEntryLabel: typeof l10nEntryLabel;
-    protected readonly directoryPickerLabel: typeof directoryPickerLabel;
     constructor();
     validate(): boolean;
     dirtyProperties(): Record<string, unknown>;
@@ -1520,18 +1658,11 @@ class NxsMetadataEditorComponent {
     protected showError(control: AbstractControl): boolean;
     protected errorOf(control: AbstractControl): FieldError | null;
     protected errorText(error: FieldError, label: string): string;
-    protected search(event: Event): void;
     protected isRequired(definition: NxsEditorFieldType): boolean;
     protected inputType(definition: NxsEditorFieldType): 'number' | 'text';
     protected step(definition: NxsEditorFieldType): string | null;
     protected readOnlyText(control: AbstractControl): string;
-    protected flatOptions(directory: string): readonly DirectoryEntry[];
-    protected groupedOptions(directory: string): ReturnType<typeof groupL10nChildrenByParent>;
-    protected usesL10n(directory: string): boolean;
-    protected vocabularyLabel(directory: string, id: unknown): string;
     protected listValue(control: AbstractControl): readonly unknown[];
-    protected panelToggled(): void;
-    protected clearValue(control: AbstractControl, multiple: boolean): void;
     protected removeItem(control: AbstractControl, index: number): void;
     protected addItem(control: AbstractControl, definition: NxsEditorFieldType, event: MatChipInputEvent): void;
     protected addComplexItem(control: AbstractControl, definition: NxsEditorFieldType, depth: number): void;
@@ -1640,6 +1771,7 @@ class NxsPagerComponent {
     }
 }
 class NxsPermissionsPanelComponent {
+    protected datesValid(): boolean;
     readonly documentId: import("@angular/core").InputSignal<string>;
     readonly permissionsChanged: import("@angular/core").InputSignal<(() => void) | null>;
     readonly offer: import("@angular/core").InputSignal<"all" | "type">;
@@ -1662,8 +1794,6 @@ class NxsPermissionsPanelComponent {
     protected readonly editorDated: import("@angular/core").WritableSignal<boolean>;
     protected readonly editorBegin: import("@angular/core").WritableSignal<Date | null>;
     protected readonly editorEnd: import("@angular/core").WritableSignal<Date | null>;
-    protected readonly editorBeginField: import("@angular/core").Signal<unknown>;
-    protected readonly editorEndField: import("@angular/core").Signal<unknown>;
     protected readonly editorSubmitted: import("@angular/core").WritableSignal<boolean>;
     protected readonly suggestions: import("@angular/core").WritableSignal<UserGroupSuggestion[]>;
     protected readonly loadErrorKey: import("@angular/core").Signal<string>;
@@ -1696,7 +1826,6 @@ class NxsPermissionsPanelComponent {
     protected closeEditor(): void;
     protected onPrincipalInput(value: string): void;
     protected onPrincipalSelected(suggestion: UserGroupSuggestion): void;
-    protected fieldDay(value: unknown): Date | null;
     protected displaySuggestion(suggestion: UserGroupSuggestion | string | null): string;
     protected applyEditor(): void;
     protected save(): void;
@@ -2018,6 +2147,7 @@ class NxsSearchFiltersComponent {
     protected clearFulltext(): void;
     protected addChoice(field: ChoiceField, value: string): void;
     protected removeChoice(field: ChoiceField, value: string): void;
+    protected chipItems(field: ChoiceField, values: readonly string[]): NxsChipItem[];
     protected onCollectionsFocus(): void;
     protected onTagInput(value: string): void;
     protected resetFilters(): void;
@@ -2047,6 +2177,7 @@ class NxsSearchFiltersComponent {
     }
 }
 class NxsShareExternalDialogComponent {
+    protected datesValid(): boolean;
     protected readonly rights: readonly string[];
     protected readonly mailHint = "permissions.notification.mail-hint";
     protected readonly email: import("@angular/core").WritableSignal<string>;
@@ -2054,8 +2185,6 @@ class NxsShareExternalDialogComponent {
     protected readonly right: import("@angular/core").WritableSignal<string>;
     protected readonly begin: import("@angular/core").WritableSignal<Date | null>;
     protected readonly end: import("@angular/core").WritableSignal<Date | null>;
-    protected readonly beginField: import("@angular/core").Signal<unknown>;
-    protected readonly endField: import("@angular/core").Signal<unknown>;
     protected readonly comment: import("@angular/core").WritableSignal<string>;
     protected readonly saving: import("@angular/core").WritableSignal<"another" | "create" | null>;
     protected readonly emailValid: import("@angular/core").Signal<boolean>;
@@ -2064,7 +2193,6 @@ class NxsShareExternalDialogComponent {
     protected readonly valid: import("@angular/core").Signal<boolean>;
     constructor();
     protected label(permission: string): string;
-    protected fieldDay(value: unknown): Date | null;
     protected cancel(): void;
     protected create(another: boolean): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsShareExternalDialogComponent, never>;
@@ -2380,6 +2508,7 @@ interface NxsToolbarAction {
     }
 }
 class NxsUpdatePermissionDialogComponent {
+    protected datesValid(): boolean;
     protected readonly id: string;
     protected readonly external: boolean;
     protected readonly principal: string;
@@ -2389,15 +2518,12 @@ class NxsUpdatePermissionDialogComponent {
     protected readonly dated: import("@angular/core").WritableSignal<boolean>;
     protected readonly begin: import("@angular/core").WritableSignal<Date | null>;
     protected readonly end: import("@angular/core").WritableSignal<Date | null>;
-    protected readonly beginField: import("@angular/core").Signal<unknown>;
-    protected readonly endField: import("@angular/core").Signal<unknown>;
     protected readonly notify: import("@angular/core").WritableSignal<boolean>;
     protected readonly comment: import("@angular/core").WritableSignal<string>;
     protected readonly saving: import("@angular/core").WritableSignal<boolean>;
     protected readonly endBeforeBegin: import("@angular/core").Signal<boolean>;
     protected readonly valid: import("@angular/core").Signal<boolean>;
     protected label(permission: string): string;
-    protected fieldDay(value: unknown): Date | null;
     protected update(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsUpdatePermissionDialogComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsUpdatePermissionDialogComponent, "nxs-update-permission-dialog", never, {}, {}, never, never, true, never>;
@@ -2407,6 +2533,15 @@ interface NxsUpdatePermissionDialogData {
     readonly documentUid: string;
     readonly ace: NuxeoAce;
     readonly permissions?: readonly string[] | null;
+    }
+}
+interface NxsUploadInputs {
+    readonly label: InputSignal<string>;
+    readonly buttonLabel: InputSignal<string>;
+    readonly multiple: InputSignalWithTransform<boolean, unknown>;
+    readonly accept: InputSignal<string>;
+    readonly disabled: InputSignalWithTransform<boolean, unknown>;
+    readonly filesHandler: InputSignal<((files: readonly File[]) => void) | null>;
     }
 }
 interface NxsUploadItem {
@@ -2473,38 +2608,52 @@ class NxsUploadQueueComponent {
 type NxsUploadState = 'done' | 'failed' | 'staged' | 'uploading' | 'waiting';
 class NxsUserGroupPickerComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly label: import("@angular/core").InputSignal<string>;
+    readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly search: import("@angular/core").InputSignal<NxsPrincipalSearch>;
     readonly minChars: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly hint: import("@angular/core").InputSignal<string>;
     readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
-    readonly value: import("@angular/core").ModelSignal<NxsPrincipal | null>;
+    readonly value: import("@angular/core").ModelSignal<NxsPrincipal | readonly NxsPrincipal[] | null>;
+    protected readonly inputId: string;
     protected readonly text: import("@angular/core").WritableSignal<string>;
     protected readonly finder: NxsSearchAsYouType<NxsPrincipal>;
     protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly chosen: import("@angular/core").Signal<readonly NxsPrincipal[]>;
+    protected readonly options: import("@angular/core").Signal<NxsPrincipal[]>;
     protected readonly unmatched: import("@angular/core").Signal<boolean>;
     protected readonly errorState: {
     isErrorState: () => boolean;
     };
     protected readonly displayWith: (principal: NxsPrincipal | string | null) => string;
+    protected readonly pickerKind: 'document' | 'principal';
+    protected readonly minimumCharacters: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    protected readonly chosenItems: import("@angular/core").Signal<readonly NxsPickerItem<NxsPrincipal>[]>;
+    protected readonly optionItems: import("@angular/core").Signal<readonly NxsPickerOption<NxsPrincipal>[]>;
     constructor();
     ngDoCheck(): void;
     validate(control: AbstractControl): ValidationErrors | null;
     registerOnValidatorChange(fn: () => void): void;
     protected missing(): boolean;
-    writeValue(value: NxsPrincipal | null): void;
-    registerOnChange(fn: (value: NxsPrincipal | null) => void): void;
+    writeValue(value: NxsPrincipal | readonly NxsPrincipal[] | null): void;
+    registerOnChange(fn: (value: NxsPrincipal | readonly NxsPrincipal[] | null) => void): void;
     registerOnTouched(fn: () => void): void;
     setDisabledState(disabled: boolean): void;
     protected onInput(event: Event): void;
     protected choose(principal: NxsPrincipal | null): void;
     protected clear(): void;
-    protected blurred(): void;
+    protected remove(principal: NxsPrincipal): void;
+    protected blurred(event: FocusEvent): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsUserGroupPickerComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsUserGroupPickerComponent, "nxs-user-group-picker", never, {
     "label": {
     "alias": "label";
     "required": true;
+    "isSignal": true;
+    };
+    "multiple": {
+    "alias": "multiple";
+    "required": false;
     "isSignal": true;
     };
     "search": {
@@ -2548,6 +2697,7 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     readonly label: import("@angular/core").InputSignal<string>;
     readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly hint: import("@angular/core").InputSignal<string>;
+    readonly error: import("@angular/core").InputSignal<string>;
     readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly value: import("@angular/core").ModelSignal<string | readonly string[] | null>;
@@ -2599,6 +2749,11 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     "required": false;
     "isSignal": true;
     };
+    "error": {
+    "alias": "error";
+    "required": false;
+    "isSignal": true;
+    };
     "required": {
     "alias": "required";
     "required": false;
@@ -2617,6 +2772,14 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     }, {
     "value": "valueChange";
     }, never, never, true, never>;
+    }
+}
+class TranslatedDatepickerIntl extends MatDatepickerIntl {
+    constructor();
+    formatYearRange(start: string, end: string): string;
+    formatYearRangeLabel(start: string, end: string): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: string, params?: Record<string, unknown>) => string, locale: string): string;
@@ -4723,44 +4886,17 @@ class DocumentViewerComponent {
     }, never, never, true, never>;
     }
 }
-class EditCollectionDialogComponent implements OnInit {
-    readonly l10nEntryLabel: typeof l10nEntryLabel;
-    protected readonly directoryPickerLabel: typeof directoryPickerLabel;
-    expiresNgModel?: NgModel;
-    readonly natureEntries: import("@angular/core").WritableSignal<DirectoryEntry[]>;
-    readonly subjectEntries: import("@angular/core").WritableSignal<L10nDirectoryEntry[]>;
-    readonly coverageEntries: import("@angular/core").WritableSignal<L10nDirectoryEntry[]>;
+class EditCollectionDialogComponent {
+    protected form?: NgForm;
     readonly saving: import("@angular/core").WritableSignal<boolean>;
-    naturePanelSearch: string;
-    subjectsPanelSearch: string;
-    coveragePanelSearch: string;
-    filteredNatureOptions(): DirectoryEntry[];
-    groupedSubjectOptions(): ReturnType<typeof groupL10nChildrenByParent>;
-    groupedCoverageOptions(): ReturnType<typeof groupL10nChildrenByParent>;
     title: string;
     description: string;
     nature: string | null;
     subjects: string[];
     coverage: string | null;
     expires: Date | null;
-    expiresRawText: string;
-    readonly expiresErrorMatcher: {
-    isErrorState: () => boolean;
-    };
-    ngOnInit(): void;
-    onNaturePanelOpen(open: boolean): void;
-    naturePillLabel(id: string): string;
-    subjectPillLabel(id: string): string;
-    coveragePillLabel(id: string): string;
-    clearNature(): void;
-    clearCoverage(): void;
-    removeSubject(id: string): void;
-    onSubjectsPanelOpen(open: boolean): void;
-    onCoveragePanelOpen(open: boolean): void;
+    constructor();
     isExpiresValid(): boolean;
-    showExpiresError(): boolean;
-    onExpiresInput(event: Event): void;
-    onExpiresChange(value: Date | null): void;
     save(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<EditCollectionDialogComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<EditCollectionDialogComponent, "lib-edit-collection-dialog", never, {}, {}, never, never, true, never>;
@@ -4955,10 +5091,7 @@ interface StoryboardItem {
     }
 }
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
-class TranslatedDatepickerIntl extends MatDatepickerIntl {
-    constructor();
-    formatYearRange(start: string, end: string): string;
-    formatYearRangeLabel(start: string, end: string): string;
+class TranslatedDatepickerIntl extends TranslatedDatepickerIntl$1 {
     static ɵfac: i0.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }

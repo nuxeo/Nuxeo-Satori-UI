@@ -1733,6 +1733,35 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       component.removeSubject('cinema');
       expect(component.subjects).toEqual(['painting']);
     });
+
+    it('builds a removable chip per subject, labelled as the subject reads', async () => {
+      await createDialog();
+      component.subjects = ['cinema'];
+
+      expect(component.subjectChips()).toEqual([
+        expect.objectContaining({
+          id: 'cinema',
+          label: 'Art/Cinema',
+          removeLabel: expect.any(String),
+        }),
+      ]);
+    });
+
+    it('shows the nature and coverage as one chip each, and none when unset', async () => {
+      await createDialog();
+      expect(component.natureChips()).toEqual([]);
+      expect(component.coverageChips()).toEqual([]);
+
+      component.nature = 'contract';
+      component.coverage = 'tanzania';
+
+      expect(component.natureChips()).toEqual([
+        expect.objectContaining({ id: 'contract', label: component.naturePillLabel('contract') }),
+      ]);
+      expect(component.coverageChips()).toEqual([
+        expect.objectContaining({ id: 'tanzania', label: component.coveragePillLabel('tanzania') }),
+      ]);
+    });
   });
 
   describe('display helpers', () => {
@@ -2422,7 +2451,9 @@ describe('CreateImportDialogComponent Expires typed into the real field', () => 
     fixture.componentInstance.startCreateFromType(pictureType());
     fixture.detectChanges();
     await fixture.whenStable();
-    const input = fixture.nativeElement.querySelector('input[name="expires"]') as HTMLInputElement;
+    const input = fixture.nativeElement.querySelector(
+      'nxs-date-input[name="expires"] input',
+    ) as HTMLInputElement;
 
     expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
     expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
@@ -2435,7 +2466,7 @@ describe('CreateImportDialogComponent Expires typed into the real field', () => 
     fixture.detectChanges();
     await fixture.whenStable();
     const input = fixture.nativeElement.querySelector(
-      'input[name="importExpires"]',
+      'nxs-date-input[name="importExpires"] input',
     ) as HTMLInputElement;
 
     expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);

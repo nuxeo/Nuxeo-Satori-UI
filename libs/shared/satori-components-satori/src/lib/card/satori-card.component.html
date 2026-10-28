@@ -1,0 +1,56 @@
+<sat-interactive-card
+  class="nxs-satori-card__surface"
+  [active]="selected()"
+  [border]="interactive()"
+>
+  @if (hasCorner()) {
+    <div class="nxs-satori-card__corner" satInteractiveCardHeaderAction>
+      @if (selectable()) {
+        <!-- The checkbox stops its own click, as the search and browse lists' checkboxes do: Satori's
+             card forwards a click it does not recognise to the heading, and Material hands it a
+             `<div>` touch target as often as the `<input>`, so without this a press on the box would
+             tick it and open the document. -->
+        <mat-checkbox
+          class="nxs-satori-card__select"
+          [checked]="selected()"
+          [aria-label]="label()"
+          (click)="$event.stopPropagation()"
+          (change)="toggle($event.checked)"
+        />
+      }
+      @if (headerAction(); as headerActionTemplate) {
+        <ng-container [ngTemplateOutlet]="headerActionTemplate" />
+      }
+    </div>
+  }
+  @if (openHandler()) {
+    <button
+      type="button"
+      class="nxs-satori-card__heading nxs-satori-card__open"
+      satInteractiveCardTitle
+      [title]="heading()"
+      (click)="open()"
+    >
+      {{ heading() }}
+    </button>
+  } @else {
+    <span class="nxs-satori-card__heading" satInteractiveCardTitle [title]="heading()">{{
+      heading()
+    }}</span>
+  }
+  @if (ownSubheading(); as text) {
+    <span class="nxs-satori-card__subheading" satInteractiveCardSubtitle [title]="text">{{
+      text
+    }}</span>
+  }
+  @if (media(); as mediaTemplate) {
+    <sat-interactive-card-content class="nxs-satori-card__media">
+      <ng-container [ngTemplateOutlet]="mediaTemplate" />
+    </sat-interactive-card-content>
+  }
+  @if (actions(); as actionsTemplate) {
+    <sat-interactive-card-actions class="nxs-satori-card__actions">
+      <ng-container [ngTemplateOutlet]="actionsTemplate" />
+    </sat-interactive-card-actions>
+  }
+</sat-interactive-card>

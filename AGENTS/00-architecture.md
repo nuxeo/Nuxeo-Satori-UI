@@ -111,17 +111,22 @@ gate, also in CI):
 | `PLATFORM_ENTRY_POINTS` in `libs/platform/src/index.ts` lists exactly the subpaths a `libs/platform/<subpath>/ng-package.json` publishes                                                                                                                                                                                                                                                                                                                                          | `checkPlatformEntryPointsListed`           |
 | Every Storybook `<Source>` code sample under `libs/` and `apps/` parses and is formatted as Prettier formats its language, and no inline sample has an indented continuation line, which MDX strips                                                                                                                                                                                                                                                                               | `checkMdxCodeSamplesFormatted`             |
 
-**Satori if available, Material otherwise — by ID** (plan section 3). Nine primitives overlap with
-Satori: avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs, the action bar and the
-card. `/components` implements each on Material — the tabs as `nxs-tabs` and the action bar as
-`nxs-document-toolbar` — and `provideNxsComponents()` registers them as `nxs.primitives.*`
-(`NXS_PRIMITIVE_IDS`). The error state's Satori version comes from
+**Satori if available, Material otherwise — by ID** (plan section 3). Thirteen primitives are
+registered by ID, and eleven of them overlap with Satori: avatar, breadcrumbs, tag, status tag, rich
+tooltip, error state, tabs, the action bar, the card, the empty state and the upload. The banner and
+the chip set have no Satori twin yet. `/components` implements each on Material — the tabs as
+`nxs-tabs` and the action bar as `nxs-document-toolbar` — and `provideNxsComponents()` registers
+them as `nxs.primitives.*` (`NXS_PRIMITIVE_IDS`). The error state's Satori version comes from
 `@hylandsoftware/satori-ui/empty-state` rather than an entry point named after it, as
-`sat-401-error-state` through `sat-500-error-state`.
+`sat-401-error-state` through `sat-500-error-state`; the card's comes from
+`@hylandsoftware/satori-ui/interactive-card`, and the upload's from
+`@hylandsoftware/satori-ui/upload-field` rather than `/upload`, whose drag overlay carries an
+untranslated literal.
 `@nuxeo/satori-platform/components-satori` — its own project,
-`libs/shared/satori-components-satori`, same tags — re-registers all but the card on Satori with
-`provideNxsSatoriComponents()`; until Satori's interactive card is wrapped, `nxs.primitives.card`
-renders the Material `nxs-card` either way. Both go through
+`libs/shared/satori-components-satori`, same tags — re-registers all but `banner` and `chipSet` on
+Satori with `provideNxsSatoriComponents()`; until their Satori twins are written,
+`nxs.primitives.banner` and `nxs.primitives.chipSet` render the Material components either way.
+Both go through
 `provideSatoriExtensions`, so later wins: the app lists both in that order, and an application
 without GitHub Packages access lists only the first. Each pair implements one `Nxs…Inputs`
 interface and a spec compares their declared inputs, so `componentInputs` mean the same thing
@@ -136,6 +141,22 @@ primitive that needs a callback or a template takes it as an input: the error st
 card's open and selection handlers and its thumbnail and action templates. The base library's value
 unions (`NxsAvatarColor` and the rest) are asserted equal to Satori's at compile time in
 `/components-satori`, since `/components` may not import Satori to check.
+
+**Picker selection modes (NXSAT-656).** `nxs-user-group-picker` and
+`nxs-document-reference-input` accept `multiple`, matching `nxs-vocabulary-select`: the same
+`value` model and form accessor carry ordered arrays in multiple mode and scalar/null values in
+single mode. Material chip grids own keyboard focus and removal; pending text remains a
+`nxsChooseFromList` error even alongside selected chips. Principal identity is `prefixedId`;
+document identity follows `idProperty`. Unreadable stored document references remain selected.
+`documentChange` continues to report an individual selection or null; use `valueChange` for
+all ids. Each picker's `MultipleFromTheKeyboard` story runs the keyboard path in Chromium with no
+mouse, starting with focus placed in the input: choosing with ↓ and Enter, Backspace into the chips,
+arrows across chips and remove buttons, Backspace/Delete/Enter removal, where focus lands after each
+removal, and no required error until focus leaves. Keys are dispatched events carrying `keyCode`, as
+Material reads it; Tab order is Material's and no story asserts it. A picker reports leaving
+(`onTouched`) when focus leaves its host, not its input, so chip-only edits reach `updateOn: 'blur'`.
+Focus lost for nowhere counts only if it has not come back a task later, because Chromium reports a
+focused chip's removal that way before Material refocuses its neighbour.
 
 **Storybook 10** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
 <https://nuxeo.github.io/agentic-ui-poc/>. Each component has an Overview, an API page and its

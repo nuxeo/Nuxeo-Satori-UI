@@ -28,7 +28,7 @@
  *   npm run docs:satori-comparison:capture -- --storybooks <dir>   # reuse a kept build
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawnToolSync } from '../beta-harness/package-command.mjs';
 import { createHash } from 'node:crypto';
 import {
   createReadStream,
@@ -159,7 +159,7 @@ function buildStorybooks() {
     const started = Date.now();
     process.stdout.write(`  build  ${name.padEnd(12)} ${target} (${label}) … `);
     const log = join(OUT, `build-${name}.log`);
-    const res = spawnSync(
+    const res = spawnToolSync(
       'npx',
       ['nx', 'run', target, `--outputDir=${join(dir, name)}`, '--skip-nx-cache'],
       {
@@ -615,9 +615,48 @@ try {
       const url = `${base}/${h.book}/iframe.html?id=${h.story}&viewMode=story`;
       try {
         const { errors, iconFont } = await open(page, url, h.selector);
+        // Grow the viewport until the documented element fits, before anything measures or crops
+        // it. `crop()` clamps to the viewport, so an element below the fold comes out truncated —
+        // or, if it starts below the fold entirely, with a negative clip height. A component whose
+        // story shows it alone already fits, and `fitViewport` returns without touching anything in
+        // that case, so this changes no existing capture; it matters for a section whose story
+        // renders several components, where the documented one can be last. The card's is.
+        const fitted = await fitViewport(page, [h.selector]);
+        // Every edge, not just the bottom. `crop()` clamps to the viewport on both axes, so a
+        // target wider than it comes out cut off horizontally while a bottom-only predicate still
+        // certifies "the whole element" — and a negative `top` or `left`, which is what a target
+        // scrolled partly above the fold has, passed that predicate too. `fitViewport` can only
+        // grow the height, so a width overflow is reported rather than fixed: it means the story
+        // renders the component wider than 1280px and the story is what has to change.
+        const vp = () => page.viewportSize();
+        const clipped = fitted.filter(
+          (b) =>
+            !b.ok ||
+            b.top < 0 ||
+            b.left < 0 ||
+            b.bottom > vp().height + 1 ||
+            b.right > vp().width + 1,
+        );
+        record(
+          subject,
+          `<${h.selector}> fits the viewport, so the crop is the whole element`,
+          fitted.length > 0 && clipped.length === 0,
+          clipped.length
+            ? clipped.map((b) => `${b.sel}: ${b.why ?? 'outside the capture'}`).join(', ')
+            : `viewport ${vp().width}×${vp().height}`,
+        );
         let opened = null;
         if (c.captured === 'Opened from the keyboard')
           opened = await openFromKeyboard(page, h.selector);
+        // Measured and cropped in viewport coordinates, so a component below the fold has to be
+        // scrolled to first. The "By registered ID" story is a grid of every primitive and is
+        // taller than any viewport: without this, its lower entries produced a zero-height clip
+        // and the run reported a failed capture for a component that had rendered perfectly well.
+        await page
+          .locator(h.selector)
+          .first()
+          .scrollIntoViewIfNeeded()
+          .catch(() => undefined); // not every selector is a single element; the box check below reports it
         const seen = await inspect(page, h.selector);
         await isolate(page, h.selector);
         const file = join(OUT, 'raw', `${slug}-${side}.png`);
@@ -732,7 +771,12 @@ try {
   // The "Primitives/By registered ID" story in both Storybooks: the whole viewport, as it renders,
   // and a close-up of every primitive together for the side-by-side.
   const full = {};
-  // One host per `NXS_PRIMITIVE_IDS` entry, in the story's order; the story renders each ID once.
+  // One host per ID the "Primitives/By registered ID" story renders, in the story's order — not one
+  // per `NXS_PRIMITIVE_IDS` entry, which is a longer list: `banner` and `chipSet` are registered but
+  // have no Satori twin, so the story leaves them out and this is the set with two sides to compare.
+  // `primitiveCount` below is this length, and the count check further down asserts the story
+  // resolved exactly this many `nxs-satori-*` hosts — so an ID added to the story without being
+  // added here fails that check rather than being quietly cropped out of the screenshots.
   const PRIMITIVE_HOSTS = {
     without: [
       'nxs-avatar',
@@ -743,6 +787,9 @@ try {
       'nxs-error-state',
       'nxs-tabs',
       'nxs-document-toolbar',
+      'nxs-card',
+      'nxs-empty-state',
+      'nxs-dropzone',
     ],
     with: [
       'nxs-satori-avatar',
@@ -753,6 +800,9 @@ try {
       'nxs-satori-error-state',
       'nxs-satori-tabs',
       'nxs-satori-action-bar',
+      'nxs-satori-card',
+      'nxs-satori-empty-state',
+      'nxs-satori-upload',
     ],
   };
   const primitiveCount = PRIMITIVE_HOSTS.with.length;

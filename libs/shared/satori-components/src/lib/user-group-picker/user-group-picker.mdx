@@ -10,6 +10,10 @@ The user and group picker is a field that finds a user or a group as the user ty
 one chosen. It is the field behind adding a permission, sharing a saved search and assigning a task,
 as Web UI's `nuxeo-user-suggestion` is. Use it wherever a screen needs one principal that Nuxeo knows.
 
+With `multiple`, choose several users and groups as chips. Each selection
+stays while searching for the next; already selected entries are excluded from the suggestions.
+If every match is already selected, the list shows the translated, non-selectable "No results" status.
+
 ## Key features
 
 - **Searches as you type, as Web UI does.** From three characters, 300 milliseconds after the last
@@ -55,6 +59,22 @@ clear button's name are translated with ngx-translate, under `satori-components.
 `satori-components.user-group-picker.*`; `providePlatformEnglishFallback()` supplies the English. It
 has no registered ID: place it in a template by its selector.
 
+### Multiple values
+
+Set `multiple` and bind an array: `readonly NxsPrincipal[]` through
+`value` or the form control. Selection order is preserved, duplicates are excluded, and removing
+the last chip emits `[]`. Without `multiple`, the value remains one principal or
+`null`. Typing an unselected term is an `nxsChooseFromList` error in either mode, even when
+other chips are selected. Resetting the form replaces all chips and clears the pending query.
+Changing `multiple` refreshes the displayed selection and clears any pending query without
+emitting a value change. There is no limit on how many entries can be chosen.
+
+<Canvas of={PickerStories.Multiple} />
+
+<Canvas of={PickerStories.MultipleFromTheKeyboard} />
+
+<Canvas of={PickerStories.MultipleDisabled} />
+
 ## Where its data comes from
 
 For users and groups together the picker runs Nuxeo's `UserGroup.Suggestion` operation, as Web UI
@@ -97,4 +117,12 @@ carries the application's sign-in, so the server decides whom the user may see.
   politely. The hint for too few characters is the field's description.
 - **Errors.** Once the field is left, an empty required field and text that was not chosen show an
   error under it, linked to the input.
+- **Multiple chips, from the keyboard alone.** The field label names the text input. **Backspace**
+  in the empty input moves focus to the last chip; with text typed it does not reach the chips.
+  **Left/Right** step through each chip and then its remove button; **Up/Down** move between chips.
+  **Backspace** or **Delete** removes the focused chip, as does **Enter** on its remove button.
+  Focus then moves to the chip that took its place — the next one, or the previous one when the last
+  was removed — and to the input once no chip is left. Each remove button is named "Remove" followed
+  by the entry label. Disabling the form also disables the input and chip removal. The keyboard
+  story below runs all of this in the browser.
 - **Clear.** The x button that removes the choice is named "Clear".

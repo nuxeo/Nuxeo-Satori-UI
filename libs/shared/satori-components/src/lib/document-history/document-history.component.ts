@@ -1,8 +1,8 @@
+import { NxsDateInputComponent } from '../date-input/date-input.component';
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatPaginatorModule, type PageEvent } from '@angular/material/paginator';
@@ -31,7 +31,6 @@ import {
 } from 'rxjs';
 
 import { NxsAvatarComponent } from '../avatar/avatar.component';
-import { NxsDateMaskPipe } from '../date-input/date-mask.pipe';
 import { provideNxsDateAdapter } from '../date-input/locale-date';
 import { NxsEmptyStateComponent } from '../empty-state/empty-state.component';
 import { NxsErrorStateComponent } from '../error-state/error-state.component';
@@ -113,10 +112,9 @@ function readable(entry: DirectoryEntry, fallback: (id: string) => string): stri
   styleUrl: './document-history.component.scss',
   providers: [provideNxsDateAdapter()],
   imports: [
-    NxsDateMaskPipe,
+    NxsDateInputComponent,
     DatePipe,
     FormsModule,
-    MatDatepickerModule,
     MatFormFieldModule,
     MatInputModule,
     MatPaginatorModule,

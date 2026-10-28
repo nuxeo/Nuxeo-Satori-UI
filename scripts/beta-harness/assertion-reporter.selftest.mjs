@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync } from './package-command.mjs';
+
 /**
  * Negative controls for `apps/nuxeo-ui-e2e/assertion-failure-reporter.ts`.
  *
@@ -37,7 +39,6 @@
  * Exit 1 if any expectation is unmet.
  */
 
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -49,7 +50,7 @@ const outputFile = resolve(repoRoot, 'dist/e2e/assertion-reporter-selftest/out.j
 
 rmSync(outputFile, { force: true });
 
-const run = spawnSync('npx', ['playwright', 'test', '-c', configFile], {
+const run = spawnToolSync('npx', ['playwright', 'test', '-c', configFile], {
   cwd: repoRoot,
   encoding: 'utf8',
   env: { ...process.env },

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync } from './beta-harness/package-command.mjs';
+
 /**
  * Does `SATORI_GH_READONLY_TOKEN` still install every GitHub Packages dependency — today, from the
  * registry, with nothing cached?
@@ -35,7 +37,6 @@
  *   SATORI_GH_READONLY_TOKEN=… node scripts/registry-auth-check.mjs
  */
 
-import { spawnSync } from 'node:child_process';
 import {
   appendFileSync,
   cpSync,
@@ -132,7 +133,7 @@ function npm(args, cwd, token, scratch) {
     npm_config_globalconfig: globalconfig,
     npm_config_update_notifier: 'false',
   });
-  const run = spawnSync('npm', args, {
+  const run = spawnToolSync('npm', args, {
     cwd,
     env,
     encoding: 'utf8',

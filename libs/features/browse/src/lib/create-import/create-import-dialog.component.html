@@ -119,10 +119,12 @@
               }
             </div>
             @if (locationRestricted()) {
-              <p class="location-hint" role="alert">
-                <span class="location-hint-bar" aria-hidden="true"></span>
-                {{ importLocationHint() | translate }}
-              </p>
+              <nxs-banner
+                class="location-hint"
+                tone="error"
+                announce="alert"
+                [message]="importLocationHint() | translate"
+              />
             }
           </div>
 
@@ -341,10 +343,12 @@
                   }
                 </div>
                 @if (locationRestricted()) {
-                  <p class="location-hint" role="alert">
-                    <span class="location-hint-bar" aria-hidden="true"></span>
-                    {{ importLocationHint() | translate }}
-                  </p>
+                  <nxs-banner
+                    class="location-hint"
+                    tone="error"
+                    announce="alert"
+                    [message]="importLocationHint() | translate"
+                  />
                 }
               </div>
 
@@ -457,23 +461,7 @@
                   (selectionChange)="natureSelect.close()"
                 >
                   <mat-select-trigger>
-                    @if (nature; as natureId) {
-                      <mat-chip-set class="subjects-trigger-chips">
-                        <mat-chip (removed)="clearNature()">
-                          {{ naturePillLabel(natureId) }}
-                          <button
-                            type="button"
-                            matChipRemove
-                            [attr.aria-label]="
-                              'shared.remove-item' | translate: { name: naturePillLabel(natureId) }
-                            "
-                            (click)="$event.stopPropagation(); clearNature()"
-                          >
-                            <mat-icon svgIcon="circle_x" />
-                          </button>
-                        </mat-chip>
-                      </mat-chip-set>
-                    }
+                    <ng-container *ngTemplateOutlet="natureChip" />
                   </mat-select-trigger>
                   <div class="vocab-panel__search">
                     <input
@@ -506,23 +494,7 @@
                   (openedChange)="onSubjectsPanelOpen($event)"
                 >
                   <mat-select-trigger>
-                    <mat-chip-set class="subjects-trigger-chips">
-                      @for (id of subjects; track id) {
-                        <mat-chip (removed)="removeSubject(id)">
-                          {{ subjectPillLabel(id) }}
-                          <button
-                            type="button"
-                            matChipRemove
-                            [attr.aria-label]="
-                              'shared.remove-item' | translate: { name: subjectPillLabel(id) }
-                            "
-                            (click)="$event.stopPropagation()"
-                          >
-                            <mat-icon svgIcon="circle_x" />
-                          </button>
-                        </mat-chip>
-                      }
-                    </mat-chip-set>
+                    <ng-container *ngTemplateOutlet="subjectsChip" />
                   </mat-select-trigger>
                   <div class="vocab-panel__search">
                     <input
@@ -562,24 +534,7 @@
                   (selectionChange)="coverageSelect.close()"
                 >
                   <mat-select-trigger>
-                    @if (coverage; as coverageId) {
-                      <mat-chip-set class="subjects-trigger-chips">
-                        <mat-chip (removed)="clearCoverage()">
-                          {{ coveragePillLabel(coverageId) }}
-                          <button
-                            type="button"
-                            matChipRemove
-                            [attr.aria-label]="
-                              'shared.remove-item'
-                                | translate: { name: coveragePillLabel(coverageId) }
-                            "
-                            (click)="$event.stopPropagation(); clearCoverage()"
-                          >
-                            <mat-icon svgIcon="circle_x" />
-                          </button>
-                        </mat-chip>
-                      </mat-chip-set>
-                    }
+                    <ng-container *ngTemplateOutlet="coverageChip" />
                   </mat-select-trigger>
                   <div class="vocab-panel__search">
                     <input
@@ -605,32 +560,15 @@
                 </mat-select>
               </mat-form-field>
 
-              <mat-form-field
-                appearance="outline"
-                subscriptSizing="dynamic"
+              <nxs-date-input
                 class="full-width"
-                [class.expires-field-invalid]="showExpiresError()"
-              >
-                <mat-label>{{ 'browse.create-import-dialog.expires' | translate }}</mat-label>
-                <input
-                  matInput
-                  name="expires"
-                  [matDatepicker]="expiresPicker"
-                  [ngModel]="expires"
-                  [errorStateMatcher]="expiresErrorMatcher"
-                  (ngModelChange)="onExpiresChange($event)"
-                  (input)="onExpiresInput($event)"
-                  #expiresInput="ngModel"
-                  [placeholder]="'common.date-mask' | translate | dateMask"
-                />
-                <mat-datepicker-toggle matIconSuffix [for]="expiresPicker" />
-                <mat-datepicker #expiresPicker />
-                @if (showExpiresError()) {
-                  <mat-error>{{
-                    'browse.create-import-dialog.enter-a-valid-date' | translate
-                  }}</mat-error>
-                }
-              </mat-form-field>
+                [label]="'browse.create-import-dialog.expires' | translate"
+                name="expires"
+                [ngModel]="expires"
+                (ngModelChange)="onExpiresChange($event)"
+                (input)="onExpiresInput($event)"
+                #expiresInput="ngModel"
+              />
             </div>
           }
         }
@@ -703,24 +641,7 @@
                       (selectionChange)="importNatureSelect.close()"
                     >
                       <mat-select-trigger>
-                        @if (nature; as natureId) {
-                          <mat-chip-set class="subjects-trigger-chips">
-                            <mat-chip (removed)="clearNature()">
-                              {{ naturePillLabel(natureId) }}
-                              <button
-                                type="button"
-                                matChipRemove
-                                [attr.aria-label]="
-                                  'shared.remove-item'
-                                    | translate: { name: naturePillLabel(natureId) }
-                                "
-                                (click)="$event.stopPropagation(); clearNature()"
-                              >
-                                <mat-icon svgIcon="circle_x" />
-                              </button>
-                            </mat-chip>
-                          </mat-chip-set>
-                        }
+                        <ng-container *ngTemplateOutlet="natureChip" />
                       </mat-select-trigger>
                       <div class="vocab-panel__search">
                         <input
@@ -755,23 +676,7 @@
                       (openedChange)="onSubjectsPanelOpen($event)"
                     >
                       <mat-select-trigger>
-                        <mat-chip-set class="subjects-trigger-chips">
-                          @for (id of subjects; track id) {
-                            <mat-chip (removed)="removeSubject(id)">
-                              {{ subjectPillLabel(id) }}
-                              <button
-                                type="button"
-                                matChipRemove
-                                [attr.aria-label]="
-                                  'shared.remove-item' | translate: { name: subjectPillLabel(id) }
-                                "
-                                (click)="$event.stopPropagation()"
-                              >
-                                <mat-icon svgIcon="circle_x" />
-                              </button>
-                            </mat-chip>
-                          }
-                        </mat-chip-set>
+                        <ng-container *ngTemplateOutlet="subjectsChip" />
                       </mat-select-trigger>
                       <div class="vocab-panel__search">
                         <input
@@ -811,24 +716,7 @@
                       (selectionChange)="importCoverageSelect.close()"
                     >
                       <mat-select-trigger>
-                        @if (coverage; as coverageId) {
-                          <mat-chip-set class="subjects-trigger-chips">
-                            <mat-chip (removed)="clearCoverage()">
-                              {{ coveragePillLabel(coverageId) }}
-                              <button
-                                type="button"
-                                matChipRemove
-                                [attr.aria-label]="
-                                  'shared.remove-item'
-                                    | translate: { name: coveragePillLabel(coverageId) }
-                                "
-                                (click)="$event.stopPropagation(); clearCoverage()"
-                              >
-                                <mat-icon svgIcon="circle_x" />
-                              </button>
-                            </mat-chip>
-                          </mat-chip-set>
-                        }
+                        <ng-container *ngTemplateOutlet="coverageChip" />
                       </mat-select-trigger>
                       <div class="vocab-panel__search">
                         <input
@@ -854,31 +742,14 @@
                     </mat-select>
                   </mat-form-field>
 
-                  <mat-form-field
-                    appearance="outline"
-                    subscriptSizing="dynamic"
+                  <nxs-date-input
                     class="full-width"
-                    [class.expires-field-invalid]="showExpiresError()"
-                  >
-                    <mat-label>{{ 'browse.create-import-dialog.expires' | translate }}</mat-label>
-                    <input
-                      matInput
-                      name="importExpires"
-                      [matDatepicker]="importExpiresPicker"
-                      [ngModel]="expires"
-                      [errorStateMatcher]="expiresErrorMatcher"
-                      (ngModelChange)="onExpiresChange($event)"
-                      (input)="onExpiresInput($event)"
-                      [placeholder]="'common.date-mask' | translate | dateMask"
-                    />
-                    <mat-datepicker-toggle matIconSuffix [for]="importExpiresPicker" />
-                    <mat-datepicker #importExpiresPicker />
-                    @if (showExpiresError()) {
-                      <mat-error>{{
-                        'browse.create-import-dialog.enter-a-valid-date' | translate
-                      }}</mat-error>
-                    }
-                  </mat-form-field>
+                    [label]="'browse.create-import-dialog.expires' | translate"
+                    name="importExpires"
+                    [ngModel]="expires"
+                    (ngModelChange)="onExpiresChange($event)"
+                    (input)="onExpiresInput($event)"
+                  />
                 </div>
               }
 
@@ -1073,3 +944,31 @@
     </mat-dialog-actions>
   }
 </div>
+
+<ng-template #natureChip>
+  @if (nature) {
+    <nxs-chip-set
+      class="subjects-trigger-chips"
+      [items]="natureChips()"
+      (removed)="clearNature()"
+    />
+  }
+</ng-template>
+
+<ng-template #coverageChip>
+  @if (coverage) {
+    <nxs-chip-set
+      class="subjects-trigger-chips"
+      [items]="coverageChips()"
+      (removed)="clearCoverage()"
+    />
+  }
+</ng-template>
+
+<ng-template #subjectsChip>
+  <nxs-chip-set
+    class="subjects-trigger-chips"
+    [items]="subjectChips()"
+    (removed)="removeSubject($event.id)"
+  />
+</ng-template>

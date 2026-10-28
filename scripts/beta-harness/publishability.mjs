@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { execToolSync } from './package-command.mjs';
+
 /**
  * Asserts that `@nuxeo/satori-platform` **can actually be published**.
  *
@@ -68,7 +70,6 @@
  * in `dist/` is still refused by npm.
  */
 
-import { execFileSync } from 'node:child_process';
 import {
   cpSync,
   existsSync,
@@ -396,8 +397,10 @@ for (const name of [...satoriImporters].filter((name) => name !== SATORI_IMPORTE
 }
 
 const SAT_TYPE = /\bSat[A-Z]\w*/g;
-const withoutComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-const satControl = '/** SatAvatar in a comment */\nexport declare function f(): SatAvatarCategory;\n';
+const withoutComments = (text) =>
+  text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const satControl =
+  '/** SatAvatar in a comment */\nexport declare function f(): SatAvatarCategory;\n';
 const rawControlHits = satControl.match(SAT_TYPE) ?? [];
 const strippedControlHits = withoutComments(satControl).match(SAT_TYPE) ?? [];
 if (rawControlHits.length !== 2 || strippedControlHits.join() !== 'SatAvatarCategory') {
@@ -447,7 +450,7 @@ try {
   writeFileSync(join(copy, 'package.json'), JSON.stringify(copied, null, 2));
 
   try {
-    execFileSync('npm', ['publish', '--dry-run', '--registry=https://registry.npmjs.org'], {
+    execToolSync('npm', ['publish', '--dry-run', '--registry=https://registry.npmjs.org'], {
       cwd: copy,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -659,7 +662,7 @@ try {
 
       var diagnostics = '';
       try {
-        execFileSync('npx', ['tsc', '-p', join(stage, 'tsconfig.json')], {
+        execToolSync('npx', ['tsc', '-p', join(stage, 'tsconfig.json')], {
           cwd: process.cwd(),
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],

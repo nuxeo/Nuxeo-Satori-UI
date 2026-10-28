@@ -2,6 +2,8 @@ export {
   NxsActionMenuComponent,
   type NxsMenuAction,
 } from './lib/action-menu/action-menu.component';
+export { NxsBannerComponent } from './lib/banner/banner.component';
+export { NxsChipSetComponent } from './lib/chip-set/chip-set.component';
 export {
   NxsColumnPickerComponent,
   type NxsPickableColumn,
@@ -150,8 +152,15 @@ export {
   type NxsAvatarInputs,
   type NxsAvatarSize,
   type NxsBreadcrumbItem,
+  type NxsBannerAction,
+  type NxsBannerAnnounce,
+  type NxsBannerInputs,
+  type NxsBannerTone,
+  type NxsChipItem,
+  type NxsChipSetInputs,
   type NxsBreadcrumbsInputs,
   type NxsCardInputs,
+  type NxsEmptyStateInputs,
   type NxsErrorStateInputs,
   type NxsRichTooltipInputs,
   type NxsStatusTagInputs,
@@ -159,6 +168,7 @@ export {
   type NxsTagColor,
   type NxsTagInputs,
   type NxsTagStatus,
+  type NxsUploadInputs,
 } from './lib/primitives';
 export { provideNxsComponents } from './lib/provide-nxs-components';
 export { nxsInitials, nxsVisibleText } from './lib/visible-text';
@@ -187,3 +197,5 @@ export {
 export { NxsSavedSearchActionsComponent } from './lib/saved-search-actions/saved-search-actions.component';
 export { NxsCardComponent } from './lib/card/card.component';
 // satori:export:components — `satori-component` inserts above this line
+
+export { TranslatedDatepickerIntl } from './lib/date-input/translated-datepicker-intl';

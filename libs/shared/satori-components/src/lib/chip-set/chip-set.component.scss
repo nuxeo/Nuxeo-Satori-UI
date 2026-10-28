@@ -1,0 +1,9 @@
+:host {
+  display: block;
+}
+
+// Fills the host, so a host that lays the set out as a flex row or wraps it still gets full width.
+mat-chip-set {
+  display: flex;
+  width: 100%;
+}

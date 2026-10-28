@@ -6,6 +6,31 @@ evidence capture with verification, and a re-runnable quality gate.
 Related: `AGENTS/11-beta-program.md` (phase gates, agent roster, model policy)
 and the `beta-phase` skill, which orchestrates both scripts.
 
+Package tools are launched through `package-command.mjs` without a shell on every OS.
+`spawnToolSync` returns a spawn-style error result when a tool cannot be resolved; invalid
+shell options still throw. Sanitizer audit registry keys use `/` even when discovery or
+TypeScript declarations supply Windows paths; filesystem operations retain native paths.
+The platform jobs use the runtime pinned in `.nvmrc`. The Windows workflow explicitly builds
+`nuxeo-ui` because an affected build need not select the application, whereas the bundle
+gate always requires its output.
+Both Windows verification and CodeQL run for PRs into `main` and `integration/**`. The
+Satori 1.0 branch was merged (NXSAT-673), so it is no longer a trigger.
+Document-detail tests use native worker console streams rather than Vitest 4's console
+RPC interception, which can reject a pending `onUserConsoleLog` during Windows teardown
+even when every assertion passes (upstream vitest-dev/vitest#11153). Warnings and errors
+remain visible; unhandled errors remain fatal. The Windows workflow runs
+`node --test scripts/beta-harness/windows-console.selftest.mjs` to verify console output,
+assertion failures and unhandled rejections before running the full gate.
+The assertion audit also canonicalizes report keys before applying the legacy story-runner
+scope exception; Windows separators must not impose the phase runner's identity contract
+on `scripts/collect-evidence/`. Constant-condition checks still apply to both runners.
+
+`npm run beta:e2e-negative-control` uses the portable Node runner (the `.sh` file is only
+a compatibility wrapper). It preserves separate baseline/starved reports and artifacts,
+sets `E2E_STARVE_APP=0/1` explicitly, disables retries, and delegates the data-sensitivity
+verdict to `vacuity-verdict.mjs`. Invalid credentials are not a useful perturbation because
+the identity guard fails before spec assertions run.
+
 ## How this differs from `scripts/collect-evidence/`
 
 |              | `collect-evidence/`              | `beta-harness/`                                    |

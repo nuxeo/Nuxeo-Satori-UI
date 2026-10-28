@@ -21,7 +21,6 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 let failures = 0;
 const ok = (name, condition, detail = '') => {
@@ -213,8 +212,9 @@ ok('a threshold of 5 is accepted', parseThreshold(5) === 5);
 
 const symlinkDir = mkdtempSync(join(tmpdir(), 'vacuity-verdict-selftest-'));
 try {
-  const symlinkPath = join(symlinkDir, 'vacuity-verdict.mjs');
-  symlinkSync(fileURLToPath(new URL('./vacuity-verdict.mjs', import.meta.url)), symlinkPath);
+  const directoryAlias = join(symlinkDir, 'harness');
+  symlinkSync(import.meta.dirname, directoryAlias, process.platform === 'win32' ? 'junction' : 'dir');
+  const symlinkPath = join(directoryAlias, 'vacuity-verdict.mjs');
   const run = spawnSync(process.execPath, [symlinkPath, '--check-threshold', '0'], {
     encoding: 'utf8',
   });
