@@ -99,17 +99,23 @@ export class NxsTagWrites {
     // The user is read through a plain function, so the only sign of a sign-out is the app's signal
     // changing under this effect. Each change ends the session, and with it every answer kept for
     // the session before, and every request still on its way: nothing from one session may be sent,
-    // shown, kept or answered under the next.
-    effect(() => {
-      this.user();
-      untracked(() => {
-        this.session.update((session) => session + 1);
-        this.unheard.clear();
-        this.known.clear();
-        this.queued.update((writes) => writes.filter((write) => write.session === this.session()));
-        this.sessionEnded.next();
-      });
-    });
+    // shown, kept or answered under the next. It runs in the toast injector, not the editor's, so an
+    // editor closing without the provider does not end it.
+    effect(
+      () => {
+        this.user();
+        untracked(() => {
+          this.session.update((session) => session + 1);
+          this.unheard.clear();
+          this.known.clear();
+          this.queued.update((writes) =>
+            writes.filter((write) => write.session === this.session()),
+          );
+          this.sessionEnded.next();
+        });
+      },
+      { injector: this.toastInjector },
+    );
     // When the provider goes, no change is taken any more, but those already made are still sent
     // and answered: completing the queue lets `concatMap` finish them, where unsubscribing would
     // cancel the one in flight and drop the rest.

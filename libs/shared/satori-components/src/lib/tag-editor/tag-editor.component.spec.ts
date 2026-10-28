@@ -725,6 +725,25 @@ describe('NxsTagEditorComponent', () => {
       expect(toastShow).not.toHaveBeenCalled();
     });
 
+    it('without provideNxsTagWrites, cancels a change of a closed editor when its user signs out', async () => {
+      await configure({ writes: false });
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      expect(added.observed).toBe(true);
+
+      user.set(null);
+      user.set('bob');
+      TestBed.flushEffects();
+
+      expect(added.observed).toBe(false);
+    });
+
     it('reads again on the next open when the read failed', async () => {
       const added = new Subject<string[]>();
       tags.addTag.mockReturnValueOnce(added);
