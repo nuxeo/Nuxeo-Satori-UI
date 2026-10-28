@@ -1139,6 +1139,50 @@ describe('BrowseComponent — rendered document list', () => {
    * stayed enabled and fell through to the *folder* — so clicking it edited something other than
    * the row the user had picked.
    */
+  /**
+   * The one case where a header control follows the selection rather than the folder.
+   *
+   * `openEditDialog()` edits the **current folder** for every selection except a single selected
+   * Collection, which gets its own dialog. So an unresolvable selection matters here and nowhere
+   * else: lose the collection from `entries()` and Edit silently becomes the folder's. This pins
+   * both halves — that it follows a selected collection, and that clearing the selection on a
+   * filter change leaves Edit meaning the folder because nothing is selected, not because the
+   * collection went missing.
+   */
+  it('keeps header Edit on a selected collection, and on the folder once it is deselected', async () => {
+    const collection = doc({
+      uid: 'col-1',
+      title: 'My Collection',
+      type: 'Collection',
+      facets: ['Collection'],
+    });
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [collection], totalSize: 1, serverFiltered: true }),
+    );
+    const component = await render();
+
+    component.onListSelectionChange(['col-1']);
+    await settle();
+    expect(component.singleSelectedEntry()?.uid).toBe('col-1');
+
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-9', title: 'Invoice' })],
+        totalSize: 1,
+        serverFiltered: true,
+      }),
+    );
+    component.filterText.set('invoice');
+    await settleFilter();
+
+    // Nothing selected, so Edit is the folder's — and `singleSelectedEntry()` is null because the
+    // selection went, not because a still-selected collection could not be found.
+    expect(TestBed.inject(SelectionService).selectedCount()).toBe(0);
+    expect(component.singleSelectedEntry()).toBeNull();
+    expect(component.showHeaderEdit()).toBe(component.canWriteCurrentDoc());
+  });
+
   it('clears a selection the filtered rows no longer contain', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({
