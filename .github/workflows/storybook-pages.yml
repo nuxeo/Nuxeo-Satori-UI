@@ -13,9 +13,13 @@ name: Storybook on GitHub Pages
 
 on:
   push:
-    # TODO(NXSAT-649): move this and the deploy job's `if:` to `main` once integration/nxsat-308
-    # merges into it. Storybook exists only on the integration branch until then.
-    branches: ['integration/nxsat-308']
+    # `main`, which is also Pages' own source. This and the deploy job's `if:` below name the
+    # branch twice and have to be changed together: the `if:` gates the deployment, so a stale
+    # one freezes the site silently — the build and the publication gate still pass, and
+    # nothing publishes, not even a `workflow_dispatch`. Other branches need no trigger here:
+    # ci.yml's `storybook` job runs this same token-free build and the same publication gate,
+    # so a change that would block the deployment fails its pull request first.
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -81,8 +85,9 @@ jobs:
 
   deploy:
     needs: build
-    # A dispatch from any other branch builds and gates without publishing.
-    if: github.ref == 'refs/heads/integration/nxsat-308'
+    # A dispatch from any other branch builds and gates without publishing. Keep this ref and
+    # the push trigger above the same branch.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       pages: write
