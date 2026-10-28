@@ -823,6 +823,7 @@ class NxsCommentsComponent {
     }
 }
 class NxsConfirmDialogComponent {
+    protected readonly cancelResult: undefined;
     protected readonly data: NxsConfirmDialogData;
     protected confirm(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsConfirmDialogComponent, never>;
