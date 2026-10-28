@@ -82,8 +82,8 @@ describe('BrowseComponent — Modified date range, rendered', () => {
             // `main` added this spec and the toolbar filters gained a folder scan on this
             // branch, so the mock needs the method the scan calls. EMPTY leaves the scan pending,
             // which keeps the filters on the loaded page exactly as this spec expects.
-            getAllBrowseFolderEntries: vi.fn(
-              (): ReturnType<BrowseService['getAllBrowseFolderEntries']> => EMPTY,
+            getBrowseFolderTypes: vi.fn(
+              (): ReturnType<BrowseService['getBrowseFolderTypes']> => EMPTY,
             ),
             getTrashedChildren: vi.fn(() => EMPTY),
           },

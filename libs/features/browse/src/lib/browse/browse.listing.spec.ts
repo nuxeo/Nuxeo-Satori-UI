@@ -35,7 +35,7 @@ import {
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { BrowseComponent } from './browse';
+import { BrowseComponent, FILTER_DEBOUNCE_MS } from './browse';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 // jsdom does not implement it; the Satori breadcrumbs and the Material menu both
@@ -86,18 +86,14 @@ const emptyAuditLog = {
 
 const browse = {
   getByPath: vi.fn((): BrowseReturn<'getByPath'> => of(folder)),
-  // Never resolves on purpose: the folder scan stays pending, so the toolbar filters fall back to
-  // the loaded page exactly as they did before cross-folder filtering existed.
+  // Never resolves on purpose, so the type dropdown falls back to the types on the loaded page
+  // unless a spec says otherwise.
+  //
   // Parameters declared, not just the return type: a zero-arg mock makes `mock.calls` an empty
-  // tuple, so a spec cannot assert which sort the scan was asked for — `spec-types` rejects the
-  // index even though Vitest runs it happily.
-  getAllBrowseFolderEntries: vi.fn(
-    (
-      _nuxeoPath: string,
-      _maxDocuments?: number,
-      _pageSize?: number,
-      _sort?: Parameters<BrowseService['getAllBrowseFolderEntries']>[3],
-    ): BrowseReturn<'getAllBrowseFolderEntries'> => EMPTY,
+  // tuple, so a spec cannot assert which path it was asked for — `spec-types` rejects the index
+  // even though Vitest runs it happily.
+  getBrowseFolderTypes: vi.fn(
+    (_nuxeoPath: string, _maxDocuments?: number): BrowseReturn<'getBrowseFolderTypes'> => EMPTY,
   ),
   getBrowseFolderContents: vi.fn(
     (
@@ -266,6 +262,17 @@ describe('BrowseComponent — rendered document list', () => {
   /** The list's tag and avatar outlets learn from a promise that their IDs are unregistered here. */
   async function settleOutlets(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve));
+    await settle();
+  }
+
+  /**
+   * Let a changed filter's debounce elapse, then render what the reload produced.
+   *
+   * Real timers, because the component's own debounce is the thing under test here; the margin is
+   * taken from `FILTER_DEBOUNCE_MS` rather than written out, so the two cannot drift apart.
+   */
+  async function settleFilter(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, FILTER_DEBOUNCE_MS + 50));
     await settle();
   }
 
@@ -727,10 +734,10 @@ describe('BrowseComponent — rendered document list', () => {
   });
 
   /**
-   * The defect: a filter sifted only the rows already fetched, so a document further down the
-   * folder could not be found by typing its exact title. Measured against a live Nuxeo on
-   * `/default-domain/workspaces` — 66 children, 50 rendered — "Project Reports" gave "0 results"
-   * while sitting in the folder.
+   * The defect, and the reason the filters moved to the server: a filter sifted only the rows
+   * already fetched, so a document further down the folder could not be found by typing its exact
+   * title. Measured against a live Nuxeo on `/default-domain/workspaces` — 66 children, 50
+   * rendered — "Project Reports" gave "0 results" while sitting in the folder.
    */
   it('finds a document that is in the folder but not on the loaded page', async () => {
     const onPage = [doc({ uid: 'c-1', title: 'Q1 Report' }), doc({ uid: 'c-2', title: 'Invoice' })];
@@ -738,806 +745,377 @@ describe('BrowseComponent — rendered document list', () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: onPage, totalSize: -1, hasNextPage: true }),
     );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: [...onPage, offPage], truncated: false }),
-    );
 
     const component = await render();
     expect(rowTitles()).toEqual(['Q1 Report', 'Invoice']);
 
+    // The server answers the filtered query with the match, and with a real count of it.
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [offPage], totalSize: 1, hasNextPage: false, serverFiltered: true }),
+    );
     component.filterText.set('project reports');
-    await settle();
+    await settleFilter();
 
-    // Case-insensitively, and from beyond the loaded page.
     expect(rowTitles()).toEqual(['Project Reports']);
     expect(query('.result-count')?.textContent).toContain('1 result');
-    // The server's next page belongs to the unfiltered listing, so it must not be offered here.
+    // From the server, so the pager describes the filtered listing rather than the unfiltered one.
     expect(component.listHasNextPage()).toBe(false);
     expect(component.listTotalSize()).toBe(1);
   });
 
-  it('keeps filtering the loaded page while the folder scan is still pending', async () => {
+  it('sends the filters to the server, from the first page', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [], totalSize: 0, serverFiltered: true }),
+    );
+    const component = await render();
+    component.goToPage(2);
+    await settle();
+    expect(lastRequest().page.currentPageIndex).toBe(2);
+
+    component.filterText.set('report');
+    component.filterType.set('File');
+    component.filterContributor.set('alice');
+    component.filterModifiedFrom.set(new Date(Date.UTC(2026, 9, 21)));
+    await settleFilter();
+
+    const [, , page, filters] = browse.getBrowseFolderContents.mock.calls.at(-1) ?? [];
+    expect(filters).toEqual({
+      text: 'report',
+      type: 'File',
+      contributor: 'alice',
+      modifiedFrom: new Date(Date.UTC(2026, 9, 21)),
+      modifiedTo: null,
+    });
+    // Page three of one filter is not page three of the next.
+    expect(page?.currentPageIndex).toBe(0);
+    expect(component.pageIndex()).toBe(0);
+  });
+
+  /**
+   * One request for a burst of keystrokes. `switchMap` in the loader is what makes a superseded
+   * answer *harmless*; the debounce is what stops sixteen being asked for in the first place.
+   */
+  it('asks once for a burst of typing, not once per keystroke', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [], totalSize: 0, serverFiltered: true }),
+    );
+    const component = await render();
+    browse.getBrowseFolderContents.mockClear();
+
+    for (const text of ['r', 're', 'rep', 'repo', 'repor', 'report']) {
+      component.filterText.set(text);
+      await settle();
+    }
+    // Nothing yet: the debounce has not elapsed.
+    expect(browse.getBrowseFolderContents).not.toHaveBeenCalled();
+
+    await settleFilter();
+    expect(browse.getBrowseFolderContents).toHaveBeenCalledTimes(1);
+    expect(browse.getBrowseFolderContents.mock.calls.at(-1)?.[3]?.text).toBe('report');
+  });
+
+  /**
+   * The rows being replaced stay on screen while the new ones are fetched. `loading` makes the
+   * document list draw its own loading state *instead of* the table, which at a 250ms debounce
+   * against a ~30ms query is a spinner flashing over every pause in typing.
+   */
+  it('keeps the rows on screen while a changed filter is being applied', async () => {
+    const rows = [doc({ uid: 'c-1', title: 'Q1 Report' }), doc({ uid: 'c-2', title: 'Invoice' })];
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: rows, totalSize: 2, serverFiltered: true }),
+    );
+    const component = await render();
+
+    const pending = new Subject<never>();
+    browse.getBrowseFolderContents.mockReturnValue(pending);
+    component.filterText.set('report');
+    await settleFilter();
+
+    expect(component.loading()).toBe(false);
+    expect(component.filtering()).toBe(true);
+    expect(rowTitles()).toEqual(['Q1 Report', 'Invoice']);
+    expect(query('.filter-progress')).not.toBeNull();
+  });
+
+  it('withdraws the progress indicator once the filtered listing lands', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [], totalSize: 0, serverFiltered: true }),
+    );
+    const component = await render();
+    component.filterText.set('report');
+    await settleFilter();
+
+    expect(component.filtering()).toBe(false);
+    expect(query('.filter-progress')).toBeNull();
+  });
+
+  it('stops filtering, rather than hanging on it, when the filtered request fails', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [], totalSize: 0, serverFiltered: true }),
+    );
+    const component = await render();
+
+    browse.getBrowseFolderContents.mockReturnValue(throwError(() => new Error('nope')));
+    component.filterText.set('report');
+    await settleFilter();
+
+    expect(component.filtering()).toBe(false);
+    expect(query('.filter-progress')).toBeNull();
+    expect(component.error()).not.toBeNull();
+  });
+
+  /**
+   * A listing the server could not filter — the repository root, whose `tree_children` view no
+   * query reproduces — still narrows what it was handed, and must not offer its next page: that
+   * page belongs to the unfiltered listing, which is what once left the control enabled beside
+   * zero filtered rows.
+   */
+  it('narrows a listing the server did not filter, and withholds its pager', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({
         folder,
-        entries: [doc({ uid: 'c-1', title: 'Q1 Report' }), doc({ uid: 'c-2', title: 'Invoice' })],
+        entries: [
+          doc({ uid: 'c-1', title: 'Q1 Report' }),
+          doc({ uid: 'c-2', title: 'Q2 Report' }),
+          doc({ uid: 'c-3', title: 'Invoice' }),
+        ],
         totalSize: -1,
         hasNextPage: true,
+        serverFiltered: false,
       }),
-    );
-    // Never resolves: the scan is in flight.
-    browse.getAllBrowseFolderEntries.mockReturnValue(EMPTY);
-
-    const component = await render();
-    component.filterText.set('report');
-    await settle();
-
-    // Rows still filter, from the page — blanking the list until a scan returns would be worse.
-    expect(rowTitles()).toEqual(['Q1 Report']);
-    // And folder-wide coverage is NOT claimed, so the pager still reflects the server.
-    expect(component.filteredAcrossFolder()).toBe(false);
-    expect(component.listHasNextPage()).toBe(true);
-  });
-
-  it('builds the type dropdown from the whole folder once scanned', async () => {
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'A', type: 'File' })], totalSize: -1 }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({
-        folder,
-        entries: [
-          doc({ uid: 'c-1', title: 'A', type: 'File' }),
-          doc({ uid: 'c-2', title: 'B', type: 'Workspace' }),
-        ],
-        truncated: false,
-      }),
-    );
-
-    const component = await render();
-    component.filterText.set('a');
-    await settle();
-
-    // 'Workspace' appears only off-page; built from the page alone it could never be selected.
-    expect(component.distinctTypes()).toEqual(['File', 'Workspace']);
-  });
-
-  /**
-   * Review follow-up: selection resolved ids against `entries()` only, so picking an off-page row
-   * found no document — Delete vanished despite the row's permissions, and header Edit on an
-   * off-page Collection fell through to the parent folder's metadata.
-   */
-  it('resolves a selected row that exists only in the scan, not on the page', async () => {
-    const onPage = [doc({ uid: 'c-1', title: 'Q1 Report' })];
-    const offPage = doc({ uid: 'c-99', title: 'Project Reports' });
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: onPage, totalSize: -1, hasNextPage: true }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: [...onPage, offPage], truncated: false }),
-    );
-
-    const component = await render();
-    component.filterText.set('project');
-    await settle();
-    expect(rowTitles()).toEqual(['Project Reports']);
-
-    component.onListSelectionChange(['c-99']);
-    await settle();
-
-    // The id resolves to the document, so the shared service gets its real title and type.
-    expect(TestBed.inject(SelectionService).selectedItems()[0].name).toBe('Project Reports');
-    expect(component.singleSelectedEntry()?.uid).toBe('c-99');
-  });
-
-  /**
-   * Review follow-up: the cached scan stayed the row source after the last filter was cleared, so
-   * the table rendered the whole folder beside a pager still describing 50-row server pages.
-   */
-  it('goes back to the loaded page when the last filter is cleared', async () => {
-    const onPage = [doc({ uid: 'c-1', title: 'Q1 Report' })];
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: onPage, totalSize: -1, hasNextPage: true }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({
-        folder,
-        entries: [...onPage, doc({ uid: 'c-99', title: 'Project Reports' })],
-        truncated: false,
-      }),
-    );
-
-    const component = await render();
-    component.filterText.set('project');
-    await settle();
-    expect(rowTitles()).toEqual(['Project Reports']);
-
-    component.filterText.set('');
-    await settle();
-
-    expect(rowTitles()).toEqual(['Q1 Report']);
-    expect(component.filteredAcrossFolder()).toBe(false);
-    // The server pager is in charge again.
-    expect(component.listHasNextPage()).toBe(true);
-    // The type options may still come from the scan: a wider option list is never wrong.
-    expect(component.distinctTypes().length).toBeGreaterThan(0);
-  });
-
-  /**
-   * Review follow-up: the scan was keyed only by path, so applying a filter replaced a sorted page
-   * with the source's default order, and a later sort click moved the indicator but not the rows.
-   */
-  it('rescans in the new order when the sort changes while filtering', async () => {
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: false }),
     );
 
     const component = await render();
     component.filterText.set('report');
-    await settle();
-    const callsBefore = browse.getAllBrowseFolderEntries.mock.calls.length;
-    expect(callsBefore).toBeGreaterThan(0);
+    await settleFilter();
 
-    component.onListSortChange({ key: 'title', direction: 'desc' });
-    await settle();
-
-    const calls = browse.getAllBrowseFolderEntries.mock.calls;
-    expect(calls.length).toBeGreaterThan(callsBefore);
-    // The order reaches the scan, so the filtered rows are the ones the user asked to see.
-    expect(calls[calls.length - 1][3]).toEqual([{ sortBy: 'dc:title', sortOrder: 'DESC' }]);
+    expect(rowTitles()).toEqual(['Q1 Report', 'Q2 Report']);
+    expect(query('.result-count')?.textContent).toContain('2 results');
+    expect(component.listHasNextPage()).toBe(false);
+    expect(component.listTotalSize()).toBe(2);
+    expect(component.listPageIndex()).toBe(0);
   });
 
-  /**
-   * Review follow-up: clearing the scan on a content refresh did not restart the scanning effect,
-   * which tracks the folder, the order, the filter and a generation — none of which a refresh
-   * changed. An active filter therefore fell back to the loaded page and lost its off-page
-   * matches, and kept showing documents a rename or trash had just changed.
-   */
-  it('rescans while filtering when the folder contents change', async () => {
-    const page = [doc({ uid: 'c-1', title: 'Q1 Report' })];
+  it('keeps the server’s own count and pager for a listing it did filter', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: page, totalSize: -1, hasNextPage: true }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
       of({
         folder,
-        entries: [...page, doc({ uid: 'c-99', title: 'Project Reports' })],
-        truncated: false,
+        entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
+        totalSize: 66,
+        hasNextPage: true,
+        serverFiltered: true,
       }),
     );
 
     const component = await render();
-    component.filterText.set('project');
-    await settle();
-    expect(rowTitles()).toEqual(['Project Reports']);
-    const callsBefore = browse.getAllBrowseFolderEntries.mock.calls.length;
+    component.filterText.set('report');
+    await settleFilter();
 
-    // What a rename, trash, upload or paste does once its request succeeds.
-    TestBed.inject(BrowseContextService).requestContentRefresh();
-    await settle();
-
-    expect(browse.getAllBrowseFolderEntries.mock.calls.length).toBeGreaterThan(callsBefore);
-    // Still filtering across the folder rather than silently narrowing to the page.
-    expect(component.filteredAcrossFolder()).toBe(true);
-    expect(rowTitles()).toEqual(['Project Reports']);
+    // Not `filteredEntries().length`: the server counted every match, across pages.
+    expect(component.listTotalSize()).toBe(66);
+    expect(component.listHasNextPage()).toBe(true);
+    expect(query('.result-count')?.textContent).toContain('66 results');
   });
 
-  it('scans on demand for the type dropdown, before any filter is applied', async () => {
+  // ── The type dropdown, whose options cannot come from the filtered rows ──
+
+  it('collects the folder’s types when the dropdown opens, and offers them with the page’s', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'A', type: 'File' })], totalSize: -1 }),
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1', type: 'File' })], totalSize: 1 }),
     );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({
-        folder,
-        entries: [
-          doc({ uid: 'c-1', title: 'A', type: 'File' }),
-          doc({ uid: 'c-2', title: 'B', type: 'Workspace' }),
-        ],
-        truncated: false,
-      }),
-    );
+    browse.getBrowseFolderTypes.mockReturnValue(of(['Note', 'Workspace']));
 
     const component = await render();
-    // The page alone offers one type; the dropdown opening is what widens it.
+    // Before it is opened: only what the page shows.
     expect(component.distinctTypes()).toEqual(['File']);
 
-    component.ensureFolderScan();
+    component.loadFolderTypes();
     await settle();
 
-    expect(component.distinctTypes()).toEqual(['File', 'Workspace']);
-    // Rows are untouched: no filter is active, so the scan is not the row source.
-    expect(rowTitles()).toEqual(['A']);
-  });
-
-  it('does not re-scan a folder it has already scanned in the same order', async () => {
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'A' })], totalSize: -1 }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'A' })], truncated: false }),
-    );
-
-    const component = await render();
-    component.ensureFolderScan();
-    await settle();
-    const calls = browse.getAllBrowseFolderEntries.mock.calls.length;
-
-    component.ensureFolderScan();
-    component.filterText.set('a');
-    await settle();
-
-    // Opening the dropdown again, then filtering, reuses the scan already in hand.
-    expect(browse.getAllBrowseFolderEntries.mock.calls.length).toBe(calls);
+    // The union, so the list is never narrower than the rows on screen.
+    expect(component.distinctTypes()).toEqual(['File', 'Note', 'Workspace']);
+    expect(browse.getBrowseFolderTypes.mock.calls.at(-1)?.[0]).toBe(component.browsePath());
   });
 
   /**
-   * A scan that fails must leave the filters on the loaded page: narrower than asked for, but
-   * never wrong about what it did show, and never a blank table.
+   * The reason the types are their own request. The rows are filtered now, so under a type filter
+   * `entries()` holds that one type — options built from them would collapse to the type already
+   * chosen and leave no other to pick, including no way back to All types.
    */
-  it('falls back to the loaded page when the folder scan fails', async () => {
+  it('does not collapse the dropdown to the type already filtered for', async () => {
+    browse.getBrowseFolderTypes.mockReturnValue(of(['File', 'Note', 'Workspace']));
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1', type: 'File' })], totalSize: 1 }),
+    );
+
+    const component = await render();
+    component.loadFolderTypes();
+    await settle();
+
     browse.getBrowseFolderContents.mockReturnValue(
       of({
         folder,
-        entries: [doc({ uid: 'c-1', title: 'Q1 Report' }), doc({ uid: 'c-2', title: 'Invoice' })],
-        totalSize: -1,
-        hasNextPage: true,
+        entries: [doc({ uid: 'c-2', title: 'A note', type: 'Note' })],
+        totalSize: 1,
+        serverFiltered: true,
       }),
     );
-    browse.getAllBrowseFolderEntries.mockReturnValue(throwError(() => new Error('scan failed')));
+    component.filterType.set('Note');
+    await settleFilter();
 
-    const component = await render();
-    component.filterText.set('report');
-    await settle();
-
-    expect(rowTitles()).toEqual(['Q1 Report']);
-    expect(component.filteredAcrossFolder()).toBe(false);
-    expect(component.filterScanning()).toBe(false);
-    // The server pager stays in charge, because the listing is still one page.
-    expect(component.listHasNextPage()).toBe(true);
+    expect(rowTitles()).toEqual(['A note']);
+    expect(component.distinctTypes()).toEqual(['File', 'Note', 'Workspace']);
   });
 
-  /**
-   * Out-of-order scan completion.
-   *
-   * A content refresh starts a second scan for the same path and sort while the first is still in
-   * flight, and those two keys cannot tell the two apart — only the generation can. Without that
-   * check a late pre-refresh result overwrote the fresh rows.
-   */
-  it('ignores a scan result that a content refresh has already superseded', async () => {
-    const page = [doc({ uid: 'c-1', title: 'Q1 Report' })];
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: page, totalSize: -1, hasNextPage: true }),
-    );
-
-    type ScanSet = { folder: typeof folder; entries: NuxeoDocument[]; truncated: boolean };
-    const pending: Subject<ScanSet>[] = [];
-    browse.getAllBrowseFolderEntries.mockImplementation(() => {
-      const subject = new Subject<ScanSet>();
-      pending.push(subject);
-      return subject.asObservable();
-    });
-
+  it('collects the types once per folder, however often the dropdown is opened', async () => {
+    browse.getBrowseFolderTypes.mockReturnValue(of(['File']));
     const component = await render();
-    component.filterText.set('report');
-    await settle();
-    expect(pending.length).toBe(1);
 
-    // A rename lands: generation bumps and a second scan starts for the same path and sort.
+    component.loadFolderTypes();
+    await settle();
+    const calls = browse.getBrowseFolderTypes.mock.calls.length;
+    component.loadFolderTypes();
+    component.loadFolderTypes();
+    await settle();
+
+    expect(browse.getBrowseFolderTypes.mock.calls.length).toBe(calls);
+  });
+
+  it('collects them again after the folder’s contents change', async () => {
+    browse.getBrowseFolderTypes.mockReturnValue(of(['File']));
+    browse.getBrowseFolderContents.mockReturnValue(of({ folder, entries: [], totalSize: 0 }));
+    const component = await render();
+    component.loadFolderTypes();
+    await settle();
+    const calls = browse.getBrowseFolderTypes.mock.calls.length;
+
+    // What a rename, a trash, an upload or an import all go through.
     TestBed.inject(BrowseContextService).requestContentRefresh();
     await settle();
-    expect(pending.length).toBe(2);
-
-    // The *newer* scan answers first, with the renamed document.
-    pending[1].next({
-      folder,
-      entries: [doc({ uid: 'c-1', title: 'Q1 Report (renamed)' })],
-      truncated: false,
-    });
-    await settle();
-    expect(rowTitles()).toEqual(['Q1 Report (renamed)']);
-
-    // The stale one answers afterwards and must be discarded.
-    pending[0].next({
-      folder,
-      entries: [
-        doc({ uid: 'c-1', title: 'Q1 Report' }),
-        doc({ uid: 'c-9', title: 'Stale Report' }),
-      ],
-      truncated: true,
-    });
+    component.loadFolderTypes();
     await settle();
 
-    expect(rowTitles()).toEqual(['Q1 Report (renamed)']);
-    expect(component.filterScanTruncated()).toBe(false);
-  });
-
-  /** The mirror case: a stale scan's *error* must not invalidate the newer scan. */
-  it('ignores a scan error that a content refresh has already superseded', async () => {
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({
-        folder,
-        entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
-        totalSize: -1,
-        hasNextPage: true,
-      }),
-    );
-
-    type ScanSet = { folder: typeof folder; entries: NuxeoDocument[]; truncated: boolean };
-    const pending: Subject<ScanSet>[] = [];
-    browse.getAllBrowseFolderEntries.mockImplementation(() => {
-      const subject = new Subject<ScanSet>();
-      pending.push(subject);
-      return subject.asObservable();
-    });
-
-    const component = await render();
-    component.filterText.set('report');
-    await settle();
-    TestBed.inject(BrowseContextService).requestContentRefresh();
-    await settle();
-
-    pending[1].next({
-      folder,
-      entries: [doc({ uid: 'c-1', title: 'Q1 Report' }), doc({ uid: 'c-2', title: 'Q2 Report' })],
-      truncated: false,
-    });
-    await settle();
-    expect(component.filteredAcrossFolder()).toBe(true);
-
-    pending[0].error(new Error('stale scan failed'));
-    await settle();
-
-    // Still covering the folder: the newer scan's result stands.
-    expect(component.filteredAcrossFolder()).toBe(true);
-    expect(rowTitles()).toEqual(['Q1 Report', 'Q2 Report']);
+    expect(browse.getBrowseFolderTypes.mock.calls.length).toBeGreaterThan(calls);
   });
 
   /**
-   * The sort cycle A -> B -> A.
-   *
-   * The two A scans share a path, a sort **and** a generation, so no key can tell them apart —
-   * only cancelling the one being replaced can. Before `switchMap`, a late result or error from
-   * the first A passed the generation guard and clobbered the second A's rows.
+   * Nothing on screen depends on the collected types, so a failure is not an error state: the
+   * dropdown falls back to the types on the page, which is what it offered before any of this.
+   * Opening it again retries.
    */
-  it('cancels the scan it replaces across a sort cycle', async () => {
-    const page = [doc({ uid: 'c-1', title: 'Q1 Report' })];
+  it('falls back to the page’s types when collecting them fails, and retries on re-open', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: page, totalSize: -1, hasNextPage: true }),
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1', type: 'File' })], totalSize: 1 }),
     );
-
-    type ScanSet = { folder: typeof folder; entries: NuxeoDocument[]; truncated: boolean };
-    const pending: Subject<ScanSet>[] = [];
-    browse.getAllBrowseFolderEntries.mockImplementation(() => {
-      const subject = new Subject<ScanSet>();
-      pending.push(subject);
-      return subject.asObservable();
-    });
+    browse.getBrowseFolderTypes.mockReturnValue(throwError(() => new Error('nope')));
 
     const component = await render();
-    component.filterText.set('report');
+    component.loadFolderTypes();
     await settle();
-    // Sort A, then B, then A again. Each change is a fresh scan request.
-    component.onListSortChange({ key: 'title', direction: 'asc' });
-    await settle();
-    const firstA = pending.length - 1;
-    component.onListSortChange({ key: 'title', direction: 'desc' });
-    await settle();
-    component.onListSortChange({ key: 'title', direction: 'asc' });
-    await settle();
-    const lastA = pending.length - 1;
-    // `firstA` and `lastA` carry the same path, sort key and generation, which is the whole point:
-    // no key can separate them, so only cancellation can. (Not `pending[0]` — that one predates
-    // the sort and its empty sort key would be rejected by the key check anyway, which is how an
-    // earlier version of this test passed without any cancellation at all.)
-    expect(lastA).toBeGreaterThan(firstA);
 
-    pending[lastA].next({
-      folder,
-      entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
-      truncated: false,
-    });
-    await settle();
-    expect(rowTitles()).toEqual(['Q1 Report']);
+    expect(component.distinctTypes()).toEqual(['File']);
+    expect(component.error()).toBeNull();
 
-    pending[firstA].next({
-      folder,
-      entries: [doc({ uid: 'c-9', title: 'Stale Report' })],
-      truncated: true,
-    });
+    browse.getBrowseFolderTypes.mockReturnValue(of(['Note']));
+    component.loadFolderTypes();
     await settle();
-    expect(rowTitles()).toEqual(['Q1 Report']);
-    expect(component.filterScanTruncated()).toBe(false);
 
-    // And its late error must not clear the newer scan either.
-    pending[firstA].error(new Error('stale A scan failed'));
-    await settle();
-    expect(component.filteredAcrossFolder()).toBe(true);
-    expect(component.filterScanFailed()).toBe(false);
+    expect(component.distinctTypes()).toEqual(['File', 'Note']);
   });
 
-  /**
-   * A silent fallback made an off-page match look like no match: the rows narrowed to the loaded
-   * page and the count read "0 results", indistinguishable from a successful empty search.
-   */
-  it('says the folder search failed, and retries from the message', async () => {
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({
-        folder,
-        entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
-        totalSize: -1,
-        hasNextPage: true,
-      }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(throwError(() => new Error('scan failed')));
+  // ── Optimistic paste rows, the only rows a filtered listing holds unjudged ──
 
-    const component = await render();
-    component.filterText.set('project');
-    await settle();
-
-    expect(component.filterScanFailed()).toBe(true);
-    expect(query('.filter-scan-note--failed')?.textContent).toContain('Could not search');
-    const retry = query('.filter-scan-retry') as HTMLButtonElement | null;
-    expect(retry).not.toBeNull();
-
-    // Retrying with a working scan clears the message and widens the rows.
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({
-        folder,
-        entries: [
-          doc({ uid: 'c-1', title: 'Q1 Report' }),
-          doc({ uid: 'c-99', title: 'Project Reports' }),
-        ],
-        truncated: false,
-      }),
-    );
-    retry!.click();
-    await settle();
-
-    expect(component.filterScanFailed()).toBe(false);
-    expect(rowTitles()).toEqual(['Project Reports']);
-  });
-
-  it('withdraws the truncation notice once the folder is no longer filtered', async () => {
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: true }),
-    );
-
-    const component = await render();
-    component.filterText.set('report');
-    await settle();
-    expect(query('.filter-scan-note')?.textContent).toContain('500');
-
-    component.filterText.set('');
-    await settle();
-
-    // The notice describes filtered rows; unfiltered, it would sit beside a server-paged listing.
-    expect(query('.filter-scan-note')).toBeNull();
-  });
-
-  /**
-   * A paste is optimistic: `@children` is eventually consistent, so the new row is added to
-   * `entries()` and kept there until the server lists it. The scan reads that same listing, so
-   * without folding the pending rows in, a document pasted a moment ago was missing from a
-   * filtered listing even though it sat in the page behind the filter.
-   */
   it('shows a freshly pasted document to an active filter', async () => {
-    const page = [doc({ uid: 'c-1', title: 'Q1 Report' })];
     browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: page, totalSize: -1, hasNextPage: true }),
+      of({ folder, entries: [], totalSize: 0, serverFiltered: true }),
     );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: page, truncated: false }),
-    );
-
     const component = await render();
-    component.filterText.set('report');
-    await settle();
-    expect(rowTitles()).toEqual(['Q1 Report']);
+    component.filterText.set('pasted');
+    await settleFilter();
 
-    // What a paste into the open folder does, before Nuxeo lists the new child.
-    TestBed.inject(BrowseContextService).notifyClipboardPasteComplete({
+    const context = TestBed.inject(BrowseContextService);
+    context.notifyClipboardPasteComplete({
       targetUid: folder.uid,
-      documents: [doc({ uid: 'c-50', title: 'Pasted Report' })],
       action: 'copy',
+      documents: [doc({ uid: 'p-1', title: 'Pasted Report' })],
     });
     await settle();
 
-    expect(rowTitles()).toContain('Pasted Report');
-    // And it is selectable, so its row actions resolve to the document.
-    component.onListSelectionChange(['c-50']);
-    await settle();
-    expect(component.singleSelectedEntry()?.title).toBe('Pasted Report');
+    // `@children` is eventually consistent, so the row exists only in `entries()` — but it matches.
+    expect(rowTitles()).toEqual(['Pasted Report']);
   });
 
   /**
-   * The reconciliation race, in the completion order that exposes it.
-   *
-   * The page has caught up and lists the pasted document, so
-   * `reconcilePendingPasteEntries()` has dropped the optimistic row — but the scan finished
-   * earlier, before Nuxeo listed it, so the scan does not have it. Reading the scan alone made the
-   * document vanish from filtered results while `entries()` still held it.
+   * The server judged its own rows; the optimistic paste row has been judged by nobody, so it is
+   * the one row the filtered listing checks here. Without that, pasting into a filtered folder put
+   * a document that does not match the filter straight into the filtered rows.
    */
-  it('keeps a pasted document in filtered results when the page has it but the scan does not', async () => {
-    const pasted = doc({ uid: 'c-50', title: 'Pasted Report' });
-    // The page has caught up...
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({
-        folder,
-        entries: [doc({ uid: 'c-1', title: 'Q1 Report' }), pasted],
-        totalSize: -1,
-        hasNextPage: true,
-      }),
-    );
-    // ...while the scan, which finished first, has not.
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: false }),
-    );
-
-    const component = await render();
-    // Nothing is pending: the page listing it is exactly what reconciliation removes it for.
-    expect(rowTitles()).toEqual(['Q1 Report', 'Pasted Report']);
-
-    component.filterText.set('report');
-    await settle();
-
-    // A filter must not show less than browsing the folder does.
-    expect(rowTitles()).toContain('Pasted Report');
-    expect(component.filteredAcrossFolder()).toBe(true);
-    expect(component.singleSelectedEntry()).toBeNull();
-    component.onListSelectionChange(['c-50']);
-    await settle();
-    expect(component.singleSelectedEntry()?.title).toBe('Pasted Report');
-  });
-
-  /**
-   * Freshness on a uid collision.
-   *
-   * A rename updates the page; a scan taken before it still holds the old document. Keeping the
-   * scan's copy meant the filtered rows showed the stale title *and* the filters matched on it, so
-   * searching for the new name missed a row that was on screen under that very name.
-   */
-  it('prefers the page copy of a document the scan holds an older version of', async () => {
-    // The order that exposes it: the scan lands first with the old copy, then a page load brings
-    // the renamed one. `loadContent()` is the paging path, so it refreshes the page *without*
-    // invalidating the scan — which is exactly how the two can disagree.
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({
-        folder,
-        entries: [doc({ uid: 'c-1', title: 'Old Report' })],
-        totalSize: -1,
-        hasNextPage: true,
-      }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Old Report' })], truncated: false }),
-    );
-
-    const component = await render();
-    component.filterText.set('report');
-    await settle();
-    expect(rowTitles()).toEqual(['Old Report']);
-
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({
-        folder,
-        entries: [doc({ uid: 'c-1', title: 'Renamed Report' })],
-        totalSize: -1,
-        hasNextPage: true,
-      }),
-    );
-    component.loadContent();
-    await settle();
-
-    // Rendered with the new title, and only once — not two rows for one document.
-    expect(rowTitles()).toEqual(['Renamed Report']);
-    expect(component.resultCount()).toBe(1);
-
-    // The filters match on the fresh copy too, not the stale one the scan still holds.
-    component.filterText.set('renamed');
-    await settle();
-    expect(rowTitles()).toEqual(['Renamed Report']);
-    component.filterText.set('old report');
-    await settle();
-    expect(rowTitles()).toEqual([]);
-  });
-
-  /**
-   * An off-page paste, renamed, then rescanned.
-   *
-   * `reconcilePendingPasteEntries()` only clears what the *page* lists, so a pasted document
-   * outside the current page stays pending indefinitely. Merging that original paste response back
-   * over a scan that has since seen the rename restored the old title and made the new one
-   * unfindable.
-   */
-  it('does not let a stale pending paste override the rescanned document', async () => {
-    const pasted = doc({ uid: 'c-50', title: 'Pasted Report' });
-    // The page never lists it — it is off-page — so it stays pending.
+  it('keeps a pasted document that does not match the filter out of the rows', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({
         folder,
         entries: [doc({ uid: 'c-1', title: 'Q1 Report' })],
-        totalSize: -1,
-        hasNextPage: true,
+        totalSize: 1,
+        serverFiltered: true,
       }),
     );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: false }),
-    );
-
     const component = await render();
+    component.filterText.set('report');
+    await settleFilter();
+    expect(rowTitles()).toEqual(['Q1 Report']);
+
     TestBed.inject(BrowseContextService).notifyClipboardPasteComplete({
       targetUid: folder.uid,
-      documents: [pasted],
       action: 'copy',
+      documents: [doc({ uid: 'p-1', title: 'Invoice' })],
     });
     await settle();
 
-    // A later scan observes it under its new name.
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({
-        folder,
-        entries: [
-          doc({ uid: 'c-1', title: 'Q1 Report' }),
-          doc({ uid: 'c-50', title: 'Renamed Pasted Report' }),
-        ],
-        truncated: false,
-      }),
+    expect(rowTitles()).toEqual(['Q1 Report']);
+  });
+
+  /**
+   * The server's rows are taken as they are. `ILIKE` folds case in the database's collation and
+   * `toLowerCase()` in the browser's, so re-checking them here could hide a row the server
+   * matched — the exact class of difference that moving the filter to the server removes.
+   */
+  it('does not re-judge the rows the server filtered', async () => {
+    const matched = doc({ uid: 'c-1', title: 'DİYARBAKIR' });
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [matched], totalSize: 1, serverFiltered: true }),
     );
-    TestBed.inject(BrowseContextService).requestContentRefresh();
-    await settle();
 
-    component.filterText.set('renamed pasted');
-    await settle();
+    const component = await render();
+    // A term the server matched that `toLowerCase().includes()` does not: the dotted capital İ
+    // lower-cases to a two-code-point sequence in JS, so this substring is absent from the result.
+    component.filterText.set('diyarbakir');
+    await settleFilter();
 
-    // The new name is findable, and the stale pending copy has not come back.
-    expect(rowTitles()).toEqual(['Renamed Pasted Report']);
+    expect(rowTitles()).toEqual(['DİYARBAKIR']);
+  });
 
-    // Selection must agree with the row, not with the stale optimistic copy still in `entries()`.
-    component.onListSelectionChange(['c-50']);
-    await settle();
-    expect(component.singleSelectedEntry()?.title).toBe('Renamed Pasted Report');
-    expect(TestBed.inject(SelectionService).selectedItems()[0].name).toBe('Renamed Pasted Report');
-
+  it('does not ask twice when a folder change clears the filters', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [], totalSize: 0, serverFiltered: true }),
+    );
+    const component = await render([
+      { provide: ROUTES, multi: true, useValue: [{ path: '**', children: [] }] },
+    ]);
     component.filterText.set('report');
+    await settleFilter();
+    browse.getBrowseFolderContents.mockClear();
+
+    await TestBed.inject(Router).navigateByUrl('/browse/default-domain/workspaces/other');
     await settle();
-    expect(rowTitles()).not.toContain('Pasted Report');
+    expect(component.filterText()).toBe('');
+    const afterNavigation = browse.getBrowseFolderContents.mock.calls.length;
+
+    // The navigation's own load already carried the cleared filters; clearing them must not ask
+    // for the same listing again once the debounce elapses.
+    await settleFilter();
+    expect(browse.getBrowseFolderContents.mock.calls.length).toBe(afterNavigation);
   });
 
-  /**
-   * The merge cannot be trusted to hold a requested order.
-   *
-   * A title-ascending scan of Apple, Banana becomes Zebra, Banana once a newer page supplies
-   * Apple's renamed copy — in Apple's old position, under a sort indicator still claiming the
-   * column. Sorting the merged set in the browser is the wrong answer here (`filteredEntries`
-   * records why), so the server is asked to re-order it.
-   */
-  it('rescans when the merge breaks the order the server was asked for', async () => {
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({
-        folder,
-        entries: [doc({ uid: 'c-1', title: 'Apple' })],
-        totalSize: -1,
-        hasNextPage: true,
-      }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({
-        folder,
-        entries: [doc({ uid: 'c-1', title: 'Apple' }), doc({ uid: 'c-2', title: 'Banana' })],
-        truncated: false,
-      }),
-    );
-
-    const component = await render();
-    component.filterText.set('a');
-    component.onListSortChange({ key: 'title', direction: 'asc' });
-    await settle();
-    const callsBefore = browse.getAllBrowseFolderEntries.mock.calls.length;
-    expect(callsBefore).toBeGreaterThan(0);
-
-    // A page read brings Apple back renamed, which would sit in Apple's old position.
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({
-        folder,
-        entries: [doc({ uid: 'c-1', title: 'Zebra' })],
-        totalSize: -1,
-        hasNextPage: true,
-      }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({
-        folder,
-        entries: [doc({ uid: 'c-2', title: 'Banana' }), doc({ uid: 'c-1', title: 'Zebra' })],
-        truncated: false,
-      }),
-    );
-    component.loadContent();
-    await settle();
-
-    // Re-scanned, and the rows come back in the server's order rather than the merged one.
-    expect(browse.getAllBrowseFolderEntries.mock.calls.length).toBeGreaterThan(callsBefore);
-    expect(rowTitles()).toEqual(['Banana', 'Zebra']);
-  });
-
-  /**
-   * A scan taken only to widen the type dropdown must survive.
-   *
-   * With a sort selected and a page beyond the scan cap, the merge breaks the order — but with no
-   * filter active `scanFolderWhenFiltering` will not re-scan, so invalidating here left the open
-   * dropdown falling back to the current page's types.
-   */
-  it('keeps a type-options scan when no filter is active and the order breaks', async () => {
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({
-        folder,
-        entries: [doc({ uid: 'c-1', title: 'Apple', type: 'File' })],
-        totalSize: -1,
-        hasNextPage: true,
-      }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({
-        folder,
-        entries: [
-          doc({ uid: 'c-2', title: 'Banana', type: 'Workspace' }),
-          doc({ uid: 'c-3', title: 'Cherry', type: 'Note' }),
-        ],
-        truncated: true,
-      }),
-    );
-
-    const component = await render();
-    component.onListSortChange({ key: 'title', direction: 'asc' });
-    await settle();
-    component.ensureFolderScan();
-    await settle();
-
-    // The page document is not in the scan, so the merge changes it — with a sort selected, that
-    // is precisely the condition that used to invalidate the scan.
-    expect(component.distinctTypes()).toEqual(['File', 'Note', 'Workspace']);
-
-    await settle();
-    // Still the wide list: the scan was not thrown away.
-    expect(component.distinctTypes()).toEqual(['File', 'Note', 'Workspace']);
-  });
-
-  /**
-   * One request, not ten. Every page the walk asks for is a full folder-contents call, and on a
-   * restricted repository root that falls back to a bootstrap which re-fetches the whole
-   * accessible list each time — so fifties turned one list into ten bootstraps.
-   */
-  it('asks for the whole folder in a single page', async () => {
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: false }),
-    );
-
-    const component = await render();
-    component.filterText.set('report');
-    await settle();
-
-    const call = browse.getAllBrowseFolderEntries.mock.calls.at(-1);
-    expect(call).toBeDefined();
-    // maxDocuments and pageSize are the same, so one page covers the cap.
-    expect(call?.[2]).toBe(call?.[1]);
-  });
-
-  /**
-   * The Modified range's clear control.
-   *
-   * It had no unit test: the only verification was in the temporary Playwright sweep, which is
-   * gone. `main` then replaced the single `mat-date-range-input` with two `nxs-date-input`s, which
-   * expose no suffix slot, so the button moved out of the fields and into the toolbar — exactly
-   * the kind of move that silently drops a feature when nothing asserts it.
-   */
   it('offers one control that clears both ends of the Modified range', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: 1 }),
@@ -1561,22 +1139,6 @@ describe('BrowseComponent — rendered document list', () => {
     expect(component.filterModifiedTo()).toBeNull();
     // And it withdraws once there is nothing to clear.
     expect(query('.filter-clear-btn--standalone')).toBeNull();
-  });
-
-  it('says so when the scan hit its cap, rather than implying it searched the folder', async () => {
-    browse.getBrowseFolderContents.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], totalSize: -1 }),
-    );
-    browse.getAllBrowseFolderEntries.mockReturnValue(
-      of({ folder, entries: [doc({ uid: 'c-1', title: 'Q1 Report' })], truncated: true }),
-    );
-
-    const component = await render();
-    component.filterText.set('report');
-    await settle();
-
-    expect(component.filterScanTruncated()).toBe(true);
-    expect(query('.filter-scan-note')?.textContent).toContain('500');
   });
 
   /** A checkbox in the open column picker, by its visible label. */
@@ -1893,8 +1455,8 @@ describe('BrowseComponent — rendered document list', () => {
     }
 
     /**
-     * The card view reads `filteredEntries()`, the same source as the list, including the
-     * off-page documents a folder scan contributes. Asserted rather than reasoned about, because
+     * The card view reads `filteredEntries()`, the same source as the list, so a filter whose only
+     * match is beyond the loaded page reaches it too. Asserted rather than reasoned about, because
      * the last review asked whether a filtered card view could come out blank.
      */
     it('renders the filtered set, off-page documents included', async () => {
@@ -1902,21 +1464,23 @@ describe('BrowseComponent — rendered document list', () => {
       browse.getBrowseFolderContents.mockReturnValue(
         of({ folder, entries: page, totalSize: -1, hasNextPage: true }),
       );
-      browse.getAllBrowseFolderEntries.mockReturnValue(
-        of({
-          folder,
-          entries: [...page, doc({ uid: 'c-99', title: 'Project Reports' })],
-          truncated: false,
-        }),
-      );
 
       await render([provideNxsComponents()]);
       (query('button[aria-label="Card view"]') as HTMLButtonElement).click();
       await settleOutlets();
       expect(fixture.nativeElement.querySelectorAll('.card-grid nxs-card').length).toBe(1);
 
-      // A filter matching only the off-page document: one card, and it is that document.
+      // The server answers the filter with a document that was never on the loaded page.
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({
+          folder,
+          entries: [doc({ uid: 'c-99', title: 'Project Reports' })],
+          totalSize: 1,
+          serverFiltered: true,
+        }),
+      );
       fixture.componentInstance.filterText.set('project');
+      await settleFilter();
       await settleOutlets();
 
       const cards = fixture.nativeElement.querySelectorAll('.card-grid nxs-card');

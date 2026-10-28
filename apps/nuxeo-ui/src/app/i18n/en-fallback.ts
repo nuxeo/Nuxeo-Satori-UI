@@ -138,6 +138,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'browse.browse.download-all': 'Download All',
   'browse.browse.edit': 'Edit',
   'browse.browse.export-csv': 'Export CSV',
+  'browse.browse.filtering': 'Filtering…',
   'browse.browse.modified': 'Modified',
   'browse.browse.from': 'From',
   'browse.browse.list-view': 'List view',

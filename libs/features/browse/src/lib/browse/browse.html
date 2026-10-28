@@ -101,28 +101,17 @@
                 }}</span>
               }
               <!--
-                Both notices describe the *filtered* rows, so both are gated on
-                `filteredAcrossFolder()`. Without that, opening All types in a folder of more than
-                500 children, or clearing the last filter after a truncated scan, left "Filtered
-                the first 500 items" sitting beside an unfiltered, server-paged listing.
+                The filters run on the server, so a changed one replaces the rows rather than
+                re-sifting them. This says so where the count is, instead of `loading` taking the
+                table away and flashing a spinner on every pause in typing.
               -->
-              @if (filteredAcrossFolder() && filterScanTruncated()) {
-                <span class="filter-scan-note" role="status">{{
-                  'browse.browse.filter-scan-truncated' | translate: { count: filterScanLimit }
-                }}</span>
-              }
-              @if (filtersActive() && filterScanFailed()) {
-                <span class="filter-scan-note filter-scan-note--failed" role="status">
-                  {{ 'browse.browse.filter-scan-failed' | translate }}
-                  <button
-                    mat-button
-                    type="button"
-                    class="filter-scan-retry"
-                    (click)="retryFolderScan()"
-                  >
-                    {{ 'browse.browse.filter-scan-retry' | translate }}
-                  </button>
-                </span>
+              @if (filtering()) {
+                <mat-progress-spinner
+                  class="filter-progress"
+                  mode="indeterminate"
+                  diameter="14"
+                  [attr.aria-label]="'browse.browse.filtering' | translate"
+                />
               }
               <div class="toolbar-spacer"></div>
 
@@ -216,7 +205,7 @@
                 <mat-select
                   [ngModel]="filterType()"
                   (ngModelChange)="filterType.set($event)"
-                  (openedChange)="$event && ensureFolderScan()"
+                  (openedChange)="$event && loadFolderTypes()"
                 >
                   <mat-option value="">{{ 'browse.browse.all-types' | translate }}</mat-option>
                   @for (t of distinctTypes(); track t) {

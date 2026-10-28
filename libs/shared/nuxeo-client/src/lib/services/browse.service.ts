@@ -119,22 +119,19 @@ export interface BrowseFolderContents {
 }
 
 /**
- * How many children a toolbar filter may walk before it stops asking for more pages.
+ * How many children the type dropdown reads to collect the types a container holds.
  *
- * A bound rather than "all of them": a folder with tens of thousands of children would otherwise
- * turn one keystroke into hundreds of requests. When the walk stops early the caller is told
- * ({@link BrowseFolderEntrySet.truncated}) so the UI can say the filter covered part of the folder
- * instead of implying it searched all of it.
+ * The listing itself is filtered, counted and paged by the server, so nothing on screen depends on
+ * this; it bounds one request whose only output is the set of options in a dropdown. A container
+ * with more than this many children may therefore be missing an option that occurs only past the
+ * bound — the rows, the count and the pages are unaffected, and the title filter still reaches
+ * those documents.
+ *
+ * Measured against this Nuxeo: 66 children came back in 54 KB and 15 ms with no `properties` header
+ * and no enrichers, against 151 KB for the same page with `properties: '*'` and `permissions` — so
+ * the request asks for neither. `type` is a top-level field on every entry.
  */
-export const BROWSE_FILTER_SCAN_LIMIT = 500;
-
-/** Every child of a folder the filters could match, and whether the scan was cut short. */
-export interface BrowseFolderEntrySet {
-  folder: NuxeoDocument | null;
-  entries: NuxeoDocument[];
-  /** True when {@link BROWSE_FILTER_SCAN_LIMIT} stopped the walk while Nuxeo still had pages. */
-  truncated: boolean;
-}
+export const BROWSE_TYPE_OPTION_LIMIT = 500;
 
 /** True for Domain documents attached directly under the repository root. */
 function isTopLevelDomain(doc: NuxeoDocument | null | undefined): boolean {
@@ -321,96 +318,88 @@ export class BrowseService {
   }
 
   /**
-   * Every child of `nuxeoPath`, paged through to the end or to `maxDocuments`.
+   * Every document type a container holds, for the browse toolbar's type dropdown.
    *
-   * For the toolbar filters on the browse page, which used to sift only the page already on
-   * screen: a folder of 66 children renders 50, so a document on the unseen remainder could not be
-   * found by typing its exact title. Measured on `/default-domain/workspaces`, "Project Reports"
-   * returned "0 results" while sitting in the folder.
+   * Its own request because the listing is now filtered by the server: under an active type filter
+   * the rows on screen are all of that one type, so options built from them would collapse to the
+   * type already chosen and leave no other to pick. Nothing else reads this — not the rows, the
+   * count, the pages, nor selection — so a stale or failed answer can only leave the dropdown
+   * offering what the current page shows, which is what it offered before any of this.
    *
-   * It walks `getBrowseFolderContents` rather than `getChildren` so every container kind keeps the
-   * listing it already had — `Root` via `tree_children`, `Collection`/`Favorites` via their member
-   * query, everything else via `@children`. That matters more than the extra `getByPath` per page
-   * costs: an NXQL rewrite was measured against this repository and the search index disagreed with
-   * `@children` **in both directions** — 91 documents against 66, and 13 of the 66 missing from the
-   * index entirely. Filtering through the index would therefore have dropped documents that are
-   * really there, so the filter scans the same listing the user is looking at.
+   * One request, bounded by {@link BROWSE_TYPE_OPTION_LIMIT}, and the server cannot make it
+   * smaller: `Repository.Query` takes `SELECT *` only. `SELECT DISTINCT ecm:primaryType` and a bare
+   * `SELECT ecm:primaryType` both answer 200 with **zero** rows rather than an error, and
+   * `GROUP BY` fails the operation outright — all three measured, which is why this reads the
+   * documents and collects the types here.
+   *
+   * A container whose listing no query reproduces (the repository root) answers an empty list, and
+   * the caller falls back to the types on its page.
    */
-  getAllBrowseFolderEntries(
+  getBrowseFolderTypes(
     nuxeoPath: string,
-    maxDocuments = BROWSE_FILTER_SCAN_LIMIT,
-    pageSize = 50,
-    sort?: BrowseSortEntry[],
-  ): Observable<BrowseFolderEntrySet> {
-    type Step = BrowseFolderContents & { pageIndex: number; fetched: number };
-
-    // `sort` is forwarded so a scanned listing keeps the order the user asked for. Without it the
-    // scan returned the source's default order, so applying a filter silently replaced a sorted
-    // page — and a later click on a sort header changed only the indicator, because the filtered
-    // rows no longer came from `entries()`.
-    // `fetched` counts the documents actually returned, which is what bounds the walk.
-    //
-    // The guard used to be `(pageIndex + 1) * pageSize < maxDocuments` — an *assumed* count. Not
-    // every branch of `listBrowseFolderEntries` hands back exactly `pageSize` rows: the root
-    // fallback pages a full list in memory and a Domain keeps only its folders, so the assumption
-    // can under-count what has been pulled and let the traversal run past the cap it exists to
-    // enforce. Counting the real rows cannot drift from them.
-    const fetchPage = (pageIndex: number, fetchedBefore: number): Observable<Step> =>
-      this.getBrowseFolderContents(nuxeoPath, pageSize, {
-        currentPageIndex: pageIndex,
-        sort,
-      }).pipe(
-        map((page) => ({
-          ...page,
-          pageIndex,
-          fetched: fetchedBefore + (page.entries?.length ?? 0),
-        })),
-      );
-
-    return fetchPage(0, 0).pipe(
-      expand((page) =>
-        page.hasNextPage === true &&
-        // A page that returned nothing cannot lead anywhere, whatever it claims about the next
-        // one. Without this the restricted-root fallback looped forever: it pages an in-memory
-        // array, so once that array is exhausted every further page is empty, `fetched` stops
-        // advancing, and `hasNextPage` still reads true because the source said it had more —
-        // re-running the bootstrap endpoints on every turn. The walk stops here and the last
-        // page's `hasNextPage` makes it `truncated`, which is the honest answer: the source holds
-        // more and this could not reach it.
-        (page.entries?.length ?? 0) > 0 &&
-        page.fetched < maxDocuments
-          ? fetchPage(page.pageIndex + 1, page.fetched)
-          : EMPTY,
-      ),
-      reduce<Step, BrowseFolderEntrySet>(
-        (acc, page) => ({
-          folder: page.folder,
-          entries: [...acc.entries, ...(page.entries ?? [])],
-          // The last page reached decides this: if the folder ran out, its `hasNextPage` is false.
-          truncated: page.hasNextPage === true,
-        }),
-        { folder: null, entries: [], truncated: false },
-      ),
-      map((set) => ({
-        folder: set.folder,
-        entries: set.entries.slice(0, maxDocuments),
-        // Either an unvisited page remains, **or** the slice below discards documents this walk
-        // already fetched. The second half matters when the cap falls mid-page: 80 children with
-        // `maxDocuments` 75 and `pageSize` 50 ends on a page with no successor, so reporting only
-        // `hasNextPage` called a result complete while five documents had been dropped.
-        truncated: set.truncated || set.entries.length > maxDocuments,
-      })),
+    maxDocuments = BROWSE_TYPE_OPTION_LIMIT,
+  ): Observable<string[]> {
+    const safePath = nuxeoPath.replace(/\/+$/, '') || '/';
+    return this.getByPath(safePath).pipe(
+      switchMap((folder) => {
+        const scopeClause =
+          folder.uid && folder.uid !== 'virtual-root' ? this.filteredScopeClause(folder) : null;
+        if (!scopeClause) return of<string[]>([]);
+        return this.api
+          .post<NuxeoDocumentList>('/nuxeo/api/v1/automation/Repository.Query', {
+            params: {
+              // No filters: the same scope, trashed and hidden rules the filtered listing uses, so
+              // the options can never describe a different set of documents than the rows do.
+              query: this.buildFilteredChildrenQuery(scopeClause, {}),
+              pageSize: maxDocuments,
+            },
+          })
+          .pipe(
+            // No `properties` header and no enrichers on purpose — see BROWSE_TYPE_OPTION_LIMIT.
+            map((list) =>
+              Array.from(
+                new Set((list.entries ?? []).map((doc) => doc.type).filter(Boolean)),
+              ).sort(),
+            ),
+          );
+      }),
     );
   }
 
   /**
-   * The NXQL a filtered folder listing runs.
+   * The NXQL clause that picks out one container's own listing, or `null` for a container whose
+   * listing a query cannot reproduce.
+   *
+   * Two shapes, because the two container kinds list by different relations: an ordinary folder or
+   * Domain lists what it *contains*, and a Collection or Favorites lists what *belongs* to it.
+   * `collectionMember:collectionIds` was measured against `default_content_collection`, the page
+   * provider the unfiltered listing uses, on every collection in this repository — Administrator's
+   * Favorites (4 members), a fixture collection (1) and three empty ones — and agreed on all five,
+   * uid for uid.
+   *
+   * `Root` returns `null` and keeps its client-side filter. `tree_children` lists only the root's
+   * **Folderish** children (`docs/api-integrations.md`), so a containment query there could show a
+   * file the unfiltered listing does not; and a user who cannot read the root never reaches this
+   * code at all — `getBrowseFolderContents` falls back to the bootstrap, which hands back the whole
+   * accessible list in one go, so narrowing that client-side is already complete.
+   */
+  private filteredScopeClause(folder: NuxeoDocument): string | null {
+    if (folder.type === 'Root') return null;
+    if (folder.type === 'Favorites' || folder.type === 'Collection') {
+      return `collectionMember:collectionIds = '${escapeNxqlLiteral(folder.uid)}'`;
+    }
+    return `ecm:parentId = '${escapeNxqlLiteral(folder.uid)}'`;
+  }
+
+  /**
+   * The NXQL a filtered listing runs, around whichever scope clause selects the container.
    *
    * Every property name here has been run against the server, because a wrong one is not an
    * error on the index-backed endpoint — it answers 200 with zero rows. (On
    * `Repository.Query` it does fail loudly: `dc:nosuchfield` returns "Failed to invoke
    * operation", which is the better of the two behaviours.) Verified: `ecm:parentId`,
-   * `ecm:isTrashed`, `dc:title`, `ecm:primaryType`, `dc:modified`, `dc:lastContributor`.
+   * `collectionMember:collectionIds`, `ecm:isTrashed`, `dc:title`, `ecm:primaryType`,
+   * `dc:modified`, `dc:lastContributor`.
    *
    * `TIMESTAMP` literals are read as **UTC**, measured on a host at +0530: the newest child's
    * `dc:modified` rendered in UTC matched at minus one minute and not at plus one. So the picked
@@ -418,18 +407,19 @@ export class BrowseService {
    * the previous client-side comparison of `getTime()` values put it.
    */
   private buildFilteredChildrenQuery(
-    folderUid: string,
+    scopeClause: string,
     filters: BrowseFolderFilters,
     sort?: BrowseSortEntry[],
   ): string {
     const clauses = [
-      `ecm:parentId = '${escapeNxqlLiteral(folderUid)}'`,
+      scopeClause,
       'ecm:isTrashed = 0',
       // `@children` applies this and a raw `ecm:parentId` query does not, so without it a filter
       // shows documents the unfiltered listing hides. Measured on `/default-domain`: the bare
       // query answered 10 children against the listing's 8, the two extras being the `CommentRoot`
-      // and `UserWorkspacesRoot` system containers; with this clause it answers the same 8.
-      // Every other NXQL in this service carries it for the same reason.
+      // and `UserWorkspacesRoot` system containers; with this clause it answers the same 8, and an
+      // `ecm:parentId` query on the repository root likewise drops from 7 to the 3 domains
+      // `tree_children` lists. Every other NXQL in this service carries it for the same reason.
       "ecm:mixinType != 'HiddenInNavigation'",
     ];
 
@@ -474,7 +464,7 @@ export class BrowseService {
    * filtered 500-row query in ~28 ms.
    */
   private getFilteredChildren(
-    folderUid: string,
+    scopeClause: string,
     filters: BrowseFolderFilters,
     pageSize: number,
     page?: BrowsePageRequest,
@@ -484,7 +474,7 @@ export class BrowseService {
         '/nuxeo/api/v1/automation/Repository.Query',
         {
           params: {
-            query: this.buildFilteredChildrenQuery(folderUid, filters, page?.sort),
+            query: this.buildFilteredChildrenQuery(scopeClause, filters, page?.sort),
             pageSize,
             currentPageIndex: page?.currentPageIndex ?? 0,
           },
@@ -515,24 +505,18 @@ export class BrowseService {
     hasNextPage?: boolean;
     serverFiltered?: boolean;
   }> {
-    // Filtered server-side wherever the children are `ecm:parentId` children — ordinary folders
-    // and Domains, which is also the only branch the server pages, and so the only one where a
-    // client-side filter could miss rows it never fetched.
+    // Filtered server-side wherever a query can reproduce this container's own listing: an
+    // ordinary folder or Domain by containment, a Collection or Favorites by membership. Those are
+    // also the listings the server pages, and so the only ones where a client-side filter could
+    // miss rows it was never handed.
     //
-    // The branches below cannot be expressed that way and keep their listing: `Root` is
-    // `tree_children` with its own Folderish/hidden rules (an `ecm:parentId` query on the root
-    // returns 7 where that listing shows 3), and Favorites/Collection are membership rather than
-    // containment. They report `serverFiltered: false` and the caller narrows what it was handed.
-    if (
-      browseFolderFiltersActive(filters) &&
-      folder.type !== 'Root' &&
-      folder.type !== 'Favorites' &&
-      folder.type !== 'Collection' &&
-      folder.uid &&
-      folder.uid !== 'virtual-root'
-    ) {
+    // `Root` is what {@link filteredScopeClause} declines, and the virtual root is not a document
+    // to query at all. They report `serverFiltered: false` and the caller narrows what it got.
+    const scopeClause =
+      folder.uid && folder.uid !== 'virtual-root' ? this.filteredScopeClause(folder) : null;
+    if (browseFolderFiltersActive(filters) && scopeClause) {
       return this.getFilteredChildren(
-        folder.uid,
+        scopeClause,
         filters as BrowseFolderFilters,
         pageSize,
         page,

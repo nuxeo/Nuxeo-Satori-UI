@@ -45,9 +45,7 @@ describe('BrowseComponent — documentList slot', () => {
       getByPath: vi.fn(() => throwError(() => new Error('not connected'))),
       // Never resolves on purpose: the folder scan stays pending, so the toolbar filters fall back to
       // the loaded page exactly as they did before cross-folder filtering existed.
-      getAllBrowseFolderEntries: vi.fn(
-        (): ReturnType<BrowseService['getAllBrowseFolderEntries']> => EMPTY,
-      ),
+      getBrowseFolderTypes: vi.fn((): ReturnType<BrowseService['getBrowseFolderTypes']> => EMPTY),
       getBrowseFolderContents: vi.fn(() => throwError(() => new Error('not connected'))),
       getFolderContext: vi.fn(() => throwError(() => new Error('not connected'))),
       getChildren: vi.fn(() => throwError(() => new Error('not connected'))),

@@ -9,7 +9,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { NUXEO_API_ORIGIN } from '../nuxeo-api.config';
 import type { NuxeoDocument } from '../models/document.model';
-import { BrowseService } from './browse.service';
+import { BROWSE_TYPE_OPTION_LIMIT, BrowseService } from './browse.service';
 
 describe('BrowseService', () => {
   let service: BrowseService;
@@ -1253,17 +1253,49 @@ describe('BrowseService', () => {
       expect(result.entries.map((e) => e.uid)).toEqual(['c-1']);
     });
 
-    it.each(['Root', 'Favorites', 'Collection'])(
-      'leaves %s to the caller, since a parentId query cannot express it',
-      async (type) => {
+    /**
+     * A Collection lists what belongs to it, not what it contains, so containment would answer
+     * nothing. `collectionMember:collectionIds` is the relation `default_content_collection` uses,
+     * and the two were measured to agree uid for uid on every collection in the dev repository,
+     * including a Favorites of four members.
+     */
+    it.each(['Favorites', 'Collection'])('scopes %s by membership, not containment', (type) => {
+      void firstValueFrom(service.getBrowseFolderContents(PATH, 50, undefined, { text: 'report' }));
+      httpMock
+        .expectOne((r) => r.url === `/nuxeo/api/v1/path${PATH}`)
+        .flush({ ...folderDoc, type, uid: 'col-uid' });
+      const request = httpMock.expectOne(
+        (r) => r.url === '/nuxeo/api/v1/automation/Repository.Query',
+      );
+
+      const { query } = (request.request.body as { params: { query: string } }).params;
+      expect(query).toContain("collectionMember:collectionIds = 'col-uid'");
+      expect(query).not.toContain('ecm:parentId');
+      request.flush({
+        entries: [],
+        resultsCount: 0,
+        currentPageSize: 0,
+        currentPageIndex: 0,
+        numberOfPages: 0,
+      });
+    });
+
+    it.each(['Root', 'virtual-root'])(
+      'leaves %s to the caller, since no query reproduces that listing',
+      async (kind) => {
         void firstValueFrom(
           service.getBrowseFolderContents(PATH, 50, undefined, { text: 'report' }),
         );
         httpMock
           .expectOne((r) => r.url === `/nuxeo/api/v1/path${PATH}`)
-          .flush({ ...folderDoc, type });
+          .flush(
+            kind === 'Root'
+              ? { ...folderDoc, type: 'Root' }
+              : // A uid that is no document: there is nothing to scope a query to.
+                { ...folderDoc, type: 'Root', uid: 'virtual-root' },
+          );
 
-        // No Repository.Query at all: these branches keep their own listing.
+        // No Repository.Query at all: this branch keeps its own listing.
         httpMock.expectNone((r) => r.url === '/nuxeo/api/v1/automation/Repository.Query');
         // Drain whichever listing that branch asked for.
         for (const r of httpMock.match(() => true)) {
@@ -1279,316 +1311,85 @@ describe('BrowseService', () => {
     );
   });
 
-  describe('getAllBrowseFolderEntries', () => {
-    /**
-     * Backs the browse toolbar filters, which used to sift only the page already fetched: on
-     * `/default-domain/workspaces` (66 children, 50 rendered) a document further down the folder
-     * could not be found by typing its exact title.
-     */
-    const folderDoc = (path: string) => ({
-      uid: 'ws-1',
+  describe('getBrowseFolderTypes', () => {
+    const PATH = '/default-domain/workspaces';
+    const folderDoc = {
+      uid: 'ws-uid',
       title: 'Workspaces',
       type: 'WorkspaceRoot',
-      path,
+      path: PATH,
       properties: {},
-    });
-
-    /** One page: the folder read `getBrowseFolderContents` does, then the `@children` page. */
-    function flushPage(
-      path: string,
-      pageIndex: number,
-      entries: { uid: string }[],
-      isNextPageAvailable: boolean,
-    ) {
-      httpMock.expectOne((r) => r.url === `/nuxeo/api/v1/path${path}`).flush(folderDoc(path));
-      httpMock
-        .expectOne(
-          (r) =>
-            r.url === `/nuxeo/api/v1/path${path}/@children` &&
-            r.params.get('currentPageIndex') === String(pageIndex),
-        )
-        .flush({
-          entries: entries.map((e) => ({
-            ...e,
-            title: e.uid,
-            type: 'File',
-            path: `${path}/${e.uid}`,
-            properties: {},
-          })),
-          totalSize: -2,
-          currentPageSize: entries.length,
-          currentPageIndex: pageIndex,
-          numberOfPages: 1,
-          isNextPageAvailable,
-        });
-    }
-
-    it('walks every page and concatenates the entries', async () => {
-      const path = '/default-domain/workspaces';
-      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 10, 1));
-
-      flushPage(path, 0, [{ uid: 'a' }], true);
-      flushPage(path, 1, [{ uid: 'b' }], true);
-      flushPage(path, 2, [{ uid: 'c' }], false);
-
-      const result = await result$;
-      expect(result.entries.map((e) => e.uid)).toEqual(['a', 'b', 'c']);
-      expect(result.truncated).toBe(false);
-      expect(result.folder?.uid).toBe('ws-1');
-    });
-
-    it('stops at the cap and says the scan was cut short', async () => {
-      const path = '/default-domain/workspaces';
-      // Cap of 2 at one document per page: two pages are requested, and Nuxeo still has more.
-      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 2, 1));
-
-      flushPage(path, 0, [{ uid: 'a' }], true);
-      flushPage(path, 1, [{ uid: 'b' }], true);
-
-      const result = await result$;
-      expect(result.entries.map((e) => e.uid)).toEqual(['a', 'b']);
-      expect(result.truncated).toBe(true);
-    });
-
-    it('does not report a truncated scan when the folder simply ran out at the cap', async () => {
-      const path = '/default-domain/workspaces';
-      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 2, 1));
-
-      flushPage(path, 0, [{ uid: 'a' }], true);
-      // Exactly as many documents as the cap, and no further page: nothing was missed.
-      flushPage(path, 1, [{ uid: 'b' }], false);
-
-      const result = await result$;
-      expect(result.entries).toHaveLength(2);
-      expect(result.truncated).toBe(false);
-    });
-
-    it('reports truncation when the cap discards documents the walk already fetched', async () => {
-      const path = '/default-domain/workspaces';
-      // Cap of 3 at two per page: page 0 and page 1 give four documents, the slice keeps three.
-      // The second page has no successor, so `hasNextPage` alone would call this complete.
-      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 3, 2));
-
-      flushPage(path, 0, [{ uid: 'a' }, { uid: 'b' }], true);
-      flushPage(path, 1, [{ uid: 'c' }, { uid: 'd' }], false);
-
-      const result = await result$;
-      expect(result.entries.map((e) => e.uid)).toEqual(['a', 'b', 'c']);
-      expect(result.truncated).toBe(true);
-    });
-
-    it('bounds the walk by documents actually returned, not by an assumed page size', async () => {
-      const path = '/default-domain/workspaces';
-      // A branch that hands back more rows than the requested page size — the root fallback pages
-      // a full list in memory, a Domain keeps only its folders — so `(pageIndex + 1) * pageSize`
-      // under-counts what has been pulled. Cap 5, requested page size 1, 4 rows per page: the cap
-      // must stop this after the second page rather than letting it run to page five.
-      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 5, 1));
-
-      flushPage(path, 0, [{ uid: 'a' }, { uid: 'b' }, { uid: 'c' }, { uid: 'd' }], true);
-      flushPage(path, 1, [{ uid: 'e' }, { uid: 'f' }, { uid: 'g' }, { uid: 'h' }], true);
-
-      const result = await result$;
-      expect(result.entries.map((e) => e.uid)).toEqual(['a', 'b', 'c', 'd', 'e']);
-      expect(result.truncated).toBe(true);
-      // `httpMock.verify()` in afterEach proves no third page was requested.
-    });
+    };
 
     /**
-     * The restricted repository root, where `getByPath('/')` is refused and the listing comes from
-     * the NXQL fallback. With more accessible top-level workspaces than the cap, the source says
-     * there are more; `pageOfFullList()` cannot see that, so the fallback has to carry it or the
-     * scan reports a complete answer it does not have.
+     * The one request the type dropdown costs. Its query carries the same scope, trashed and
+     * hidden rules the filtered listing does — and no filters — so the options can never describe
+     * a different set of documents than the rows.
      */
-    it('reports truncation on a restricted root whose source held more', async () => {
-      const result$ = firstValueFrom(service.getAllBrowseFolderEntries('/', 2, 2));
+    it('reads the container unfiltered and returns its distinct types, sorted', async () => {
+      const result$ = firstValueFrom(service.getBrowseFolderTypes(PATH));
+      httpMock.expectOne((r) => r.url === `/nuxeo/api/v1/path${PATH}`).flush(folderDoc);
+      const request = httpMock.expectOne(
+        (r) => r.url === '/nuxeo/api/v1/automation/Repository.Query',
+      );
 
-      // The root is not readable for this user.
-      httpMock
-        .expectOne((r) => r.url === '/nuxeo/api/v1/path/')
-        .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
-      // `getRepositoryRoot()` falls back too.
-      httpMock
-        .expectOne((r) => r.url === '/nuxeo/api/v1/path/')
-        .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
-      httpMock
-        .expectOne(
-          (r) =>
-            r.url === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
-            r.params.get('query')?.includes('FROM Domain') === true,
-        )
-        .flush({
-          entries: [],
-          totalSize: 0,
-          currentPageSize: 0,
-          currentPageIndex: 0,
-          numberOfPages: 0,
-        });
-      httpMock
-        .expectOne((r) => r.url === '/nuxeo/api/v1/search/pp/tree_children/execute')
-        .flush({
-          entries: [],
-          totalSize: 0,
-          currentPageSize: 0,
-          currentPageIndex: 0,
-          numberOfPages: 0,
-        });
+      const { query, pageSize } = (
+        request.request.body as { params: { query: string; pageSize: number } }
+      ).params;
+      expect(query).toBe(
+        "SELECT * FROM Document WHERE ecm:parentId = 'ws-uid' AND ecm:isTrashed = 0 " +
+          "AND ecm:mixinType != 'HiddenInNavigation'",
+      );
+      expect(pageSize).toBe(BROWSE_TYPE_OPTION_LIMIT);
+      // Neither header, so the response stays thin: 54 KB against 151 KB for the same 66 children.
+      expect(request.request.headers.get('properties')).toBeNull();
+      expect(request.request.headers.get('enrichers.document')).toBeNull();
 
-      // The accessible-workspaces query fills the page **and** says there is more.
-      const ws = (uid: string) => ({
-        uid,
-        title: uid,
-        type: 'Workspace',
-        path: `/${uid}`,
-        facets: ['Folderish'],
-        properties: {},
+      request.flush({
+        entries: [
+          { uid: 'a', title: 'a', type: 'Note', path: `${PATH}/a`, properties: {} },
+          { uid: 'b', title: 'b', type: 'File', path: `${PATH}/b`, properties: {} },
+          { uid: 'c', title: 'c', type: 'File', path: `${PATH}/c`, properties: {} },
+        ],
+        resultsCount: 3,
+        currentPageSize: 3,
+        currentPageIndex: 0,
+        numberOfPages: 1,
       });
-      httpMock
-        .expectOne(
-          (r) =>
-            r.url === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
-            r.params.get('query')?.includes('FROM Domain') !== true,
-        )
-        .flush({
-          entries: [ws('ws-1'), ws('ws-2')],
-          totalSize: 3,
-          currentPageSize: 2,
-          currentPageIndex: 0,
-          numberOfPages: 2,
-          isNextPageAvailable: true,
-        });
 
-      const result = await result$;
-      expect(result.entries).toHaveLength(2);
-      // The notice fires: the scan did not see the whole set.
-      expect(result.truncated).toBe(true);
+      expect(await result$).toEqual(['File', 'Note']);
     });
 
-    /**
-     * A restricted-root fallback batch **smaller than the cap**.
-     *
-     * The fallback pages an in-memory array, so once it is exhausted every further page comes back
-     * empty while the source's `hasMore` keeps `hasNextPage` true. Before the empty-page guard
-     * `fetched` never advanced and the walk re-ran the bootstrap endpoints forever.
-     *
-     * It is bounded at **two** bootstraps, not one: page 0 is non-empty, so the walk is entitled
-     * to try page 1, and it is page 1 coming back empty that stops it. One redundant bootstrap in
-     * this rare case is the price of keeping the source's "there is more" signal, which is what
-     * makes the result honestly `truncated`. This spec flushes exactly two and `httpMock.verify()`
-     * proves nothing else was asked for.
-     */
-    it('stops a restricted-root fallback whose batch is smaller than the cap', async () => {
-      const emptyList = {
+    it('scopes a collection by membership, as the filtered listing does', async () => {
+      void firstValueFrom(service.getBrowseFolderTypes(PATH));
+      httpMock
+        .expectOne((r) => r.url === `/nuxeo/api/v1/path${PATH}`)
+        .flush({ ...folderDoc, type: 'Collection', uid: 'col-uid' });
+      const request = httpMock.expectOne(
+        (r) => r.url === '/nuxeo/api/v1/automation/Repository.Query',
+      );
+
+      expect((request.request.body as { params: { query: string } }).params.query).toContain(
+        "collectionMember:collectionIds = 'col-uid'",
+      );
+      request.flush({
         entries: [],
-        totalSize: 0,
+        resultsCount: 0,
         currentPageSize: 0,
         currentPageIndex: 0,
         numberOfPages: 0,
-      };
-      const ws = (uid: string) => ({
-        uid,
-        title: uid,
-        type: 'Workspace',
-        path: `/${uid}`,
-        facets: ['Folderish'],
-        properties: {},
       });
-
-      /** One pass of the fallback: root refused twice, Domain probe and tree_children empty. */
-      const flushBootstrap = (entries: ReturnType<typeof ws>[]) => {
-        for (let i = 0; i < 2; i += 1) {
-          httpMock
-            .expectOne((r) => r.url === '/nuxeo/api/v1/path/')
-            .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
-        }
-        httpMock
-          .expectOne(
-            (r) =>
-              r.url === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
-              r.params.get('query')?.includes('FROM Domain') === true,
-          )
-          .flush(emptyList);
-        httpMock
-          .expectOne((r) => r.url === '/nuxeo/api/v1/search/pp/tree_children/execute')
-          .flush(emptyList);
-        httpMock
-          .expectOne(
-            (r) =>
-              r.url === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
-              r.params.get('query')?.includes('FROM Domain') !== true,
-          )
-          .flush({
-            entries,
-            totalSize: entries.length,
-            currentPageSize: entries.length,
-            currentPageIndex: 0,
-            numberOfPages: 1,
-            // The source still claims more, which is what used to drive the walk round forever.
-            isNextPageAvailable: true,
-          });
-      };
-
-      const result$ = firstValueFrom(service.getAllBrowseFolderEntries('/', 500, 500));
-
-      // Page 0: two accessible workspaces, well under the cap.
-      flushBootstrap([ws('ws-1'), ws('ws-2')]);
-      // Page 1: the same array, now sliced past its end, so this page is empty — and that is what
-      // terminates the walk.
-      flushBootstrap([ws('ws-1'), ws('ws-2')]);
-
-      const result = await result$;
-      expect(result.entries.map((e) => e.uid)).toEqual(['ws-1', 'ws-2']);
-      // Honest: the source said it held more and the walk could not reach it.
-      expect(result.truncated).toBe(true);
     });
 
-    it('forwards the requested sort to every page it walks', async () => {
-      const path = '/default-domain/workspaces';
-      const sort = [{ sortBy: 'dc:title', sortOrder: 'ASC' as const }];
-      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 10, 1, sort));
+    /** The repository root: no query reproduces its listing, so there is nothing to ask. */
+    it('answers an empty list, and asks nothing, for a container it cannot query', async () => {
+      const result$ = firstValueFrom(service.getBrowseFolderTypes('/'));
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/path/')
+        .flush({ ...folderDoc, type: 'Root' });
 
-      for (const pageIndex of [0, 1]) {
-        httpMock.expectOne((r) => r.url === `/nuxeo/api/v1/path${path}`).flush(folderDoc(path));
-        const req = httpMock.expectOne(
-          (r) =>
-            r.url === `/nuxeo/api/v1/path${path}/@children` &&
-            r.params.get('currentPageIndex') === String(pageIndex),
-        );
-        // Without this the scan returned the default order and silently unsorted a sorted page.
-        expect(req.request.params.get('sortBy')).toBe('dc:title');
-        expect(req.request.params.get('sortOrder')).toBe('ASC');
-        req.flush({
-          entries: [
-            {
-              uid: `p${pageIndex}`,
-              title: `p${pageIndex}`,
-              type: 'File',
-              path: `${path}/p`,
-              properties: {},
-            },
-          ],
-          totalSize: -2,
-          currentPageSize: 1,
-          currentPageIndex: pageIndex,
-          numberOfPages: 1,
-          isNextPageAvailable: pageIndex === 0,
-        });
-      }
-
-      const result = await result$;
-      expect(result.entries.map((e) => e.uid)).toEqual(['p0', 'p1']);
-    });
-
-    it('asks for one page only when the folder fits in one', async () => {
-      const path = '/default-domain/workspaces';
-      const result$ = firstValueFrom(service.getAllBrowseFolderEntries(path, 500, 50));
-
-      flushPage(path, 0, [{ uid: 'a' }, { uid: 'b' }], false);
-
-      const result = await result$;
-      expect(result.entries).toHaveLength(2);
-      expect(result.truncated).toBe(false);
-      // `httpMock.verify()` in afterEach is what proves no second page was requested.
+      httpMock.expectNone((r) => r.url === '/nuxeo/api/v1/automation/Repository.Query');
+      expect(await result$).toEqual([]);
     });
   });
 });

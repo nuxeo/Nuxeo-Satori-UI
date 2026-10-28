@@ -339,31 +339,11 @@ sat-breadcrumbs {
   white-space: nowrap;
 }
 
-// Shown only when the filter scan hit its cap, so the count beside it is not read as the whole
-// folder. Same scale as the count; `warning`-ish colour would overstate it, since nothing failed.
-.filter-scan-note {
-  font-size: 12px;
-  font-style: italic;
-  color: var(--mat-sys-on-surface-variant, #474551);
-  white-space: nowrap;
+// Beside the count while a changed filter's listing is on its way. Deliberately small and in the
+// toolbar rather than over the table: the rows it is replacing stay readable until it lands.
+.filter-progress {
   margin-inline-start: 8px;
-}
-
-// A failed scan is not an error state for the page — the rows below are still real, just fewer
-// than asked for — so it takes the same scale as the count and `error` only for its text.
-.filter-scan-note--failed {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-style: normal;
-  color: var(--mat-sys-error, #b3261e);
-  white-space: normal;
-}
-
-.filter-scan-retry {
-  font-size: 12px;
-  min-width: 0;
-  padding: 0 8px;
+  flex-shrink: 0;
 }
 
 // The Modified clear, which now sits in the toolbar rather than inside a form field: `main`

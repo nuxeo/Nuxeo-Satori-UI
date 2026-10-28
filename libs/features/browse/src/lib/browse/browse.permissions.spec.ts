@@ -70,7 +70,7 @@ const browse = {
   // Default EMPTY: the folder scan never resolves, so the toolbar filters fall back to the
   // loaded page exactly as they did before cross-folder filtering existed. A spec that wants the
   // whole-folder behaviour overrides this with its own `of({ entries, truncated })`.
-  getAllBrowseFolderEntries: vi.fn((): BrowseReturn<'getAllBrowseFolderEntries'> => EMPTY),
+  getBrowseFolderTypes: vi.fn((): BrowseReturn<'getBrowseFolderTypes'> => EMPTY),
   getFolderContext: vi.fn((): BrowseReturn<'getFolderContext'> => EMPTY),
   getChildren: vi.fn((): BrowseReturn<'getChildren'> => EMPTY),
   hasChildCollections: vi.fn((): BrowseReturn<'hasChildCollections'> => of(false)),

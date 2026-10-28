@@ -97,9 +97,7 @@ describe('BrowseComponent — row actions', () => {
     getByPath: vi.fn(() => of(folder)),
     // Never resolves on purpose: the folder scan stays pending, so the toolbar filters fall back to
     // the loaded page exactly as they did before cross-folder filtering existed.
-    getAllBrowseFolderEntries: vi.fn(
-      (): ReturnType<BrowseService['getAllBrowseFolderEntries']> => EMPTY,
-    ),
+    getBrowseFolderTypes: vi.fn((): ReturnType<BrowseService['getBrowseFolderTypes']> => EMPTY),
     getBrowseFolderContents: vi.fn(() =>
       of({ folder, entries: [report, note, readOnly, subfolder, publication], totalSize: 5 }),
     ),
