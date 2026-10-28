@@ -203,7 +203,7 @@ export class NxsAdminGroupDetailsPageComponent {
 
   protected deleteGroup(): void {
     const group = this.group();
-    if (!group) return;
+    if (!group || this.mutationBusy()) return;
     this.mutationRequest = this.confirm(group.groupname)
       .pipe(
         switchMap(() => this.userService.deleteGroup(group.groupname)),
@@ -247,6 +247,7 @@ export class NxsAdminGroupDetailsPageComponent {
   }
 
   protected removePermission(row: PrincipalPermissionRow): void {
+    if (this.mutationBusy()) return;
     this.mutationRequest = this.documentDetail
       .removePermissionById(row.documentUid, row.aceId)
       .pipe(takeUntilDestroyed(this.destroyRef))
