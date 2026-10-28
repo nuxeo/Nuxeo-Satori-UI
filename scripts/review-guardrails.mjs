@@ -10310,9 +10310,16 @@ function workflowLines(body) {
     // is a valid header, and requiring the indicator to end the raw line missed it, which put the
     // script body back into the YAML the parser reads. Indentation is still measured from the raw
     // lines, because comment blanking would erase the indentation the boundary depends on.
-    const key = /^(\s*)((?:-\s+)?)([A-Za-z_][\w.-]*)\s*:\s*[|>][-+]?\d*\s*$/.exec(
-      stripTrailingYamlComment(raw[i]),
-    );
+    const header = stripTrailingYamlComment(raw[i]);
+    const key =
+      /^(\s*)((?:-\s+)?)['"]?([A-Za-z_][\w.-]*)['"]?\s*:\s*[|>][-+]?\d*\s*$/.exec(header) ??
+      /* A mapping whose VALUE is opaque data rather than workflow structure. Its body is blanked
+       * for the same reason a `run:` script is: the gate scan treats any `if:` under `jobs:` as a
+       * condition, so a job declaring `env.if` — or a `with:` input named `if` — had that data read
+       * as a step condition and failed the shape rule, on a workflow with nothing conditional in
+       * it. Reported on #494. None of these keys can contain a job or a step, so nothing the
+       * parser needs is lost. */
+      /^(\s*)((?:-\s+)?)['"]?(env|with|outputs|inputs|secrets|strategy)['"]?\s*:\s*$/.exec(header);
     if (!key || key[3] === 'if') continue;
     /* The KEY's column, not the dash's. For `- run: |` the dash sits further left than the key, so
      * measuring from the dash swallowed the step's own sibling keys as script — and a ticket-branch
@@ -10420,11 +10427,28 @@ function parseYamlStringList(lines, index, keyIndent) {
   }
   if (after !== '') return [unquoteYamlScalar(after)];
 
+  /* A block sequence, in either indentation YAML allows.
+   *
+   * `yamlBlockEnd` is not used here, and that is the point: it stops at the first line indented no
+   * further than the key, which ends the sequence immediately for the INDENTLESS form —
+   *
+   *     branches:
+   *     - integration/nxsat-308
+   *
+   * — where the items sit at the key's own column. That form is valid YAML and GitHub accepts it,
+   * and it used to read as an unreadable filter: the trigger rule could not see the branch, and
+   * with no ref gate in the workflow the check returned before reporting anything. A ticket-only
+   * trigger written this way passed in silence. Reported on #494.
+   *
+   * So the sequence runs while lines are items at or past the key's column, and stops at the first
+   * line that is not one. A plain scalar on the next line still returns `null`, which is what
+   * makes "I cannot read this filter" distinct from "there is no filter". */
   const items = [];
-  for (let i = index + 1; i < yamlBlockEnd(lines, index, keyIndent); i += 1) {
+  for (let i = index + 1; i < lines.length; i += 1) {
     if (lines[i].trim() === '') continue;
+    if (yamlIndent(lines[i]) < keyIndent) break;
     const entry = /^\s*-\s*(.+)$/.exec(lines[i]);
-    if (!entry) return null;
+    if (!entry) break;
     items.push(unquoteYamlScalar(entry[1]));
   }
   return items.length > 0 ? items : null;
@@ -10613,9 +10637,14 @@ const expressionHasAlternative = (expression) => {
   // escape — and two analyses of the same text reaching different conclusions is the shape of
   // defect that produced the quoted-scalar bug.
   const inside = stringLiteralMask(expression);
-  return /\|\|/.test(
-    [...expression].map((character, i) => (inside[i] ? ' ' : character)).join(''),
-  );
+  /* Indexed by CODE UNIT, like the mask. `[...expression]` iterates code POINTS, so one astral
+   * character — an emoji in a branch name is enough — shifted every index after it by one and the
+   * blanking fell out of step with the mask. The visible symptom was a real `||` being erased:
+   * `github.ref=='refs/heads/🚀'||github.ref=='refs/heads/main'` was reported unreachable.
+   * Reported on #494. */
+  let blanked = '';
+  for (let i = 0; i < expression.length; i += 1) blanked += inside[i] ? ' ' : expression[i];
+  return /\|\|/.test(blanked);
 };
 
 /**
@@ -10687,8 +10716,8 @@ function parseWorkflowTriggersAndGates(body) {
    * instead of calling it absent.
    */
   const inlineFilter = (text) => {
-    const key = /\b(branches|branches-ignore)\s*:/.exec(text);
-    const tags = /\btags(?:-ignore)?\s*:/.test(text);
+    const key = /['"]?\b(branches|branches-ignore)\b['"]?\s*:/.exec(text);
+    const tags = /['"]?\btags(?:-ignore)?\b['"]?\s*:/.test(text);
     if (!key) return text.trim() === '' ? null : { ...NO_FILTER, tags };
     const items = parseYamlFlowSequence(text.slice(key.index + key[0].length));
     return {
@@ -10739,13 +10768,23 @@ function parseWorkflowTriggersAndGates(body) {
       if (!key) return null;
       const event = key[2] ?? key[3];
       const eventEnd = yamlBlockEnd(lines, i, eventIndent);
-      // An inline flow mapping on the key's own line is read first, then the block form below.
-      let filter = inlineFilter(lines[i].slice(lines[i].indexOf(':', yamlIndent(lines[i])) + 1));
+      /* An inline flow mapping first, then the block form below.
+       *
+       * A flow mapping may span lines: `push: {` with `branches: […] }` underneath handed
+       * `inlineFilter` just `{`, which carries no filter, so the ticket-only trigger counted as
+       * unfiltered. Reported on #494. The rest of the event region is joined on only when the
+       * value really does open a flow mapping — joining unconditionally would feed the BLOCK form
+       * to the inline parser, and `branches:` with a `- main` sequence under it has no `[…]` for
+       * that parser to find, which would turn every block filter into "unreadable". */
+      const ownValue = lines[i].slice(lines[i].indexOf(':', yamlIndent(lines[i])) + 1);
+      let filter = inlineFilter(
+        ownValue.trim().startsWith('{') ? [ownValue, ...lines.slice(i + 1, eventEnd)].join(' ') : ownValue,
+      );
       if (filter === null) {
         filter = NO_FILTER;
         for (let j = i + 1; j < eventEnd; j += 1) {
-          if (/^\s*tags(?:-ignore)?\s*:/.test(lines[j])) filter = { ...filter, tags: true };
-          const match = /^\s*(branches|branches-ignore)\s*:/.exec(lines[j]);
+          if (/^\s*['"]?tags(?:-ignore)?['"]?\s*:/.test(lines[j])) filter = { ...filter, tags: true };
+          const match = /^\s*['"]?(branches|branches-ignore)['"]?\s*:/.exec(lines[j]);
           if (!match) continue;
           const list = parseYamlStringList(lines, j, yamlIndent(lines[j]));
           filter = {
@@ -10780,12 +10819,12 @@ function parseWorkflowTriggersAndGates(body) {
       if (lines[i].trim() === '') continue;
       const indent = yamlIndent(lines[i]);
       if (indent === jobIndent) {
-        job = /^\s*([A-Za-z_][\w-]*)\s*:/.exec(lines[i])?.[1] ?? job;
+        job = /^\s*['"]?([A-Za-z_][\w-]*)['"]?\s*:/.exec(lines[i])?.[1] ?? job;
         jobKeyIndent = null;
         continue;
       }
       if (jobKeyIndent === null) jobKeyIndent = indent;
-      const gate = /^\s*(?:-\s+)?if\s*:\s*(.+)$/.exec(lines[i]);
+      const gate = /^\s*(?:-\s+)?['"]?if['"]?\s*:\s*(.*)$/.exec(lines[i]);
       if (!gate) continue;
 
       /* Fold in the continuation lines, unconditionally.
@@ -11007,7 +11046,7 @@ function checkWorkflowRefGates() {
     const seenLines = new Set(gates.map((gate) => gate.line));
     const commentless = workflowLines(body);
     for (let i = 0; i < commentless.length; i += 1) {
-      if (!/^\s*(?:-\s+)?if\s*:/.test(commentless[i])) continue;
+      if (!/^\s*(?:-\s+)?['"]?if['"]?\s*:/.test(commentless[i])) continue;
       if (refComparisons(commentless[i]).length === 0 || seenLines.has(i + 1)) continue;
       fail(
         `${workflow}:${i + 1} compares \`github.ref\` in an \`if:\` that ` +
@@ -11022,6 +11061,25 @@ function checkWorkflowRefGates() {
      * some job had an `if: always()`. The pattern and filter rules are about ref gates; a workflow
      * that has none must not be judged by them. Caught in review on #494. */
     const refGates = gates.filter((gate) => refComparisons(gate.expression).length > 0);
+
+    /* An unreadable branch filter is reported whether or not anything gates on a ref, and that has
+     * to come BEFORE the return below. It did not: a filter the parser could not read made the
+     * trigger rule blind to the branches — they are not in `allowlists` — and then a workflow with
+     * no ref gate returned here without reporting either. A ticket-only trigger in a shape the
+     * parser could not read passed in complete silence, which is the failure mode this guardrail
+     * exists to prevent, reached through the guardrail itself. Reported on #494.
+     *
+     * The unsupported-PATTERN rule below stays scoped to ref gates: an unmodelled glob only
+     * matters when a reachability verdict depends on it. */
+    if (unparsedFilter !== null) {
+      fail(
+        `${workflow} has a \`${unparsedFilter}.branches\` value this guardrail cannot read, so ` +
+          'neither its trigger nor any ref gate in this workflow was checked against it. Teach ' +
+          '`parseYamlStringList` the shape it uses — a filter that cannot be read is not a filter ' +
+          'that is absent, and treating the two alike is how a stale trigger passes unnoticed.',
+      );
+    }
+
     if (refGates.length === 0) continue;
 
     const unmodelled = allowlists
@@ -11044,14 +11102,6 @@ function checkWorkflowRefGates() {
       unfiltered.length === 0 &&
       unparsedFilter === null &&
       unmodelled.length === 0;
-    if (unparsedFilter !== null) {
-      fail(
-        `${workflow} has a \`${unparsedFilter}.branches\` value this guardrail cannot read, and ` +
-          'the workflow gates a job on a ref, so that gate was not checked for reachability. ' +
-          'Teach `parseYamlStringList` the shape it uses.',
-      );
-    }
-
     for (const gate of refGates) {
       // `job` is null only for an `if:` that precedes any job key, which is malformed rather than
       // impossible — named generically so the message never reads "the `null` job".

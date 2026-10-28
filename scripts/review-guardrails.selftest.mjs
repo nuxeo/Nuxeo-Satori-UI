@@ -10491,6 +10491,183 @@ expectRed(
   /on the branch `staging`, which none of the workflow's own branch filters admit/,
 );
 
+/* --- fifth review round on #494: alternative YAML spellings of the same thing --- */
+
+const TICKET_TRIGGER_FORMS = {
+  'a flow mapping that spans lines': "name: Fixture\n\non:\n  push: {\n    branches: ['integration/nxsat-308'] }\n\n",
+  'a quoted filter key': "name: Fixture\n\non:\n  push:\n    'branches': ['integration/nxsat-308']\n\n",
+  'a quoted filter key inside a flow mapping':
+    "name: Fixture\n\non:\n  push: { 'branches': ['integration/nxsat-308'] }\n\n",
+  'an indentless block sequence': 'name: Fixture\n\non:\n  push:\n    branches:\n    - integration/nxsat-308\n\n',
+};
+
+// Four spellings of ONE trigger, each of which used to pass. Every one is valid YAML that GitHub
+// accepts, and none needed a ref gate to hide behind: the branch simply never reached the rule.
+// The indentless sequence was the worst of them — the filter read as unreadable, which made the
+// trigger rule blind to the branch, and with no ref gate the check returned before reporting even
+// that. A ticket-only trigger passed in silence, through the guardrail's own early exit.
+for (const [form, triggers] of Object.entries(TICKET_TRIGGER_FORMS)) {
+  expectRed(
+    `a ticket-only push trigger written as ${form}`,
+    'checkWorkflowRefGates',
+    { '.github/workflows/storybook-pages.yml': triggers + WORKFLOW_JOB },
+    null,
+    /triggers on `push` only for `integration\/nxsat-308`/,
+  );
+}
+
+expectRed(
+  'an unreadable branch filter is reported even with no ref gate in the workflow',
+  'checkWorkflowRefGates',
+  {
+    // The ordering half of the indentless-sequence finding, and the sharper half. A filter the
+    // parser cannot read keeps its branches out of `allowlists`, which makes the trigger rule
+    // blind to them — and the check used to return on "no ref gates" before saying so. So the
+    // guardrail's own early exit was the last thing standing between a stale ticket-only trigger
+    // and a green run. The unreadable filter is now reported before that return; the unsupported-
+    // PATTERN rule stays scoped to ref gates, where a reachability verdict actually depends on it.
+    '.github/workflows/deploy.yml':
+      'name: Fixture\n\non:\n  push:\n    branches:\n      main\n\n' + WORKFLOW_JOB,
+  },
+  null,
+  /has a `push\.branches` value this guardrail cannot read/,
+);
+
+expectRed(
+  'an `if:` whose value begins on the next line is still a condition',
+  'checkWorkflowRefGates',
+  {
+    // The gate regex required at least one character after the colon, so a bare `if:` matched
+    // nothing and the folding that would have read the condition never ran. The tripwire reads the
+    // `if:` line, where there is no comparison to see, so it could not catch it either.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  deploy:
+    needs: build
+    if:
+      github.ref == 'refs/heads/integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deploy
+`,
+  },
+  null,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`/,
+);
+
+expectRed(
+  'a quoted `\'if\':` key is still a condition',
+  'checkWorkflowRefGates',
+  {
+    // Both the gate scan and the tripwire required the key unquoted, so this produced no gates and
+    // passed silently — the same quoted-key blindness as the event and filter keys above. They are
+    // separate controls because they are separate scanners, and fixing one taught me nothing about
+    // the others.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  deploy:
+    needs: build
+    'if': github.ref == 'refs/heads/integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deploy
+`,
+  },
+  null,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an astral character does not shift the string-literal mask',
+  'checkWorkflowRefGates',
+  {
+    // `stringLiteralMask` indexes code UNITS; blanking with `[...expression]` iterates code POINTS,
+    // so one emoji in a branch name shifted every index after it and erased a real `||` — which
+    // made a reachable job look unreachable. Both sides count code units now.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.ref=='refs/heads/\u{1F680}'||github.ref=='refs/heads/main'"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a data field named `if` under `env:` is data, not a condition',
+  'checkWorkflowRefGates',
+  {
+    // Any `if:` under `jobs:` was read as a condition, so a job declaring `env.if` failed the shape
+    // rule with nothing conditional in it. The bodies of `env`, `with`, `outputs`, `inputs`,
+    // `secrets` and `strategy` are blanked like a `run:` script — none of them can contain a job or
+    // a step, so the parser loses nothing it needs.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      if: github.ref == 'main'
+    steps:
+      - run: echo build
+`,
+  },
+);
+
+expectRed(
+  'blanking `env:` does not hide a real condition after it',
+  'checkWorkflowRefGates',
+  {
+    // The control that keeps the fix above from going too far: the body of `env:` is blanked, and
+    // a step's own `if:` sits at the key's column, not inside it.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        env:
+          TARGET: pages
+        if: github.ref == 'refs/heads/integration/nxsat-308'
+        run: echo deploy
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is a ticket branch/,
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;
