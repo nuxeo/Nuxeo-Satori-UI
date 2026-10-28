@@ -35,6 +35,48 @@ export interface NavTreeBootstrap {
   hasMore?: boolean;
 }
 
+/** The browse toolbar's filters, as the server takes them. */
+export interface BrowseFolderFilters {
+  /** Substring of `dc:title`, matched case-insensitively. */
+  text?: string;
+  /** Exact `ecm:primaryType`. */
+  type?: string;
+  /** Inclusive lower bound on `dc:modified`. */
+  modifiedFrom?: Date | null;
+  /** Inclusive upper bound on `dc:modified`; the whole of that day counts. */
+  modifiedTo?: Date | null;
+  /** Substring of `dc:lastContributor`, matched case-insensitively. */
+  contributor?: string;
+}
+
+/** Whether any filter would narrow the listing. */
+export function browseFolderFiltersActive(filters?: BrowseFolderFilters): boolean {
+  if (!filters) return false;
+  return (
+    !!filters.text?.trim() ||
+    !!filters.type ||
+    !!filters.modifiedFrom ||
+    !!filters.modifiedTo ||
+    !!filters.contributor?.trim()
+  );
+}
+
+/**
+ * Escape a value for use inside a single-quoted NXQL `LIKE`/`ILIKE` **pattern**.
+ *
+ * `escapeNxqlLiteral` closes the quote and backslash holes; this closes the wildcards, which it
+ * deliberately leaves to the caller. Measured against the server: `ILIKE '%P_oject%'` and
+ * `ILIKE '%Pro%ect%'` both match "Project Reports", so an unescaped `_` or `%` typed into the
+ * filter box silently becomes a wildcard — and `ILIKE '%Pro\%ect%'` matches nothing, so a
+ * backslash is what makes them literal. There is no `ESCAPE` clause: `ESCAPE '!'` is rejected.
+ *
+ * Order matters and is inherited: `escapeNxqlLiteral` doubles backslashes first, so the ones added
+ * here are unambiguously escapes rather than data.
+ */
+export function escapeNxqlPattern(value: string): string {
+  return escapeNxqlLiteral(value).replace(/[%_]/g, '\\$&');
+}
+
 /** One server-side sort key: a Nuxeo property name such as `dc:title`, and its direction. */
 export interface BrowseSortEntry {
   sortBy: string;
@@ -67,6 +109,13 @@ export interface BrowseFolderContents {
   hasNextPage?: boolean;
   /** Present when a restricted user should land on their only accessible folder. */
   redirectTo?: string;
+  /**
+   * Whether the **server** applied the filters.
+   *
+   * False where the listing came from a source a filtered query cannot express — the repository
+   * root, Favorites, a Collection — so the caller must still narrow what it was handed.
+   */
+  serverFiltered?: boolean;
 }
 
 /**
@@ -130,6 +179,11 @@ function sortValue(doc: NuxeoDocument, property: string): string {
  * reads every accessible top-level folder at once, so its page and sort are applied here; the
  * server pages and sorts every other listing.
  */
+/** `YYYY-MM-DD HH:mm:ss` in UTC, which is how Nuxeo reads a `TIMESTAMP` literal. */
+function nxqlTimestamp(value: Date): string {
+  return value.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 function pageOfFullList(
   entries: readonly NuxeoDocument[],
   pageSize: number,
@@ -227,12 +281,13 @@ export class BrowseService {
     nuxeoPath: string,
     pageSize = 50,
     page?: BrowsePageRequest,
+    filters?: BrowseFolderFilters,
   ): Observable<BrowseFolderContents> {
     const safePath = nuxeoPath.replace(/\/+$/, '') || '/';
 
     return this.getByPath(safePath).pipe(
       switchMap((folder) =>
-        this.listBrowseFolderEntries(folder, safePath, pageSize, page).pipe(
+        this.listBrowseFolderEntries(folder, safePath, pageSize, page, filters).pipe(
           // Spread rather than destructure: picking named fields is what dropped `hasNextPage`
           // on its way out, so the pager saw `undefined` and never offered a next page.
           map((page) => ({ folder, ...page })),
@@ -255,6 +310,9 @@ export class BrowseService {
               // does not have.
               hasNextPage: paged.hasNextPage || hasMore === true,
               redirectTo: entries.length === 1 ? entries[0].path : undefined,
+              // The bootstrap is not a query, so the caller still has to narrow this itself. It
+              // hands back the whole accessible list, so narrowing it client-side is complete.
+              serverFiltered: false,
             };
           }),
         );
@@ -345,12 +403,141 @@ export class BrowseService {
     );
   }
 
+  /**
+   * The NXQL a filtered folder listing runs.
+   *
+   * Every property name here has been run against the server, because a wrong one is not an
+   * error on the index-backed endpoint — it answers 200 with zero rows. (On
+   * `Repository.Query` it does fail loudly: `dc:nosuchfield` returns "Failed to invoke
+   * operation", which is the better of the two behaviours.) Verified: `ecm:parentId`,
+   * `ecm:isTrashed`, `dc:title`, `ecm:primaryType`, `dc:modified`, `dc:lastContributor`.
+   *
+   * `TIMESTAMP` literals are read as **UTC**, measured on a host at +0530: the newest child's
+   * `dc:modified` rendered in UTC matched at minus one minute and not at plus one. So the picked
+   * `Date`'s instant is formatted from its UTC components, which keeps the boundary exactly where
+   * the previous client-side comparison of `getTime()` values put it.
+   */
+  private buildFilteredChildrenQuery(
+    folderUid: string,
+    filters: BrowseFolderFilters,
+    sort?: BrowseSortEntry[],
+  ): string {
+    const clauses = [
+      `ecm:parentId = '${escapeNxqlLiteral(folderUid)}'`,
+      'ecm:isTrashed = 0',
+      // `@children` applies this and a raw `ecm:parentId` query does not, so without it a filter
+      // shows documents the unfiltered listing hides. Measured on `/default-domain`: the bare
+      // query answered 10 children against the listing's 8, the two extras being the `CommentRoot`
+      // and `UserWorkspacesRoot` system containers; with this clause it answers the same 8.
+      // Every other NXQL in this service carries it for the same reason.
+      "ecm:mixinType != 'HiddenInNavigation'",
+    ];
+
+    const text = filters.text?.trim();
+    if (text) {
+      clauses.push(`dc:title ILIKE '%${escapeNxqlPattern(text)}%'`);
+    }
+    if (filters.type) {
+      clauses.push(`ecm:primaryType = '${escapeNxqlLiteral(filters.type)}'`);
+    }
+    if (filters.modifiedFrom) {
+      clauses.push(`dc:modified >= TIMESTAMP '${nxqlTimestamp(filters.modifiedFrom)}'`);
+    }
+    if (filters.modifiedTo) {
+      // Exclusive upper bound one day on, so the whole of the chosen day counts — the same
+      // arithmetic the client-side filter used.
+      const endOfDay = new Date(filters.modifiedTo.getTime() + 86_400_000);
+      clauses.push(`dc:modified < TIMESTAMP '${nxqlTimestamp(endOfDay)}'`);
+    }
+    const contributor = filters.contributor?.trim();
+    if (contributor) {
+      clauses.push(`dc:lastContributor ILIKE '%${escapeNxqlPattern(contributor)}%'`);
+    }
+
+    const order = (sort ?? [])
+      .map((entry) => `${entry.sortBy} ${entry.sortOrder === 'DESC' ? 'DESC' : 'ASC'}`)
+      .join(', ');
+    return (
+      `SELECT * FROM Document WHERE ${clauses.join(' AND ')}` + (order ? ` ORDER BY ${order}` : '')
+    );
+  }
+
+  /**
+   * One page of a folder's children, filtered and ordered by the **server**.
+   *
+   * `automation/Repository.Query` and not `search/lang/NXQL/execute`: the latter is
+   * OpenSearch-backed and, measured on a live instance, disagrees with `@children` in both
+   * directions — 91 documents against 66, 13 live children missing from the index and 38 trashed
+   * ones still indexed as `ecm:isTrashed = 0` — so a filter evaluated there drops real documents
+   * and resurrects deleted ones, and `ILIKE` silently returns nothing. `Repository.Query` returned
+   * exactly the same 66 uids as `@children`, honours `ILIKE` case-insensitively, and answers a
+   * filtered 500-row query in ~28 ms.
+   */
+  private getFilteredChildren(
+    folderUid: string,
+    filters: BrowseFolderFilters,
+    pageSize: number,
+    page?: BrowsePageRequest,
+  ): Observable<{ entries: NuxeoDocument[]; totalSize: number; hasNextPage: boolean }> {
+    return this.api
+      .post<NuxeoDocumentList>(
+        '/nuxeo/api/v1/automation/Repository.Query',
+        {
+          params: {
+            query: this.buildFilteredChildrenQuery(folderUid, filters, page?.sort),
+            pageSize,
+            currentPageIndex: page?.currentPageIndex ?? 0,
+          },
+        },
+        // The same enricher the unfiltered listing asks for, or a filtered row would carry no
+        // `contextParameters.permissions` and its actions would vanish.
+        { properties: '*', 'enrichers.document': 'permissions' },
+      )
+      .pipe(
+        map((list) => ({
+          entries: list.entries ?? [],
+          // A real count, unlike `@children`'s `-2`: the provider reports its total across pages.
+          totalSize: list.resultsCount ?? list.totalSize ?? (list.entries ?? []).length,
+          hasNextPage: list.isNextPageAvailable === true,
+        })),
+      );
+  }
+
   private listBrowseFolderEntries(
     folder: NuxeoDocument,
     safePath: string,
     pageSize: number,
     page?: BrowsePageRequest,
-  ): Observable<{ entries: NuxeoDocument[]; totalSize: number; hasNextPage?: boolean }> {
+    filters?: BrowseFolderFilters,
+  ): Observable<{
+    entries: NuxeoDocument[];
+    totalSize: number;
+    hasNextPage?: boolean;
+    serverFiltered?: boolean;
+  }> {
+    // Filtered server-side wherever the children are `ecm:parentId` children — ordinary folders
+    // and Domains, which is also the only branch the server pages, and so the only one where a
+    // client-side filter could miss rows it never fetched.
+    //
+    // The branches below cannot be expressed that way and keep their listing: `Root` is
+    // `tree_children` with its own Folderish/hidden rules (an `ecm:parentId` query on the root
+    // returns 7 where that listing shows 3), and Favorites/Collection are membership rather than
+    // containment. They report `serverFiltered: false` and the caller narrows what it was handed.
+    if (
+      browseFolderFiltersActive(filters) &&
+      folder.type !== 'Root' &&
+      folder.type !== 'Favorites' &&
+      folder.type !== 'Collection' &&
+      folder.uid &&
+      folder.uid !== 'virtual-root'
+    ) {
+      return this.getFilteredChildren(
+        folder.uid,
+        filters as BrowseFolderFilters,
+        pageSize,
+        page,
+      ).pipe(map((result) => ({ ...result, serverFiltered: true })));
+    }
     // Each branch is asked for one page in the server's order. `Root`, `Domain`, `Favorites` and
     // `Collection` used to take only a page size, so a listing could never reach past its first
     // page there, and a sort the caller asked for was dropped without a word. A domain lists every

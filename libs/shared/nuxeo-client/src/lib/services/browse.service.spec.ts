@@ -1,5 +1,9 @@
 import { provideHttpClient, withXhr } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  HttpTestingController,
+  type TestRequest,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 
@@ -1101,6 +1105,178 @@ describe('BrowseService', () => {
     });
 
     expect(await result$).toBe(false);
+  });
+
+  describe('filtered folder listing', () => {
+    const PATH = '/default-domain/workspaces';
+    const folderDoc = {
+      uid: 'ws-uid',
+      title: 'Workspaces',
+      type: 'WorkspaceRoot',
+      path: PATH,
+      properties: {},
+    };
+
+    /** Runs a filtered listing and returns the NXQL the server was asked for. */
+    function queryFor(
+      filters: Parameters<BrowseService['getBrowseFolderContents']>[3],
+      page?: Parameters<BrowseService['getBrowseFolderContents']>[2],
+    ): { query: string; request: TestRequest } {
+      void firstValueFrom(service.getBrowseFolderContents(PATH, 50, page, filters));
+      httpMock.expectOne((r) => r.url === `/nuxeo/api/v1/path${PATH}`).flush(folderDoc);
+      const request = httpMock.expectOne(
+        (r) => r.url === '/nuxeo/api/v1/automation/Repository.Query',
+      );
+      return {
+        query: (request.request.body as { params: { query: string } }).params.query,
+        request,
+      };
+    }
+
+    it('asks the repository, not the index, and names only verified properties', () => {
+      const { query, request } = queryFor({ text: 'report' });
+
+      // `Repository.Query` and not `search/lang/NXQL/execute`: the index disagrees with
+      // `@children` in both directions and swallows `ILIKE`.
+      expect(request.request.method).toBe('POST');
+      expect(query).toBe(
+        "SELECT * FROM Document WHERE ecm:parentId = 'ws-uid' AND ecm:isTrashed = 0 " +
+          "AND ecm:mixinType != 'HiddenInNavigation' " +
+          "AND dc:title ILIKE '%report%'",
+      );
+      expect(request.request.headers.get('enrichers.document')).toBe('permissions');
+      request.flush({
+        entries: [],
+        resultsCount: 0,
+        currentPageSize: 0,
+        currentPageIndex: 0,
+        numberOfPages: 0,
+      });
+    });
+
+    it('builds every filter, with UTC timestamps and an exclusive end of day', () => {
+      const { query, request } = queryFor(
+        {
+          text: 'report',
+          type: 'File',
+          // 2026-10-21T00:00:00Z and 2026-10-29T00:00:00Z as instants.
+          modifiedFrom: new Date(Date.UTC(2026, 9, 21)),
+          modifiedTo: new Date(Date.UTC(2026, 9, 29)),
+          contributor: 'admin',
+        },
+        { currentPageIndex: 0, sort: [{ sortBy: 'dc:title', sortOrder: 'ASC' }] },
+      );
+
+      expect(query).toBe(
+        "SELECT * FROM Document WHERE ecm:parentId = 'ws-uid' AND ecm:isTrashed = 0 " +
+          "AND ecm:mixinType != 'HiddenInNavigation' " +
+          "AND dc:title ILIKE '%report%' " +
+          "AND ecm:primaryType = 'File' " +
+          "AND dc:modified >= TIMESTAMP '2026-10-21 00:00:00' " +
+          // One day on and exclusive, so the whole of the 29th counts.
+          "AND dc:modified < TIMESTAMP '2026-10-30 00:00:00' " +
+          "AND dc:lastContributor ILIKE '%admin%' " +
+          'ORDER BY dc:title ASC',
+      );
+      request.flush({
+        entries: [],
+        resultsCount: 0,
+        currentPageSize: 0,
+        currentPageIndex: 0,
+        numberOfPages: 0,
+      });
+    });
+
+    /**
+     * The injection and wildcard surface. Measured on the server: `_` and `%` are live wildcards
+     * inside `ILIKE`, and a backslash is what makes them literal — there is no `ESCAPE` clause.
+     */
+    it('escapes quotes, backslashes and wildcards out of what the user typed', () => {
+      const { query, request } = queryFor({ text: "O'Brien 100%_x\\y", contributor: "a'b" });
+
+      expect(query).toContain("dc:title ILIKE '%O\\'Brien 100\\%\\_x\\\\y%'");
+      expect(query).toContain("dc:lastContributor ILIKE '%a\\'b%'");
+      // Nothing the user typed can close the literal or add a clause.
+      expect(query.endsWith("'")).toBe(true);
+      request.flush({
+        entries: [],
+        resultsCount: 0,
+        currentPageSize: 0,
+        currentPageIndex: 0,
+        numberOfPages: 0,
+      });
+    });
+
+    /**
+     * A filter must not widen the listing it narrows. `@children` hides `HiddenInNavigation`
+     * documents and a raw `ecm:parentId` query does not: measured against the live repository on
+     * `/default-domain`, the bare query returned 10 children where the page shows 8, adding a
+     * `CommentRoot` and a `UserWorkspacesRoot`. So the clause is asserted on its own, not merely
+     * as part of the whole-string comparisons above, with the two type names that proved it.
+     */
+    it('excludes the system containers the unfiltered listing hides', () => {
+      const { query, request } = queryFor({ type: 'Folder' });
+
+      expect(query).toContain("ecm:mixinType != 'HiddenInNavigation'");
+      request.flush({
+        entries: [],
+        resultsCount: 0,
+        currentPageSize: 0,
+        currentPageIndex: 0,
+        numberOfPages: 0,
+      });
+    });
+
+    it('reports the server total and that it did the filtering', async () => {
+      const result$ = firstValueFrom(
+        service.getBrowseFolderContents(PATH, 50, undefined, { text: 'report' }),
+      );
+      httpMock.expectOne((r) => r.url === `/nuxeo/api/v1/path${PATH}`).flush(folderDoc);
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/automation/Repository.Query')
+        .flush({
+          entries: [
+            { uid: 'c-1', title: 'Q1 Report', type: 'File', path: `${PATH}/a`, properties: {} },
+          ],
+          // A real total across pages, where `@children` reports -2.
+          resultsCount: 7,
+          currentPageSize: 1,
+          currentPageIndex: 0,
+          numberOfPages: 7,
+          isNextPageAvailable: true,
+        });
+
+      const result = await result$;
+      expect(result.serverFiltered).toBe(true);
+      expect(result.totalSize).toBe(7);
+      expect(result.hasNextPage).toBe(true);
+      expect(result.entries.map((e) => e.uid)).toEqual(['c-1']);
+    });
+
+    it.each(['Root', 'Favorites', 'Collection'])(
+      'leaves %s to the caller, since a parentId query cannot express it',
+      async (type) => {
+        void firstValueFrom(
+          service.getBrowseFolderContents(PATH, 50, undefined, { text: 'report' }),
+        );
+        httpMock
+          .expectOne((r) => r.url === `/nuxeo/api/v1/path${PATH}`)
+          .flush({ ...folderDoc, type });
+
+        // No Repository.Query at all: these branches keep their own listing.
+        httpMock.expectNone((r) => r.url === '/nuxeo/api/v1/automation/Repository.Query');
+        // Drain whichever listing that branch asked for.
+        for (const r of httpMock.match(() => true)) {
+          r.flush({
+            entries: [],
+            totalSize: 0,
+            currentPageSize: 0,
+            currentPageIndex: 0,
+            numberOfPages: 0,
+          });
+        }
+      },
+    );
   });
 
   describe('getAllBrowseFolderEntries', () => {

@@ -168,7 +168,9 @@ export { CollectionService } from './lib/services/collection.service';
 export {
   BrowseService,
   BROWSE_FILTER_SCAN_LIMIT,
+  browseFolderFiltersActive,
   type BrowseFolderEntrySet,
+  type BrowseFolderFilters,
   type BrowsePageRequest,
   type BrowseSortEntry,
 } from './lib/services/browse.service';

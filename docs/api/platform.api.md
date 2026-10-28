@@ -3123,7 +3123,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-318 exported symbol(s).
+320 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -3292,6 +3292,14 @@ interface BrowseFolderEntrySet {
     truncated: boolean;
     }
 }
+interface BrowseFolderFilters {
+    text?: string;
+    type?: string;
+    modifiedFrom?: Date | null;
+    modifiedTo?: Date | null;
+    contributor?: string;
+    }
+}
 interface BrowsePageRequest {
     currentPageIndex?: number;
     sort?: BrowseSortEntry[];
@@ -3302,7 +3310,7 @@ class BrowseService {
     getUserWorkspace(): Observable<NuxeoDocument>;
     getRepositoryRoot(): Observable<NuxeoDocument>;
     getNavTreeBootstrap(pageSize?: number): Observable<NavTreeBootstrap>;
-    getBrowseFolderContents(nuxeoPath: string, pageSize?: number, page?: BrowsePageRequest): Observable<BrowseFolderContents>;
+    getBrowseFolderContents(nuxeoPath: string, pageSize?: number, page?: BrowsePageRequest, filters?: BrowseFolderFilters): Observable<BrowseFolderContents>;
     getAllBrowseFolderEntries(nuxeoPath: string, maxDocuments?: number, pageSize?: number, sort?: BrowseSortEntry[]): Observable<BrowseFolderEntrySet>;
     getCollectionMembers(collectionUid: string, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>;
     getFolderContext(nuxeoPath: string): Observable<NuxeoDocument>;
@@ -4498,6 +4506,7 @@ const administrationLandingGuard: CanActivateFn;
 function auditActivityLabel(entry: AuditEntry, eventTypeLabels?: Map<string, string> | Record<string, string>): string;
 function auditActivityLabelKey(entry: AuditEntry): string;
 function avatarColor(name: string): AvatarColor;
+function browseFolderFiltersActive(filters?: BrowseFolderFilters): boolean;
 function browseTreeContextPath(doc: NuxeoDocument): string;
 function buildContentLakeIngestMarker(blobDigest: string): string;
 function buildDocumentCompareSections(left: NuxeoDocument, right: NuxeoDocument, viewAll: boolean, locale: string): CompareSection[];
