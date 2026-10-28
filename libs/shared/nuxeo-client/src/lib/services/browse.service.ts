@@ -311,7 +311,16 @@ export class BrowseService {
 
     return fetchPage(0, 0).pipe(
       expand((page) =>
-        page.hasNextPage === true && page.fetched < maxDocuments
+        page.hasNextPage === true &&
+        // A page that returned nothing cannot lead anywhere, whatever it claims about the next
+        // one. Without this the restricted-root fallback looped forever: it pages an in-memory
+        // array, so once that array is exhausted every further page is empty, `fetched` stops
+        // advancing, and `hasNextPage` still reads true because the source said it had more —
+        // re-running the bootstrap endpoints on every turn. The walk stops here and the last
+        // page's `hasNextPage` makes it `truncated`, which is the honest answer: the source holds
+        // more and this could not reach it.
+        (page.entries?.length ?? 0) > 0 &&
+        page.fetched < maxDocuments
           ? fetchPage(page.pageIndex + 1, page.fetched)
           : EMPTY,
       ),

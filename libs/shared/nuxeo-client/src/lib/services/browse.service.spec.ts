@@ -1288,6 +1288,84 @@ describe('BrowseService', () => {
       expect(result.truncated).toBe(true);
     });
 
+    /**
+     * A restricted-root fallback batch **smaller than the cap**.
+     *
+     * The fallback pages an in-memory array, so once it is exhausted every further page comes back
+     * empty while the source's `hasMore` keeps `hasNextPage` true. Before the empty-page guard
+     * `fetched` never advanced and the walk re-ran the bootstrap endpoints forever.
+     *
+     * It is bounded at **two** bootstraps, not one: page 0 is non-empty, so the walk is entitled
+     * to try page 1, and it is page 1 coming back empty that stops it. One redundant bootstrap in
+     * this rare case is the price of keeping the source's "there is more" signal, which is what
+     * makes the result honestly `truncated`. This spec flushes exactly two and `httpMock.verify()`
+     * proves nothing else was asked for.
+     */
+    it('stops a restricted-root fallback whose batch is smaller than the cap', async () => {
+      const emptyList = {
+        entries: [],
+        totalSize: 0,
+        currentPageSize: 0,
+        currentPageIndex: 0,
+        numberOfPages: 0,
+      };
+      const ws = (uid: string) => ({
+        uid,
+        title: uid,
+        type: 'Workspace',
+        path: `/${uid}`,
+        facets: ['Folderish'],
+        properties: {},
+      });
+
+      /** One pass of the fallback: root refused twice, Domain probe and tree_children empty. */
+      const flushBootstrap = (entries: ReturnType<typeof ws>[]) => {
+        for (let i = 0; i < 2; i += 1) {
+          httpMock
+            .expectOne((r) => r.url === '/nuxeo/api/v1/path/')
+            .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+        }
+        httpMock
+          .expectOne(
+            (r) =>
+              r.url === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
+              r.params.get('query')?.includes('FROM Domain') === true,
+          )
+          .flush(emptyList);
+        httpMock
+          .expectOne((r) => r.url === '/nuxeo/api/v1/search/pp/tree_children/execute')
+          .flush(emptyList);
+        httpMock
+          .expectOne(
+            (r) =>
+              r.url === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
+              r.params.get('query')?.includes('FROM Domain') !== true,
+          )
+          .flush({
+            entries,
+            totalSize: entries.length,
+            currentPageSize: entries.length,
+            currentPageIndex: 0,
+            numberOfPages: 1,
+            // The source still claims more, which is what used to drive the walk round forever.
+            isNextPageAvailable: true,
+          });
+      };
+
+      const result$ = firstValueFrom(service.getAllBrowseFolderEntries('/', 500, 500));
+
+      // Page 0: two accessible workspaces, well under the cap.
+      flushBootstrap([ws('ws-1'), ws('ws-2')]);
+      // Page 1: the same array, now sliced past its end, so this page is empty — and that is what
+      // terminates the walk.
+      flushBootstrap([ws('ws-1'), ws('ws-2')]);
+
+      const result = await result$;
+      expect(result.entries.map((e) => e.uid)).toEqual(['ws-1', 'ws-2']);
+      // Honest: the source said it held more and the walk could not reach it.
+      expect(result.truncated).toBe(true);
+    });
+
     it('forwards the requested sort to every page it walks', async () => {
       const path = '/default-domain/workspaces';
       const sort = [{ sortBy: 'dc:title', sortOrder: 'ASC' as const }];
