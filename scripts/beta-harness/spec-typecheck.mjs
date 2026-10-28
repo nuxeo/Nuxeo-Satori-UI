@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync } from './package-command.mjs';
+
 /**
  * Type-check every project's **spec** files.
  *
@@ -36,7 +38,6 @@
  * Exit 1 if any spec file fails to type-check.
  */
 
-import { spawnSync } from 'node:child_process';
 import { readdirSync, existsSync, statSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 
@@ -71,7 +72,7 @@ if (configs.length === 0) {
 const results = [];
 for (const config of configs) {
   const rel = relative(repoRoot, config);
-  const proc = spawnSync('npx', ['tsc', '-p', config, '--noEmit'], {
+  const proc = spawnToolSync('npx', ['tsc', '-p', config, '--noEmit'], {
     cwd: repoRoot,
     encoding: 'utf8',
   });
@@ -79,7 +80,9 @@ for (const config of configs) {
   const errors = output.split('\n').filter((line) => / error TS\d+:/.test(line));
   results.push({ config: rel, ok: errors.length === 0, count: errors.length, errors });
   if (!asJson) {
-    console.log(`  ${errors.length === 0 ? 'pass' : 'FAIL'}  ${rel}${errors.length ? ` (${errors.length})` : ''}`);
+    console.log(
+      `  ${errors.length === 0 ? 'pass' : 'FAIL'}  ${rel}${errors.length ? ` (${errors.length})` : ''}`,
+    );
   }
 }
 

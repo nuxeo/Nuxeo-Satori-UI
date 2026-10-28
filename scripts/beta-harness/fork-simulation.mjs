@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { execToolSync } from './package-command.mjs';
+
 /**
  * Fork simulation: compile the template against the **built package**, not the source.
  *
@@ -44,7 +46,6 @@
  *   node scripts/beta-harness/fork-simulation.mjs
  */
 
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -140,7 +141,7 @@ console.log(
 );
 
 try {
-  execFileSync('npx', ['ngc', '-p', configPath], {
+  execToolSync('npx', ['ngc', '-p', configPath], {
     cwd: ROOT,
     stdio: 'pipe',
     encoding: 'utf8',

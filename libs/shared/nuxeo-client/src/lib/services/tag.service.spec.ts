@@ -2,7 +2,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { TagService } from './tag.service';
@@ -173,7 +173,7 @@ describe('TagService is the only Tag.Suggestion sender', () => {
       .flatMap(shippedSources)
       .flatMap((path) =>
         tagSuggestionSenders(readFileSync(path, 'utf8')).map(
-          (literal) => `${relative(repositoryRoot, path)}: ${literal}`,
+          (literal) => `${relative(repositoryRoot, path).split(sep).join('/')}: ${literal}`,
         ),
       );
     expect(senders).toEqual([

@@ -9593,6 +9593,91 @@ function checkSatoriPrimitivesRegisteredInOrder() {
   }
 }
 
+/** Package-tool shims cannot be executed directly on Windows. Inspect syntax, not comments. */
+function checkPackageToolLaunches() {
+  const files = ['scripts', 'tools'].flatMap((dir) =>
+    walk(dir, (file) => /\.[cm]?[jt]s$/.test(file)),
+  );
+  const methods = new Set(['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync']);
+  const isTool = (node) =>
+    node && ts.isStringLiteralLike(node) && /^(?:npm|npx|nx)(?:\.cmd)?(?:\s|$)/i.test(node.text);
+  for (const file of files) {
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+    const aliases = new Set(methods);
+    for (const statement of source.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !/^(node:)?child_process$/.test(statement.moduleSpecifier.text)
+      )
+        continue;
+      for (const binding of statement.importClause?.namedBindings?.elements ?? []) {
+        if (methods.has(binding.propertyName?.text ?? binding.name.text))
+          aliases.add(binding.name.text);
+      }
+    }
+    const promisifiers = new Set(['promisify']);
+    for (const statement of source.statements) {
+      if (
+        ts.isImportDeclaration(statement) &&
+        /^(node:)?util$/.test(statement.moduleSpecifier.text)
+      ) {
+        for (const binding of statement.importClause?.namedBindings?.elements ?? []) {
+          if ((binding.propertyName?.text ?? binding.name.text) === 'promisify')
+            promisifiers.add(binding.name.text);
+        }
+      }
+    }
+    const collectAliases = (node) => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer &&
+        ts.isCallExpression(node.initializer)
+      ) {
+        const call = node.initializer;
+        const name = ts.isIdentifier(call.expression)
+          ? call.expression.text
+          : ts.isPropertyAccessExpression(call.expression)
+            ? call.expression.name.text
+            : '';
+        const original = call.arguments[0];
+        const launcher =
+          original &&
+          (ts.isIdentifier(original)
+            ? original.text
+            : ts.isPropertyAccessExpression(original)
+              ? original.name.text
+              : '');
+        if (promisifiers.has(name) && aliases.has(launcher)) aliases.add(node.name.text);
+      }
+      ts.forEachChild(node, collectAliases);
+    };
+    collectAliases(source);
+    const visit = (node) => {
+      const name =
+        ts.isCallExpression(node) &&
+        (ts.isIdentifier(node.expression)
+          ? node.expression.text
+          : ts.isPropertyAccessExpression(node.expression)
+            ? node.expression.name.text
+            : '');
+      const launch = name && aliases.has(name) && isTool(node.arguments[0]);
+      const entry =
+        ts.isPropertyAssignment(node) &&
+        (node.name.text === 'cmd' || node.name.text === 'command') &&
+        isTool(node.initializer);
+      if (launch || entry) {
+        const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+        fail(
+          `${file}:${line} starts a package tool directly; use scripts/beta-harness/package-command.mjs.`,
+        );
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+}
+
 const SATORI_ADOPTION_REGISTRY =
   'libs/shared/satori-components-satori/src/lib/provide-nxs-satori-components.ts';
 
@@ -10159,6 +10244,7 @@ function checkAdoptedPatternsNotBypassed() {
 }
 
 const GUARDRAILS = [
+  checkPackageToolLaunches,
   checkThemeTokens,
   checkDocsNumbering,
   checkNoReviewCorpusChurn,
