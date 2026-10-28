@@ -258,11 +258,7 @@ export class NxsAdminGroupDetailsPageComponent {
 
   protected removePermission(row: PrincipalPermissionRow): void {
     this.documentDetail
-      .removePermission(row.documentUid, {
-        user: row.acePrincipal,
-        permission: row.permission,
-        acl: 'local',
-      })
+      .removePermissionById(row.documentUid, row.aceId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {

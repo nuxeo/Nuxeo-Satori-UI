@@ -67,6 +67,7 @@ const PERMISSION = {
   documentPath: '/Claims',
   permission: 'Write',
   acePrincipal: 'editors',
+  aceId: 'editors:Write',
   grantedBy: 'admin',
 };
 
@@ -109,7 +110,7 @@ describe('NxsAdminGroupDetailsPageComponent', () => {
       deleteGroup: vi.fn(() => of({})),
     };
     permissions = { listLocalPermissionRows: vi.fn(() => of(PAGE)) };
-    documents = { removePermission: vi.fn(() => of({})) };
+    documents = { removePermissionById: vi.fn(() => of({})) };
     const dialog = { open: vi.fn(() => ({ afterClosed: () => of(dialogResults.shift()) })) };
     await TestBed.configureTestingModule({
       imports: [NxsAdminGroupDetailsPageComponent],
@@ -226,11 +227,7 @@ describe('NxsAdminGroupDetailsPageComponent', () => {
       fixture.componentInstance as unknown as { removePermission(row: unknown): void }
     ).removePermission(PERMISSION);
     await render();
-    expect(documents['removePermission']).toHaveBeenCalledWith('doc-1', {
-      user: 'editors',
-      permission: 'Write',
-      acl: 'local',
-    });
+    expect(documents['removePermissionById']).toHaveBeenCalledWith('doc-1', 'editors:Write');
     expect(text()).toContain('Permission removed');
   });
 });

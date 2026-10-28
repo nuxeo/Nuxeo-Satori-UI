@@ -31,6 +31,7 @@ const PERMISSION = {
   documentPath: '/Claims',
   permission: 'Read',
   acePrincipal: 'jdoe',
+  aceId: 'jdoe:Read',
   grantedBy: 'admin',
 };
 
@@ -51,6 +52,12 @@ const withServices = () =>
         useValue: {
           getUser: () => of(USER),
           getGroup: () => of(GROUP),
+          searchGroupsPaged: () =>
+            of({
+              'entity-type': 'groups',
+              entries: [{ groupname: 'managers', grouplabel: 'Managers' }],
+              totalSize: 1,
+            }),
           updateUser: () => of({}),
           deleteUser: () => of({}),
         },
@@ -59,7 +66,7 @@ const withServices = () =>
         provide: PrincipalPermissionsService,
         useValue: { listLocalPermissionRows: () => of(PAGE) },
       },
-      { provide: DocumentDetailService, useValue: { removePermission: () => of({}) } },
+      { provide: DocumentDetailService, useValue: { removePermissionById: () => of({}) } },
     ],
   });
 

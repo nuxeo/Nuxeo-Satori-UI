@@ -26,6 +26,7 @@ const PAGE = {
       documentPath: '/Claims',
       permission: 'Write',
       acePrincipal: 'editors',
+      aceId: 'editors:Write',
       grantedBy: 'admin',
     },
   ],
@@ -43,6 +44,12 @@ const withServices = () =>
         provide: UserService,
         useValue: {
           getGroup: () => of(GROUP),
+          searchUsersPaged: () =>
+            of({
+              'entity-type': 'users',
+              entries: [{ id: 'carol', properties: {} }],
+              totalSize: 1,
+            }),
           updateGroup: () => of({}),
           deleteGroup: () => of({}),
         },
@@ -51,7 +58,7 @@ const withServices = () =>
         provide: PrincipalPermissionsService,
         useValue: { listLocalPermissionRows: () => of(PAGE) },
       },
-      { provide: DocumentDetailService, useValue: { removePermission: () => of({}) } },
+      { provide: DocumentDetailService, useValue: { removePermissionById: () => of({}) } },
     ],
   });
 

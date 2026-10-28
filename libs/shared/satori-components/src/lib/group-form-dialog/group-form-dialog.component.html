@@ -8,15 +8,25 @@
 <mat-dialog-content class="nxs-group-form-dialog__form">
   <mat-form-field appearance="outline" class="nxs-group-form-dialog__field">
     <mat-label>{{ 'satori-components.group-form-dialog.group-name' | translate }}</mat-label>
-    <input
-      matInput
-      name="groupname"
-      required
-      cdkFocusInitial
-      [disabled]="data.mode === 'edit'"
-      [ngModel]="groupname()"
-      (ngModelChange)="groupname.set($event)"
-    />
+    @if (data.mode === 'create') {
+      <input
+        matInput
+        name="groupname"
+        required
+        cdkFocusInitial
+        [ngModel]="groupname()"
+        (ngModelChange)="groupname.set($event)"
+      />
+    } @else {
+      <input
+        matInput
+        name="groupname"
+        required
+        disabled
+        [ngModel]="groupname()"
+        (ngModelChange)="groupname.set($event)"
+      />
+    }
   </mat-form-field>
   <mat-form-field appearance="outline" class="nxs-group-form-dialog__field">
     <mat-label>{{ 'satori-components.group-form-dialog.label' | translate }}</mat-label>

@@ -74,6 +74,7 @@ const PERMISSION = {
   documentPath: '/Claims',
   permission: 'Read',
   acePrincipal: 'jdoe',
+  aceId: 'jdoe:Read',
   grantedBy: 'admin',
 };
 
@@ -120,7 +121,7 @@ describe('NxsAdminUserDetailsPageComponent', () => {
       listLocalPermissionRows: vi.fn(() => of({ ...EMPTY, rows: [PERMISSION], totalDocuments: 1 })),
     };
     documents = {
-      removePermission: vi.fn(() => of({})),
+      removePermissionById: vi.fn(() => of({})),
     };
     const dialog = { open: vi.fn(() => ({ afterClosed: () => of(dialogResults.shift()) })) };
     await TestBed.configureTestingModule({
@@ -243,11 +244,7 @@ describe('NxsAdminUserDetailsPageComponent', () => {
       fixture.componentInstance as unknown as { removePermission(row: unknown): void }
     ).removePermission(PERMISSION);
     await render();
-    expect(documents['removePermission']).toHaveBeenCalledWith('doc-1', {
-      user: 'jdoe',
-      permission: 'Read',
-      acl: 'local',
-    });
+    expect(documents['removePermissionById']).toHaveBeenCalledWith('doc-1', 'jdoe:Read');
     expect(text()).toContain('Permission removed');
   });
   it('shows the translated message for an empty direct table, not the key', async () => {

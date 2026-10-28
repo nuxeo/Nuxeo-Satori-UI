@@ -124,7 +124,8 @@ export class NxsUserFormDialogComponent implements OnInit {
   protected readonly failure = signal<string | null>(null);
 
   protected readonly passwordsDiffer = computed(
-    () => this.confirmPassword().length > 0 && this.password() !== this.confirmPassword(),
+    () =>
+      this.confirmPassword().length > 0 && this.password().trim() !== this.confirmPassword().trim(),
   );
   protected readonly canSave = computed(() => {
     if (this.loadingGroups() || this.saving()) return false;

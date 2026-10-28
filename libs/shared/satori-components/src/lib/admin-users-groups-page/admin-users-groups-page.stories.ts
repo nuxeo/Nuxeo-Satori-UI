@@ -46,6 +46,26 @@ const withDirectory = (failUsers = false) =>
             action('deleteUser')(id);
             return of({});
           },
+          createUser: (body: unknown) => {
+            action('createUser')(body);
+            return of({});
+          },
+          updateUser: (...args: unknown[]) => {
+            action('updateUser')(args);
+            return of({});
+          },
+          createGroup: (body: unknown) => {
+            action('createGroup')(body);
+            return of({});
+          },
+          updateGroup: (...args: unknown[]) => {
+            action('updateGroup')(args);
+            return of({});
+          },
+          deleteGroup: (id: string) => {
+            action('deleteGroup')(id);
+            return of({});
+          },
         },
       },
     ],

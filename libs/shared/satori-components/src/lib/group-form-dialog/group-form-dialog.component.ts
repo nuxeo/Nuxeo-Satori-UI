@@ -146,12 +146,20 @@ export class NxsGroupFormDialogComponent implements OnInit {
     this.skipNextChipInput = true;
     const userId = (event.option.value as NuxeoUser)?.id?.trim();
     if (userId) {
-      // The autocomplete can add a partial prefix chip first; keep only the full username.
-      // Only a partial chip typed during this search is dropped; a member who was already there is kept.
+      // The autocomplete can add the typed text as a partial chip first. Drop only that chip, and only when
+      // this search added it: a member already on the list, or picked from blank results, is never dropped.
+      const typed = this.memberQuery().trim();
       const kept = this.members().filter(
-        (id) => id === userId || this.membersBeforeQuery.has(id) || !userId.startsWith(id),
+        (id) =>
+          !(
+            id === typed &&
+            id !== userId &&
+            userId.startsWith(id) &&
+            !this.membersBeforeQuery.has(id)
+          ),
       );
       this.members.set(kept.includes(userId) ? kept : [...kept, userId]);
+      this.membersBeforeQuery = new Set(this.members());
     }
     this.clearMemberSearch();
     event.option.deselect();

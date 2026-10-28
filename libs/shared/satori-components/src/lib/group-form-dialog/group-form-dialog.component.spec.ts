@@ -226,4 +226,10 @@ describe('NxsGroupFormDialogComponent', () => {
     expect(searchUsersPaged.mock.calls.map((c) => c[0])).toContain('al');
     expect(signalOf<unknown[]>('memberOptions')().length).toBeGreaterThan(0);
   });
+  it('keeps every member picked one after another from blank results', async () => {
+    await create({ mode: 'create' });
+    method('onMemberSelected')({ option: { value: { id: 'ann' }, deselect: vi.fn() } });
+    method('onMemberSelected')({ option: { value: { id: 'anna' }, deselect: vi.fn() } });
+    expect(signalOf<string[]>('members')()).toEqual(['ann', 'anna']);
+  });
 });
