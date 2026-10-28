@@ -11,7 +11,15 @@
  */
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { after, test } from 'node:test';
@@ -31,15 +39,24 @@ const scratch = () => {
 
 /**
  * A stub Storybook. `omit` drops one required file; `entries` of 0 writes an empty index.
+ *
+ * `marker` goes into every file, so the two fixtures are distinguishable once copied. They used to
+ * be byte-identical, which made the happy path tautological: swapping the two copy sources passed
+ * every assertion, so the controls did not test the one thing they are named for. Keep them
+ * distinct.
  * @param {string} dir
- * @param {{ omit?: string, entries?: number, extra?: string }} [options]
+ * @param {{ omit?: string, entries?: number, extra?: string, marker?: string }} [options]
  */
-function storybook(dir, { omit, entries = 2, extra } = {}) {
+function storybook(dir, { omit, entries = 2, extra, marker = 'unmarked' } = {}) {
   mkdirSync(dir, { recursive: true });
-  if (omit !== 'index.html') writeFileSync(join(dir, 'index.html'), '<html>sb</html>');
-  if (omit !== 'iframe.html') writeFileSync(join(dir, 'iframe.html'), '<html>frame</html>');
+  if (omit !== 'index.html') writeFileSync(join(dir, 'index.html'), `<html>${marker} index</html>`);
+  if (omit !== 'iframe.html')
+    writeFileSync(join(dir, 'iframe.html'), `<html>${marker} frame</html>`);
   const index = Object.fromEntries(
-    Array.from({ length: entries }, (_, i) => [`story--${i}`, { title: `Story ${i}` }]),
+    Array.from({ length: entries }, (_, i) => [
+      `${marker}-story--${i}`,
+      { title: `${marker} ${i}` },
+    ]),
   );
   writeFileSync(join(dir, 'index.json'), JSON.stringify({ entries: index }));
   if (extra) mkdirSync(join(dir, extra), { recursive: true });
@@ -66,15 +83,26 @@ test('lays Material at the root and Satori under /satori', async () => {
   const dir = scratch();
   const out = join(dir, 'site');
   const result = await assemble({
-    material: storybook(join(dir, 'material')),
-    satori: storybook(join(dir, 'satori-theme')),
+    material: storybook(join(dir, 'material'), { marker: 'MATERIAL' }),
+    satori: storybook(join(dir, 'satori-theme'), { marker: 'SATORI' }),
     out,
   });
   assert.equal(result.code, 0, result.stderr);
-  assert.ok(existsSync(join(out, 'index.html')), 'Material index.html at the root');
-  assert.ok(existsSync(join(out, 'iframe.html')), 'Material iframe.html at the root');
-  assert.ok(existsSync(join(out, 'satori', 'index.html')), 'Satori index.html under /satori');
-  assert.ok(existsSync(join(out, 'satori', 'iframe.html')), 'Satori iframe.html under /satori');
+
+  // Which build landed where, not merely that something did. Asserting presence alone passes just
+  // as happily when the two sources are swapped, which is the whole requirement reversed.
+  for (const file of ['index.html', 'iframe.html', 'index.json']) {
+    const root = readFileSync(join(out, file), 'utf8');
+    const satori = readFileSync(join(out, 'satori', file), 'utf8');
+    assert.match(root, /MATERIAL/, `/${file} should come from the Material build`);
+    assert.doesNotMatch(root, /SATORI/, `/${file} must not come from the Satori build`);
+    assert.match(satori, /SATORI/, `/satori/${file} should come from the Satori build`);
+    assert.doesNotMatch(
+      satori,
+      /MATERIAL/,
+      `/satori/${file} must not come from the Material build`,
+    );
+  }
   assert.match(result.stdout, /Material at \/, Satori at \/satori\//);
 });
 
