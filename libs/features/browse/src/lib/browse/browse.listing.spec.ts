@@ -981,6 +981,41 @@ describe('BrowseComponent — rendered document list', () => {
     expect(browse.getBrowseFolderTypes.mock.calls.length).toBe(calls);
   });
 
+  /**
+   * A collected answer must not land after the thing it describes has changed.
+   *
+   * The types are cached per folder and the in-flight guard compares the path — which cannot tell
+   * "another folder" from "the same folder, invalidated since". The scan this replaced carried a
+   * generation counter for precisely that, and dropping the scan dropped the counter with it.
+   */
+  it('ignores collected types that a content change has already superseded', async () => {
+    const pending = new Subject<string[]>();
+    browse.getBrowseFolderTypes.mockReturnValue(pending);
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Q1', type: 'File' })],
+        totalSize: 1,
+      }),
+    );
+    const component = await render();
+
+    component.loadFolderTypes();
+    await settle();
+
+    // The folder's contents change while the request is still in flight.
+    TestBed.inject(BrowseContextService).requestContentRefresh();
+    await settle();
+
+    // The pre-change answer arrives.
+    pending.next(['Note', 'Workspace']);
+    pending.complete();
+    await settle();
+
+    // It describes the folder as it was before the change, so only the page's own types remain.
+    expect(component.distinctTypes()).toEqual(['File']);
+  });
+
   it('collects them again after the folder’s contents change', async () => {
     browse.getBrowseFolderTypes.mockReturnValue(of(['File']));
     browse.getBrowseFolderContents.mockReturnValue(of({ folder, entries: [], totalSize: 0 }));

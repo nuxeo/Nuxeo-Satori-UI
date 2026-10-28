@@ -656,7 +656,18 @@ export class BrowseComponent {
   private readonly folderTypes = signal<readonly string[]>([]);
   /** The folder {@link folderTypes} describes, so the fetch happens once per folder. */
   private folderTypesPath: string | null = null;
-  private readonly folderTypeRequests$ = new Subject<string>();
+  /**
+   * Bumped by {@link invalidateFolderTypes}, so an answer in flight when the folder changed under
+   * it can be told from one that is still wanted.
+   *
+   * The path alone cannot: it says "another folder" but not "the same folder, invalidated since".
+   * Open the dropdown, have the contents change while the request is out, and the pre-change answer
+   * arrived afterwards and was adopted — offering a type that had just been deleted, or missing one
+   * just created, until the dropdown was opened again. The scan this replaced carried a generation
+   * counter for exactly this, and removing the scan removed the counter with it.
+   */
+  private folderTypesGeneration = 0;
+  private readonly folderTypeRequests$ = new Subject<{ path: string; generation: number }>();
 
   readonly distinctTypes = computed(() => {
     // The union of the fetched set and the page, never one alone. The fetched set is complete but
@@ -768,13 +779,15 @@ export class BrowseComponent {
     const path = this.browsePath();
     if (this.folderTypesPath === path) return;
     this.folderTypesPath = path;
-    this.folderTypeRequests$.next(path);
+    this.folderTypeRequests$.next({ path, generation: this.folderTypesGeneration });
   }
 
   /** Forget the collected types, so the next dropdown opening fetches them again. */
   private invalidateFolderTypes(): void {
     this.folderTypesPath = null;
     this.folderTypes.set([]);
+    // Anything already in flight now describes the folder as it was before this.
+    this.folderTypesGeneration += 1;
   }
 
   /** The visible columns as the document list takes them: translated, sortable where the server sorts. */
@@ -1082,19 +1095,22 @@ export class BrowseComponent {
 
     this.folderTypeRequests$
       .pipe(
-        switchMap((path) =>
+        switchMap(({ path, generation }) =>
           this.browseService.getBrowseFolderTypes(path).pipe(
-            map((types) => ({ path, types: types as string[] | null })),
+            map((types) => ({ path, generation, types: types as string[] | null })),
             // A failure leaves the dropdown on the types of the page on screen, which is what it
             // offered before this existed. Nothing else reads them, so there is nothing to report
             // and nothing to retry until the dropdown is opened again.
-            catchError(() => of({ path, types: null })),
+            catchError(() => of({ path, generation, types: null })),
           ),
         ),
         takeUntilDestroyed(),
       )
-      .subscribe(({ path, types }) => {
+      .subscribe(({ path, generation, types }) => {
+        // Both halves are needed. The path rejects an answer for the folder we have left; the
+        // generation rejects one for the folder we are still on, taken before its contents changed.
         if (path !== this.browsePath()) return;
+        if (generation !== this.folderTypesGeneration) return;
         if (!types) {
           // Clearing the record of which folder was fetched is what lets re-opening try again.
           this.folderTypesPath = null;
