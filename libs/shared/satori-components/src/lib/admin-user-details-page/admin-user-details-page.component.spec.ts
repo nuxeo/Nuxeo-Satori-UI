@@ -266,4 +266,24 @@ describe('NxsAdminUserDetailsPageComponent', () => {
     page.removeFromGroup('reviewers');
     expect(userService['updateUser']).toHaveBeenCalledTimes(1);
   });
+
+  it('drops a late response for the previous user, and empties the page while the next one loads', async () => {
+    const alice = new Subject<NuxeoUser>();
+    const bob = new Subject<NuxeoUser>();
+    userService['getUser'].mockReturnValueOnce(alice).mockReturnValueOnce(bob);
+    fixture = TestBed.createComponent(NxsAdminUserDetailsPageComponent);
+    fixture.componentRef.setInput('userId', 'alice');
+    await render();
+    fixture.componentRef.setInput('userId', 'bob');
+    await render();
+    expect(el().querySelector('h1')).toBeNull();
+    bob.next({
+      ...USER,
+      id: 'bob',
+      properties: { ...USER.properties, groups: [] },
+    } as unknown as NuxeoUser);
+    alice.next({ ...USER, id: 'alice' } as unknown as NuxeoUser);
+    await render();
+    expect(el().querySelector('h1')?.textContent?.trim()).toBe('bob');
+  });
 });

@@ -19,7 +19,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { catchError, filter, forkJoin, of, type Subscription, switchMap } from 'rxjs';
+import { catchError, filter, forkJoin, of, Subject, switchMap, takeUntil } from 'rxjs';
 
 import {
   DocumentDetailService,
@@ -133,6 +133,9 @@ export class NxsAdminUserDetailsPageComponent {
 
   protected readonly removingGroup = signal(false);
 
+  /** Ends the user loads still in flight when the user changes, so a late response cannot replace the next user. */
+  private readonly loadsCancelled = new Subject<void>();
+
   constructor() {
     effect(() => {
       const id = this.userId();
@@ -142,11 +145,18 @@ export class NxsAdminUserDetailsPageComponent {
 
   /** Loads the user, then the groups and their permissions. */
   private load(id: string): void {
+    this.loadsCancelled.next();
+    if (this.user()?.id !== id) {
+      this.user.set(null);
+      this.groups.set([]);
+      this.localPermissions.set(EMPTY_PAGE);
+      this.groupPermissions.set({});
+    }
     this.loading.set(true);
     this.loadFailed.set(false);
     this.userService
       .getUser(id)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.loadsCancelled), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (user) => {
           this.user.set(user);
@@ -175,7 +185,7 @@ export class NxsAdminUserDetailsPageComponent {
         this.userService.getGroup(id).pipe(catchError(() => of<NuxeoGroup | null>(null))),
       ),
     )
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.loadsCancelled), takeUntilDestroyed(this.destroyRef))
       .subscribe((found) => {
         this.groups.set(ids.map((id, i) => ({ id, label: found[i]?.grouplabel ?? id })));
       });
@@ -187,6 +197,7 @@ export class NxsAdminUserDetailsPageComponent {
       .listLocalPermissionRows(principal, PERMISSIONS_PAGE_SIZE, this.localPage())
       .pipe(
         catchError(() => of(EMPTY_PAGE)),
+        takeUntil(this.loadsCancelled),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((page) => {
@@ -208,6 +219,7 @@ export class NxsAdminUserDetailsPageComponent {
       .listLocalPermissionRows(groupId, PERMISSIONS_PAGE_SIZE, pageIndex)
       .pipe(
         catchError(() => of(EMPTY_PAGE)),
+        takeUntil(this.loadsCancelled),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((page) => {

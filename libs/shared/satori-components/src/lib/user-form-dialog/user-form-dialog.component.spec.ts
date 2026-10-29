@@ -310,6 +310,19 @@ describe('NxsUserFormDialogComponent', () => {
       expect(searchGroupsPaged).toHaveBeenCalledWith('*', 200, 0);
     });
 
+    it('refreshes the group results after each blank selection, not just the first', () => {
+      vi.useFakeTimers();
+      method('onGroupInputFocus')();
+      vi.advanceTimersByTime(250);
+      searchGroupsPaged.mockClear();
+      method('onGroupSelected')({ option: { value: 'members', deselect: vi.fn() } });
+      vi.advanceTimersByTime(250);
+      method('onGroupSelected')({ option: { value: 'managers', deselect: vi.fn() } });
+      vi.advanceTimersByTime(250);
+      expect(searchGroupsPaged).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
     it('takes Enter as a choice from the results when there are any, and as typed text when not', () => {
       (component()['groupQuery'] as { set: (v: string) => void }).set('x');
       method('onGroupInputKeydown')({ key: 'Enter' } as KeyboardEvent);
