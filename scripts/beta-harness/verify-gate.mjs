@@ -23,6 +23,7 @@ import { spawnToolSync } from './package-command.mjs';
  *   --require-complete  exit 1 unless the verdict is `pass`: every gate ran and passed
  *   --platform-sensitive  only the gates whose verdict can differ by operating system,
  *   --require-scope-complete  exit 1 unless every SELECTED gate ran and passed
+ *   --list-gates     print the selected gate ids and exit without running them
  *                        as each gate declares for itself. Ignored when --gates is given.
  *
  * Examples:
@@ -570,6 +571,14 @@ const selected =
       : ALL_GATES;
 
 const notRequested = ALL_GATES.filter((g) => !selected.includes(g)).map((g) => g.id);
+/* `--list-gates` prints the selection and runs nothing. Added because a control could not
+ * otherwise observe what `--platform-sensitive` selects: passing `--gates` to keep a selftest
+ * cheap overrides the flag, so the control exercised precedence and nothing else, and would have
+ * passed with the platform filter inverted or ignored. Review caught that. */
+if (args.has('list-gates')) {
+  console.log(selected.map((g) => g.id).join('\n'));
+  process.exit(0);
+}
 
 console.log(`\nBeta verification gate — ${phase}`);
 console.log(`  base   ${base}`);

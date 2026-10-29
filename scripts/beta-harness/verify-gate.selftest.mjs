@@ -287,27 +287,39 @@ control('a gate missing the declaration is refused, not defaulted', () => {
   }
 });
 
-control('--platform-sensitive selects exactly the gates declared true', () => {
-  const expected = declaredIds.filter((_, i) => declarations[i] === 'true');
+control('--platform-sensitive selects exactly the declared set, nothing more or less', () => {
+  /* Compares the actual selection against the declarations, via `--list-gates`. The previous
+   * version of this control passed `--gates node` to stay cheap — which OVERRIDES the flag, so it
+   * exercised precedence only and would have passed with the platform filter inverted or ignored
+   * entirely. Review caught it, and it is the third hollow control of mine on this branch. */
+  const expected = declaredIds
+    .filter((id, i) => declarations[i] === 'true' || id === 'code-scanning')
+    .sort();
   const run = spawnSync(
     process.execPath,
-    [
-      join(here, 'verify-gate.mjs'),
-      '--platform-sensitive',
-      '--gates',
-      'node',
-      '--phase',
-      'selftest',
-    ],
+    [join(here, 'verify-gate.mjs'), '--platform-sensitive', '--list-gates'],
     { cwd: repoRoot, encoding: 'utf8', env },
   );
-  // An explicit `--gates` must still win, so the flag cannot silently widen a targeted run.
-  expect(/gates {2}node {2}\(1 of/.test(run.stdout), 'explicit --gates did not take precedence');
+  expect(run.status === 0, `--list-gates exited ${run.status}: ${run.stderr.trim().slice(0, 160)}`);
+  const actual = run.stdout.trim().split('\n').filter(Boolean).sort();
   expect(
-    expected.length > 0 && expected.length < declaredIds.length,
-    `the split is ${expected.length} of ${declaredIds.length}: a run covering all or none of ` +
-      'them means the flag is not doing anything',
+    actual.join(',') === expected.join(','),
+    `selection differs.\n      only selected: ${actual.filter((id) => !expected.includes(id))}` +
+      `\n      only expected: ${expected.filter((id) => !actual.includes(id))}`,
   );
+  expect(
+    actual.length < declaredIds.length,
+    `selected all ${declaredIds.length} gates, so the flag narrowed nothing`,
+  );
+});
+
+control('an explicit --gates still overrides --platform-sensitive', () => {
+  const run = spawnSync(
+    process.execPath,
+    [join(here, 'verify-gate.mjs'), '--platform-sensitive', '--gates', 'node', '--list-gates'],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  expect(run.stdout.trim() === 'node', `selected ${JSON.stringify(run.stdout.trim())}`);
 });
 
 control('--require-scope-complete passes a scoped run that is all green', () => {
