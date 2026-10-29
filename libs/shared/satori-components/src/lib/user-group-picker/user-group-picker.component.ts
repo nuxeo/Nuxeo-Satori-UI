@@ -165,7 +165,8 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
       label: principal.label,
       icon: principal.kind === 'group' ? 'user_group' : 'user',
       detailKey: `satori-components.user-group-picker.${principal.kind}`,
-      detail: principal.email ? ' · ' + principal.email : '',
+      // The ID tells apart two principals with the same label, such as two groups both called "Legal team".
+      detail: ' · ' + [principal.id, principal.email].filter(Boolean).join(' · '),
     })),
   );
 

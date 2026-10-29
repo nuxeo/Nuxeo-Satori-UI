@@ -18,6 +18,11 @@ If every match is already selected, the list shows the translated, non-selectabl
 
 - **Searches as you type, as Web UI does.** From three characters, 300 milliseconds after the last
   key, so a one-letter term does not list the whole directory. Set `minChars` for a smaller one.
+  Three is the decision for every picker here, including the add-permission and saved-search
+  dialogs (NXSAT-654), because Web UI's saved-search dialog and document suggestion search from
+  three characters. The measurement behind it could not show the cost at scale: a one-letter search
+  took 9 to 30 ms on a local directory of eight users, which says nothing about a large one, so the
+  value follows Web UI rather than a tuned number.
 - **Users, groups or both.** `search` is `users-and-groups` (the default), `users` or `groups`.
 - **Only a principal Nuxeo returned.** Typing after a choice clears it, so the value is never free
   text. Text typed and not chosen is an error on the form, `nxsChooseFromList`.
