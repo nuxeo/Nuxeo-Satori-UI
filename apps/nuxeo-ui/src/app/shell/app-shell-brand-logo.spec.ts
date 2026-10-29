@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { APP_CONFIG_FORMAT, AppConfigService } from '@nuxeo/satori-platform/app-config';
@@ -17,6 +17,7 @@ import { AppShellComponent } from './app-shell.component';
  */
 describe('AppShellComponent — configured logo (branding.logo)', () => {
   let http: HttpTestingController;
+  let fixture: ComponentFixture<AppShellComponent>;
 
   const authMock: Partial<Record<keyof AuthService, unknown>> = {
     isAuthenticated: signal(true),
@@ -52,7 +53,7 @@ describe('AppShellComponent — configured logo (branding.logo)', () => {
   });
 
   async function headerWithBootstrap(body: Record<string, unknown>): Promise<HTMLElement> {
-    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture = TestBed.createComponent(AppShellComponent);
     const loaded = TestBed.inject(AppConfigService).load();
     http
       .match((request) => request.url.endsWith('/agentic-ui-config/bootstrap.json'))
@@ -110,5 +111,80 @@ describe('AppShellComponent — configured logo (branding.logo)', () => {
 
     expect(header.querySelector('sat-word-mark-logo')).toBeTruthy();
     expect(header.querySelector('img[satAppHeaderLogo]')).toBeNull();
+  });
+
+  /**
+   * NXSAT-721 — a `src` that passes both checks and then does not render. The checks run before
+   * the image is requested, so the fallback has to come from the element.
+   */
+  describe('a logo the browser cannot show', () => {
+    /** Resolves once the image has either loaded or failed, so the directive has had its event. */
+    function settled(img: HTMLImageElement): Promise<void> {
+      if (img.complete) return Promise.resolve();
+      return new Promise((resolve) => {
+        img.addEventListener('load', () => resolve(), { once: true });
+        img.addEventListener('error', () => resolve(), { once: true });
+      });
+    }
+
+    it('restores the word mark when the image fails to load', async () => {
+      const header = await headerWithBootstrap({
+        branding: { logo: { src: 'qa-missing.svg', alt: 'Acme' } },
+      });
+      const img = header.querySelector('img[satAppHeaderLogo]');
+      expect(img)
+        .withContext('the configured logo renders before it is known to fail')
+        .toBeTruthy();
+
+      img!.dispatchEvent(new Event('error'));
+      fixture.detectChanges();
+
+      expect(header.querySelector('img[satAppHeaderLogo]'))
+        .withContext('a zero-width broken image must not be left in the header')
+        .toBeNull();
+      expect(header.querySelector('sat-word-mark-logo')).toBeTruthy();
+    });
+
+    it('restores the word mark when the image loads with no intrinsic size', async () => {
+      // A 0x0 SVG fires no `error` event — it loads and draws nothing — so only a measurement
+      // after `load` catches it. Driven with a real data: URI through the real resolution path.
+      const zeroSized =
+        'data:image/svg+xml;utf8,' +
+        encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"></svg>');
+      const header = await headerWithBootstrap({
+        branding: { logo: { src: zeroSized, alt: 'Acme' } },
+      });
+      const img = header.querySelector('img[satAppHeaderLogo]') as HTMLImageElement | null;
+      expect(img).withContext('a data:image/ src is an accepted form').toBeTruthy();
+
+      await settled(img!);
+      fixture.detectChanges();
+
+      expect(header.querySelector('img[satAppHeaderLogo]'))
+        .withContext('an image with no intrinsic size draws nothing, so it is not a logo')
+        .toBeNull();
+      expect(header.querySelector('sat-word-mark-logo')).toBeTruthy();
+    });
+
+    it('keeps a logo that loads with a size of its own', async () => {
+      const sized =
+        'data:image/svg+xml;utf8,' +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40">' +
+            '<rect width="120" height="40" fill="red"/></svg>',
+        );
+      const header = await headerWithBootstrap({
+        branding: { logo: { src: sized, alt: 'Acme' } },
+      });
+      const img = header.querySelector('img[satAppHeaderLogo]') as HTMLImageElement | null;
+
+      await settled(img!);
+      fixture.detectChanges();
+
+      expect(header.querySelector('img[satAppHeaderLogo]'))
+        .withContext('the size measurement must not reject a logo that rendered')
+        .toBeTruthy();
+      expect(header.querySelector('sat-word-mark-logo')).toBeNull();
+    });
   });
 });

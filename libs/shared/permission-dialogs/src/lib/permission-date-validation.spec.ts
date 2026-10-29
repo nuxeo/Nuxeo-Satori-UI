@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
+import { DocumentDetailService, UserService } from '@nuxeo/satori-platform/nuxeo-client';
 import { NxsToastService } from '@nuxeo/satori-platform/components';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
@@ -46,6 +46,7 @@ describe.each([
             replacePermissionWithNotification: write,
           },
         },
+        { provide: UserService, useValue: {} },
       ],
     }).compileComponents();
     TestBed.overrideProvider(NxsToastService, { useValue: { show: vi.fn(), error: vi.fn() } });
@@ -54,12 +55,12 @@ describe.each([
       AddPermissionDialogComponent | UpdatePermissionDialogComponent;
     component.timeFrame = 'date-based';
     if (component instanceof AddPermissionDialogComponent)
-      component.selectedUser = {
+      component.selectedUser.set({
         id: 'user-1',
-        displayLabel: 'User',
-        type: 'USER_TYPE',
-        prefixed_id: 'user:user-1',
-      };
+        label: 'User',
+        kind: 'user',
+        prefixedId: 'user:user-1',
+      });
     const settle = async () => {
       fixture.detectChanges();
       await fixture.whenStable();

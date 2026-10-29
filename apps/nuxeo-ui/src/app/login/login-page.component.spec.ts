@@ -103,7 +103,19 @@ describe('LoginPageComponent', () => {
       providers: [
         provideRouter([{ path: 'dashboard', component: LoginPageComponent }]),
         { provide: AuthService, useValue: auth },
-        { provide: AppConfigService, useValue: { brandingLogo, bootstrap } },
+        {
+          provide: AppConfigService,
+          // `reportBrandingLogoUnavailable` stands in for the real one, which clears the signal
+          // the same way; its own behaviour is covered in `app-config.service.spec.ts`, and the
+          // header spec drives it through the real service.
+          useValue: {
+            brandingLogo,
+            bootstrap,
+            reportBrandingLogoUnavailable: (url: string) => {
+              if (brandingLogo()?.url === url) brandingLogo.set(null);
+            },
+          },
+        },
       ],
     }).compileComponents();
 
@@ -148,6 +160,29 @@ describe('LoginPageComponent', () => {
       fixture.detectChanges();
 
       expect(brandLink()?.getAttribute('aria-label')).toBe('Acme Insurance');
+    });
+
+    /**
+     * NXSAT-721 — the image, the lockup and the link's name all come off `brandingLogo`, so a logo
+     * the browser cannot show must take the accessible name back with it. Announcing "Acme" over
+     * the Hyland lockup would be the same defect one layer down.
+     */
+    it('restores the lockup and the Hyland name when the logo cannot be shown', () => {
+      brandingLogo.set({ url: 'https://cdn.example/qa-missing.svg', alt: 'Acme' });
+      fixture.detectChanges();
+      const img = brandLink()?.querySelector('img.login-brand-logo');
+      expect(img)
+        .withContext('the configured logo renders before it is known to fail')
+        .toBeTruthy();
+
+      img!.dispatchEvent(new Event('error'));
+      fixture.detectChanges();
+
+      expect(brandLink()?.querySelector('img.login-brand-logo'))
+        .withContext('a zero-width broken image must not be left above the username field')
+        .toBeNull();
+      expect(brandLink()?.querySelector('sat-logo')).toBeTruthy();
+      expect(brandLink()?.getAttribute('aria-label')).toBe('Hyland');
     });
   });
 
