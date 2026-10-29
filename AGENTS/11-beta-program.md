@@ -710,7 +710,7 @@ JavaScript entry script without shell interpolation. Use `spawnToolSync`,
 Windows Developer Mode or administrator privileges; an EPERM there is an environment
 failure, not a passing control. `beta:e2e-negative-control` is a Node script too.
 The `Cross-platform Beta tooling` workflow exercises arguments on Windows, Linux and
-macOS and runs the full gate on Windows, retaining the gate report on failure.
+macOS and runs the platform-sensitive gates on Windows, retaining the gate report on failure.
 Its PR and push triggers match CodeQL's. Before the full gate, it waits for the
 matching CodeQL workflow and an analysis of the exact event ref and revision;
 `code-scanning` uses that ref even in a detached Actions checkout. Empty or stale
