@@ -958,10 +958,20 @@ explanation are one implementation and cannot disagree. Two functions that must 
 nothing comparing them, is the `proxy-check` class the pre-PR review keeps finding. Then log it
 from the service, **once per load**, not from a `computed` that re-runs.
 
+**One reason per cause, not per rule.** A predicate that returns `false` for several unrelated
+reasons gives one message for all of them, and that message is then wrong for most of them. On
+this fix a path refused because the _server_ would re-read `;` or `%` was reported as pointing
+outside the configuration directory — untrue for a file named `acme;v=1.svg`, which is inside it,
+and it sends the administrator looking in the wrong place. Likewise `javascript:` and `http:`
+shared "must use https:". When a boolean predicate covers several causes, return the reason and
+let the boolean be `reason === null`.
+
 Regression test pattern: a table of every refused form asserting the message names the value, the
 contributing package and the reason, plus one accepted value asserting silence — that negative
 control is what proves the reporting is not unconditional
-(`libs/shared/app-config/src/lib/app-config.service.spec.ts`).
+(`libs/shared/app-config/src/lib/app-config.service.spec.ts`). Add one assertion that **no two
+causes share a message**: it is a single test over the table, and it is what caught both
+collisions above (`bootstrap-config.spec.ts`, `describeBrandingLogoRefusal`).
 
 ---
 

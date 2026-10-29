@@ -358,6 +358,10 @@ describe('describeBrandingLogoRefusal', () => {
     ['query with no path', '?v=2'],
     ['outside the configuration directory', 'https://app.example/nuxeo/api/v1/me'],
     ['a Nuxeo host', 'https://app.example./nuxeo/api/v1/me'],
+    // Fourth review round of PR 512: these are inside the directory and refused for how the
+    // server would re-read the path, which is not the same thing as pointing outside it.
+    ['a path parameter in a segment', 'acme;v=1.svg'],
+    ['a percent escape that does not decode', 'acme%e0.svg'],
   ];
 
   it.each(CAUSES)('gives a reason for %s', (_label, src) => {
@@ -377,6 +381,36 @@ describe('describeBrandingLogoRefusal', () => {
   it('names the scheme it refused, so javascript: is not reported as merely not-https', () => {
     expect(reasonFor('javascript:alert(1)')).toContain('javascript');
     expect(reasonFor('http://example.com/l.svg')).toContain('http');
+  });
+
+  /**
+   * Fourth review round of PR 512. `isInsideDirectory` returned `false` both for a path that
+   * really does leave the directory and for one that stays inside it but carries syntax the
+   * server re-reads — and every one of those was reported as pointing outside the directory,
+   * which for the second group is simply untrue.
+   */
+  describe('a path refused for its syntax is not reported as pointing outside the directory', () => {
+    it('says a genuinely outside path points outside', () => {
+      expect(reasonFor('https://app.example/nuxeo/api/v1/me')).toContain(
+        'outside the configuration directory',
+      );
+    });
+
+    it.each([
+      ['a path parameter', 'acme;v=1.svg'],
+      ['an encoded semicolon', 'acme%3bv=1.svg'],
+      ['an encoded slash', 'brand%2facme.svg'],
+    ])('blames how the server re-reads %s, not the directory', (_label, src) => {
+      const reason = reasonFor(src);
+      expect(reason).toBeTruthy();
+      expect(reason).not.toContain('outside the configuration directory');
+    });
+
+    it('blames the escape when a segment does not decode', () => {
+      const reason = reasonFor('acme%e0.svg');
+      expect(reason).toContain('escape');
+      expect(reason).not.toContain('outside the configuration directory');
+    });
   });
 });
 

@@ -629,9 +629,8 @@ function resolveLogoTarget(
 
   const config = new URL(configUrl);
   if (url.origin === config.origin) {
-    return isInsideDirectory(url.pathname, new URL('.', config).pathname)
-      ? { url: url.href }
-      : { refused: 'it points outside the configuration directory on the application’s own host' };
+    const refused = describeDirectoryContainment(url.pathname, new URL('.', config).pathname);
+    return refused === null ? { url: url.href } : { refused };
   }
   // Cookies are scoped by host, not by scheme or port, so any origin on a Nuxeo host carries the
   // session.
@@ -754,26 +753,35 @@ function embeddedIpv4(hostname: string): string | null {
 }
 
 /**
- * Whether the server, not just the browser, reads `pathname` as lying inside `directory`.
+ * Why the server, not just the browser, would not read `pathname` as lying inside `directory` —
+ * or `null` when both read it that way.
  *
  * Tomcat drops `;` path parameters from each segment before it collapses dot segments, so `..;x`
  * is an ordinary segment to the browser and a parent directory to Nuxeo. A proxy that decodes
  * before forwarding does the same with `%3b`, with `%2f` as a separator, and with `%252e%252e`,
  * which Tomcat then decodes again to `..`. A segment carrying any of those — including an escape
  * left over after decoding once — or one that does not decode, is refused.
+ *
+ * Those are **three different reasons**, and reporting them as one was a false claim: a file named
+ * `acme;v=1.svg` or `acme%e0.svg` is inside the configuration directory, and saying it points
+ * outside tells an administrator to look in the wrong place (review of PR 512).
  */
-function isInsideDirectory(pathname: string, directory: string): boolean {
-  if (!pathname.startsWith(directory)) return false;
-  return pathname
-    .slice(directory.length)
-    .split('/')
-    .every((segment) => {
-      try {
-        return !/[;/\\%]/.test(decodeURIComponent(segment));
-      } catch {
-        return false;
-      }
-    });
+function describeDirectoryContainment(pathname: string, directory: string): string | null {
+  if (!pathname.startsWith(directory)) {
+    return 'it points outside the configuration directory on the application’s own host';
+  }
+  for (const segment of pathname.slice(directory.length).split('/')) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      return 'a path segment carries a percent escape that does not decode, so the server and the browser would not read the path the same way';
+    }
+    if (/[;/\\%]/.test(decoded)) {
+      return 'a path segment decodes to a ";", "%", "/" or "\\", which the server strips or re-reads, so the path could leave the configuration directory there while staying inside it in the browser';
+    }
+  }
+  return null;
 }
 
 /**

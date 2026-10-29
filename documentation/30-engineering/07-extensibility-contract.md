@@ -132,8 +132,11 @@ key for the favicon.
   What the report deliberately does **not** say is which mark ends up on screen: a refusal leaves
   whatever an earlier layer set, so an earlier valid logo still wins and a later valid one
   replaces a refused earlier one. Each cause gives its own wording — the scheme is named, so
-  `javascript:` and `http:` do not read alike, and a backslash is not reported as a control
-  character — so one log line identifies what was wrong with the value.
+  `javascript:` and `http:` do not read alike; a backslash is not reported as a control
+  character; and a path refused for syntax the server re-reads is not reported as pointing outside
+  the configuration directory, because a file named `acme;v=1.svg` or `acme%e0.svg` is inside it
+  and saying otherwise sends the administrator looking in the wrong place. One log line identifies
+  what was wrong with the value.
 - **The two logo messages make different claims on purpose.** A failure _after_ loading (the
   NXSAT-721 case above) says the Satori marks are in use, because the merge has already settled
   which contribution won and suppressing that one URL leaves nothing to render but the packaged
