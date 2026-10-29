@@ -58,6 +58,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
 import { SessionTimeoutService } from '../auth/session-timeout.service';
+import { BrandLogoFallbackDirective } from '../config/brand-logo-fallback.directive';
 import { AppNavItem, SETTINGS_DRAWER_ITEMS, toAppNavItem } from '../platform-nav-items';
 import { ThemingFeatureFlagService } from '../theme/theming-feature-flag.service';
 import { drawerItemForPath } from './drawer-route-match';
@@ -84,6 +85,7 @@ import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
     NavDrawerComponent,
     PresetBadgeComponent,
     SelectionTopbarComponent,
+    BrandLogoFallbackDirective,
     FormsModule,
     AiMarkdownPipe,
     TranslatePipe,
