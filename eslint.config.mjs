@@ -15,17 +15,48 @@ const require = createRequire(import.meta.url);
  * until a build-order change in #496 incidentally warmed the graph before the removal. Incidental
  * is not a fix: reorder those steps back and the site silently stops refreshing again.
  *
- * Resolution and loading are separate on purpose. A missing package is tolerated; a package that
- * is present but throws while loading is not, because silently dropping these rules on a broken
- * install would be worse than failing.
+ * Only an ABSENT package is tolerated. Silently dropping these rules on a broken install would be
+ * worse than failing, and `MODULE_NOT_FOUND` on the entry point does not distinguish the two:
+ * Node reports it both for a package that is not installed and for one that is, whose `./eslint`
+ * export points at a file that is not there. Probing the manifest separates them — see
+ * `satoriLintIsInstalled`. Loading happens outside the `try`, so an error thrown from inside
+ * satori-lint propagates rather than being read as absence.
  */
+const SATORI_LINT_ENTRY = '@hylandsoftware/satori-lint/eslint';
+
+/**
+ * Whether the package is installed at all, independent of its entry point resolving.
+ *
+ * A package that exists but does not export `./package.json` fails with
+ * `ERR_PACKAGE_PATH_NOT_EXPORTED`, and that error is itself proof Node found the package and read
+ * its `exports` — satori-lint does exactly this. So only `MODULE_NOT_FOUND` here means absent.
+ */
+const satoriLintIsInstalled = () => {
+  try {
+    require.resolve('@hylandsoftware/satori-lint/package.json');
+    return true;
+  } catch (error) {
+    return error?.code !== 'MODULE_NOT_FOUND';
+  }
+};
+
 let satoriLintPath = null;
 try {
-  satoriLintPath = require.resolve('@hylandsoftware/satori-lint/eslint');
+  satoriLintPath = require.resolve(SATORI_LINT_ENTRY);
 } catch (error) {
-  if (error.code !== 'MODULE_NOT_FOUND') throw error;
+  if (error?.code !== 'MODULE_NOT_FOUND') throw error;
+  // Installed, but its entry point does not resolve: a broken install, not an absent package.
+  if (satoriLintIsInstalled()) throw error;
 }
 const satoriLint = satoriLintPath ? require(satoriLintPath) : null;
+
+if (!satoriLint) {
+  // So a lint run that has quietly lost these rules says why, rather than just passing.
+  console.warn(
+    `[eslint.config] ${SATORI_LINT_ENTRY} is not installed — Satori lint rules are disabled. ` +
+      'Expected in the token-free builds that remove @hylandsoftware; a surprise anywhere else.',
+  );
+}
 
 export default [
   ...nx.configs['flat/base'],
