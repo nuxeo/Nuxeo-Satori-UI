@@ -2,21 +2,62 @@ import { createRequire } from 'node:module';
 import nx from '@nx/eslint-plugin';
 
 const require = createRequire(import.meta.url);
-const satoriLint = require('@hylandsoftware/satori-lint/eslint');
+
+const SATORI_LINT_ENTRY = '@hylandsoftware/satori-lint/eslint';
+
+// The Satori lint layer has to survive its own package being absent, because two builds delete
+// the whole `@hylandsoftware` scope from `node_modules` on purpose before building the Material
+// Storybook — `storybook-pages.yml` and ci.yml's `storybook` job — so that a Satori import fails
+// the build instead of compiling into a site we publish from a public repository.
+//
+// Nx loads this file to infer lint targets while it computes the project graph, and that happens
+// for *every* `nx run`. So a hard `require` here turned that deliberate deletion into
+// `Failed to process project graph: Cannot find module '@hylandsoftware/satori-lint/eslint'`
+// and took the Storybook build down with it. It did exactly that, on the two pushes to `main` of
+// 2026-10-28. The require had landed on 2026-10-25, while the publishing workflow was pointed at
+// a deleted branch and so never ran; nothing else caught it, because ci.yml runs that build only
+// when `satori-components` is affected and a change to this file affects no project at all.
+//
+// Absent is tolerated. Broken is not: a package that resolves and then throws is a real failure
+// and is re-thrown, and an absent one says so on stderr, so a lint run that has quietly lost the
+// rules below tells you instead of passing wider than it should.
+function loadSatoriLint() {
+  try {
+    return require(SATORI_LINT_ENTRY);
+  } catch (error) {
+    const entryIsMissing =
+      error?.code === 'MODULE_NOT_FOUND' && String(error.message).includes(SATORI_LINT_ENTRY);
+    if (!entryIsMissing) throw error;
+    console.warn(
+      `[eslint.config] ${SATORI_LINT_ENTRY} is not installed — Satori lint rules are OFF for this run.`,
+    );
+    return null;
+  }
+}
+
+const satoriLint = loadSatoriLint();
+
+// A rule may only be named once its plugin is registered, so the override goes with the layer
+// that brings the plugin in rather than standing on its own.
+const satoriLintLayers = satoriLint
+  ? [
+      ...satoriLint.configs['flat/recommended'],
+      {
+        files: ['**/*.html'],
+        rules: {
+          // 513 Material font icons → Satori SVG icons is a separate migration tracked by
+          // `npm run satori:icons`. Warn so lint stays green while SDSC tracks progress.
+          '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
+        },
+      },
+    ]
+  : [];
 
 export default [
   ...nx.configs['flat/base'],
   ...nx.configs['flat/typescript'],
   ...nx.configs['flat/javascript'],
-  ...satoriLint.configs['flat/recommended'],
-  {
-    files: ['**/*.html'],
-    rules: {
-      // 513 Material font icons → Satori SVG icons is a separate migration tracked by
-      // `npm run satori:icons`. Warn so lint stays green while SDSC tracks progress.
-      '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
-    },
-  },
+  ...satoriLintLayers,
   {
     ignores: [
       '**/dist',

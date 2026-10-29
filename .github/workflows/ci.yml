@@ -279,6 +279,12 @@ jobs:
           npm run beta:gate-selftest
           # The Storybook publication gate's controls: each Satori fingerprint must fail it.
           npm run storybook:publication-gate-selftest
+          # The root ESLint config against a deleted `@hylandsoftware` scope, which is the state
+          # the Material Storybook build creates on purpose. Both directions: it must load with
+          # the package absent, and it must still carry the Satori rules when it is installed.
+          # Runs here, with every other static gate, because a change to `eslint.config.mjs`
+          # affects no Nx project and so reaches none of the affected-based jobs below.
+          npm run lint:config-selftest
           # SCA. Fails on a high or critical in the PRODUCTION tree, and on an accepted
           # advisory whose review date has expired. Gating on the dev-inclusive total
           # instead would be permanently red (9 high, none shipped) and so bypassed.
