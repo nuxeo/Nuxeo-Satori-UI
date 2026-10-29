@@ -56,8 +56,17 @@ npx nx build platform
 ## Installation and use
 
 The package is public and publishes to the Nuxeo registry (`https://packages.nuxeo.com/repository/npm-public/`)
-under the `@nuxeo` scope. Consumers install it with no registry login. The steps are in
-[`docs/installing-satori-platform.md`](../../docs/installing-satori-platform.md).
+under the `@nuxeo` scope. Consumers install it with no registry login. Add this line to the
+project's `.npmrc`, then install the alpha tag:
+
+```ini
+@nuxeo:registry=https://packages.nuxeo.com/repository/npm-public/
+```
+
+```bash
+npm install @nuxeo/satori-platform@alpha
+```
+
 Until the first alpha is published, install from a **tarball** or **local path**:
 
 ```bash

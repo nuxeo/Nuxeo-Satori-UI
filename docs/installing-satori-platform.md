@@ -25,8 +25,9 @@ Without it, npm looks for `@nuxeo/satori-platform` on public npm, where it does 
 npm install @nuxeo/satori-platform@alpha
 ```
 
-The first release is published under the `alpha` dist-tag, so `npm install` without `@alpha`
-does not pick it up. A `latest` tag is only set by a deliberate promotion.
+Always install with the `@alpha` tag explicitly. Do not rely on the default tag: when no `latest`
+tag exists, npm can select another version. After the alpha is published, check the tags with
+`npm view @nuxeo/satori-platform dist-tags`.
 
 ## 3. Peer dependencies
 
