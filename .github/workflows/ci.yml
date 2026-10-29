@@ -628,7 +628,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: storybook-${{ steps.scope.outputs.sha }}
-          path: dist/storybook/satori-components
+          path: dist/storybook/satori-components-DELIBERATELY-MISSING
           if-no-files-found: error
           retention-days: 7
 
