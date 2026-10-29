@@ -85,6 +85,11 @@ export class AppConfigService {
   private readonly bootstrapConfig = signal<AppBootstrapConfig>(DEFAULT_APP_BOOTSTRAP_CONFIG);
   private readonly runtimeManifest = signal<AppRuntimeManifest>(DEFAULT_APP_RUNTIME_MANIFEST);
   private readonly presetState = signal<AppActivePreset | null>(null);
+  /**
+   * The resolved logo URL a brand surface reported it could not show. Keyed by URL rather than a
+   * bare flag, so a configuration that later names a different logo gets a fresh attempt.
+   */
+  private readonly failedLogoUrl = signal<string | null>(null);
   private loading: Promise<void> | null = null;
   private readonly diagnosticsState = signal<AppConfigDiagnostics>({
     bootstrapSource: 'packaged-default',
@@ -107,6 +112,10 @@ export class AppConfigService {
   /**
    * The configured logo with its `src` resolved to the URL an `<img>` loads, or `null` to keep the
    * Satori marks. Resolved here because only this service knows where `bootstrap.json` came from.
+   *
+   * It also goes back to `null` once a brand surface reports that the browser could not show the
+   * logo — see {@link reportBrandingLogoUnavailable}. Both brand surfaces read this one signal, so
+   * the image, the packaged mark and the brand link's accessible name always agree.
    */
   readonly brandingLogo = computed<{ readonly url: string; readonly alt: string } | null>(() => {
     const config = this.bootstrapConfig();
@@ -115,8 +124,24 @@ export class AppConfigService {
     const baseUri = this.document.baseURI;
     const configUrl = new URL(this.bootstrapUrl, baseUri).href;
     const url = resolveBrandingLogoUrl(logo.src, configUrl, nuxeoOriginsOf(config, baseUri));
-    return url === null ? null : { url, alt: logo.alt };
+    if (url === null || url === this.failedLogoUrl()) return null;
+    return { url, alt: logo.alt };
   });
+
+  /**
+   * A configured logo the browser could not show, so the brand surfaces fall back to the packaged
+   * Satori marks instead of holding an image nobody can see.
+   *
+   * Every check before this one runs before the image is ever requested: `isAcceptedLogoSrc` on
+   * the string as written, and `resolveBrandingLogoUrl` on where the resolved URL points. Neither
+   * can know whether the bytes exist, decode, or are allowed cross-origin, which is why the
+   * outcome has to come back from the element that loaded it (NXSAT-721).
+   */
+  reportBrandingLogoUnavailable(url: string, reason: string): void {
+    if (!url || this.failedLogoUrl() === url) return;
+    this.failedLogoUrl.set(url);
+    this.note(`branding.logo not shown, using the Satori marks instead — ${reason}: ${url}`);
+  }
 
   /**
    * Fetch both halves, choose the preset, and apply everything in order. Never rejects, so it is

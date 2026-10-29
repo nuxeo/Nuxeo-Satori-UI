@@ -446,6 +446,78 @@ describe('AppConfigService', () => {
     });
   });
 
+  /**
+   * NXSAT-721. Every check before this one runs before the image is requested, so only the element
+   * that loaded it can say whether the browser could show it.
+   */
+  describe('reportBrandingLogoUnavailable', () => {
+    const logoUrl = () => new URL('/agentic-ui-config/assets/acme-logo.svg', document.baseURI).href;
+
+    async function loadWithLogo() {
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'acme',
+            content: { branding: { logo: { src: 'assets/acme-logo.svg', alt: 'Acme' } } },
+          },
+        ]),
+      );
+    }
+
+    it('clears the logo, so both brand surfaces fall back to the Satori marks', async () => {
+      await loadWithLogo();
+      expect(service.brandingLogo()).not.toBeNull();
+
+      service.reportBrandingLogoUnavailable(logoUrl(), 'the image could not be loaded');
+
+      expect(service.brandingLogo()).toBeNull();
+    });
+
+    it('records one diagnostic naming the failing address, and logs it', async () => {
+      await loadWithLogo();
+      const before = service.diagnostics().messages.length;
+
+      service.reportBrandingLogoUnavailable(logoUrl(), 'the image could not be loaded');
+
+      const added = service.diagnostics().messages.slice(before);
+      expect(added).toHaveLength(1);
+      expect(added[0]).toContain(logoUrl());
+      expect(added[0]).toContain('the image could not be loaded');
+      expect(warn).toHaveBeenCalledWith(`[agentic-ui-config] ${added[0]}`);
+    });
+
+    it('reports a given URL once, however many surfaces show it', async () => {
+      await loadWithLogo();
+      const before = service.diagnostics().messages.length;
+
+      service.reportBrandingLogoUnavailable(logoUrl(), 'the image could not be loaded');
+      service.reportBrandingLogoUnavailable(logoUrl(), 'the image could not be loaded');
+
+      expect(service.diagnostics().messages.slice(before)).toHaveLength(1);
+    });
+
+    it('ignores an empty URL rather than disabling a logo it cannot name', async () => {
+      await loadWithLogo();
+      const before = service.diagnostics().messages.length;
+
+      service.reportBrandingLogoUnavailable('', 'the image could not be loaded');
+
+      expect(service.brandingLogo()).not.toBeNull();
+      expect(service.diagnostics().messages.slice(before)).toHaveLength(0);
+    });
+
+    it('leaves a logo configured at a different address alone, so a later one gets its chance', () => {
+      service.reportBrandingLogoUnavailable(
+        new URL('/agentic-ui-config/assets/old-logo.svg', document.baseURI).href,
+        'the image could not be loaded',
+      );
+
+      return loadWithLogo().then(() => {
+        expect(service.brandingLogo()).toEqual({ url: logoUrl(), alt: 'Acme' });
+      });
+    });
+  });
+
   describe('featureToggle', () => {
     it('returns the caller fallback when no package has configured the toggle', () => {
       expect(service.featureToggle('ai', true)).toBe(true);

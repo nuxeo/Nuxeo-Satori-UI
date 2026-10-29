@@ -38,6 +38,8 @@ import { observeStripRedundantMatInputAriaRequired } from '@nuxeo/satori-platfor
 
 import { AuthService, SignInError } from '../auth/auth.service';
 
+import { BrandLogoFallbackDirective } from '../config/brand-logo-fallback.directive';
+
 const LAST_USER_KEY = 'agentic_ui_last_username';
 
 @Component({
@@ -63,6 +65,8 @@ const LAST_USER_KEY = 'agentic_ui_last_username';
     TranslatePipe,
 
     SatLogoModule,
+
+    BrandLogoFallbackDirective,
   ],
 
   templateUrl: './login-page.component.html',

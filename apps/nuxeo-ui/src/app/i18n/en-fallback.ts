@@ -328,6 +328,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'permissions.add-permission-dialog.hi-could-you-comment-on-this':
     'Hi! Could you comment on this document and...',
   'permissions.add-permission-dialog.search-for-users-and-groups': 'Search for users and groups',
+  'permissions.add-permission-dialog.user-group': 'User / Group',
   'permissions.share-external-dialog.hi-could-you-comment-on-this':
     'Hi! Could you comment on this document and...',
   'permissions.update-permission-dialog.hi-could-you-comment-on-this':
@@ -434,6 +435,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
     'Hi! Could you comment on this document and...',
   'shared-ui.share-saved-search-add-permission-dialog.search-for-users-and-groups':
     'Search for users and groups',
+  'shared-ui.share-saved-search-add-permission-dialog.user-group': 'User / Group',
   'shared-ui.share-saved-search-dialog.close-dialog': 'Close dialog',
   'shared-ui.share-saved-search-dialog.edit-external-permission': 'Edit external permission',
   'shared-ui.share-saved-search-dialog.edit-permission': 'Edit permission',
