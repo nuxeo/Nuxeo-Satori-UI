@@ -22,7 +22,7 @@ client or Angular Material in with it.
 
 ```
 libs/platform/
-  package.json          ← package metadata, peers, private: true
+  package.json          ← package metadata, peers, publishConfig
   ng-package.json       ← primary entry point
   src/
     index.ts            ← PLATFORM_ENTRY_POINTS export
@@ -55,8 +55,10 @@ npx nx build platform
 
 ## Installation and use
 
-Not published yet (`private: true` until `@nuxeo-satori` scope ownership is confirmed).
-Installable from a **tarball** or **local path** today:
+The package is public and publishes to the Nuxeo registry (`https://packages.nuxeo.com/repository/npm-public/`)
+under the `@nuxeo` scope. Consumers install it with no registry login. The steps are in
+[`docs/installing-satori-platform.md`](../../docs/installing-satori-platform.md).
+Until the first alpha is published, install from a **tarball** or **local path**:
 
 ```bash
 npm pack ./dist/libs/platform --pack-destination /tmp
@@ -136,4 +138,5 @@ a cross-compatibility matrix.
 - [x] Installable from tarball
 - [x] Typechecks from installed `.d.ts` (verified via probe, not assumed)
 - [x] API surface pinned and gated
-- [ ] **Publish blocked:** `private: true` until `@nuxeo-satori` scope confirmed (risk R10)
+- [x] `private` removed and `publishConfig` names the Nuxeo registry (NXSAT-667)
+- [ ] First `alpha` published to packages.nuxeo.com (needs the registry publish secret and a go-ahead)
