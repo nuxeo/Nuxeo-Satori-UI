@@ -18,24 +18,48 @@ const SATORI_LINT_ENTRY = '@hylandsoftware/satori-lint/eslint';
 // a deleted branch and so never ran; nothing else caught it, because ci.yml runs that build only
 // when `satori-components` is affected and a change to this file affects no project at all.
 //
-// Absent is tolerated. Broken is not: a package that resolves and then throws is a real failure
-// and is re-thrown, and an absent one says so on stderr, so a lint run that has quietly lost the
-// rules below tells you instead of passing wider than it should.
-function loadSatoriLint() {
+// Absent is tolerated. Broken is not — silently dropping these rules on a half-installed package
+// would be worse than failing, because lint would pass wider than it should and say nothing.
+//
+// Telling the two apart needs more than the error code. Node reports `MODULE_NOT_FOUND` on the
+// entry point BOTH when the package is not installed and when it is installed with an `./eslint`
+// export pointing at a file that is not there, with the same specifier in the message either way.
+// Measured, not assumed; `scripts/eslint-config-satori-lint.selftest.mjs` re-measures it against a
+// real fixture, so these branches cannot drift from what Node actually does.
+const SATORI_LINT_MANIFEST = '@hylandsoftware/satori-lint/package.json';
+
+// Whether the package is there at all, independently of its entry point resolving. A package that
+// exists but does not export `./package.json` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`, and that
+// error is itself proof Node found the package and read its `exports` — the real satori-lint does
+// exactly this, so this is the live branch, not a hypothetical one. Only `MODULE_NOT_FOUND` here
+// means genuinely absent.
+function satoriLintIsInstalled() {
   try {
-    return require(SATORI_LINT_ENTRY);
+    require.resolve(SATORI_LINT_MANIFEST);
+    return true;
   } catch (error) {
-    const entryIsMissing =
-      error?.code === 'MODULE_NOT_FOUND' && String(error.message).includes(SATORI_LINT_ENTRY);
-    if (!entryIsMissing) throw error;
+    return error?.code !== 'MODULE_NOT_FOUND';
+  }
+}
+
+function resolveSatoriLint() {
+  try {
+    return require.resolve(SATORI_LINT_ENTRY);
+  } catch (error) {
+    if (error?.code !== 'MODULE_NOT_FOUND') throw error;
+    if (satoriLintIsInstalled()) throw error; // installed, entry broken: a real failure.
     console.warn(
-      `[eslint.config] ${SATORI_LINT_ENTRY} is not installed — Satori lint rules are OFF for this run.`,
+      `[eslint.config] ${SATORI_LINT_ENTRY} is not installed — Satori lint rules are OFF for this run. ` +
+        'Expected in the token-free builds that remove @hylandsoftware; a surprise anywhere else.',
     );
     return null;
   }
 }
 
-const satoriLint = loadSatoriLint();
+const satoriLintPath = resolveSatoriLint();
+// Loaded outside the try above on purpose, so an error thrown from inside satori-lint propagates
+// instead of being read as the package being absent.
+const satoriLint = satoriLintPath ? require(satoriLintPath) : null;
 
 // A rule may only be named once its plugin is registered, so the override goes with the layer
 // that brings the plugin in rather than standing on its own.

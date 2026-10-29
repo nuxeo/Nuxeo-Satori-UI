@@ -8,70 +8,189 @@
  * public repository publishes. Nx loads `eslint.config.mjs` to infer lint targets while it
  * computes the project graph, which happens for *every* `nx run`, so a hard `require` of that
  * package turns the deliberate deletion into `Failed to process project graph` and takes the
- * Storybook build with it. That is NXSAT-649: the public Storybook stopped publishing, and
- * nothing caught it, because ci.yml runs that build only when `satori-components` is affected
- * and a change to the root ESLint config does not affect it.
+ * Storybook build with it. It did: the public Storybook stopped publishing on 2026-10-28.
  *
- * What is load-bearing here. Two claims in opposite directions, and the second is the one that
- * is easy to lose: the config must load with the package ABSENT, and it must still carry the
- * Satori rules when the package is PRESENT. A fix that satisfies only the first silently widens
- * what lint accepts in every normal run. The remaining controls are negative: a package that
- * resolves and then fails is a real error and must NOT be swallowed by the absent-package path.
+ * What is load-bearing here. THREE states, not two, and the third is the one a plausible fix
+ * gets wrong:
  *
- * Each case runs in its own child process, because module resolution is patched before
- * `eslint.config.mjs` is imported and that cannot be undone within one process. Nothing here
- * writes to `node_modules` — the installed tree is never touched. Note that moving the scope
- * aside by hand does NOT reproduce the failure in a worktree nested inside another checkout:
- * Node walks up and resolves the parent's copy instead. That is why this patches resolution.
+ *   - absent              -> the config must load, with the Satori rules off
+ *   - installed           -> the config must load, with the Satori rules ON
+ *   - installed, broken   -> the config must THROW
+ *
+ * The third exists because Node reports `MODULE_NOT_FOUND` on the entry point for an absent
+ * package AND for an installed one whose `./eslint` export points at a missing file, with the
+ * same specifier in the message. A guard that reads only the entry-point error therefore treats
+ * a half-installed package as absent and silently drops every Satori rule — lint passes wider
+ * and says nothing. Telling them apart needs the manifest probed separately, because a package
+ * that exists but does not export `./package.json` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`,
+ * and that error is proof Node found it. The real satori-lint does not export `./package.json`,
+ * so this is the live path, not a hypothetical one.
+ *
+ * The error codes above are MEASURED against real fixtures by the first group of controls below,
+ * and the behavioural controls inject errors built from the same constants. So if a Node upgrade
+ * changes them, the fixtures go red and say the simulation has drifted, rather than passing while
+ * testing something Node no longer does.
+ *
+ * Each behavioural case runs in its own child process, because module resolution is patched
+ * before `eslint.config.mjs` is imported and that cannot be undone within one process. Nothing
+ * here writes to the installed `node_modules`. Note that moving the scope aside by hand does NOT
+ * reproduce absence in a worktree nested inside another checkout: Node walks up and resolves the
+ * parent's copy. That is why this patches resolution instead.
  *
  * Usage: node scripts/eslint-config-satori-lint.selftest.mjs
  */
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
-const CONFIG = resolve(import.meta.dirname, '..', 'eslint.config.mjs');
+const ROOT = resolve(import.meta.dirname, '..');
+const CONFIG = join(ROOT, 'eslint.config.mjs');
 const ENTRY = '@hylandsoftware/satori-lint/eslint';
+const MANIFEST = '@hylandsoftware/satori-lint/package.json';
+
+// The two codes the config's branches turn on. Asserted against real fixtures below.
+const ABSENT_CODE = 'MODULE_NOT_FOUND';
+const INSTALLED_BUT_UNEXPORTED_CODE = 'ERR_PACKAGE_PATH_NOT_EXPORTED';
 
 const failures = [];
 let controls = 0;
 
+function check(label, condition, detail) {
+  controls += 1;
+  if (!condition) failures.push(`${label}${detail ? `: ${detail}` : ''}`);
+}
+
+// ----------------------------------------------- fixture fidelity: what Node really reports ----
+
+/** Resolves `specifier` as if from a file in `dir`, and reports the outcome. */
+function resolveFrom(dir, specifier) {
+  try {
+    createRequire(join(dir, 'eslint.config.mjs')).resolve(specifier);
+    return { resolved: true, code: null };
+  } catch (error) {
+    return { resolved: false, code: error?.code ?? null };
+  }
+}
+
+const fixtures = mkdtempSync(join(tmpdir(), 'satori-lint-fixtures-'));
+try {
+  // A tree with no `@hylandsoftware` at all.
+  const absentDir = join(fixtures, 'absent');
+  mkdirSync(join(absentDir, 'node_modules'), { recursive: true });
+
+  // A tree where the package IS installed but its `./eslint` export points at a missing file.
+  const brokenDir = join(fixtures, 'broken');
+  const brokenPkg = join(brokenDir, 'node_modules', '@hylandsoftware', 'satori-lint');
+  mkdirSync(brokenPkg, { recursive: true });
+  writeFileSync(
+    join(brokenPkg, 'package.json'),
+    JSON.stringify({
+      name: '@hylandsoftware/satori-lint',
+      version: '0.0.0-fixture',
+      exports: { './eslint': './eslint/index.cjs' },
+    }),
+  );
+
+  const absentEntry = resolveFrom(absentDir, ENTRY);
+  const absentManifest = resolveFrom(absentDir, MANIFEST);
+  const brokenEntry = resolveFrom(brokenDir, ENTRY);
+  const brokenManifest = resolveFrom(brokenDir, MANIFEST);
+  const realEntry = resolveFrom(ROOT, ENTRY);
+  const realManifest = resolveFrom(ROOT, MANIFEST);
+
+  check(
+    'fixture: an absent package fails the entry point with the absent code',
+    absentEntry.code === ABSENT_CODE,
+    `got ${absentEntry.code}`,
+  );
+  check(
+    'fixture: an absent package fails the manifest with the absent code too',
+    absentManifest.code === ABSENT_CODE,
+    `got ${absentManifest.code}`,
+  );
+  check(
+    'fixture: a broken install fails the entry point with the SAME code as an absent one, which ' +
+      'is why the entry-point error alone cannot be trusted',
+    brokenEntry.code === ABSENT_CODE,
+    `got ${brokenEntry.code}`,
+  );
+  check(
+    'fixture: a broken install is distinguishable on the manifest',
+    brokenManifest.code === INSTALLED_BUT_UNEXPORTED_CODE,
+    `got ${brokenManifest.code}`,
+  );
+  check(
+    'fixture: the really installed package resolves its entry point',
+    realEntry.resolved,
+    `got code ${realEntry.code}`,
+  );
+  check(
+    'fixture: the really installed package does not export its manifest, so that branch is live',
+    realManifest.code === INSTALLED_BUT_UNEXPORTED_CODE,
+    `got ${realManifest.resolved ? 'resolved' : realManifest.code} — if this package started ` +
+      'exporting ./package.json the probe still works, but this control documents which path runs',
+  );
+} finally {
+  rmSync(fixtures, { recursive: true, force: true });
+}
+
+// ------------------------------------------------------- behaviour: the config under each state --
+
 /**
- * Imports `eslint.config.mjs` in a child process, with `require` of ENTRY optionally replaced by
- * a thrown error, and reports what the exported flat config contains.
+ * Imports `eslint.config.mjs` in a child process with resolution patched per specifier, and
+ * reports what the exported flat config contains.
  *
- * `throws` is the error to raise instead of resolving ENTRY: `{ message, code }`, or null to
- * leave resolution alone and use the really installed package.
+ * `plan` maps a specifier to `{ code, message }` to throw instead of resolving it. `loadThrows`
+ * instead lets the entry resolve and makes *loading* it throw, which must propagate.
  */
-function loadConfig(throws) {
+function loadConfig({ plan = {}, loadThrows = null } = {}) {
   const child = `
     import Module from 'node:module';
-    const thrown = ${JSON.stringify(throws)};
-    if (thrown) {
-      const original = Module._resolveFilename;
-      Module._resolveFilename = function (request, ...rest) {
-        if (request === ${JSON.stringify(ENTRY)}) {
-          const error = new Error(thrown.message);
-          if (thrown.code) error.code = thrown.code;
+    const plan = ${JSON.stringify(plan)};
+    const loadThrows = ${JSON.stringify(loadThrows)};
+
+    const resolvedEntry = loadThrows ? Module.createRequire(${JSON.stringify(CONFIG)}).resolve(${JSON.stringify(ENTRY)}) : null;
+
+    const originalResolve = Module._resolveFilename;
+    Module._resolveFilename = function (request, ...rest) {
+      const planned = plan[request];
+      if (planned) {
+        const error = new Error(planned.message);
+        if (planned.code) error.code = planned.code;
+        throw error;
+      }
+      return originalResolve.call(this, request, ...rest);
+    };
+
+    if (loadThrows) {
+      const originalLoad = Module._load;
+      // Both forms, so this control means the same thing whether the config loads the package by
+      // its resolved path or by its bare specifier. Keyed on only one, it would pass or fail on
+      // the shape of the implementation rather than on the behaviour being tested.
+      Module._load = function (request, ...rest) {
+        if (request === resolvedEntry || request === ${JSON.stringify(ENTRY)}) {
+          const error = new Error(loadThrows.message);
+          if (loadThrows.code) error.code = loadThrows.code;
           throw error;
         }
-        return original.call(this, request, ...rest);
+        return originalLoad.call(this, request, ...rest);
       };
     }
+
     const config = (await import(${JSON.stringify(CONFIG)})).default;
-    const ruleKeys = config
+    const satoriRules = config
       .flatMap((layer) => Object.keys(layer?.rules ?? {}))
       .filter((rule) => rule.startsWith('@hylandsoftware/satori-lint'));
-    const plugins = config
+    const satoriPlugins = config
       .flatMap((layer) => Object.keys(layer?.plugins ?? {}))
       .filter((name) => name.includes('satori-lint'));
-    console.log(
-      'RESULT ' +
-        JSON.stringify({ layers: config.length, satoriRules: ruleKeys, satoriPlugins: plugins }),
-    );
+    console.log('RESULT ' + JSON.stringify({ layers: config.length, satoriRules, satoriPlugins }));
   `;
   const run = spawnSync(process.execPath, ['--input-type=module', '-e', child], {
     encoding: 'utf8',
-    cwd: resolve(import.meta.dirname, '..'),
+    cwd: ROOT,
   });
   const line = (run.stdout || '').split('\n').find((l) => l.startsWith('RESULT '));
   return {
@@ -81,14 +200,14 @@ function loadConfig(throws) {
   };
 }
 
-function check(label, condition, detail) {
-  controls += 1;
-  if (!condition) failures.push(`${label}${detail ? `: ${detail}` : ''}`);
-}
+const notFound = (specifier) => ({
+  code: ABSENT_CODE,
+  message: `Cannot find module '${specifier}'`,
+});
 
-// --------------------------------------------- the package is absent: the config must load ----
+// ---- absent: both the entry point and the manifest are unresolvable. Must load, rules off. ----
 
-const absent = loadConfig({ message: `Cannot find module '${ENTRY}'`, code: 'MODULE_NOT_FOUND' });
+const absent = loadConfig({ plan: { [ENTRY]: notFound(ENTRY), [MANIFEST]: notFound(MANIFEST) } });
 
 check(
   'absent package: the config still loads',
@@ -111,9 +230,9 @@ check(
   `stderr was ${JSON.stringify(absent.stderr.trim().slice(0, 200))}`,
 );
 
-// ------------- the package is installed: the rules must still be there (the easy one to lose) --
+// ---- installed: the rules must still be there. The direction a careless fix loses. ----
 
-const present = loadConfig(null);
+const present = loadConfig();
 
 check(
   'installed package: the config loads',
@@ -141,36 +260,66 @@ check(
   `stderr was ${JSON.stringify(present.stderr.trim().slice(0, 200))}`,
 );
 
-// ------------------------------- negative controls: a broken package must NOT be swallowed ----
+// ---- installed but broken: the fail-open this exists to prevent. Must throw. ----
 
-// MODULE_NOT_FOUND, but for something the package itself requires. Tolerating this would hide a
-// half-installed dependency behind "Satori lint rules are OFF" and lint would pass wider.
-const innerMissing = loadConfig({
-  message: "Cannot find module 'some-inner-dependency'",
-  code: 'MODULE_NOT_FOUND',
+const brokenInstall = loadConfig({
+  plan: {
+    [ENTRY]: notFound(ENTRY),
+    [MANIFEST]: {
+      code: INSTALLED_BUT_UNEXPORTED_CODE,
+      message: `Package subpath './package.json' is not defined by "exports" in ${MANIFEST}`,
+    },
+  },
+});
+
+check(
+  'installed but broken entry point: the config THROWS rather than dropping the rules',
+  brokenInstall.code !== 0,
+  `exit ${brokenInstall.code}, result ${JSON.stringify(brokenInstall.result)}`,
+);
+check(
+  'installed but broken entry point: nothing claims the package is merely absent',
+  !/Satori lint rules are OFF/i.test(brokenInstall.stderr),
+  `stderr was ${JSON.stringify(brokenInstall.stderr.trim().slice(0, 200))}`,
+);
+check(
+  'installed but broken entry point: the real resolution error survives',
+  brokenInstall.stderr.includes(ENTRY),
+  `stderr was ${JSON.stringify(brokenInstall.stderr.trim().slice(0, 200))}`,
+);
+
+// ---- other failures on the way in must not be read as absence either. ----
+
+const otherResolveError = loadConfig({
+  plan: {
+    [ENTRY]: { code: 'ERR_INVALID_MODULE_SPECIFIER', message: 'Invalid module specifier' },
+  },
 });
 check(
-  'a missing inner dependency is re-thrown, not treated as an absent package',
-  innerMissing.code !== 0,
-  `exit ${innerMissing.code}, result ${JSON.stringify(innerMissing.result)}`,
+  'a non-MODULE_NOT_FOUND resolution error is re-thrown',
+  otherResolveError.code !== 0,
+  `exit ${otherResolveError.code}, result ${JSON.stringify(otherResolveError.result)}`,
 );
 check(
-  'a missing inner dependency keeps its own message',
-  innerMissing.stderr.includes('some-inner-dependency'),
-  `stderr was ${JSON.stringify(innerMissing.stderr.trim().slice(0, 200))}`,
+  'a non-MODULE_NOT_FOUND resolution error keeps its own message',
+  otherResolveError.stderr.includes('Invalid module specifier'),
+  `stderr was ${JSON.stringify(otherResolveError.stderr.trim().slice(0, 200))}`,
 );
 
-// A package that resolves and then throws for any other reason: also a real failure.
-const brokenEntry = loadConfig({ message: 'Unexpected token in satori-lint entry' });
+// The package resolves, then throws while loading — a missing dependency of its own, say. Loading
+// happens outside the guard, so this must propagate untouched.
+const loadError = loadConfig({
+  loadThrows: { code: ABSENT_CODE, message: "Cannot find module 'some-inner-dependency'" },
+});
 check(
-  'a package that fails for another reason is re-thrown',
-  brokenEntry.code !== 0,
-  `exit ${brokenEntry.code}, result ${JSON.stringify(brokenEntry.result)}`,
+  'a throw from inside satori-lint propagates instead of being read as absence',
+  loadError.code !== 0,
+  `exit ${loadError.code}, result ${JSON.stringify(loadError.result)}`,
 );
 check(
-  'a package that fails for another reason keeps its own message',
-  brokenEntry.stderr.includes('Unexpected token in satori-lint entry'),
-  `stderr was ${JSON.stringify(brokenEntry.stderr.trim().slice(0, 200))}`,
+  'a throw from inside satori-lint keeps its own message',
+  loadError.stderr.includes('some-inner-dependency'),
+  `stderr was ${JSON.stringify(loadError.stderr.trim().slice(0, 200))}`,
 );
 
 console.log(`eslint.config satori-lint selftest: ${controls} controls.`);
