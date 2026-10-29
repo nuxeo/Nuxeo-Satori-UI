@@ -6,7 +6,6 @@ import {
   OnDestroy,
   ViewChild,
   computed,
-  effect,
   inject,
   signal,
   ChangeDetectionStrategy,
@@ -265,12 +264,9 @@ export class AppShellComponent implements OnDestroy {
   constructor() {
     this.sessionTimeout.start();
 
-    // The browser tab is branding too, and it was previously fixed in index.html
-    // where no customer could reach it. An effect rather than a one-off call
-    // because the configuration load is asynchronous.
-    effect(() => {
-      document.title = this.appConfig.bootstrap().branding.documentTitle;
-    });
+    // The browser tab title is set at application scope by `syncDocumentTitle`, not here: this
+    // component only mounts on authenticated routes, so a title written here never reached the
+    // sign-in page (NXSAT-722).
 
     if (!this.platformNavState.collapsed()) {
       this.platformNavState.toggleCollapsed();
