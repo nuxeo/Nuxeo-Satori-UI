@@ -910,6 +910,24 @@ node -e "for (const h of ['localhost','localhost.','127.1','[::1]']) console.log
 Note where it must stop: resolving a name to an address needs DNS, which a browser does not
 expose. State the residual gap rather than implying the rule is total.
 
+**And check the other address family.** The first fix of this covered `localhost`, `127.0.0.0/8`
+and `[::1]`, and the reviewer found `[::ffff:127.0.0.1]` straight through it — IPv6 can embed an
+IPv4 address three ways, and the parser canonicalises each into a different shape
+(`[::ffff:7f00:1]`, `[::7f00:1]`, `[::ffff:0:7f00:1]`). **Decode the embedded address** rather
+than listing the prefixes; a list is incomplete the moment a fourth embedding exists, which is
+the same mistake as enumerating focusable selectors.
+
+**A guard added for diagnostics must not become a new failure mode.** The same review found that
+reporting the refusal parsed the configuration URL unguarded, inside a method documented to
+never reject because it runs as an `APP_INITIALIZER`. A malformed override turned a _tolerated_
+load failure into a failed startup — the reporting was worse than the silence it replaced. When
+you add a pass over configuration to explain it, the pass inherits that contract.
+
+**Say only what you know.** The first message read `refused, keeping the Satori marks`, which is
+false whenever an earlier layer set a valid value: a refusal falls back to `base`, not to the
+packaged default. Report what was refused and why; do not narrate the merged outcome from one
+contribution's point of view.
+
 **A refusal with no reason is indistinguishable from no configuration.** A function returning
 `null` for "refused" throws the reason away at the moment it is known. Return the reason and
 derive the boolean from it — `isAccepted = describeRefusal(x) === null` — so the verdict and the

@@ -504,6 +504,11 @@ function isAcceptedLogoSrc(src: string): boolean {
  * written for the administrator who set the value, not for us (NXSAT-724).
  */
 function describeLogoSrcForm(src: string): string | null {
+  // `readLogo` already discards a blank, so this branch changes no verdict — it exists so a
+  // value that was written and is blank can be reported rather than passed over in silence.
+  if (src.trim() === '') {
+    return 'it is blank, so it names no file';
+  }
   if (src.includes('\\') || [...src].some((char) => char < ' ' || char === '\u007f')) {
     return 'it contains a backslash or a control character, which the URL parser rewrites or drops';
   }
@@ -661,8 +666,56 @@ function canonicalHost(hostname: string): string {
 /** `localhost`, `127.0.0.0/8` and the IPv6 loopback, in the forms the URL parser produces. */
 function isLoopbackHost(hostname: string): boolean {
   if (hostname === 'localhost') return true;
-  if (hostname === '[::1]' || hostname === '::1') return true;
-  return /^127\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname);
+  if (/^127\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname)) return true;
+  const groups = ipv6Groups(hostname);
+  if (groups === null) return false;
+  // `::1`.
+  if (groups.slice(0, 7).every((group) => group === 0) && groups[7] === 1) return true;
+  return embeddedIpv4FirstOctet(groups) === 127;
+}
+
+/**
+ * An IPv6 host as its eight 16-bit groups, or `null` when it is not one.
+ *
+ * The parser hands back a bracketed, already-abbreviated address — `[::ffff:7f00:1]` — so the
+ * `::` has to be expanded before any group can be read positionally.
+ */
+function ipv6Groups(hostname: string): number[] | null {
+  const inner = /^\[(.+)]$/.exec(hostname)?.[1];
+  if (inner === undefined || !/^[0-9a-f:]+$/i.test(inner)) return null;
+  const [head, tail, ...rest] = inner.split('::');
+  if (rest.length > 0) return null;
+  const parse = (part: string) => (part === '' ? [] : part.split(':').map((g) => parseInt(g, 16)));
+  const left = parse(head ?? '');
+  const right = tail === undefined ? [] : parse(tail);
+  const zeros = 8 - left.length - right.length;
+  // No `::` means the address must already be eight groups; with one, it must stand for at least one.
+  if (tail === undefined ? zeros !== 0 : zeros < 1) return null;
+  const groups = [...left, ...Array.from({ length: zeros }, () => 0), ...right];
+  return groups.every((group) => Number.isInteger(group) && group >= 0 && group <= 0xffff)
+    ? groups
+    : null;
+}
+
+/**
+ * The first octet of an IPv4 address embedded in the low 32 bits, or `null` when none is.
+ *
+ * Three embeddings reach an IPv4 host and the URL parser accepts all of them: IPv4-mapped
+ * (`::ffff:127.0.0.1`), the deprecated IPv4-compatible (`::127.0.0.1`), and IPv4-translated
+ * (`::ffff:0:127.0.0.1`). They arrive as `[::ffff:7f00:1]`, `[::7f00:1]` and `[::ffff:0:7f00:1]`,
+ * so none of them matches a check written against the IPv4 or the `::1` spelling (NXSAT-724,
+ * review of PR 512).
+ *
+ * Rather than list the three prefixes — a list that is incomplete the moment a fourth exists —
+ * this requires every group above the low 32 bits to be `0` or `ffff`, which is what all of them
+ * are made of, and then reads the address out. A real routable address such as `2001:db8::7f00:1`
+ * has a leading group that is neither, so it is not treated as embedding one.
+ */
+function embeddedIpv4FirstOctet(groups: readonly number[]): number | null {
+  const prefix = groups.slice(0, 6);
+  if (!prefix.every((group) => group === 0 || group === 0xffff)) return null;
+  if (prefix.every((group) => group === 0) && groups[6] === 0) return null;
+  return (groups[6] ?? 0) >>> 8;
 }
 
 /**

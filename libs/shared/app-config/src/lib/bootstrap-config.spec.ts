@@ -199,6 +199,37 @@ describe('resolveBrandingLogoUrl — the check on the URL the browser loads', ()
     ).toBeNull();
   });
 
+  /**
+   * Review of PR 512. An IPv4 address embedded in IPv6 reaches the IPv4 host, and the parser
+   * accepts all three embeddings — mapped, the deprecated compatible form, and translated — none
+   * of which matches a check written against the IPv4 or `::1` spelling.
+   */
+  it.each([
+    ['IPv4-mapped', 'https://[::ffff:127.0.0.1]:4200/nuxeo/icons/x.png'],
+    ['IPv4-mapped, already canonical', 'https://[::ffff:7f00:1]:4200/nuxeo/icons/x.png'],
+    ['IPv4-compatible (deprecated)', 'https://[::127.0.0.1]:4200/nuxeo/icons/x.png'],
+    ['IPv4-translated', 'https://[::ffff:0:127.0.0.1]:4200/nuxeo/icons/x.png'],
+    ['a fully written IPv6 loopback', 'https://[0:0:0:0:0:0:0:1]:4200/nuxeo/icons/x.png'],
+    ['another mapped address in 127.0.0.0/8', 'https://[::ffff:127.0.0.2]:4200/nuxeo/icons/x.png'],
+  ])('refuses a loopback Nuxeo host embedded in IPv6 as %s', (_label, src) => {
+    expect(
+      resolveBrandingLogoUrl(src, 'http://localhost:4200/agentic-ui-config/bootstrap.json'),
+    ).toBeNull();
+  });
+
+  /** The embedding check must not swallow addresses that merely end in those bits. */
+  it.each([
+    ['a routable address whose low bits look like loopback', 'https://[2001:db8::7f00:1]/acme.svg'],
+    ['a mapped address that is not loopback', 'https://[::ffff:10.0.0.5]/acme.svg'],
+    ['an ordinary IPv6 host', 'https://[2001:db8::1]/acme.svg'],
+    // Compared against the parser's own canonical form rather than the written one: it rewrites
+    // an embedded IPv4 to hex groups, so `[::ffff:10.0.0.5]` comes back as `[::ffff:a00:5]`.
+  ])('still allows %s on a loopback deployment', (_label, src) => {
+    expect(
+      resolveBrandingLogoUrl(src, 'http://localhost:4200/agentic-ui-config/bootstrap.json'),
+    ).toBe(new URL(src).href);
+  });
+
   it('still allows a third-party https logo when the deployment is on loopback', () => {
     expect(
       resolveBrandingLogoUrl(

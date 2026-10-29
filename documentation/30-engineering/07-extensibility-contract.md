@@ -105,7 +105,12 @@ key for the favicon.
   it does not do, and the check now does: a **trailing dot** is stripped, because `example.com.`
   is the fully-qualified form of `example.com` and shares its cookie jar; and `localhost`,
   anything in `127.0.0.0/8` and `[::1]` are treated as one host, because on a single-host
-  deployment each of them reaches the Nuxeo the configuration itself came from. A side effect
+  deployment each of them reaches the Nuxeo the configuration itself came from — including an
+  IPv4 loopback address embedded in IPv6, in any of the three embeddings the URL parser accepts
+  (`::ffff:127.0.0.1`, the deprecated `::127.0.0.1`, and `::ffff:0:127.0.0.1`, which arrive as
+  `[::ffff:7f00:1]`, `[::7f00:1]` and `[::ffff:0:7f00:1]`). The embedded address is decoded rather
+  than matched against a list of prefixes, which would be incomplete the moment a fourth exists.
+  A side effect
   worth knowing: a logo inside the configuration directory is refused if its host carries a
   trailing dot, since the same-origin exception is matched on the origin as written — write the
   host the way the application is served, or use a relative path. What the check still cannot do
@@ -115,9 +120,14 @@ key for the favicon.
 - **Every refusal is reported** (NXSAT-724). A refused `src` used to keep the packaged mark and
   say nothing, so a typo looked exactly like configuring no logo at all. Each contributed value
   the checks refuse is now written once per load to the console as `[agentic-ui-config] …` and
-  recorded in `diagnostics().messages`, naming the value, the package that contributed it and the
-  reason. The reason text comes from the same function that decides the verdict, so the two
-  cannot drift apart.
+  recorded in `diagnostics().messages`, naming the value, where it came from and the reason. The
+  reason text comes from the same function that decides the verdict, so the two cannot drift
+  apart. The active preset's contribution is included and named as such; unselected presets
+  contribute nothing and stay quiet. A `src` written as an empty or whitespace-only string is
+  reported too — it is refused, and it used to be indistinguishable from declaring no logo.
+  What the report deliberately does **not** say is which mark ends up on screen: a refusal leaves
+  whatever an earlier layer set, so an earlier valid logo still wins and a later valid one
+  replaces a refused earlier one.
 - **A logo that is accepted and then does not render keeps the Satori marks too** (NXSAT-721).
   Every check above runs before the image is requested, so none of them can know whether the file
   exists, whether the bytes decode, or whether a remote host sent the CORS header. The two `<img>`

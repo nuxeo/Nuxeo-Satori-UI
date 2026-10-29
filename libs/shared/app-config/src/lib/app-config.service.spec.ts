@@ -91,6 +91,44 @@ describe('AppConfigService and the host application’s interceptors', () => {
   });
 });
 
+/**
+ * Review of PR 512. `load()` never rejects, by contract — it is an `APP_INITIALIZER` and the
+ * application has to start on the packaged defaults whatever the configuration says. The
+ * diagnostic pass added for NXSAT-724 parsed the configuration URL unguarded, so a malformed
+ * `APP_BOOTSTRAP_CONFIG_URL` override turned a tolerated load failure into a failed startup.
+ */
+describe('AppConfigService with a malformed configuration URL', () => {
+  it('still starts on the packaged defaults, and says why nothing was checked', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const malformed = 'https://[';
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: malformed },
+      ],
+    });
+    const service = TestBed.inject(AppConfigService);
+    const http = TestBed.inject(HttpTestingController);
+
+    const loaded = service.load();
+    // Both URLs are matched by shape rather than by name: the manifest URL is derived from the
+    // bootstrap one, so a malformed override makes it malformed too.
+    const requests = http.match(() => true);
+    expect(requests).toHaveLength(2);
+    requests.forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+
+    // The assertion is that this resolves at all: it used to reject with a TypeError.
+    await expect(loaded).resolves.toBeUndefined();
+    expect(service.bootstrap()).toEqual(DEFAULT_APP_BOOTSTRAP_CONFIG);
+    expect(service.diagnostics().messages.some((m) => m.includes('not a valid URL'))).toBe(true);
+    expect(service.brandingLogo()).toBeNull();
+
+    http.verify();
+    warn.mockRestore();
+  });
+});
+
 describe('AppConfigService', () => {
   let service: AppConfigService;
   let http: HttpTestingController;
@@ -603,6 +641,103 @@ describe('AppConfigService', () => {
       service.brandingLogo();
 
       expect(logoMessages()).toHaveLength(1);
+    });
+
+    /** Review of PR 512 — four things this pass got wrong. */
+    describe('review of PR 512', () => {
+      it('reports a src written as a blank string, which is refused but looked like none', async () => {
+        await loadWithSrc('   ');
+
+        const messages = logoMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('blank');
+        expect(service.brandingLogo()).toBeNull();
+      });
+
+      it('stays silent for a contribution that declares no logo at all', async () => {
+        await load(
+          envelope('bootstrap', [
+            { name: 'acme', content: { branding: { applicationTitle: 'Acme' } } },
+          ]),
+        );
+
+        expect(logoMessages()).toEqual([]);
+      });
+
+      it('does not claim which mark is displayed, because an earlier logo survives a refusal', async () => {
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'one',
+              component: 'com.one',
+              content: { branding: { logo: { src: 'assets/a.svg', alt: 'A' } } },
+            },
+            {
+              name: 'two',
+              component: 'com.two',
+              content: { branding: { logo: { src: '../b.svg', alt: 'B' } } },
+            },
+          ]),
+        );
+
+        const messages = logoMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('com.two');
+        expect(messages[0]).not.toContain('Satori marks');
+        // The earlier valid logo is what is actually shown, so any such claim would be wrong.
+        expect(service.brandingLogo()?.url).toContain('/agentic-ui-config/assets/a.svg');
+      });
+
+      it('reports a logo the active preset contributes, naming the preset', async () => {
+        window.history.replaceState({}, '', '/?preset=insurance');
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'presales',
+              content: {
+                presales: {
+                  presetSwitching: true,
+                  presets: {
+                    insurance: {
+                      label: 'Insurance',
+                      bootstrap: { branding: { logo: { src: '../x.svg', alt: 'Acme' } } },
+                    },
+                  },
+                },
+              },
+            },
+          ]),
+        );
+
+        const messages = logoMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('preset "insurance"');
+        expect(messages[0]).toContain('../x.svg');
+      });
+
+      it('stays silent about a preset nobody selected', async () => {
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'presales',
+              content: {
+                presales: {
+                  presetSwitching: true,
+                  presets: {
+                    insurance: {
+                      label: 'Insurance',
+                      bootstrap: { branding: { logo: { src: '../x.svg', alt: 'Acme' } } },
+                    },
+                  },
+                },
+              },
+            },
+          ]),
+        );
+
+        expect(service.activePreset()).toBeNull();
+        expect(logoMessages()).toEqual([]);
+      });
     });
   });
 
