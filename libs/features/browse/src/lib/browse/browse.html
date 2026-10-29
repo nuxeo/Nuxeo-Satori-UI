@@ -910,49 +910,14 @@
             <div class="panel-section-title" role="heading" aria-level="4">
               {{ 'browse.browse.tags' | translate }}
             </div>
-            <div class="tags-container">
-              @for (tag of tags(); track tag) {
-                <span class="removable-tag">
-                  <sat-category-tag category="blue">{{ tag }}</sat-category-tag>
-                  <button
-                    type="button"
-                    class="tag-remove-btn"
-                    (click)="removeTag(tag)"
-                    [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
-                  >
-                    <mat-icon svgIcon="x_large" />
-                  </button>
-                </span>
-              }
-              @if (tags().length === 0) {
-                <span class="no-data">{{ 'browse.browse.no-tags-yet' | translate }}</span>
-              }
-            </div>
-
-            <mat-form-field class="tag-autocomplete-field" appearance="outline">
-              <input
-                matInput
-                [placeholder]="'browse.browse.search-or-create-a-tag' | translate"
-                [(ngModel)]="tagInput"
-                (ngModelChange)="onTagSearch($event)"
-                [matAutocomplete]="tagAuto"
+            @if (currentDoc(); as doc) {
+              <nxs-tag-editor
+                [documentUid]="doc.uid"
+                [tags]="tags()"
+                [readOnly]="!canTag()"
+                (tagsChange)="onTagsChange(doc.uid, $event)"
               />
-              <mat-icon matSuffix svgIcon="chevron_down" />
-              <mat-autocomplete
-                #tagAuto="matAutocomplete"
-                (optionSelected)="selectTag($event.option.value)"
-                autoActiveFirstOption
-              >
-                @for (result of tagSearchResults(); track result) {
-                  <mat-option [value]="result">{{ result }}</mat-option>
-                }
-                @if (showCreateOption()) {
-                  <mat-option [value]="tagInput">
-                    <span class="create-tag-option">+ {{ tagInput }}</span>
-                  </mat-option>
-                }
-              </mat-autocomplete>
-            </mat-form-field>
+            }
           </div>
         }
 

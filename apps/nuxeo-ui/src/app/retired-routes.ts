@@ -4,8 +4,13 @@ import { toBrowseRouterUrl } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * The adf-hx proof of concept's two routes, retired. Bookmarks and shared links to them still
- * arrive, and the router has no wildcard route, so an unmatched path is a navigation error rather
- * than a fallback page. Each redirects to the page that replaced it, with its query string intact.
+ * arrive, so each redirects to the page that replaced it, with its query string intact.
+ *
+ * This used to add "and the router has no wildcard route, so an unmatched path is a navigation
+ * error rather than a fallback page". The router has had one since b20f32638 — an unmatched path
+ * now renders the not-found page — so these redirects are what keeps an old link landing on the
+ * page that replaced it rather than on a 404, which is a better outcome but no longer the only
+ * one.
  *
  * `/browse-adf-hx` named its folder in `?path=`, and `/browse` reads the folder from its path, so
  * keeping the query alone would open the repository root. The folder is therefore also moved into

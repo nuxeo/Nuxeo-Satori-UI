@@ -1,5 +1,14 @@
 import { DOCUMENT } from '@angular/common';
-import { APP_INITIALIZER, DestroyRef, LOCALE_ID, Provider, inject } from '@angular/core';
+import {
+  DestroyRef,
+  EnvironmentProviders,
+  Injector,
+  LOCALE_ID,
+  Provider,
+  effect,
+  inject,
+  provideAppInitializer,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { TranslateService } from '@ngx-translate/core';
@@ -120,25 +129,63 @@ export function syncDocumentLanguage(
     .subscribe((event) => apply(event.lang));
 }
 
-export function provideAppConfig(): Provider[] {
+/**
+ * Keeps the browser tab title equal to Layer 0 `branding.documentTitle`, on every route.
+ *
+ * This used to be an `effect` in `AppShellComponent`'s constructor. The effect itself was right —
+ * the configuration load is asynchronous, so a reactive reader is what re-runs when it lands — but
+ * the shell only mounts on authenticated routes. The sign-in page, the first page a customer sees
+ * and the one that ends up in their history and bookmarks, therefore kept the packaged
+ * `<title>` from `index.html` for the whole of the session before sign-in (NXSAT-722).
+ *
+ * At application scope instead, so there is no route where it does not apply. `nuxeo-satori-template`
+ * writes the title in its initializer after `await config.load()`; an effect is the form its own
+ * comment prefers, and it needs no sequencing because it re-runs when the signal changes.
+ *
+ * `branding.documentTitle` can no longer be blank — `mergeBootstrapConfig` keeps the packaged
+ * value for a blank or whitespace-only one — so this does not need to guard against writing an
+ * empty title.
+ *
+ * The `injector` is passed in for the same reason `syncDocumentLanguage` takes a `DestroyRef`:
+ * the initializer's closure runs after provider resolution, outside an injection context, so
+ * `effect()` cannot find one for itself.
+ */
+export function syncDocumentTitle(
+  config: Pick<AppConfigService, 'bootstrap'>,
+  document: Document,
+  injector: Injector,
+): void {
+  effect(
+    () => {
+      document.title = config.bootstrap().branding.documentTitle;
+    },
+    { injector },
+  );
+}
+
+// `EnvironmentProviders` in the union because `provideAppInitializer` returns that rather than a
+// `Provider`. `ApplicationConfig.providers` accepts both, and the spec that picks out the
+// `LOCALE_ID` provider keys on a `provide` property, which an `EnvironmentProviders` does not have.
+export function provideAppConfig(): (Provider | EnvironmentProviders)[] {
   return [
-    {
-      provide: APP_INITIALIZER,
-      useFactory: (config: AppConfigService, translate: TranslateService) =>
-        initialiseAppConfigAndLanguage(config, translate),
-      deps: [AppConfigService, TranslateService],
-      multi: true,
-    },
-    {
-      provide: APP_INITIALIZER,
-      useFactory: () => {
-        const translate = inject(TranslateService);
-        const document = inject(DOCUMENT);
-        const destroyRef = inject(DestroyRef);
-        return () => syncDocumentLanguage(translate, document, destroyRef);
-      },
-      multi: true,
-    },
+    // `provideAppInitializer` rather than the `APP_INITIALIZER` token, which Angular has
+    // deprecated. Its callback runs in an injection context, so these inject directly instead of
+    // resolving in a factory and returning a closure. Same ordering and the same concurrency —
+    // Angular still runs initializers concurrently, which is why
+    // `initialiseAppConfigAndLanguage` sequences the language load inside itself rather than
+    // relying on a second initializer. `nuxeo-satori-template` already uses this form.
+    provideAppInitializer(() =>
+      initialiseAppConfigAndLanguage(inject(AppConfigService), inject(TranslateService))(),
+    ),
+    provideAppInitializer(() =>
+      syncDocumentLanguage(inject(TranslateService), inject(DOCUMENT), inject(DestroyRef)),
+    ),
+    // Application scope rather than the shell, so the sign-in page gets the configured title
+    // too (NXSAT-722). An effect, so it re-runs when the asynchronous load lands and does not
+    // need sequencing against the other initializers.
+    provideAppInitializer(() =>
+      syncDocumentTitle(inject(AppConfigService), inject(DOCUMENT), inject(Injector)),
+    ),
     /*
      * Angular's OWN formatting locale, which is a different mechanism from the string language.
      *

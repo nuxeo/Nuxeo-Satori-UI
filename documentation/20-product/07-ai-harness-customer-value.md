@@ -36,7 +36,7 @@ by unpacking it.
 | Artifact                    | What it does                                                                                                                     | Status      |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | **4 Nx generators**         | `extension-library`, `-rule`, `-action`, `-component`. Produce registered, tested, conforming scaffolding                        | **Shipped** |
-| **Guardrail script**        | 5 checks a customer runs in their own CI, so an agent can verify its own output before a human reviews it                        | **Shipped** |
+| **Guardrail script**        | 6 checks a customer runs in their own CI, so an agent can verify its own output before a human reviews it                        | **Shipped** |
 | **Customer knowledge base** | `AGENTS.md` (~180 lines of procedure) + the 509-line extension reference, shipped as package assets so any AI tool can read them | **Shipped** |
 | **A forkable template**     | Thin, and ships **no design system** so the customer adds theirs                                                                 | **Shipped** |
 
@@ -75,7 +75,7 @@ disappeared.
 | A customer can generate a conforming extension library from the installed package | Verified by unpacking the tarball into `node_modules` and running the generator: `project.json`, `src/index.ts`, `src/lib/extensions.ts` and a spec were produced |
 | The generated library is **inert until the app opts in** — one provider line      | `provideAcmeExtensions()` in the template's app config                                                                                                            |
 | The generated library registers **live**, not merely present                      | `phase-5-harness` evidence, 27 checks; guardrail check 3 requires a spec asserting registry state                                                                 |
-| The guardrail catches five specific classes of mistake                            | Each corresponds to a mistake actually made in this repository. All five probed                                                                                   |
+| The guardrail catches six specific classes of mistake                             | Each corresponds to a mistake actually made in this repository. All six probed                                                                                    |
 | A Layer 0/1/2 customisation **survives a version bump**                           | `npm run beta:upgrade`, 8 assertions incl. slot existence                                                                                                         |
 | Config and manifest survive a **marketplace upgrade**                             | Both are fragments in the customer's own package; ours installs no configuration file. Rehearsed with two customer packages installed (NXSAT-312)                 |
 
@@ -86,7 +86,7 @@ disappeared.
 | "A customisation is a short agent session rather than a project" | **No customer has done this.** Zero external users. The generators were only made reachable from the published package on 2026-08-24 |
 | "Layers 0 and 1 absorb most requests"                            | The **central economic assumption**, flagged as unvalidated in both the RFC and the plan                                             |
 | "The 52 registered IDs are the right ones"                       | RFC risk **R8** — too few addressable IDs pushes work into Layer 2 and undermines the maintenance economics                          |
-| "An agent can verify its own work"                               | True of the 5 checks. It cannot verify that the feature is _correct_, only that it conforms                                          |
+| "An agent can verify its own work"                               | True of the 6 checks. It cannot verify that the feature is _correct_, only that it conforms                                          |
 
 ### Tier 3 · Potential, requiring investment
 

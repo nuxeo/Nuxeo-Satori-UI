@@ -9,6 +9,8 @@ import { themingGuard } from './theme/theming.guard';
 const placeholder = () =>
   import('./placeholder-page.component').then((m) => m.PlaceholderPageComponent);
 
+const notFound = () => import('./not-found-page.component').then((m) => m.NotFoundPageComponent);
+
 export const routes: Routes = [
   {
     path: 'login',
@@ -53,6 +55,16 @@ export const routes: Routes = [
         path: 'expired-queue',
         loadComponent: placeholder,
       },
+      // `/doc` with no document id — a link copied or truncated without it. The `**` below
+      // cannot catch this: `path: 'doc'` matches the segment, leaving nothing for the feature's
+      // only child (`:uid`) to match, and a parent that matched with no child to activate is a
+      // successful navigation with an empty outlet rather than a no-match the router can fall
+      // through. Measured: the header and the nav rail, and no page.
+      //
+      // `pathMatch: 'full'` is what keeps this off `/doc/:uid`, which is declared next and is
+      // reached whenever there is an id. `/doc/a/b` needs nothing here — a leftover segment
+      // _is_ a no-match, so it already falls through to `**`.
+      { path: 'doc', pathMatch: 'full', loadComponent: notFound },
       {
         path: 'doc',
         loadChildren: () =>
@@ -138,11 +150,12 @@ export const routes: Routes = [
       // It cannot shadow a feature route: Angular matches in order and every path above is
       // declared before it. `/browse/**` is handled inside the browse feature's own routes, so
       // this never swallows a folder path.
-      {
-        path: '**',
-        loadComponent: () =>
-          import('./not-found-page.component').then((m) => m.NotFoundPageComponent),
-      },
+      //
+      // It is not, however, a catch-all for every address that identifies no page. A `**` is
+      // only reached on a **no-match**, and a path whose parent route matched is not one: the
+      // navigation succeeds with an empty outlet instead. `/doc` above is that case, and any
+      // future route whose children cannot match an empty remainder needs the same treatment.
+      { path: '**', loadComponent: notFound },
     ],
   },
 ];
