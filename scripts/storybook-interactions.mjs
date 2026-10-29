@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// NXSAT-662 scratch: deliberate artifact-upload failure, reverted in the next commit.
 /**
  * Run every story of a built Storybook in a real browser, its play function included, and fail
  * when a story does not render or its play function throws.
