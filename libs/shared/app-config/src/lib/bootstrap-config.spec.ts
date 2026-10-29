@@ -246,6 +246,58 @@ describe('mergeBootstrapConfig', () => {
     expect(merged.aiBackendUrl).toBe(DEFAULT_APP_BOOTSTRAP_CONFIG.aiBackendUrl);
   });
 
+  /**
+   * NXSAT-722. A product name and a browser tab title are always shown to someone, so the empty
+   * string is not a value a customer can mean: it is a blank tab title, and an unnamed brand link
+   * where `applicationTitle` is the accessible name.
+   */
+  describe('blank branding titles', () => {
+    const branding = (patch: Record<string, unknown>) =>
+      mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, { branding: patch }).branding;
+    const packaged = DEFAULT_APP_BOOTSTRAP_CONFIG.branding;
+
+    it('keeps the packaged documentTitle for an empty string', () => {
+      expect(branding({ documentTitle: '' }).documentTitle).toBe(packaged.documentTitle);
+    });
+
+    it('keeps the packaged documentTitle for a whitespace-only value', () => {
+      expect(branding({ documentTitle: '   ' }).documentTitle).toBe(packaged.documentTitle);
+      expect(branding({ documentTitle: '\t\n' }).documentTitle).toBe(packaged.documentTitle);
+    });
+
+    it('keeps the packaged applicationTitle for an empty or whitespace-only value', () => {
+      expect(branding({ applicationTitle: '' }).applicationTitle).toBe(packaged.applicationTitle);
+      expect(branding({ applicationTitle: '  ' }).applicationTitle).toBe(packaged.applicationTitle);
+    });
+
+    it('still applies a non-blank title, and one that merely has padding', () => {
+      expect(branding({ documentTitle: 'Acme Portal' }).documentTitle).toBe('Acme Portal');
+      expect(branding({ applicationTitle: ' Acme Insurance ' }).applicationTitle).toBe(
+        ' Acme Insurance ',
+      );
+    });
+
+    it('does not let a later blank fragment wipe out a title an earlier package set', () => {
+      const configured = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+        branding: { documentTitle: 'Acme Portal', applicationTitle: 'Acme Insurance' },
+      });
+
+      const merged = mergeBootstrapConfig(configured, {
+        branding: { documentTitle: '', applicationTitle: '   ' },
+      });
+
+      expect(merged.branding.documentTitle).toBe('Acme Portal');
+      expect(merged.branding.applicationTitle).toBe('Acme Insurance');
+    });
+
+    it('leaves the logo and the other settings alone', () => {
+      const merged = branding({ documentTitle: '', logo: { src: 'acme.svg', alt: 'Acme' } });
+
+      expect(merged.logo).toEqual({ src: 'acme.svg', alt: 'Acme' });
+      expect(merged.documentTitle).toBe(packaged.documentTitle);
+    });
+  });
+
   it('distinguishes an explicit null server URL from an absent one', () => {
     expect(
       mergeBootstrapConfig(

@@ -586,8 +586,9 @@ afterwards; `Tag.Suggestion` with `[{ "id", "displayLabel" }]`.
 - Web UI's `isTaggable` — `canTagDocument(doc)` here — offers neither without Write, nor on a version
   or a proxy.
 
-**Used by:** `nxs-tag-editor` in the document page's Properties panel, and the AI "Suggested tags"
-card, which refreshes the document's tags from `addTag`'s answer.
+**Used by:** `nxs-tag-editor` in the document page's Properties panel and in Browse's details panel
+(Tags sub-tab), and the AI "Suggested tags" card, which refreshes the document's tags from
+`addTag`'s answer.
 
 ---
 
@@ -1661,13 +1662,28 @@ same way.
 `404 Directory label_tag_entry was not found` (measured 2026-10-13), so it never suggests anything.
 `suggestTags` uses the operation Web UI uses, which answered the same server, and is the one place
 that sends it: the search filters' tags reach it through `SearchService.getTagSuggestions`, and
-document detail's `nxs-tag-editor` calls it directly. Browse's tag field still calls `searchTags`,
-so it suggests nothing on Nuxeo 2025 until it moves onto `suggestTags`.
+document detail and Browse's `nxs-tag-editor` call it directly. Both editors save every add and
+remove immediately and apply the returned tags to their document state.
 
 `nxs-date-input` makes no request.
 
-**Usage:** none yet. The pickers are in `@nuxeo/satori-platform/components`, documented in its
-Storybook; screens move onto them in a later change.
+**Usage:** Add permission and saved-search sharing use `nxs-user-group-picker`, with its default
+three-character minimum. A selected `NxsPrincipal` supplies the raw username or group id for both
+document and saved-search permission writes — never its label, which is a display name — and its
+kind for the saved-search entry's `grantedBy`. Editing the text clears the selection; failed
+searches remain retryable in the picker. Browse and document detail use `nxs-tag-editor` for
+immediate saves, with `canTagDocument` controlling read-only state. Its writes are queued by
+`provideNxsTagWrites()` in the app config, so closing the panel or moving to another document
+mid-write neither cancels a change nor drops the ones behind it.
+`nxs-tag-input` remains a form control for labels that are saved with a form.
+
+**Why three characters, not one (NXSAT-654).** `UserGroup.Suggestion` does not cap its answer: it
+returns every user and group matching the term, and the picker renders each one as an option. A
+one-character term therefore asks for a large share of the directory on the first pause. The only
+measurement made for this change was on the local Nuxeo directory of eight users: a one-character
+search took 9 to 30 ms, which says nothing about the cost on a large directory. Three is also Web
+UI's default for the saved-search dialog and document suggestion, so the minimum stays at three.
+The picker's `minChars` input sets a different value where a smaller directory needs one.
 
 ---
 

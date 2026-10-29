@@ -7,7 +7,7 @@ import { TranslateLoader, provideTranslateService } from '@ngx-translate/core';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
 import { CURRENT_USERNAME, ADMIN_ACCESS_CHECKS } from '@nuxeo/satori-platform/nuxeo-client';
-import { provideNxsComponents } from '@nuxeo/satori-platform/components';
+import { provideNxsComponents, provideNxsTagWrites } from '@nuxeo/satori-platform/components';
 import { provideNxsSatoriComponents } from '@nuxeo/satori-platform/components-satori';
 import { nuxeoAuthInterceptor } from './auth/nuxeo-auth.interceptor';
 import { AuthService } from './auth/auth.service';
@@ -39,6 +39,8 @@ export const appConfig: ApplicationConfig = {
     // build without GitHub Packages access lists only the first.
     provideNxsComponents(),
     provideNxsSatoriComponents(),
+    // At the root, so a tag change outlives the Browse panel or document page that made it.
+    provideNxsTagWrites(),
     // Layer 1: registers the application's slot, rule and component IDs. Must
     // follow `provideAppConfig()`, which loads the manifest they are merged with.
     ...provideAppExtensions(),

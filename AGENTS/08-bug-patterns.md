@@ -807,6 +807,76 @@ simulated — `apps/nuxeo-ui/src/app/shell/app-shell-brand-logo.spec.ts`.
 
 ---
 
+## 24. A blank string accepted as a configured value
+
+```typescript
+// BAD ❌ — "" is a string, so it overrides the packaged default. An empty field in a
+// configuration tool is the usual way one arrives, and the result is a blank browser tab
+// title and a brand link a screen reader announces as just "link".
+applicationTitle: readString(branding, 'applicationTitle', base.branding.applicationTitle),
+
+// GOOD ✅ — blank and whitespace-only keep the fallback.
+applicationTitle: readNonBlankString(branding, 'applicationTitle', base.branding.applicationTitle),
+```
+
+Ask of every configured string whether the empty string is a value a customer could **mean**. For
+anything always shown to someone — a product name, a tab title, an accessible name — it is not:
+`""` is not a quieter choice, it is an absent one. This repo already took that view elsewhere and
+branding was the inconsistency: `readStringRecord` requires `entry.trim() !== ''` for manifest
+operation ids, `readStringArray` requires a non-empty result, and the ARender config requires a
+non-blank `viewerOrigin`.
+
+**The expensive half is the merge, not the default.** Configuration arrives as ordered fragments,
+so the question is not only "what does a blank give me" but "what does a blank do to a value an
+earlier package set correctly". It wiped it out: `{documentTitle: 'Acme Portal'}` followed by
+`{documentTitle: ''}` left the tab with no title at all, which is worse than the reported symptom
+and was not in the ticket (NXSAT-722). Assert the layering, not just the single value.
+
+Fix at the config-read layer rather than at each consumer: the readers are the one place that
+knows the packaged fallback, and a guard there fixes every consumer — including other apps on the
+same shared library — at once.
+
+---
+
+## 25. A reactive effect scoped to a component that does not mount on every route
+
+```typescript
+// BAD ❌ — in AppShellComponent's constructor. The effect is right: the configuration load is
+// asynchronous, so a reactive reader is what re-runs when it lands. The SCOPE is wrong — the
+// shell only mounts on authenticated routes, so the sign-in page never got the configured title.
+effect(() => {
+  document.title = this.appConfig.bootstrap().branding.documentTitle;
+});
+
+// GOOD ✅ — at application scope, where there is no route that escapes it.
+export function syncDocumentTitle(config, document, injector): void {
+  effect(
+    () => {
+      document.title = config.bootstrap().branding.documentTitle;
+    },
+    { injector },
+  );
+}
+```
+
+A global concern — the tab title, `<html lang>`, a theme class on `<html>` — belongs at
+application scope. Putting it in the shell makes it quietly conditional on being signed in, and
+the gap is invisible from inside the shell because everything looks right there. The sign-in page
+is the case to check: it is the first page a customer sees and the one that reaches their history
+and bookmarks.
+
+Two details that bite:
+
+- **`effect()` needs an injection context.** An `APP_INITIALIZER`'s returned closure runs after
+  provider resolution, so pass the `Injector` in (`{ injector }`) exactly as the neighbouring
+  `syncDocumentLanguage` takes a `DestroyRef`.
+- **Check the prose while you are there.** `index.html` claimed "AppShellComponent replaces it
+  from Layer 0 `branding.documentTitle`", which is what made the gap easy to miss for everyone who
+  read it. A comment asserting a guarantee nothing enforces is the `stale-prose` class the
+  pre-PR review skill exists for.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
