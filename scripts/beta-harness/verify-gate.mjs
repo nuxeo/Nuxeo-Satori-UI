@@ -420,6 +420,18 @@ const ALL_GATES = [
     argv: ['scripts/storybook-publication-gate.selftest.mjs'],
     echoOnPass: true,
   },
+  // The controls of the script that lays the published site out. It runs on real Storybook builds
+  // in storybook-pages.yml, so like the gate above only its controls run here — they drive it
+  // through stub builds instead, because what is under test is the laying-out, not the building.
+  // Every refusal asserts that nothing was written: the failure worth guarding against is a site
+  // that deploys successfully and is empty.
+  {
+    id: 'storybook-assemble-selftest',
+    label: 'Storybook site assembly controls',
+    cmd: 'node',
+    argv: ['scripts/storybook-assemble-site.selftest.mjs'],
+    echoOnPass: true,
+  },
   // `.cursor/` is the source for the agent configuration and `.claude/` and `.agent/` are
   // generated copies, so three copies of every skill exist with nothing comparing them. That
   // is the shape of drift this repository keeps paying for, and it is worse here than usual:
