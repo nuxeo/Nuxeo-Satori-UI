@@ -22,6 +22,7 @@ import { spawnToolSync } from './package-command.mjs';
  *   --tail <n>       lines of failing output to show (default 40)
  *   --require-complete  exit 1 unless the verdict is `pass`: every gate ran and passed
  *   --platform-sensitive  only the gates whose verdict can differ by operating system,
+ *   --require-scope-complete  exit 1 unless every SELECTED gate ran and passed
  *                        as each gate declares for itself. Ignored when --gates is given.
  *
  * Examples:
@@ -146,8 +147,14 @@ const ALL_GATES = [
   // `pass-incomplete` rather than `pass`.
   {
     id: 'code-scanning',
-    // Reads CodeQL results from the GitHub API. The analysis does not run here at all.
+    // Reads CodeQL results from the GitHub API, so nothing about it is platform-dependent.
     platformSensitive: false,
+    /* But it still runs in the cross-platform job, because that is the only job that waits for
+     * CodeQL to finish on this revision — no other workflow hosts this gate, so excluding it
+     * here would remove CI's only enforcement of alert severity and allowlist expiry rather
+     * than move it. Declared separately so the reason is the real one: this is about where the
+     * CodeQL wait lives, not about Windows. */
+    requiresCodeqlWait: true,
     label: 'Code scanning (CodeQL)',
     cmd: 'node',
     argv: ['scripts/beta-harness/code-scanning.mjs'],
@@ -545,7 +552,7 @@ const requested = args.get('gates');
 const platformOnly = args.has('platform-sensitive');
 const selected =
   platformOnly && typeof requested !== 'string'
-    ? ALL_GATES.filter((g) => g.platformSensitive)
+    ? ALL_GATES.filter((g) => g.platformSensitive || g.requiresCodeqlWait)
     : typeof requested === 'string'
       ? requested
           .split(',')
@@ -698,10 +705,32 @@ for (const line of summaryLines) console.log(line);
 console.log(`\nreport   ${reportPath}`);
 
 // `--require-complete`, for CI that claims the full gate: a green exit must mean every gate ran
-// and passed, so `pass-incomplete` (a gate NOT RUN) and `pass-partial` fail as well.
+// and passed, so `pass-incomplete` (a gate NOT RUN) and `pass-partial` fail as well. Left strict
+// on purpose — it is the guard against a run claiming completeness it does not have.
 if (!anyFailed && args.has('require-complete') && verdict !== 'pass') {
   console.error(`verdict ${verdict}: --require-complete accepts only every gate run and green`);
   process.exit(1);
+}
+
+/* `--require-scope-complete` is the narrower claim a deliberately scoped run can make: every gate
+ * SELECTED ran and passed. Separate from `--require-complete` rather than a loosening of it,
+ * because that flag's strictness is the point and the Windows job is not entitled to it.
+ *
+ * Asserted against `selected` and `results` directly, not via the verdict. A filtered run is
+ * classified `pass-partial` whether or not a selected gate was skipped — the skip is invisible in
+ * the verdict — so reading the verdict here would accept exactly the hole this is for. */
+if (args.has('require-scope-complete')) {
+  const ran = new Set(
+    results.filter((r) => (r.status ?? (r.passed ? 'pass' : 'fail')) === 'pass').map((r) => r.id),
+  );
+  const shortfall = selected.map((g) => g.id).filter((id) => !ran.has(id));
+  if (shortfall.length > 0) {
+    console.error(
+      `--require-scope-complete: ${shortfall.length} selected gate(s) did not run green: ` +
+        `${shortfall.join(', ')}`,
+    );
+    process.exit(1);
+  }
 }
 
 process.exit(anyFailed ? 1 : 0);

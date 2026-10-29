@@ -310,6 +310,55 @@ control('--platform-sensitive selects exactly the gates declared true', () => {
   );
 });
 
+control('--require-scope-complete passes a scoped run that is all green', () => {
+  /* The bug this PR shipped before review caught it: the job used `--require-complete`, which a
+   * filtered run can never satisfy, so Windows would have failed on every commit with every
+   * selected gate green. */
+  const run = spawnSync(
+    process.execPath,
+    [
+      join(here, 'verify-gate.mjs'),
+      '--gates',
+      'node',
+      '--require-scope-complete',
+      '--phase',
+      'selftest',
+    ],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  expect(
+    run.status === 0,
+    `exit ${run.status}: ${`${run.stdout}${run.stderr}`.trim().split('\n').slice(-2).join(' | ')}`,
+  );
+});
+
+control('--require-complete stays strict about a scoped run', () => {
+  // Not loosened by this change: its strictness is the guard against claiming completeness.
+  const run = spawnSync(
+    process.execPath,
+    [join(here, 'verify-gate.mjs'), '--gates', 'node', '--require-complete', '--phase', 'selftest'],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  expect(run.status === 1, `expected exit 1 for a partial scope, got ${run.status}`);
+});
+
+control('the cross-platform selection keeps the gate that waits for CodeQL', () => {
+  /* `code-scanning` is not platform-sensitive and says so. It is still selected, because this is
+   * the only job that waits for CodeQL on the revision — dropping it would remove CI's only
+   * enforcement of alert severity and allowlist expiry rather than relocate it. */
+  const block = gateBlock.slice(gateBlock.indexOf("id: 'code-scanning'"));
+  const descriptor = block.slice(0, block.indexOf('\n  },'));
+  expect(/platformSensitive: false/.test(descriptor), 'code-scanning should declare false');
+  expect(
+    /requiresCodeqlWait: true/.test(descriptor),
+    'code-scanning must declare why it is still selected, or the selection silently drops it',
+  );
+  expect(
+    /g\.platformSensitive \|\| g\.requiresCodeqlWait/.test(gateSource),
+    'the selection must honour requiresCodeqlWait, not only platformSensitive',
+  );
+});
+
 rmSync(evidence, { recursive: true, force: true });
 
 for (const c of controls)

@@ -54,7 +54,10 @@ test('a clean Windows runner explicitly builds the bundle before the gate', () =
     (step) =>
       step.run?.includes('beta:gate') &&
       step.run.includes('--phase windows-ci') &&
-      step.run.includes('--require-complete'),
+      // Either completeness claim counts here; which one is asserted below. `--require-complete`
+      // is not a substring of `--require-scope-complete`, so matching the shorter one alone
+      // silently stopped finding this step.
+      /--require-(scope-)?complete/.test(step.run),
   );
   assert.ok(build >= 0, 'no explicit nuxeo-ui build step');
   assert.ok(gate > build, 'the gate must run after the build it depends on');
@@ -65,6 +68,10 @@ test('the Windows gate runs the platform-sensitive selection, not all 34 gates',
   // Running everything twice is what this job used to do: 21 of its 35 minutes went on two
   // selftests whose subject is platform-independent. If the flag is dropped, that comes back.
   assert.match(gate.run, /--platform-sensitive/);
+  // And it must claim only what a scoped run can: `--require-complete` demands all 34 and a
+  // filtered run can never satisfy it, so pairing the two would fail on every commit.
+  assert.match(gate.run, /--require-scope-complete/);
+  assert.doesNotMatch(gate.run, /--require-complete\b/);
 });
 
 function harness({ runs = () => [success], analyses = () => [analysis], event = context } = {}) {

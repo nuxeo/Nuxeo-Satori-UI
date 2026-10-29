@@ -99,9 +99,11 @@ jobs:
       # static analysis whose subject is platform-independent. `dependency-tree-selftest` still
       # exercises the same fixture machinery here, symlinks included, for 38s.
       #
-      # `--require-complete` still applies: a green run must mean every SELECTED gate ran.
+      # `--require-scope-complete`, not `--require-complete`: the narrower claim that every gate
+      # SELECTED ran and passed. `--require-complete` stays strict about all 34 and this job is
+      # no longer entitled to it.
       - name: Platform-sensitive Beta gates on Windows
-        run: npm run beta:gate -- --phase windows-ci --platform-sensitive --require-complete
+        run: npm run beta:gate -- --phase windows-ci --platform-sensitive --require-scope-complete
       - name: Preserve gate verdict and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
