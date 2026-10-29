@@ -271,6 +271,28 @@ function readString(source: Record<string, unknown>, key: string, fallback: stri
   return typeof value === 'string' ? value : fallback;
 }
 
+/**
+ * Like {@link readString}, but a blank or whitespace-only value keeps `fallback` (NXSAT-722).
+ *
+ * For the settings where the empty string is not a value a customer could mean. A product name
+ * and a browser tab title are both always shown to someone, so "" is not a quieter choice — it
+ * is a blank tab title and, where the name is an element's accessible name, a control a screen
+ * reader cannot announce. An empty field in a configuration tool is the usual way one arrives.
+ *
+ * Not folded into `readString`, which also reads theme ids, language tags and origins: a blank
+ * there is wrong too, but each has its own fallback behaviour and its own tests, so widening the
+ * shared reader would change all of them at once. The trim is the same rule `readStringRecord`
+ * already applies to manifest operation ids.
+ */
+function readNonBlankString(
+  source: Record<string, unknown>,
+  key: string,
+  fallback: string,
+): string {
+  const value = source[key];
+  return typeof value === 'string' && value.trim() !== '' ? value : fallback;
+}
+
 function readNullableString(
   source: Record<string, unknown>,
   key: string,
@@ -614,8 +636,15 @@ export function mergeBootstrapConfig(base: AppBootstrapConfig, patch: unknown): 
     nuxeoServerUrl: readNullableString(patch, 'nuxeoServerUrl', base.nuxeoServerUrl),
     aiBackendUrl: readString(patch, 'aiBackendUrl', base.aiBackendUrl),
     branding: {
-      applicationTitle: readString(branding, 'applicationTitle', base.branding.applicationTitle),
-      documentTitle: readString(branding, 'documentTitle', base.branding.documentTitle),
+      // Non-blank: a blank here would be a blank browser tab title, and an unnamed brand link
+      // where `applicationTitle` is the accessible name. A later fragment carrying a blank also
+      // used to wipe out a title an earlier package had set correctly (NXSAT-722).
+      applicationTitle: readNonBlankString(
+        branding,
+        'applicationTitle',
+        base.branding.applicationTitle,
+      ),
+      documentTitle: readNonBlankString(branding, 'documentTitle', base.branding.documentTitle),
       logo: readLogo(branding['logo'], base.branding.logo),
     },
     defaultThemeId: readString(patch, 'defaultThemeId', base.defaultThemeId),
