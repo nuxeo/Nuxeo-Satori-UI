@@ -286,10 +286,12 @@ jobs:
           #
           # NOT because this file reaches no affected-based job: `nx show projects --affected
           # --files eslint.config.mjs` reports every project in the workspace, 32 of 32, so the
-          # storybook job below does build on a change to it. That job still cannot exercise the
-          # guard, because it resolves its affected set while `@hylandsoftware` is installed and
-          # then reuses that cached graph after removing the scopes — so it never re-reads the
-          # config with the scope absent. These fixtures are the only thing that does.
+          # storybook job below does build on a change to it. What stopped that job catching the
+          # 2026-10-25 break was the warm project graph: it resolved its affected set while
+          # `@hylandsoftware` was installed and reused that cache after removing the scopes, so it
+          # never re-read the config with the scope absent. The build step computes its graph cold
+          # now, so it does exercise the guard — these fixtures are the proof that does not depend
+          # on that step order holding.
           npm run lint:config-selftest
           # SCA. Fails on a high or critical in the PRODUCTION tree, and on an accepted
           # advisory whose review date has expired. Gating on the dev-inclusive total
