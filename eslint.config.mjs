@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { lstatSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
@@ -37,10 +37,24 @@ const SATORI_LINT_ENTRY = `${SATORI_SCOPE}/satori-lint/eslint`;
 // `@hylandsoftware` scope removed from `node_modules`, which is what the token-free builds create
 // on purpose. Ask that question directly, of the filesystem. One question instead of three
 // inferences, and it cannot be fooled by the state of what is inside the scope.
+// `lstatSync`, not `existsSync`: `existsSync` follows symlinks, so a dangling scope link — a
+// broken linked install — would read as "not installed" and be tolerated. The question is whether
+// an entry is THERE, not whether it points at anything.
+//
+// And only `ENOENT` counts as absent. `EACCES`, `ELOOP`, `ENOTDIR` and the rest fail closed, which
+// is the right way round for a check whose whole job is telling a deliberate removal from a broken
+// tree: an unreadable tree is not a deliberate removal. That makes the predicate total — either an
+// entry is found, or it is reported missing, or something else is wrong — and the three guards this
+// replaced each fell to a state outside what they modelled.
 function scopeIsInstalled() {
-  return (require.resolve.paths(SATORI_LINT_ENTRY) ?? []).some((dir) =>
-    existsSync(join(dir, SATORI_SCOPE)),
-  );
+  return (require.resolve.paths(SATORI_LINT_ENTRY) ?? []).some((dir) => {
+    try {
+      lstatSync(join(dir, SATORI_SCOPE));
+      return true;
+    } catch (error) {
+      return error?.code !== 'ENOENT';
+    }
+  });
 }
 
 function resolveSatoriLint() {

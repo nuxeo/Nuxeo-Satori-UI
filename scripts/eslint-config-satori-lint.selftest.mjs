@@ -33,7 +33,15 @@
  * Usage: node scripts/eslint-config-satori-lint.selftest.mjs
  */
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -44,8 +52,13 @@ const OUR_OVERRIDE = `${SCOPE}/satori-lint/eslint/no-material-font-icons`;
 const LOAD_THROW_MESSAGE = 'satori-lint blew up on load';
 
 const failures = [];
-const builtFixtures = [];
+const cleanups = [];
 let controls = 0;
+
+// Permission bits do not apply to root, so the unreadable-ancestor control cannot mean anything
+// there. Skipped rather than reported as a hole, and said out loud so a green run as root is not
+// read as covering it.
+const CAN_TEST_PERMISSIONS = process.getuid?.() !== 0;
 
 function check(label, condition, detail) {
   controls += 1;
@@ -58,8 +71,30 @@ function manifest(extra) {
 
 /** Builds a throwaway tree whose `node_modules` is in the named state. */
 function buildFixture(state) {
+  // This one needs two levels: an ancestor `node_modules` that cannot be searched, so lstat of the
+  // scope inside it reports EACCES rather than ENOENT. Node's own resolver still reports a plain
+  // MODULE_NOT_FOUND in this tree, so the ONLY thing that can tell it from a deliberate removal is
+  // how the lstat error is treated — which is exactly what this pins. Verified to discriminate: a
+  // variant that reads any lstat error as absence loads here, while the real guard throws.
+  if (state === 'scope-unreadable-ancestor') {
+    const outer = mkdtempSync(join(tmpdir(), `satori-lint-${state}-`));
+    const blocked = join(outer, 'node_modules');
+    mkdirSync(blocked, { recursive: true });
+    const inner = join(outer, 'inner');
+    const innerModules = join(inner, 'node_modules');
+    mkdirSync(innerModules, { recursive: true });
+    symlinkSync(join(ROOT, 'node_modules', '@nx'), join(innerModules, '@nx'), 'dir');
+    copyFileSync(CONFIG, join(inner, 'eslint.config.mjs'));
+    chmodSync(blocked, 0o000);
+    cleanups.push(() => {
+      chmodSync(blocked, 0o755); // or rmSync cannot remove it
+      rmSync(outer, { recursive: true, force: true });
+    });
+    return inner;
+  }
+
   const dir = mkdtempSync(join(tmpdir(), `satori-lint-${state}-`));
-  builtFixtures.push(dir);
+  cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
   const nodeModules = join(dir, 'node_modules');
   mkdirSync(nodeModules, { recursive: true });
   // Everything the config needs apart from satori-lint, from the real install.
@@ -83,6 +118,11 @@ function buildFixture(state) {
       break;
     case 'package-gutted': // directory there, no manifest and no entry point
       mkdirSync(packageDir, { recursive: true });
+      break;
+    case 'scope-dangling-symlink':
+      // A broken linked install: the scope entry is there, pointing at nothing. `existsSync`
+      // follows the link and reads this as absent, which is why the guard uses `lstatSync`.
+      symlinkSync(join(dir, 'nowhere-at-all'), scopeDir, 'dir');
       break;
     case 'entry-throws-on-load':
       mkdirSync(join(packageDir, 'eslint'), { recursive: true });
@@ -204,7 +244,11 @@ try {
     ['scope-present-package-absent', 'the scope is installed but satori-lint is not'],
     ['entry-file-missing', 'its ./eslint export points at a file that is not there'],
     ['package-gutted', 'the package directory has no manifest and no entry point'],
+    ['scope-dangling-symlink', 'the scope entry is there but points at nothing'],
     ['invalid-exports-target', 'resolution fails for a reason that is not MODULE_NOT_FOUND'],
+    ...(CAN_TEST_PERMISSIONS
+      ? [['scope-unreadable-ancestor', 'the scope cannot be read, which is not the same as gone']]
+      : []),
   ]) {
     const broken = state(name);
     check(
@@ -238,14 +282,17 @@ try {
     `stderr ${JSON.stringify(loadThrows.stderr.trim().slice(0, 160))}`,
   );
 } finally {
-  for (const dir of builtFixtures) rmSync(dir, { recursive: true, force: true });
+  for (const cleanup of cleanups) cleanup();
 }
 
 function lastLines(stderr) {
   return `stderr: ${stderr.trim().split('\n').slice(-3).join(' | ')}`;
 }
 
-console.log(`eslint.config satori-lint selftest: ${controls} controls.`);
+console.log(
+  `eslint.config satori-lint selftest: ${controls} controls` +
+    `${CAN_TEST_PERMISSIONS ? '' : ' (unreadable-ancestor SKIPPED: running as root)'}.`,
+);
 if (failures.length) {
   console.error(`\n${failures.length} control(s) did not behave as required:`);
   for (const message of failures) console.error(`- ${message}`);
