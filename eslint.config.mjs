@@ -1,4 +1,6 @@
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import nx from '@nx/eslint-plugin';
 
 const require = createRequire(import.meta.url);
@@ -15,38 +17,36 @@ const require = createRequire(import.meta.url);
  * until a build-order change in #496 incidentally warmed the graph before the removal. Incidental
  * is not a fix: reorder those steps back and the site silently stops refreshing again.
  *
- * Only an ABSENT package is tolerated. Silently dropping these rules on a broken install would be
- * worse than failing, and `MODULE_NOT_FOUND` on the entry point does not distinguish the two:
- * Node reports it both for a package that is not installed and for one that is, whose `./eslint`
- * export points at a file that is not there. Probing the manifest separates them — see
- * `satoriLintIsInstalled`. Loading happens outside the `try`, so an error thrown from inside
- * satori-lint propagates rather than being read as absence.
- */
-const SATORI_LINT_ENTRY = '@hylandsoftware/satori-lint/eslint';
-
-/**
- * Whether the package is installed at all, independent of its entry point resolving.
+ * Exactly ONE absence is tolerated: the whole `@hylandsoftware` scope missing from `node_modules`,
+ * which is the state the token-free builds deliberately create. Every other way this can fail to
+ * resolve — scope present but satori-lint gone, half-extracted, manifest missing, `./eslint`
+ * pointing at a file that is not there — is a broken install, and silently dropping lint rules for
+ * it would hide the breakage instead of reporting it.
  *
- * A package that exists but does not export `./package.json` fails with
- * `ERR_PACKAGE_PATH_NOT_EXPORTED`, and that error is itself proof Node found the package and read
- * its `exports` — satori-lint does exactly this. So only `MODULE_NOT_FOUND` here means absent.
+ * That condition is checked directly rather than inferred from the error, because the error cannot
+ * carry it: Node reports `MODULE_NOT_FOUND` for an absent package, a broken entry point and a
+ * partially extracted directory alike. Two earlier attempts here tried to tell those apart from
+ * `error.code` and then from the manifest, and review found a hole in each. Asking "is the scope
+ * there?" has no such variants.
+ *
+ * Loading happens outside the `try`, so an error thrown from inside satori-lint propagates rather
+ * than being read as absence.
  */
-const satoriLintIsInstalled = () => {
-  try {
-    require.resolve('@hylandsoftware/satori-lint/package.json');
-    return true;
-  } catch (error) {
-    return error?.code !== 'MODULE_NOT_FOUND';
-  }
-};
+const SATORI_SCOPE = '@hylandsoftware';
+const SATORI_LINT_ENTRY = `${SATORI_SCOPE}/satori-lint/eslint`;
+
+/** Is the scope directory present in any `node_modules` Node would search for it? */
+const scopeIsInstalled = () =>
+  (require.resolve.paths(SATORI_LINT_ENTRY) ?? []).some((dir) =>
+    existsSync(join(dir, SATORI_SCOPE)),
+  );
 
 let satoriLintPath = null;
 try {
   satoriLintPath = require.resolve(SATORI_LINT_ENTRY);
 } catch (error) {
-  if (error?.code !== 'MODULE_NOT_FOUND') throw error;
-  // Installed, but its entry point does not resolve: a broken install, not an absent package.
-  if (satoriLintIsInstalled()) throw error;
+  // Anything but "the scope was removed on purpose" is a real failure.
+  if (error?.code !== 'MODULE_NOT_FOUND' || scopeIsInstalled()) throw error;
 }
 const satoriLint = satoriLintPath ? require(satoriLintPath) : null;
 
