@@ -59,6 +59,7 @@
     "storybook:interactions": "node scripts/storybook-interactions.mjs",
     "storybook:publication-gate": "node scripts/storybook-publication-gate.mjs",
     "storybook:publication-gate-selftest": "node scripts/storybook-publication-gate.selftest.mjs",
+    "lint:config-selftest": "node scripts/eslint-config-satori-lint.selftest.mjs",
     "lint": "nx run-many -t lint",
     "lint:affected": "nx affected -t lint",
     "lint:styles": "stylelint '**/*.scss' --ignore-path .gitignore",

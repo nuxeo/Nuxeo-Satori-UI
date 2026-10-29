@@ -68,6 +68,32 @@ describe('NxsDomainHintComponent', () => {
     expect(note()).toBeNull();
   });
 
+  /**
+   * The host carries the note's vertical spacing, so an empty host must collapse. Browse mounts
+   * this component unconditionally; left visible with margins it reserved 24px of space in every
+   * ordinary workspace and folder.
+   *
+   * Asserts the **class**, not the computed `display`: this harness does not apply the component's
+   * `styleUrl`, so the host measures as an unstyled `inline` element here and even
+   * `:host { display: block }` is absent. The `display: none` that the class triggers lives in
+   * `domain-hint.component.scss`.
+   */
+  it('collapses its host when there is no note to show', async () => {
+    const hostEl = (): HTMLElement =>
+      fixture.nativeElement.querySelector('nxs-domain-hint') as HTMLElement;
+
+    host.type.set('Workspace');
+    host.path.set('/default-domain/workspaces/one');
+    await render();
+    expect(note()).toBeNull();
+    expect(hostEl().classList).toContain('nxs-domain-hint--empty');
+
+    host.type.set('Domain');
+    await render();
+    expect(note()).not.toBeNull();
+    expect(hostEl().classList).not.toContain('nxs-domain-hint--empty');
+  });
+
   it('withdraws the note on leaving the domain', async () => {
     host.type.set('Domain');
     await render();

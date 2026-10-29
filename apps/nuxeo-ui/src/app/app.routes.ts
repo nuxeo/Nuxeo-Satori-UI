@@ -131,6 +131,18 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./settings/themes/themes-page.component').then((m) => m.ThemesPageComponent),
       },
+      // Last, and inside the shell on purpose: an unmatched path keeps the navigation and the
+      // header, so there is a way out. Without this route the router raised a navigation error and
+      // left a blank page — measured at under 120 characters of text — for any stale bookmark.
+      //
+      // It cannot shadow a feature route: Angular matches in order and every path above is
+      // declared before it. `/browse/**` is handled inside the browse feature's own routes, so
+      // this never swallows a folder path.
+      {
+        path: '**',
+        loadComponent: () =>
+          import('./not-found-page.component').then((m) => m.NotFoundPageComponent),
+      },
     ],
   },
 ];

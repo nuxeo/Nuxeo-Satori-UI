@@ -103,13 +103,37 @@ function isExtensionRoute(route: Route): boolean {
   return route.data?.[EXTENSION_ROUTE_MARKER] === true;
 }
 
+/**
+ * Packaged routes, then the contributed ones, with any catch-all kept last.
+ *
+ * Appended and not prepended, as before: the shell's own `{ path: '', redirectTo }` must keep
+ * matching first, and a contributed path must not shadow a packaged one.
+ *
+ * The wildcard is the exception, because Angular matches in order and `**` matches everything. The
+ * shell declares one so an unmatched URL renders a not-found page instead of a blank screen; left
+ * at the end of the packaged list it would answer every manifest-contributed path — `/reports`
+ * would render the 404 page rather than its own route — so contributions go in front of it.
+ */
+function mergeKeepingWildcardLast(packaged: Routes, contributed: Routes): Routes {
+  const wildcardAt = packaged.findIndex((route) => route.path === '**');
+  if (wildcardAt === -1) {
+    return [...packaged, ...contributed];
+  }
+  return [...packaged.slice(0, wildcardAt), ...contributed, ...packaged.slice(wildcardAt)];
+}
+
 function applyExtensionRoutes(router: Router, parentPath: string, contributed: Routes): void {
   const host = router.config.find(
     (route) => route.path === parentPath && Array.isArray(route.children),
   );
 
   if (!host) {
-    router.resetConfig([...router.config.filter((r) => !isExtensionRoute(r)), ...contributed]);
+    router.resetConfig(
+      mergeKeepingWildcardLast(
+        router.config.filter((r) => !isExtensionRoute(r)),
+        contributed,
+      ),
+    );
     return;
   }
 
@@ -118,13 +142,10 @@ function applyExtensionRoutes(router: Router, parentPath: string, contributed: R
       route === host
         ? {
             ...route,
-            // Appended, never prepended: the shell's own `{ path: '', redirectTo }`
-            // must keep matching first, and a contributed path must not shadow a
-            // packaged one.
-            children: [
-              ...(route.children ?? []).filter((c) => !isExtensionRoute(c)),
-              ...contributed,
-            ],
+            children: mergeKeepingWildcardLast(
+              (route.children ?? []).filter((c) => !isExtensionRoute(c)),
+              contributed,
+            ),
           }
         : route,
     ),

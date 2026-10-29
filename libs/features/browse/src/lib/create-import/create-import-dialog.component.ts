@@ -1,4 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   NxsBannerComponent,
   NxsChipSetComponent,
@@ -161,6 +162,29 @@ function toDocTypeDefs(types: string[], translate: (key: string) => string): Doc
     type,
     label: docTypeLabel(type, translate),
   }));
+}
+
+/**
+ * Which message a failed folder-context read should show.
+ *
+ * One branch used to serve every failure, so a permission outcome, a deleted folder and a dropped
+ * connection all rendered as "Could not load creatable document types for this folder." — a
+ * technical sentence with no next step, under an otherwise empty dialog. The reported case is a
+ * guest at the repository root: Nuxeo answers `403 Privilege 'Read' is not granted to 'Anonymous'`,
+ * which is a statement about permission, not about loading.
+ *
+ * Anything that is not recognisably one of those keeps the retryable wording, because a message
+ * that guesses wrong about the cause is worse than one that admits it does not know.
+ */
+function folderContextErrorKey(error: unknown): string {
+  const status = error instanceof HttpErrorResponse ? error.status : 0;
+  if (status === 401 || status === 403) {
+    return 'browse.create-import.types-forbidden';
+  }
+  if (status === 404) {
+    return 'browse.create-import.types-folder-missing';
+  }
+  return 'browse.create-import.types-load-failed';
 }
 
 const DIALOG_SIZE = {
@@ -450,13 +474,13 @@ export class CreateImportDialogComponent implements OnInit {
           );
           this.loadingContext.set(false);
         },
-        error: () => {
+        error: (error: unknown) => {
           if (requestId !== this.folderContextRequestId) {
             return;
           }
           this.parentFolderType.set(null);
           this.creatableTypes.set([]);
-          this.typesLoadError.set(this.translate.instant('browse.create-import.types-load-failed'));
+          this.typesLoadError.set(this.translate.instant(folderContextErrorKey(error)));
           this.loadingContext.set(false);
         },
       });
