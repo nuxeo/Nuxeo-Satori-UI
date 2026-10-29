@@ -541,8 +541,9 @@ jobs:
       # because with them installed an accidental Satori import compiles and the claim is untested.
       # `checkSatoriComponentsDependencies` holds the same rule statically; this is the build that
       # proves it. About a minute, so only when the library is affected, or the interaction runner
-      # below, its dialog layout check or the publication gate changed — a script outside every
-      # project affects none. A skip says so.
+      # below, its dialog layout check, the publication gate or one of the two workflows that
+      # build and publish it changed — a script or a workflow outside every project affects none.
+      # A skip says so.
       #
       # Then the publication gate, which storybook-pages.yml runs before publishing this build to
       # GitHub Pages: here, whenever this step builds, it fails the pull request instead.
@@ -567,11 +568,53 @@ jobs:
           runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
           gate="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- 'scripts/storybook-publication-gate*.mjs')"
 
+          # The two workflow files that define this build and publish what it produces. Nx
+          # attributes anything under .github to no project — `nx show projects --affected
+          # --files=.github/workflows/ci.yml` returns `[]`, measured 2026-10-29 — so before this
+          # term an edit to the build step below ran nothing: the step it changed was skipped and
+          # the job still reported success. storybook-pages.yml's own comment makes this job the
+          # thing that "fails its pull request first" for a change that would block the
+          # deployment, which it could not do for a change to either workflow itself.
+          #
+          # WHICH FAILURE EACH FILE IS HERE FOR:
+          #   ci.yml                — the build step below and its gating, including the cold
+          #                           project-graph cache the step now sets. A change to either
+          #                           has to be able to run the build it governs.
+          #   storybook-pages.yml   — the publisher runs this same token-free build and the same
+          #                           publication gate. Its build order is load-bearing: the
+          #                           Satori build before it leaves a warm project graph, which is
+          #                           precisely what hid the 2026-10-28 breakage.
+          #
+          # Root configuration is deliberately NOT listed, and that is measured rather than
+          # assumed: eslint.config.mjs, package.json, package-lock.json, nx.json and
+          # tsconfig.base.json each already put satori-components in the affected set on their own
+          # (checked 2026-10-29 over a commit touching only that file, through `--files` and
+          # through `--base/--head` exactly as the line above does, and for eslint.config.mjs it
+          # survives both removing `{workspaceRoot}/eslint.config.mjs` from nx.json's
+          # targetDefaults and unregistering @nx/eslint/plugin). A term for them could never be
+          # the one that flips `build`, so it would read as protection and assert nothing.
+          # tsconfig.json, angular.json and migrations.json do return `[]` and are still not
+          # listed: nothing in the Storybook build reads them.
+          #
+          # IF YOU RE-MEASURE THIS LOCALLY, strip AI_AGENT and CLAUDECODE from the environment
+          # first. `nx show projects` sets `--json` on its own when it detects an AI agent
+          # (nx/dist/src/command-line/show/projects.js), which collapses the output to one JSON
+          # line; `grep -qx` below then misses on a list that does contain satori-components, and
+          # every case reads as "not affected". A runner has neither variable, which is why the
+          # match works there — see run 40696145911, one satori-components file and no script in
+          # the diff, build and interactions both RUN. Two cases were measured backwards this way
+          # before the flag was found.
+          #
+          # NOT in `interactions` below, for cost: the browser suite is ~9 of this job's ~9.5
+          # minutes and these two files change often, so widening it there would charge that to
+          # most pull requests that touch CI. Same asymmetry as the publication gate.
+          workflows="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- .github/workflows/ci.yml .github/workflows/storybook-pages.yml)"
+
           satori=false
           if grep -qx satori-components <<<"$affected"; then satori=true; fi
 
           build=false
-          if [ "$satori" = true ] || [ -n "$runner" ] || [ -n "$gate" ]; then build=true; fi
+          if [ "$satori" = true ] || [ -n "$runner" ] || [ -n "$gate" ] || [ -n "$workflows" ]; then build=true; fi
 
           # The publication gate diff deliberately does NOT appear here: a change to the gate
           # needs the build it inspects, not the browser suite. Same asymmetry as before.
@@ -585,7 +628,7 @@ jobs:
           # repository treats a check that did not run as its own result rather than as a pass —
           # so the two NOT RUN lines the original steps printed are printed here instead.
           if [ "$build" != true ]; then
-            echo "satori-components is not affected and the runner and publication gate are unchanged: Storybook build and publication gate NOT RUN"
+            echo "satori-components is not affected and the runner, publication gate and both Storybook workflows are unchanged: Storybook build and publication gate NOT RUN"
           fi
           if [ "$interactions" != true ]; then
             echo "satori-components is not affected and the runner is unchanged: Storybook interactions NOT RUN"
@@ -594,6 +637,35 @@ jobs:
       - name: Storybook builds without GitHub Packages and carries no Satori (satori-components)
         if: steps.scope.outputs.build == 'true'
         shell: bash
+        env:
+          # A project-graph cache of this step's own, so the graph is computed AFTER the two scopes
+          # are gone. Widening the trigger above is worth nothing without this: with the graph
+          # already warm, running this step is not the same as proving anything.
+          #
+          # `Resolve what this job needs to run` above calls `nx show projects` while
+          # @hylandsoftware is still installed, which writes a complete project graph into
+          # .nx/workspace-data. nx then reuses it here, so @nx/eslint/plugin never re-reads the
+          # root ESLint config and a module that config requires out of a deleted scope is never
+          # resolved a second time. The graph cache is keyed on the hashes of tracked files, and
+          # removing a package from node_modules changes none of them. `--skip-nx-cache` does not
+          # help: it skips the TASK cache, not the project graph.
+          #
+          # Not hypothetical, and not fixed by the trigger alone. eslint.config.mjs began
+          # requiring @hylandsoftware/satori-lint/eslint on 2026-10-25 (e901c8c6d). This step RAN
+          # on the pull request that brought that to main (#473, run 40321110523 — satori-components
+          # was affected, and the graph was warm from the lint/build/typecheck steps ahead of it in
+          # the single job of the time) and it PASSED. storybook-pages.yml computes the graph cold
+          # with the scopes gone, and failed on every push to main with `Failed to process project
+          # graph. ... Cannot find module '@hylandsoftware/satori-lint/eslint'` (run 40672226172).
+          # Reproduced locally on 2026-10-29 against a canary package required from the root config:
+          # warm graph with the package deleted exits 0, cold graph with the same tree exits 1 with
+          # that exact message. Delete this line and the blindness comes back — that is the control.
+          #
+          # KNOWN, NOT FIXED HERE: storybook-pages.yml builds the Satori Storybook first, while the
+          # scopes are installed, so its Material build now inherits a warm graph for the same
+          # reason this step used to. That is why publishing is green again on main while the
+          # unguarded require is still there, and it is tracked separately from this change.
+          NX_PROJECT_GRAPH_CACHE_DIRECTORY: ${{ runner.temp }}/nx-graph-without-github-packages
         run: |
           set -euo pipefail
           hidden="$RUNNER_TEMP/github-packages-scopes"
