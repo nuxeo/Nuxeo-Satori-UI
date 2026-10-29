@@ -131,6 +131,17 @@ jobs:
           # is why the real thing failed there and cannot be made to fail in a worktree. Delete this
           # line and the blindness returns — that is the control.
           #
+          # HOW TO CHECK THIS IS STILL LIVE, in one grep of a run log. With this line, the step
+          # below re-reads the root config with the scope gone, so `resolveSatoriLint`'s warning —
+          # `[eslint.config] @hylandsoftware/satori-lint/eslint is not installed` — appears inside
+          # it. Without it the config is never re-read and the warning cannot appear. Measured both
+          # ways on real runners: once in run 40848541113 (this workflow, dispatched on a branch),
+          # and not once in run 40846034299 (`main`, before this line). If that warning ever stops
+          # appearing here, the removal has stopped being tested, whatever the step's verdict says.
+          #
+          # A `workflow_dispatch` on a branch is the way to exercise this without publishing: the
+          # `deploy` job is gated on `main`, and the concurrency group is keyed by ref.
+          #
           # #503 adds the same block, for the same reason, to ci.yml's `storybook` job, which runs
           # this same token-free build.
           NX_PROJECT_GRAPH_CACHE_DIRECTORY: ${{ runner.temp }}/nx-graph-without-github-packages
