@@ -22,8 +22,8 @@ const SATORI_LINT_ENTRY = `${SATORI_SCOPE}/satori-lint/eslint`;
 // a deleted branch and so never ran.
 //
 // ci.yml did not catch it either, but NOT because this file reaches no affected-based job —
-// `nx show projects --affected --files eslint.config.mjs` reports 32 projects including
-// `satori-components`, so the storybook job does build. It missed it for the same warm-graph
+// `nx show projects --affected --files eslint.config.mjs` reports EVERY project in the
+// workspace — 32 of 32, `satori-components` among them — so the storybook job does build. It missed it for the same warm-graph
 // reason the deploy later passed by accident: that job resolves what it needs with
 // `nx show projects --affected` while `@hylandsoftware` is still installed, which caches the
 // project graph; the build step then moves the scopes away and `nx run` reuses the cached graph
