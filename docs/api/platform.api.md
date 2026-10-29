@@ -99,6 +99,7 @@ class AppConfigService {
     readonly url: string;
     readonly alt: string;
     } | null>;
+    reportBrandingLogoUnavailable(url: string, reason: string): void;
     load(): Promise<void>;
     resolveTheme(id: string | null): AppThemeConfig;
     featureToggle(id: string, fallback: boolean): boolean;
