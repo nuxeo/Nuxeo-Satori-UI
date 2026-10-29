@@ -179,9 +179,9 @@ Satori import fails the build rather than compiling. Only the opt-in `:satori` c
 interaction runner, dialog-layout check or publication gate did), it uploads the build as the workflow
 artifact `storybook-<short sha>` of the PR head, kept seven days, after the publication gate has passed.
 Storybook will not open from `file://`: its manager scripts are blocked by CORS, so unzip the artifact and
-serve the folder over HTTP with any static file server. Checked locally on 2026-10-29: the build is 349
-files, 35 MB on disk; served over HTTP its sidebar lists 65 entries with no console errors, and from
-`file://` it logs CORS failures and lists none.
+serve the folder over HTTP with any static file server. Checked on 2026-10-29: the build is 349 files,
+35 MB on disk; served over HTTP its sidebar lists 65 entries, and from `file://` it logs CORS failures and
+lists none.
 
 **Publishing.** `.github/workflows/storybook-pages.yml` deploys **two** builds to GitHub Pages on
 every push to `main`: the default configuration, token-free, at the root, and the `:satori`
