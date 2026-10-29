@@ -99,6 +99,17 @@ key for the favicon.
   or fragment with no path (it would load `bootstrap.json` itself), `http:`, `javascript:`, and a
   `data:` URI that is not an image or has no payload (a payload that starts with `#` is a
   fragment, so it counts as none).
+- **A logo that is accepted and then does not render keeps the Satori marks too** (NXSAT-721).
+  Every check above runs before the image is requested, so none of them can know whether the file
+  exists, whether the bytes decode, or whether a remote host sent the CORS header. The two `<img>`
+  elements report back instead: `error` covers a missing file, a `src` that answers with something
+  that is not an image, and a cross-origin response without `Access-Control-Allow-Origin`, and a
+  measurement after `load` covers an image that decodes but draws nothing, such as a 0x0 SVG. The
+  first report clears the logo for the session, so the header, the login page and the brand link's
+  accessible name all go back to the Satori marks together, and one warning naming the failing
+  address is written to the console as `[agentic-ui-config] …` and recorded in
+  `diagnostics().messages`. A failure on another origin says so, because a missing
+  `Access-Control-Allow-Origin` header is the likeliest cause and the hardest to guess at.
 - **`alt`** names the login page's brand link. Empty falls back to `applicationTitle`. The header
   logo is decorative (`alt=""`): the header is named by its heading.
 - Contributed assets are served at `/nuxeo/agentic-ui-config/assets/<name>` (NXSAT-312). The servlet path is outside every

@@ -680,6 +680,11 @@ providers: [
 ];
 ```
 
+A host that shows `nxs-tag-editor` also lists `provideNxsTagWrites()` once in the same providers.
+It registers no ID; it keeps the editor's tag changes for as long as the application runs, so
+closing the panel that holds the editor mid-change neither cancels nor drops one, and the next
+editor for that document shows what Nuxeo stored.
+
 `provideNxsSatoriComponents()` also needs what any Satori host provides: `provideSatori()` for the
 theme and icons, and Satori's `sat.*` catalogue in ngx-translate (upstream's
 `provideAndConfigureSatoriUITranslations`, or seeded into your own loader). Without the catalogue

@@ -757,6 +757,56 @@ Until then this pattern is the check: search for the token, not for the symptom.
 
 ---
 
+## 23. Configuration-time validation read as proof the asset will render
+
+```html
+<!-- BAD ❌ — the branch is decided by the config alone, so the @else is unreachable
+     for the life of the page however the request goes. A 404, a text/html body, a
+     cross-origin response with no Access-Control-Allow-Origin, or a 0x0 SVG all leave
+     a zero-width <img> and no fallback. -->
+@if (brandLogo(); as logo) {
+<img [src]="logo.url" alt="" crossorigin="anonymous" />
+} @else {
+<sat-word-mark-logo aria-hidden="true" />
+}
+
+<!-- GOOD ✅ — the element reports the outcome back to the state the branch reads. -->
+@if (brandLogo(); as logo) {
+<img [src]="logo.url" alt="" crossorigin="anonymous" appBrandLogoFallback />
+} @else {
+<sat-word-mark-logo aria-hidden="true" />
+}
+```
+
+A configured URL passes two checks before anything is fetched — the string as written, and where
+the resolved URL points — and **neither is a liveness check**. The second one looks like one
+because it is thorough and security-critical, which is exactly why it gets trusted too far. Only
+the element that loaded the asset knows whether the browser could show it, so the fallback has to
+be driven from an `error` handler, with the result kept in the state the template branches on
+rather than in the component that happens to own the element (NXSAT-721: the header and the login
+page read one signal, so the image, the packaged mark **and** the brand link's accessible name
+cannot disagree — the first fix sketch cleared the image and left the link announcing "Acme").
+
+Two traps in the handler itself:
+
+- **`error` does not cover everything.** An image that decodes and draws nothing — a 0x0 SVG —
+  fires `load`, not `error`. Measure `naturalWidth`/`naturalHeight` after `load` as well.
+  Verified in Chrome: a 0x0 SVG reports 0, while a `viewBox`-only SVG reports the 300x150 default
+  corrected to its aspect ratio, so the measurement does not reject a logo that would have
+  rendered.
+- **A failed fetch is not a reason to drop `crossorigin="anonymous"`.** The resolved-URL check
+  cannot see a _redirect_ to a Nuxeo URL, and that attribute is the only thing keeping the session
+  cookie off the follow-up request. The cost — a remote asset needs `Access-Control-Allow-Origin`
+  — is the intended trade; say so in the diagnostic instead of removing the attribute. Fetching
+  it through `HttpClient` into a blob URL does not help either: XHR is more CORS-restricted than
+  `<img>`, not less.
+
+Regression test pattern: assert the fallback after dispatching `error`, and drive the zero-size
+path with a real `data:image/svg+xml` 0x0 URI so the `load` measurement is exercised rather than
+simulated — `apps/nuxeo-ui/src/app/shell/app-shell-brand-logo.spec.ts`.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
@@ -775,3 +825,4 @@ Fix proactively to avoid a review cycle:
 - "Focus indicator may not be visible" → set the vendor's focus-outline custom property to its own foreground token; left unset it falls back to a low-emphasis divider colour and misses 3:1
 - "Absolute path to a bundled asset" → drop the leading `/` so it resolves against `<base href>`; the packaged app lives under `/nuxeo/agentic-ui/`
 - "Low contrast text" → if the colour is `var(--mat-sys-outline)`, that is a border token graded at 3:1; use `var(--mat-sys-on-surface-variant)` for text. If the use really is non-text (an icon, a divider), say so in a comment with the measured ratio
+- "No fallback if the image fails to load" → bind `(error)` and clear the state the template branches on, not a flag local to one component; and measure `naturalWidth` after `load` too, because an image that draws nothing fires no `error`

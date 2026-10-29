@@ -70,7 +70,15 @@ import { execToolSync } from './package-command.mjs';
  * in `dist/` is still refused by npm.
  */
 
-import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import ts from 'typescript';
@@ -361,6 +369,85 @@ if (undeclared.length > 0) {
   );
 }
 
+// ------------------------------------ 2c. the Satori implementation is not redistributed ----
+
+/**
+ * `@hylandsoftware/satori-ui` is the customer's to install (an optional peer). The shipped bytes
+ * may carry only a bare reference to it, from the one entry point documented as its importer, and
+ * no `Sat*` type may appear outside a comment. Nothing else in the gate reads for either.
+ *
+ * Both checks are guarded by a control. A scan that stops seeing imports, or a matcher that stops
+ * matching, must fail here rather than report a clean result.
+ */
+const SATORI_PEER = '@hylandsoftware/satori-ui';
+const SATORI_IMPORTER = 'nuxeo-satori-platform-components-satori.mjs';
+const satoriImporters = externalImports.get(SATORI_PEER) ?? new Set();
+if (!satoriImporters.has(SATORI_IMPORTER)) {
+  fail(
+    `${SATORI_PEER} is not imported by ${SATORI_IMPORTER}, the one entry point documented as its importer.\n` +
+      '    Either the import moved, or the scan no longer reads it. Either way the Satori boundary\n' +
+      '    described in extension-reference §6a is not what the bytes say.',
+  );
+}
+for (const name of [...satoriImporters].filter((name) => name !== SATORI_IMPORTER).sort()) {
+  fail(
+    `${SATORI_PEER} is imported by ${name}, which is not its documented importer.\n` +
+      '    Only the components-satori entry point may reach the optional Satori peer.',
+  );
+}
+
+/**
+ * `Sat*` identifiers in a declaration file, read from the TypeScript syntax tree. A regex over the
+ * text cannot tell a comment from a string literal: `'/*'` hides everything after it, and a trailing
+ * `// SatAvatar` is wrongly reported. The parser sees neither, because only identifiers count.
+ */
+const satIdentifiersIn = (text, file) => {
+  const hits = [];
+  const visit = (node) => {
+    if (ts.isIdentifier(node) && /^Sat[A-Z]/.test(node.text)) hits.push(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true));
+  return hits;
+};
+
+// Controls: comments and string literals must be ignored, and a real declaration must still be seen.
+const satControls = [
+  ['/** SatAvatar in a JSDoc block */\nexport declare function f(): void;\n', []],
+  [
+    "export declare const route: '/*';\nexport declare function f(): SatAvatarCategory;\n",
+    ['SatAvatarCategory'],
+  ],
+  ['export declare function g(): void; // SatAvatar\n', []],
+];
+for (const [source, expected] of satControls) {
+  const found = satIdentifiersIn(source, 'control.d.ts');
+  if (found.join() !== expected.join()) {
+    fail(
+      'The Sat* identifier check no longer matches its controls.\n' +
+        `    Source: ${JSON.stringify(source)}\n` +
+        `    Expected ${JSON.stringify(expected)}, found ${JSON.stringify(found)}`,
+    );
+  }
+}
+
+const dtsFilesUnder = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return dtsFilesUnder(path);
+    return entry.name.endsWith('.d.ts') ? [path] : [];
+  });
+for (const file of dtsFilesUnder(join(DIST, 'types'))) {
+  const hits = satIdentifiersIn(readFileSync(file, 'utf8'), file);
+  if (hits.length > 0) {
+    fail(
+      `${relative(DIST, file)} declares or references ${[...new Set(hits)].join(', ')} outside a comment.\n` +
+        '    A Satori type in the public declarations makes the published API unusable without the\n' +
+        '    optional peer, which is the leak the Satori boundary exists to prevent.',
+    );
+  }
+}
+
 // -------------------------------------------- 3. npm publish --dry-run succeeds ----
 
 const staging = mkdtempSync(join(tmpdir(), 'satori-publishability-'));
@@ -369,8 +456,8 @@ try {
   cpSync(DIST, copy, { recursive: true });
 
   // Stripped in the COPY only. `private: true` stays in dist so an accidental real
-  // publish is refused; npm refuses a dry run of a private package too, which would
-  // make this check unfalsifiable rather than passing.
+  // publish is refused. npm would dry-run a private package anyway, so the copy's flag
+  // is removed only to dry-run the package as a public one would be published.
   const copied = JSON.parse(readFileSync(join(copy, 'package.json'), 'utf8'));
   if (copied.private !== true) {
     fail(

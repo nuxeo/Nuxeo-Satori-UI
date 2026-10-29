@@ -36,6 +36,9 @@ export default defineConfig(() => ({
   test: {
     name: 'integration-tests-unit',
     watch: false,
+    // Under full-suite load a spec can run several seconds. The 5s Vitest default turned
+    // that load into failures, so the limit is set for the whole project.
+    testTimeout: 30_000,
     globals: true,
     // `node`, matching the live config: the code under test uses `Buffer`, `fetch` and
     // `AbortSignal.timeout`, and none of it touches a DOM.

@@ -39,6 +39,16 @@ export class TagService {
       .pipe(map(tagLabels));
   }
 
+  /** The document's tags as Nuxeo holds them now, for a host whose own copy may be behind. */
+  tagsOf(uid: string): Observable<string[]> {
+    return this.api
+      .get<NuxeoDocument>(
+        `/nuxeo/api/v1/id/${uid}`,
+        new HttpParams().set('properties', 'facetedTag'),
+      )
+      .pipe(map(tagLabels));
+  }
+
   searchTags(term: string): Observable<string[]> {
     const params = new HttpParams().set('pageSize', '20').set('currentPageIndex', '0');
     return this.http

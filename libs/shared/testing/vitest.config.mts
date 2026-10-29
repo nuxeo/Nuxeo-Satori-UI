@@ -9,6 +9,9 @@ export default defineConfig(() => ({
   test: {
     name: 'testing',
     watch: false,
+    // Under full-suite load a spec can run several seconds. The 5s Vitest default turned
+    // that load into failures, so the limit is set for the whole project.
+    testTimeout: 30_000,
     globals: true,
     // `passWithNoTests: true` was here while the library had no specs of its own, so that the
     // `test` target `review-guardrails.mjs` requires would not fail on "no test files found".
