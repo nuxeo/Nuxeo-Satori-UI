@@ -28,6 +28,52 @@ function titleCase(kebab: string): string {
 }
 
 /**
+ * Names Satori itself uses, and what each one would collide with (NXSAT-729).
+ *
+ * The package name is copied into three namespaces this generator does not own — the fragment
+ * name in the component XML, the Marketplace package name, and a directory on disk — and the
+ * only uniqueness check there was (`projectRoot already exists`) can see one workspace's
+ * directories. So `defaults` passed every check and produced
+ * `<fragment name="defaults" layer="bootstrap">`, which is the key Satori's own packaged
+ * defaults occupy; `ContributionRegistry.resolve()` then does what it is designed to do and
+ * lets the later contribution take that key, reporting it only at `info`.
+ */
+const SATORI_NAMES = new Map([
+  [
+    'defaults',
+    'the name of Satori’s own packaged fragments in both layers, so a package of this name replaces them on the server',
+  ],
+  [
+    'nuxeo-agentic-ui',
+    'Satori’s own Marketplace package, which every configuration package depends on',
+  ],
+]);
+
+/**
+ * Device names Windows reserves. The package name and every `--directory` segment become
+ * directories, so one generated on macOS or Linux leaves a repository that cannot be checked
+ * out on Windows at all — which this repository supports deliberately.
+ */
+const WINDOWS_DEVICE_NAMES = new Set([
+  'con',
+  'prn',
+  'aux',
+  'nul',
+  ...Array.from({ length: 10 }, (_, n) => `com${n}`),
+  ...Array.from({ length: 10 }, (_, n) => `lpt${n}`),
+]);
+
+/**
+ * Windows reaches the same device through any case and through a trailing extension —
+ * `NUL.txt` is `NUL` — so both are folded away before the comparison. A package name needs
+ * neither, having already been held to lower-case kebab-case; a `--directory` segment permits
+ * both.
+ */
+function isWindowsDeviceName(segment: string): boolean {
+  return WINDOWS_DEVICE_NAMES.has(segment.toLowerCase().replace(/\..*$/, ''));
+}
+
+/**
  * Scaffold a configuration package: the Marketplace package a customer ships to configure Nuxeo
  * Satori, instead of editing a file on the server or a document in the repository.
  *
@@ -74,6 +120,12 @@ export default async function configPackageGenerator(tree: Tree, options: Config
       `--directory "${parentDirectory}" must be a relative path of letters, digits, ".", "_" and "-" separated by "/", no part starting with "-".`,
     );
   }
+  const reservedSegment = segments.find(isWindowsDeviceName);
+  if (reservedSegment !== undefined) {
+    throw new Error(
+      `--directory "${parentDirectory}" has the segment "${reservedSegment}", a device name Windows reserves; a directory of that name cannot be created there.`,
+    );
+  }
   if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(options.name)) {
     throw new Error(`"${options.name}" must be kebab-case, e.g. acme-config.`);
   }
@@ -81,6 +133,20 @@ export default async function configPackageGenerator(tree: Tree, options: Config
   if (options.name.length > 128) {
     throw new Error(
       `"${options.name}" is ${options.name.length} characters; a fragment name may have at most 128.`,
+    );
+  }
+  // Shape is settled above; these two are about the namespaces the name enters, which it does
+  // not own. Satori's names are refused for the package name only — a parent directory is
+  // neither a fragment name nor a Marketplace package name.
+  const clash = SATORI_NAMES.get(options.name);
+  if (clash !== undefined) {
+    throw new Error(
+      `"${options.name}" is a name Satori itself uses: ${clash}. Choose another name, e.g. acme-config.`,
+    );
+  }
+  if (isWindowsDeviceName(options.name)) {
+    throw new Error(
+      `"${options.name}" is a device name Windows reserves; a directory of that name cannot be created there. Choose another name, e.g. acme-config.`,
     );
   }
   // The schema says the same, but only the CLI applies it; a caller of this function would not.

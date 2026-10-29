@@ -29,13 +29,15 @@ const USAGE = `Usage: node tools/satori-generators/src/config-package/create.mjs
          [--title <text>] [--vendor <text>] [--version <x.y.z>] [--presales]
          [--directory <parent>] [--force]
 
-  <name>        Marketplace package name, kebab-case, at most 128 characters
+  <name>        Marketplace package name, kebab-case, at most 128 characters. Not a name Satori
+                itself uses (defaults, nuxeo-agentic-ui) nor one Windows reserves (con, nul, com1…)
   --owner       Owner prefix for the Nuxeo component, <owner>.config.<name>: lower-case letters and digits
   --title       Marketplace title and the starter applicationTitle (default: the name in title case)
   --vendor      Vendor in the Marketplace listing (default: the title)
   --version     Package version (default: 1.0.0)
   --presales    Add a presales block: preset switching on, and one example preset
-  --directory   Parent directory, relative to the current one (default: config-packages)
+  --directory   Parent directory, relative to the current one, no part a name Windows reserves
+                (default: config-packages)
   --force       Overwrite the generated files if the package already exists`;
 
 /** Exit 2: the command line itself is wrong, before any option is checked. */
@@ -50,6 +52,39 @@ function titleCase(kebab) {
     .split('-')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+/**
+ * The generator's reserved names, duplicated rather than imported (NXSAT-729).
+ *
+ * This file imports nothing but Node built-ins on purpose — `create.spec.ts` asserts it, so a
+ * customer can run it in a clone with no `npm ci` and no registry token. Every other check here
+ * is a copy of the generator's for the same reason, and `create.spec.ts` refuses the same
+ * options through both and compares the messages. Change one, change both.
+ */
+const SATORI_NAMES = new Map([
+  [
+    'defaults',
+    'the name of Satori’s own packaged fragments in both layers, so a package of this name replaces them on the server',
+  ],
+  [
+    'nuxeo-agentic-ui',
+    'Satori’s own Marketplace package, which every configuration package depends on',
+  ],
+]);
+
+const WINDOWS_DEVICE_NAMES = new Set([
+  'con',
+  'prn',
+  'aux',
+  'nul',
+  ...Array.from({ length: 10 }, (_, n) => `com${n}`),
+  ...Array.from({ length: 10 }, (_, n) => `lpt${n}`),
+]);
+
+/** Windows reaches the same device through any case and through a trailing extension. */
+function isWindowsDeviceName(segment) {
+  return WINDOWS_DEVICE_NAMES.has(segment.toLowerCase().replace(/\..*$/, ''));
 }
 
 const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&#34;', "'": '&#39;' };
@@ -174,12 +209,29 @@ try {
       `--directory "${parentDirectory}" must be a relative path of letters, digits, ".", "_" and "-" separated by "/", no part starting with "-".`,
     );
   }
+  const reservedSegment = segments.find(isWindowsDeviceName);
+  if (reservedSegment !== undefined) {
+    throw new Error(
+      `--directory "${parentDirectory}" has the segment "${reservedSegment}", a device name Windows reserves; a directory of that name cannot be created there.`,
+    );
+  }
   if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name)) {
     throw new Error(`"${name}" must be kebab-case, e.g. acme-config.`);
   }
   if (name.length > 128) {
     throw new Error(
       `"${name}" is ${name.length} characters; a fragment name may have at most 128.`,
+    );
+  }
+  const clash = SATORI_NAMES.get(name);
+  if (clash !== undefined) {
+    throw new Error(
+      `"${name}" is a name Satori itself uses: ${clash}. Choose another name, e.g. acme-config.`,
+    );
+  }
+  if (isWindowsDeviceName(name)) {
+    throw new Error(
+      `"${name}" is a device name Windows reserves; a directory of that name cannot be created there. Choose another name, e.g. acme-config.`,
     );
   }
   if (!/^[a-z][a-z0-9]*$/.test(options.owner)) {

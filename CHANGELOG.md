@@ -145,6 +145,16 @@ private readonly locale = inject(LOCALE_ID);
 
 ### Changed (`@nuxeo-satori/platform` generators)
 
+- The `config-package` generator and `create.mjs` refuse a package name they cannot honour, before
+  writing anything, and say what it would clash with (NXSAT-729). Refused: `defaults`, the name of
+  Satori's own packaged fragments in both layers — a package of that name contributed a fragment on
+  the same key as ours and took its place on the server, reported only at `info`; `nuxeo-agentic-ui`,
+  the package every configuration package depends on; and the device names Windows reserves (`con`,
+  `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9`), which cannot be directory names there, through
+  any case and through a trailing extension. A `--directory` segment is held to the Windows names
+  too, since it also becomes a directory; Satori's names are refused for the package name only. A
+  package already generated under one of these names is unaffected until it is regenerated with
+  `--force`.
 - The `config-package` generator no longer runs Prettier over what it writes, so its output no
   longer depends on the workspace's Prettier configuration or on the title (Prettier rewrote
   `*Claims*` as `_Claims_`). Its templates are stored as Prettier formatted them, so the only file
