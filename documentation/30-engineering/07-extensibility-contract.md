@@ -141,8 +141,11 @@ key for the favicon.
   `javascript:` and `http:` do not read alike; a backslash is not reported as a control
   character; and a path refused for syntax the server re-reads is not reported as pointing outside
   the configuration directory, because a file named `acme;v=1.svg` or `acme%e0.svg` is inside it
-  and saying otherwise sends the administrator looking in the wrong place. One log line identifies
-  what was wrong with the value.
+  and saying otherwise sends the administrator looking in the wrong place. A `..` segment is
+  likewise reported as not allowed rather than as leaving the directory, since
+  `assets/../acme.svg` carries one and resolves back inside — it is refused on the written form
+  wherever it would resolve to, which is the point of checking the form at all. One log line
+  identifies what was wrong with the value.
 - **The two logo messages make different claims on purpose.** A failure _after_ loading (the
   NXSAT-721 case above) says the Satori marks are in use, because the merge has already settled
   which contribution won and suppressing that one URL leaves nothing to render but the packaged

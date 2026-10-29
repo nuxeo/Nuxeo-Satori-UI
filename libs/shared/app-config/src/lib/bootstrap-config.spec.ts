@@ -412,6 +412,33 @@ describe('describeBrandingLogoRefusal', () => {
       expect(reason).not.toContain('outside the configuration directory');
     });
   });
+
+  /**
+   * Sixth review round of PR 512. A `..` segment is refused on the written form wherever it
+   * resolves to, which is deliberate — the server may read the path differently from the browser.
+   * The reason given claimed it "would leave the configuration directory", and that is a claim
+   * about the resolved path: `assets/../acme.svg` carries a `..` and resolves *inside* the
+   * directory, so for those the stated reason was untrue.
+   */
+  describe('a parent-directory segment is not reported as escaping the directory', () => {
+    it.each([
+      ['one cancelled by a preceding segment', 'assets/../acme.svg'],
+      ['two cancelled by preceding segments', 'a/b/../../c.svg'],
+    ])('refuses %s without claiming it leaves the directory', (_label, src) => {
+      // Refused by the check on the written form. The resolved check alone would accept it —
+      // it lands inside the directory — which is exactly why the form rule is not redundant,
+      // and exactly why its reason must not borrow the resolved check's wording.
+      expect(resolveBrandingLogoUrl(src, configUrl)).not.toBeNull();
+
+      const reason = reasonFor(src);
+      expect(reason).toContain('parent-directory segment');
+      expect(reason).not.toMatch(/would leave|leaves|outside/);
+    });
+
+    it('still refuses one that does leave the directory, with the same reason', () => {
+      expect(reasonFor('../x.svg')).toBe(reasonFor('assets/../acme.svg'));
+    });
+  });
 });
 
 describe('nuxeoOriginsOf', () => {

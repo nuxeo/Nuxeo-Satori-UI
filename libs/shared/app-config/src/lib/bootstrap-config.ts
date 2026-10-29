@@ -552,8 +552,12 @@ function describeLogoSrcForm(src: string): string | null {
   if (!path) {
     return 'it has no path, so it would load bootstrap.json itself';
   }
+  // States the rule, not an outcome: a `..` is refused wherever it resolves to, because the
+  // server may read the path differently from the browser. `assets/../acme.svg` carries one and
+  // lands *inside* the configuration directory, so the old wording — "would leave the
+  // configuration directory" — was untrue for it (review of PR 512).
   return path.replace(/%2e/gi, '.').split('/').includes('..')
-    ? 'it contains a parent-directory segment, which would leave the configuration directory'
+    ? 'it contains a parent-directory segment (".."), which is not allowed in a relative path however it resolves'
     : null;
 }
 
