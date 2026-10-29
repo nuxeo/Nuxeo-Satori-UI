@@ -50,8 +50,11 @@ export interface AppThemeConfig {
 export interface AppBrandingLogo {
   /**
    * As written in `bootstrap.json`: a file name or relative path, resolved against the directory
-   * `bootstrap.json` is served from; an `https:` URL; or a `data:image/` URI. Any other form keeps
-   * the Satori marks — see `resolveBrandingLogoUrl` for the check on where it actually points.
+   * `bootstrap.json` is served from; an `https:` URL; or a `data:image/` URI.
+   *
+   * Any other form is refused, and what shows then depends on **which check refused it** — see
+   * {@link readLogo} for the two layers. `resolveBrandingLogoUrl` is the check on where the value
+   * actually points.
    */
   readonly src: string;
   /** Accessible name for the login page's brand link. Empty falls back to `applicationTitle`. */
@@ -555,8 +558,23 @@ function describeLogoSrcForm(src: string): string | null {
 }
 
 /**
- * `null` clears a logo an earlier layer set; anything unusable keeps `base`, so a malformed entry
- * degrades to the packaged marks rather than to a broken image.
+ * `null` clears a logo an earlier layer set; anything unusable keeps `base`.
+ *
+ * **What a refusal falls back to depends on which of the two layers refused it**, and saying
+ * "the packaged marks" for both is wrong — which this comment used to do, and the log message
+ * used to repeat (review of PR 512):
+ *
+ * - **Here, during the merge.** The value is dropped and `base` stands, so an earlier package's
+ *   valid logo keeps rendering and only a deployment with no valid logo before it falls back to
+ *   the packaged marks. A later valid contribution can also replace a refused earlier one.
+ *   Pinned by "keeps a logo an earlier layer set when this one omits or garbles it".
+ * - **Afterwards, on the merged value.** Once merging has settled which contribution won,
+ *   `AppConfigService.brandingLogo` resolves that one `src`; if `resolveBrandingLogoUrl` refuses
+ *   the URL, or the browser cannot show the image (`reportBrandingLogoUnavailable`), there is no
+ *   earlier layer left to fall back to and the packaged marks are what renders.
+ *
+ * So a value this function retains can still end up not displayed, and the two layers report
+ * themselves differently for exactly that reason.
  */
 function readLogo(value: unknown, base: AppBrandingLogo | null): AppBrandingLogo | null {
   if (value === null) return null;

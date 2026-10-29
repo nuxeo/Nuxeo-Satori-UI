@@ -689,6 +689,27 @@ describe('AppConfigService', () => {
         expect(service.brandingLogo()?.url).toContain('/agentic-ui-config/assets/a.svg');
       });
 
+      /**
+       * Fifth review round of PR 512: the documented retention guarantee and what actually
+       * renders are two different layers, and the docs used to conflate them. A value the merge
+       * keeps can still be refused afterwards, on the URL it resolves to — so the configuration
+       * holds a logo while the packaged marks are what shows.
+       */
+      it('keeps a value the merge accepts even when the resolved URL is refused afterwards', async () => {
+        const host = new URL(document.baseURI).host;
+        const src = `https://${host}/nuxeo/api/v1/me`;
+        await loadWithSrc(src);
+
+        // Retained: the written form is acceptable, so the merge does not drop it.
+        expect(service.bootstrap().branding.logo).toEqual({ src, alt: 'Acme' });
+        // Not displayed: this document is served over http, so an https URL on the same host is
+        // a different origin and the host rule refuses it — an `<img>` there would carry the
+        // session cookie.
+        expect(service.brandingLogo()).toBeNull();
+        expect(logoMessages()).toHaveLength(1);
+        expect(logoMessages()[0]).toContain('serves Nuxeo');
+      });
+
       it('reports a logo the active preset contributes, naming the preset', async () => {
         window.history.replaceState({}, '', '/?preset=insurance');
         await load(

@@ -83,7 +83,13 @@ key for the favicon.
   logo is loaded without cookies and a redirect from it to a Nuxeo URL cannot carry the session —
   which means an `https:` logo only renders if its host sends `Access-Control-Allow-Origin`. A
   contributed asset is same-origin and unaffected.
-- **Every other form is rejected** and the Satori marks are kept. An `<img>` request bypasses the
+- **Every other form is rejected.** What shows instead depends on which check rejected it, and the
+  two are not the same: a value rejected **while the fragments merge** is dropped and the previous
+  layer stands, so another package's valid logo keeps rendering and only a deployment with no
+  valid logo before it falls back to the Satori marks; a value rejected **after the merge**, on
+  the URL it resolves to, has no earlier layer left to fall back to and the Satori marks render.
+  A contributed value can therefore be retained by the merge and still not be displayed. An
+  `<img>` request bypasses the
   HTTP interceptor but still sends the session cookie, so a `src` that could name a Nuxeo REST
   endpoint is refused rather than left to fail. The deciding check runs on the **resolved** URL,
   after the URL parser has dropped tabs and newlines and collapsed `..` and `%2e%2e`. On any host
