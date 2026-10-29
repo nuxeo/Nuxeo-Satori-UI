@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { lstatSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import nx from '@nx/eslint-plugin';
@@ -35,11 +35,24 @@ const require = createRequire(import.meta.url);
 const SATORI_SCOPE = '@hylandsoftware';
 const SATORI_LINT_ENTRY = `${SATORI_SCOPE}/satori-lint/eslint`;
 
-/** Is the scope directory present in any `node_modules` Node would search for it? */
+/**
+ * Is a scope entry present in any `node_modules` Node would search for it?
+ *
+ * `lstatSync`, not `existsSync`, and only `ENOENT` counts as absence. `existsSync` follows
+ * symlinks, so a dangling `node_modules/@hylandsoftware` link — a broken linked install — would
+ * read as a deliberately removed scope and take the rules down quietly. Any entry at that path,
+ * of any type, and any error other than `ENOENT`, means this is not the clean removal the
+ * token-free builds perform, so it fails closed.
+ */
 const scopeIsInstalled = () =>
-  (require.resolve.paths(SATORI_LINT_ENTRY) ?? []).some((dir) =>
-    existsSync(join(dir, SATORI_SCOPE)),
-  );
+  (require.resolve.paths(SATORI_LINT_ENTRY) ?? []).some((dir) => {
+    try {
+      lstatSync(join(dir, SATORI_SCOPE));
+      return true;
+    } catch (error) {
+      return error?.code !== 'ENOENT';
+    }
+  });
 
 let satoriLintPath = null;
 try {
