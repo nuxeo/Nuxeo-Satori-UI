@@ -3,6 +3,7 @@ import {
   NXS_PERMISSIONS_PANEL_ID,
   NXS_PRIMITIVE_IDS,
   NxsBreadcrumbsComponent,
+  NxsAvatarComponent,
   NxsDeletePermissionDialogComponent,
   NxsDocumentListComponent,
   NxsFolderHeaderComponent,
