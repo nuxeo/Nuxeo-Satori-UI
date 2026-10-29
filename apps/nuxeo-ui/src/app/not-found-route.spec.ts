@@ -37,7 +37,10 @@ import { testTranslateModule } from './i18n/translate-testing';
   standalone: true,
   selector: 'app-stub-document-detail',
   changeDetection: ChangeDetectionStrategy.Eager,
-  template: 'stub document detail',
+  // External even for a four-word test double: `AGENTS/03-angular-conventions.md` says
+  // "ALWAYS external — never inline template" without carving out tests, and CLAUDE.md
+  // repeats it among the non-negotiable conventions.
+  templateUrl: './not-found-route.stub.html',
 })
 class StubDocumentDetailComponent {}
 
