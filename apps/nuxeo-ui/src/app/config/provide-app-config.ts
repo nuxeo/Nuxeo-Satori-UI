@@ -1,12 +1,13 @@
 import { DOCUMENT } from '@angular/common';
 import {
-  APP_INITIALIZER,
   DestroyRef,
+  EnvironmentProviders,
   Injector,
   LOCALE_ID,
   Provider,
   effect,
   inject,
+  provideAppInitializer,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
@@ -162,38 +163,29 @@ export function syncDocumentTitle(
   );
 }
 
-export function provideAppConfig(): Provider[] {
+// `EnvironmentProviders` in the union because `provideAppInitializer` returns that rather than a
+// `Provider`. `ApplicationConfig.providers` accepts both, and the spec that picks out the
+// `LOCALE_ID` provider keys on a `provide` property, which an `EnvironmentProviders` does not have.
+export function provideAppConfig(): (Provider | EnvironmentProviders)[] {
   return [
-    {
-      provide: APP_INITIALIZER,
-      useFactory: (config: AppConfigService, translate: TranslateService) =>
-        initialiseAppConfigAndLanguage(config, translate),
-      deps: [AppConfigService, TranslateService],
-      multi: true,
-    },
-    {
-      provide: APP_INITIALIZER,
-      useFactory: () => {
-        const translate = inject(TranslateService);
-        const document = inject(DOCUMENT);
-        const destroyRef = inject(DestroyRef);
-        return () => syncDocumentLanguage(translate, document, destroyRef);
-      },
-      multi: true,
-    },
-    {
-      // Application scope rather than the shell, so the sign-in page gets the configured title
-      // too (NXSAT-722). An effect, so it re-runs when the asynchronous load lands and does not
-      // need sequencing against the other initializers.
-      provide: APP_INITIALIZER,
-      useFactory: () => {
-        const config = inject(AppConfigService);
-        const document = inject(DOCUMENT);
-        const injector = inject(Injector);
-        return () => syncDocumentTitle(config, document, injector);
-      },
-      multi: true,
-    },
+    // `provideAppInitializer` rather than the `APP_INITIALIZER` token, which Angular has
+    // deprecated. Its callback runs in an injection context, so these inject directly instead of
+    // resolving in a factory and returning a closure. Same ordering and the same concurrency —
+    // Angular still runs initializers concurrently, which is why
+    // `initialiseAppConfigAndLanguage` sequences the language load inside itself rather than
+    // relying on a second initializer. `nuxeo-satori-template` already uses this form.
+    provideAppInitializer(() =>
+      initialiseAppConfigAndLanguage(inject(AppConfigService), inject(TranslateService))(),
+    ),
+    provideAppInitializer(() =>
+      syncDocumentLanguage(inject(TranslateService), inject(DOCUMENT), inject(DestroyRef)),
+    ),
+    // Application scope rather than the shell, so the sign-in page gets the configured title
+    // too (NXSAT-722). An effect, so it re-runs when the asynchronous load lands and does not
+    // need sequencing against the other initializers.
+    provideAppInitializer(() =>
+      syncDocumentTitle(inject(AppConfigService), inject(DOCUMENT), inject(Injector)),
+    ),
     /*
      * Angular's OWN formatting locale, which is a different mechanism from the string language.
      *
