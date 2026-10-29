@@ -344,6 +344,30 @@ control('--require-scope-complete passes a scoped run that is all green', () => 
   );
 });
 
+control('--require-scope-complete rejects a selected gate that did not run', () => {
+  /* The green-path control above would still exit 0 with the whole enforcement block deleted, so
+   * on its own it proves nothing. `BETA_SKIP_CODE_SCANNING` in this suite's env makes
+   * `code-scanning` report NOT RUN, which is the shortfall the flag exists to catch. */
+  const run = spawnSync(
+    process.execPath,
+    [
+      join(here, 'verify-gate.mjs'),
+      '--gates',
+      'code-scanning',
+      '--require-scope-complete',
+      '--phase',
+      'selftest',
+    ],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  const out = `${run.stdout}${run.stderr}`;
+  expect(run.status === 1, `expected exit 1 for a skipped selected gate, got ${run.status}`);
+  expect(
+    /--require-scope-complete: 1 selected gate\(s\) did not run green: code-scanning/.test(out),
+    `diagnostic did not name the shortfall: ${out.trim().split('\n').slice(-3).join(' | ')}`,
+  );
+});
+
 control('--require-complete stays strict about a scoped run', () => {
   // Not loosened by this change: its strictness is the guard against claiming completeness.
   const run = spawnSync(
