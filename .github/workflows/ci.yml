@@ -282,8 +282,14 @@ jobs:
           # The root ESLint config against a deleted `@hylandsoftware` scope, which is the state
           # the Material Storybook build creates on purpose. Both directions: it must load with
           # the package absent, and it must still carry the Satori rules when it is installed.
-          # Runs here, with every other static gate, because a change to `eslint.config.mjs`
-          # affects no Nx project and so reaches none of the affected-based jobs below.
+          # Runs here, with every other static gate, because it is fast and needs no build.
+          #
+          # NOT because this file reaches no affected-based job: `nx show projects --affected
+          # --files eslint.config.mjs` reports 32 projects including `satori-components`, so the
+          # storybook job below does build on a change to it. That job still cannot exercise the
+          # guard, because it resolves its affected set while `@hylandsoftware` is installed and
+          # then reuses that cached graph after removing the scopes — so it never re-reads the
+          # config with the scope absent. These fixtures are the only thing that does.
           npm run lint:config-selftest
           # SCA. Fails on a high or critical in the PRODUCTION tree, and on an accepted
           # advisory whose review date has expired. Gating on the dev-inclusive total
