@@ -75,7 +75,17 @@
         </div>
 
         @if (aiError()) {
-          <nxs-banner class="ai-error" tone="error" announce="alert" [message]="aiError() ?? ''" />
+          <!-- The wrapper carries the layout, so it holds whichever component the ID resolves to. -->
+          <div class="ai-error">
+            <lib-extension-outlet
+              #aiErrorOutlet
+              [componentId]="bannerId"
+              [componentInputs]="{ message: aiError() ?? '', tone: 'error', announce: 'alert' }"
+            />
+            @if (aiErrorOutlet.unresolved()) {
+              <nxs-banner tone="error" announce="alert" [message]="aiError() ?? ''" />
+            }
+          </div>
         }
 
         @if (showNxqlPanel() && aiGeneratedNxql()) {

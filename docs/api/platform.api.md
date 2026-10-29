@@ -2109,6 +2109,7 @@ interface NxsSearchFilters {
     }
 }
 class NxsSearchFiltersComponent {
+    protected readonly chipSetId: "nxs.primitives.chipSet";
     readonly filters: import("@angular/core").ModelSignal<NxsSearchFilters>;
     readonly aggregations: import("@angular/core").InputSignal<SearchAggregations>;
     readonly optionLabels: import("@angular/core").InputSignal<Readonly<Partial<Record<string, Readonly<Record<string, string>>>>>>;
@@ -2147,6 +2148,7 @@ class NxsSearchFiltersComponent {
     protected clearFulltext(): void;
     protected addChoice(field: ChoiceField, value: string): void;
     protected removeChoice(field: ChoiceField, value: string): void;
+    protected chipRemover(field: ChoiceField): (item: NxsChipItem) => void;
     protected chipItems(field: ChoiceField, values: readonly string[]): NxsChipItem[];
     protected onCollectionsFocus(): void;
     protected onTagInput(value: string): void;

@@ -54,64 +54,49 @@
     }
   </div>
 
+  <!-- Each banner is rendered by ID; the wrapper keeps the layout whichever component the ID resolves to. -->
   @if (isTrashed()) {
-    <sat-banner variant="info" [border]="true">
-      <sat-banner-message>{{
-        'document-detail.document-detail.you-are-viewing-a-trashed-document' | translate
-      }}</sat-banner-message>
-      @if (canWriteDoc()) {
-        <button
-          mat-stroked-button
-          satBannerAction
-          (click)="restoreFromTrash()"
-          [disabled]="actionInProgress() === 'restore'"
-        >
-          <mat-icon svgIcon="restore" />
-          {{ 'document-detail.document-detail.restore' | translate }}
-        </button>
+    <div class="trashed-banner">
+      <lib-extension-outlet
+        #trashedOutlet
+        [componentId]="bannerId"
+        [componentInputs]="{
+          message: trashedBanner().message,
+          tone: 'info',
+          announce: 'none',
+          actions: trashedBanner().actions,
+        }"
+      />
+      @if (trashedOutlet.unresolved()) {
+        <nxs-banner
+          tone="info"
+          [message]="trashedBanner().message"
+          [actions]="trashedBanner().actions"
+        />
       }
-      @if (canRemoveDoc()) {
-        <button
-          mat-stroked-button
-          satBannerAction
-          (click)="permanentlyDelete()"
-          [disabled]="actionInProgress() === 'permanentDelete'"
-        >
-          <mat-icon svgIcon="trash_x" />
-          {{ 'document-detail.document-detail.delete-permanently' | translate }}
-        </button>
-      }
-    </sat-banner>
+    </div>
   }
 
   @if (isVersionView()) {
-    <sat-banner class="version-banner" variant="info" [border]="true">
-      <sat-banner-message>{{
-        'document-detail.version-viewing' | translate: { version: versionLabel() }
-      }}</sat-banner-message>
-      <button
-        class="version-banner-latest"
-        mat-button
-        type="button"
-        satBannerAction
-        (click)="showLatestVersion()"
-      >
-        {{ 'document-detail.version-go-to-latest' | translate }}
-      </button>
-      @if (canRestoreVersion()) {
-        <button
-          class="version-banner-restore"
-          mat-flat-button
-          type="button"
-          satBannerAction
-          (click)="confirmRestoreVersion()"
-          [disabled]="actionInProgress() === 'restore'"
-        >
-          <mat-icon svgIcon="restore" />
-          {{ 'document-detail.version-restore' | translate: { version: versionLabel() } }}
-        </button>
+    <div class="version-banner">
+      <lib-extension-outlet
+        #versionOutlet
+        [componentId]="bannerId"
+        [componentInputs]="{
+          message: versionBanner().message,
+          tone: 'info',
+          announce: 'none',
+          actions: versionBanner().actions,
+        }"
+      />
+      @if (versionOutlet.unresolved()) {
+        <nxs-banner
+          tone="info"
+          [message]="versionBanner().message"
+          [actions]="versionBanner().actions"
+        />
       }
-    </sat-banner>
+    </div>
   }
 
   <!-- Workflow info banner — one per running workflow -->

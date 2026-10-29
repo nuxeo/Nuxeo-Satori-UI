@@ -37,6 +37,10 @@ import {
   NXS_PRIMITIVE_IDS,
   NxsToastService,
   provideNxsComponents,
+  type NxsBannerAction,
+  type NxsBannerAnnounce,
+  type NxsBannerInputs,
+  type NxsBannerTone,
   type NxsCardInputs,
 } from '@nuxeo/satori-platform/components';
 import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
@@ -67,6 +71,20 @@ class ProbeCardComponent implements NxsCardInputs {
   readonly media = input<TemplateRef<unknown> | null>(null);
   readonly headerAction = input<TemplateRef<unknown> | null>(null);
   readonly actions = input<TemplateRef<unknown> | null>(null);
+}
+
+/** A banner registered under `nxs.primitives.banner`, which shows the message the page passed it. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-probe-banner',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `<p class="probe-message">{{ message() }}</p>`,
+})
+class ProbeBannerComponent implements NxsBannerInputs {
+  readonly message = input('');
+  readonly tone = input<NxsBannerTone>('info');
+  readonly announce = input<NxsBannerAnnounce>('none');
+  readonly actions = input<readonly NxsBannerAction[]>([]);
 }
 
 const mockSearchService = {
@@ -1755,6 +1773,62 @@ describe('SearchComponent', () => {
       expect(navigate).toHaveBeenCalledWith('/doc/a');
       cards[1].querySelector<HTMLInputElement>('.nxs-card__select input')?.click();
       expect(mockSelectionService.toggle).toHaveBeenCalledWith('b', 'Claims');
+    });
+  });
+
+  describe('the AI error banner', () => {
+    const el = () => fixture.nativeElement as HTMLElement;
+
+    async function renderAiError(
+      providers: (Provider | EnvironmentProviders)[] = [],
+    ): Promise<void> {
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true, providers });
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      component.aiSearchMode.set(true);
+      component.aiError.set('The AI search is unavailable');
+      // An outlet learns from a promise that its ID is unregistered, so it settles twice.
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    it('shows the message through the registered banner ID, with no built-in banner beside it', async () => {
+      await renderAiError([
+        provideNxsComponents(),
+        provideSatoriExtensions({
+          components: { [NXS_PRIMITIVE_IDS.banner]: ProbeBannerComponent },
+        }),
+      ]);
+
+      expect(el().querySelectorAll('lib-extension-outlet lib-test-probe-banner')).toHaveLength(1);
+      expect(el().querySelector('lib-test-probe-banner .probe-message')?.textContent?.trim()).toBe(
+        'The AI search is unavailable',
+      );
+      expect(el().querySelector('.ai-error nxs-banner')).toBeNull();
+    });
+
+    // The app registers the built-in banner under the ID, so the outlet resolves to it and the
+    // fallback never renders. The layout wrapper must hold it anyway, or the margin is lost.
+    it('keeps the layout wrapper around the built-in banner the app registers under the ID', async () => {
+      await renderAiError([provideNxsComponents()]);
+
+      expect(el().querySelector('.ai-error lib-extension-outlet nxs-banner')).not.toBeNull();
+      expect(el().querySelector('.ai-error nxs-banner')?.textContent).toContain(
+        'The AI search is unavailable',
+      );
+    });
+
+    it('falls back to the built-in banner when nothing is registered under the ID', async () => {
+      await renderAiError();
+
+      expect(el().querySelector('lib-test-probe-banner')).toBeNull();
+      const banner = el().querySelector('.ai-error nxs-banner');
+      expect(banner?.getAttribute('role')).toBe('alert');
+      expect(banner?.textContent).toContain('The AI search is unavailable');
     });
   });
 });

@@ -179,6 +179,7 @@ import {
   NxsPermissionsPanelComponent,
   NxsPropertiesPanelComponent,
   NxsSpinnerComponent,
+  NxsBannerComponent,
   NxsTabsComponent,
   NxsTagComponent,
   NxsToastService,
@@ -194,6 +195,7 @@ import {
   type NxsUpdatePermissionDialogData,
   type NxsErrorStatus,
   type NxsTab,
+  type NxsBannerAction,
   type NxsToolbarAction,
   type NxsVocabularyLabel,
 } from '@nuxeo/satori-platform/components';
@@ -251,6 +253,12 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   md: 'text/markdown',
 };
 
+/** A banner's text and the actions it offers, as a banner rendered by ID takes them. */
+interface DocumentBanner {
+  readonly message: string;
+  readonly actions: readonly NxsBannerAction[];
+}
+
 @Component({
   selector: 'lib-document-detail',
   standalone: true,
@@ -289,6 +297,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     NoteEditorComponent,
     SatAvatarModule,
     SAT_BANNER_IMPORTS,
+    NxsBannerComponent,
     SatBreadcrumbs,
     SatGhost,
     SatTagModule,
@@ -742,6 +751,74 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const label = `${this.currentMajor()}.${this.currentMinor()}`;
     return d.isCheckedOut ? `${label}+` : label;
   });
+
+  /** A banner's message and actions, translated and read afresh when the page's state changes. */
+  readonly trashedBanner = computed<DocumentBanner>(() => {
+    this.translationTick();
+    return {
+      message: this.translate.instant(
+        'document-detail.document-detail.you-are-viewing-a-trashed-document',
+      ),
+      actions: [
+        ...(this.canWriteDoc()
+          ? [
+              {
+                label: this.translate.instant('document-detail.document-detail.restore'),
+                icon: 'restore',
+                emphasis: 'outlined' as const,
+                disabled: this.actionInProgress() === 'restore',
+                press: () => this.restoreFromTrash(),
+              },
+            ]
+          : []),
+        ...(this.canRemoveDoc()
+          ? [
+              {
+                label: this.translate.instant('document-detail.document-detail.delete-permanently'),
+                icon: 'delete_forever',
+                emphasis: 'outlined' as const,
+                disabled: this.actionInProgress() === 'permanentDelete',
+                press: () => this.permanentlyDelete(),
+              },
+            ]
+          : []),
+      ],
+    };
+  });
+
+  /** The version banner's message and actions, the Go to latest and Restore buttons it offers. */
+  readonly versionBanner = computed<DocumentBanner>(() => {
+    this.translationTick();
+    return {
+      message: this.translate.instant('document-detail.version-viewing', {
+        version: this.versionLabel(),
+      }),
+      actions: [
+        {
+          label: this.translate.instant('document-detail.version-go-to-latest'),
+          emphasis: 'text',
+          cssClass: 'version-banner-latest',
+          press: () => this.showLatestVersion(),
+        },
+        ...(this.canRestoreVersion()
+          ? [
+              {
+                label: this.translate.instant('document-detail.version-restore', {
+                  version: this.versionLabel(),
+                }),
+                icon: 'restore',
+                emphasis: 'filled' as const,
+                cssClass: 'version-banner-restore',
+                disabled: this.actionInProgress() === 'restore',
+                press: () => this.confirmRestoreVersion(),
+              },
+            ]
+          : []),
+      ],
+    };
+  });
+
+  readonly bannerId = NXS_PRIMITIVE_IDS.banner;
 
   readonly publicationCount = computed(() => this.publishedDocs().length);
 

@@ -1,6 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
+  NXS_PRIMITIVE_IDS,
   NxsBannerComponent,
   NxsChipSetComponent,
   type NxsChipItem,
@@ -13,6 +14,7 @@ import {
   NxsUploadQueueComponent,
   provideNxsToast,
 } from '@nuxeo/satori-platform/components';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import {
@@ -198,6 +200,7 @@ const DIALOG_SIZE = {
   imports: [
     NxsDateInputComponent,
     NgTemplateOutlet,
+    ExtensionOutletComponent,
     NxsBannerComponent,
     NxsChipSetComponent,
     NxsDocTypeIconComponent,
@@ -864,6 +867,15 @@ export class CreateImportDialogComponent implements OnInit {
   clearCoverage(): void {
     this.coverage = null;
   }
+
+  /** The banner and chip set are rendered by ID, so a component registered under one replaces the built-in. */
+  readonly bannerId = NXS_PRIMITIVE_IDS.banner;
+  readonly chipSetId = NXS_PRIMITIVE_IDS.chipSet;
+
+  /** A chip set rendered by ID binds no outputs, so each removal reaches the page as a handler. */
+  readonly removeNatureChip = (): void => this.clearNature();
+  readonly removeCoverageChip = (): void => this.clearCoverage();
+  readonly removeSubjectChip = (item: NxsChipItem): void => this.removeSubject(item.id);
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
