@@ -8,7 +8,7 @@ import {
   UserService,
   type NuxeoGroup,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { NxsAdminGroupDetailsPageComponent } from './admin-group-details-page.component';
@@ -229,5 +229,30 @@ describe('NxsAdminGroupDetailsPageComponent', () => {
     await render();
     expect(documents['removePermissionById']).toHaveBeenCalledWith('doc-1', 'editors:Write');
     expect(text()).toContain('Permission removed');
+  });
+
+  it('ignores a second membership change while the first is still in flight', () => {
+    const pending = new Subject<unknown>();
+    userService['updateGroup'].mockReturnValueOnce(pending);
+    const page = fixture.componentInstance as unknown as {
+      removeMember(id: string): void;
+      removeNestedGroup(id: string): void;
+    };
+    page.removeMember('jdoe');
+    page.removeNestedGroup('reviewers');
+    expect(userService['updateGroup']).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts the next change once the first has failed', async () => {
+    userService['updateGroup'].mockReturnValueOnce(throwError(() => new Error('no')));
+    (fixture.componentInstance as unknown as { removeMember(id: string): void }).removeMember(
+      'jdoe',
+    );
+    await render();
+    (
+      fixture.componentInstance as unknown as { removeNestedGroup(id: string): void }
+    ).removeNestedGroup('reviewers');
+    await render();
+    expect(userService['updateGroup']).toHaveBeenCalledTimes(2);
   });
 });
