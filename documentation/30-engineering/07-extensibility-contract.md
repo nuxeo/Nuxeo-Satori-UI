@@ -113,10 +113,12 @@ key for the favicon.
   anything in `127.0.0.0/8`, `[::1]` and any `*.localhost` subdomain are treated as one host,
   because on a single-host deployment each of them reaches the Nuxeo the configuration itself came
   from — `*.localhost` because RFC 6761 resolves it to loopback and browsers honour that. An IPv4
-  address embedded in IPv6 is **decoded**, in any of the three embeddings the URL parser accepts
-  (`::ffff:127.0.0.1`, the deprecated `::127.0.0.1`, and `::ffff:0:127.0.0.1`, which arrive as
-  `[::ffff:7f00:1]`, `[::7f00:1]` and `[::ffff:0:7f00:1]`), rather than matched against a list of
-  prefixes that would be incomplete the moment a fourth exists. Decoding applies to **every**
+  address embedded in IPv6 is **decoded**, for each of the three standardised embeddings the URL
+  parser accepts (`::ffff:127.0.0.1`, the deprecated `::127.0.0.1`, and `::ffff:0:127.0.0.1`,
+  which arrive as `[::ffff:7f00:1]`, `[::7f00:1]` and `[::ffff:0:7f00:1]`) and only those — an
+  address outside them embeds no IPv4 host and is left alone, because reading the low 32 bits of
+  anything that merely looks similar collapses distinct hosts together and refuses logos that
+  should load. Decoding applies to **every**
   address, not just loopback, so a deployment on `10.0.0.5` also refuses `[::ffff:10.0.0.5]`;
   that equivalence needs no DNS. Names that merely contain the word are unaffected —
   `mylocalhost`, `localhost.example.com` and a host actually called `loopback` are ordinary

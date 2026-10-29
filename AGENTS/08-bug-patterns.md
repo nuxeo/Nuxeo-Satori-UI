@@ -913,9 +913,23 @@ expose. State the residual gap rather than implying the rule is total.
 **And check the other address family.** The first fix of this covered `localhost`, `127.0.0.0/8`
 and `[::1]`, and the reviewer found `[::ffff:127.0.0.1]` straight through it — IPv6 can embed an
 IPv4 address three ways, and the parser canonicalises each into a different shape
-(`[::ffff:7f00:1]`, `[::7f00:1]`, `[::ffff:0:7f00:1]`). **Decode the embedded address** rather
-than listing the prefixes; a list is incomplete the moment a fourth embedding exists, which is
-the same mistake as enumerating focusable selectors.
+(`[::ffff:7f00:1]`, `[::7f00:1]`, `[::ffff:0:7f00:1]`). Decode the embedded address for each of
+those three prefixes **and only those**.
+
+The first attempt generalised instead, accepting any address whose upper groups were `0` or
+`ffff` on the reasoning that an enumerated list "is incomplete the moment a fourth embedding
+exists". That reasoning is wrong here, and the next round of review caught it: the
+generalisation was **unsound**, not merely broad. It read an IPv4 address out of hosts that embed
+none, so `[::ffff:ffff:7f00:1]` was treated as loopback, and `[::ffff:0:0:0:1]` and
+`[::ffff:0:1]` — two distinct addresses — collapsed onto one key. Both refused logos that should
+have loaded.
+
+The distinction worth carrying: enumerating is right when the set is **defined by a
+specification** (three IPv4-in-IPv6 embeddings, which change only when a standard changes) and
+wrong when it is defined by an open-ended implementation (which elements a browser makes
+focusable). An incomplete list fails closed on something it has not heard of; an unsound
+generalisation fails _open_ in both directions, and in a host-equivalence rule that means
+refusing a customer's logo.
 
 **A guard added for diagnostics must not become a new failure mode.** The same review found that
 reporting the refusal parsed the configuration URL unguarded, inside a method documented to

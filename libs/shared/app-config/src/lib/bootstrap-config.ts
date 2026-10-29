@@ -753,21 +753,34 @@ function ipv6Groups(hostname: string): number[] | null {
  * so none of them matches a check written against the IPv4 or the `::1` spelling (NXSAT-724,
  * review of PR 512).
  *
- * Rather than list the three prefixes — a list that is incomplete the moment a fourth exists —
- * this requires every group above the low 32 bits to be `0` or `ffff`, which is what all of them
- * are made of, and then reads the address out. A real routable address such as `2001:db8::7f00:1`
- * has a leading group that is neither, so it is not treated as embedding one.
+ * The upper six groups must be **exactly** one of the three defined prefixes. An earlier version
+ * accepted any mix of `0` and `ffff` there, on the reasoning that enumerating prefixes would be
+ * incomplete the moment a fourth embedding existed. That traded incompleteness for unsoundness,
+ * which is worse: it read an address out of hosts that embed none, so `[::ffff:ffff:7f00:1]` was
+ * treated as loopback and `[::ffff:0:0:0:1]` and `[::ffff:0:1]` — two distinct addresses —
+ * collapsed onto one key. Both refused logos that should load (review of PR 512). If a fourth
+ * embedding is ever standardised, add its prefix here.
  *
  * Returning the address rather than just its first octet is what makes the equivalence hold for
  * every host and not only loopback: with the configuration on `10.0.0.5`, a logo at
  * `[::ffff:10.0.0.5]` names the same machine, and that needs no DNS to decide.
  */
+const IPV4_EMBEDDING_PREFIXES: readonly (readonly number[])[] = [
+  [0, 0, 0, 0, 0, 0xffff], // IPv4-mapped, ::ffff:a.b.c.d
+  [0, 0, 0, 0, 0xffff, 0], // IPv4-translated, ::ffff:0:a.b.c.d
+  [0, 0, 0, 0, 0, 0], // IPv4-compatible, ::a.b.c.d — deprecated, still parsed
+];
+
 function embeddedIpv4(hostname: string): string | null {
   const groups = ipv6Groups(hostname);
   if (groups === null) return null;
   const prefix = groups.slice(0, 6);
-  if (!prefix.every((group) => group === 0 || group === 0xffff)) return null;
-  // `::` and `::1` embed no address; an all-zero prefix needs a non-zero high half to be one.
+  const embeds = IPV4_EMBEDDING_PREFIXES.some(
+    (candidate) => candidate.length === prefix.length && candidate.every((g, i) => g === prefix[i]),
+  );
+  if (!embeds) return null;
+  // Under the all-zero prefix, `::1` and `::` embed no address — the low 32 bits are the address
+  // itself only when the high half is set.
   if (prefix.every((group) => group === 0) && (groups[6] ?? 0) === 0) return null;
   const high = groups[6] ?? 0;
   const low = groups[7] ?? 0;

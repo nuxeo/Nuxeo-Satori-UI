@@ -274,6 +274,36 @@ describe('resolveBrandingLogoUrl — the check on the URL the browser loads', ()
         expect(resolveBrandingLogoUrl(src, onIpv4)).toBe(new URL(src).href);
       }
     });
+
+    /**
+     * Seventh review round. Reading the low 32 bits of any address whose upper groups happen to be
+     * `0` or `ffff` is not the same as recognising an IPv4 embedding: it decodes addresses that
+     * embed nothing, so distinct hosts collapse onto one key and a valid logo is refused. Only the
+     * three standardised embeddings carry an IPv4 address.
+     */
+    it('does not read an IPv4 address out of a host that embeds none', () => {
+      // `::ffff:ffff:7f00:1` is its own address, not a mapped 127.0.0.1.
+      const src = 'https://[::ffff:ffff:7f00:1]/acme.svg';
+      expect(resolveBrandingLogoUrl(src, onLoopback)).toBe(new URL(src).href);
+    });
+
+    it('keeps two distinct addresses distinct when neither embeds IPv4', () => {
+      // Both used to decode to `0.0.0.1` and so compared equal to each other.
+      const config = 'https://[::ffff:0:0:0:1]/agentic-ui-config/bootstrap.json';
+      const src = 'https://[::ffff:0:1]/acme.svg';
+      expect(resolveBrandingLogoUrl(src, config)).toBe(new URL(src).href);
+    });
+
+    it('still refuses each of the three real embeddings of the Nuxeo host', () => {
+      const onIpv4 = 'https://10.0.0.5/agentic-ui-config/bootstrap.json';
+      for (const src of [
+        'https://[::ffff:10.0.0.5]/nuxeo/api/v1/me', // mapped
+        'https://[::10.0.0.5]/nuxeo/api/v1/me', // compatible, deprecated
+        'https://[::ffff:0:10.0.0.5]/nuxeo/api/v1/me', // translated
+      ]) {
+        expect(resolveBrandingLogoUrl(src, onIpv4)).toBeNull();
+      }
+    });
   });
 
   it('still allows a third-party https logo when the deployment is on loopback', () => {
