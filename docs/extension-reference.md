@@ -710,7 +710,14 @@ strip through `nxs.primitives.tabs` and its header's action row through `nxs.pri
 passing its open and selection handlers and the templates for its thumbnail and actions as inputs,
 because the outlet binds no outputs. `nxs-document-list` renders each row's type through
 `nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`. An override of those
-IDs reaches these screens.
+IDs reaches these screens. Document detail's trashed-document and version banners, search's AI error
+banner and create-import's two location hints render through `nxs.primitives.banner`; create-import's
+subject, nature and coverage chips and the search filters' chips render through `nxs.primitives.chipSet`.
+The banners pass their message and buttons as `componentInputs`, and the chip sets pass
+`removeHandler`, since the outlet binds no outputs. Each keeps its built-in element as the fallback, and
+each sits in a wrapper that carries the layout, so the layout holds whichever component the ID resolves
+to. Document detail's workflow, task-action and AI error banners are still `sat-banner`, as are the
+other `sat-*` uses noted below.
 
 Other `sat-*` uses in packaged screens are not yet on these IDs, so an override does not reach them.
 Those elements render directly until they move onto the IDs. Nor does an override of the tabs or the
