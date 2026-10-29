@@ -576,10 +576,11 @@ describe('AppConfigService', () => {
 
     it.each([
       ['a parent-directory segment', '../x.svg', 'parent-directory segment'],
-      ['a javascript: URL', 'javascript:alert(1)', 'must use https:'],
-      ['an http: URL', 'http://example.com/l.svg', 'must use https:'],
+      // The scheme is named, so these two are no longer the same message.
+      ['a javascript: URL', 'javascript:alert(1)', 'uses "javascript:"'],
+      ['an http: URL', 'http://example.com/l.svg', 'uses "http:"'],
       ['an absolute path', '/nuxeo/api/v1/me', 'absolute path is not allowed'],
-      ['a backslash', 'a\\b.svg', 'backslash or a control character'],
+      ['a backslash', 'a\\b.svg', 'contains a backslash'],
       ['a query with no path', '?v=2', 'no path'],
       ['a data: URI that is not an image', 'data:text/html,<b>x', 'not an image'],
     ])('reports %s, naming the value and the reason', async (_label, src, expected) => {

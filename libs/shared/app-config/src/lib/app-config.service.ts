@@ -141,6 +141,13 @@ export class AppConfigService {
    * the string as written, and `resolveBrandingLogoUrl` on where the resolved URL points. Neither
    * can know whether the bytes exist, decode, or are allowed cross-origin, which is why the
    * outcome has to come back from the element that loaded it (NXSAT-721).
+   *
+   * This message **does** say the Satori marks are in use, where {@link noteRefusedLogos}
+   * deliberately does not, and the difference is not an inconsistency. By the time a logo is
+   * loaded the merge has already settled which contribution won, so suppressing that one URL
+   * leaves nothing for `brandingLogo` to return and the packaged marks are what renders. A
+   * configuration-time refusal happens *during* the merge, where an earlier layer's valid logo
+   * survives, so the same claim there would often be false (review of PR 512).
    */
   reportBrandingLogoUnavailable(url: string, reason: string): void {
     if (!url || this.failedLogoUrl() === url) return;

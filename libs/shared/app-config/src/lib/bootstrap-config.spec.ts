@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_APP_BOOTSTRAP_CONFIG,
+  describeBrandingLogoRefusal,
   mergeBootstrapConfig,
   nuxeoOriginsOf,
   resolveBrandingLogoUrl,
@@ -325,6 +326,57 @@ describe('resolveBrandingLogoUrl — the check on the URL the browser loads', ()
 
   it('refuses an unparseable URL', () => {
     expect(resolveBrandingLogoUrl('https://exa mple.com/acme.svg', configUrl)).toBeNull();
+  });
+});
+
+/**
+ * The reason function is the single implementation behind both the verdict and the explanation,
+ * and nothing tested it directly — only its effect through `AppConfigService`. Third review round
+ * of PR 512 asked whether the messages distinguish the underlying cases, which is a property of
+ * this function, so it is asserted here.
+ */
+describe('describeBrandingLogoRefusal', () => {
+  const configUrl = 'https://app.example/nuxeo/agentic-ui-config/bootstrap.json';
+  const reasonFor = (src: string) => describeBrandingLogoRefusal(src, configUrl);
+
+  it('says nothing about a src it accepts', () => {
+    expect(reasonFor('assets/acme.svg')).toBeNull();
+    expect(reasonFor('https://cdn.example/acme.svg')).toBeNull();
+    expect(reasonFor('data:image/svg+xml,<svg/>')).toBeNull();
+  });
+
+  /** One distinct, administrator-readable reason per cause. */
+  const CAUSES: ReadonlyArray<readonly [string, string]> = [
+    ['blank', '   '],
+    ['backslash', 'a\\b.svg'],
+    ['control character', 'a\u0001b.svg'],
+    ['data: URI that is not an image', 'data:text/html,<b>x'],
+    ['http scheme', 'http://example.com/l.svg'],
+    ['javascript scheme', 'javascript:alert(1)'],
+    ['absolute path', '/nuxeo/api/v1/me'],
+    ['parent segment', '../x.svg'],
+    ['query with no path', '?v=2'],
+    ['outside the configuration directory', 'https://app.example/nuxeo/api/v1/me'],
+    ['a Nuxeo host', 'https://app.example./nuxeo/api/v1/me'],
+  ];
+
+  it.each(CAUSES)('gives a reason for %s', (_label, src) => {
+    expect(reasonFor(src)).toBeTruthy();
+  });
+
+  it('gives a different reason for every cause, so a log line identifies what went wrong', () => {
+    const byReason = new Map<string, string[]>();
+    for (const [label, src] of CAUSES) {
+      const reason = reasonFor(src) ?? '(accepted)';
+      byReason.set(reason, [...(byReason.get(reason) ?? []), label]);
+    }
+    const shared = [...byReason.entries()].filter(([, labels]) => labels.length > 1);
+    expect(shared).toEqual([]);
+  });
+
+  it('names the scheme it refused, so javascript: is not reported as merely not-https', () => {
+    expect(reasonFor('javascript:alert(1)')).toContain('javascript');
+    expect(reasonFor('http://example.com/l.svg')).toContain('http');
   });
 });
 

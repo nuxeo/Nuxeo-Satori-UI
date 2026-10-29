@@ -131,7 +131,14 @@ key for the favicon.
   reported too — it is refused, and it used to be indistinguishable from declaring no logo.
   What the report deliberately does **not** say is which mark ends up on screen: a refusal leaves
   whatever an earlier layer set, so an earlier valid logo still wins and a later valid one
-  replaces a refused earlier one.
+  replaces a refused earlier one. Each cause gives its own wording — the scheme is named, so
+  `javascript:` and `http:` do not read alike, and a backslash is not reported as a control
+  character — so one log line identifies what was wrong with the value.
+- **The two logo messages make different claims on purpose.** A failure _after_ loading (the
+  NXSAT-721 case above) says the Satori marks are in use, because the merge has already settled
+  which contribution won and suppressing that one URL leaves nothing to render but the packaged
+  marks. A refusal _during_ the merge says only that the value was refused, because an earlier
+  layer's valid logo survives it.
 - **A logo that is accepted and then does not render keeps the Satori marks too** (NXSAT-721).
   Every check above runs before the image is requested, so none of them can know whether the file
   exists, whether the bytes decode, or whether a remote host sent the CORS header. The two `<img>`
