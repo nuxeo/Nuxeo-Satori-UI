@@ -1,5 +1,12 @@
+// A widget is the lightest surface in the hierarchy — white in a light scheme — so it reads as
+// a card lifted off the page, which paints `--mat-sys-surface-container-low`. It used to take
+// `--mat-sys-surface`, the same token the page host used, and the two resolved to the same
+// `#f9f9fc`: the widgets had no fill of their own and were separated only by this border.
+//
+// `light-dark()` carries both schemes, so this is `#ffffff` in light and `#0a0b0c` in dark rather
+// than a hardcoded white that would blow out dark mode.
 .widget {
-  background: var(--mat-sys-surface, #ffffff);
+  background: var(--mat-sys-surface-container-lowest, #ffffff);
   color: var(--mat-sys-on-surface, #1a1c1e);
   border: 1px solid var(--mat-sys-outline-variant, #e8eaef);
   border-radius: 12px;
@@ -18,7 +25,7 @@
   gap: 8px;
   padding: 16px 20px 12px;
   border-bottom: 1px solid var(--mat-sys-outline-variant, #e8eaef);
-  background: var(--mat-sys-surface, #ffffff);
+  background: var(--mat-sys-surface-container-lowest, #ffffff);
   flex-shrink: 0;
 }
 

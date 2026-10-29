@@ -145,7 +145,9 @@ before being trusted.
 2. In `libs/platform/package.json`: remove `"private": true`, add `publishConfig`.
 3. If the scope changes, rename the 190 import specifiers and the `tsconfig.base.json`
    aliases, then `npm run beta:api -- --update`.
-4. Decide a version. It is `0.2.0`, hand-maintained and not tied to the app version. NXSAT-308
+4. Decide a version. It is `0.2.0` in the source, hand-maintained and not tied to the app
+   version. The publish workflow (NXSAT-666) bumps it in the runner only, never in git, so
+   the committed version stays the one a human set. NXSAT-308
    moved it from `0.1.0`: `CHANGELOG.md`'s Unreleased section holds breaking changes, and
    `^0.1.0` admits only `0.1.x`. A Beta wants `0.x` so the API can move without a major bump
    every sprint.
@@ -156,12 +158,17 @@ than pushing to a scope we might not own.
 
 ## 5. Deliberately not done
 
-- **No release CI workflow.** Publishing on a tag needs the scope decision first, and a
-  workflow that publishes to the wrong registry is worse than none.
+- **No real-publish CI workflow.** The manual `publish-platform` workflow (NXSAT-666) only
+  dry-runs by default. Its publish job runs whenever `dryRun` is false, and while `private` is
+  set npm refuses that publish with `EPRIVATE`. Publishing on a tag needs the scope decision first, and a workflow that publishes
+  to the wrong registry is worse than none.
 - **No provenance / signing.** Worth doing at GA; needs a public registry and a trusted
   CI publisher.
-- **Version is not automated.** No changesets, no semantic-release. With one package and
-  a hand-written changelog that is fine; it stops being fine with three.
+- **Version is not persistently automated.** The workflow bumps the version in the runner's
+  checkout only, via `nx release`, and never commits or tags it. No changesets, no
+  semantic-release. A real publish must be followed by a reviewed commit that records the
+  version shipped. With one package and a hand-written changelog that is fine; it stops being
+  fine with three.
 - **No real `npm install` of the template against the tarball.** `fork-simulation`
   covers type resolution offline. Peer _installability_, the risk this bullet once called
   uncovered, is now checked: `@hylandsoftware/satori-ui` is an optional peer that only

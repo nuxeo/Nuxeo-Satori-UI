@@ -100,6 +100,19 @@
                     | translate: { count }
                 }}</span>
               }
+              <!--
+                The filters run on the server, so a changed one replaces the rows rather than
+                re-sifting them. This says so where the count is, instead of `loading` taking the
+                table away and flashing a spinner on every pause in typing.
+              -->
+              @if (filtering()) {
+                <mat-progress-spinner
+                  class="filter-progress"
+                  mode="indeterminate"
+                  diameter="14"
+                  [attr.aria-label]="'browse.browse.filtering' | translate"
+                />
+              }
               <div class="toolbar-spacer"></div>
 
               <mat-form-field
@@ -141,6 +154,25 @@
                 [ngModel]="filterModifiedTo()"
                 (ngModelChange)="filterModifiedTo.set($event)"
               />
+              <!--
+                One clear control for the pair, outside both fields.
+
+                `main` replaced the single `mat-date-range-input` with two `nxs-date-input`s, and
+                that component exposes no suffix slot, so the clear cannot sit inside a field the
+                way it did before. One button for the whole range also reads better than two, since
+                the From/To inputs are a single filter.
+              -->
+              @if (filterModifiedFrom() || filterModifiedTo()) {
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="filter-clear-btn filter-clear-btn--standalone"
+                  [attr.aria-label]="'browse.browse.clear-modified' | translate"
+                  (click)="clearModifiedRange()"
+                >
+                  <mat-icon svgIcon="x_large" />
+                </button>
+              }
               <mat-form-field
                 class="toolbar-filter-field"
                 appearance="outline"
@@ -170,7 +202,11 @@
                 subscriptSizing="dynamic"
               >
                 <mat-label>{{ 'browse.browse.all-types' | translate }}</mat-label>
-                <mat-select [ngModel]="filterType()" (ngModelChange)="filterType.set($event)">
+                <mat-select
+                  [ngModel]="filterType()"
+                  (ngModelChange)="filterType.set($event)"
+                  (openedChange)="$event && loadFolderTypes()"
+                >
                   <mat-option value="">{{ 'browse.browse.all-types' | translate }}</mat-option>
                   @for (t of distinctTypes(); track t) {
                     <mat-option [value]="t">{{ t }}</mat-option>
@@ -247,10 +283,10 @@
                   "
                   [sort]="listSort()"
                   [selectedIds]="listSelectedIds()"
-                  [pageIndex]="pageIndex()"
+                  [pageIndex]="listPageIndex()"
                   [pageSize]="pageSize"
-                  [totalSize]="totalSize()"
-                  [hasNextPage]="hasNextPage()"
+                  [totalSize]="listTotalSize()"
+                  [hasNextPage]="listHasNextPage()"
                   [loading]="loading()"
                   [error]="error() ? errorStatus() : null"
                   [errorHeading]="error() ?? ''"
@@ -357,11 +393,11 @@
                 }
               </div>
               <nxs-pager
-                [pageIndex]="pageIndex()"
+                [pageIndex]="listPageIndex()"
                 [pageSize]="pageSize"
                 [itemCount]="filteredEntries().length"
-                [totalSize]="totalSize()"
-                [hasNextPage]="hasNextPage()"
+                [totalSize]="listTotalSize()"
+                [hasNextPage]="listHasNextPage()"
                 (pageChange)="goToPage($event)"
               />
             }

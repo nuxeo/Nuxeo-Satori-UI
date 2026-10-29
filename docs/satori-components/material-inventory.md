@@ -42,7 +42,7 @@ The historical counts and line numbers below describe the original measurement, 
 | Empty states (region level)        | 78 (24)             | 29                     | `empty-state` + `illustration`                                                                                  | `nxs-empty-state`                |
 | Empty "none" text (inline)         | 17 (7)              | 12                     | none: stays text                                                                                                | none                             |
 | Upload controls (drop zone, input) | 7 (5)               | 6                      | `upload` (`[satUpload]`, `sat-upload-area`), `upload-field`                                                     | `nxs-upload`                     |
-| Upload queues                      | 2 (2)               | 1                      | `upload-field` file list (fit not verified)                                                                     | `nxs-upload`                     |
+| Upload queues                      | 0 (0)               | 0                      | none: the two results lists are not upload queues (section 4.4)                                                 | none                             |
 | Cards and grid tiles               | 7 (7)               | 2, plus DocumentCards  | `interactive-card`, `card-surface`                                                                              | `nxs-card`                       |
 | Banners and inline notices         | 20 (12)             | 6                      | `banner`                                                                                                        | `nxs-banner`                     |
 | Chips (`mat-chip-set`/`-grid`)     | 18 (7)              | 16                     | **none**: `inline-chip` is not an input chip (section 3, item 1)                                                | **none**; owned by §5 J/K inputs |
@@ -185,19 +185,19 @@ Inline "none" text, which is **not** an empty state and stays as text: `browse.h
 
 ### 4.4 Upload → `upload`, `upload-field` → `nxs-upload`
 
-| Site                                                                                                      | What it is                                                 | Scope            |
-| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------- |
-| `libs/features/browse/src/lib/create-import/create-import-dialog.component.html:188`, `:192`              | Upload drop zone (`onUploadDrop`) and its file input       | NXSAT-308        |
-| `libs/features/browse/src/lib/create-import/create-import-dialog.component.html:276`, `:280`              | CSV import drop zone (`onCsvDrop`) and its file input      | NXSAT-308        |
-| `libs/features/browse/src/lib/create-import/create-import-dialog.component.html:446`, `:450`              | Content drop zone (`onContentDrop`) and its file input     | NXSAT-308        |
-| `libs/features/document-detail/src/lib/replace-attachment-dialog/replace-attachment-dialog.html:9`, `:18` | Replace-attachment drop zone and hidden file input         | NXSAT-308        |
-| `libs/features/document-detail/src/lib/document-detail/document-detail.html:1968`                         | Hidden attachment input (`uploadAttachment`)               | NXSAT-308        |
-| `libs/features/document-detail/src/lib/note-editor/note-editor.html:249`                                  | Note editor image input                                    | NXSAT-308        |
-| `libs/features/knowledge-discovery/src/lib/content-lake-upload/content-lake-upload.html:63`               | Content Lake upload input                                  | KD (out of Beta) |
-| `libs/features/search/src/lib/search-queue/search-queue.component.html`                                   | Upload queue (`lib-search-queue`)                          | NXSAT-308        |
-| `libs/features/assets/src/lib/assets-queue/assets-queue.component.html`                                   | Upload queue (`lib-assets-queue`), to unify with the above | DAM (§13 Q2)     |
+| Site                                                                                                      | What it is                                             | Scope            |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------- |
+| `libs/features/browse/src/lib/create-import/create-import-dialog.component.html:188`, `:192`              | Upload drop zone (`onUploadDrop`) and its file input   | NXSAT-308        |
+| `libs/features/browse/src/lib/create-import/create-import-dialog.component.html:276`, `:280`              | CSV import drop zone (`onCsvDrop`) and its file input  | NXSAT-308        |
+| `libs/features/browse/src/lib/create-import/create-import-dialog.component.html:446`, `:450`              | Content drop zone (`onContentDrop`) and its file input | NXSAT-308        |
+| `libs/features/document-detail/src/lib/replace-attachment-dialog/replace-attachment-dialog.html:9`, `:18` | Replace-attachment drop zone and hidden file input     | NXSAT-308        |
+| `libs/features/document-detail/src/lib/document-detail/document-detail.html:1968`                         | Hidden attachment input (`uploadAttachment`)           | NXSAT-308        |
+| `libs/features/document-detail/src/lib/note-editor/note-editor.html:249`                                  | Note editor image input                                | NXSAT-308        |
+| `libs/features/knowledge-discovery/src/lib/content-lake-upload/content-lake-upload.html:63`               | Content Lake upload input                              | KD (out of Beta) |
 
 Drop-on-list upload (plan section 5 I, Build) has no site today; no drop target exists outside these dialogs.
+
+The search and assets results lists (`lib-search-queue`, `lib-assets-queue`) are not upload queues, and were wrongly listed as such before NXSAT-657. Each lists results from an aggregation service and uploads nothing, so they are left out of this table.
 
 ### 4.5 Cards and grid tiles → `interactive-card`, `card-surface` → `nxs-card`
 

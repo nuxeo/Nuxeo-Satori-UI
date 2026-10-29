@@ -28,9 +28,9 @@ import { NxsTagComponent } from './tag/tag.component';
  *
  * Registration goes through `provideSatoriExtensions`, so it layers like every other contribution:
  * in provider order, later wins per ID. List it **before** `provideNxsSatoriComponents()` from
- * `components-satori`, which re-registers the nine `NXS_PRIMITIVE_IDS` entries that have a Satori
- * twin — every one but `banner` and `chipSet` — on Satori, and
- * before your own `provideSatoriExtensions(...)` calls, so an override of yours wins.
+ * `components-satori`, which re-registers the eleven of thirteen `NXS_PRIMITIVE_IDS` entries that
+ * have a Satori twin — every one but `banner` and `chipSet`, which have no Satori wrapper yet — on
+ * Satori, and before your own `provideSatoriExtensions(...)` calls, so an override of yours wins.
  */
 export function provideNxsComponents(): EnvironmentProviders {
   return provideSatoriExtensions({

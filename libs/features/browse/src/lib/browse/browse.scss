@@ -288,6 +288,22 @@ sat-breadcrumbs {
   white-space: nowrap;
 }
 
+// Beside the count while a changed filter's listing is on its way. Deliberately small and in the
+// toolbar rather than over the table: the rows it is replacing stay readable until it lands.
+.filter-progress {
+  margin-inline-start: 8px;
+  flex-shrink: 0;
+}
+
+// The Modified clear, which now sits in the toolbar rather than inside a form field: `main`
+// replaced the range input with two `nxs-date-input`s and that component has no suffix slot. So it
+// aligns itself against the fields instead of borrowing their padding.
+.filter-clear-btn--standalone {
+  align-self: center;
+  margin-inline-start: -4px;
+  margin-inline-end: 0;
+}
+
 .toolbar-spacer {
   flex: 1;
 }
@@ -309,14 +325,62 @@ sat-breadcrumbs {
   }
 }
 
+// Shrunk to fit the dense toolbar field — but shrinking it with `!important` dropped three things
+// `mat-icon-button` normally provides, each of which was a reported defect:
+//
+//   * the padding that insets the glyph, so the × sat 0.0px from the field's outline and read as
+//     being outside the control;
+//   * the centring, so all 8px of slack fell on the left and the hover/click target sat 8px to
+//     the left of the glyph you aim at;
+//   * the state layer, so hovering changed nothing at all (measured `rgba(0,0,0,0)` either side).
+//
+// `place-items` centres the glyph in its own hit area, `margin-inline-end` restores the inset, and
+// the state layer is re-declared because the size override suppresses Material's own.
 .filter-clear-btn {
   width: 24px !important;
   height: 24px !important;
-  line-height: 24px !important;
+  padding: 0 !important;
+  display: grid;
+  place-items: center;
+  // 6px, so the glyph lands ~10px from the field's outline once its own 4px of padding is added.
+  // At 4px the × read as pinned to the border.
+  margin-inline-end: 6px;
+  border-radius: 50%;
+
   mat-icon {
     font-size: 16px;
     width: 16px;
     height: 16px;
+    // Without this the glyph box reports 24px tall and stretches out of the centred cell: the
+    // button's `line-height` was inherited straight through the `height: 16px`.
+    line-height: 16px;
+    margin: 0;
+  }
+
+  // The glyph itself, not just its box.
+  //
+  // `svgIcon` makes Angular Material insert an `<svg>` into the `mat-icon` at runtime, and that
+  // SVG keeps the registered icon's own 24px intrinsic size — the `width`/`height` above apply to
+  // `mat-icon` and do not reach inside it. Measured: a 24px glyph inside the 24px button, so it
+  // filled the circle edge to edge with no padding at all, which is why the control read as a
+  // heavy × crammed against the field instead of a small × inside a round target.
+  //
+  // `::ng-deep` because the SVG is created imperatively and carries no `_ngcontent` attribute, so
+  // a scoped descendant selector cannot match it.
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  ::ng-deep mat-icon svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--mat-sys-on-surface, #1a1c1e) 8%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 1px;
   }
 }
 
@@ -570,9 +634,23 @@ sat-breadcrumbs {
 // ── Card view ──
 // Each card is `nxs-card`, or whatever is registered under its ID; it draws itself. The grid lays
 // out the cards, and the media template's thumbnail is sized here because browse declares it.
+// 200px, not 160px, because of how the card splits its header row.
+//
+// Measured on `/browse/default-domain` at a 160px card: the title box
+// (`.sat-interactive-card-titles`) received **82px**, after a fixed 40px selection control and
+// ~38px of card padding. "Configuration" needs ~95px at `title-small`, so ordinary one-word
+// folder names wrapped onto a second line and broke mid-character — "Configuratio / n",
+// "Workspace / s". The break threshold sat between 9 and 10 characters.
+//
+// The character break itself is `overflow-wrap: anywhere` in `satori-card.component.scss`, and
+// that is deliberately left alone: unlike `break-word` it lowers the box's intrinsic min-content
+// width, which is the only reason the title can shrink inside Satori's `min-width: auto` flex
+// item instead of blowing the card out. Its own comment records that. Giving the grid 40px more
+// hands the title ~122px, so the common case no longer needs to break, while `anywhere` stays as
+// the safety net for a long unbroken file name.
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
   padding: 8px 0;
 }

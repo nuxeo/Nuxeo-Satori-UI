@@ -50,6 +50,9 @@ function doc(overrides: Partial<NuxeoDocument> & Pick<NuxeoDocument, 'uid'>): Nu
 
 const mockBrowseService = {
   getByPath: vi.fn((): ReturnType<BrowseService['getByPath']> => notConnected()),
+  // Never resolves on purpose: the folder scan stays pending, so the toolbar filters fall back to
+  // the loaded page exactly as they did before cross-folder filtering existed.
+  getBrowseFolderTypes: vi.fn((): ReturnType<BrowseService['getBrowseFolderTypes']> => EMPTY),
   getBrowseFolderContents: vi.fn((): ReturnType<BrowseService['getBrowseFolderContents']> =>
     notConnected(),
   ),

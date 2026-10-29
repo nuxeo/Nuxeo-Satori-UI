@@ -21,7 +21,14 @@ import {
   styleUrl: './domain-hint.component.scss',
   imports: [TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'nxs-domain-hint' },
+  // The host carries the note's spacing, so it must collapse when there is no note. Browse mounts
+  // this component unconditionally and the template renders its paragraph only for a Domain or the
+  // repository root; left visible, an empty host reserved 24px of vertical space in every ordinary
+  // workspace and folder, where it is a flex item whose margins do not collapse away.
+  host: {
+    class: 'nxs-domain-hint',
+    '[class.nxs-domain-hint--empty]': '!visible()',
+  },
 })
 export class NxsDomainHintComponent {
   /** The type of the document being shown. */

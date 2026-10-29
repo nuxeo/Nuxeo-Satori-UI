@@ -1,22 +1,113 @@
+import { lstatSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
 import nx from '@nx/eslint-plugin';
 
 const require = createRequire(import.meta.url);
-const satoriLint = require('@hylandsoftware/satori-lint/eslint');
+
+const SATORI_SCOPE = '@hylandsoftware';
+const SATORI_LINT_ENTRY = `${SATORI_SCOPE}/satori-lint/eslint`;
+
+// The Satori lint layer has to survive its own package being absent, because two builds delete
+// the whole `@hylandsoftware` scope from `node_modules` on purpose before building the Material
+// Storybook — `storybook-pages.yml` and ci.yml's `storybook` job — so that a Satori import fails
+// the build instead of compiling into a site we publish from a public repository.
+//
+// Nx loads this file to infer lint targets while it computes the project graph, and that happens
+// for *every* `nx run`. So a hard `require` here turned that deliberate deletion into
+// `Failed to process project graph: Cannot find module '@hylandsoftware/satori-lint/eslint'`
+// and took the Storybook build down with it. It did exactly that, on the two pushes to `main` of
+// 2026-10-28. The require had landed on 2026-10-25, while the publishing workflow was pointed at
+// a deleted branch and so never ran; nothing else caught it, because ci.yml runs that build only
+// when `satori-components` is affected and a change to this file affects no project at all.
+//
+// Absent is tolerated. Broken is not — silently dropping these rules on a half-installed package
+// would be worse than failing, because lint would pass wider than it should and say nothing.
+//
+// The error cannot tell you which you have. Node reports `MODULE_NOT_FOUND`, with this specifier
+// in the message, for at least three different situations: the scope is not installed; the
+// package is installed but its `./eslint` export points at a file that is not there; and the
+// package directory exists but has lost both its manifest and its entry point. Interrogating
+// `error.code`, or the message, or probing `./package.json` separately, each answers "absent" for
+// some state that is really broken. All of that was measured, not argued — and two such guards
+// were written and discarded here before this one.
+//
+// So do not decode the error at all. Exactly ONE absence is legitimate: the whole
+// `@hylandsoftware` scope removed from `node_modules`, which is what the token-free builds create
+// on purpose. Ask that question directly, of the filesystem. One question instead of three
+// inferences, and it cannot be fooled by the state of what is inside the scope.
+// `lstatSync`, not `existsSync`: `existsSync` follows symlinks, so a dangling scope link — a
+// broken linked install — would read as "not installed" and be tolerated. The question is whether
+// an entry is THERE, not whether it points at anything.
+//
+// And only `ENOENT` counts as absent. `EACCES`, `ELOOP`, `ENOTDIR` and the rest fail closed, which
+// is the right way round for a check whose whole job is telling a deliberate removal from a broken
+// tree: an unreadable tree is not a deliberate removal. That makes the predicate total — either an
+// entry is found, or it is reported missing, or something else is wrong — and the three guards this
+// replaced each fell to a state outside what they modelled.
+function scopeIsInstalled() {
+  return (require.resolve.paths(SATORI_LINT_ENTRY) ?? []).some((dir) => {
+    try {
+      lstatSync(join(dir, SATORI_SCOPE));
+      return true;
+    } catch (error) {
+      return error?.code !== 'ENOENT';
+    }
+  });
+}
+
+function resolveSatoriLint() {
+  try {
+    return require.resolve(SATORI_LINT_ENTRY);
+  } catch (error) {
+    // Anything other than a plain not-found, or a not-found while the scope is sitting right
+    // there, is a broken install rather than a deliberately removed one.
+    if (error?.code !== 'MODULE_NOT_FOUND' || scopeIsInstalled()) throw error;
+    console.warn(
+      `[eslint.config] ${SATORI_LINT_ENTRY} is not installed — Satori lint rules are OFF for this run. ` +
+        `Expected in the token-free builds that remove ${SATORI_SCOPE}; a surprise anywhere else.`,
+    );
+    return null;
+  }
+}
+
+const satoriLintPath = resolveSatoriLint();
+// Loaded outside the try above on purpose, so an error thrown from inside satori-lint propagates
+// instead of being read as the package being absent.
+const satoriLint = satoriLintPath === null ? null : require(satoriLintPath);
+
+// A rule may only be named once its plugin is registered, so the override goes with the layer
+// that brings the plugin in rather than standing on its own.
+//
+// Gated on `satoriLintPath`, NOT on `satoriLint` being truthy. The only tolerated state is the
+// resolution failure handled above; everything else must speak up. An entry that resolves and
+// then exports `null`, `undefined` or `false` is a broken package, and a truthiness check here
+// would quietly give it the same empty layer as a deliberate removal — without even the warning,
+// since that is printed on the resolve path. This way `satoriLint.configs` throws on it, which is
+// what should happen.
+const satoriLintLayers =
+  satoriLintPath === null
+    ? []
+    : [
+        ...satoriLint.configs['flat/recommended'],
+        {
+          files: ['**/*.html'],
+          rules: {
+            // The remaining Material font icons are tracked by `npm run satori:check` — 6 as of
+            // 2026-10-28, and five of those are deliberate, so this is a warning by choice rather
+            // than a migration waiting to finish. `docs/satori-adoption-dashboard.md` has the
+            // per-icon verdicts.
+            '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
+          },
+        },
+      ];
 
 export default [
   ...nx.configs['flat/base'],
   ...nx.configs['flat/typescript'],
   ...nx.configs['flat/javascript'],
-  ...satoriLint.configs['flat/recommended'],
-  {
-    files: ['**/*.html'],
-    rules: {
-      // 513 Material font icons → Satori SVG icons is a separate migration tracked by
-      // `npm run satori:icons`. Warn so lint stays green while SDSC tracks progress.
-      '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
-    },
-  },
+  ...satoriLintLayers,
   {
     ignores: [
       '**/dist',

@@ -28,6 +28,14 @@ class ShellComponent {}
 
 @Component({
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'lib-not-found',
+  template: 'PACKAGED NOT FOUND',
+})
+class NotFoundComponent {}
+
+@Component({
+  standalone: true,
   selector: 'lib-test-reports',
   changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="reports">CONTRIBUTED REPORTS PAGE</p>',
@@ -177,6 +185,60 @@ describe('provideExtensionRoutes', () => {
     harness.detectChanges();
 
     expect(harness.routeNativeElement?.ownerDocument.body.textContent).toContain('PACKAGED HOME');
+  });
+
+  /**
+   * A catch-all in the packaged config must not swallow contributed paths.
+   *
+   * `applyExtensionRoutes` appends contributions after the host's existing children, and Angular
+   * matches in order, so a `**` route sitting at the end of those children answered every
+   * manifest-contributed path: `/reports` rendered the shell's 404 page instead of its own
+   * component. The shell gained such a route so an unmatched URL is not a blank screen.
+   */
+  it('keeps a packaged wildcard behind the contributed routes', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(
+          [
+            {
+              path: '',
+              component: ShellComponent,
+              children: [
+                { path: '', pathMatch: 'full', component: HomeComponent },
+                { path: '**', component: NotFoundComponent },
+              ],
+            },
+          ],
+          withComponentInputBinding(),
+        ),
+        provideManifest({
+          slots: {
+            routes: [
+              {
+                id: 'acme.routes.reports',
+                path: 'reports',
+                componentId: 'acme.components.reports',
+              },
+            ],
+          },
+        }),
+        provideSatoriExtensions({ components: { 'acme.components.reports': ReportsComponent } }),
+        provideExtensionRoutes(),
+      ],
+    });
+
+    const harness = await RouterTestingHarness.create();
+    const body = () => harness.routeNativeElement?.ownerDocument.body.textContent ?? '';
+
+    await harness.navigateByUrl('/reports');
+    harness.detectChanges();
+    expect(body()).toContain('CONTRIBUTED REPORTS PAGE');
+    expect(body()).not.toContain('PACKAGED NOT FOUND');
+
+    // And the wildcard still does its own job for a path nothing claims.
+    await harness.navigateByUrl('/no-such-path');
+    harness.detectChanges();
+    expect(body()).toContain('PACKAGED NOT FOUND');
   });
 });
 
