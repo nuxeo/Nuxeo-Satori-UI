@@ -41,7 +41,7 @@
   background: var(--mat-sys-secondary-container);
 }
 
-.nxs-gdp__title {
+.nxs-gdp__title.nxs-gdp__title {
   margin: 0;
   font: var(--mat-sys-headline-small);
 }
@@ -75,7 +75,7 @@
   margin: 0;
 }
 
-.nxs-gdp__section-title {
+.nxs-gdp__section-title.nxs-gdp__section-title {
   margin: 0 0 0.5rem;
   font: var(--mat-sys-title-medium);
 }

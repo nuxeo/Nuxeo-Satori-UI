@@ -41,7 +41,7 @@
   background: var(--mat-sys-secondary-container);
 }
 
-.nxs-udp__title {
+.nxs-udp__title.nxs-udp__title {
   margin: 0;
   font: var(--mat-sys-headline-small);
 }
@@ -75,7 +75,7 @@
   margin: 0;
 }
 
-.nxs-udp__section-title {
+.nxs-udp__section-title.nxs-udp__section-title {
   margin: 0 0 0.5rem;
   font: var(--mat-sys-title-medium);
 }

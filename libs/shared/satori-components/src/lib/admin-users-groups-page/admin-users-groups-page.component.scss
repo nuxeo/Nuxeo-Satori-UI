@@ -10,7 +10,7 @@
   flex-wrap: wrap;
 }
 
-.nxs-ugp__title {
+.nxs-ugp__title.nxs-ugp__title {
   flex: 1;
   margin: 0;
   font: var(--mat-sys-headline-small);
@@ -25,7 +25,7 @@
   width: 100%;
 }
 
-.nxs-ugp__section-title {
+.nxs-ugp__section-title.nxs-ugp__section-title {
   margin: 1.5rem 0 0.5rem;
   font: var(--mat-sys-title-medium);
 }

@@ -243,6 +243,33 @@ describe('NxsAdminGroupDetailsPageComponent', () => {
     expect(userService['updateGroup']).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps Edit, Delete and Remove permission blocked until a pending member removal completes', async () => {
+    const pending = new Subject<unknown>();
+    userService['updateGroup'].mockReturnValueOnce(pending);
+    const page = fixture.componentInstance as unknown as {
+      removeMember(id: string): void;
+      edit(): void;
+      deleteGroup(): void;
+      removePermission(row: unknown): void;
+    };
+    page.removeMember('jdoe');
+    dialogResults.push(
+      { mode: 'edit', groupname: 'editors', grouplabel: 'Editors', memberUsers: [] },
+      true,
+    );
+    page.edit();
+    page.deleteGroup();
+    page.removePermission(PERMISSION);
+    expect(userService['updateGroup']).toHaveBeenCalledTimes(1);
+    expect(userService['deleteGroup']).not.toHaveBeenCalled();
+    expect(documents['removePermissionById']).not.toHaveBeenCalled();
+    pending.next({});
+    pending.complete();
+    await render();
+    page.removePermission(PERMISSION);
+    expect(documents['removePermissionById']).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts the next change once the first has failed', async () => {
     userService['updateGroup'].mockReturnValueOnce(throwError(() => new Error('no')));
     (fixture.componentInstance as unknown as { removeMember(id: string): void }).removeMember(
