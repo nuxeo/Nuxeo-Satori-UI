@@ -140,6 +140,74 @@ describe('resolveBrandingLogoUrl — the check on the URL the browser loads', ()
     expect(resolveBrandingLogoUrl('http://cdn.example/acme.svg', configUrl)).toBeNull();
   });
 
+  /**
+   * NXSAT-724. The rule above is stated in terms of the host, but it compared the host as the URL
+   * parser left it. The parser canonicalises case and every IPv4 form (`127.1` and `0x7f.0.0.1`
+   * both become `127.0.0.1`), so those were never gaps — but it **keeps a trailing dot**, which is
+   * the FQDN form of the very same host and so shares its cookie jar.
+   */
+  it.each([
+    ['a trailing dot on the configuration host', 'https://app.example./nuxeo/api/v1/me'],
+    ['a trailing dot with an explicit port', 'https://app.example.:8443/nuxeo/api/v1/me'],
+    ['a trailing dot on the path of the configuration directory', 'https://app.example./x.svg'],
+  ])('refuses %s', (_label, src) => {
+    expect(resolveBrandingLogoUrl(src, configUrl)).toBeNull();
+  });
+
+  it('refuses a trailing dot on another configured Nuxeo origin', () => {
+    expect(
+      resolveBrandingLogoUrl('https://api.example./static/acme.svg', configUrl, [
+        'https://api.example',
+      ]),
+    ).toBeNull();
+  });
+
+  /**
+   * The documented side effect of normalising the host but matching the same-origin exception on
+   * the origin as written: a trailing dot takes a path that really is inside the configuration
+   * directory out of the exception, and the host rule then refuses it. Pinned here because the
+   * extensibility contract states it, and a stated guarantee with no test is not a guarantee.
+   */
+  it('refuses the configuration directory itself when the host carries a trailing dot', () => {
+    expect(
+      resolveBrandingLogoUrl('https://app.example./nuxeo/agentic-ui-config/acme.svg', configUrl),
+    ).toBeNull();
+    // Written the way the application is served, the same path is accepted.
+    expect(
+      resolveBrandingLogoUrl('https://app.example/nuxeo/agentic-ui-config/acme.svg', configUrl),
+    ).toBe('https://app.example/nuxeo/agentic-ui-config/acme.svg');
+  });
+
+  /**
+   * NXSAT-724 cases B and C as reported, against a dev deployment on loopback. `localhost`,
+   * `127.0.0.0/8` and `[::1]` all name this machine, so a logo at any of them reaches the same
+   * server the configuration came from.
+   */
+  it.each([
+    [
+      'the host written exactly (the control, already refused)',
+      'https://localhost:4200/nuxeo/icons/x.png',
+    ],
+    ['a trailing dot', 'https://localhost.:4200/nuxeo/icons/x.png'],
+    ['the IPv4 loopback address', 'https://127.0.0.1:4200/nuxeo/icons/x.png'],
+    ['a short IPv4 loopback form', 'https://127.1:4200/nuxeo/icons/x.png'],
+    ['another address in 127.0.0.0/8', 'https://127.0.0.2:4200/nuxeo/icons/x.png'],
+    ['the IPv6 loopback address', 'https://[::1]:4200/nuxeo/icons/x.png'],
+  ])('refuses a loopback Nuxeo host written as %s', (_label, src) => {
+    expect(
+      resolveBrandingLogoUrl(src, 'http://localhost:4200/agentic-ui-config/bootstrap.json'),
+    ).toBeNull();
+  });
+
+  it('still allows a third-party https logo when the deployment is on loopback', () => {
+    expect(
+      resolveBrandingLogoUrl(
+        'https://cdn.example/acme.svg',
+        'http://localhost:4200/agentic-ui-config/bootstrap.json',
+      ),
+    ).toBe('https://cdn.example/acme.svg');
+  });
+
   // Defence in depth: these are also refused when the configuration is read, but the resolved
   // check must hold on its own.
   it.each([

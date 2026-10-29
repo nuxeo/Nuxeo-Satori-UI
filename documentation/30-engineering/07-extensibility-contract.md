@@ -99,6 +99,25 @@ key for the favicon.
   or fragment with no path (it would load `bootstrap.json` itself), `http:`, `javascript:`, and a
   `data:` URI that is not an image or has no payload (a payload that starts with `#` is a
   fragment, so it counts as none).
+- **"The same host" means the same host however it is spelled** (NXSAT-724). The URL parser
+  lowercases names and canonicalises every IPv4 form — `127.1` and `0x7f.0.0.1` both arrive as
+  `127.0.0.1` — so neither case nor IPv4 notation was ever a way past the rule above. Two things
+  it does not do, and the check now does: a **trailing dot** is stripped, because `example.com.`
+  is the fully-qualified form of `example.com` and shares its cookie jar; and `localhost`,
+  anything in `127.0.0.0/8` and `[::1]` are treated as one host, because on a single-host
+  deployment each of them reaches the Nuxeo the configuration itself came from. A side effect
+  worth knowing: a logo inside the configuration directory is refused if its host carries a
+  trailing dot, since the same-origin exception is matched on the origin as written — write the
+  host the way the application is served, or use a relative path. What the check still cannot do
+  is resolve a name to an address, so a Nuxeo named `nuxeo.internal` and addressed as `10.0.0.5`
+  compares unequal; that is not a session risk, because cookies are scoped by the host as
+  written and the two spellings do not share a jar.
+- **Every refusal is reported** (NXSAT-724). A refused `src` used to keep the packaged mark and
+  say nothing, so a typo looked exactly like configuring no logo at all. Each contributed value
+  the checks refuse is now written once per load to the console as `[agentic-ui-config] …` and
+  recorded in `diagnostics().messages`, naming the value, the package that contributed it and the
+  reason. The reason text comes from the same function that decides the verdict, so the two
+  cannot drift apart.
 - **A logo that is accepted and then does not render keeps the Satori marks too** (NXSAT-721).
   Every check above runs before the image is requested, so none of them can know whether the file
   exists, whether the bytes decode, or whether a remote host sent the CORS header. The two `<img>`

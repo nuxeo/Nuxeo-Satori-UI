@@ -518,6 +518,94 @@ describe('AppConfigService', () => {
     });
   });
 
+  /**
+   * NXSAT-724. A refused `logo.src` kept the packaged mark, which is correct, and said nothing at
+   * all — so a typo was indistinguishable from configuring no logo. Each case here is one the
+   * ticket reports.
+   */
+  describe('a refused branding.logo is reported', () => {
+    async function loadWithSrc(src: string, component = 'com.acme.branding') {
+      await load(
+        envelope('bootstrap', [
+          { name: 'acme', component, content: { branding: { logo: { src, alt: 'Acme' } } } },
+        ]),
+      );
+    }
+
+    /** The messages this load recorded that are about `branding.logo`. */
+    const logoMessages = () =>
+      service.diagnostics().messages.filter((message) => message.includes('branding.logo'));
+
+    it.each([
+      ['a parent-directory segment', '../x.svg', 'parent-directory segment'],
+      ['a javascript: URL', 'javascript:alert(1)', 'must use https:'],
+      ['an http: URL', 'http://example.com/l.svg', 'must use https:'],
+      ['an absolute path', '/nuxeo/api/v1/me', 'absolute path is not allowed'],
+      ['a backslash', 'a\\b.svg', 'backslash or a control character'],
+      ['a query with no path', '?v=2', 'no path'],
+      ['a data: URI that is not an image', 'data:text/html,<b>x', 'not an image'],
+    ])('reports %s, naming the value and the reason', async (_label, src, expected) => {
+      await loadWithSrc(src);
+
+      const messages = logoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain(src);
+      expect(messages[0]).toContain('com.acme.branding');
+      expect(messages[0]).toContain(expected);
+      expect(warn).toHaveBeenCalledWith(`[agentic-ui-config] ${messages[0]}`);
+      expect(service.brandingLogo()).toBeNull();
+    });
+
+    it('reports a logo on a Nuxeo host, including the trailing-dot and loopback spellings', async () => {
+      // BOOTSTRAP_URL is served from this document's origin, so the configuration host is the
+      // one the test page runs on — the same situation as the dev server in the ticket.
+      const host = new URL(document.baseURI).hostname;
+      await loadWithSrc(`https://${host}./nuxeo/icons/x.png`);
+
+      const messages = logoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('serves Nuxeo');
+      expect(service.brandingLogo()).toBeNull();
+    });
+
+    it('says nothing when the logo is accepted', async () => {
+      await loadWithSrc('assets/acme-logo.svg');
+
+      expect(logoMessages()).toEqual([]);
+      expect(service.brandingLogo()).not.toBeNull();
+    });
+
+    it('names each contributing package when more than one logo is refused', async () => {
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'one',
+            component: 'com.one',
+            content: { branding: { logo: { src: '../a.svg', alt: 'A' } } },
+          },
+          {
+            name: 'two',
+            component: 'com.two',
+            content: { branding: { logo: { src: 'http://two.example/b.svg', alt: 'B' } } },
+          },
+        ]),
+      );
+
+      const messages = logoMessages();
+      expect(messages).toHaveLength(2);
+      expect(messages[0]).toContain('com.one');
+      expect(messages[1]).toContain('com.two');
+    });
+
+    it('reports once per load, not once per read of the logo', async () => {
+      await loadWithSrc('../x.svg');
+      service.brandingLogo();
+      service.brandingLogo();
+
+      expect(logoMessages()).toHaveLength(1);
+    });
+  });
+
   describe('featureToggle', () => {
     it('returns the caller fallback when no package has configured the toggle', () => {
       expect(service.featureToggle('ai', true)).toBe(true);

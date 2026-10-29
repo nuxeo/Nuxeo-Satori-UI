@@ -7,6 +7,7 @@ import {
   AppBootstrapConfig,
   AppThemeConfig,
   DEFAULT_APP_BOOTSTRAP_CONFIG,
+  describeBrandingLogoRefusal,
   mergeBootstrapConfig,
   nuxeoOriginsOf,
   resolveBrandingLogoUrl,
@@ -14,6 +15,7 @@ import {
 } from './bootstrap-config';
 import { APP_BOOTSTRAP_CONFIG_URL, APP_MANIFEST_CONFIG_URL } from './app-config.tokens';
 import {
+  AppConfigFragment,
   AppConfigFragmentInfo,
   AppConfigLayer,
   AppConfigResponse,
@@ -193,6 +195,40 @@ export class AppConfigService {
         `[agentic-ui-config] server ${level} ${code}${component ? ` (${component})` : ''}: ${message}`,
       );
     }
+    this.noteRefusedLogos(bootstrapFragments, bootstrapConfig);
+  }
+
+  /**
+   * Report every contributed `branding.logo.src` the checks refuse, naming the value, the package
+   * that contributed it and the reason.
+   *
+   * Read from the fragments rather than from the merged configuration, because a refused `src` is
+   * dropped during the merge: by the time the configuration is assembled the bad value is gone and
+   * only the packaged mark remains. That is the right behaviour and it was also the whole problem —
+   * the refusal was invisible, so a typo looked identical to no logo at all (NXSAT-724).
+   *
+   * Runs once per load, not inside the `brandingLogo` computed, which would re-log on every
+   * recomputation.
+   */
+  private noteRefusedLogos(
+    fragments: readonly AppConfigFragment[],
+    config: AppBootstrapConfig,
+  ): void {
+    const baseUri = this.document.baseURI;
+    const configUrl = new URL(this.bootstrapUrl, baseUri).href;
+    const nuxeoOrigins = nuxeoOriginsOf(config, baseUri);
+
+    for (const fragment of fragments) {
+      const src = configuredLogoSrc(fragment.content);
+      if (!src) continue;
+
+      const reason = describeBrandingLogoRefusal(src, configUrl, nuxeoOrigins);
+      if (reason) {
+        this.note(
+          `branding.logo "${src}" from ${fragment.component} refused, keeping the Satori marks — ${reason}`,
+        );
+      }
+    }
   }
 
   /** The active theme definition for a stored or configured theme id. */
@@ -290,6 +326,21 @@ function describe(error: unknown): string {
   const ok = typeof status === 'number' && status >= 200 && status < 300;
   if (typeof status === 'number' && status !== 0 && !ok) return `HTTP ${status}`;
   return typeof message === 'string' ? message : 'request failed';
+}
+
+/**
+ * The `branding.logo.src` a fragment declares, trimmed, or `''` when it declares none.
+ *
+ * Reads the raw contribution rather than the parsed configuration, so a value the merge is about
+ * to discard is still visible to report on.
+ */
+function configuredLogoSrc(content: Readonly<Record<string, unknown>>): string {
+  const branding = content['branding'];
+  if (typeof branding !== 'object' || branding === null) return '';
+  const logo = (branding as Record<string, unknown>)['logo'];
+  if (typeof logo !== 'object' || logo === null) return '';
+  const src = (logo as Record<string, unknown>)['src'];
+  return typeof src === 'string' ? src.trim() : '';
 }
 
 /**

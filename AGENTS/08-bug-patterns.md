@@ -807,6 +807,53 @@ simulated — `apps/nuxeo-ui/src/app/shell/app-shell-brand-logo.spec.ts`.
 
 ---
 
+## 24. A security rule stated about hosts, compared as strings — and a refusal that says nothing
+
+```typescript
+// BAD ❌ — the rule is "any host that serves Nuxeo is refused", but this compares the
+// hostname the URL parser happened to produce. The parser normalises case and every IPv4
+// form, which hides how much it does NOT normalise: `localhost.` is the FQDN form of
+// `localhost`, shares its cookie jar, and compares unequal. Returning a bare `null` then
+// loses the reason, so nobody can tell a refusal from "nothing was configured".
+const nuxeoHosts = origins.map((o) => parseUrl(o)?.hostname);
+if (nuxeoHosts.includes(url.hostname)) return null;
+
+// GOOD ✅ — compare on a canonical form, and make the reason the return value.
+if (nuxeoHosts.some((host) => isSameHost(host, url.hostname))) {
+  return { refused: 'it names a host that serves Nuxeo, where an <img> would carry the cookie' };
+}
+```
+
+Two defects that travel together (NXSAT-724), both worth checking for separately.
+
+**A rule written about a concept, enforced on a representation.** `url.hostname` is already
+canonical for case and for IPv4 (`127.1` and `0x7f.0.0.1` both arrive as `127.0.0.1`) — which is
+exactly what makes this one hard to see: the partial normalisation reads as full normalisation.
+It keeps a trailing dot, and it cannot know `localhost`, `127.0.0.0/8` and `[::1]` are one
+machine. Before trusting a parser's output as canonical, **print the forms you care about and
+look**, rather than reasoning about what it ought to do:
+
+```bash
+node -e "for (const h of ['localhost','localhost.','127.1','[::1]']) console.log(h, new URL('https://'+h).hostname)"
+```
+
+Note where it must stop: resolving a name to an address needs DNS, which a browser does not
+expose. State the residual gap rather than implying the rule is total.
+
+**A refusal with no reason is indistinguishable from no configuration.** A function returning
+`null` for "refused" throws the reason away at the moment it is known. Return the reason and
+derive the boolean from it — `isAccepted = describeRefusal(x) === null` — so the verdict and the
+explanation are one implementation and cannot disagree. Two functions that must agree, with
+nothing comparing them, is the `proxy-check` class the pre-PR review keeps finding. Then log it
+from the service, **once per load**, not from a `computed` that re-runs.
+
+Regression test pattern: a table of every refused form asserting the message names the value, the
+contributing package and the reason, plus one accepted value asserting silence — that negative
+control is what proves the reporting is not unconditional
+(`libs/shared/app-config/src/lib/app-config.service.spec.ts`).
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
@@ -826,3 +873,5 @@ Fix proactively to avoid a review cycle:
 - "Absolute path to a bundled asset" → drop the leading `/` so it resolves against `<base href>`; the packaged app lives under `/nuxeo/agentic-ui/`
 - "Low contrast text" → if the colour is `var(--mat-sys-outline)`, that is a border token graded at 3:1; use `var(--mat-sys-on-surface-variant)` for text. If the use really is non-text (an icon, a divider), say so in a comment with the measured ratio
 - "No fallback if the image fails to load" → bind `(error)` and clear the state the template branches on, not a flag local to one component; and measure `naturalWidth` after `load` too, because an image that draws nothing fires no `error`
+- "Host comparison may be bypassed by equivalent forms" → canonicalise before comparing (strip a trailing dot, alias the loopback spellings); the URL parser normalises case and IPv4 but not those
+- "Silent rejection" → return the reason and derive the boolean from it, then log it once from the service; a bare `null` makes a refusal look like nothing was configured
