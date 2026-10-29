@@ -45,14 +45,26 @@ test('all platform jobs use the repository-pinned runtime accepted by gate zero'
   }
 });
 
-test('a clean Windows runner explicitly builds the bundle before the full gate', () => {
+test('a clean Windows runner explicitly builds the bundle before the gate', () => {
   const steps = workflow.jobs['windows-gate'].steps;
   const build = steps.findIndex((step) => step.run === 'npx nx build nuxeo-ui');
+  // Matched on the flags that carry meaning rather than the whole command string, which coupled
+  // this control to the exact wording and broke it when the gate selection changed.
   const gate = steps.findIndex(
-    (step) => step.run === 'npm run beta:gate -- --phase windows-ci --require-complete',
+    (step) =>
+      step.run?.includes('beta:gate') &&
+      step.run.includes('--phase windows-ci') &&
+      step.run.includes('--require-complete'),
   );
-  assert.ok(build >= 0);
-  assert.ok(gate > build);
+  assert.ok(build >= 0, 'no explicit nuxeo-ui build step');
+  assert.ok(gate > build, 'the gate must run after the build it depends on');
+});
+
+test('the Windows gate runs the platform-sensitive selection, not all 34 gates', () => {
+  const gate = workflow.jobs['windows-gate'].steps.find((step) => step.run?.includes('beta:gate'));
+  // Running everything twice is what this job used to do: 21 of its 35 minutes went on two
+  // selftests whose subject is platform-independent. If the flag is dropped, that comes back.
+  assert.match(gate.run, /--platform-sensitive/);
 });
 
 function harness({ runs = () => [success], analyses = () => [analysis], event = context } = {}) {

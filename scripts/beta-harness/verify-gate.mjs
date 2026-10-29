@@ -21,6 +21,8 @@ import { spawnToolSync } from './package-command.mjs';
  *   --base <ref>     git base for affected calculation (default origin/main)
  *   --tail <n>       lines of failing output to show (default 40)
  *   --require-complete  exit 1 unless the verdict is `pass`: every gate ran and passed
+ *   --platform-sensitive  only the gates whose verdict can differ by operating system,
+ *                        as each gate declares for itself. Ignored when --gates is given.
  *
  * Examples:
  *   node scripts/beta-harness/verify-gate.mjs --gates guardrails,lint
@@ -60,6 +62,7 @@ const ALL_GATES = [
   // working code. That happened. This gate makes it impossible to happen silently.
   {
     id: 'node',
+    platformSensitive: true,
     label: 'Node runtime preflight',
     cmd: 'node',
     argv: ['scripts/beta-harness/node-version.mjs'],
@@ -72,6 +75,7 @@ const ALL_GATES = [
   // every local gate green.
   {
     id: 'lockfile',
+    platformSensitive: true,
     label: 'Lockfile integrity',
     cmd: 'node',
     argv: ['scripts/beta-harness/lockfile-integrity.mjs'],
@@ -83,6 +87,7 @@ const ALL_GATES = [
   // were caught by a human reading it, which is the part this closes.
   {
     id: 'lockfile-selftest',
+    platformSensitive: true,
     label: 'Lockfile integrity controls',
     cmd: 'node',
     argv: ['scripts/beta-harness/lockfile-integrity.selftest.mjs'],
@@ -94,6 +99,7 @@ const ALL_GATES = [
   // so the verdict line, which names the mode, is in the log.
   {
     id: 'dependency-tree',
+    platformSensitive: true,
     label: 'Dependency tree (ADF removal)',
     cmd: 'node',
     argv: ['scripts/beta-harness/dependency-tree.mjs'],
@@ -103,6 +109,7 @@ const ALL_GATES = [
   // regress into a scanner that finds nothing and stay green until the day it became blocking.
   {
     id: 'dependency-tree-selftest',
+    platformSensitive: true,
     label: 'Dependency tree controls',
     cmd: 'node',
     argv: ['scripts/beta-harness/dependency-tree.selftest.mjs'],
@@ -121,6 +128,8 @@ const ALL_GATES = [
   // than after eight minutes of builds.
   {
     id: 'supply-chain',
+    // npm audit output plus a dated allowlist. No filesystem walk of our source, nothing to differ.
+    platformSensitive: false,
     label: 'Supply chain',
     cmd: 'node',
     argv: ['scripts/beta-harness/supply-chain.mjs'],
@@ -137,6 +146,8 @@ const ALL_GATES = [
   // `pass-incomplete` rather than `pass`.
   {
     id: 'code-scanning',
+    // Reads CodeQL results from the GitHub API. The analysis does not run here at all.
+    platformSensitive: false,
     label: 'Code scanning (CodeQL)',
     cmd: 'node',
     argv: ['scripts/beta-harness/code-scanning.mjs'],
@@ -146,6 +157,7 @@ const ALL_GATES = [
   },
   {
     id: 'guardrails',
+    platformSensitive: true,
     label: 'Review guardrails',
     cmd: 'node',
     argv: ['scripts/review-guardrails.mjs', '--base', base],
@@ -163,6 +175,10 @@ const ALL_GATES = [
   // per control under `os.tmpdir()`, so it is safe to run concurrently with anything.
   {
     id: 'guardrails-selftest',
+    // 874s on Windows — 60% of that job on its own, for 709 controls over i18n catalogues and
+    // static analysis whose subject is platform-independent. The fixture plumbing it shares is
+    // still exercised on Windows by `dependency-tree-selftest`, symlinks included, for 38s.
+    platformSensitive: false,
     label: 'i18n guardrail negative controls',
     cmd: 'node',
     argv: ['scripts/review-guardrails.selftest.mjs'],
@@ -171,6 +187,7 @@ const ALL_GATES = [
   },
   {
     id: 'crowdin-selftest',
+    platformSensitive: true,
     label: 'Crowdin script controls',
     // Both suites behind one gate, via the npm script, so adding the status report did not add a
     // gate. The count in the verdict line is quoted in docs and in CLAUDE.md; a second entry here
@@ -188,6 +205,7 @@ const ALL_GATES = [
   // Sits next to guardrails because both are static code checks with no compilation required.
   {
     id: 'sanitizer-audit',
+    platformSensitive: true,
     label: 'Sanitizer bypass audit',
     cmd: 'node',
     argv: ['scripts/beta-harness/sanitizer-audit.mjs'],
@@ -204,6 +222,9 @@ const ALL_GATES = [
   // must not overlap a build, and both are cheap and static.
   {
     id: 'sanitizer-selftest',
+    // 377s on Windows. Same reasoning: the sanitizer rules it verifies are string analysis, and the
+    // fixture machinery is covered more cheaply elsewhere on that platform.
+    platformSensitive: false,
     label: 'Sanitizer audit negative controls',
     cmd: 'node',
     argv: ['scripts/beta-harness/sanitizer-audit.selftest.mjs'],
@@ -218,6 +239,8 @@ const ALL_GATES = [
   // appeared to guard.
   {
     id: 'assertions',
+    // Audits evidence JSON that earlier gates wrote.
+    platformSensitive: false,
     label: 'Evidence assertion audit',
     cmd: 'node',
     argv: ['scripts/beta-harness/assertion-audit.mjs'],
@@ -230,6 +253,7 @@ const ALL_GATES = [
   // notice, because every defect was in a steps file nothing audited.
   {
     id: 'parity-surface',
+    platformSensitive: true,
     label: 'Parity surface adapter audit',
     cmd: 'node',
     argv: ['scripts/beta-harness/parity-surface-audit.mjs'],
@@ -238,6 +262,7 @@ const ALL_GATES = [
   // sanitizer selftest this one cannot leave the tree dirty.
   {
     id: 'parity-surface-selftest',
+    platformSensitive: true,
     label: 'Parity surface audit controls',
     cmd: 'node',
     argv: ['scripts/beta-harness/parity-surface-audit.selftest.mjs'],
@@ -262,6 +287,7 @@ const ALL_GATES = [
   // above because both read the same steps file and neither compiles anything.
   {
     id: 'parity-selftest',
+    platformSensitive: true,
     label: 'Parity step 11 save-verdict and option-match controls',
     cmd: 'node',
     argv: ['scripts/beta-harness/steps/nxsat-308-parity.selftest.mjs'],
@@ -271,18 +297,21 @@ const ALL_GATES = [
   },
   {
     id: 'lint',
+    platformSensitive: true,
     label: 'Affected lint',
     tool: 'npx',
     argv: ['nx', 'affected', '-t', 'lint', `--base=${base}`],
   },
   {
     id: 'test',
+    platformSensitive: true,
     label: 'Affected tests',
     tool: 'npx',
     argv: ['nx', 'affected', '-t', 'test', `--base=${base}`],
   },
   {
     id: 'build',
+    platformSensitive: true,
     label: 'Affected build',
     tool: 'npx',
     argv: ['nx', 'affected', '-t', 'build', `--base=${base}`],
@@ -294,6 +323,7 @@ const ALL_GATES = [
   // is checked directly rather than only wherever `nuxeo-ui` happens to use it.
   {
     id: 'typecheck',
+    platformSensitive: true,
     label: 'Affected typecheck',
     tool: 'npx',
     argv: ['nx', 'affected', '-t', 'typecheck', `--base=${base}`],
@@ -305,6 +335,7 @@ const ALL_GATES = [
   // — one of them a production signature stricter than the payload it parsed.
   {
     id: 'spec-types',
+    platformSensitive: true,
     label: 'Spec typecheck',
     cmd: 'node',
     argv: ['scripts/beta-harness/spec-typecheck.mjs'],
@@ -315,6 +346,7 @@ const ALL_GATES = [
   // ng-mocks' implementation and two `eval()` calls into a customer-facing chunk.
   {
     id: 'bundle',
+    platformSensitive: true,
     label: 'Bundle contents',
     cmd: 'node',
     argv: ['scripts/beta-harness/no-test-libs-in-bundle.mjs'],
@@ -328,6 +360,7 @@ const ALL_GATES = [
   // caller is updated in the same commit; the break lands on the customer.
   {
     id: 'api-surface',
+    platformSensitive: true,
     label: 'API surface',
     cmd: 'node',
     argv: ['scripts/beta-harness/api-surface.mjs'],
@@ -339,6 +372,7 @@ const ALL_GATES = [
   // every gate here was green and the phase claimed "an upgrade is an npm version bump".
   {
     id: 'publishability',
+    platformSensitive: true,
     label: 'Package publishability',
     cmd: 'node',
     argv: ['scripts/beta-harness/publishability.mjs'],
@@ -352,6 +386,7 @@ const ALL_GATES = [
   // risk `docs/publish-readiness.md` §5 recorded as uncovered. Needs registry.npmjs.org.
   {
     id: 'peer-installability',
+    platformSensitive: true,
     label: 'Installs without GitHub Packages',
     cmd: 'node',
     argv: ['scripts/beta-harness/peer-installability.mjs'],
@@ -364,6 +399,7 @@ const ALL_GATES = [
   // shipping 27 wrongly non-nullable types while every other gate was green.
   {
     id: 'fork-simulation',
+    platformSensitive: true,
     label: 'Fork simulation',
     cmd: 'node',
     argv: ['scripts/beta-harness/fork-simulation.mjs'],
@@ -375,6 +411,7 @@ const ALL_GATES = [
   // green and this is the only check that goes red.
   {
     id: 'upgrade-rehearsal',
+    platformSensitive: true,
     label: 'Upgrade rehearsal',
     cmd: 'node',
     argv: ['scripts/beta-harness/upgrade-rehearsal.mjs'],
@@ -388,6 +425,8 @@ const ALL_GATES = [
   // and it used an ID that exists only in spec files as its security example.
   {
     id: 'reference-drift',
+    // Compares registered IDs in docs against code as strings.
+    platformSensitive: false,
     label: 'Extension reference drift',
     cmd: 'node',
     argv: ['scripts/beta-harness/extension-reference-drift.mjs'],
@@ -398,6 +437,8 @@ const ALL_GATES = [
   // story or image disagrees with the code.
   {
     id: 'nxs-comparison',
+    // Checks a Markdown page covers every component. Text comparison.
+    platformSensitive: false,
     label: 'Satori comparison page covers every nxs- component',
     cmd: 'node',
     argv: ['scripts/beta-harness/satori-comparison-doc.mjs'],
@@ -405,6 +446,8 @@ const ALL_GATES = [
   // Its negative controls, in memory and under `os.tmpdir()`, so safe to run beside anything.
   {
     id: 'nxs-comparison-selftest',
+    // Controls for that text comparison.
+    platformSensitive: false,
     label: 'Satori comparison page controls',
     cmd: 'node',
     argv: ['scripts/beta-harness/satori-comparison-doc.selftest.mjs'],
@@ -415,6 +458,7 @@ const ALL_GATES = [
   // gate itself needs a Storybook build, so it runs in CI and in storybook-pages.yml, not here.
   {
     id: 'storybook-publication-selftest',
+    platformSensitive: true,
     label: 'Storybook publication gate controls',
     cmd: 'node',
     argv: ['scripts/storybook-publication-gate.selftest.mjs'],
@@ -427,6 +471,7 @@ const ALL_GATES = [
   // that deploys successfully and is empty.
   {
     id: 'storybook-assemble-selftest',
+    platformSensitive: true,
     label: 'Storybook site assembly controls',
     cmd: 'node',
     argv: ['scripts/storybook-assemble-site.selftest.mjs'],
@@ -439,6 +484,7 @@ const ALL_GATES = [
   // be using the other tool.
   {
     id: 'agent-mirror',
+    platformSensitive: true,
     label: 'Agent config mirrors match .cursor',
     cmd: 'node',
     argv: ['scripts/mirror-agent-config.mjs', 'check'],
@@ -462,6 +508,7 @@ const ALL_GATES = [
   // is a tool we would discover was broken from a customer's CI log.
   {
     id: 'customer-guardrails',
+    platformSensitive: true,
     label: 'Customer extension guardrails',
     // The npm script, so the gate and CI run the same two things: the guardrail against our
     // reference library, which proves it passes, and its selftest, which proves it can fail.
@@ -471,21 +518,49 @@ const ALL_GATES = [
   },
 ];
 
+/* Every gate must say whether its VERDICT can differ by operating system. Not whether it is
+ * useful — whether running it a second time on another platform can tell you something the first
+ * run could not.
+ *
+ * Checked rather than assumed, because a gate added without the field would otherwise inherit
+ * whatever `--platform-sensitive` does with `undefined`, and that decision would be made by
+ * accident. This is the whole anti-drift mechanism: the answer lives on the gate, and a new gate
+ * cannot run until someone has answered for it. A list of ids kept anywhere else goes stale
+ * against the gates it describes — this repository has paid for that three times. */
+const undeclared = ALL_GATES.filter((g) => typeof g.platformSensitive !== 'boolean').map(
+  (g) => g.id,
+);
+if (undeclared.length > 0) {
+  console.error(
+    `Gate(s) without a \`platformSensitive\` declaration: ${undeclared.join(', ')}.\n` +
+      'Add `platformSensitive: true` when the verdict can differ by operating system — paths, ' +
+      'process spawning, permissions, line endings — or `false` with a one-line reason why it ' +
+      'cannot. Guessing on behalf of a new gate is how a cross-platform run stops meaning ' +
+      'anything.',
+  );
+  process.exit(2);
+}
+
 const requested = args.get('gates');
+const platformOnly = args.has('platform-sensitive');
 const selected =
-  typeof requested === 'string'
-    ? requested
-        .split(',')
-        .map((s) => s.trim())
-        .map((id) => {
-          const g = ALL_GATES.find((x) => x.id === id);
-          if (!g) {
-            console.error(`Unknown gate "${id}". Valid: ${ALL_GATES.map((x) => x.id).join(', ')}`);
-            process.exit(2);
-          }
-          return g;
-        })
-    : ALL_GATES;
+  platformOnly && typeof requested !== 'string'
+    ? ALL_GATES.filter((g) => g.platformSensitive)
+    : typeof requested === 'string'
+      ? requested
+          .split(',')
+          .map((s) => s.trim())
+          .map((id) => {
+            const g = ALL_GATES.find((x) => x.id === id);
+            if (!g) {
+              console.error(
+                `Unknown gate "${id}". Valid: ${ALL_GATES.map((x) => x.id).join(', ')}`,
+              );
+              process.exit(2);
+            }
+            return g;
+          })
+      : ALL_GATES;
 
 const notRequested = ALL_GATES.filter((g) => !selected.includes(g)).map((g) => g.id);
 

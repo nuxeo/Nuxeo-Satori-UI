@@ -90,8 +90,18 @@ jobs:
               await new Promise((resolve) => setTimeout(resolve, 15_000));
             }
             throw new Error(`No completed CodeQL analysis of ${context.ref} at ${context.sha} within 15 minutes`);
-      - name: Full Beta gate on Windows
-        run: npm run beta:gate -- --phase windows-ci --require-complete
+      # The gates whose VERDICT can differ by operating system, not all 34. Each gate declares
+      # that for itself in `verify-gate.mjs` and the harness refuses to run if one has not, so
+      # this selection cannot drift away from the gates it describes.
+      #
+      # Measured on a real run of this job before the split: `guardrails-selftest` took 874s and
+      # `sanitizer-selftest` 377s — 21 of the 35 minutes — for controls over i18n catalogues and
+      # static analysis whose subject is platform-independent. `dependency-tree-selftest` still
+      # exercises the same fixture machinery here, symlinks included, for 38s.
+      #
+      # `--require-complete` still applies: a green run must mean every SELECTED gate ran.
+      - name: Platform-sensitive Beta gates on Windows
+        run: npm run beta:gate -- --phase windows-ci --platform-sensitive --require-complete
       - name: Preserve gate verdict and diagnostics
         if: always()
         uses: actions/upload-artifact@v4

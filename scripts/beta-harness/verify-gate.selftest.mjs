@@ -11,7 +11,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -237,6 +237,77 @@ control('only a gate declared able to report it is not-run on the not-run exit c
   expect(classify({}, NOT_RUN_EXIT_CODE) === 'fail', 'undeclared gate, not-run code must fail');
   expect(classify({ mayNotRun: true }, 1) === 'fail', 'exit 1');
   expect(classify({ mayNotRun: true }, null) === 'fail', 'killed by a signal');
+});
+
+/* `platformSensitive` decides what a cross-platform run covers, so the declaration itself needs
+ * controls. Read out of the source rather than imported, because `verify-gate.mjs` is a script
+ * that runs gates on import — the same reason the controls above drive it as a subprocess. */
+const gateSource = readFileSync(join(here, 'verify-gate.mjs'), 'utf8');
+const gateBlock = gateSource.slice(
+  gateSource.indexOf('const ALL_GATES = ['),
+  gateSource.indexOf('\n];', gateSource.indexOf('const ALL_GATES = [')),
+);
+const declaredIds = [...gateBlock.matchAll(/\n\s+id: '([a-z0-9-]+)',/g)].map((m) => m[1]);
+const declarations = [...gateBlock.matchAll(/\n\s+platformSensitive: (true|false),/g)].map(
+  (m) => m[1],
+);
+
+control('every gate declares platformSensitive', () => {
+  expect(
+    declaredIds.length === declarations.length,
+    `${declaredIds.length} gates but ${declarations.length} declarations — a gate without one ` +
+      'would be included or excluded from the Windows run by accident',
+  );
+  expect(declaredIds.length > 0, 'found no gates, so this control asserted nothing');
+});
+
+control('a gate missing the declaration is refused, not defaulted', () => {
+  /* The anti-drift property, exercised rather than asserted: strip one declaration and the
+   * harness must refuse to run at all. Without this, a new gate silently inherits a default and
+   * the cross-platform run quietly stops covering it. */
+  const mutated = gateSource.replace(/\n(\s+)platformSensitive: (?:true|false),/, '');
+  /* Beside the original, not in a temp directory: this script imports `./gate-summary.mjs` and
+   * `../collect-evidence/evidence-path.mjs`, so a copy anywhere else dies on module resolution
+   * with exit 1 and the control would pass for the wrong reason. It did, on the first run. */
+  const copy = join(here, `verify-gate.platform-control-${process.pid}.mjs`);
+  try {
+    writeFileSync(copy, mutated);
+    const run = spawnSync(process.execPath, [copy, '--gates', 'node', '--phase', 'selftest'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      env,
+    });
+    expect(run.status === 2, `expected exit 2, got ${run.status}`);
+    expect(
+      /without a `platformSensitive` declaration/.test(`${run.stdout}${run.stderr}`),
+      `message did not name the problem: ${`${run.stdout}${run.stderr}`.trim().slice(0, 200)}`,
+    );
+  } finally {
+    rmSync(copy, { force: true });
+  }
+});
+
+control('--platform-sensitive selects exactly the gates declared true', () => {
+  const expected = declaredIds.filter((_, i) => declarations[i] === 'true');
+  const run = spawnSync(
+    process.execPath,
+    [
+      join(here, 'verify-gate.mjs'),
+      '--platform-sensitive',
+      '--gates',
+      'node',
+      '--phase',
+      'selftest',
+    ],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  // An explicit `--gates` must still win, so the flag cannot silently widen a targeted run.
+  expect(/gates {2}node {2}\(1 of/.test(run.stdout), 'explicit --gates did not take precedence');
+  expect(
+    expected.length > 0 && expected.length < declaredIds.length,
+    `the split is ${expected.length} of ${declaredIds.length}: a run covering all or none of ` +
+      'them means the flag is not doing anything',
+  );
 });
 
 rmSync(evidence, { recursive: true, force: true });
