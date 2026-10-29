@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * Export the Beta infographic decks as PowerPoint files.
  *
@@ -33,12 +34,13 @@
  *   node tools/video/export-pptx.mjs 01-provenance    # one deck (no combined file)
  */
 
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { packageCommand, spawnTool } from '../../scripts/beta-harness/package-command.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -93,13 +95,12 @@ async function loadPptxGenJs() {
 
   console.log(`  installing pptxgenjs into ${sidecar}`);
   mkdirSync(sidecar, { recursive: true });
-  await execFileAsync(
+  const tool = packageCommand(
     'npm',
     ['install', '--no-audit', '--no-fund', '--loglevel=error', 'pptxgenjs@4'],
-    {
-      cwd: sidecar,
-    },
+    { cwd: sidecar },
   );
+  await execFileAsync(tool.command, tool.args, { cwd: sidecar });
   try {
     return (await import(entry)).default;
   } catch (error) {
@@ -109,7 +110,7 @@ async function loadPptxGenJs() {
 
 /** Serve a directory statically, and resolve only once it actually answers. */
 async function serve(dir, port) {
-  const child = spawn('npx', ['--yes', 'http-server', dir, '-p', String(port), '-s', '-c-1'], {
+  const child = spawnTool('npx', ['--yes', 'http-server', dir, '-p', String(port), '-s', '-c-1'], {
     cwd: ROOT,
     stdio: 'ignore',
   });

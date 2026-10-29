@@ -33,12 +33,11 @@
  *    parallel with CI. So the newest analysis for a ref can predate `HEAD`, and this gate then
  *    reports on the previous commit's code. The run below prints the analysis timestamp for exactly
  *    that reason — read it, do not assume it covers what you just wrote.
- * 2. **It is therefore NOT in CI.** On a fresh push CodeQL has usually not finished, so CI would
+ * 2. **CI must wait for CodeQL.** On a fresh push CodeQL has usually not finished, so CI would
  *    fail on the previous commit's alerts — including ones the pushed commit fixes. A gate that
  *    goes red for work already done is a gate people learn to ignore. It runs in the phase gate,
- *    which is the sign-off path, and the honest cost is that it is not enforced per-push. Wiring it
- *    in properly means waiting on the CodeQL check to complete first, which is a CI change worth
- *    making deliberately rather than as a side effect of this step.
+ *    which is the sign-off path. The Windows full-gate workflow now waits for a successful CodeQL
+ *    workflow and an analysis of its exact ref and revision before running this gate.
  *
  * ## Why it can be skipped, and why that is not a hole
  *
@@ -136,12 +135,14 @@ const slug = slugRes.ok ? slugRes.data.nameWithOwner : null;
 let ref = null;
 let refKind = null;
 const refArg = argv.includes('--ref') ? argv[argv.indexOf('--ref') + 1] : null;
-if (refArg) {
+const actionsRef = process.env['GITHUB_ACTIONS'] === 'true' ? process.env['GITHUB_REF'] : null;
+if (refArg || actionsRef) {
   // Present so the zero-is-not-clean assertion below can be tested against a ref that has never
   // been analysed. Without it that check is unfalsifiable, which is exactly the property this
   // repository keeps discovering it cannot afford in a gate.
-  ref = refArg;
-  refKind = `--ref ${refArg}`;
+  // Actions checks out a detached merge commit, so `gh pr view` cannot infer its PR.
+  ref = refArg || actionsRef;
+  refKind = refArg ? `--ref ${refArg}` : 'GitHub Actions event ref';
 } else if (slug) {
   const pr = gh(['pr', 'view', '--json', 'number,state']);
   if (pr.ok && pr.data?.number && pr.data.state === 'OPEN') {

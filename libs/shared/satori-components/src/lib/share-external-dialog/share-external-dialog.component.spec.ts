@@ -210,20 +210,20 @@ describe('NxsShareExternalDialogComponent', () => {
   it('flags an invalid email once the user leaves the box, and ties the message to it', async () => {
     await open();
     await type(emailBox(), 'not-an-email');
-    expect(overlay().querySelector('mat-error')).toBeNull();
+    expect(emailBox().closest('mat-form-field')!.querySelector('mat-error')).toBeNull();
     expect(emailBox().getAttribute('aria-invalid')).toBe('false');
 
     emailBox().dispatchEvent(new Event('blur'));
     await settle();
 
-    const error = overlay().querySelector('mat-error') as HTMLElement;
+    const error = emailBox().closest('mat-form-field')!.querySelector('mat-error') as HTMLElement;
     expect(error.textContent?.trim()).toBe('Enter a valid email address.');
     expect(error.closest('[aria-live="polite"]')).not.toBeNull();
     expect(emailBox().getAttribute('aria-invalid')).toBe('true');
     expect((emailBox().getAttribute('aria-describedby') ?? '').split(' ')).toContain(error.id);
 
     await type(emailBox(), 'ext@example.com');
-    expect(overlay().querySelector('mat-error')).toBeNull();
+    expect(emailBox().closest('mat-form-field')!.querySelector('mat-error')).toBeNull();
     expect(emailBox().getAttribute('aria-invalid')).toBe('false');
   });
 

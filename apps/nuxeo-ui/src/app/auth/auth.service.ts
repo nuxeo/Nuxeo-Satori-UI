@@ -119,6 +119,20 @@ export class AuthService {
   private readonly ssoPostLoginPath = inject(NUXEO_SSO_POST_LOGIN_PATH);
   private readonly ssoReturnQueryParam = inject(NUXEO_SSO_RETURN_QUERY_PARAM);
 
+  /**
+   * Set once `/nuxeo/logout` has answered 404, so the probe is not repeated.
+   *
+   * Static because the absence is a property of the Nuxeo being talked to, not of an injector —
+   * and `AuthService` is a root singleton anyway, so this only matters for tests, which reset it
+   * through {@link resetNuxeoLogoutProbe}.
+   */
+  private static nuxeoLogoutEndpointAbsent = false;
+
+  /** Test seam: forget that `/nuxeo/logout` was missing. */
+  static resetNuxeoLogoutProbe(): void {
+    AuthService.nuxeoLogoutEndpointAbsent = false;
+  }
+
   private readonly state = signal<StoredSession | null>(null);
   private hydration$: Observable<void> | null = null;
   /** In-memory token for Instant Share / external permission links (Nuxeo TOKEN_AUTH). */
@@ -160,8 +174,23 @@ export class AuthService {
   /**
    * Clears a stale Nuxeo browser session (JSESSIONID) before password login or hydration.
    * Same-origin `/nuxeo/**` requests always send cookies; an old cookie can override Basic auth.
+   *
+   * **Not every Nuxeo serves this endpoint.** A headless instance with no JSF web module answers
+   * `/nuxeo/logout` with 404 — measured against the local Docker stack, where `/nuxeo/logout`,
+   * `/nuxeo/logout.faces` and `/nuxeo/nxstartup.faces?nxo=logout` all 404. The call is therefore
+   * best-effort, as the `catchError` always implied, and a 404 is remembered so the request is
+   * attempted once per page load instead of on every login and every hydration. Each failed
+   * attempt put a console error in front of whoever was debugging something else.
+   *
+   * Remembering it does not weaken the guard: where the endpoint is absent it never cleared
+   * anything to begin with. What keeps a stale cookie from overriding Basic auth on this path is
+   * that the login probe and `fetchMe()` both run without `withCredentials`, so no cookie is sent;
+   * `establishBasicAuthBrowserSession()` is the one call that deliberately opts in.
    */
   private clearStaleNuxeoCookieSession(): Observable<void> {
+    if (AuthService.nuxeoLogoutEndpointAbsent) {
+      return of(undefined);
+    }
     return this.http
       .get(this.apiUrl('/nuxeo/logout'), {
         withCredentials: true,
@@ -169,7 +198,12 @@ export class AuthService {
       })
       .pipe(
         map(() => undefined),
-        catchError(() => of(undefined)),
+        catchError((error: unknown) => {
+          if (error instanceof HttpErrorResponse && error.status === 404) {
+            AuthService.nuxeoLogoutEndpointAbsent = true;
+          }
+          return of(undefined);
+        }),
       );
   }
 

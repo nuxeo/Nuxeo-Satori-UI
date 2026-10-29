@@ -102,9 +102,15 @@ const GOOD_TEMPLATE = `<button type="button" [attr.aria-label]="'app.nav.toggle'
  * guardrail is then green on a tree that is broken on purpose — which is a control asserting
  * nothing. Staging the file is what makes it a reintroduction rather than a stray.
  */
-function withFixture(files, mutate, run) {
+function withFixture(files, mutate, run, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'guardrail-selftest-'));
   try {
+    /* `initialBranch` exists for one rule: `checkWorkflowRefGates` decides whether a missing
+     * branch is a FACT or merely unobserved by asking whether this clone resolves its own default
+     * branch. A fixture on `main` can prove it, so the rule fails there; a fixture on any other
+     * name cannot, so the rule warns. Without this option the degraded path had nothing exercising
+     * it, and a severity that is never reached is a severity nobody has checked. */
+    const initialBranch = options.initialBranch ?? 'main';
     const git = (args) => {
       const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
       if (result.status !== 0) {
@@ -118,7 +124,7 @@ function withFixture(files, mutate, run) {
       writeFileSync(path, body);
     };
 
-    git(['init', '--quiet', '--initial-branch=main']);
+    git(['init', '--quiet', `--initial-branch=${initialBranch}`]);
     git(['config', 'user.email', 'selftest@example.invalid']);
     git(['config', 'user.name', 'Guardrail Selftest']);
     git(['config', 'commit.gpgsign', 'false']);
@@ -135,6 +141,68 @@ function withFixture(files, mutate, run) {
     }).stdout.trim();
 
     if (mutate) mutate(write, git);
+
+    /* `shallow` runs the guardrail in a depth-1 clone of the fixture instead of the fixture itself.
+     *
+     * One rule needs it: `checkWorkflowRefGates` fails on a missing branch only where the clone can
+     * PROVE it is missing, which means not shallow. Every fixture here is a full repository, so the
+     * `!cloneIsShallow` half of that condition had nothing exercising it — mutation testing showed
+     * removing it changed no control's verdict. `--no-local` is required: a local clone ignores
+     * `--depth` and would quietly produce a full repository, which is the same shape of silent
+     * no-op this whole guardrail is about.
+     *
+     * Only for controls without a `mutate`, since the clone is taken after the baseline commit. */
+    let runDir = dir;
+    if (options.shallow) {
+      runDir = `${dir}-shallow`;
+      /* `--no-single-branch` matters: `--depth 1` implies `--single-branch`, which also narrows
+       * the fetch refspec — and `checkWorkflowRefGates` treats a narrow refspec as missing branch
+       * coverage for its own reasons. A clone that is both shallow AND narrow cannot tell which of
+       * the two made the finding advisory, and mutation testing proved the point: with the plain
+       * `--depth 1` clone, removing the shallow test from the check changed no verdict here. This
+       * fixture is shallow with FULL branch coverage, so it isolates shallowness. */
+      const clone = spawnSync(
+        'git',
+        ['clone', '--quiet', '--depth', '1', '--no-single-branch', '--no-local', `file://${dir}`, runDir],
+        { encoding: 'utf8' },
+      );
+      if (clone.status !== 0) throw new Error(`shallow clone failed: ${clone.stderr}`);
+      const confirm = spawnSync('git', ['rev-parse', '--is-shallow-repository'], {
+        cwd: runDir,
+        encoding: 'utf8',
+      }).stdout.trim();
+      if (confirm !== 'true') throw new Error(`fixture clone is not shallow (got ${confirm})`);
+      const refspec = spawnSync('git', ['config', '--get', 'remote.origin.fetch'], {
+        cwd: runDir,
+        encoding: 'utf8',
+      }).stdout.trim();
+      if (!refspec.includes('refs/heads/*')) {
+        throw new Error(`shallow fixture must still track every branch (refspec ${refspec})`);
+      }
+    } else if (options.singleBranch) {
+      /* A clone that is complete in HISTORY and incomplete in BRANCHES. `options.singleBranch` is
+       * the list of branches to create in the origin first, none of which the clone will track —
+       * which is the shape that made `checkWorkflowRefGates` call a live branch dead, because not
+       * being shallow is not the same as having every ref. */
+      for (const branch of options.singleBranch) git(['branch', branch]);
+      runDir = `${dir}-single`;
+      const clone = spawnSync(
+        'git',
+        [
+          'clone', '--quiet', '--single-branch', '--branch', initialBranch,
+          '--no-local', `file://${dir}`, runDir,
+        ],
+        { encoding: 'utf8' },
+      );
+      if (clone.status !== 0) throw new Error(`single-branch clone failed: ${clone.stderr}`);
+      const refspec = spawnSync('git', ['config', '--get', 'remote.origin.fetch'], {
+        cwd: runDir,
+        encoding: 'utf8',
+      }).stdout.trim();
+      if (refspec.includes('refs/heads/*')) {
+        throw new Error(`fixture clone tracks every branch (refspec ${refspec})`);
+      }
+    }
 
     return run((guardrail) => {
       // The fixture must not inherit the OUTER repository's refs.
@@ -157,12 +225,14 @@ function withFixture(files, mutate, run) {
       const result = spawnSync(
         process.execPath,
         [GUARDRAILS, '--only', guardrail, '--base', base, '--head', 'HEAD'],
-        { cwd: dir, encoding: 'utf8', env },
+        { cwd: runDir, encoding: 'utf8', env },
       );
       return { code: result.status, out: `${result.stdout}${result.stderr}` };
     });
   } finally {
     rmSync(dir, { recursive: true, force: true });
+    rmSync(`${dir}-shallow`, { recursive: true, force: true });
+    rmSync(`${dir}-single`, { recursive: true, force: true });
   }
 }
 
@@ -194,7 +264,7 @@ function expectRed(label, guardrail, files, mutate, expected) {
  * outcomes, and a control that only checks the exit code cannot tell them apart — which is how
  * a demoted check quietly becomes no check at all.
  */
-function expectWarn(label, guardrail, files, mutate, expected) {
+function expectWarn(label, guardrail, files, mutate, expected, options) {
   if (!selected(guardrail)) return;
   negative += 1;
   withFixture(files, mutate, (runGuardrail) => {
@@ -209,7 +279,7 @@ function expectWarn(label, guardrail, files, mutate, expected) {
           `    expected /${expected.source}/\n    got: ${out.trim()}`,
       );
     }
-  });
+  }, options);
 }
 
 /** Asserts a correct tree is green — the control that stops a guardrail failing on everything. */
@@ -9030,6 +9100,35 @@ expectRed(
   /demo\.mjs:2 defaults NUXEO_USER [\s\S]*demo\.mjs:3 defaults NUXEO_PASS [\s\S]*demo\.mjs:5 defaults NUXEO_AUTH /,
 );
 
+for (const [label, body] of [
+  ['spawn', "import { spawnSync } from 'node:child_process'; spawnSync('npm', ['ls']);"],
+  ['gate entry', "const gate = { cmd: 'npm', argv: ['ls'] };"],
+  [
+    'npx shim',
+    "import { execFileSync as run } from 'node:child_process'; run('npx.cmd', ['tsc']);",
+  ],
+  ['nx namespace', "import * as cp from 'node:child_process'; cp.spawn('nx', ['build']);"],
+  [
+    'promisified launcher',
+    "import { execFile } from 'node:child_process'; import { promisify as asyncify } from 'node:util'; const execFileAsync = asyncify(execFile); execFileAsync('npm', ['install']);",
+  ],
+]) {
+  expectRed(
+    `direct package tool ${label}`,
+    'checkPackageToolLaunches',
+    { 'scripts/direct.mjs': body },
+    null,
+    /direct\.mjs:\d+ starts a package tool directly/,
+  );
+}
+expectGreen(
+  'helper calls, comments and fixture strings remain allowed',
+  'checkPackageToolLaunches',
+  {
+    'scripts/good.mjs': `// spawnSync('npm', []);\nconst fixture = "spawnSync('npx', [])";\nspawnToolSync('npm', ['ls']);\nconst gate = { tool: 'npx', argv: ['nx'] };`,
+  },
+);
+
 /* ---------------- checkAdoptedPatternsNotBypassed (NXSAT-676) ---------------- */
 
 /**
@@ -9538,6 +9637,1659 @@ expectGreen(
       '\ntype Assert<T extends true> = T;\n' +
       'export type Contract = [Assert<true>];\n',
   }),
+);
+
+/* ---------------- checkWorkflowRefGates ---------------- */
+
+/**
+ * Controls for the workflow ref-gate check, which exists because of NXSAT-649.
+ *
+ * `storybook-pages.yml` published the public Storybook from `integration/nxsat-308`, in two places
+ * that agreed with each other — the push trigger and the `deploy` job's `if:`. The branch merged
+ * and was deleted; the site then went stale for five days while `workflow_dispatch` runs stayed
+ * GREEN, because the gate was false and a skipped job does not fail a run. `actionlint` 1.7.12
+ * exits 0 on that file.
+ *
+ * `HISTORICAL_*` below is that file's shape, reduced to the lines the check reads. It is the one
+ * control that matters most: it must stay red for as long as this guardrail exists.
+ */
+const WORKFLOW_JOB = `jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+`;
+
+/** A workflow, assembled so each control varies exactly one thing. */
+const workflow = (triggers, jobs = WORKFLOW_JOB) => `name: Fixture\n\n${triggers}\n${jobs}`;
+
+/** A job whose own `if:` gates it on a ref. */
+const gatedJob = (expression) => `jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  deploy:
+    needs: build
+    if: ${expression}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deploy
+`;
+
+const HISTORICAL_TRIGGER = `on:
+  push:
+    branches: ['integration/nxsat-308']
+  workflow_dispatch:
+`;
+
+const HISTORICAL = {
+  '.github/workflows/storybook-pages.yml': workflow(
+    HISTORICAL_TRIGGER,
+    gatedJob("github.ref == 'refs/heads/integration/nxsat-308'"),
+  ),
+};
+
+expectRed(
+  'the NXSAT-649 bug itself: a job gated on a merged-and-deleted ticket branch',
+  'checkWorkflowRefGates',
+  HISTORICAL,
+  null,
+  /storybook-pages\.yml:\d+ gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+expectRed(
+  'the NXSAT-649 bug itself: the push trigger names only that ticket branch',
+  'checkWorkflowRefGates',
+  {
+    // No ref gate at all, so only the trigger half can be what goes red. The two halves of the
+    // incident are pinned separately: a single fixture that trips both would stay red if either
+    // rule were deleted, which is a control that cannot tell you which one you broke.
+    '.github/workflows/storybook-pages.yml': workflow(HISTORICAL_TRIGGER),
+  },
+  null,
+  /triggers on `push` only for `integration\/nxsat-308`, which is not `main`/,
+);
+
+expectRed(
+  'the gate and the push trigger name different branches, and nothing else can supply the ref',
+  'checkWorkflowRefGates',
+  {
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.ref == 'refs/heads/staging'"),
+    ),
+  },
+  null,
+  /on the branch `staging`, which none of the workflow's own branch filters admit/,
+);
+
+expectRed(
+  'a branch filter is matched as a pattern, not as a substring: `main` does not admit `maintenance`',
+  'checkWorkflowRefGates',
+  {
+    // The whole point of `githubBranchFilterToRegExp`. A substring test — the obvious way to write
+    // this check — would read `main` as admitting `maintenance` and pass a job that can never run.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.ref == 'refs/heads/maintenance'"),
+    ),
+  },
+  null,
+  /on the branch `maintenance`, which none of the workflow's own branch filters admit/,
+);
+
+expectRed(
+  '`*` does not cross a slash, so `release/*` does not admit `release/a/b`',
+  'checkWorkflowRefGates',
+  {
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: ['release/*']\n",
+      gatedJob("github.ref == 'refs/heads/release/a/b'"),
+    ),
+  },
+  null,
+  /on the branch `release\/a\/b`, which none of the workflow's own branch filters admit/,
+);
+
+expectRed(
+  '`github.ref` compared to a bare branch name, which it never equals',
+  'checkWorkflowRefGates',
+  {
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'main'"),
+    ),
+  },
+  null,
+  /`github\.ref == 'main'`, which is a constant: `github\.ref` is always a full ref[\s\S]*always false/,
+);
+
+expectRed(
+  '`github.ref_name` compared to a full ref, which it never equals',
+  'checkWorkflowRefGates',
+  {
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref_name == 'refs/heads/main'"),
+    ),
+  },
+  null,
+  /`github\.ref_name == 'refs\/heads\/main'`, which is a constant[\s\S]*always false/,
+);
+
+expectRed(
+  'a constant-TRUE `!=`, which excludes nothing instead of never running',
+  'checkWorkflowRefGates',
+  {
+    // The opposite direction of the same shape error, and it fails the opposite way: the job runs
+    // everywhere it was meant to be skipped. Pinned because only `==` is carried into the branch
+    // rules below, so `!=` is handled here or nowhere.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref != 'main'"),
+    ),
+  },
+  null,
+  /always true[\s\S]*excludes nothing/,
+);
+
+expectRed(
+  'a branch filter this guardrail cannot model is refused, not guessed at',
+  'checkWorkflowRefGates',
+  {
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main, 'rel[0-9]']\n",
+      gatedJob("github.ref == 'refs/heads/staging'"),
+    ),
+  },
+  null,
+  /filters branches with `rel\[0-9\]`, which `githubBranchFilterToRegExp` does not model/,
+);
+
+expectRed(
+  'a `branches:` value the list parser cannot read is refused, not read as "no filter"',
+  'checkWorkflowRefGates',
+  {
+    // An unreadable allowlist treated as an absent one makes every job reachable and the
+    // reachability rule green on everything — the fail-open shape this repository has paid for
+    // three times.
+    '.github/workflows/deploy.yml': workflow(
+      'on:\n  push:\n    branches:\n      main\n',
+      gatedJob("github.ref == 'refs/heads/staging'"),
+    ),
+  },
+  null,
+  /has a `push\.branches` value this guardrail cannot read/,
+);
+
+expectRed(
+  'an empty `branches:` is unreadable, not an allowlist that happens to admit nothing',
+  'checkWorkflowRefGates',
+  {
+    // A separate control from the one above because it reaches "unreadable" by a different path —
+    // an empty block rather than an item the sequence parser cannot match — and mutation testing
+    // showed the first control left this one unguarded. Reading an empty filter as a filter makes
+    // the message name no patterns at all, and with a `workflow_dispatch` present it is not even
+    // red: reachability becomes undecidable and the workflow passes.
+    '.github/workflows/deploy.yml': workflow(
+      'on:\n  push:\n    branches:\n  workflow_dispatch:\n',
+      gatedJob("github.ref == 'refs/heads/staging'"),
+    ),
+  },
+  null,
+  /has a `push\.branches` value this guardrail cannot read/,
+);
+
+expectRed(
+  'a ref gate the parser did not read trips the parser tripwire',
+  'checkWorkflowRefGates',
+  {
+    // No `jobs:` block, so `parseWorkflowTriggersAndGates` reads no gates while a crude scan
+    // plainly sees one. That is the fail-open case the tripwire exists for, and it only works
+    // because the tripwire runs BEFORE the "no gates, nothing to do" return.
+    '.github/workflows/deploy.yml':
+      "name: Fixture\n\non:\n  push:\n    branches: [main]\n\nnot-jobs:\n  deploy:\n    if: github.ref == 'refs/heads/main'\n",
+  },
+  null,
+  /compares `github\.ref` in an `if:` that `parseWorkflowTriggersAndGates` did not read/,
+);
+
+expectRed(
+  'no workflow at all, so the check would have asserted nothing',
+  'checkWorkflowRefGates',
+  { 'README.md': '# fixture\n' },
+  null,
+  /No workflow found under \.github\/workflows, so this gate asserted nothing/,
+);
+
+/* The existence rule's severity follows what the clone can PROVE, and both halves are pinned.
+ *
+ * It used to warn unconditionally. The reasoning was sound — `actions/checkout` fetches one ref,
+ * and a shallow clone cannot tell a deleted branch from an unfetched one — but the consequence was
+ * not: it left the pinned-branch rule as the only one that could fail CI, so every dead branch
+ * that rule did not recognise went green. Reported from a sibling session after five rounds, and
+ * it was the second of the two findings that actually decide whether this prevents the next
+ * NXSAT-649. `develop` is used for both controls because it is long-lived by name, so the
+ * longevity rule passes and the existence rule is the only thing left that can speak. */
+const MISSING_BRANCH_WORKFLOW = {
+  '.github/workflows/deploy.yml': workflow(
+    "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+    gatedJob("github.ref == 'refs/heads/develop'"),
+  ),
+};
+
+expectRed(
+  'a gate on a branch that does not exist FAILS where the clone can prove it',
+  'checkWorkflowRefGates',
+  MISSING_BRANCH_WORKFLOW,
+  null,
+  /no `refs\/heads\/develop` or `refs\/remotes\/origin\/develop` exists[\s\S]*not shallow and resolves its own default branch/,
+);
+
+expectWarn(
+  'the same gate only warns where no default branch resolves',
+  'checkWorkflowRefGates',
+  MISSING_BRANCH_WORKFLOW,
+  null,
+  /A warning rather than a failure: this clone is shallow or cannot resolve its own default branch/,
+  // The fixture's default branch is not `main` or `master`, so the check cannot resolve a default
+  // branch and will not claim a missing branch is absent. This is the degraded path, and before
+  // this control there was nothing exercising it at all.
+  { initialBranch: 'trunk' },
+);
+
+expectWarn(
+  'the same gate only warns in a non-shallow SINGLE-BRANCH clone, where refs are incomplete',
+  'checkWorkflowRefGates',
+  MISSING_BRANCH_WORKFLOW,
+  null,
+  /A warning rather than a failure/,
+  // A clone can be complete in history and incomplete in BRANCHES: `--single-branch` is not
+  // shallow and resolves `main` perfectly well while tracking only
+  // `+refs/heads/main:refs/remotes/origin/main`. `develop` exists in the origin here and the clone
+  // simply does not have it — so calling it dead was the false positive the severity promotion
+  // most easily introduced. A wildcard fetch refspec is what establishes branch coverage.
+  { singleBranch: ['develop'] },
+);
+
+expectWarn(
+  'the same gate only warns in a shallow clone, which is what a `fetch-depth: 1` job has',
+  'checkWorkflowRefGates',
+  MISSING_BRANCH_WORKFLOW,
+  null,
+  /A warning rather than a failure: this clone is shallow or cannot resolve its own default branch/,
+  // The other half of the condition, and the half that matters in CI: `ci.yml` checks out with
+  // `fetch-depth: 0` so the rule fails there, while `build-marketplace.yml` and
+  // `publish-config-package.yml` use `fetch-depth: 1` and get a warning. Mutation testing found
+  // this half unasserted — dropping `!cloneIsShallow` changed no verdict, because every other
+  // fixture is a full repository.
+  { shallow: true },
+);
+
+/* --- the shapes it must NOT flag --- */
+
+falsePositiveControls += 1;
+expectGreen(
+  'the NXSAT-649 fix: push trigger and gate both naming `main`',
+  'checkWorkflowRefGates',
+  {
+    // `storybook-pages.yml` as NXSAT-649 left it. The guardrail has to be green on the fix, or it
+    // is a check nobody can satisfy.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/main'"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  "a11y.yml's real triggers: globbed ticket namespaces and no ref-gated job",
+  'checkWorkflowRefGates',
+  {
+    // Verbatim from `.github/workflows/a11y.yml`. `integration/**` is a glob, not a pinned branch,
+    // so it keeps matching after any one ticket merges — and nothing here gates on a ref at all.
+    // Most workflows in this repository are this shape; flagging it would make the check useless.
+    '.github/workflows/a11y.yml': workflow(
+      "on:\n  pull_request:\n    branches: [main, 'integration/**']\n" +
+        "  push:\n    branches: [main, 'feature/**', 'fix/**', 'integration/**']\n",
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a comment at column 0 inside `on:` does not end the trigger block',
+  'checkWorkflowRefGates',
+  {
+    // Comments are BLANKED rather than removed, and this is the control that proves it is load
+    // bearing. A column-0 comment between `on:` and its events would otherwise close the block —
+    // `yamlBlockEnd` stops at the first line indented no further than the key — and the whole
+    // workflow would be reported as having no `on:` block this guardrail can read. `.github` is
+    // mostly comment, so a parser that stops at one reads almost nothing.
+    //
+    // A first attempt at this control put a stale `# ... if: github.ref == '...'` comment beside a
+    // correct gate and asserted the check believed the configuration. It stayed green with comment
+    // handling removed ENTIRELY: the gate regex is anchored to the start of the line, so a `#`
+    // prefix already prevents a match. It proved nothing. Mutation testing is how that was found.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+# TODO(NXSAT-649): this comment sits at column 0 on purpose.
+  push:
+    branches: [main]
+
+${gatedJob("github.ref == 'refs/heads/main'")}`,
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a trailing comment on a branch filter item is not part of the branch name',
+  'checkWorkflowRefGates',
+  {
+    // The other half of comment handling. A block-sequence item is captured by `- (.+)$`, so
+    // without `stripTrailingYamlComment` the pattern becomes `main # the default branch`, which
+    // matches no branch at all — and the gate on `main` is then reported as unreachable. A check
+    // that cries wolf over a comment is a check people run with their eyes closed.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches:
+      - main # the default branch
+
+${gatedJob("github.ref == 'refs/heads/main'")}`,
+  },
+);
+
+expectRed(
+  '`**` crosses a slash, so `integration/**` admits `integration/nxsat-308`',
+  'checkWorkflowRefGates',
+  {
+    // The other half of the pattern matcher, and it is pinned by WHICH failure comes back rather
+    // than by passing. The branch is admitted by the trigger, so the reachability rule stays
+    // quiet and the longevity rule speaks; if `**` stopped crossing `/` the reachability rule
+    // would fire instead and this regex would not match.
+    //
+    // It used to be a green control gating on `release/2026-10`, which worked only while
+    // `release/` was outside the ticket-prefix list. Once longevity became an allowlist, every
+    // literal branch except the long-lived ones is flagged, so a green control cannot isolate the
+    // glob any more — this one can.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: ['integration/**']\n",
+      gatedJob("github.ref == 'refs/heads/integration/nxsat-308'"),
+    ),
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a `workflow_dispatch` makes a gate outside the push filter reachable',
+  'checkWorkflowRefGates',
+  {
+    // Rule 2 is conditioned on there being no unfiltered trigger, and this is why: a gate on a
+    // branch the push filter excludes IS reachable by dispatching from that branch. Claiming
+    // otherwise would be exactly the overstatement this programme keeps being caught on.
+    //
+    // The gated branch is `main` — long-lived and present — so the longevity rule cannot preempt
+    // the point. The trigger deliberately does not admit it.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: ['release/**']\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/main'"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a `branches-ignore` denylist decides nothing about reachability',
+  'checkWorkflowRefGates',
+  {
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches-ignore: ['wip/**']\n",
+      gatedJob("github.ref == 'refs/heads/main'"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a tag gate is not a branch gate',
+  'checkWorkflowRefGates',
+  {
+    '.github/workflows/release.yml': workflow(
+      "on:\n  push:\n    tags: ['v*']\n",
+      gatedJob("github.ref == 'refs/tags/v1.0.0'"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  '`startsWith` against a namespace prefix is a family, not a pinned branch',
+  'checkWorkflowRefGates',
+  {
+    // A documented gap, pinned so it stays a deliberate one. `startsWith(github.ref,
+    // 'refs/heads/integration/')` keeps matching every future branch in that namespace, so it is
+    // not the shape that goes stale when one ticket merges.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: ['integration/**']\n",
+      gatedJob("startsWith(github.ref, 'refs/heads/integration/')"),
+    ),
+  },
+);
+
+/* --- findings from the review of #494, each confirmed against the check before it was fixed --- */
+
+falsePositiveControls += 1;
+expectGreen(
+  'the reversed operand order reads `ref_name` as `ref_name`, not as `ref` plus a suffix',
+  'checkWorkflowRefGates',
+  {
+    // `(ref|ref_name)` matched `ref` as a prefix when nothing followed the context name, so
+    // `'main' == github.ref_name` was read as a comparison against `github.ref` and failed the
+    // shape rule on a valid condition. The forward order never had the bug because the `==` that
+    // must follow forces a backtrack — an asymmetry that made it easy to miss.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("${{ 'main' == github.ref_name }}"),
+    ),
+  },
+);
+
+expectRed(
+  'a branch filter written as an inline flow mapping is read, not skipped',
+  'checkWorkflowRefGates',
+  {
+    // Only subsequent LINES were searched for `branches:`, so `push: { branches: [...] }` was read
+    // as an event with no filter — silently exempting the exact shape this guardrail exists to
+    // catch, with no gate needed to hide it.
+    '.github/workflows/deploy.yml': workflow("on:\n  push: { branches: ['integration/nxsat-308'] }\n"),
+  },
+  null,
+  /triggers on `push` only for `integration\/nxsat-308`/,
+);
+
+expectRed(
+  'an `if:` whose expression continues on the next line is folded in, not read as `${{`',
+  'checkWorkflowRefGates',
+  {
+    // A multi-line plain scalar. The gate used to be recorded as the three characters `${{`, no
+    // comparison was found in it, and the tripwire reads only the `if:` line — so a stale
+    // ticket-branch gate written this way passed completely.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  deploy:
+    needs: build
+    if: \${{
+      github.ref == 'refs/heads/integration/nxsat-308'
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deploy
+`,
+  },
+  null,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a workflow whose only condition is not a ref comparison is not judged by the ref rules',
+  'checkWorkflowRefGates',
+  {
+    // `gates` holds every `if:` in the file, so judging by `gates.length` made a valid
+    // `!wip/**` filter fail the unsupported-pattern rule purely because some job had
+    // `if: always()`. The pattern and filter rules are about ref gates; a workflow with none must
+    // not be held to them.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main, '!wip/**']\n",
+      gatedJob('always()'),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  '`github.ref_name` may be a tag name once the workflow filters tags',
+  'checkWorkflowRefGates',
+  {
+    // `ref_name` is the short name of whatever ref triggered the run, tag or branch. Checking a
+    // tag name against the branch allowlist rejected a valid `v1.0.0` gate on a tag-triggered
+    // workflow. A `github.ref` literal stays unambiguous, because `refs/heads/…` is a branch
+    // whatever else the workflow triggers on.
+    '.github/workflows/release.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n    tags: ['v*']\n",
+      gatedJob("github.ref_name == 'v1.0.0'"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'one branch of an `||` is not a branch the job requires',
+  'checkWorkflowRefGates',
+  {
+    // Satisfiable on `main`, so the job is reachable; the isolated `staging` equality was being
+    // read as a required inclusion gate.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a negated comparison names the branch EXCLUDED, not the branch required',
+  'checkWorkflowRefGates',
+  {
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("!(github.ref == 'refs/heads/staging')"),
+    ),
+  },
+);
+
+expectRed(
+  '`&& !cancelled()` does not disable the ticket-branch rule',
+  'checkWorkflowRefGates',
+  {
+    // The control that keeps the fix for the two above from going too far. Negation is tested per
+    // COMPARISON, not per expression: a `!` somewhere else in the condition is one of the
+    // commonest shapes in `.github/workflows`, and treating the whole expression as negated would
+    // have re-opened NXSAT-649 itself.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/integration/nxsat-308' && !cancelled()"),
+    ),
+  },
+  null,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+expectRed(
+  'a branch gate in a `pull_request`-only workflow, where `github.ref` is never a branch',
+  'checkWorkflowRefGates',
+  {
+    // `pull_request` supplies `refs/pull/<number>/merge`. A `branches:` filter names the pull
+    // request's TARGET, not the ref the job runs on, and reading the two as the same thing is the
+    // mistake — the gate is false on every event and the run still goes green.
+    '.github/workflows/deploy.yml': workflow(
+      'on:\n  pull_request:\n    branches: [main]\n',
+      gatedJob("github.ref == 'refs/heads/main'"),
+    ),
+  },
+  null,
+  /but `pull_request` is the only trigger/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  '`pull_request_target` does run with the base branch as `github.ref`',
+  'checkWorkflowRefGates',
+  {
+    // The deliberate exclusion from the rule above, pinned so it is not widened by accident.
+    '.github/workflows/deploy.yml': workflow(
+      'on:\n  pull_request_target:\n    branches: [main]\n',
+      gatedJob("github.ref == 'refs/heads/main'"),
+    ),
+  },
+);
+
+/* --- second review round on #494: YAML shapes and GitHub expression semantics --- */
+
+expectRed(
+  'a root-level flow mapping `on:` is refused, not read as one event named after the mapping',
+  'checkWorkflowRefGates',
+  {
+    // `on: { push: { branches: [...] } }` registered a single "event" whose name was the whole
+    // mapping text. That matches no branch-filtered event, so the trigger counted as unfiltered
+    // and a ticket-only trigger passed with nothing to hide it. Refused rather than parsed —
+    // nested flow mappings are real work to read, and a loud refusal naming the parser is what
+    // this file prefers to a quiet exemption.
+    '.github/workflows/deploy.yml':
+      "name: Fixture\n\non: { push: { branches: ['integration/nxsat-308'] } }\n\n" + WORKFLOW_JOB,
+  },
+  null,
+  /is written in YAML this guardrail cannot read/,
+);
+
+expectRed(
+  'a plain multi-line `if:` with no expression markers is folded in',
+  'checkWorkflowRefGates',
+  {
+    // `if: github.ref ==` with the literal on the next line. There is no `${{` to notice here, so
+    // the earlier unbalanced-marker test could not see it; the gate was recorded as
+    // `github.ref ==`, compared nothing, and the tripwire reads only the `if:` line. The fix
+    // follows YAML's own rule — a scalar continues on every line indented past its key — rather
+    // than guessing at completeness.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  deploy:
+    needs: build
+    if: github.ref ==
+      'refs/heads/integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deploy
+`,
+  },
+  null,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`/,
+);
+
+expectRed(
+  '`?` in a branch filter is refused, because it quantifies the preceding character',
+  'checkWorkflowRefGates',
+  {
+    // In a GitHub filter pattern `?` means zero or one of the PRECEDING character, not "any one
+    // character" as in a shell glob. So `release/10?` admits `release/1` and `release/10` and not
+    // `release/10x` — and modelling it as `[^/]` got both ends wrong, rejecting the two branches
+    // the pattern admits and admitting one it does not. This fixture is the admitted-one-it-does-
+    // not case, which used to pass silently.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: ['release/10?']\n",
+      gatedJob("github.ref == 'refs/heads/release/10x'"),
+    ),
+  },
+  null,
+  /filters branches with `release\/10\?`, which `githubBranchFilterToRegExp` does not model/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a reversed-order comparison after another string literal reads only its own literal',
+  'checkWorkflowRefGates',
+  {
+    // `github.event_name == 'push' && 'main' == github.ref_name`. The lazy `(.*?)` with a quote
+    // backreference backtracked across two literals and read the branch name as `push' && 'main`,
+    // which no filter admits — so a valid compound condition failed as unreachable.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.event_name == 'push' && 'main' == github.ref_name"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'YAML inside a `run:` block scalar is shell, not workflow keys',
+  'checkWorkflowRefGates',
+  {
+    // A script that writes a workflow. The heredoc's `if:` line was recorded as a step condition
+    // and failed the ticket-branch rule, on a workflow with no ref gate at all. Block-scalar
+    // bodies are now blanked in `workflowLines`, which fixes the jobs scan and the tripwire
+    // together — the reason they share that function.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a workflow
+        run: |
+          cat > generated.yml <<'YAML'
+          jobs:
+            deploy:
+              if: github.ref == 'refs/heads/integration/nxsat-308'
+          YAML
+`,
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a YAML-quoted `if:` scalar is unwrapped before the expression is analysed',
+  'checkWorkflowRefGates',
+  {
+    // The quoted form of the `||` control above. With the quotes left on, the two analyses
+    // contradicted each other over the same text: `expressionHasAlternative` blanks string
+    // literals before looking for `||`, so it blanked the whole scalar and found none, while
+    // `refComparisons` still pulled both comparisons out — and `staging` was called unreachable.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob(`"github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'"`),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'GitHub compares expression strings without case, so `refs/heads/MAIN` reaches `main`',
+  'checkWorkflowRefGates',
+  {
+    // `==` in an Actions expression ignores case, so this job does run on `main` and calling it
+    // unreachable was wrong. Note the asymmetry the fix has to respect: git refs themselves are
+    // case-sensitive, so the leniency belongs in the pattern match and the ref lookup — both of
+    // which model what the workflow sees — and nowhere else.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.ref == 'refs/heads/MAIN'"),
+    ),
+  },
+);
+
+expectRed(
+  "a sibling step key is not part of the condition above it",
+  'checkWorkflowRefGates',
+  {
+    // Continuation lines are measured from the KEY's indent, not the line's. In a sequence item
+    // the `-` sits further left than the key, so measuring from the line would fold the step's own
+    // `run:` into the expression — and here that would drag in a shell `||`, which makes the gate
+    // look like an alternative and silences the ticket-branch rule entirely.
+    //
+    // Mutation testing found this one: the fix was in place and nothing was asserting it.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - if: github.ref == 'refs/heads/integration/nxsat-308'
+        run: echo a || echo b
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+expectRed(
+  'a differently cased ticket branch is still a ticket branch',
+  'checkWorkflowRefGates',
+  {
+    // The other side of case-insensitivity: the leniency must not become a way round the rule.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/Integration/NXSAT-308'"),
+    ),
+  },
+  null,
+  /on the branch `Integration\/NXSAT-308`, which is not one of this repository's long-lived branches/,
+);
+
+/* --- third review round on #494: the dash, quoted keys, ref case, and expression strings --- */
+
+expectRed(
+  'a block scalar as a step\'s FIRST key does not swallow the sibling `if:` below it',
+  'checkWorkflowRefGates',
+  {
+    // `- run: |` puts the dash further left than the key, so measuring the body's extent from the
+    // dash blanked the step's own `if:` as script — invisible to the gate scan and to the tripwire
+    // that is supposed to catch exactly that. The same off-by-a-dash as the condition folding,
+    // which had been fixed there and not here.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo hello
+        if: github.ref == 'refs/heads/integration/nxsat-308'
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a comment after a block scalar indicator still marks the body as script',
+  'checkWorkflowRefGates',
+  {
+    // `run: | # generate a workflow` is a valid header. Requiring the indicator to end the line
+    // missed it, which put the heredoc back into the YAML the parser reads and turned its `if:`
+    // into a fictitious step condition. The header is matched on a comment-stripped copy while
+    // indentation is still measured from the raw lines.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a workflow
+        run: | # generate a workflow
+          cat > generated.yml <<'YAML'
+          jobs:
+            deploy:
+              if: github.ref == 'refs/heads/integration/nxsat-308'
+          YAML
+`,
+  },
+);
+
+expectRed(
+  'a quoted event key means what the unquoted one means',
+  'checkWorkflowRefGates',
+  {
+    // `'push':` matched nothing and was SKIPPED, leaving the event map empty — so the trigger the
+    // unquoted form is rejected for passed unnoticed. An entry that still does not match is now
+    // refused outright rather than skipped: skipping is how a parser quietly stops enforcing,
+    // because every shape it does not know becomes an exemption with nothing to show for it.
+    '.github/workflows/deploy.yml':
+      "name: Fixture\n\non:\n  'push':\n    branches: ['integration/nxsat-308']\n\n" + WORKFLOW_JOB,
+  },
+  null,
+  /triggers on `push` only for `integration\/nxsat-308`/,
+);
+
+expectRed(
+  'a mixed-case `refs/HEADS/` prefix is still a branch gate',
+  'checkWorkflowRefGates',
+  {
+    // A fail-open, not a cosmetic slip: the literal was discarded as "not a branch ref", so a
+    // pinned ticket branch written this way skipped every rule.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/HEADS/integration/nxsat-308'"),
+    ),
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  '`REFS/HEADS/main` is a full ref, because the expression comparison ignores case',
+  'checkWorkflowRefGates',
+  {
+    // The other direction of the same prefix test: read case-sensitively, this looked like a bare
+    // branch name compared to `github.ref` and was reported as a constant-false gate.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.ref == 'REFS/HEADS/main'"),
+    ),
+  },
+);
+
+expectRed(
+  'a YAML-quoted condition is still read as a condition',
+  'checkWorkflowRefGates',
+  {
+    // The fail-open hiding behind the two fixes above, found by mutation testing: once string
+    // literals are masked so comparison TEXT is not mistaken for a gate, an `if:` left wrapped in
+    // its YAML quotes has every comparison inside it masked too — so a pinned ticket branch
+    // written this way becomes invisible rather than merely misread. Unwrapping the scalar is what
+    // keeps masking safe, and before this control nothing asserted the pair worked together: the
+    // existing quoted-`||` control passes either way.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob(`"github.ref == 'refs/heads/integration/nxsat-308'"`),
+    ),
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'comparison text passed to a function is a string, not a gate',
+  'checkWorkflowRefGates',
+  {
+    // `contains(github.event.head_commit.message, 'github.ref == ''main''')` gates on nothing.
+    // The scan read the comparison inside the literal and reported `github.ref == ''` failing the
+    // shape rule. A doubled quote is GitHub's escape, so that whole operand is ONE string — which
+    // is also why `expressionHasAlternative` now blanks literals through the same mask rather than
+    // with a regex of its own that does not know it.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("contains(github.event.head_commit.message, 'github.ref == ''main''')"),
+    ),
+  },
+);
+
+/* --- fourth review round on #494: negation that encloses rather than adjoins --- */
+
+falsePositiveControls += 1;
+expectGreen(
+  'an enclosing `!` counts even when the comparison follows another operand',
+  'checkWorkflowRefGates',
+  {
+    // `!(github.event_name == 'push' && github.ref == 'refs/heads/staging')` excludes `staging`,
+    // so the job is reachable on `main`. Walking back over whitespace and parentheses found the
+    // `!` only while the `(` was adjacent to the comparison; put anything in front of it inside
+    // the group and the walk stopped at the `&`. `comparisonIsNegated` now tracks every enclosing
+    // group and whether a `!` introduces it.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("!(github.event_name == 'push' && github.ref == 'refs/heads/staging')"),
+    ),
+  },
+);
+
+expectRed(
+  'parentheses on their own are not a negation',
+  'checkWorkflowRefGates',
+  {
+    // The control that stops the fix above from going too far. A group that no `!` introduces
+    // changes nothing: `(github.ref == 'refs/heads/staging')` with `branches: [main]` really is a
+    // job that can never run, and treating every enclosing paren as a negation would have turned
+    // the whole reachability rule off wherever anyone added brackets for readability.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("(github.ref == 'refs/heads/staging')"),
+    ),
+  },
+  null,
+  /on the branch `staging`, which none of the workflow's own branch filters admit/,
+);
+
+/* --- fifth review round on #494: alternative YAML spellings of the same thing --- */
+
+const TICKET_TRIGGER_FORMS = {
+  'a flow mapping that spans lines': "name: Fixture\n\non:\n  push: {\n    branches: ['integration/nxsat-308'] }\n\n",
+  'a quoted filter key': "name: Fixture\n\non:\n  push:\n    'branches': ['integration/nxsat-308']\n\n",
+  'a quoted filter key inside a flow mapping':
+    "name: Fixture\n\non:\n  push: { 'branches': ['integration/nxsat-308'] }\n\n",
+  'an indentless block sequence': 'name: Fixture\n\non:\n  push:\n    branches:\n    - integration/nxsat-308\n\n',
+};
+
+// Four spellings of ONE trigger, each of which used to pass. Every one is valid YAML that GitHub
+// accepts, and none needed a ref gate to hide behind: the branch simply never reached the rule.
+// The indentless sequence was the worst of them — the filter read as unreadable, which made the
+// trigger rule blind to the branch, and with no ref gate the check returned before reporting even
+// that. A ticket-only trigger passed in silence, through the guardrail's own early exit.
+for (const [form, triggers] of Object.entries(TICKET_TRIGGER_FORMS)) {
+  expectRed(
+    `a ticket-only push trigger written as ${form}`,
+    'checkWorkflowRefGates',
+    { '.github/workflows/storybook-pages.yml': triggers + WORKFLOW_JOB },
+    null,
+    /triggers on `push` only for `integration\/nxsat-308`/,
+  );
+}
+
+expectRed(
+  'an unreadable branch filter is reported even with no ref gate in the workflow',
+  'checkWorkflowRefGates',
+  {
+    // The ordering half of the indentless-sequence finding, and the sharper half. A filter the
+    // parser cannot read keeps its branches out of `allowlists`, which makes the trigger rule
+    // blind to them — and the check used to return on "no ref gates" before saying so. So the
+    // guardrail's own early exit was the last thing standing between a stale ticket-only trigger
+    // and a green run. The unreadable filter is now reported before that return; the unsupported-
+    // PATTERN rule stays scoped to ref gates, where a reachability verdict actually depends on it.
+    '.github/workflows/deploy.yml':
+      'name: Fixture\n\non:\n  push:\n    branches:\n      main\n\n' + WORKFLOW_JOB,
+  },
+  null,
+  /has a `push\.branches` value this guardrail cannot read/,
+);
+
+expectRed(
+  'an `if:` whose value begins on the next line is still a condition',
+  'checkWorkflowRefGates',
+  {
+    // The gate regex required at least one character after the colon, so a bare `if:` matched
+    // nothing and the folding that would have read the condition never ran. The tripwire reads the
+    // `if:` line, where there is no comparison to see, so it could not catch it either.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  deploy:
+    needs: build
+    if:
+      github.ref == 'refs/heads/integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deploy
+`,
+  },
+  null,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`/,
+);
+
+expectRed(
+  'a quoted `\'if\':` key is still a condition',
+  'checkWorkflowRefGates',
+  {
+    // Both the gate scan and the tripwire required the key unquoted, so this produced no gates and
+    // passed silently — the same quoted-key blindness as the event and filter keys above. They are
+    // separate controls because they are separate scanners, and fixing one taught me nothing about
+    // the others.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  deploy:
+    needs: build
+    'if': github.ref == 'refs/heads/integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deploy
+`,
+  },
+  null,
+  /gates the `deploy` job's `if:` on the branch `integration\/nxsat-308`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an astral character does not shift the string-literal mask',
+  'checkWorkflowRefGates',
+  {
+    // `stringLiteralMask` indexes code UNITS; blanking with `[...expression]` iterates code POINTS,
+    // so one emoji in a branch name shifted every index after it and erased a real `||` — which
+    // made a reachable job look unreachable. Both sides count code units now.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("github.ref=='refs/heads/\u{1F680}'||github.ref=='refs/heads/main'"),
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a data field named `if` under `env:` is data, not a condition',
+  'checkWorkflowRefGates',
+  {
+    // Any `if:` under `jobs:` was read as a condition, so a job declaring `env.if` failed the shape
+    // rule with nothing conditional in it. The bodies of `env`, `with`, `outputs`, `inputs`,
+    // `secrets` and `strategy` are blanked like a `run:` script — none of them can contain a job or
+    // a step, so the parser loses nothing it needs.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      if: github.ref == 'main'
+    steps:
+      - run: echo build
+`,
+  },
+);
+
+expectRed(
+  'blanking `env:` does not hide a real condition after it',
+  'checkWorkflowRefGates',
+  {
+    // The control that keeps the fix above from going too far: the body of `env:` is blanked, and
+    // a step's own `if:` sits at the key's column, not inside it.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        env:
+          TARGET: pages
+        if: github.ref == 'refs/heads/integration/nxsat-308'
+        run: echo deploy
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+/* --- sixth round: longevity is an allowlist, so no namespace can be forgotten --- */
+
+/**
+ * Every spelling of a dead branch, including ones no prefix list had.
+ *
+ * This is the control that makes the inversion stick. The rule was a list of nine ticket prefixes,
+ * and measured against this repository's own remote it missed five namespaces in use —
+ * `copilot/` (8 branches), `feat/` (7), `product/`, `docs/`, `ci/`. `feat/` is the sharpest,
+ * because `feature/` WAS listed and this repository uses both spellings: a dead `feature/x` gate
+ * failed and a dead `feat/x` gate passed. A bare name with no namespace at all passed too.
+ *
+ * Six of these eight went green before the rule was inverted. Appending five prefixes would have
+ * fixed exactly these six and left the next spelling for the next incident — the same drift this
+ * guardrail exists to prevent, reproduced inside it. Asking instead whether a branch is on a short
+ * list of long-lived ones has no namespace to forget, which is why this control enumerates
+ * spellings rather than naming a rule: if anyone reverts to a prefix list, several of these fail.
+ */
+for (const branch of [
+  'feat/dead-thing',
+  'copilot/dead-thing',
+  'docs/dead-thing',
+  'ci/dead-thing',
+  'product/dead-thing',
+  'renovate/dead-thing',
+  'nxsat-999',
+  'integration/nxsat-308',
+]) {
+  expectRed(
+    `a gate pinning \`${branch}\` is caught whatever its namespace`,
+    'checkWorkflowRefGates',
+    {
+      '.github/workflows/deploy.yml': workflow(
+        "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+        gatedJob(`github.ref == 'refs/heads/${branch}'`),
+      ),
+    },
+    null,
+    new RegExp(
+      `on the branch \`${branch.replace(/[/\-]/g, (c) => `\\${c}`)}\`, ` +
+        "which is not one of this repository's long-lived branches",
+    ),
+  );
+}
+
+falsePositiveControls += 1;
+expectGreen(
+  'every long-lived branch on the allowlist is accepted',
+  'checkWorkflowRefGates',
+  {
+    // `develop` and `gh-pages` are on the list but absent from the fixture, so this also asserts
+    // the two rules are independent: being off the allowlist is what the longevity rule judges,
+    // and the existence rule speaks separately (here as a warning, since a gate under a dispatch
+    // on an absent long-lived branch is still worth saying out loud without failing).
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/main'"),
+    ),
+  },
+);
+
+expectRed(
+  'a long-lived branch that is not declared says to declare it',
+  'checkWorkflowRefGates',
+  {
+    // The escape hatch, pinned. `staging` may well outlive its work, and the rule cannot know
+    // that — so it fails with an instruction rather than silently guessing from the name. Declaring
+    // longevity is a one-line change to a list that moves about once a year; inferring it from a
+    // prefix is what failed five rounds running.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("github.ref == 'refs/heads/staging'"),
+    ),
+  },
+  null,
+  /If `staging` is itself long-lived, add it to `LONG_LIVED_BRANCHES`/,
+);
+
+/* --- the data-key blanking, and the two ways it was wrong --- */
+
+expectRed(
+  'a job may be CALLED `env` without its own condition being blanked',
+  'checkWorkflowRefGates',
+  {
+    // The data rule blanks the body of `env:`, `with:`, `outputs:` and friends so a field named
+    // `if` is not read as a condition. A job ID matches the same pattern, so naming a job `env`
+    // blanked the whole job — ticket-branch gate included — and both the gate scan and its
+    // tripwire went blind. A job ID is a key directly under the column-0 `jobs:` key, so one
+    // indent distinguishes it from configuration.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  env:
+    if: github.ref == 'refs/heads/integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /gates the `env` job's `if:` on the branch `integration\/nxsat-308`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a comment at the data key\'s own column does not end the opaque region',
+  'checkWorkflowRefGates',
+  {
+    // A comment sits wherever its author put it, and one written at the key's column ended the
+    // region early — handing the rest of the mapping back to the gate scan, which read an `env`
+    // field called `if` as a step condition and failed the shape rule.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+    # Environment variables
+      if: github.ref == 'main'
+    steps:
+      - run: echo hi
+`,
+  },
+);
+
+expectRed(
+  'skipping comments does not swallow the condition after a script',
+  'checkWorkflowRefGates',
+  {
+    // The control that keeps the fix above from over-reaching, and it was written before the fix
+    // to find out whether it would. A comment between a `run: |` script and the step's own `if:`
+    // must not extend the script over the condition — a key at or below the column still ends the
+    // region, so only the comment is skipped.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Script
+        run: |
+          echo a
+        # a comment between the script and the condition
+        if: github.ref == 'refs/heads/integration/nxsat-308'
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+/* --- seventh round: shapes that are REFUSED rather than parsed, and two severity corrections --- */
+
+/**
+ * Four shapes that produced no finding at all, each now refused with a diagnostic.
+ *
+ * They are grouped because the fix is one decision, not four: an anchor, an alias, or a flow
+ * mapping where this parser expects a block mapping is **refused**, not read. Every one of these
+ * hid a ticket-only trigger or a ticket-branch gate in silence — the `jobs: { … }` pair produced no
+ * gates at all, so the tripwire had nothing to compare against either.
+ *
+ * Refusing is the point. Following an alias means carrying a document-wide anchor table, and
+ * reading a flow mapping nested in a flow mapping means being a YAML implementation; this parser
+ * is explicitly not one, because no YAML parser is a declared dependency of this repository. A
+ * loud refusal naming the function is the honest end of that constraint, and it is what stops the
+ * next shape from being a silent exemption instead of a failure.
+ */
+const REFUSED_SHAPES = {
+  'an anchor on an event value': `name: Fixture\n\non:\n  push: &publish_trigger\n    branches: ['integration/nxsat-308']\n\n${WORKFLOW_JOB}`,
+  'an anchor on the root `on:` value': `name: Fixture\n\non: &triggers\n  push:\n    branches: ['integration/nxsat-308']\n\n${WORKFLOW_JOB}`,
+  '`jobs:` as a flow mapping':
+    "name: Fixture\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\n" +
+    "jobs: { deploy: { runs-on: ubuntu-latest, if: \"github.ref == 'refs/heads/integration/nxsat-308'\" } }\n",
+  'a job body as a flow mapping':
+    "name: Fixture\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\njobs:\n" +
+    "  deploy: { runs-on: ubuntu-latest, if: \"github.ref == 'refs/heads/integration/nxsat-308'\" }\n",
+};
+
+for (const [shape, body] of Object.entries(REFUSED_SHAPES)) {
+  expectRed(
+    `${shape} is refused with a diagnostic, not read as nothing`,
+    'checkWorkflowRefGates',
+    { '.github/workflows/storybook-pages.yml': body },
+    null,
+    /is written in YAML this guardrail cannot read/,
+  );
+}
+
+falsePositiveControls += 1;
+expectGreen(
+  'a tag gate on a workflow with no branch filter at all is not read as a branch',
+  'checkWorkflowRefGates',
+  {
+    // `on: push` with no filters admits TAG pushes as well as branch pushes, so
+    // `github.ref_name == 'v1.0.0'` beside `github.ref_type == 'tag'` is a tag gate — and it was
+    // being judged as pinning a branch called `v1.0.0`. The tag question is asked of the FILTER,
+    // not the event: a `push` with a `branches:` filter does not admit tags.
+    '.github/workflows/release.yml': `name: Fixture
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+
+  release:
+    if: github.ref_type == 'tag' && github.ref_name == 'v1.0.0'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo release
+`,
+  },
+);
+
+expectWarn(
+  'an ambiguous `ref_name` is named as ambiguous rather than guessed either way',
+  'checkWorkflowRefGates',
+  {
+    // The same workflow without the `ref_type` assertion. Guessing has a cost in both directions,
+    // and this review has paid both: read as a branch it rejects valid tag gates, read as a tag it
+    // lets a pinned ticket branch through in silence. So it says so and judges neither, pointing at
+    // `github.ref`, which cannot be mistaken.
+    '.github/workflows/release.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: github.ref_name == 'v1.0.0'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo release
+`,
+  },
+  null,
+  /cannot tell whether `v1\.0\.0` is a branch or a tag and has judged neither/,
+);
+
+/* --- eighth round: the tag inference, narrowed to where tags can actually arrive --- */
+
+expectRed(
+  'an unfiltered `pull_request` admits no tag, so the pull-request-only rule still fires',
+  'checkWorkflowRefGates',
+  {
+    // The tag inference was asked of every branch-filtered event, and `pull_request` admits no tag
+    // push at all — so an unfiltered `on: pull_request` became advisory and skipped the
+    // pull-request-only rule entirely. A fail-open introduced by the previous round's fix for a
+    // false positive, which is the fourth time in this review that closing one hole opened another.
+    '.github/workflows/deploy.yml': `name: Fixture
+
+on: pull_request
+
+jobs:
+  release:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /but `pull_request` is the only trigger/,
+);
+
+expectRed(
+  'an unfiltered `pull_request_target` admits no tag either',
+  'checkWorkflowRefGates',
+  {
+    // The same inference, the other event. `pull_request_target` runs with the base branch as
+    // `github.ref`, so the branch rules apply in full and a pinned ticket branch must not escape
+    // them by way of a tag question that cannot arise.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on: pull_request_target
+
+jobs:
+  release:
+    if: github.ref_name == 'integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+expectRed(
+  '`ref_type == \'branch\'` settles the ambiguity, so the branch rules apply in full',
+  'checkWorkflowRefGates',
+  {
+    // Only `ref_type == 'tag'` was honoured, so a condition that says in as many words that the
+    // ref is a BRANCH still came back advisory — even though no tag can satisfy it. The assertion
+    // has to be required rather than optional, which is why it is read after the `||` and negation
+    // test; there is a control below for the negated form, which must not count.
+    '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: github.ref_type == 'branch' && github.ref_name == 'integration/nxsat-308'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+expectWarn(
+  'a NEGATED branch assertion does not settle anything',
+  'checkWorkflowRefGates',
+  {
+    // The control that keeps the fix above from reading any mention of `ref_type` as an assertion.
+    // `!(github.ref_type == 'branch')` says the opposite, so the literal is ambiguous again and
+    // the advisory path is the right one.
+    '.github/workflows/release.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: !(github.ref_type == 'branch') && github.ref_name == 'v1.0.0'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /cannot tell whether `v1\.0\.0` is a branch or a tag and has judged neither/,
+);
+
+/* --- ninth round: the ref_type assertion reads through the shared matcher --- */
+
+/**
+ * `assertsRefType` was its own regex for one round, and reproduced all three defects the ref-gate
+ * matcher had already been fixed for: comparison text inside a string read as a real assertion
+ * (round 5), the reversed operand order missed (round 2), and the literal compared case-sensitively
+ * where GitHub's `==` is not (round 2). Reported on #494 the round after the duplicate was written.
+ *
+ * It reads through `contextComparisons` now — the same function the gates use — so there is one
+ * matcher and one set of fixes. These controls are what makes a second matcher fail rather than
+ * quietly work for the simple cases: each form below is a spelling that the shared matcher handles
+ * and a hand-rolled regex would not.
+ */
+const REF_TYPE_FORMS = {
+  'an upper-case assertion': "github.ref_type == 'BRANCH' && github.ref_name == 'integration/nxsat-308'",
+  'the reversed operand order':
+    "${{ 'branch' == github.ref_type && github.ref_name == 'integration/nxsat-308' }}",
+  'reversed AND upper-case':
+    "${{ 'BRANCH' == github.ref_type && github.ref_name == 'integration/nxsat-308' }}",
+};
+
+for (const [description, condition] of Object.entries(REF_TYPE_FORMS)) {
+  expectRed(
+    `a branch assertion written as ${description} still settles the ambiguity`,
+    'checkWorkflowRefGates',
+    {
+      '.github/workflows/storybook-pages.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: ${condition}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+    },
+    null,
+    /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+  );
+}
+
+expectWarn(
+  'an assertion quoted INSIDE a string is not an assertion',
+  'checkWorkflowRefGates',
+  {
+    // The false-positive half. `contains('github.ref_type == "branch"', 'branch')` mentions the
+    // assertion without making it, so the literal is still ambiguous and the advisory path is
+    // right — reading it as branch-qualified rejected a valid tag job.
+    '.github/workflows/release.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: contains('github.ref_type == "branch"', 'branch') && github.ref_name == 'v1.0.0'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+  null,
+  /cannot tell whether `v1\.0\.0` is a branch or a tag and has judged neither/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a tag assertion is accepted in the reversed and upper-case forms too, and silently',
+  'checkWorkflowRefGates',
+  {
+    // The same spellings on the tag side. Silently matters: an unrecognised tag assertion fell
+    // through to the ambiguity warning, so these forms were noisy as well as unrecognised.
+    '.github/workflows/release.yml': `name: Fixture
+
+on: push
+
+jobs:
+  release:
+    if: \${{ 'TAG' == github.ref_type && github.ref_name == 'v1.0.0' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  },
+);
+
+/* --- tenth round: an inversion need not be spelled `!` --- */
+
+/**
+ * `(github.ref == '…') == false` excludes that branch exactly as `!(…)` does.
+ *
+ * Reading it as a required inclusion gate rejected a reachable job. Three spellings, because the
+ * fix has to cover the operand order and the `!= true` form as well — and the two guards below
+ * matter more than the three fixes, since `== true` and `!= false` are NOT inversions and getting
+ * the polarity backwards would switch the reachability rule off wherever anyone wrote one.
+ */
+for (const [spelling, condition] of Object.entries({
+  '`(…) == false`': "${{ (github.ref == 'refs/heads/staging') == false }}",
+  'the reversed `false == (…)`': "${{ false == (github.ref == 'refs/heads/staging') }}",
+  '`(…) != true`': "${{ (github.ref == 'refs/heads/staging') != true }}",
+})) {
+  falsePositiveControls += 1;
+  expectGreen(
+    `a ref equality inverted with ${spelling} is not a branch the job requires`,
+    'checkWorkflowRefGates',
+    {
+      '.github/workflows/deploy.yml': workflow(
+        "on:\n  push:\n    branches: [main]\n",
+        gatedJob(condition),
+      ),
+    },
+  );
+}
+
+expectRed(
+  '`== true` is not an inversion, so the gate is still unreachable',
+  'checkWorkflowRefGates',
+  {
+    // The polarity guard. `(github.ref == 'refs/heads/staging') == true` requires `staging` just
+    // as the bare comparison does, and with `branches: [main]` the job can never run.
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n",
+      gatedJob("${{ (github.ref == 'refs/heads/staging') == true }}"),
+    ),
+  },
+  null,
+  /on the branch `staging`, which none of the workflow's own branch filters admit/,
+);
+
+expectRed(
+  'an `== false` somewhere else in the condition does not excuse a pinned branch',
+  'checkWorkflowRefGates',
+  {
+    // The scope guard, and the same shape as the `&& !cancelled()` control: the inversion has to
+    // apply to THIS comparison's own enclosing group. `cancelled() == false` inverts nothing about
+    // the ref, and treating any `== false` in the expression as an inversion would have re-opened
+    // NXSAT-649 for the fourth time.
+    '.github/workflows/storybook-pages.yml': workflow(
+      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      gatedJob("${{ github.ref == 'refs/heads/integration/nxsat-308' && cancelled() == false }}"),
+    ),
+  },
+  null,
+  /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
 /* ---------------- report ---------------- */

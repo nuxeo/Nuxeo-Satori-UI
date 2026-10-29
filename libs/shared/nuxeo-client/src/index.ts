@@ -167,6 +167,9 @@ export { TaskService } from './lib/services/task.service';
 export { CollectionService } from './lib/services/collection.service';
 export {
   BrowseService,
+  BROWSE_TYPE_OPTION_LIMIT,
+  browseFolderFiltersActive,
+  type BrowseFolderFilters,
   type BrowsePageRequest,
   type BrowseSortEntry,
 } from './lib/services/browse.service';

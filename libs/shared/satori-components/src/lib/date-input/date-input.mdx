@@ -23,7 +23,10 @@ it for any date property, such as an expiry date or the start of a permission.
   subclass of it that keeps its `Date.parse`; that subclass's other changes, such as the first day
   of the week, then do not reach the field.
 - **Says what is wrong.** Text that is not a date shows an example in the locale's format, such as
-  "Enter a date like 31/12/2026"; a date outside `min` and `max` says the limit.
+  "Enter a date like 31/12/2026"; a date outside `min` and `max` says the limit. `error` adds a
+  message of the host's — the server's reason for refusing the date — shown while the form marks
+  the field invalid and it has no error of its own. Every message sits under the field, named by
+  the input's `aria-describedby`.
 - **Translated calendar.** The calendar's buttons and labels follow the application's catalogue.
 
 ## Demo showcase
@@ -95,3 +98,8 @@ format, from the browser's `Intl` data, and passes Angular Material's calendar t
 - **Errors.** Once the field is left, text that is not a date, a date outside the limits and an
   empty required field show an error under it, linked to the input. The example date in the error
   has a day above 12, so the order of the fields is clear.
+
+The core browse, document, collection and permission screens share this field. Its calendar labels
+come from `TranslatedDatepickerIntl`, also re-exported by the UI entry point for older screens.
+The form value is a JavaScript `Date`; a host adapter using another date representation is converted
+only at the calendar boundary, keeping its parsing, formatting and calendar-day semantics.

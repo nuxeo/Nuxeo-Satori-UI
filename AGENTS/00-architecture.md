@@ -145,6 +145,22 @@ card's open and selection handlers and its thumbnail and action templates. The b
 unions (`NxsAvatarColor` and the rest) are asserted equal to Satori's at compile time in
 `/components-satori`, since `/components` may not import Satori to check.
 
+**Picker selection modes (NXSAT-656).** `nxs-user-group-picker` and
+`nxs-document-reference-input` accept `multiple`, matching `nxs-vocabulary-select`: the same
+`value` model and form accessor carry ordered arrays in multiple mode and scalar/null values in
+single mode. Material chip grids own keyboard focus and removal; pending text remains a
+`nxsChooseFromList` error even alongside selected chips. Principal identity is `prefixedId`;
+document identity follows `idProperty`. Unreadable stored document references remain selected.
+`documentChange` continues to report an individual selection or null; use `valueChange` for
+all ids. Each picker's `MultipleFromTheKeyboard` story runs the keyboard path in Chromium with no
+mouse, starting with focus placed in the input: choosing with ↓ and Enter, Backspace into the chips,
+arrows across chips and remove buttons, Backspace/Delete/Enter removal, where focus lands after each
+removal, and no required error until focus leaves. Keys are dispatched events carrying `keyCode`, as
+Material reads it; Tab order is Material's and no story asserts it. A picker reports leaving
+(`onTouched`) when focus leaves its host, not its input, so chip-only edits reach `updateOn: 'blur'`.
+Focus lost for nowhere counts only if it has not come back a task later, because Chromium reports a
+focused chip's removal that way before Material refocuses its neighbour.
+
 **Storybook 10** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
 <https://nuxeo.github.io/agentic-ui-poc/>. Each component has an Overview, an API page and its
 stories, after a Getting started page:
@@ -162,18 +178,39 @@ builds it with `@hylandsoftware` and `@alfresco` removed from `node_modules`, so
 Satori import fails the build rather than compiling. Only the opt-in `:satori` configuration reaches `@hylandsoftware/satori-ui`, for its theme.
 `typecheck` type-checks the stories too.
 
-**Publishing.** `.github/workflows/storybook-pages.yml` builds the default configuration the same
-token-free way and deploys it to GitHub Pages on every push to `integration/nxsat-308` (to `main`
-once that merges, NXSAT-649). **Only that build may be published.** `satori-components-satori`'s
-Storybook bundles compiled `@hylandsoftware/*` modules, `--sat-*` tokens and Satori's fonts, and the
-`:satori` configuration the tokens and fonts; we may consume them but not redistribute them. This
-repository is public, so a workflow artifact is published too: neither build may be uploaded as one.
-`scripts/storybook-publication-gate.mjs` refuses an artifact carrying any of them before upload, and
-CI runs it after its own build of this Storybook, so a change to the library that would block the
-deployment fails its pull request first. Its allowances are explicit and few: the Getting started
-page's sentences naming the package, the text of our own `libs/` and `apps/` files in source maps,
-and Storybook's Nunito Sans. Anything else fails, as does an allowance that matches nothing — so
-when Getting started gains or loses a mention of `@hylandsoftware`, update `ALLOWANCES` in the gate.
+**Publishing.** `.github/workflows/storybook-pages.yml` deploys **two** builds to GitHub Pages on
+every push to `main`: the default configuration, token-free, at the root, and the `:satori`
+configuration at `/satori/`. The root is unchanged, so existing links to the site still land where
+they did. Its push trigger and its `deploy` job's `if:` name that branch twice and must be changed
+together: both still said `integration/nxsat-308` after it merged and was deleted, and because the
+second gates the deployment as well, not even a `workflow_dispatch` from `main` could refresh the
+site — it built, passed the publication gate, and stopped.
+
+Publishing `/satori` is redistribution — it carries compiled `@hylandsoftware/*` modules, `--sat-*`
+tokens and Satori's fonts, and this repository is public, so the workflow artifact is public too.
+The Satori package owners approved it (relayed 2026-10-28; record the approver or ticket here).
+Until that approval this file, the workflow and the gate all said the opposite, so do not read a
+narrowed gate as an accident. `satori-components-satori`'s own Storybook is still **not**
+published: the approval was for the themed build, and nothing asked for the other.
+
+`scripts/storybook-publication-gate.mjs` is unchanged and still runs, but on the default build
+alone — in CI after its own build, and in `storybook-pages.yml` before the site is assembled, while
+that build is still a tree of its own. So the root stays provably Satori-free, which is the claim
+still worth making, and a change to the library that would block the deployment fails its pull
+request first; `/satori` is ungated by design, because gating it would mean weakening the gate until
+it passed. The workflow builds `:satori` first and then removes `@hylandsoftware` and `@alfresco`
+from `node_modules` before the default build, so a stray Satori import cannot compile into the root
+at all rather than merely being caught afterwards.
+
+The gate's allowances are explicit and few: the Getting started page's sentences naming the package,
+the text of our own `libs/` and `apps/` files in source maps, and Storybook's Nunito Sans. Anything
+else fails, as does an allowance that matches nothing — so when Getting started gains or loses a
+mention of `@hylandsoftware`, update `ALLOWANCES` in the gate.
+
+`scripts/storybook-assemble-site.mjs` lays the two builds out and refuses to write anything unless
+both are real Storybooks — `index.html`, `iframe.html` and an `index.json` listing at least one
+entry — because the failure that matters here is a site that deploys successfully and is empty. Its
+controls are the `storybook-assemble-selftest` gate.
 
 What each page documents, and where it comes from. All of it is customer-facing, so no ticket,
 branch or change history:

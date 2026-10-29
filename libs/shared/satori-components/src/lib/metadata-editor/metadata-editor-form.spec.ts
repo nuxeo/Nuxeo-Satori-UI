@@ -230,7 +230,7 @@ describe('firstError', () => {
     expect(firstError(control)?.key).toBe('required');
     control.setErrors({ required: true, server: 'Taken' });
     expect(firstError(control)).toEqual({ key: 'server', params: { message: 'Taken' } });
-    control.setErrors({ matDatepickerParse: { text: 'x' } });
+    control.setErrors({ nxsDateParse: { text: 'x' } });
     expect(firstError(control)?.key).toBe('date');
     control.setErrors({ maximum: { bound: 2, inclusive: false } });
     expect(firstError(control)).toEqual({

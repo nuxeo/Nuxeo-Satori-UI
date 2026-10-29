@@ -1,4 +1,19 @@
 import { NgTemplateOutlet } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import {
+  NxsBannerComponent,
+  NxsChipSetComponent,
+  type NxsChipItem,
+  NxsDateInputComponent,
+  NxsDocTypeIconComponent,
+  NxsDropzoneComponent,
+  NxsSpinnerComponent,
+  NxsToastService,
+  NxsUploadQueue,
+  NxsUploadQueueComponent,
+  provideNxsToast,
+} from '@nuxeo/satori-platform/components';
+
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import {
   Component,
@@ -20,7 +35,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -62,22 +76,9 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
-  DateMaskPipe,
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
-import {
-  NxsBannerComponent,
-  NxsChipSetComponent,
-  type NxsChipItem,
-  NxsDocTypeIconComponent,
-  NxsDropzoneComponent,
-  NxsSpinnerComponent,
-  NxsToastService,
-  NxsUploadQueue,
-  NxsUploadQueueComponent,
-  provideNxsToast,
-} from '@nuxeo/satori-platform/components';
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */
@@ -163,6 +164,29 @@ function toDocTypeDefs(types: string[], translate: (key: string) => string): Doc
   }));
 }
 
+/**
+ * Which message a failed folder-context read should show.
+ *
+ * One branch used to serve every failure, so a permission outcome, a deleted folder and a dropped
+ * connection all rendered as "Could not load creatable document types for this folder." — a
+ * technical sentence with no next step, under an otherwise empty dialog. The reported case is a
+ * guest at the repository root: Nuxeo answers `403 Privilege 'Read' is not granted to 'Anonymous'`,
+ * which is a statement about permission, not about loading.
+ *
+ * Anything that is not recognisably one of those keeps the retryable wording, because a message
+ * that guesses wrong about the cause is worse than one that admits it does not know.
+ */
+function folderContextErrorKey(error: unknown): string {
+  const status = error instanceof HttpErrorResponse ? error.status : 0;
+  if (status === 401 || status === 403) {
+    return 'browse.create-import.types-forbidden';
+  }
+  if (status === 404) {
+    return 'browse.create-import.types-folder-missing';
+  }
+  return 'browse.create-import.types-load-failed';
+}
+
 const DIALOG_SIZE = {
   content: { width: '960px', height: '680px' },
   success: { width: '440px' },
@@ -172,7 +196,7 @@ const DIALOG_SIZE = {
   selector: 'lib-create-import-dialog',
   standalone: true,
   imports: [
-    DateMaskPipe,
+    NxsDateInputComponent,
     NgTemplateOutlet,
     NxsBannerComponent,
     NxsChipSetComponent,
@@ -187,7 +211,6 @@ const DIALOG_SIZE = {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatDatepickerModule,
     MatProgressBarModule,
     MatSlideToggleModule,
     MatCheckboxModule,
@@ -451,13 +474,13 @@ export class CreateImportDialogComponent implements OnInit {
           );
           this.loadingContext.set(false);
         },
-        error: () => {
+        error: (error: unknown) => {
           if (requestId !== this.folderContextRequestId) {
             return;
           }
           this.parentFolderType.set(null);
           this.creatableTypes.set([]);
-          this.typesLoadError.set(this.translate.instant('browse.create-import.types-load-failed'));
+          this.typesLoadError.set(this.translate.instant(folderContextErrorKey(error)));
           this.loadingContext.set(false);
         },
       });

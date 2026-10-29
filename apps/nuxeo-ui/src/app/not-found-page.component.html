@@ -1,0 +1,10 @@
+<div class="not-found">
+  <nxs-error-state
+    [status]="404"
+    [heading]="'app.not-found.heading' | translate"
+    [retryable]="false"
+  />
+  <button mat-flat-button type="button" (click)="goToDashboard()">
+    {{ 'app.not-found.go-to-dashboard' | translate }}
+  </button>
+</div>

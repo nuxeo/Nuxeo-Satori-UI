@@ -68,8 +68,9 @@ import { BindingType, TmplAstRecursiveVisitor, parseTemplate } from '@angular/co
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import ts from 'typescript';
+import { auditPath } from './sanitizer-path.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const ALLOWLIST_PATH = '.ai/state/sanitizer-allowlist.json';
@@ -329,7 +330,8 @@ function findFiles(dir, extensions) {
     if (st.isDirectory()) {
       out.push(...findFiles(rel, extensions));
     } else if (extensions.some((e) => entry.endsWith(e)) && !entry.endsWith('.spec.ts')) {
-      out.push(rel);
+      // Registry keys use repository separators; stat/read operations still use native paths.
+      out.push(auditPath(rel));
     }
   }
   return out;
@@ -594,8 +596,7 @@ function resolveCalleeDeclaration(node, checker) {
   const decl = symbol.valueDeclaration ?? symbol.declarations?.[0];
   if (!decl) return null;
   const abs = decl.getSourceFile().fileName;
-  const rel = abs.startsWith(ROOT) ? relative(ROOT, abs) : abs;
-  return `${rel.replace(/\\/g, '/')}::${symbol.getName()}`;
+  return `${auditPath(abs, ROOT)}::${symbol.getName()}`;
 }
 
 /**

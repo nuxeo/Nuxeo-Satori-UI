@@ -54,12 +54,25 @@ const emptyAuditLog = {
   numberOfPages: 0,
 };
 
+/** The filters argument of a load with nothing filtered: every field present and empty. */
+const NO_FILTERS = {
+  text: '',
+  type: '',
+  modifiedFrom: null,
+  modifiedTo: null,
+  contributor: '',
+};
+
 type BrowseReturn<K extends keyof BrowseService> = ReturnType<BrowseService[K]>;
 type DetailReturn<K extends keyof DocumentDetailService> = ReturnType<DocumentDetailService[K]>;
 
 const browse = {
   getByPath: vi.fn((): BrowseReturn<'getByPath'> => EMPTY),
   getBrowseFolderContents: vi.fn((): BrowseReturn<'getBrowseFolderContents'> => EMPTY),
+  // Default EMPTY: the folder scan never resolves, so the toolbar filters fall back to the
+  // loaded page exactly as they did before cross-folder filtering existed. A spec that wants the
+  // whole-folder behaviour overrides this with its own `of({ entries, truncated })`.
+  getBrowseFolderTypes: vi.fn((): BrowseReturn<'getBrowseFolderTypes'> => EMPTY),
   getFolderContext: vi.fn((): BrowseReturn<'getFolderContext'> => EMPTY),
   getChildren: vi.fn((): BrowseReturn<'getChildren'> => EMPTY),
   hasChildCollections: vi.fn((): BrowseReturn<'hasChildCollections'> => of(false)),
@@ -293,25 +306,33 @@ describe('BrowseComponent — listing state', () => {
       browse.getBrowseFolderContents.mockClear();
       component.onListSortChange({ key, direction: 'desc' });
       expect(component.pageIndex()).toBe(0);
-      expect(browse.getBrowseFolderContents).toHaveBeenCalledWith(expect.any(String), 50, {
-        currentPageIndex: 0,
-        sort: [{ sortBy, sortOrder: 'DESC' }],
-      });
+      expect(browse.getBrowseFolderContents).toHaveBeenCalledWith(
+        expect.any(String),
+        50,
+        { currentPageIndex: 0, sort: [{ sortBy, sortOrder: 'DESC' }] },
+        // The filters ride along on every load, so re-ordering a filtered listing keeps it
+        // filtered. None are set here, which is itself the assertion: a sort is not a filter.
+        NO_FILTERS,
+      );
     }
   });
 
   it('sends no sort for a cleared order, nor for a column the server cannot sort by', () => {
     component.onListSortChange(null);
-    expect(browse.getBrowseFolderContents).toHaveBeenLastCalledWith(expect.any(String), 50, {
-      currentPageIndex: 0,
-      sort: [],
-    });
+    expect(browse.getBrowseFolderContents).toHaveBeenLastCalledWith(
+      expect.any(String),
+      50,
+      { currentPageIndex: 0, sort: [] },
+      NO_FILTERS,
+    );
 
     component.onListSortChange({ key: 'version', direction: 'asc' });
-    expect(browse.getBrowseFolderContents).toHaveBeenLastCalledWith(expect.any(String), 50, {
-      currentPageIndex: 0,
-      sort: [],
-    });
+    expect(browse.getBrowseFolderContents).toHaveBeenLastCalledWith(
+      expect.any(String),
+      50,
+      { currentPageIndex: 0, sort: [] },
+      NO_FILTERS,
+    );
   });
 
   it('marks only the columns the server sorts by as sortable', () => {
@@ -633,6 +654,7 @@ describe('BrowseComponent — listing state', () => {
       '/default-domain/workspaces/other',
       50,
       { currentPageIndex: 0, sort: [] },
+      NO_FILTERS,
     );
   });
 

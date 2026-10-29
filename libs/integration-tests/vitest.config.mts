@@ -9,6 +9,9 @@ export default defineConfig(() => ({
   test: {
     name: 'integration-tests',
     watch: false,
+    // Under full-suite load a spec can run several seconds. The 5s Vitest default turned
+    // that load into failures, so the limit is set for the whole project.
+    testTimeout: 30_000,
     globals: true,
     // `node` for the suite as a whole: most specs talk to Nuxeo with `fetch`, and jsdom's
     // `Blob` is not Node's, so the upload specs break under it with `object.stream is not

@@ -213,7 +213,6 @@ describe('SearchComponent', () => {
     return {
       id: 'doc1',
       name: 'Test Doc',
-      imageUrl: 'images/Login-background.svg',
       type: 'File',
       modifiedDate: '2026-08-24',
       lastContributor: 'admin',
@@ -649,28 +648,6 @@ describe('SearchComponent', () => {
     it('falls back to its own message when the server sends none', () => {
       component.onFavoriteFailed(new Error(''));
       expect(toast.error).toHaveBeenCalledWith('Failed to update favorites.', { duration: 5000 });
-    });
-  });
-
-  describe('onImageError', () => {
-    // NXSAT-318: the packaged app is served from /nuxeo/agentic-ui/, so the fallback must
-    // resolve against the base href rather than the server root.
-    it('should replace image src with the fallback, resolved against the base href', () => {
-      const mockImg = { src: '' } as HTMLImageElement;
-      const event = { target: mockImg } as unknown as Event;
-
-      component.onImageError(event);
-
-      expect(new URL(mockImg.src, 'http://nuxeo.test/nuxeo/agentic-ui/').pathname).toBe(
-        '/nuxeo/agentic-ui/images/Login-background.svg',
-      );
-    });
-
-    it('should do nothing when target is not an image', () => {
-      const event = { target: null } as Event;
-
-      // Should not throw
-      expect(() => component.onImageError(event)).not.toThrow();
     });
   });
 
@@ -1349,20 +1326,6 @@ describe('SearchComponent', () => {
       component.aiResults.set([resultItem({ id: 'ai', title: 'From AI' })]);
 
       expect(component.displayResults().map((r) => r.name)).toEqual(['From AI']);
-    });
-
-    it('gives each row fallback art that resolves against the base href (NXSAT-318)', async () => {
-      mockSearchService.search.mockReturnValue(
-        of({ items: [resultItem({ id: 'doc', title: 'Doc' })], aggregations: {} }),
-      );
-      fixture = TestBed.createComponent(SearchComponent);
-      component = fixture.componentInstance;
-      await fixture.whenStable();
-
-      const [view] = component.displayResults();
-      expect(new URL(view.imageUrl, 'http://nuxeo.test/nuxeo/agentic-ui/').pathname).toBe(
-        '/nuxeo/agentic-ui/images/Login-background.svg',
-      );
     });
   });
 

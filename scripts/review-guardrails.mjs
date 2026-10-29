@@ -9593,6 +9593,91 @@ function checkSatoriPrimitivesRegisteredInOrder() {
   }
 }
 
+/** Package-tool shims cannot be executed directly on Windows. Inspect syntax, not comments. */
+function checkPackageToolLaunches() {
+  const files = ['scripts', 'tools'].flatMap((dir) =>
+    walk(dir, (file) => /\.[cm]?[jt]s$/.test(file)),
+  );
+  const methods = new Set(['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync']);
+  const isTool = (node) =>
+    node && ts.isStringLiteralLike(node) && /^(?:npm|npx|nx)(?:\.cmd)?(?:\s|$)/i.test(node.text);
+  for (const file of files) {
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+    const aliases = new Set(methods);
+    for (const statement of source.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !/^(node:)?child_process$/.test(statement.moduleSpecifier.text)
+      )
+        continue;
+      for (const binding of statement.importClause?.namedBindings?.elements ?? []) {
+        if (methods.has(binding.propertyName?.text ?? binding.name.text))
+          aliases.add(binding.name.text);
+      }
+    }
+    const promisifiers = new Set(['promisify']);
+    for (const statement of source.statements) {
+      if (
+        ts.isImportDeclaration(statement) &&
+        /^(node:)?util$/.test(statement.moduleSpecifier.text)
+      ) {
+        for (const binding of statement.importClause?.namedBindings?.elements ?? []) {
+          if ((binding.propertyName?.text ?? binding.name.text) === 'promisify')
+            promisifiers.add(binding.name.text);
+        }
+      }
+    }
+    const collectAliases = (node) => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer &&
+        ts.isCallExpression(node.initializer)
+      ) {
+        const call = node.initializer;
+        const name = ts.isIdentifier(call.expression)
+          ? call.expression.text
+          : ts.isPropertyAccessExpression(call.expression)
+            ? call.expression.name.text
+            : '';
+        const original = call.arguments[0];
+        const launcher =
+          original &&
+          (ts.isIdentifier(original)
+            ? original.text
+            : ts.isPropertyAccessExpression(original)
+              ? original.name.text
+              : '');
+        if (promisifiers.has(name) && aliases.has(launcher)) aliases.add(node.name.text);
+      }
+      ts.forEachChild(node, collectAliases);
+    };
+    collectAliases(source);
+    const visit = (node) => {
+      const name =
+        ts.isCallExpression(node) &&
+        (ts.isIdentifier(node.expression)
+          ? node.expression.text
+          : ts.isPropertyAccessExpression(node.expression)
+            ? node.expression.name.text
+            : '');
+      const launch = name && aliases.has(name) && isTool(node.arguments[0]);
+      const entry =
+        ts.isPropertyAssignment(node) &&
+        (node.name.text === 'cmd' || node.name.text === 'command') &&
+        isTool(node.initializer);
+      if (launch || entry) {
+        const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+        fail(
+          `${file}:${line} starts a package tool directly; use scripts/beta-harness/package-command.mjs.`,
+        );
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+}
+
 const SATORI_ADOPTION_REGISTRY =
   'libs/shared/satori-components-satori/src/lib/provide-nxs-satori-components.ts';
 
@@ -10130,7 +10215,1244 @@ function checkAdoptedPatternsNotBypassed() {
   }
 }
 
+/**
+ * Drop a trailing `#` comment from one YAML line, tracking quotes so a `#` inside a string stays.
+ *
+ * `stripYamlComments` removes WHOLE-LINE comments, which is all a token search needs. The workflow
+ * parser below reads specific lines and has to be stricter, because `.github/workflows` is
+ * commented heavily and the comments discuss the very syntax being parsed. `storybook-pages.yml`
+ * carried `# TODO(NXSAT-649): move this and the deploy job's \`if:\` to \`main\``, which a naive
+ * `if:` scan reads as a gate, and `ci.yml`, `build-marketplace.yml` and `publish-config-package.yml`
+ * all explain `github.ref` in prose. A parser that reads comments reports the documentation instead
+ * of the configuration — and would have reported this workflow as gated on `main` while it was
+ * gated on a deleted branch.
+ *
+ * @param {string} line one line of YAML
+ * @returns {string} the same line truncated at the first unquoted `#`
+ */
+function stripTrailingYamlComment(line) {
+  let quote = null;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (quote !== null) {
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === '#' && (i === 0 || /\s/.test(line[i - 1]))) return line.slice(0, i);
+  }
+  return line;
+}
+
+/**
+ * A workflow as lines, with comments and opaque block-scalar bodies blanked rather than removed.
+ *
+ * **Blanked, so index `i` is always line `i + 1`.** `stripYamlComments` filters comment lines out,
+ * which shifts every line number after the first comment — and `.github/workflows` is mostly
+ * comment, so the shift is large. The first version of the parser tripwire below used that helper
+ * and reported `storybook-pages.yml:61` for a gate on line 85, which is both a wrong citation and
+ * a false failure. One function, used by the parser and by the tripwire that checks the parser, so
+ * the two numberings cannot disagree again.
+ *
+ * ## Why block scalars go too
+ *
+ * The body of a `run: |` is shell, not YAML, and reading it as YAML is not a theoretical problem:
+ * a script that writes a workflow — `cat > generated.yml <<'YAML'` with an `if: github.ref == …`
+ * inside it — had its heredoc line recorded as a step condition and failed the ticket-branch rule,
+ * on a workflow with no ref gate at all. Caught in review on #494. Blanking the body here fixes the
+ * jobs scan and the tripwire together, which is the point of them sharing this function.
+ *
+ * `if:` is the one block-scalar key kept, because there the body IS the expression and the gate
+ * parser folds it in deliberately.
+ *
+ * @param {string} body workflow source
+ * @returns {string[]}
+ */
+function workflowLines(body) {
+  const raw = body.split('\n');
+  // Detected on the RAW lines: comment blanking would strip the indentation these boundaries are
+  // measured by, and a blanked line would end a block scalar early.
+  /* The column job IDs sit at, so a JOB may be called `env` without its body being blanked.
+   *
+   * `jobs:\n  env:\n    if: …` named a job after a configuration field, and the data rule below
+   * blanked the whole job — ticket-branch gate included — which made both the gate scan and its
+   * tripwire blind to it. Reported on #494. A job ID is a key directly under the column-0 `jobs:`
+   * key, so one indent is enough to tell the two apart; anything deeper is configuration. */
+  const jobsIndex = raw.findIndex((line) => /^jobs\s*:/.test(line));
+  const jobIdIndent =
+    jobsIndex === -1
+      ? -1
+      : (raw
+          .slice(jobsIndex + 1)
+          .find((line) => line.trim() !== '' && !/^\s*#/.test(line))
+          ?.search(/\S/) ?? -1);
+
+  const opaque = new Array(raw.length).fill(false);
+  for (let i = 0; i < raw.length; i += 1) {
+    if (opaque[i]) continue;
+    // The trailing comment is dropped for the HEADER MATCH only — `run: | # generate a workflow`
+    // is a valid header, and requiring the indicator to end the raw line missed it, which put the
+    // script body back into the YAML the parser reads. Indentation is still measured from the raw
+    // lines, because comment blanking would erase the indentation the boundary depends on.
+    const header = stripTrailingYamlComment(raw[i]);
+    const blockScalar =
+      /^(\s*)((?:-\s+)?)['"]?([A-Za-z_][\w.-]*)['"]?\s*:\s*[|>][-+]?\d*\s*$/.exec(header);
+    /* A mapping whose VALUE is opaque data rather than workflow structure. Its body is blanked for
+     * the same reason a `run:` script is: the gate scan treats any `if:` under `jobs:` as a
+     * condition, so a job declaring `env.if` — or a `with:` input named `if` — had that data read
+     * as a step condition and failed the shape rule, on a workflow with nothing conditional in it.
+     * Reported on #494. None of these keys can contain a job or a step, so nothing the parser
+     * needs is lost — unless the key is a job ID, which `jobIdIndent` excludes. */
+    const dataField =
+      blockScalar ??
+      /^(\s*)((?:-\s+)?)['"]?(env|with|outputs|inputs|secrets|strategy)['"]?\s*:\s*$/.exec(header);
+    const key =
+      dataField && dataField !== blockScalar && dataField[1].length === jobIdIndent
+        ? null
+        : dataField;
+    if (!key || key[3] === 'if') continue;
+    /* The KEY's column, not the dash's. For `- run: |` the dash sits further left than the key, so
+     * measuring from the dash swallowed the step's own sibling keys as script — and a ticket-branch
+     * `if:` written after the script was blanked, invisible to the gate scan AND to the tripwire.
+     * The same off-by-a-dash as the condition folding below; it was fixed there and not here. */
+    const keyIndent = key[1].length + key[2].length;
+    for (let j = i + 1; j < raw.length; j += 1) {
+      /* A full-line comment is not a boundary. A comment sits wherever its author put it, and one
+       * written at the key's own column — `    # Environment variables` under a job's `    env:` —
+       * ended the region early and handed the rest of the mapping back to the gate scan, which
+       * then read an `env` field called `if` as a step condition. Reported on #494.
+       *
+       * This does not over-reach: a key at or below the column still ends the region, so a step's
+       * own `if:` written after a `run: |` and a comment is still read. There is a control for
+       * exactly that, because it is the shape this could have broken. */
+      if (/^\s*#/.test(raw[j])) continue;
+      if (raw[j].trim() !== '' && yamlIndent(raw[j]) <= keyIndent) break;
+      opaque[j] = true;
+    }
+  }
+  return raw.map((line, i) =>
+    opaque[i] || /^\s*#/.test(line) ? '' : stripTrailingYamlComment(line),
+  );
+}
+
+const yamlIndent = (line) => line.length - line.trimStart().length;
+
+/** The exclusive end of the block nested under `lines[start]`, whose key sits at `keyIndent`. */
+function yamlBlockEnd(lines, start, keyIndent) {
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end];
+    if (line.trim() !== '' && yamlIndent(line) <= keyIndent) break;
+    end += 1;
+  }
+  return end;
+}
+
+const unquoteYamlScalar = (value) => value.trim().replace(/^(['"])([\s\S]*)\1$/, '$2');
+
+/**
+ * The items of a YAML flow sequence, scanned rather than matched with a regex.
+ *
+ * `/\[([^\]]*)\]/` was the first attempt and it is wrong for the values this has to read: a branch
+ * filter may contain a character range, so `branches: [main, 'rel[0-9]']` ends at the `]` INSIDE
+ * the pattern and yields `'rel[0-9`. A selftest control caught it. Splitting on every comma has
+ * the same shape of bug for a pattern containing one, so the scan tracks quotes and nesting and
+ * only breaks at a top-level comma.
+ *
+ * Returns `null` for an unterminated sequence, so the caller can fail loudly.
+ *
+ * @returns {string[]|null}
+ */
+function parseYamlFlowSequence(text) {
+  const start = text.indexOf('[');
+  if (start === -1) return null;
+  const items = [];
+  let current = '';
+  let quote = null;
+  let depth = 0;
+
+  for (let i = start; i < text.length; i += 1) {
+    const char = text[i];
+    if (quote !== null) {
+      current += char;
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      current += char;
+    } else if (char === '[') {
+      depth += 1;
+      if (depth > 1) current += char;
+    } else if (char === ']') {
+      depth -= 1;
+      if (depth > 0) {
+        current += char;
+      } else {
+        items.push(current);
+        return items.map(unquoteYamlScalar).filter((item) => item !== '');
+      }
+    } else if (char === ',' && depth === 1) {
+      items.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  return null;
+}
+
+/**
+ * A YAML string list in any of the three forms `.github/workflows` actually uses: a flow sequence
+ * on the key's own line (`branches: [main]`), a flow sequence spanning lines, or a block sequence
+ * of `- item` lines.
+ *
+ * Returns `null` when the value is none of those, so the caller can fail loudly rather than read
+ * "I could not parse the filter" as "there is no filter". That confusion is the whole defect class
+ * this guardrail exists to catch: an unreadable branch allowlist treated as an absent one makes
+ * every job reachable and the check green on everything.
+ *
+ * @returns {string[]|null}
+ */
+function parseYamlStringList(lines, index, keyIndent) {
+  const line = lines[index];
+  const after = line.slice(line.indexOf(':', yamlIndent(line)) + 1).trim();
+
+  if (after.startsWith('[')) {
+    const items = parseYamlFlowSequence(
+      lines.slice(index, yamlBlockEnd(lines, index, keyIndent)).join(' '),
+    );
+    return items === null || items.length === 0 ? null : items;
+  }
+  if (after !== '') return [unquoteYamlScalar(after)];
+
+  /* A block sequence, in either indentation YAML allows.
+   *
+   * `yamlBlockEnd` is not used here, and that is the point: it stops at the first line indented no
+   * further than the key, which ends the sequence immediately for the INDENTLESS form —
+   *
+   *     branches:
+   *     - integration/nxsat-308
+   *
+   * — where the items sit at the key's own column. That form is valid YAML and GitHub accepts it,
+   * and it used to read as an unreadable filter: the trigger rule could not see the branch, and
+   * with no ref gate in the workflow the check returned before reporting anything. A ticket-only
+   * trigger written this way passed in silence. Reported on #494.
+   *
+   * So the sequence runs while lines are items at or past the key's column, and stops at the first
+   * line that is not one. A plain scalar on the next line still returns `null`, which is what
+   * makes "I cannot read this filter" distinct from "there is no filter". */
+  const items = [];
+  for (let i = index + 1; i < lines.length; i += 1) {
+    if (lines[i].trim() === '') continue;
+    if (yamlIndent(lines[i]) < keyIndent) break;
+    const entry = /^\s*-\s*(.+)$/.exec(lines[i]);
+    if (!entry) break;
+    items.push(unquoteYamlScalar(entry[1]));
+  }
+  return items.length > 0 ? items : null;
+}
+
+/** The events that accept a branch filter. Every other event is unfiltered by construction. */
+const BRANCH_FILTERED_EVENTS = ['push', 'pull_request', 'pull_request_target'];
+
+/**
+ * The branches that outlive the work done on them. **An allowlist, deliberately.**
+ *
+ * ## Why this is not a list of ticket namespaces
+ *
+ * It was: nine prefixes — `integration/`, `feature/`, `fix/`, `bugfix/`, `hotfix/`, `chore/`,
+ * `claude/`, `dependabot/`, `renovate/` — and a branch outside them was treated as safe to pin.
+ * Reviewed against this repository's actual remote, that list missed five namespaces in use:
+ *
+ *     fix 107, feature 49, claude 10, copilot 8, feat 7, dependabot 7, chore 6,
+ *     integration 2, product 1, docs 1, ci 1
+ *
+ * `copilot/`, `feat/`, `product/`, `docs/` and `ci/` were all absent, and `feat/` is the sharpest
+ * of them because `feature/` was listed and this repository uses both spellings. A dead
+ * `feat/<ticket>` gate passed; a dead `feature/<ticket>` gate failed. So did a bare `nxsat-999`
+ * with no namespace at all — six of eight dead branches probed went green.
+ *
+ * Appending five more prefixes would have fixed those six and left the next spelling to the next
+ * incident, which is the same drift this guardrail exists to prevent, reproduced inside the
+ * guardrail. Inverted, the question becomes the one with a short and stable answer: a branch that
+ * is **not** on this list is work in progress, and pinning work in progress in a workflow is the
+ * bomb. The list changes when a repository adopts a new permanent branch, roughly never; the set
+ * of namespaces people invent for tickets changes every sprint.
+ *
+ * A branch that genuinely is long-lived and is not here — `staging`, say — fails with a message
+ * saying to add it. That is the point: longevity becomes declared rather than inferred from a
+ * prefix nobody updated.
+ */
+const LONG_LIVED_BRANCHES = ['main', 'master', 'develop', 'gh-pages'];
+
+// Case-insensitive to match GitHub's expression `==`, so `MAIN` is recognised.
+const isLongLivedBranch = (branch) => LONG_LIVED_BRANCHES.includes(branch.toLowerCase());
+
+/** A filter pattern that names exactly one branch, rather than a family of them. */
+const isLiteralBranchPattern = (pattern) =>
+  !/[*?+[\]]/.test(pattern) && !pattern.startsWith('!');
+
+/**
+ * A GitHub branch-filter pattern as a `RegExp`, or `null` for syntax this does not model.
+ *
+ * `**` crosses `/` and `*` does not — so `integration/**` matches `integration/nxsat-308`, and so
+ * does `integration/*`, while `integration/*` does NOT match `integration/a/b`. Matching by
+ * substring instead gets this wrong in both directions: `main` would "match" `maintenance`, and
+ * `integration/**` would not match anything.
+ *
+ * **Case-insensitive**, because GitHub's expression `==` ignores case for strings: with
+ * `branches: [main]`, `if: github.ref == 'refs/heads/MAIN'` does run the job, and a case-sensitive
+ * test reported it as unreachable. Caught in review on #494. Note the asymmetry — git refs
+ * themselves are case-sensitive, so this leniency belongs here, where an Actions expression is
+ * being modelled, and not in the ref-existence lookup.
+ *
+ * Character ranges, `+`, `?`, and `!` negation return `null`. `?` is in that list rather than
+ * translated: in GitHub filter patterns `?` means **zero or one of the PRECEDING character**, not
+ * "any one character" as in a shell glob, so `release/10?` admits `release/1` and `release/10` and
+ * not `release/10x`. Modelling it as `[^/]` got both ends wrong — it rejected the two branches the
+ * pattern admits and admitted one it does not. Refusing to guess is the behaviour the rest of this
+ * function already has, and no workflow here uses `?`.
+ *
+ * The caller fails loudly on `null`, because a mismatched pattern silently converts "this job can
+ * never run" into "this job is fine".
+ */
+function githubBranchFilterToRegExp(pattern) {
+  if (/[+?[\]]/.test(pattern) || pattern.startsWith('!')) return null;
+  const source = pattern
+    .replace(/[.^${}()|\\]/g, '\\$&')
+    .replace(/\*\*/g, '\u0000')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\u0000/g, '.*');
+  return new RegExp(`^${source}$`, 'i');
+}
+
+/**
+ * Every `github.ref` / `github.ref_name` comparison against a string literal in an expression.
+ *
+ * Both operand orders are read, and `!=` as well as `==`. `startsWith(github.ref, '…')` and
+ * `contains(…)` are deliberately NOT matched: a prefix test against `refs/heads/integration/`
+ * stays true for every future branch in that namespace, so it is not the pinned-to-one-branch
+ * shape this guards. That is a known gap, not an oversight — closing it would require deciding
+ * whether a prefix is "a branch", which it is not.
+ *
+ * `ref_name` is listed BEFORE `ref` in both alternations, and both are closed with `\b`. In the
+ * reversed-operand order nothing follows the context name, so `(ref|ref_name)` matched `ref` as a
+ * prefix and read `'main' == github.ref_name` as a comparison against `github.ref` — which then
+ * failed the shape rule on a perfectly valid condition. Caught in review on #494. The forward
+ * order never had the bug, because the `==` that must follow forces the regex to backtrack to the
+ * longer alternative; relying on that asymmetry is what made it easy to miss.
+ *
+ * The literal is a character class closed on its own quote, not `(.*?)` with a backreference. The
+ * lazy form could span two literals: in `github.event_name == 'push' && 'main' == github.ref_name`
+ * it backtracked until the reversed order matched, and read the branch name as `push' && 'main`.
+ * Also caught on #494. A doubled quote — GitHub's escape inside an expression string — is part of
+ * the literal and is unescaped below.
+ */
+const EXPRESSION_STRING = "'((?:[^']|'')*)'|\"((?:[^\"]|\"\")*)\"";
+
+/**
+ * The comparison matcher, parameterised by which `github.*` contexts to look for.
+ *
+ * Parameterised because the alternative is a second matcher, and a second matcher is a second set
+ * of the same bugs. `assertsRefType` was written as its own regex and promptly reproduced all
+ * three defects this one had already been fixed for: it read comparison text inside a string as a
+ * real assertion, it missed the reversed operand order, and it compared the literal case-sensitively
+ * where GitHub's `==` does not. Reported on #494, one round after the duplicate was introduced.
+ *
+ * Longest context first in the alternation, and `\b` after it — see `refComparisons` below for what
+ * that prevents.
+ */
+const comparisonPatterns = new Map();
+const comparisonPattern = (contexts) => {
+  const key = contexts.join('|');
+  if (!comparisonPatterns.has(key)) {
+    comparisonPatterns.set(
+      key,
+      new RegExp(
+        `github\\.(${key})\\b\\s*(==|!=)\\s*(?:${EXPRESSION_STRING})` +
+          `|(?:${EXPRESSION_STRING})\\s*(==|!=)\\s*github\\.(${key})\\b`,
+        'g',
+      ),
+    );
+  }
+  return comparisonPatterns.get(key);
+};
+
+/**
+ * Which characters of an expression sit inside a string literal, quotes included.
+ *
+ * A doubled quote is GitHub's escape, so it does not end the literal — which is what makes
+ * `'github.ref == ''main'''` a single string and not a comparison. Needed because the scan below
+ * would otherwise read the comparison TEXT inside it:
+ * `contains(github.event.head_commit.message, 'github.ref == ''main''')` gates on nothing, and was
+ * reported as `github.ref == ''` failing the shape rule. Caught in review on #494.
+ */
+function stringLiteralMask(expression) {
+  const inside = new Uint8Array(expression.length);
+  for (let i = 0; i < expression.length; i += 1) {
+    const quote = expression[i];
+    if (quote !== "'" && quote !== '"') continue;
+    const start = i;
+    i += 1;
+    while (i < expression.length) {
+      if (expression[i] !== quote) {
+        i += 1;
+      } else if (expression[i + 1] === quote) {
+        i += 2;
+      } else {
+        break;
+      }
+    }
+    for (let j = start; j <= Math.min(i, expression.length - 1); j += 1) inside[j] = 1;
+  }
+  return inside;
+}
+
+function contextComparisons(expression, contexts) {
+  const inside = stringLiteralMask(expression);
+  const found = [];
+  for (const match of expression.matchAll(comparisonPattern(contexts))) {
+    const forward = match[1] !== undefined;
+    // The CONTEXT has to be outside a string literal. Its operand is a literal, of course, so the
+    // match's own start is only the right place to ask in the forward order.
+    const contextIndex = forward ? match.index : match.index + match[0].lastIndexOf('github.');
+    if (inside[contextIndex]) continue;
+    found.push({
+      context: forward ? match[1] : match[8],
+      operator: forward ? match[2] : match[7],
+      literal: (forward ? (match[3] ?? match[4]) : (match[5] ?? match[6]))
+        .replace(/''/g, "'")
+        .replace(/""/g, '"'),
+      index: match.index,
+    });
+  }
+  return found;
+}
+
+/** Every `github.ref` / `github.ref_name` comparison against a string literal. */
+const refComparisons = (expression) => contextComparisons(expression, ['ref_name', 'ref']);
+
+/**
+ * An `if:` value with its enclosing YAML quotes removed, so what is analysed is the Actions
+ * expression rather than the scalar that carries it.
+ *
+ * Leaving them on produced a contradiction rather than a near miss:
+ * `if: "github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'"` has the whole
+ * expression inside one double-quoted scalar, so `expressionHasAlternative` — which blanks string
+ * literals before looking for `||` — blanked the entire thing and found no `||`, while
+ * `refComparisons` still pulled both comparisons out of it. The two disagreed about the same text
+ * and `staging` was reported unreachable. Caught in review on #494.
+ *
+ * Only a value that both opens and closes with the same quote is treated as a quoted scalar; in
+ * YAML a quoted scalar cannot be followed by more content, so that is the shape, not a guess.
+ */
+function unquoteYamlExpression(value) {
+  if (value.length > 1 && value.startsWith('"') && value.endsWith('"')) {
+    return value.slice(1, -1).replace(/\\"/g, '"');
+  }
+  if (value.length > 1 && value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replace(/''/g, "'");
+  }
+  return value;
+}
+
+/**
+ * `||` anywhere in the expression, ignoring string literals (a branch name may contain a `|`).
+ *
+ * Coarse on purpose, and it under-reaches: `github.ref == 'refs/heads/main' && (success() ||
+ * failure())` is not judged either, though the comparison there is required. Scoping `||` to the
+ * right operand needs real precedence parsing, and the direction of this error is the safe one —
+ * a rule that declines to speak, not one that rejects a valid workflow. The shape that caused
+ * NXSAT-649 was a bare single comparison, so the rule still fires where it matters.
+ */
+const expressionHasAlternative = (expression) => {
+  // Blanked through `stringLiteralMask`, the same function `refComparisons` filters by. The two
+  // used to disagree about one string — a `'…'` regex here does not know a doubled quote is an
+  // escape — and two analyses of the same text reaching different conclusions is the shape of
+  // defect that produced the quoted-scalar bug.
+  const inside = stringLiteralMask(expression);
+  /* Indexed by CODE UNIT, like the mask. `[...expression]` iterates code POINTS, so one astral
+   * character — an emoji in a branch name is enough — shifted every index after it by one and the
+   * blanking fell out of step with the mask. The visible symptom was a real `||` being erased:
+   * `github.ref=='refs/heads/🚀'||github.ref=='refs/heads/main'` was reported unreachable.
+   * Reported on #494. */
+  let blanked = '';
+  for (let i = 0; i < expression.length; i += 1) blanked += inside[i] ? ' ' : expression[i];
+  return /\|\|/.test(blanked);
+};
+
+/**
+ * Whether the comparison AT `index` sits under a negation.
+ *
+ * Per-comparison, not per-expression, and that distinction is load-bearing: `if: github.ref ==
+ * 'refs/heads/integration/x' && !cancelled()` contains a `!`, and treating the whole expression as
+ * negated would have skipped the ticket-branch rule on one of the commonest shapes in
+ * `.github/workflows` — re-opening the exact bug this guardrail exists to catch.
+ *
+ * ## Why this tracks groups rather than walking back
+ *
+ * The first version walked back over whitespace and opening parentheses, which finds the `!` in
+ * `!(github.ref == …)` only because the `(` is adjacent. Put anything in front of the comparison
+ * inside that group — `!(github.event_name == 'push' && github.ref == 'refs/heads/staging')` — and
+ * the walk stops at the `&`, the enclosing negation is missed, and a reachable job is rejected.
+ * Reported on #494 after the third round.
+ *
+ * So every group open before `index` is pushed with whether a `!` introduces it, and a comparison
+ * is negated if ANY enclosing group is. Parentheses that are not negated still mean nothing —
+ * `(github.ref == 'refs/heads/staging')` on its own really is unreachable, and must stay caught.
+ * Characters inside string literals are ignored, so a `(` or `!` in a branch name does not count.
+ */
+function comparisonIsNegated(expression, index) {
+  const inside = stringLiteralMask(expression);
+
+  /** `!` immediately before `position`, e.g. the `!` of `!(github.ref == …)`. */
+  const introducedByBang = (position) => {
+    let i = position - 1;
+    while (i >= 0 && /\s/.test(expression[i])) i -= 1;
+    return i >= 0 && expression[i] === '!' && !inside[i];
+  };
+
+  /* `(…) == false` and `(…) != true`, in either operand order.
+   *
+   * An inversion does not have to be spelled `!`. `(github.ref == 'refs/heads/staging') == false`
+   * excludes `staging` exactly as `!(…)` does, and reading it as a required inclusion gate rejected
+   * a reachable job. Reported on #494. `== true` and `!= false` are NOT inversions and must keep
+   * working — there is a control for `== true` precisely because this is easy to get backwards. */
+  const invertedByBooleanCompare = (open, close) => {
+    const after = expression.slice(close + 1).match(/^\s*(==|!=)\s*(true|false)\b/i);
+    if (after) return (after[1] === '==') === (after[2].toLowerCase() === 'false');
+    const before = expression.slice(0, open).match(/(true|false)\s*(==|!=)\s*$/i);
+    if (before) return (before[2] === '==') === (before[1].toLowerCase() === 'false');
+    return false;
+  };
+
+  // Every group that encloses `index`, as a span, so what FOLLOWS the group can be read too.
+  const open = [];
+  const enclosing = [];
+  for (let i = 0; i < expression.length; i += 1) {
+    if (inside[i]) continue;
+    if (expression[i] === '(') {
+      open.push(i);
+    } else if (expression[i] === ')') {
+      const start = open.pop();
+      if (start !== undefined && start < index && i > index) enclosing.push([start, i]);
+    }
+  }
+
+  return (
+    introducedByBang(index) ||
+    enclosing.some(([start, end]) => introducedByBang(start) || invertedByBooleanCompare(start, end))
+  );
+}
+
+/**
+ * The trigger events with their branch filters, and every `if:` inside `jobs:`, of one workflow.
+ *
+ * Hand-parsed rather than YAML-parsed for the reason `crowdinFileEntries` gives above: no YAML
+ * parser is a declared dependency of this repository, and a guardrail that imports an undeclared
+ * package goes red for a reason unrelated to what it guards the first time the tree resolves
+ * differently.
+ *
+ * Returns `null` when there is no `on:` block to read, so the caller can say so instead of
+ * reporting a workflow with no triggers as a workflow with nothing wrong.
+ */
+function parseWorkflowTriggersAndGates(body) {
+  const lines = workflowLines(body);
+
+  const onIndex = lines.findIndex((line) => /^(?:on|'on'|"on")\s*:/.test(line));
+  if (onIndex === -1) return null;
+
+  const NO_FILTER = { branches: null, unparsed: false, ignore: false, tags: false };
+
+  /**
+   * A branch filter written as part of an inline flow mapping, e.g.
+   * `push: { branches: ['integration/nxsat-308'] }`.
+   *
+   * Only subsequent LINES used to be searched, so an inline mapping read as an event with no
+   * filter at all — which bypassed both the reachability rule and the ticket-branch trigger rule,
+   * silently, on the exact shape this guardrail exists to catch. Caught in review on #494.
+   *
+   * A `branches` key whose value cannot be read returns `unparsed`, so the caller fails loudly
+   * instead of calling it absent.
+   */
+  const inlineFilter = (text) => {
+    const key = /['"]?\b(branches|branches-ignore)\b['"]?\s*:/.exec(text);
+    const tags = /['"]?\btags(?:-ignore)?\b['"]?\s*:/.test(text);
+    if (!key) return text.trim() === '' ? null : { ...NO_FILTER, tags };
+    const items = parseYamlFlowSequence(text.slice(key.index + key[0].length));
+    return {
+      branches: items,
+      unparsed: items === null || items.length === 0,
+      ignore: key[1] === 'branches-ignore',
+      tags,
+    };
+  };
+
+  /** @type {Map<string, {branches: string[]|null, unparsed: boolean, ignore: boolean, tags: boolean}>} */
+  const events = new Map();
+  const inline = lines[onIndex].slice(lines[onIndex].indexOf(':') + 1).trim();
+  if (inline !== '') {
+    /* `on: { push: { branches: [...] } }` is a flow MAPPING, not a list of event names. It used to
+     * be registered as a single event whose name was the whole mapping text — which matches no
+     * branch-filtered event, so the trigger counted as unfiltered and a ticket-only trigger passed
+     * with nothing to hide it. Caught in review on #494.
+     *
+     * Refused rather than parsed: nested flow mappings are real work to read, the caller's failure
+     * names this function and says what to do, and a loud refusal is the behaviour this file
+     * already prefers to a quiet exemption. No workflow here uses the form. */
+    if (inline.startsWith('{') || /^[&*]/.test(inline)) return null;
+    // `on: push` or `on: [push, pull_request]` — a shorthand that carries no branch filter.
+    const names = inline.startsWith('[')
+      ? (parseYamlFlowSequence(inline) ?? [])
+      : [unquoteYamlScalar(inline)];
+    for (const name of names.filter(Boolean)) events.set(name, NO_FILTER);
+  } else {
+    const onEnd = yamlBlockEnd(lines, onIndex, yamlIndent(lines[onIndex]));
+    const indents = lines
+      .slice(onIndex + 1, onEnd)
+      .filter((line) => line.trim() !== '')
+      .map(yamlIndent);
+    if (indents.length === 0) return null;
+    const eventIndent = Math.min(...indents);
+
+    for (let i = onIndex + 1; i < onEnd; i += 1) {
+      if (lines[i].trim() === '' || yamlIndent(lines[i]) !== eventIndent) continue;
+      /* A quoted event key is valid YAML — `'push':` means exactly what `push:` means. It used to
+       * match nothing and be SKIPPED, which left the event map empty and let the very trigger the
+       * unquoted form is rejected for pass unnoticed.
+       *
+       * And an entry that still does not match is now `null` rather than skipped. Skipping is how
+       * a parser quietly stops enforcing: every unrecognised shape became an exemption, and the
+       * only sign was a check that said nothing. Failing names this function and says what to do. */
+      const key = /^\s*(?:(['"])([A-Za-z_][\w-]*)\1|([A-Za-z_][\w-]*))\s*:/.exec(lines[i]);
+      if (!key) return null;
+      const event = key[2] ?? key[3];
+      const eventEnd = yamlBlockEnd(lines, i, eventIndent);
+      /* An inline flow mapping first, then the block form below.
+       *
+       * A flow mapping may span lines: `push: {` with `branches: […] }` underneath handed
+       * `inlineFilter` just `{`, which carries no filter, so the ticket-only trigger counted as
+       * unfiltered. Reported on #494. The rest of the event region is joined on only when the
+       * value really does open a flow mapping — joining unconditionally would feed the BLOCK form
+       * to the inline parser, and `branches:` with a `- main` sequence under it has no `[…]` for
+       * that parser to find, which would turn every block filter into "unreadable". */
+      const ownValue = lines[i].slice(lines[i].indexOf(':', yamlIndent(lines[i])) + 1);
+      /* An anchor or alias on the event value — `push: &publish_trigger`, `push: *triggers` — is
+       * refused, not read. An anchor is a non-empty value with no `branches` in it, so the event
+       * counted as unfiltered and a ticket-only trigger passed. Reported on #494. Refused rather
+       * than resolved: following an alias means carrying a document-wide anchor table, which is a
+       * YAML implementation, and not being one is the whole constraint this parser works under. */
+      if (/^\s*[&*]/.test(ownValue)) return null;
+      let filter = inlineFilter(
+        ownValue.trim().startsWith('{') ? [ownValue, ...lines.slice(i + 1, eventEnd)].join(' ') : ownValue,
+      );
+      if (filter === null) {
+        filter = NO_FILTER;
+        for (let j = i + 1; j < eventEnd; j += 1) {
+          if (/^\s*['"]?tags(?:-ignore)?['"]?\s*:/.test(lines[j])) filter = { ...filter, tags: true };
+          const match = /^\s*['"]?(branches|branches-ignore)['"]?\s*:/.exec(lines[j]);
+          if (!match) continue;
+          const list = parseYamlStringList(lines, j, yamlIndent(lines[j]));
+          filter = {
+            ...filter,
+            branches: list,
+            unparsed: list === null,
+            ignore: match[1] === 'branches-ignore',
+          };
+        }
+      }
+      events.set(event, filter);
+      i = eventEnd - 1;
+    }
+  }
+
+  /** @type {{job: string|null, line: number, level: 'job'|'step', expression: string}[]} */
+  const gates = [];
+  const jobsIndex = lines.findIndex((line) => /^jobs\s*:/.test(line));
+  if (jobsIndex !== -1) {
+    /* `jobs:` with anything on its own line is a flow mapping or an anchor, and it is refused.
+     * `jobs: { deploy: { if: … } }` produced no gates at all — the line scan below finds no keys
+     * to attribute and the tripwire only looks at `if:`-shaped lines — so a ticket-branch gate
+     * written that way passed in silence. Reported on #494. Refused rather than parsed, for the
+     * reason the anchors above are: a flow mapping nested inside a flow mapping is a YAML reader,
+     * and the failure names this function so whoever meets it knows what to do. */
+    if (lines[jobsIndex].slice(lines[jobsIndex].indexOf(':') + 1).trim() !== '') return null;
+    const jobsEnd = yamlBlockEnd(lines, jobsIndex, yamlIndent(lines[jobsIndex]));
+    const jobIndents = lines
+      .slice(jobsIndex + 1, jobsEnd)
+      .filter((line) => line.trim() !== '')
+      .map(yamlIndent);
+    const jobIndent = jobIndents.length === 0 ? 0 : Math.min(...jobIndents);
+    let job = null;
+    // The indent of a job's own keys, taken from the first one seen rather than assumed to be
+    // `jobIndent + 2`, so `if:` is attributed to the job or to a step correctly under any style.
+    let jobKeyIndent = null;
+
+    for (let i = jobsIndex + 1; i < jobsEnd; i += 1) {
+      if (lines[i].trim() === '') continue;
+      const indent = yamlIndent(lines[i]);
+      if (indent === jobIndent) {
+        // A job whose body is a flow mapping or an alias — `deploy: { if: … }` — is refused for
+        // the same reason `jobs:` is above: its keys never reach the scan, so a gate inside it is
+        // invisible rather than merely misread.
+        const jobValue = lines[i].slice(lines[i].indexOf(':', indent) + 1).trim();
+        if (/^[{&*]/.test(jobValue)) return null;
+        job = /^\s*['"]?([A-Za-z_][\w-]*)['"]?\s*:/.exec(lines[i])?.[1] ?? job;
+        jobKeyIndent = null;
+        continue;
+      }
+      if (jobKeyIndent === null) jobKeyIndent = indent;
+      const gate = /^\s*(?:-\s+)?['"]?if['"]?\s*:\s*(.*)$/.exec(lines[i]);
+      if (!gate) continue;
+
+      /* Fold in the continuation lines, unconditionally.
+       *
+       * A YAML scalar value continues on every following line indented further than its key, in
+       * both shapes this has to read: a block scalar (`if: >` / `if: |`) and a multi-line PLAIN
+       * scalar, which is what `if: ${{` with the expression below it is — and also plain
+       * `if: github.ref ==` with the literal on the next line, which has no expression markers to
+       * notice at all. Both were read as a first line only, so the gate compared nothing and the
+       * tripwire, which reads the `if:` line, could not see it either. Caught in review on #494;
+       * the earlier version looked for an unbalanced `${{`, which the marker-less form does not
+       * have. Following YAML's own rule instead of guessing at completeness covers both.
+       *
+       * The key's indent, not the line's: for a sequence item (`- if: …`) the `-` sits further
+       * left than the key, so measuring from the line would treat the step's own sibling keys as
+       * continuations and fold `run: echo` into the expression. */
+      const keyIndent = (/^(\s*-\s+)/.exec(lines[i])?.[1] ?? '').length || indent;
+      const isBlockScalar = /^[>|][-+]?\d*$/.test(gate[1].trim());
+      const folded = isBlockScalar ? [] : [gate[1].trim()];
+      for (
+        let j = i + 1;
+        j < jobsEnd && (lines[j].trim() === '' || yamlIndent(lines[j]) > keyIndent);
+        j += 1
+      ) {
+        folded.push(lines[j].trim());
+      }
+      gates.push({
+        job,
+        line: i + 1,
+        level: indent === jobKeyIndent ? 'job' : 'step',
+        expression: unquoteYamlExpression(folded.join(' ').trim()),
+      });
+    }
+  }
+
+  return { events, gates };
+}
+
+/**
+ * A workflow's ref gates must name a branch that can actually carry the workflow.
+ *
+ * ## The incident
+ *
+ * `storybook-pages.yml` published the public Material Storybook from `integration/nxsat-308`:
+ *
+ *     on:
+ *       push:
+ *         branches: ['integration/nxsat-308']
+ *       workflow_dispatch:
+ *     jobs:
+ *       deploy:
+ *         if: github.ref == 'refs/heads/integration/nxsat-308'
+ *
+ * That branch merged into `main` and was deleted. https://nuxeo.github.io/agentic-ui-poc/ then went
+ * un-refreshed from 2026-10-23 until NXSAT-649, and the failure mode is the nastiest kind: a
+ * `workflow_dispatch` from `main` still checked out, still built the Storybook, still passed
+ * `scripts/storybook-publication-gate.mjs` — and then **skipped** `deploy`, because its `if:` was
+ * false. A skipped job leaves the run **green**. So there was a green run, a stale site, and no
+ * route to publish at all. Nothing in this repository's tooling could see it, and the only reason
+ * it was found is that somebody looked at the live page.
+ *
+ * `actionlint` cannot see it either: version 1.7.12 exits 0 on that exact file, verified before
+ * this check was written. It validates expression syntax and context names, not whether a ref a
+ * gate names is a ref that can exist. That is why this guardrail has to exist rather than being a
+ * line in an actionlint config.
+ *
+ * ## Why this reads the whole tree, not the diff
+ *
+ * Most checks here are diff-scoped. This one cannot be. **The file did not change — the world
+ * changed.** The workflow was correct the day it was written and became wrong when a branch was
+ * deleted in a different pull request that touched no workflow at all. A diff-scoped check sees
+ * nothing on the commit that breaks it, and nothing on any commit afterwards.
+ *
+ * ## Which rules are errors, and why
+ *
+ * Load-bearing, `error`, and each fires identically in a fresh CI clone because each is decided
+ * from the workflow text alone:
+ *
+ * 1. **Shape.** `github.ref` is always a full ref (`refs/heads/main`) and `github.ref_name` is
+ *    always the short name (`main`). Comparing either to the other form is a constant: `==` can
+ *    never be true, and `!=` can never be false, so the gate either never runs or never gates.
+ * 2. **Unreachable.** The gated branch matches none of the workflow's own `push` /`pull_request`
+ *    branch allowlists, and no unfiltered trigger could supply that ref either. The job can never
+ *    run. Conditioned on there being no `workflow_dispatch` / `schedule` on purpose: with a manual
+ *    dispatch the gate IS reachable, by dispatching from that branch, so claiming otherwise would
+ *    be the overstatement this programme keeps getting caught on.
+ * 3. **Transient.** The gate pins one literal branch in a namespace whose branches are deleted
+ *    when their ticket merges, or a branch allowlist contains nothing but such branches. This is
+ *    the rule that catches the incident above, and it is static: it does not ask whether the branch
+ *    exists today, it says that pinning a ticket branch is a bomb with the fuse already lit.
+ *
+ * Rule 2 alone would NOT have caught the incident — the trigger and the `if:` named the same
+ * branch, so they agreed with each other perfectly. They were both wrong. Catching "the two
+ * disagree" is worth having, but it is not the bug that cost five days; rule 3 is.
+ *
+ * And one rule that is explicitly NOT load-bearing:
+ *
+ * 4. **No such ref** — `warn`, and silent unless the clone can resolve its own default branch.
+ *    `actions/checkout` fetches one ref by default, so in CI `refs/heads/main` usually does not
+ *    exist and the question is unanswerable; asking it anyway would warn about every correct
+ *    workflow in the repository. It is kept because locally it catches a dead branch that rules 1
+ *    to 3 cannot — a plain name like `develop` in no transient namespace — and it is pinned by a
+ *    control in the selftest so it cannot rot into decoration. It is a developer aid. It is not
+ *    the gate; rules 1 to 3 are.
+ */
+function checkWorkflowRefGates() {
+  const DIR = '.github/workflows';
+  const workflows = walk(DIR, (path) => /\.ya?ml$/.test(path)).sort();
+  if (workflows.length === 0) {
+    fail(
+      `No workflow found under ${DIR}, so this gate asserted nothing. If the workflows moved, ` +
+        'point this check at them rather than leaving it inert.',
+    );
+    return;
+  }
+
+  /* Rule 4's precondition, asked once. A clone that cannot see its own default branch cannot
+   * answer "does this branch exist", so the question is not asked at all there.
+   *
+   * One `for-each-ref` rather than a `show-ref` per branch, lower-cased: GitHub's expression `==`
+   * ignores case, so a gate on `refs/heads/MAIN` names the branch `main` as far as the workflow is
+   * concerned, and warning that it does not exist would be wrong for the same reason the
+   * reachability rule had to become case-insensitive. */
+  let knownRefs = null;
+  const branchRefExists = (branch) => {
+    if (knownRefs === null) {
+      try {
+        knownRefs = new Set(
+          git(['for-each-ref', '--format=%(refname)', 'refs/heads/', 'refs/remotes/origin/'])
+            .split('\n')
+            .filter(Boolean)
+            .map((ref) => ref.toLowerCase()),
+        );
+      } catch {
+        knownRefs = new Set();
+      }
+    }
+    return (
+      knownRefs.has(`refs/heads/${branch}`.toLowerCase()) ||
+      knownRefs.has(`refs/remotes/origin/${branch}`.toLowerCase())
+    );
+  };
+  const refsAreKnowable = ['main', 'master'].some(branchRefExists);
+
+  /* Whether a missing branch is a FACT here, or merely unobserved.
+   *
+   * The existence rule used to warn unconditionally, and the reasoning was sound as far as it went:
+   * `actions/checkout` fetches one ref by default, and a shallow clone cannot tell a deleted branch
+   * from an unfetched one. The consequence was not sound. It left the pinned-branch rule as the
+   * only one that could fail, so any dead branch it did not recognise went green — which is
+   * exactly how the nine-prefix list above came to matter so much.
+   *
+   * A clone that is not shallow AND can resolve its own default branch has the refs to answer the
+   * question, so there a missing branch is evidence rather than a guess. `ci.yml` checks out with
+   * `fetch-depth: 0`, so this is the case in this repository's own CI; `build-marketplace.yml` and
+   * `publish-config-package.yml` use `fetch-depth: 1`, and there it stays a warning. Severity
+   * follows what the clone can prove, instead of assuming the worst everywhere. */
+  const cloneIsShallow = (() => {
+    try {
+      return git(['rev-parse', '--is-shallow-repository']).trim() !== 'false';
+    } catch {
+      return true;
+    }
+  })();
+  /* A clone can be complete in history and still incomplete in BRANCHES. `git clone
+   * --single-branch` is not shallow and resolves `main` perfectly well, while tracking only
+   * `+refs/heads/main:refs/remotes/origin/main` — so `origin/develop` is absent even though
+   * `develop` exists in the origin, and a valid gate on it was reported as a dead branch.
+   * Reported on #494, and it is the false positive this severity promotion could most easily
+   * have introduced.
+   *
+   * A wildcard fetch refspec is what says "this clone tracks every branch". No remote at all also
+   * qualifies: then `refs/heads/*` is the whole truth and there is nothing absent to miss, which is
+   * the case in every selftest fixture. Anything narrower keeps the finding advisory — the safe
+   * direction, because a guardrail that rejects a valid workflow gets switched off. */
+  const tracksEveryBranch = (() => {
+    try {
+      const refspecs = git(['config', '--get-all', 'remote.origin.fetch'])
+        .split('\n')
+        .filter(Boolean);
+      return refspecs.length === 0 || refspecs.some((spec) => spec.includes('refs/heads/*'));
+    } catch {
+      // No remote configured: every branch is local, so the local refs are complete.
+      return true;
+    }
+  })();
+  const existenceIsProvable = refsAreKnowable && !cloneIsShallow && tracksEveryBranch;
+
+  for (const workflow of workflows) {
+    const body = read(workflow);
+    const parsed = parseWorkflowTriggersAndGates(body);
+    if (!parsed) {
+      fail(
+        `${workflow} is written in YAML this guardrail cannot read, so neither its triggers nor ` +
+          'its ref gates were checked. It expects `on:` and `jobs:` as block mappings; it refuses ' +
+          'a flow mapping, an anchor or an alias in their place rather than guessing.\n' +
+          '    Teach `parseWorkflowTriggersAndGates` the shape it uses, or write the block form — ' +
+          'but do not leave a workflow silently exempt from a check that exists because a silent ' +
+          'exemption cost five days of a stale published site.',
+      );
+      continue;
+    }
+    const { events, gates } = parsed;
+
+    /** @type {[string, string[]][]} */
+    const allowlists = [];
+    const unfiltered = [];
+    let unparsedFilter = null;
+    /* Can a TAG start this workflow? If so, `github.ref_name` may be a tag name and not a branch.
+     *
+     * An explicit `tags:` filter is the obvious case. The one that was missed is a `push` with no
+     * filters at all — `on: push` admits tag pushes too, so a perfectly good
+     * `github.ref_type == 'tag' && github.ref_name == 'v1.0.0'` was judged as pinning a branch
+     * called `v1.0.0`. Reported on #494. A `push` WITH a `branches:` filter does not admit tags,
+     * which is why this asks about the filter rather than about the event.
+     *
+     * **`push` only.** The first version asked this of every branch-filtered event, and
+     * `pull_request` and `pull_request_target` admit no tag push at all — so an unfiltered
+     * `on: pull_request` with `if: github.ref_name == 'main'` became advisory and skipped the
+     * pull-request-only rule entirely, and a ticket `ref_name` gate on an unfiltered
+     * `pull_request_target` escaped the branch rules. A fail-open introduced by the fix for a
+     * false positive, reported on #494 in the round after it. */
+    let tagsArePossible = false;
+    for (const [event, filter] of events) {
+      if (event === 'push' && (filter.tags || (!filter.unparsed && filter.branches === null && !filter.ignore))) {
+        tagsArePossible = true;
+      }
+      if (!BRANCH_FILTERED_EVENTS.includes(event)) {
+        unfiltered.push(event);
+      } else if (filter.unparsed) {
+        unparsedFilter = event;
+      } else if (filter.branches === null || filter.ignore) {
+        // No allowlist, or a `branches-ignore` denylist: any branch not named can trigger it, so
+        // nothing about reachability can be concluded.
+        unfiltered.push(event);
+      } else {
+        allowlists.push([event, filter.branches]);
+      }
+    }
+
+    /* A workflow whose ONLY trigger is `pull_request` never sees a branch ref: `github.ref` is
+     * `refs/pull/<number>/merge` and `github.ref_name` is `<number>/merge`. So a gate comparing
+     * either to a branch is false on every event the workflow can receive — the branch filter
+     * describes the pull request's TARGET, not the ref the job runs on, and the two being equal
+     * is the mistake. `pull_request_target` is excluded deliberately: that one does run with the
+     * base branch as `github.ref`, so a branch gate there is legitimate. Found in review on
+     * #494, where this shape passed the check completely. */
+    const pullRequestOnly = events.size > 0 && [...events.keys()].every((e) => e === 'pull_request');
+
+    /* The trigger half. An allowlist of nothing but pinned work-in-progress branches stops matching
+     * anything the day they merge, and then the workflow does not run at all — which is how the
+     * push half of the incident went unnoticed: no failed run, just no run. A glob
+     * (`integration/**`) is fine, and so is a list that also names a long-lived branch. */
+    for (const [event, patterns] of allowlists) {
+      const pinned = patterns.filter(
+        (pattern) => isLiteralBranchPattern(pattern) && !isLongLivedBranch(pattern),
+      );
+      if (pinned.length === 0 || pinned.length !== patterns.length) continue;
+      fail(
+        `${workflow} triggers on \`${event}\` only for ` +
+          `${pinned.map((pattern) => `\`${pattern}\``).join(', ')}, ` +
+          `${pinned.length === 1 ? 'which is not' : 'none of which are'} ` +
+          `${LONG_LIVED_BRANCHES.map((branch) => `\`${branch}\``).join(', ')}.\n` +
+          `    A branch that is not long-lived is deleted when its work merges, and the workflow ` +
+          `then stops running on \`${event}\` entirely — no failed run to notice, just no run. ` +
+          'Name a long-lived branch, or a glob such as `integration/**` that keeps matching. If ' +
+          `${pinned.length === 1 ? 'it is' : 'they are'} long-lived, add ` +
+          `${pinned.length === 1 ? 'it' : 'them'} to \`LONG_LIVED_BRANCHES\` — that list is an ` +
+          'allowlist on purpose, so longevity is declared rather than guessed from a prefix.',
+      );
+    }
+
+    /* A crude whole-file scan must not see a comparison the structured parse missed. Both read the
+     * same text, so this is not a second opinion — it is a tripwire on the parser, the one part of
+     * this check that can fail open. Restricted to `if:`-shaped lines so a `github.ref ==` written
+     * in an `env:` or a `run:` script is not mistaken for a missed gate.
+     *
+     * Deliberately BEFORE the `gates.length === 0` return below. It used to sit after it, which
+     * made it useless in the one case it exists for: a parser that reads no gates at all skipped
+     * its own tripwire and the workflow was reported clean. */
+    const seenLines = new Set(gates.map((gate) => gate.line));
+    const commentless = workflowLines(body);
+    for (let i = 0; i < commentless.length; i += 1) {
+      if (!/^\s*(?:-\s+)?['"]?if['"]?\s*:/.test(commentless[i])) continue;
+      if (refComparisons(commentless[i]).length === 0 || seenLines.has(i + 1)) continue;
+      fail(
+        `${workflow}:${i + 1} compares \`github.ref\` in an \`if:\` that ` +
+          '`parseWorkflowTriggersAndGates` did not read, so that gate was not checked. Fix the ' +
+          'parser: a ref gate this check cannot see is exactly the gate that goes stale unnoticed.',
+      );
+    }
+
+    /* Only the gates that actually compare a ref. `gates` holds EVERY `if:` in the file, including
+     * `always()` and conditions on step outputs, and judging a workflow by `gates.length` made a
+     * valid `branches: [main, '!wip/**']` fail the unsupported-pattern rule below purely because
+     * some job had an `if: always()`. The pattern and filter rules are about ref gates; a workflow
+     * that has none must not be judged by them. Caught in review on #494. */
+    const refGates = gates.filter((gate) => refComparisons(gate.expression).length > 0);
+
+    /* An unreadable branch filter is reported whether or not anything gates on a ref, and that has
+     * to come BEFORE the return below. It did not: a filter the parser could not read made the
+     * trigger rule blind to the branches — they are not in `allowlists` — and then a workflow with
+     * no ref gate returned here without reporting either. A ticket-only trigger in a shape the
+     * parser could not read passed in complete silence, which is the failure mode this guardrail
+     * exists to prevent, reached through the guardrail itself. Reported on #494.
+     *
+     * The unsupported-PATTERN rule below stays scoped to ref gates: an unmodelled glob only
+     * matters when a reachability verdict depends on it. */
+    if (unparsedFilter !== null) {
+      fail(
+        `${workflow} has a \`${unparsedFilter}.branches\` value this guardrail cannot read, so ` +
+          'neither its trigger nor any ref gate in this workflow was checked against it. Teach ' +
+          '`parseYamlStringList` the shape it uses — a filter that cannot be read is not a filter ' +
+          'that is absent, and treating the two alike is how a stale trigger passes unnoticed.',
+      );
+    }
+
+    if (refGates.length === 0) continue;
+
+    const unmodelled = allowlists
+      .flatMap(([, patterns]) => patterns)
+      .filter((pattern) => githubBranchFilterToRegExp(pattern) === null);
+    if (unmodelled.length > 0) {
+      fail(
+        `${workflow} filters branches with ` +
+          `${[...new Set(unmodelled)].map((pattern) => `\`${pattern}\``).join(', ')}, which ` +
+          '`githubBranchFilterToRegExp` does not model (character ranges, `+`, `?`, `!` ' +
+          'negation), and the workflow gates a job on a ref. Note that `?` and `+` quantify the ' +
+          'PRECEDING character in a GitHub filter pattern — `release/10?` admits `release/1` and ' +
+          '`release/10`, not `release/10x` — so they are refused rather than read as glob ' +
+          'wildcards. Teach the matcher that syntax rather than letting the reachability rule ' +
+          'guess.',
+      );
+    }
+    const reachabilityIsDecidable =
+      allowlists.length > 0 &&
+      unfiltered.length === 0 &&
+      unparsedFilter === null &&
+      unmodelled.length === 0;
+    for (const gate of refGates) {
+      // `job` is null only for an `if:` that precedes any job key, which is malformed rather than
+      // impossible — named generically so the message never reads "the `null` job".
+      const where =
+        gate.job === null
+          ? 'an `if:`'
+          : gate.level === 'job'
+            ? `the \`${gate.job}\` job's \`if:\``
+            : `a step \`if:\` in the \`${gate.job}\` job`;
+
+      /* Is one comparison, on its own, what decides whether the job runs?
+       *
+       * Only if the expression neither makes it optional nor inverts it. With `||` the job still
+       * runs when another alternative holds, and under `!` the branch named is the one EXCLUDED —
+       * so `github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'` and
+       * `!(github.ref == 'refs/heads/staging')` are both satisfiable on `main`, and both were
+       * rejected as unreachable. Caught in review on #494. `&&` is fine: a comparison joined by
+       * `&&` is still required, which is why negation is tested per comparison rather than per
+       * expression — see `comparisonIsNegated`.
+       *
+       * Rule 1 below does not consult this — a constant is a constant inside any expression. */
+      const hasAlternative = expressionHasAlternative(gate.expression);
+
+      for (const { context, operator, literal, index } of refComparisons(gate.expression)) {
+        /* Rule 1 — shape. `github.ref` is `refs/heads/main`; `github.ref_name` is `main`. Mixing
+         * them is a constant, and the two directions fail differently: a constant-false `==` never
+         * runs the job, a constant-true `!=` never gates it. Both are silent. */
+        // Case-insensitive, like the pattern match and for the same reason: GitHub's `==` ignores
+        // case, so `REFS/HEADS/main` IS a full ref as far as the expression is concerned. Reading
+        // it as a bare name rejected a valid condition as a constant.
+        const isFullRef = /^refs\//i.test(literal);
+        if ((context === 'ref') !== isFullRef) {
+          fail(
+            `${workflow}:${gate.line} gates ${where} on ` +
+              `\`github.${context} ${operator} '${literal}'\`, which is a constant: ` +
+              `\`github.${context}\` is always ` +
+              `${context === 'ref' ? 'a full ref such as `refs/heads/main`' : 'a short name such as `main`'}` +
+              `, so this is always ${operator === '==' ? 'false' : 'true'}.\n` +
+              `    ${
+                operator === '=='
+                  ? 'The job is skipped on every event, and a skipped job leaves the run green.'
+                  : 'The gate excludes nothing, so the job runs on every event it was meant to skip.'
+              } Compare \`github.${context}\` to ` +
+              `\`${context === 'ref' ? `refs/heads/${literal}` : literal.replace(/^refs\/heads\//, '')}\`.`,
+          );
+          continue;
+        }
+
+        // Only `==` can silently skip. A stale `!=` makes the gate always true, which runs the job
+        // rather than hiding it — wrong, but not invisible, and not this bug.
+        if (operator !== '==') continue;
+        // A tag or pull-ref gate is not a branch gate. `github.ref_name` on a `pull_request` is
+        // `<number>/merge`, which is not a branch either.
+        // Case-insensitive too, and this one was a fail-open rather than a false positive:
+        // `refs/HEADS/integration/nxsat-308` was discarded as "not a branch ref", so a pinned
+        // ticket branch written that way skipped every rule below.
+        if (context === 'ref' && !/^refs\/heads\//i.test(literal)) continue;
+        if (context === 'ref_name' && /^\d+\/merge$/.test(literal)) continue;
+
+        /* Not individually load-bearing → nothing below applies. Moved ABOVE the tag reasoning: it
+         * used to sit after it, so a comparison under an `||` drew an ambiguity warning on its way
+         * to being skipped anyway, which is a warning about a gate the check had already decided
+         * not to judge. */
+        if (hasAlternative || comparisonIsNegated(gate.expression, index)) continue;
+
+        /* `github.ref_name` is the short name of whatever ref triggered the run — a TAG name just
+         * as readily as a branch name. So where a tag could have started the workflow, a
+         * `ref_name` literal cannot be assumed to be a branch: checking it against the branch
+         * allowlist rejected a valid `github.ref_name == 'v1.0.0'`. A `github.ref` literal stays
+         * unambiguous, because `refs/heads/…` says which it is.
+         *
+         * What the CONDITION says settles it where it says anything. `ref_type == 'tag'` means
+         * there is nothing here to judge; `ref_type == 'branch'` means the branch rules apply in
+         * full — that second one was missing, so `github.ref_type == 'branch' && github.ref_name
+         * == 'integration/nxsat-308'` came back advisory even though no tag can satisfy it.
+         * Reported on #494. Both assertions must be required rather than optional, which is why
+         * this sits after the `||` and negation test above.
+         *
+         * With neither assertion the literal is genuinely ambiguous, and the honest answer is to
+         * say so rather than pick. Guessing either way has a cost this review has already paid:
+         * as a branch it rejects valid tag gates, as a tag it lets a pinned ticket branch through
+         * in silence. The warning names the ambiguity and points at `github.ref`. */
+        /* Read through `contextComparisons`, the same matcher the ref gates use, rather than a
+         * regex of its own. Its own regex reproduced all three defects that one had already been
+         * fixed for — comparison text inside a string read as a real assertion, the reversed
+         * operand order missed, and the literal compared case-sensitively where GitHub's `==` is
+         * not. Reported on #494 one round after the duplicate was written, which is the clearest
+         * case in this review for sharing the primitive instead of the pattern. */
+        const assertsRefType = (type) =>
+          contextComparisons(gate.expression, ['ref_type']).some(
+            (assertion) =>
+              assertion.operator === '==' &&
+              assertion.literal.toLowerCase() === type &&
+              !comparisonIsNegated(gate.expression, assertion.index),
+          );
+
+        if (context === 'ref_name' && tagsArePossible && !assertsRefType('branch')) {
+          if (!assertsRefType('tag')) {
+            warn(
+              `${workflow}:${gate.line} gates ${where} on \`github.ref_name == '${literal}'\`, ` +
+                'and a tag can start this workflow, so this guardrail cannot tell whether ' +
+                `\`${literal}\` is a branch or a tag and has judged neither.\n` +
+                "    Compare `github.ref` to `refs/heads/…` or `refs/tags/…` — that form says " +
+                'which it is — or assert `github.ref_type` alongside this comparison.',
+            );
+          }
+          continue;
+        }
+        const branch = context === 'ref' ? literal.slice('refs/heads/'.length) : literal;
+
+        /* A branch gate in a `pull_request`-only workflow. Never true: the event supplies
+         * `refs/pull/<number>/merge`. */
+        if (pullRequestOnly) {
+          fail(
+            `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, but ` +
+              '`pull_request` is the only trigger — so `github.ref` is ' +
+              '`refs/pull/<number>/merge` and `github.ref_name` is `<number>/merge`, never a ' +
+              'branch. The gate is false on every event the workflow can receive, the job is ' +
+              'SKIPPED, and the run still goes green.\n' +
+              `    A \`branches:\` filter names the pull request's TARGET, not the ref the job ` +
+              'runs on. Use `github.base_ref` for the target, or `pull_request_target` if the job ' +
+              'really must run with the base branch checked out.',
+          );
+          continue;
+        }
+
+        /* Unreachable under this workflow's own triggers — BEFORE the longevity rule below,
+         * because it is the more specific diagnosis of the two. "The trigger and the gate name
+         * different branches" tells you what to change; "this branch is not long-lived" would be
+         * true of the same gate and less useful. */
+        if (reachabilityIsDecidable) {
+          const allowed = allowlists.some(([, patterns]) =>
+            patterns.some((pattern) => githubBranchFilterToRegExp(pattern).test(branch)),
+          );
+          if (!allowed) {
+            fail(
+              `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, which none ` +
+                'of the workflow\'s own branch filters admit:\n' +
+                allowlists
+                  .map(
+                    ([event, patterns]) =>
+                      `      ${event}: ${patterns.map((pattern) => `\`${pattern}\``).join(', ')}`,
+                  )
+                  .join('\n') +
+                '\n    No unfiltered trigger could supply that ref either, so the job can never ' +
+                'run: every event that starts this workflow leaves the gate false, and a skipped ' +
+                'job leaves the run green. Make the gate and the trigger name the same branch.',
+            );
+            continue;
+          }
+        }
+
+        /* The branch a gate pins must be one that outlives the work on it — and, where the clone
+         * can prove it, must actually be there.
+         *
+         * This is the rule that catches NXSAT-649, and it is static: it fires from the workflow
+         * text alone, in a shallow CI clone as readily as here, which is what the existence check
+         * below cannot promise. */
+        const exists = branchRefExists(branch);
+        if (!isLongLivedBranch(branch)) {
+          fail(
+            `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, which is not ` +
+              `one of this repository's long-lived branches ` +
+              `(${LONG_LIVED_BRANCHES.map((b) => `\`${b}\``).join(', ')})` +
+              `${exists ? '' : ', and no such branch exists in this clone'}.\n` +
+              '    A branch that is not long-lived is deleted when its work merges. From then on ' +
+              'the gate is false on every event, the job is SKIPPED, and a skipped job leaves the ' +
+              'run green — so the workflow reports success while doing nothing. ' +
+              '`storybook-pages.yml` published the public Storybook this way and the site went ' +
+              'stale for five days behind green runs (NXSAT-649).\n' +
+              `    Gate on a long-lived branch and keep the gate and the trigger naming the same ` +
+              `one. If \`${branch}\` is itself long-lived, add it to \`LONG_LIVED_BRANCHES\`: ` +
+              'that list is an allowlist so that longevity is declared, not guessed from a ' +
+              'prefix — a list of ticket prefixes missed five of the namespaces this repository ' +
+              'actually uses.',
+          );
+          continue;
+        }
+
+        /* A long-lived NAME that is not in the clone. Severity follows what the clone can prove:
+         * a full, non-shallow checkout has the refs to call this dead, and a shallow one cannot
+         * tell a deleted branch from an unfetched one. */
+        if (!exists) {
+          const message =
+            `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, and no ` +
+            `\`refs/heads/${branch}\` or \`refs/remotes/origin/${branch}\` exists. The job is ` +
+            'skipped on every event and the run still goes green.';
+          if (existenceIsProvable) {
+            fail(
+              `${message}\n    This clone is not shallow and resolves its own default branch, so ` +
+                'the branch is absent rather than unfetched.',
+            );
+          } else {
+            warn(
+              `${message}\n    A warning rather than a failure: this clone is shallow or cannot ` +
+                'resolve its own default branch, so a deleted branch and an unfetched one look ' +
+                'the same. In a checkout with `fetch-depth: 0` this is a failure.',
+            );
+          }
+        }
+      }
+    }
+  }
+}
+
 const GUARDRAILS = [
+  checkPackageToolLaunches,
   checkThemeTokens,
   checkDocsNumbering,
   checkNoReviewCorpusChurn,
@@ -10182,6 +11504,7 @@ const GUARDRAILS = [
   checkSatoriFallbackEntryPoint,
   checkSatoriPrimitivesRegisteredInOrder,
   checkAdoptedPatternsNotBypassed,
+  checkWorkflowRefGates,
 ];
 
 /**

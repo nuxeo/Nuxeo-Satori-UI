@@ -1,21 +1,35 @@
 name: Storybook on GitHub Pages
 
-# Publishes the Material Storybook of `satori-components` to https://nuxeo.github.io/agentic-ui-poc/.
+# Publishes two Storybooks of `satori-components` to https://nuxeo.github.io/agentic-ui-poc/: the
+# Material build at the root, and the same library under Satori's theme at `/satori/`. The root is
+# unchanged, so every existing link to the site still lands where it always did.
 #
-# ONLY that build. `satori-components-satori`'s Storybook bundles compiled `@hylandsoftware/*` modules,
-# tokens and fonts, and `satori-components:build-storybook:satori` (this library under Satori's theme)
-# its tokens and fonts: we may consume them but not redistribute them. This repository is public, so
-# neither build may be published, nor uploaded as a workflow artifact by any workflow here.
-# `scripts/storybook-publication-gate.mjs` refuses both before this workflow uploads.
+# The Satori build carries compiled `@hylandsoftware/*` modules, `--sat-*` tokens and Satori's
+# fonts. This repository is public, so publishing it is redistribution — which the Satori package
+# owners approved, relayed 2026-10-28. Record the approver or the ticket here: three places in this
+# repository asserted the opposite before this change, and whoever next reads a narrowed gate needs
+# to know whose decision overrode them.
+#
+# `scripts/storybook-publication-gate.mjs` still runs, on the Material build alone, so the root
+# stays provably Satori-free. `/satori` is deliberately ungated — it carries Satori on purpose, so
+# gating it would mean weakening the gate until it passed, and a gate that passes everything is
+# worth nothing. Narrow and meaningful beats broad and hollow.
+#
+# Still NOT published: `satori-components-satori`'s own Storybook, the components that exist only
+# under Satori. Nobody asked for it, and the approval above was for the themed build.
 #
 # A workflow of its own rather than a job in ci.yml: that one runs on pull requests and every feature
 # branch, and its `cancel-in-progress` concurrency would cancel a deployment half-way through.
 
 on:
   push:
-    # TODO(NXSAT-649): move this and the deploy job's `if:` to `main` once integration/nxsat-308
-    # merges into it. Storybook exists only on the integration branch until then.
-    branches: ['integration/nxsat-308']
+    # `main`, which is also Pages' own source. This and the deploy job's `if:` below name the
+    # branch twice and have to be changed together: the `if:` gates the deployment, so a stale
+    # one freezes the site silently — the build and the publication gate still pass, and
+    # nothing publishes, not even a `workflow_dispatch`. Other branches need no trigger here:
+    # ci.yml's `storybook` job runs this same token-free build and the same publication gate,
+    # so a change that would block the deployment fails its pull request first.
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -37,8 +51,11 @@ jobs:
     permissions:
       contents: read
     env:
-      # The gate and the upload read the same directory, so what is checked is what is published.
-      STORYBOOK_DIR: dist/storybook/satori-components
+      # The gate reads MATERIAL_DIR and the upload reads the assembled SITE_DIR, so what is checked
+      # is no longer all of what is published: `/satori` is published ungated, on purpose.
+      MATERIAL_DIR: dist/storybook/satori-components
+      SATORI_DIR: dist/storybook/satori-components-satori-theme
+      SITE_DIR: _site
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,9 +75,18 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
           SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
 
-      # Built as ci.yml builds it, with `@hylandsoftware` and `@alfresco` removed from node_modules,
-      # so a Satori import fails the build instead of compiling into the published site. Nothing
+      # Satori FIRST, while GitHub Packages is still installed. `build-storybook` depends on
+      # `compodoc`, which Nx runs once before either build.
+      - name: Build the Satori-themed Storybook
+        run: npx nx run satori-components:build-storybook:satori --skip-nx-cache
+
+      # Then as ci.yml builds it, with `@hylandsoftware` and `@alfresco` removed from node_modules,
+      # so a Satori import fails this build instead of compiling into the root of the site. Nothing
       # later in this job needs them, so they are not put back.
+      #
+      # The order is what keeps the root honest. Built with those packages still present, a stray
+      # Satori import would compile into the Material Storybook and the gate below would be the
+      # only thing between it and the root; this way it cannot compile at all.
       - name: Build the Material Storybook without GitHub Packages
         shell: bash
         run: |
@@ -72,17 +98,27 @@ jobs:
           done
           npx nx run satori-components:build-storybook:ci --skip-nx-cache
 
-      - name: Publication gate
-        run: node scripts/storybook-publication-gate.mjs "$STORYBOOK_DIR"
+      # On the Material build alone, and while it is still a tree of its own, so the gate sees
+      # exactly the shape it was written for rather than an assembled site with `/satori` in it.
+      - name: Publication gate, on the Material build
+        run: node scripts/storybook-publication-gate.mjs "$MATERIAL_DIR"
+
+      # Refuses a missing or empty build, so a renamed outputDir cannot publish a blank site, and
+      # writes nothing at all unless both builds pass. Controls: `storybook-assemble-selftest`.
+      - name: Assemble the site
+        run: |
+          node scripts/storybook-assemble-site.mjs \
+            --material "$MATERIAL_DIR" --satori "$SATORI_DIR" --out "$SITE_DIR"
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: ${{ env.STORYBOOK_DIR }}
+          path: ${{ env.SITE_DIR }}
 
   deploy:
     needs: build
-    # A dispatch from any other branch builds and gates without publishing.
-    if: github.ref == 'refs/heads/integration/nxsat-308'
+    # A dispatch from any other branch builds and gates without publishing. Keep this ref and
+    # the push trigger above the same branch.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       pages: write

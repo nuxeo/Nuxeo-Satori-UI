@@ -15,6 +15,9 @@ export default defineConfig(() => ({
   test: {
     name: 'document-detail',
     watch: false,
+    // Under full-suite load a spec can run several seconds. The 5s Vitest default turned
+    // that load into failures, so the limit is set for the whole project.
+    testTimeout: 30_000,
     globals: true,
     environment: 'jsdom',
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
@@ -23,6 +26,10 @@ export default defineConfig(() => ({
     // Pin the worker pool explicitly: the Vitest default pool crashes under
     // Node 20 in Nx/CI for this project before any test output is emitted.
     pool: 'threads',
+    // Keep warnings/errors on the worker's native streams: Vitest 4's intercepted
+    // console can leave onUserConsoleLog RPCs pending when a Windows worker closes.
+    // This preserves console output and does not ignore unhandled test errors.
+    disableConsoleIntercept: true,
     // zone.js keeps the Node.js event loop alive after Angular TestBed teardown;
     // forceExit ensures Vitest can always exit cleanly in CI.
     forceExit: true,

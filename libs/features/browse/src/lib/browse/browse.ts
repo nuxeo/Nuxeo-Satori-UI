@@ -1,4 +1,43 @@
 import {
+  NxsDateInputComponent,
+  NXS_PERMISSIONS_PANEL_ID,
+  NXS_PRIMITIVE_IDS,
+  NxsActionMenuComponent,
+  NxsBreadcrumbsComponent,
+  NxsCardComponent,
+  NxsColumnPickerComponent,
+  NxsDocumentListComponent,
+  NxsDomainHintComponent,
+  NxsDriveDialogComponent,
+  NxsFolderPickerDialogComponent,
+  NxsRenameDialogComponent,
+  NxsErrorStateComponent,
+  NxsFolderHeaderComponent,
+  NxsPagerComponent,
+  NxsPermissionsPanelComponent,
+  NxsSpinnerComponent,
+  NxsThumbnailComponent,
+  NxsUploadQueue,
+  NxsUploadQueueComponent,
+  nxsErrorStatus,
+  provideNxsThumbnailCache,
+  type NxsBreadcrumbItem,
+  type NxsDocumentListColumn,
+  type NxsDocumentListRowAction,
+  type NxsDocumentListSort,
+  type NxsDriveDialogData,
+  type NxsErrorStatus,
+  type NxsFolderPickerDialogData,
+  type NxsFolderPickerDialogResult,
+  type NxsRenameDialogData,
+  type NxsMenuAction,
+  type NxsPickableColumn,
+  NxsToastService,
+  nxsVisibleText,
+  provideNxsToast,
+} from '@nuxeo/satori-platform/components';
+
+import {
   Component,
   DestroyRef,
   LOCALE_ID,
@@ -36,7 +75,6 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 
@@ -46,6 +84,8 @@ import {
   NuxeoAce,
   AuditEntry,
   DirectoryEntry,
+  browseFolderFiltersActive,
+  type BrowseFolderFilters,
   BrowseService,
   BrowseContextService,
   ClipboardTargetService,
@@ -140,45 +180,6 @@ import {
 } from '../edit-metadata-dialog/edit-metadata-dialog';
 import { CreateImportDialogComponent } from '../create-import/create-import-dialog.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import {
-  NXS_PERMISSIONS_PANEL_ID,
-  NXS_PRIMITIVE_IDS,
-  NxsActionMenuComponent,
-  NxsAvatarComponent,
-  NxsBreadcrumbsComponent,
-  NxsCardComponent,
-  NxsColumnPickerComponent,
-  NxsDocumentListComponent,
-  NxsDomainHintComponent,
-  NxsDriveDialogComponent,
-  NxsFolderPickerDialogComponent,
-  NxsRenameDialogComponent,
-  NxsErrorStateComponent,
-  NxsFolderHeaderComponent,
-  NxsPagerComponent,
-  NxsPermissionsPanelComponent,
-  NxsSpinnerComponent,
-  NxsTagComponent,
-  NxsThumbnailComponent,
-  NxsUploadQueue,
-  NxsUploadQueueComponent,
-  nxsErrorStatus,
-  provideNxsThumbnailCache,
-  type NxsBreadcrumbItem,
-  type NxsDocumentListColumn,
-  type NxsDocumentListRowAction,
-  type NxsDocumentListSort,
-  type NxsDriveDialogData,
-  type NxsErrorStatus,
-  type NxsFolderPickerDialogData,
-  type NxsFolderPickerDialogResult,
-  type NxsRenameDialogData,
-  type NxsMenuAction,
-  type NxsPickableColumn,
-  NxsToastService,
-  nxsVisibleText,
-  provideNxsToast,
-} from '@nuxeo/satori-platform/components';
 
 /**
  * The packaged column set as descriptors, for an injector where Layer 1
@@ -211,8 +212,17 @@ const SORT_FIELDS: Readonly<Record<string, string>> = {
   author: 'dc:creator',
 };
 
-/** One page of a folder: the 50 entries browse has always asked for, now with the rest reachable. */
 const PAGE_SIZE = 50;
+
+/**
+ * How long a changed filter waits before the listing reloads.
+ *
+ * The filters run on the server now, so each keystroke would otherwise be a request. The loader's
+ * `switchMap` already makes that *correct* — a superseded answer is discarded — so this is only
+ * about not asking sixteen times for what one request answers. Long enough to coalesce typing,
+ * short enough that a pause feels like the list is keeping up.
+ */
+export const FILTER_DEBOUNCE_MS = 250;
 
 @Component({
   selector: 'lib-browse',
@@ -224,6 +234,7 @@ const PAGE_SIZE = 50;
     provideNxsThumbnailCache(),
   ],
   imports: [
+    NxsDateInputComponent,
     NxsActionMenuComponent,
     NxsAvatarComponent,
     NxsBreadcrumbsComponent,
@@ -256,7 +267,6 @@ const PAGE_SIZE = 50;
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatDatepickerModule,
     MatChipsModule,
     MatAutocompleteModule,
     ExtensionOutletComponent,
@@ -317,8 +327,21 @@ export class BrowseComponent {
   private lastSeenClipboardPasteTick = -1;
   /** Clipboard paste results not yet visible in @children (eventual consistency on Cloud). */
   private readonly pendingPasteEntries = new Map<string, NuxeoDocument>();
+  /**
+   * The same pending rows as a signal, so a `computed()` can see them.
+   *
+   * A paste is optimistic because `@children` is eventually consistent, so the new rows live only
+   * in `entries()` until the server catches up. The filtered listing needs to know which rows those
+   * are: they are the only ones the server's query has not judged.
+   */
+  private readonly pendingPasteList = signal<NuxeoDocument[]>([]);
   readonly browsePath = signal('/');
-  private readonly browsePath$ = new Subject<{ nuxeoPath: string; pageIndex: number }>();
+  private readonly browsePath$ = new Subject<{
+    nuxeoPath: string;
+    pageIndex: number;
+    /** True for a reload a changed filter asked for, which must not blank the table. */
+    filterChange?: boolean;
+  }>();
 
   // Details side panel
   readonly panelOpen = signal(false);
@@ -581,65 +604,189 @@ export class BrowseComponent {
   readonly filterModifiedTo = signal<Date | null>(null);
   readonly filterContributor = signal('');
 
+  /**
+   * The filters as the server takes them, and as one comparable string.
+   *
+   * The key is what tells a real change from a recompute: the `Date` objects behind the range are
+   * new instances on every pick, so comparing the filter object itself would reload the listing
+   * for a value that had not changed.
+   */
+  private readonly currentFilters = computed<BrowseFolderFilters>(() => ({
+    text: this.filterText(),
+    type: this.filterType(),
+    modifiedFrom: this.filterModifiedFrom(),
+    modifiedTo: this.filterModifiedTo(),
+    contributor: this.filterContributor(),
+  }));
+
+  private readonly filterKey = computed(() => {
+    const filters = this.currentFilters();
+    return [
+      filters.text?.trim() ?? '',
+      filters.type ?? '',
+      filters.modifiedFrom?.getTime() ?? '',
+      filters.modifiedTo?.getTime() ?? '',
+      filters.contributor?.trim() ?? '',
+    ].join('\u0000');
+  });
+
+  /** Whether a toolbar filter is narrowing the listing. Asked of the service, so one rule decides. */
+  readonly filtersActive = computed(() => browseFolderFiltersActive(this.currentFilters()));
+
+  /**
+   * True when the **server** applied the filters, so the rows, the count and the pages on screen
+   * already describe the whole folder rather than one page of it.
+   *
+   * False for the repository root, whose listing no query reproduces; there the filters still run
+   * over what was loaded.
+   */
+  private readonly serverFiltered = signal(false);
+
+  /** True while a changed filter's listing is on its way, so the toolbar can say so. */
+  readonly filtering = signal(false);
+
+  /**
+   * The types the container holds, for the dropdown — fetched once per folder, when it opens.
+   *
+   * Separate from the rows because the rows are filtered: see
+   * `BrowseService.getBrowseFolderTypes`.
+   */
+  private readonly folderTypes = signal<readonly string[]>([]);
+  /** The folder {@link folderTypes} describes, so the fetch happens once per folder. */
+  private folderTypesPath: string | null = null;
+  /**
+   * Bumped by {@link invalidateFolderTypes}, so an answer in flight when the folder changed under
+   * it can be told from one that is still wanted.
+   *
+   * The path alone cannot: it says "another folder" but not "the same folder, invalidated since".
+   * Open the dropdown, have the contents change while the request is out, and the pre-change answer
+   * arrived afterwards and was adopted — offering a type that had just been deleted, or missing one
+   * just created, until the dropdown was opened again. The scan this replaced carried a generation
+   * counter for exactly this, and removing the scan removed the counter with it.
+   */
+  private folderTypesGeneration = 0;
+  private readonly folderTypeRequests$ = new Subject<{ path: string; generation: number }>();
+
   readonly distinctTypes = computed(() => {
-    const types = new Set(this.entries().map((e) => e.type));
+    // The union of the fetched set and the page, never one alone. The fetched set is complete but
+    // arrives only once the dropdown has been opened, and under an active type filter the page
+    // holds that one type — so either source alone leaves the dropdown narrower than what is on
+    // screen at some point in the sequence. A wider option list is never wrong; a missing option
+    // is unreachable.
+    const types = new Set<string>(this.folderTypes());
+    for (const entry of this.entries()) {
+      if (entry.type) types.add(entry.type);
+    }
     return Array.from(types).sort();
   });
 
+  /** Whether a document passes the filters, by the same comparisons the server's NXQL makes. */
+  private matchesFilters(doc: NuxeoDocument): boolean {
+    const filters = this.currentFilters();
+    const text = filters.text?.trim().toLowerCase();
+    if (text && !doc.title.toLowerCase().includes(text)) return false;
+    if (filters.type && doc.type !== filters.type) return false;
+    if (filters.modifiedFrom || filters.modifiedTo) {
+      const modified = new Date(doc.lastModified).getTime();
+      if (filters.modifiedFrom && modified < filters.modifiedFrom.getTime()) return false;
+      // The whole of the chosen day counts, as the server's exclusive next-midnight bound does.
+      if (filters.modifiedTo && modified >= filters.modifiedTo.getTime() + 86_400_000) return false;
+    }
+    const contributor = filters.contributor?.trim().toLowerCase();
+    if (
+      contributor &&
+      !((doc.properties?.['dc:lastContributor'] as string) ?? '')
+        .toLowerCase()
+        .includes(contributor)
+    ) {
+      return false;
+    }
+    return true;
+  }
+
   readonly filteredEntries = computed(() => {
-    let docs = this.entries();
-    const text = this.filterText();
-    const type = this.filterType();
-    const modFrom = this.filterModifiedFrom();
-    const modTo = this.filterModifiedTo();
-    const contributor = this.filterContributor();
+    const docs = this.entries();
+    if (!this.filtersActive()) return docs;
+    if (!this.serverFiltered()) return docs.filter((doc) => this.matchesFilters(doc));
 
-    if (text) {
-      const term = text.toLowerCase();
-      docs = docs.filter((d) => d.title.toLowerCase().includes(term));
-    }
-    if (type) {
-      docs = docs.filter((d) => d.type === type);
-    }
-    if (modFrom) {
-      const from = modFrom.getTime();
-      docs = docs.filter((d) => new Date(d.lastModified).getTime() >= from);
-    }
-    if (modTo) {
-      const to = modTo.getTime() + 86_400_000;
-      docs = docs.filter((d) => new Date(d.lastModified).getTime() < to);
-    }
-    if (contributor) {
-      const term = contributor.toLowerCase();
-      docs = docs.filter((d) =>
-        ((d.properties?.['dc:lastContributor'] as string) ?? '').toLowerCase().includes(term),
-      );
-    }
-
-    // Never sorted here: the page arrives in the server's order, which is the order the user
-    // asked for. Sorting a page in the browser once hid a sort the server had dropped.
-    return docs;
+    // The server narrowed these, so they are not re-checked: `ILIKE` folds case in the database's
+    // collation and `toLowerCase()` in the browser's, and for a character the two disagree on,
+    // re-checking would hide a row the server matched — exactly the kind of difference that moving
+    // the filter to the server removes. Only the optimistic paste rows appended to the server's
+    // answer have been through no filter at all, so only they are judged here.
+    const optimistic = new Set(this.pendingPasteList().map((doc) => doc.uid));
+    if (optimistic.size === 0) return docs;
+    return docs.filter((doc) => !optimistic.has(doc.uid) || this.matchesFilters(doc));
   });
 
-  /** Whether a toolbar filter narrows the page on screen. */
-  readonly filtersActive = computed(
-    () =>
-      !!this.filterText() ||
-      !!this.filterType() ||
-      !!this.filterModifiedFrom() ||
-      !!this.filterModifiedTo() ||
-      !!this.filterContributor(),
+  // Paging facts the listing is handed. The server pages the filtered listing, so these are its
+  // own — except on the repository root, where the filters ran here over a listing the server
+  // paged for something else: there the filtered set is all there is, and offering its next page
+  // is what once left the control enabled beside zero filtered rows.
+  private readonly clientFiltered = computed(() => this.filtersActive() && !this.serverFiltered());
+  readonly listPageIndex = computed(() => (this.clientFiltered() ? 0 : this.pageIndex()));
+  readonly listTotalSize = computed(() =>
+    this.clientFiltered() ? this.filteredEntries().length : this.totalSize(),
   );
+  readonly listHasNextPage = computed(() => (this.clientFiltered() ? false : this.hasNextPage()));
 
   /**
-   * The count beside the toolbar: what a filter left of this page, else Nuxeo's total, else
-   * nothing — a page of fifty from a folder Nuxeo did not count is not "50 results".
+   * The count beside the toolbar: the server's total for the filtered folder, what a client-side
+   * filter left, else Nuxeo's total — and nothing at all when Nuxeo did not count, because a page
+   * of fifty from an uncounted folder is not "50 results".
    */
   readonly resultCount = computed<number | null>(() => {
-    if (this.filtersActive()) return this.filteredEntries().length;
+    if (this.clientFiltered()) return this.filteredEntries().length;
     const total = this.totalSize();
     return total >= 0 ? total : null;
   });
+
+  /**
+   * Reloads the listing when a filter changes, debounced, from the first page.
+   *
+   * Page three of one filter is not page three of the next, so the index resets — the same reason
+   * a new sort order starts again from the first page.
+   *
+   * `loadedFilterKey` starts as `null` and is set back to `null` whenever the filters are cleared
+   * for a folder change: in both cases the load that is already happening carries the filters this
+   * would ask for, so the next key becomes the baseline without a second request.
+   */
+  private loadedFilterKey: string | null = null;
+
+  private readonly reloadWhenFiltersChange = effect(() => {
+    const key = this.filterKey();
+    untracked(() => {
+      if (this.loadedFilterKey === key) return;
+      const baseline = this.loadedFilterKey === null;
+      this.loadedFilterKey = key;
+      if (baseline) return;
+      this.filtering.set(true);
+      this.filterChanges$.next();
+    });
+  });
+
+  private readonly filterChanges$ = new Subject<void>();
+
+  /**
+   * Collect the container's types, if they are not already in hand.
+   *
+   * Called when the type dropdown opens rather than when a folder loads, so a folder nobody filters
+   * costs nothing.
+   */
+  loadFolderTypes(): void {
+    const path = this.browsePath();
+    if (this.folderTypesPath === path) return;
+    this.folderTypesPath = path;
+    this.folderTypeRequests$.next({ path, generation: this.folderTypesGeneration });
+  }
+
+  /** Forget the collected types, so the next dropdown opening fetches them again. */
+  private invalidateFolderTypes(): void {
+    this.folderTypesPath = null;
+    this.folderTypes.set([]);
+    // Anything already in flight now describes the folder as it was before this.
+    this.folderTypesGeneration += 1;
+  }
 
   /** The visible columns as the document list takes them: translated, sortable where the server sorts. */
   readonly listColumns = computed<readonly NxsDocumentListColumn[]>(() => {
@@ -835,6 +982,8 @@ export class BrowseComponent {
       )
       .subscribe((nuxeoPath) => {
         this.resetBrowseTabState();
+        // Another folder's types are not this folder's.
+        this.invalidateFolderTypes();
         this.currentNuxeoPath = nuxeoPath;
         this.browsePath.set(nuxeoPath);
         this.pageIndex.set(0);
@@ -846,14 +995,20 @@ export class BrowseComponent {
 
     this.browsePath$
       .pipe(
-        switchMap(({ nuxeoPath, pageIndex }) => {
-          this.loading.set(true);
+        switchMap(({ nuxeoPath, pageIndex, filterChange }) => {
+          // A filter reload keeps the rows it is replacing. `loading` makes the document list draw
+          // its own loading state instead of the table, and at a 250ms debounce against a ~30ms
+          // query that is a spinner flashing over every pause in typing. `filtering` says the same
+          // thing in the toolbar without taking the rows away.
+          if (!filterChange) this.loading.set(true);
           this.error.set(null);
           return this.browseService
-            .getBrowseFolderContents(nuxeoPath, PAGE_SIZE, {
-              currentPageIndex: pageIndex,
-              sort: this.serverSort(),
-            })
+            .getBrowseFolderContents(
+              nuxeoPath,
+              PAGE_SIZE,
+              { currentPageIndex: pageIndex, sort: this.serverSort() },
+              this.currentFilters(),
+            )
             .pipe(
               map((result) => ({ nuxeoPath, pageIndex, result })),
               catchError((error: unknown) =>
@@ -870,6 +1025,7 @@ export class BrowseComponent {
           this.errorStatus.set(payload.error);
           this.error.set(this.translate.instant('browse.message.failed-to-load-folder-contents'));
           this.loading.set(false);
+          this.filtering.set(false);
           // Another folder failing leaves nothing of the one before it — not its title and
           // actions in the header, its count, nor the end of the trail. The same folder failing
           // on another page or order keeps them.
@@ -885,6 +1041,7 @@ export class BrowseComponent {
         const { folder, entries, totalSize, redirectTo } = payload.result;
         if (redirectTo) {
           this.loading.set(false);
+          this.filtering.set(false);
           void this.router.navigateByUrl(`/browse${redirectTo}`, { replaceUrl: true });
           return;
         }
@@ -893,15 +1050,73 @@ export class BrowseComponent {
         this.unopenedPath.set(null);
         this.browseContext.setFromNuxeoPath(folder.path);
         this.entries.set(entries);
+        // Set from the answer, not assumed from the filters: the service decides per container
+        // whether a query can reproduce its listing, and the rows, count and pager all read this.
+        this.serverFiltered.set(payload.result.serverFiltered === true);
         this.hasNextPage.set(payload.result.hasNextPage === true);
         this.reconcilePendingPasteEntries(entries);
-        const pendingCount = this.pendingPasteEntries.size;
+        // Only the pending rows the listing is actually showing. Counting all of them added a
+        // document the filter excludes to the total on every refresh, so one visible row read
+        // "2 results" — and the query can never clear it, because it never returns its uid.
+        const pendingCount = this.visiblePendingPasteCount();
         this.totalSize.set(totalSize === entries.length ? totalSize + pendingCount : totalSize);
         this.loading.set(false);
+        this.filtering.set(false);
         this.syncClipboardTarget(folder, payload.nuxeoPath);
         if (folder.uid && folder.uid !== 'virtual-root') {
           this.loadActivity(folder.uid);
         }
+      });
+
+    // A changed filter reloads the listing from its first page: page three of one filter is not
+    // page three of the next. Debounced rather than per keystroke; `switchMap` in the loader is
+    // what makes a superseded answer harmless, so this is only about how many requests it costs.
+    this.filterChanges$
+      .pipe(debounceTime(FILTER_DEBOUNCE_MS), takeUntilDestroyed())
+      .subscribe(() => {
+        this.pageIndex.set(0);
+        // And the selection goes with it, as it already does when the folder changes.
+        //
+        // Every selection helper resolves an id against `entries()`, which a filtered reload
+        // replaces wholesale. A selection the new rows do not contain therefore survives as a
+        // count with nothing behind it, and the header controls read that two different ways:
+        // `showHeaderDelete` finds no removable document and hides Delete, while `showHeaderEdit`
+        // sees `singleSelectedEntry()` go null and falls back to `canWriteCurrentDoc()` — so Edit
+        // stays enabled and quietly retargets from the row the user picked to the folder they are
+        // standing in. Resolving it instead would mean keeping every document of the folder in
+        // hand, which is the scan this replaced.
+        this.selectionService.clear();
+        this.browsePath$.next({
+          nuxeoPath: this.currentNuxeoPath,
+          pageIndex: 0,
+          filterChange: true,
+        });
+      });
+
+    this.folderTypeRequests$
+      .pipe(
+        switchMap(({ path, generation }) =>
+          this.browseService.getBrowseFolderTypes(path).pipe(
+            map((types) => ({ path, generation, types: types as string[] | null })),
+            // A failure leaves the dropdown on the types of the page on screen, which is what it
+            // offered before this existed. Nothing else reads them, so there is nothing to report
+            // and nothing to retry until the dropdown is opened again.
+            catchError(() => of({ path, generation, types: null })),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(({ path, generation, types }) => {
+        // Both halves are needed. The path rejects an answer for the folder we have left; the
+        // generation rejects one for the folder we are still on, taken before its contents changed.
+        if (path !== this.browsePath()) return;
+        if (generation !== this.folderTypesGeneration) return;
+        if (!types) {
+          // Clearing the record of which folder was fetched is what lets re-opening try again.
+          this.folderTypesPath = null;
+          return;
+        }
+        this.folderTypes.set(types);
       });
 
     this.browsePath$.next({ nuxeoPath: initialPath, pageIndex: 0 });
@@ -914,6 +1129,12 @@ export class BrowseComponent {
         return;
       }
       untracked(() => {
+        // Something outside this page changed the folder — the detail panel, the tree, a created
+        // domain. Which types it holds may have changed with it, and an optimistic paste copy may
+        // now describe a document that has been renamed, moved or trashed since. A paste bumps
+        // only `clipboardPasteTick`, so clearing them here cannot cut its own bridge.
+        this.invalidateFolderTypes();
+        this.clearPendingPasteEntries();
         if (this.currentNuxeoPath) {
           this.loadContent();
         }
@@ -941,7 +1162,9 @@ export class BrowseComponent {
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe(() => {
               if (this.currentDoc()?.uid === paste.targetUid && this.currentNuxeoPath) {
-                this.loadContent();
+                // The reload the optimistic rows are waiting for: it is what clears each one that
+                // the server has caught up with, so it must not discard the ones it has not.
+                this.reloadAfterContentChange({ keepOptimisticPasteRows: true });
               }
             });
         }
@@ -1000,12 +1223,46 @@ export class BrowseComponent {
     this.permissionsLoading.set(false);
     this.activeTabIndex.set(0);
     this.pendingPasteEntries.clear();
+    this.syncPendingPasteList();
     this.clearFilters();
+    // Only here, and only because the caller is about to load the new folder with exactly these
+    // (empty) filters: without it, clearing them would be seen as a change and ask for the same
+    // listing a second time, 250ms later. `clearFilters()` itself stays an ordinary filter change,
+    // so a Clear control reloads the way every other filter control does.
+    this.loadedFilterKey = null;
+    this.filtering.set(false);
+    this.serverFiltered.set(false);
     this.selectionService.clear();
   }
 
   loadContent(): void {
     this.browsePath$.next({ nuxeoPath: this.currentNuxeoPath, pageIndex: this.pageIndex() });
+  }
+
+  /**
+   * Reload after the folder's **contents** changed — a rename, a trash, a restore, an upload, a
+   * paste, a create/import.
+   *
+   * Still separate from `loadContent()`, which is also how paging and re-ordering reload: those
+   * cannot change which types the folder holds, and these can, so the dropdown's collected types
+   * are dropped here and nowhere else.
+   *
+   * It also forgets the optimistic paste rows, and that default is the point: a mutation makes a
+   * pasted row's copy stale, so renaming one out of the active filter, moving it, or trashing it
+   * used to leave it on screen under its old title — or after deletion — because a filtered query
+   * never returns its uid for {@link reconcilePendingPasteEntries} to clear. Clearing here covers
+   * every mutation path without naming them one by one, and the single caller that *must* keep
+   * them says so.
+   *
+   * @param keepOptimisticPasteRows the paste's own deferred reload, and only that: it is the
+   *   reload the rows are waiting for, so dropping them there would defeat the bridge entirely.
+   */
+  private reloadAfterContentChange(options?: { keepOptimisticPasteRows?: boolean }): void {
+    this.invalidateFolderTypes();
+    if (!options?.keepOptimisticPasteRows) {
+      this.clearPendingPasteEntries();
+    }
+    this.loadContent();
   }
 
   /** Another page of the same folder, in the same order. */
@@ -1111,7 +1368,8 @@ export class BrowseComponent {
 
   private afterDroppedUpload(path: string): void {
     this.browseContext.requestTreeRefresh();
-    if (nuxeoPathsEqualFlexible(path, this.currentDoc()?.path ?? '')) this.loadContent();
+    if (nuxeoPathsEqualFlexible(path, this.currentDoc()?.path ?? ''))
+      this.reloadAfterContentChange();
   }
 
   // ── Row actions ──
@@ -1165,7 +1423,7 @@ export class BrowseComponent {
           this.translate.instant('browse.message.renamed', { name: updated.title ?? doc.title }),
         );
         this.browseContext.requestTreeRefresh();
-        this.loadContent();
+        this.reloadAfterContentChange();
       });
   }
 
@@ -1214,7 +1472,7 @@ export class BrowseComponent {
             this.selectionService.toggle(doc.uid);
           }
           this.browseContext.requestTreeRefresh();
-          this.loadContent();
+          this.reloadAfterContentChange();
         },
         error: (err: unknown) =>
           this.toast.error(
@@ -1261,7 +1519,7 @@ export class BrowseComponent {
           if (this.selectionService.isSelected(doc.uid)) this.selectionService.toggle(doc.uid);
           this.toast.show(this.translate.instant('browse.message.moved-to-trash'));
           this.browseContext.requestTreeRefresh();
-          this.loadContent();
+          this.reloadAfterContentChange();
         },
         error: (err: unknown) =>
           this.toast.error(
@@ -1275,6 +1533,39 @@ export class BrowseComponent {
   }
 
   /** Merge clipboard copy/move API results into the visible folder (Web UI updates listing immediately). */
+  /** Mirror the pending-paste map into its signal; the map is not reactive on its own. */
+  private syncPendingPasteList(): void {
+    this.pendingPasteList.set([...this.pendingPasteEntries.values()]);
+  }
+
+  /**
+   * How many optimistic paste rows the listing is actually showing.
+   *
+   * What the count may add to the server's total. An unfiltered listing shows all of them; a
+   * filtered one shows only those that match, because {@link filteredEntries} judges exactly these
+   * rows — so counting the rest inflated the total beside rows that did not include them.
+   */
+  private visiblePendingPasteCount(): number {
+    const pending = [...this.pendingPasteEntries.values()];
+    if (!this.filtersActive()) return pending.length;
+    return pending.filter((doc) => this.matchesFilters(doc)).length;
+  }
+
+  /**
+   * Forget the optimistic paste rows.
+   *
+   * They exist to bridge one gap: `@children` may not list a just-pasted document yet, and
+   * {@link reconcilePendingPasteEntries} drops each one as soon as the server's answer includes
+   * its uid. Under a server-side filter that inference does not hold — a row the filter excludes
+   * is absent from every answer, so absence stops meaning "not committed yet" — and a pending copy
+   * that is never cleared goes on being re-appended with whatever title it was pasted under.
+   */
+  private clearPendingPasteEntries(): void {
+    if (this.pendingPasteEntries.size === 0) return;
+    this.pendingPasteEntries.clear();
+    this.syncPendingPasteList();
+  }
+
   private applyClipboardPasteToListing(documents: NuxeoDocument[]): void {
     if (documents.length === 0) {
       return;
@@ -1285,10 +1576,19 @@ export class BrowseComponent {
         this.pendingPasteEntries.set(doc.uid, doc);
       }
     }
+    this.syncPendingPasteList();
 
     let added = 0;
     let additions: NuxeoDocument[] = [];
-    const previousEntryCount = this.entries().length;
+    // The rows on screen, not `entries().length`.
+    //
+    // The guard below asks "is the total a complete count of this listing?", and it asks it of the
+    // number the total is displayed beside. Against the raw entry count it stopped being true for
+    // good after one non-matching paste: that row joins `entries()` and is deliberately left out
+    // of both the total and the rows, so the two counts diverge by one and never meet again — and
+    // the *next* paste, one that does match, could then never raise the total. Two rows, "1
+    // result". Unfiltered the two are the same number, so nothing changes there.
+    const previousVisibleCount = this.filteredEntries().length;
     const previousTotalSize = this.totalSize();
     this.entries.update((entries) => {
       const existingUids = new Set(entries.map((entry) => entry.uid));
@@ -1298,8 +1598,14 @@ export class BrowseComponent {
     });
 
     if (added > 0) {
-      if (previousTotalSize === previousEntryCount) {
-        this.totalSize.update((count) => count + added);
+      // Only the rows the listing will show. Pasting a document the active filter excludes left
+      // one visible row reporting "2 results", because the count rose and `filteredEntries` — the
+      // thing that judges exactly these optimistic rows — correctly left it out.
+      const shown = this.filtersActive()
+        ? additions.filter((doc) => this.matchesFilters(doc)).length
+        : added;
+      if (shown > 0 && previousTotalSize === previousVisibleCount) {
+        this.totalSize.update((count) => count + shown);
       }
     }
   }
@@ -1314,6 +1620,7 @@ export class BrowseComponent {
     for (const uid of serverUids) {
       this.pendingPasteEntries.delete(uid);
     }
+    this.syncPendingPasteList();
 
     const pending = [...this.pendingPasteEntries.values()];
     if (pending.length === 0) {
@@ -1518,7 +1825,7 @@ export class BrowseComponent {
       next: () => {
         this.toast.show(`"${doc.title}" restored`);
         this.loadTrash();
-        this.loadContent();
+        this.reloadAfterContentChange();
       },
       error: () =>
         this.toast.error(this.translate.instant('browse.message.failed-to-restore-document')),
@@ -1556,6 +1863,18 @@ export class BrowseComponent {
     this.filterModifiedFrom.set(null);
     this.filterModifiedTo.set(null);
     this.filterContributor.set('');
+  }
+
+  /**
+   * Clears the Modified range on its own.
+   *
+   * The title and contributor filters each had a clear suffix; this one had only the calendar
+   * toggle, so the only ways out of a chosen range were "clear filters" — which also discards the
+   * other three — or emptying both inputs by hand.
+   */
+  clearModifiedRange(): void {
+    this.filterModifiedFrom.set(null);
+    this.filterModifiedTo.set(null);
   }
 
   // ── CSV export (server-side via Nuxeo Bulk Action) ──
@@ -1699,7 +2018,7 @@ export class BrowseComponent {
           });
           return;
         }
-        if (result?.refreshed) this.loadContent();
+        if (result?.refreshed) this.reloadAfterContentChange();
       });
   }
 
@@ -1748,7 +2067,7 @@ export class BrowseComponent {
       return;
     }
     this.currentDoc.set(updatedDoc);
-    this.loadContent();
+    this.reloadAfterContentChange();
   }
 
   isCollectionEntry(doc: NuxeoDocument): boolean {
@@ -1787,7 +2106,7 @@ export class BrowseComponent {
             .subscribe((updatedDoc) => {
               if (updatedDoc) {
                 this.browseContext.requestTreeRefresh();
-                this.loadContent();
+                this.reloadAfterContentChange();
                 this.toast.show(this.translate.instant('browse.message.collection-updated'));
               }
             });
@@ -1832,7 +2151,7 @@ export class BrowseComponent {
                   next: () => {
                     this.selectionService.clear();
                     this.browseContext.requestTreeRefresh();
-                    this.loadContent();
+                    this.reloadAfterContentChange();
                     this.toast.show(
                       this.translate.instant('browse.message.collection-moved-to-trash'),
                     );
@@ -2092,7 +2411,7 @@ export class BrowseComponent {
             );
           }
           this.browseContext.requestTreeRefresh();
-          this.loadContent();
+          this.reloadAfterContentChange();
         },
         error: () => this.toast.error(this.translate.instant('browse.message.failed-to-delete')),
       });

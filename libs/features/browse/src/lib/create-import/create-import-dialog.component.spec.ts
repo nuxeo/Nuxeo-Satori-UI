@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { DateAdapter } from '@angular/material/core';
 import { enUS, fr, de, nl, ja, th, zhCN } from 'date-fns/locale';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -1206,17 +1207,69 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(component.natureEntries()).toEqual([]);
     });
 
-    it('reports a folder-context failure and offers no creatable types', async () => {
+    /**
+     * This threw `new Error('403')` — a plain `Error`, not an `HttpErrorResponse` — so despite its
+     * message it never exercised a permission failure. It covers the fallback branch, and is named
+     * for what it actually does now; the status-specific branches are covered below it.
+     */
+    it('reports an unrecognised folder-context failure as retryable, with no creatable types', async () => {
       await createDialog({ parentPath: WS_PATH }, (mocks) => {
-        mocks.getFolderContext.mockReturnValue(throwError(() => new Error('403')));
+        mocks.getFolderContext.mockReturnValue(throwError(() => new Error('boom')));
       });
 
       expect(component.typesLoadError()).toBe(
-        'Could not load creatable document types for this folder.',
+        'Could not load the document types for this folder. Check your connection and try again.',
       );
       expect(component.creatableTypes()).toEqual([]);
       expect(component.parentFolderType()).toBeNull();
       expect(component.loadingContext()).toBe(false);
+    });
+
+    it.each([401, 403])(
+      'tells the user it is a permission problem on HTTP %i, not a load failure',
+      async (status) => {
+        await createDialog({ parentPath: WS_PATH }, (mocks) => {
+          mocks.getFolderContext.mockReturnValue(
+            throwError(
+              () =>
+                new HttpErrorResponse({
+                  status,
+                  statusText: 'Forbidden',
+                  error: { message: "Privilege 'Read' is not granted to 'Anonymous'" },
+                }),
+            ),
+          );
+        });
+
+        expect(component.typesLoadError()).toBe(
+          'You do not have permission to add content to this folder. Pick a different location, or ask an administrator for access.',
+        );
+        expect(component.creatableTypes()).toEqual([]);
+      },
+    );
+
+    it('tells the user the folder is gone on HTTP 404', async () => {
+      await createDialog({ parentPath: WS_PATH }, (mocks) => {
+        mocks.getFolderContext.mockReturnValue(
+          throwError(() => new HttpErrorResponse({ status: 404, statusText: 'Not Found' })),
+        );
+      });
+
+      expect(component.typesLoadError()).toBe(
+        'This folder no longer exists. Go back and pick another location.',
+      );
+    });
+
+    it('keeps the retryable wording for a server failure, which a retry may clear', async () => {
+      await createDialog({ parentPath: WS_PATH }, (mocks) => {
+        mocks.getFolderContext.mockReturnValue(
+          throwError(() => new HttpErrorResponse({ status: 500, statusText: 'Server Error' })),
+        );
+      });
+
+      expect(component.typesLoadError()).toBe(
+        'Could not load the document types for this folder. Check your connection and try again.',
+      );
     });
 
     it('empties the location suggestions when the children fetch fails', async () => {
@@ -2451,7 +2504,9 @@ describe('CreateImportDialogComponent Expires typed into the real field', () => 
     fixture.componentInstance.startCreateFromType(pictureType());
     fixture.detectChanges();
     await fixture.whenStable();
-    const input = fixture.nativeElement.querySelector('input[name="expires"]') as HTMLInputElement;
+    const input = fixture.nativeElement.querySelector(
+      'nxs-date-input[name="expires"] input',
+    ) as HTMLInputElement;
 
     expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
     expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
@@ -2464,7 +2519,7 @@ describe('CreateImportDialogComponent Expires typed into the real field', () => 
     fixture.detectChanges();
     await fixture.whenStable();
     const input = fixture.nativeElement.querySelector(
-      'input[name="importExpires"]',
+      'nxs-date-input[name="importExpires"] input',
     ) as HTMLInputElement;
 
     expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
