@@ -14,10 +14,14 @@
  *
  * - `canActivate` is dropped. The guards resolve `AuthService` over HTTP, which is a different
  *   subject; route *matching* is what is under test here.
- * - the document-detail feature's lazy children are replaced by a stub of the same shape
- *   (`:uid`), so `/doc/:uid` can be asserted without pulling the whole feature into a Karma
- *   bundle. The shape is asserted against the real route table below, so the stub cannot drift
- *   into agreeing with a table that has changed.
+ * - the document-detail feature's **paths** are the real ones, resolved from the production
+ *   `loadChildren`; only the component each one activates is swapped for a stub, so the heavy
+ *   feature component is never instantiated.
+ *
+ * The second substitution used to hardcode `:uid` instead of resolving the loader, which meant
+ * the `/doc/:uid` and `/doc/a/b` tests would have passed against a loader that returned nothing
+ * at all — the drift protection this header claims was not enforced anywhere (caught in review
+ * on PR #510). `resolves the feature's real child paths` below is what now enforces it.
  */
 import { ChangeDetectionStrategy, Component, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -50,13 +54,27 @@ function withoutGuards(route: Route): Route {
   return copy;
 }
 
-function harnessChildren(): Routes {
+/**
+ * The document-detail feature's child routes, resolved from the **production** loader — so a
+ * loader that returned an empty or unrelated table cannot leave these tests passing.
+ */
+async function realDocChildren(): Promise<Routes> {
+  const feature = docRoutes.find((route) => route.loadChildren);
+  const loaded = await (feature?.loadChildren as () => Promise<Routes>)();
+  return loaded;
+}
+
+/** Keeps the real paths; activates a stub so the feature component is never instantiated. */
+function withStubComponent(route: Route): Route {
+  const copy: Route = { ...route, component: StubDocumentDetailComponent };
+  delete copy.loadComponent;
+  return copy;
+}
+
+function harnessChildren(docChildren: Routes): Routes {
   return (shell?.children ?? []).map((route) => {
     if (route.path === 'doc' && route.loadChildren) {
-      return {
-        path: 'doc',
-        loadChildren: () => [{ path: ':uid', component: StubDocumentDetailComponent }],
-      } satisfies Route;
+      return { path: 'doc', children: docChildren.map(withStubComponent) } satisfies Route;
     }
     return withoutGuards(route);
   });
@@ -66,12 +84,14 @@ describe('not-found routing', () => {
   let harness: RouterTestingHarness;
 
   beforeEach(async () => {
+    const docChildren = await realDocChildren();
+
     TestBed.configureTestingModule({
       imports: [testTranslateModule()],
       providers: [
         provideZonelessChangeDetection(),
         provideNoopAnimations(),
-        provideRouter([{ path: '', children: harnessChildren() }]),
+        provideRouter([{ path: '', children: harnessChildren(docChildren) }]),
       ],
     });
     harness = await RouterTestingHarness.create();
@@ -109,6 +129,17 @@ describe('not-found routing', () => {
     );
 
     expect(page).toBeInstanceOf(StubDocumentDetailComponent);
+  });
+
+  it("resolves the feature's real child paths, so the stub cannot stand in for a lost table", async () => {
+    const children = await realDocChildren();
+
+    // What makes the two tests above mean anything. The harness swaps each child's component
+    // but keeps its path, so a production loader that returned nothing — or stopped taking a
+    // single segment — would otherwise leave `/doc/:uid` and `/doc/a/b` passing against a table
+    // this spec had invented. Asserting the exact paths is deliberate: a child added here
+    // changes which addresses fall through to `**`, and that should be read, not absorbed.
+    expect(children.map((route) => route.path)).toEqual([':uid']);
   });
 
   it('declares the bare-doc route before the one that loads the feature', () => {
