@@ -1975,6 +1975,19 @@ describe('BrowseComponent — rendered document list', () => {
       await settleOutlets();
       expect(texts('.details-panel nxs-tag-editor mat-chip-row')).toEqual(['urgent', 'q3']);
     });
+
+    it('renders a trashed child type through nxs.primitives.tag', async () => {
+      browse.getTrashedChildren.mockReturnValue(
+        of({ folder: described, entries: [doc({ uid: 'trash-1', title: 'Old', type: 'File' })] }),
+      );
+
+      const component = await render([provideNoopAnimations(), overrides]);
+      component.onTabChange(3);
+      await settleOutlets();
+
+      expect(texts('.browse-table .acme-tag')).toEqual(['File']);
+      expect(query('.browse-table nxs-tag')).toBeNull();
+    });
   });
   /**
    * The card view renders each document's card by `nxs.primitives.card`, so whatever is registered
