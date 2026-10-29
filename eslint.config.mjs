@@ -75,23 +75,33 @@ function resolveSatoriLint() {
 const satoriLintPath = resolveSatoriLint();
 // Loaded outside the try above on purpose, so an error thrown from inside satori-lint propagates
 // instead of being read as the package being absent.
-const satoriLint = satoriLintPath ? require(satoriLintPath) : null;
+const satoriLint = satoriLintPath === null ? null : require(satoriLintPath);
 
 // A rule may only be named once its plugin is registered, so the override goes with the layer
 // that brings the plugin in rather than standing on its own.
-const satoriLintLayers = satoriLint
-  ? [
-      ...satoriLint.configs['flat/recommended'],
-      {
-        files: ['**/*.html'],
-        rules: {
-          // 513 Material font icons → Satori SVG icons is a separate migration tracked by
-          // `npm run satori:icons`. Warn so lint stays green while SDSC tracks progress.
-          '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
+//
+// Gated on `satoriLintPath`, NOT on `satoriLint` being truthy. The only tolerated state is the
+// resolution failure handled above; everything else must speak up. An entry that resolves and
+// then exports `null`, `undefined` or `false` is a broken package, and a truthiness check here
+// would quietly give it the same empty layer as a deliberate removal — without even the warning,
+// since that is printed on the resolve path. This way `satoriLint.configs` throws on it, which is
+// what should happen.
+const satoriLintLayers =
+  satoriLintPath === null
+    ? []
+    : [
+        ...satoriLint.configs['flat/recommended'],
+        {
+          files: ['**/*.html'],
+          rules: {
+            // The remaining Material font icons are tracked by `npm run satori:check` — 6 as of
+            // 2026-10-28, and five of those are deliberate, so this is a warning by choice rather
+            // than a migration waiting to finish. `docs/satori-adoption-dashboard.md` has the
+            // per-icon verdicts.
+            '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
+          },
         },
-      },
-    ]
-  : [];
+      ];
 
 export default [
   ...nx.configs['flat/base'],

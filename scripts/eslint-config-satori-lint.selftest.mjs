@@ -44,6 +44,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const CONFIG = join(ROOT, 'eslint.config.mjs');
@@ -55,10 +56,22 @@ const failures = [];
 const cleanups = [];
 let controls = 0;
 
-// Permission bits do not apply to root, so the unreadable-ancestor control cannot mean anything
-// there. Skipped rather than reported as a hole, and said out loud so a green run as root is not
-// read as covering it.
-const CAN_TEST_PERMISSIONS = process.getuid?.() !== 0;
+// The unreadable-ancestor control needs `chmod 000` to actually deny traversal, which it does not
+// everywhere: root reads straight through mode 000, and on Windows `chmodSync` does not deny
+// directory listing at all. In both places the fixture stays readable, so the config correctly
+// tolerates the absent scope and the control would fail for a reason that is not a defect.
+//
+// Skipped rather than reported as a hole, with the reason named, so a green run is never read as
+// having covered the fail-closed branch. Same shape as
+// `scripts/beta-harness/dependency-tree.selftest.mjs`, which skips its unlistable-directory
+// fixture for exactly these two reasons.
+const PERMISSIONS_SKIPPED =
+  process.platform === 'win32'
+    ? 'Windows chmod does not deny directory listing'
+    : process.getuid?.() === 0
+      ? 'running as root, which reads through mode 000'
+      : null;
+const CAN_TEST_PERMISSIONS = PERMISSIONS_SKIPPED === null;
 
 function check(label, condition, detail) {
   controls += 1;
@@ -135,6 +148,30 @@ function buildFixture(state) {
         `throw new Error(${JSON.stringify(LOAD_THROW_MESSAGE)});\n`,
       );
       break;
+    // The entry resolves, then fails to load because something IT requires is missing. The error
+    // is a MODULE_NOT_FOUND naming this package in its require stack, so any guard that matches on
+    // the code plus the message reads it as "satori-lint is absent" and drops every rule.
+    case 'entry-missing-transitive-dep':
+      mkdirSync(join(packageDir, 'eslint'), { recursive: true });
+      writeFileSync(
+        join(packageDir, 'package.json'),
+        manifest({ exports: { './eslint': './eslint/index.cjs' } }),
+      );
+      writeFileSync(
+        join(packageDir, 'eslint', 'index.cjs'),
+        "module.exports = require('a-dependency-that-is-not-installed');\n",
+      );
+      break;
+    // Resolves and loads cleanly, then hands back nothing usable. A truthiness check on the
+    // loaded module treats this like a deliberate removal and drops every rule in silence.
+    case 'entry-exports-falsy':
+      mkdirSync(join(packageDir, 'eslint'), { recursive: true });
+      writeFileSync(
+        join(packageDir, 'package.json'),
+        manifest({ exports: { './eslint': './eslint/index.cjs' } }),
+      );
+      writeFileSync(join(packageDir, 'eslint', 'index.cjs'), 'module.exports = null;\n');
+      break;
     case 'invalid-exports-target': // a resolution failure that is not MODULE_NOT_FOUND
       mkdirSync(join(packageDir, 'eslint'), { recursive: true });
       writeFileSync(
@@ -154,10 +191,19 @@ function buildFixture(state) {
   return dir;
 }
 
-/** Imports the fixture's copy of the config in a child process and reports what came out. */
+/**
+ * Imports the fixture's copy of the config in a child process and reports what came out.
+ *
+ * `pathToFileURL`, not `'file://' + path`. Concatenation mis-encodes three things that are all
+ * legal in a temp directory name: `#` and `?` start a fragment or query, so the rest of the path
+ * is discarded and the import fails with `ERR_MODULE_NOT_FOUND`; `%` begins an escape sequence;
+ * and on Windows a drive letter turns `file://C:\\…` into a URL whose host is `c:`. Each of those
+ * fails the POSITIVE controls before the config is ever exercised — which reads as a config defect
+ * and is not one.
+ */
 function loadIn(dir) {
   const child = `
-    const config = (await import('file://' + ${JSON.stringify(join(dir, 'eslint.config.mjs'))})).default;
+    const config = (await import(${JSON.stringify(pathToFileURL(join(dir, 'eslint.config.mjs')).href)})).default;
     const rules = config
       .flatMap((layer) => Object.keys(layer?.rules ?? {}))
       .filter((rule) => rule.includes('satori-lint'));
@@ -281,6 +327,36 @@ try {
     !loadThrows.warnedAbsent,
     `stderr ${JSON.stringify(loadThrows.stderr.trim().slice(0, 160))}`,
   );
+
+  // The entry resolves but one of ITS dependencies does not. Node raises MODULE_NOT_FOUND with
+  // this package in the require stack, which is the shape that fooled the guards matching on the
+  // error message. Loading outside the resolve guard is what keeps it fatal.
+  const transitive = state('entry-missing-transitive-dep');
+  check(
+    'entry-missing-transitive-dep: a dependency missing inside satori-lint is fatal',
+    !transitive.loaded,
+    `loaded with rules ${JSON.stringify(transitive.rules)}`,
+  );
+  check(
+    'entry-missing-transitive-dep: does not claim the package is merely absent',
+    !transitive.warnedAbsent,
+    `stderr ${JSON.stringify(transitive.stderr.trim().slice(0, 160))}`,
+  );
+
+  // A package that resolves and loads, then exports something unusable. The layers are gated on
+  // the resolve result rather than on the loaded value precisely so this cannot pass as absence:
+  // it is the one broken state that reaches the config with no error of its own to propagate.
+  const falsyExport = state('entry-exports-falsy');
+  check(
+    'entry-exports-falsy: an entry exporting null is fatal, not an empty layer',
+    !falsyExport.loaded,
+    `loaded with rules ${JSON.stringify(falsyExport.rules)}`,
+  );
+  check(
+    'entry-exports-falsy: does not claim the package is merely absent',
+    !falsyExport.warnedAbsent,
+    `stderr ${JSON.stringify(falsyExport.stderr.trim().slice(0, 160))}`,
+  );
 } finally {
   for (const cleanup of cleanups) cleanup();
 }
@@ -291,7 +367,7 @@ function lastLines(stderr) {
 
 console.log(
   `eslint.config satori-lint selftest: ${controls} controls` +
-    `${CAN_TEST_PERMISSIONS ? '' : ' (unreadable-ancestor SKIPPED: running as root)'}.`,
+    `${CAN_TEST_PERMISSIONS ? '' : ` (unreadable-ancestor SKIPPED: ${PERMISSIONS_SKIPPED})`}.`,
 );
 if (failures.length) {
   console.error(`\n${failures.length} control(s) did not behave as required:`);
