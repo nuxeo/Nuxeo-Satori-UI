@@ -2,21 +2,52 @@ import { createRequire } from 'node:module';
 import nx from '@nx/eslint-plugin';
 
 const require = createRequire(import.meta.url);
-const satoriLint = require('@hylandsoftware/satori-lint/eslint');
+
+/**
+ * Optional on purpose. `@hylandsoftware/satori-lint` comes from GitHub Packages, and the token-free
+ * builds run with `@hylandsoftware` removed from `node_modules` — `storybook-pages.yml` does that
+ * so a Satori import cannot compile into the Storybook it publishes.
+ *
+ * A hard `require` here is not a lint-time failure, it is an every-`nx`-command failure:
+ * `@nx/eslint/plugin` loads this file while constructing the project graph, so a missing module
+ * takes down `nx run` too. That is how the public Storybook deploy broke on 2026-10-28 — two runs
+ * failed with `Cannot find module '@hylandsoftware/satori-lint/eslint'` and the site stayed stale
+ * until a build-order change in #496 incidentally warmed the graph before the removal. Incidental
+ * is not a fix: reorder those steps back and the site silently stops refreshing again.
+ *
+ * Resolution and loading are separate on purpose. A missing package is tolerated; a package that
+ * is present but throws while loading is not, because silently dropping these rules on a broken
+ * install would be worse than failing.
+ */
+let satoriLintPath = null;
+try {
+  satoriLintPath = require.resolve('@hylandsoftware/satori-lint/eslint');
+} catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') throw error;
+}
+const satoriLint = satoriLintPath ? require(satoriLintPath) : null;
 
 export default [
   ...nx.configs['flat/base'],
   ...nx.configs['flat/typescript'],
   ...nx.configs['flat/javascript'],
-  ...satoriLint.configs['flat/recommended'],
-  {
-    files: ['**/*.html'],
-    rules: {
-      // 513 Material font icons → Satori SVG icons is a separate migration tracked by
-      // `npm run satori:icons`. Warn so lint stays green while SDSC tracks progress.
-      '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
-    },
-  },
+  // Both blocks hang off the same optional module: the rule override below names a rule that only
+  // exists once `flat/recommended` has registered the plugin, so neither can be present alone.
+  ...(satoriLint
+    ? [
+        ...satoriLint.configs['flat/recommended'],
+        {
+          files: ['**/*.html'],
+          rules: {
+            // The remaining Material font icons are tracked by `npm run satori:check` — 6 as of
+            // 2026-10-28, and five of those are deliberate, so this stays a warning rather than
+            // being a migration waiting to finish. `docs/satori-adoption-dashboard.md` has the
+            // per-icon verdicts.
+            '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
+          },
+        },
+      ]
+    : []),
   {
     ignores: [
       '**/dist',
