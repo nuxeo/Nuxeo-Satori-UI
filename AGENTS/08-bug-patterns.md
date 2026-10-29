@@ -928,6 +928,29 @@ false whenever an earlier layer set a valid value: a refusal falls back to `base
 packaged default. Report what was refused and why; do not narrate the merged outcome from one
 contribution's point of view.
 
+**Never canonicalise to a sentinel drawn from the value space.** The second review round found
+that mapping every loopback spelling to the string `'loopback'` made a third-party server
+_actually named_ `loopback` compare equal to `localhost`, so its logo was refused. A sentinel
+only works where it cannot be a real value, and `'loopback'` is a legal DNS name. Express the
+equivalence as a predicate on both sides instead:
+
+```typescript
+// BAD ❌ — the key is itself a possible hostname.
+const key = (h: string) => (isLoopback(h) ? 'loopback' : h);
+return key(a) === key(b);
+
+// GOOD ✅ — no key, so nothing to collide with.
+if (isLoopback(a) && isLoopback(b)) return true;
+return a === b;
+```
+
+The same round found the narrower equivalence twice more: `*.localhost` resolves to loopback
+(RFC 6761) and was missed, and the embedded-IPv4 decode was applied only to loopback, so a
+deployment on `10.0.0.5` still accepted `[::ffff:10.0.0.5]`. **Decide the equivalence once, for
+all values**, rather than special-casing the one address you were looking at. Each fix needs a
+negative control — `mylocalhost` and `localhost.example.com` must stay allowed — because the
+failure mode of an over-broad host rule is a customer's logo silently refused.
+
 **A refusal with no reason is indistinguishable from no configuration.** A function returning
 `null` for "refused" throws the reason away at the moment it is known. Return the reason and
 derive the boolean from it — `isAccepted = describeRefusal(x) === null` — so the verdict and the

@@ -230,6 +230,51 @@ describe('resolveBrandingLogoUrl — the check on the URL the browser loads', ()
     ).toBe(new URL(src).href);
   });
 
+  /**
+   * Second review of PR 512. Three ways the host comparison was still wrong, two of them
+   * refusing logos that should load.
+   */
+  describe('second review of PR 512', () => {
+    const onLoopback = 'http://localhost:4200/agentic-ui-config/bootstrap.json';
+
+    it('allows a third-party host actually named "loopback"', () => {
+      // The canonical form used to be the literal string 'loopback', which is itself a legal DNS
+      // name, so this host collided with `localhost` and was refused.
+      expect(resolveBrandingLogoUrl('https://loopback/acme.svg', onLoopback)).toBe(
+        'https://loopback/acme.svg',
+      );
+    });
+
+    it.each([
+      ['a name merely ending in the word', 'https://mylocalhost/acme.svg'],
+      ['a name with localhost as a label', 'https://localhost.example.com/acme.svg'],
+    ])('allows %s', (_label, src) => {
+      expect(resolveBrandingLogoUrl(src, onLoopback)).toBe(src);
+    });
+
+    it('refuses a .localhost subdomain, which resolves to loopback', () => {
+      expect(
+        resolveBrandingLogoUrl('https://tenant.localhost:4200/nuxeo/icons/x.png', onLoopback),
+      ).toBeNull();
+    });
+
+    /** An embedded IPv4 names the same host whatever its spelling, loopback or not. */
+    it('refuses an IPv4-mapped form of a non-loopback Nuxeo host', () => {
+      const onIpv4 = 'https://10.0.0.5/agentic-ui-config/bootstrap.json';
+      expect(
+        resolveBrandingLogoUrl('https://[::ffff:10.0.0.5]/nuxeo/api/v1/me', onIpv4),
+      ).toBeNull();
+      expect(resolveBrandingLogoUrl('https://[::10.0.0.5]/nuxeo/api/v1/me', onIpv4)).toBeNull();
+    });
+
+    it('still allows a different IPv4 host, mapped or plain', () => {
+      const onIpv4 = 'https://10.0.0.5/agentic-ui-config/bootstrap.json';
+      for (const src of ['https://10.0.0.6/acme.svg', 'https://[::ffff:10.0.0.6]/acme.svg']) {
+        expect(resolveBrandingLogoUrl(src, onIpv4)).toBe(new URL(src).href);
+      }
+    });
+  });
+
   it('still allows a third-party https logo when the deployment is on loopback', () => {
     expect(
       resolveBrandingLogoUrl(

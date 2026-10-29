@@ -655,23 +655,36 @@ function resolveLogoTarget(
  * the two spellings do not share a jar — and it is now reported rather than silent.
  */
 function isSameHost(a: string, b: string): boolean {
-  return canonicalHost(a) === canonicalHost(b);
+  const left = canonicalHost(a);
+  const right = canonicalHost(b);
+  // Every loopback spelling means this machine, so any two of them are the same host. Expressed
+  // as a predicate on both sides rather than by mapping them to one representative string: a
+  // sentinel like `'loopback'` is itself a legal DNS name, so a third-party server actually
+  // called `loopback` collided with it and had its logo refused (review of PR 512).
+  if (isLoopbackHost(left) && isLoopbackHost(right)) return true;
+  return left === right;
 }
 
+/**
+ * A hostname in the form two spellings of the same host share.
+ *
+ * Drops the trailing dot of the fully-qualified form, and reads out an IPv4 address embedded in
+ * IPv6 — for **any** address, not only loopback, since `10.0.0.5` and `[::ffff:10.0.0.5]` are the
+ * same host and deciding that needs no DNS (review of PR 512).
+ */
 function canonicalHost(hostname: string): string {
   const bare = hostname.replace(/\.+$/, '');
-  return isLoopbackHost(bare) ? 'loopback' : bare;
+  return embeddedIpv4(bare) ?? bare;
 }
 
-/** `localhost`, `127.0.0.0/8` and the IPv6 loopback, in the forms the URL parser produces. */
+/** `localhost` and its subdomains, `127.0.0.0/8`, and the IPv6 loopback. */
 function isLoopbackHost(hostname: string): boolean {
-  if (hostname === 'localhost') return true;
-  if (/^127\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname)) return true;
-  const groups = ipv6Groups(hostname);
-  if (groups === null) return false;
-  // `::1`.
-  if (groups.slice(0, 7).every((group) => group === 0) && groups[7] === 1) return true;
-  return embeddedIpv4FirstOctet(groups) === 127;
+  // RFC 6761: `*.localhost` resolves to loopback, and browsers honour it — so a logo at
+  // `tenant.localhost` reaches the same Nuxeo the configuration came from (review of PR 512).
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
+  if (hostname === '[::1]') return true;
+  // Embedded IPv4 loopback arrives here already read out by `canonicalHost`.
+  return /^127\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname);
 }
 
 /**
@@ -698,7 +711,7 @@ function ipv6Groups(hostname: string): number[] | null {
 }
 
 /**
- * The first octet of an IPv4 address embedded in the low 32 bits, or `null` when none is.
+ * The dotted IPv4 address an IPv6 host embeds in its low 32 bits, or `null` when it embeds none.
  *
  * Three embeddings reach an IPv4 host and the URL parser accepts all of them: IPv4-mapped
  * (`::ffff:127.0.0.1`), the deprecated IPv4-compatible (`::127.0.0.1`), and IPv4-translated
@@ -710,12 +723,21 @@ function ipv6Groups(hostname: string): number[] | null {
  * this requires every group above the low 32 bits to be `0` or `ffff`, which is what all of them
  * are made of, and then reads the address out. A real routable address such as `2001:db8::7f00:1`
  * has a leading group that is neither, so it is not treated as embedding one.
+ *
+ * Returning the address rather than just its first octet is what makes the equivalence hold for
+ * every host and not only loopback: with the configuration on `10.0.0.5`, a logo at
+ * `[::ffff:10.0.0.5]` names the same machine, and that needs no DNS to decide.
  */
-function embeddedIpv4FirstOctet(groups: readonly number[]): number | null {
+function embeddedIpv4(hostname: string): string | null {
+  const groups = ipv6Groups(hostname);
+  if (groups === null) return null;
   const prefix = groups.slice(0, 6);
   if (!prefix.every((group) => group === 0 || group === 0xffff)) return null;
-  if (prefix.every((group) => group === 0) && groups[6] === 0) return null;
-  return (groups[6] ?? 0) >>> 8;
+  // `::` and `::1` embed no address; an all-zero prefix needs a non-zero high half to be one.
+  if (prefix.every((group) => group === 0) && (groups[6] ?? 0) === 0) return null;
+  const high = groups[6] ?? 0;
+  const low = groups[7] ?? 0;
+  return [high >>> 8, high & 0xff, low >>> 8, low & 0xff].join('.');
 }
 
 /**

@@ -104,13 +104,17 @@ key for the favicon.
   `127.0.0.1` — so neither case nor IPv4 notation was ever a way past the rule above. Two things
   it does not do, and the check now does: a **trailing dot** is stripped, because `example.com.`
   is the fully-qualified form of `example.com` and shares its cookie jar; and `localhost`,
-  anything in `127.0.0.0/8` and `[::1]` are treated as one host, because on a single-host
-  deployment each of them reaches the Nuxeo the configuration itself came from — including an
-  IPv4 loopback address embedded in IPv6, in any of the three embeddings the URL parser accepts
+  anything in `127.0.0.0/8`, `[::1]` and any `*.localhost` subdomain are treated as one host,
+  because on a single-host deployment each of them reaches the Nuxeo the configuration itself came
+  from — `*.localhost` because RFC 6761 resolves it to loopback and browsers honour that. An IPv4
+  address embedded in IPv6 is **decoded**, in any of the three embeddings the URL parser accepts
   (`::ffff:127.0.0.1`, the deprecated `::127.0.0.1`, and `::ffff:0:127.0.0.1`, which arrive as
-  `[::ffff:7f00:1]`, `[::7f00:1]` and `[::ffff:0:7f00:1]`). The embedded address is decoded rather
-  than matched against a list of prefixes, which would be incomplete the moment a fourth exists.
-  A side effect
+  `[::ffff:7f00:1]`, `[::7f00:1]` and `[::ffff:0:7f00:1]`), rather than matched against a list of
+  prefixes that would be incomplete the moment a fourth exists. Decoding applies to **every**
+  address, not just loopback, so a deployment on `10.0.0.5` also refuses `[::ffff:10.0.0.5]`;
+  that equivalence needs no DNS. Names that merely contain the word are unaffected —
+  `mylocalhost`, `localhost.example.com` and a host actually called `loopback` are ordinary
+  third-party hosts. A side effect
   worth knowing: a logo inside the configuration directory is refused if its host carries a
   trailing dot, since the same-origin exception is matched on the origin as written — write the
   host the way the application is served, or use a relative path. What the check still cannot do
