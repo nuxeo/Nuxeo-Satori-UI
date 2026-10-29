@@ -1978,7 +1978,13 @@ describe('BrowseComponent — rendered document list', () => {
 
     it('renders a trashed child type through nxs.primitives.tag', async () => {
       browse.getTrashedChildren.mockReturnValue(
-        of({ folder: described, entries: [doc({ uid: 'trash-1', title: 'Old', type: 'File' })] }),
+        of({
+          entries: [doc({ uid: 'trash-1', title: 'Old', type: 'File' })],
+          totalSize: 1,
+          currentPageSize: 1,
+          currentPageIndex: 0,
+          numberOfPages: 1,
+        }),
       );
 
       const component = await render([provideNoopAnimations(), overrides]);
