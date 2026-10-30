@@ -162,7 +162,7 @@ Focus lost for nowhere counts only if it has not come back a task later, because
 focused chip's removal that way before Material refocuses its neighbour.
 
 **Storybook 10** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
-<https://nuxeo.github.io/agentic-ui-poc/>. Each component has an Overview, an API page and its
+<https://nuxeo.github.io/Nuxeo-Satori-UI/>. Each component has an Overview, an API page and its
 stories, after a Getting started page:
 
 ```bash

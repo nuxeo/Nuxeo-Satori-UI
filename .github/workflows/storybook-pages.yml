@@ -1,6 +1,6 @@
 name: Storybook on GitHub Pages
 
-# Publishes two Storybooks of `satori-components` to https://nuxeo.github.io/agentic-ui-poc/: the
+# Publishes two Storybooks of `satori-components` to https://nuxeo.github.io/Nuxeo-Satori-UI/: the
 # Material build at the root, and the same library under Satori's theme at `/satori/`. The root is
 # unchanged, so every existing link to the site still lands where it always did.
 #
