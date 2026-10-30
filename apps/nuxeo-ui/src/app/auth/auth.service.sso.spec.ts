@@ -190,6 +190,43 @@ describe('resolveSsoLoginUrl', () => {
       expect('url' in target).toBeTrue();
     });
 
+    /**
+     * Held to the same scheme rule as the login path, for the same diagnostic reason rather than a
+     * security one: prepending a slash to `https://evil.example/` makes the path
+     * `/https://evil.example/`, which really is on this application's origin, so the comparison
+     * alone would attach it and all the administrator would see is a 404 after sign-in.
+     */
+    it('refuses an absolute return address rather than sending it as a path on our own origin', () => {
+      const target = resolve('/nuxeo/login/azure', { postLoginPath: 'https://evil.example/x' });
+      expect('url' in target && target.url).toBe('https://nuxeo.example/nuxeo/login/azure');
+      expect('url' in target && target.url).not.toContain('evil.example');
+    });
+
+    it('never attaches a return URL on another origin, whatever the configured value', () => {
+      const values = [
+        '/dashboard',
+        'dashboard',
+        '//evil.example/landing',
+        '/\\evil.example/landing',
+        '/\t/evil.example/landing',
+        'https://evil.example/x',
+        'javascript:alert(1)',
+        '/%2f%2fevil.example',
+      ];
+      for (const postLoginPath of values) {
+        const target = resolve('/nuxeo/login/azure', { postLoginPath });
+        expect('url' in target)
+          .withContext(`${JSON.stringify(postLoginPath)} must not refuse the sign-in`)
+          .toBeTrue();
+        if (!('url' in target)) continue;
+        const sent = new URL(target.url).searchParams.get('requestedUrl');
+        if (sent === null) continue;
+        expect(new URL(sent).origin)
+          .withContext(`${JSON.stringify(postLoginPath)} was sent as ${sent}`)
+          .toBe(APP);
+      }
+    });
+
     it('accepts a relative return path by resolving it on the application origin', () => {
       const url = urlOf('/nuxeo/login/azure');
       expect(url).toContain(encodeURIComponent('https://app.example/dashboard'));

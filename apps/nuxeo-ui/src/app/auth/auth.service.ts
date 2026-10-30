@@ -199,11 +199,20 @@ export function resolveSsoLoginUrl(request: SsoLoginRequest): SsoLoginTarget {
   return { url: url.href };
 }
 
-/** The absolute return URL for `postLoginPath`, or `null` when it does not stay on `appOrigin`. */
+/**
+ * The absolute return URL for `postLoginPath`, or `null` when it does not stay on `appOrigin`.
+ *
+ * Held to the same two rules as {@link resolveSsoLoginUrl}, including the scheme refusal, for the
+ * same reason and not for a security one: `https://evil.example/` prepended with a slash becomes
+ * the path `/https://evil.example/`, which really is on this application's origin, so the
+ * comparison would allow it and the only symptom would be a 404 landing page after a sign-in that
+ * otherwise worked. Refusing it drops the parameter and says why.
+ */
 function resolveSsoReturnUrl(postLoginPath: string, appOrigin: string): string | null {
   const base = parseUrl(`${appOrigin.replace(/\/+$/, '')}/`);
   if (base === null || !isHttpUrl(base)) return null;
   const trimmed = postLoginPath.trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return null;
   const url = parseUrl(trimmed.startsWith('/') ? trimmed : `/${trimmed}`, base.href);
   return url !== null && url.origin === base.origin ? url.href : null;
 }
