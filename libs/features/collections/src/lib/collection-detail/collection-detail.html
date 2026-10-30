@@ -38,7 +38,7 @@
       [heading]="collection()?.title ?? ('collections.collection' | translate)"
     >
       @if (showBreadcrumbs() && breadcrumbItems().length) {
-        <div class="header-path-row" nxsFolderHeaderDetail>
+        <div class="header-path-row collection-breadcrumbs" nxsFolderHeaderDetail>
           @let trailLabel = 'collections.collection-detail.breadcrumbs' | translate;
           <lib-extension-outlet
             #breadcrumbsOutlet
@@ -447,13 +447,15 @@
                   </th>
                   <td mat-cell *matCellDef="let entry">
                     <div class="user-cell">
-                      <sat-avatar
-                        [initials]="entry.principalName"
-                        [category]="avatarColor(entry.principalName)"
-                        size="24"
-                        [borderless]="true"
-                        aria-hidden="true"
+                      @let color = avatarColor(entry.principalName);
+                      <lib-extension-outlet
+                        #avatarOutlet
+                        [componentId]="avatarId"
+                        [componentInputs]="{ initials: entry.principalName, color, size: '24' }"
                       />
+                      @if (avatarOutlet.unresolved()) {
+                        <nxs-avatar [initials]="entry.principalName" [color]="color" size="24" />
+                      }
                       <span>{{ entry.principalName }}</span>
                     </div>
                   </td>

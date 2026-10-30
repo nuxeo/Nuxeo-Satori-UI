@@ -89,7 +89,6 @@ import {
   BrowseContextService,
   decodeNuxeoPathSegment,
   noteFormatLabel,
-  normalizeNuxeoPath,
   parentNuxeoFolderPath,
   renderNoteMarkdown,
   isMailSendError,
@@ -103,11 +102,9 @@ import {
   formatRelativeTime,
   permissionRightLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import { SAT_BANNER_IMPORTS } from '@hylandsoftware/satori-ui/banner';
-import { SatBreadcrumbs, type SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
 import { SatGhost } from '@hylandsoftware/satori-ui/ghost';
-import { SatTagModule, SatTagCategory } from '@hylandsoftware/satori-ui/tag';
+import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';
 import {
   AiGatewayService,
   AiChatService,
@@ -165,6 +162,9 @@ import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   NXS_PERMISSIONS_PANEL_ID,
   NxsCommentExtraDirective,
+  NXS_PRIMITIVE_IDS,
+  NxsAvatarComponent,
+  NxsBreadcrumbsComponent,
   NxsCommentsComponent,
   NxsTagEditorComponent,
   NxsDeletePermissionDialogComponent,
@@ -184,9 +184,9 @@ import {
   NxsToastService,
   nxsAceTimeFrame,
   nxsErrorStatus,
-  NXS_PRIMITIVE_IDS,
   nxsToggleFavorite,
   provideNxsToast,
+  type NxsBreadcrumbItem,
   type NxsDeletePermissionDialogData,
   type NxsDetailsPanelTab,
   type NxsDriveDialogData,
@@ -256,6 +256,8 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   standalone: true,
   imports: [
     NxsCommentExtraDirective,
+    NxsAvatarComponent,
+    NxsBreadcrumbsComponent,
     NxsCommentsComponent,
     NxsTagEditorComponent,
     NxsDetailsPanelComponent,
@@ -287,11 +289,8 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     ExtensionOutletComponent,
     NxsPermissionsPanelComponent,
     NoteEditorComponent,
-    SatAvatarModule,
     SAT_BANNER_IMPORTS,
-    SatBreadcrumbs,
     SatGhost,
-    SatTagModule,
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter(), provideNxsToast()],
   templateUrl: './document-detail.html',
@@ -568,7 +567,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   /** Set when navigating here immediately after creating a Note. */
   private freshNoteDocument = false;
   private breadcrumbPathCache: string | null = null;
-  private breadcrumbItemsCache: SatBreadcrumbsItem[] = [];
+  private breadcrumbItemsCache: NxsBreadcrumbItem[] = [];
 
   // AI Insights state
   readonly aiSummary = signal<SummarizeResponse | null>(null);
@@ -699,7 +698,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return `${(len / (1024 * 1024)).toFixed(2)} MB`;
   });
 
-  readonly breadcrumbItems = computed<SatBreadcrumbsItem[]>(() => {
+  readonly breadcrumbItems = computed<NxsBreadcrumbItem[]>(() => {
     const d = this.doc();
     if (!d) return [];
 
@@ -712,28 +711,18 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const parts = path.split('/').filter(Boolean);
     parts.pop();
     this.breadcrumbPathCache = cacheKey;
-    let accumulated = '/';
-    this.breadcrumbItemsCache = parts.map((s) => {
-      accumulated = normalizeNuxeoPath(`${accumulated}/${s}`);
-      return {
-        label: decodeNuxeoPathSegment(s),
-        href: toBrowseRouterUrl(accumulated),
-      };
-    });
+    // Router links, not hrefs: whichever component `nxs.primitives.breadcrumbs` resolves to routes
+    // them itself — the folded ones too, which Material's trail lists in a menu outside its host.
+    // One command per segment, so the router encodes each exactly once.
+    this.breadcrumbItemsCache = parts.map((s, index) => ({
+      label: decodeNuxeoPathSegment(s),
+      routerLink: ['/browse', ...parts.slice(0, index + 1)],
+    }));
     return this.breadcrumbItemsCache;
   });
 
   private browseUrlForPath(nuxeoPath: string): string {
     return toBrowseRouterUrl(nuxeoPath);
-  }
-
-  onBreadcrumbClick(event: MouseEvent): void {
-    const anchor = (event.target as HTMLElement).closest('a');
-    const href = anchor?.getAttribute('href');
-    if (href) {
-      event.preventDefault();
-      void this.router.navigateByUrl(href);
-    }
   }
 
   readonly versionLabel = computed(() => {
@@ -2348,6 +2337,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   avatarColor = avatarColor;
+
+  /** The breadcrumbs, the AI category tag and the activity avatars render by these IDs. */
+  readonly primitiveIds = NXS_PRIMITIVE_IDS;
 
   tagCategory(index: number): SatTagCategory {
     return TAG_CATEGORIES[index % TAG_CATEGORIES.length];

@@ -9170,8 +9170,12 @@ const adoption = (extra = {}) => ({
 
 /** A feature that is NOT in `ADOPTION_BASELINE`, so it is held to the rule. */
 const NOT_BASELINED = 'libs/features/search/src/lib/search/search.ts';
-/** A feature that IS in `ADOPTION_BASELINE` for `@hylandsoftware/satori-ui/tag`. */
-const BASELINED = 'libs/features/trash/src/lib/trash/trash.component.ts';
+/**
+ * A feature that IS in `ADOPTION_BASELINE`, for `SatTagCategory` from `@hylandsoftware/satori-ui/tag`
+ * and nothing else. Not the dashboard, which is baselined for two entry points: a fixture holding
+ * only its `tag` import would also leave its `avatar` entry stale.
+ */
+const BASELINED = 'libs/features/document-detail/src/lib/document-detail/document-detail.ts';
 
 /** A direct import of an adopted entry point, which the scan must catch. */
 const BYPASS = "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n";
@@ -9280,8 +9284,8 @@ expectGreen(
   'checkAdoptedPatternsNotBypassed',
   adoption({
     [BASELINED]:
-      "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class TrashComponent {}\n',
+      "import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class DocumentDetailComponent {}\n',
   }),
 );
 
@@ -9290,32 +9294,31 @@ expectRed(
   'checkAdoptedPatternsNotBypassed',
   adoption({
     [BASELINED]:
-      "import { SatTagModule, SatStatusTag } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class TrashComponent {}\n',
+      "import { SatTagCategory, SatStatusTag } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class DocumentDetailComponent {}\n',
   }),
   null,
-  /trash\.component\.ts:1 imports `SatStatusTag` from `@hylandsoftware\/satori-ui\/tag`, which `ADOPTION_BASELINE` does not exempt for this file/,
+  /document-detail\.ts:1 imports `SatStatusTag` from `@hylandsoftware\/satori-ui\/tag`, which `ADOPTION_BASELINE` does not exempt for this file/,
 );
 
 expectRed(
   'a baselined site that no longer imports the entry point leaves a stale exemption',
   'checkAdoptedPatternsNotBypassed',
-  adoption({ [BASELINED]: 'export class TrashComponent {}\n' }),
+  adoption({ [BASELINED]: 'export class DocumentDetailComponent {}\n' }),
   null,
-  /trash\.component\.ts no longer imports `@hylandsoftware\/satori-ui\/tag`[\s\S]*stale/,
+  /document-detail\.ts no longer imports `@hylandsoftware\/satori-ui\/tag`[\s\S]*stale[\s\S]*may\s+only shrink/,
 );
 
 expectRed(
   'a baselined symbol that is no longer imported leaves a stale exemption',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    'libs/features/document-detail/src/lib/document-detail/document-detail.ts':
+    'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts':
       "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n" +
-      "import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';\n" +
-      "import { SatBreadcrumbs, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';\n",
+      "import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';\n",
   }),
   null,
-  /document-detail\.ts no longer imports `SatTagCategory` from `@hylandsoftware\/satori-ui\/tag`, so that much of its `ADOPTION_BASELINE` entry is stale/,
+  /dashboard-page\.component\.ts no longer imports `SatAvatarCategory` from `@hylandsoftware\/satori-ui\/avatar`, so that much of its `ADOPTION_BASELINE` entry is stale/,
 );
 
 falsePositiveControls += 1;
@@ -9324,8 +9327,8 @@ expectGreen(
   'checkAdoptedPatternsNotBypassed',
   adoption({
     [BASELINED]:
-      "import { SatTagModule as Tags } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class TrashComponent {}\n',
+      "import { SatTagCategory as Category } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class DocumentDetailComponent {}\n',
   }),
 );
 
@@ -9336,7 +9339,7 @@ expectGreen(
   adoption({
     [BASELINED]:
       "// migrated away from '@hylandsoftware/satori-ui/avatar' already\n" +
-      "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n",
+      "import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';\n",
   }),
 );
 

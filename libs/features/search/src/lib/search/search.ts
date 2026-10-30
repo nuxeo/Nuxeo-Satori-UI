@@ -14,6 +14,7 @@ import {
   descriptorLabel,
 } from '@nuxeo/satori-platform/extensions';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   type Observable,
@@ -65,6 +66,7 @@ import {
   NxsPagerComponent,
   NxsSavedSearchActionsComponent,
   NxsSpinnerComponent,
+  NxsTagComponent,
   NxsThumbnailComponent,
   nxsErrorStatus,
   provideNxsThumbnailCache,
@@ -202,6 +204,8 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
     NxsPagerComponent,
     NxsSavedSearchActionsComponent,
     NxsSpinnerComponent,
+    NxsTagComponent,
+    NgTemplateOutlet,
     NxsThumbnailComponent,
     DocTypeLabelPipe,
     DescriptorLabelPipe,
@@ -234,6 +238,9 @@ export class SearchComponent {
   private readonly aiGateway = inject(AiGatewayService);
   readonly featureFlags = inject(AiFeatureFlagService);
   readonly selectionService = inject(SelectionService);
+
+  /** A result's type renders by ID, so an override of `nxs.primitives.tag` reaches search too. */
+  protected readonly tagId = NXS_PRIMITIVE_IDS.tag;
 
   /**
    * Sequence for the whole AI request lifecycle — `nlToNxql` *and* the `nxqlSearch` it triggers.

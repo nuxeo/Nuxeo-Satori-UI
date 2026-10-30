@@ -43,6 +43,17 @@ import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 type SearchResponseLike = { items: SearchResultItem[]; aggregations: Record<string, unknown> };
 
+/** A customer's tag, registered under `nxs.primitives.tag`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-tag',
+  template: '<span class="acme-tag" [attr.data-color]="color()">{{ label() }}</span>',
+})
+class AcmeTagComponent {
+  readonly label = input('');
+  readonly color = input('');
+}
+
 /** A card registered under the packaged card's ID, which shows what the page passed it. */
 @Component({
   standalone: true,
@@ -1315,6 +1326,52 @@ describe('SearchComponent', () => {
       component.aiResults.set([resultItem({ id: 'ai', title: 'From AI' })]);
 
       expect(component.displayResults().map((r) => r.name)).toEqual(['From AI']);
+    });
+  });
+
+  /**
+   * NXSAT-652. A list row's type renders through `nxs.primitives.tag`, so a component registered
+   * under the ID replaces it; with nothing registered, `nxs-tag` renders. The grid shows the type
+   * as its card's subheading instead, which `grid view` covers. Seen red on purpose by restoring
+   * the plain-text type badge.
+   */
+  describe('the type tag', () => {
+    async function renderList(providers: (Provider | EnvironmentProviders)[]): Promise<void> {
+      mockSearchService.search.mockReturnValue(
+        of({ items: [resultItem({ id: 'a', type: 'File' })], aggregations: {} }),
+      );
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true, providers });
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      component.setViewMode('list');
+      await fixture.whenStable();
+      fixture.detectChanges();
+      // An unregistered ID is reported unresolved from a promise.
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+    }
+
+    const override = provideSatoriExtensions({
+      components: { [NXS_PRIMITIVE_IDS.tag]: AcmeTagComponent },
+    });
+    const el = (selector: string): HTMLElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector(selector);
+
+    it('renders the list row’s type through nxs.primitives.tag', async () => {
+      await renderList([override]);
+
+      const tag = el('.simple-list-type .acme-tag');
+      expect(tag?.textContent?.trim()).toBe('File');
+      expect(tag?.dataset['color']).toBe('gray');
+      expect(el('.simple-list-type')?.getAttribute('title')).toBe('File');
+    });
+
+    it('falls back to nxs-tag when nothing is registered under the ID', async () => {
+      await renderList([]);
+
+      expect(el('.simple-list-type nxs-tag')?.textContent?.trim()).toBe('File');
+      expect(el('.simple-list-type .acme-tag')).toBeNull();
     });
   });
 
