@@ -122,7 +122,8 @@ describe('resolveBrandingLogoUrl — the check on the URL the browser loads', ()
     ).toBeNull();
   });
 
-  // Cookies are scoped by host, not by scheme or port, so these still carry the Nuxeo session.
+  // The rule is about the host, so neither a different scheme nor a different port steps around
+  // it. Not a cookie control for these cross-origin cases — see `resolveBrandingLogoUrl`.
   it('refuses another scheme or port on a host that serves Nuxeo', () => {
     expect(
       resolveBrandingLogoUrl('https://app.example:8443/nuxeo/api/v1/me', configUrl),
@@ -145,7 +146,7 @@ describe('resolveBrandingLogoUrl — the check on the URL the browser loads', ()
    * NXSAT-724. The rule above is stated in terms of the host, but it compared the host as the URL
    * parser left it. The parser canonicalises case and every IPv4 form (`127.1` and `0x7f.0.0.1`
    * both become `127.0.0.1`), so those were never gaps — but it **keeps a trailing dot**, which is
-   * the FQDN form of the very same host and so shares its cookie jar.
+   * the FQDN form of the very same host.
    */
   it.each([
     ['a trailing dot on the configuration host', 'https://app.example./nuxeo/api/v1/me'],

@@ -597,10 +597,24 @@ function readLogo(value: unknown, base: AppBrandingLogo | null): AppBrandingLogo
  * installer replaces the application bundle on every upgrade and leaves that directory alone.
  *
  * The check runs on the **resolved** URL, after the parser has dropped tabs and newlines and
- * collapsed `..` and `%2e%2e` — the forms a check on the raw string can be talked past. On any
- * origin that serves Nuxeo the URL must stay inside the configuration directory: anywhere else
- * there may be a REST endpoint, which an `<img>` requests with the session cookie and without the
- * HTTP interceptor. Elsewhere only `https:` is allowed, so a CDN logo still works.
+ * collapsed `..` and `%2e%2e` — the forms a check on the raw string can be talked past.
+ *
+ * Two different rules apply, with two different justifications, and conflating them overstated
+ * the second (review of PR 512):
+ *
+ * - **On the application's own origin** the URL must stay inside the configuration directory.
+ *   Anywhere else there may be a REST endpoint, and a **same-origin** `<img>` request does carry
+ *   the session cookie — `crossorigin="anonymous"` means credentials mode "same-origin", so it
+ *   withholds them cross-origin only. Measured in Chrome: a same-origin anonymous `<img>` sends
+ *   the cookie, a cross-origin one does not.
+ * - **On any other host that serves Nuxeo** the URL is refused whatever the scheme or port. This
+ *   one is *not* about the cookie on that request: being cross-origin, it is credential-less
+ *   while the attribute is there. It is a second, independent control — the attribute is the
+ *   first, and NXSAT-712 explicitly asked whether it was required, so it is exactly the kind of
+ *   thing a later change removes. It also keeps the browser from asking a Nuxeo endpoint at all,
+ *   rather than relying on that endpoint to refuse.
+ *
+ * Elsewhere only `https:` is allowed, so a CDN logo still works.
  *
  * @param nuxeoOrigins origins that serve Nuxeo besides the one `configUrl` is on
  */
@@ -654,15 +668,15 @@ function resolveLogoTarget(
     const refused = describeDirectoryContainment(url.pathname, new URL('.', config).pathname);
     return refused === null ? { url: url.href } : { refused };
   }
-  // Cookies are scoped by host, not by scheme or port, so any origin on a Nuxeo host carries the
-  // session.
+  // Scheme and port are ignored on purpose: the rule is about the host, so that a later change
+  // to either cannot step around it. See the note above on why this is defence in depth rather
+  // than a cookie control.
   const nuxeoHosts = [config.origin, ...nuxeoOrigins]
     .map((origin) => parseUrl(origin)?.hostname)
     .filter((hostname): hostname is string => hostname !== undefined);
   if (nuxeoHosts.some((hostname) => isSameHost(hostname, url.hostname))) {
     return {
-      refused:
-        'it names a host that serves Nuxeo, where an <img> request would carry the session cookie',
+      refused: 'it names a host that serves Nuxeo, which a branding logo may not address',
     };
   }
   return url.protocol === 'https:'
@@ -671,22 +685,23 @@ function resolveLogoTarget(
 }
 
 /**
- * Whether two hostnames reach the same host, for the cookie-scope rule above.
+ * Whether two hostnames reach the same host, for the Nuxeo-host rule above.
  *
  * The URL parser already lowercases names and canonicalises every IPv4 form — `127.1` and
  * `0x7f.0.0.1` both arrive as `127.0.0.1` — so neither case nor IPv4 notation was ever a way
  * past the rule. Two things it does not do, and this does (NXSAT-724):
  *
  * - **A trailing dot is kept.** `example.com.` is the fully-qualified form of `example.com`, the
- *   same host to DNS and to the cookie jar, and it compared unequal as a string.
+ *   same host to DNS and to the browser, and it compared unequal as a string.
  * - **Loopback has several spellings.** `localhost`, anything in `127.0.0.0/8` and `[::1]` all
  *   name this machine, so on a single-host deployment each of them reaches the Nuxeo the
  *   configuration itself came from.
  *
  * It cannot go further than that: resolving a name to an address needs DNS, which the browser
  * does not expose, so a Nuxeo named `nuxeo.internal` and addressed as `10.0.0.5` still compares
- * unequal. That residue is not a session risk — cookies are scoped by the host as written, so
- * the two spellings do not share a jar — and it is now reported rather than silent.
+ * unequal. That residue is not a credential risk — the request is credential-less cross-origin,
+ * and the two spellings do not share a cookie jar either — and it is now reported rather than
+ * silent.
  */
 function isSameHost(a: string, b: string): boolean {
   const left = canonicalHost(a);

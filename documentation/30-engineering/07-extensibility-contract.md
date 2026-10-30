@@ -90,12 +90,18 @@ key for the favicon.
   the URL it resolves to, has no earlier layer left to fall back to and the Satori marks render.
   A contributed value can therefore be retained by the merge and still not be displayed. An
   `<img>` request bypasses the
-  HTTP interceptor but still sends the session cookie, so a `src` that could name a Nuxeo REST
-  endpoint is refused rather than left to fail. The deciding check runs on the **resolved** URL,
+  HTTP interceptor. A **same-origin** `<img>` still sends the session cookie — `crossorigin="anonymous"`
+  means credentials mode "same-origin", so it withholds credentials cross-origin only — so a `src`
+  that could name a Nuxeo REST endpoint on the application's own origin is refused rather than left
+  to fail. Measured in Chrome: a same-origin anonymous `<img>` carries the cookie; a cross-origin
+  one does not. The deciding check runs on the **resolved** URL,
   after the URL parser has dropped tabs and newlines and collapsed `..` and `%2e%2e`. On any host
   that serves Nuxeo — the application's, and those of `nuxeoApiOrigin` and `nuxeoServerUrl`,
-  including protocol-relative values — it is refused whatever the scheme or port, because cookies
-  are scoped by host. The one exception is the configuration directory itself, where no path
+  including protocol-relative values — it is refused whatever the scheme or port. That rule is
+  **not** a cookie control: those requests are cross-origin and therefore credential-less while
+  `crossorigin="anonymous"` is present. It is a second, independent control, because the attribute
+  is the first and NXSAT-712 asked whether it was even required; it also keeps the browser from
+  asking a Nuxeo endpoint at all rather than relying on that endpoint to refuse. The one exception is the configuration directory itself, where no path
   segment may carry a `;`, an encoded `;` or `/`, or a double-encoded escape such as `%252e` —
   Tomcat strips `;` path parameters before it collapses `..`, so `..;/api/v1/me` would leave the
   directory on the server while staying inside it in the browser, and a proxy that decodes before
@@ -127,8 +133,8 @@ key for the favicon.
   trailing dot, since the same-origin exception is matched on the origin as written — write the
   host the way the application is served, or use a relative path. What the check still cannot do
   is resolve a name to an address, so a Nuxeo named `nuxeo.internal` and addressed as `10.0.0.5`
-  compares unequal; that is not a session risk, because cookies are scoped by the host as
-  written and the two spellings do not share a jar.
+  compares unequal; that is not a credential risk, because such a request is credential-less
+  cross-origin and the two spellings do not share a cookie jar either.
 - **Every refusal is reported** (NXSAT-724). A refused `src` used to keep the packaged mark and
   say nothing, so a typo looked exactly like configuring no logo at all. Each contributed value
   the checks refuse is now written once per load to the console as `[agentic-ui-config] …` and
