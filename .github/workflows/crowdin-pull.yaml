@@ -130,15 +130,35 @@ jobs:
           #
           # See D8d and D8h in docs/i18n-localization-plan.md.
 
-          # Only the languages the app ships. A catalogue for a locale with no Angular locale data
-          # fails `checkLocaleDataRegistered`, and Crowdin has nine target languages while the app
-          # registers six. `pt` and `pl` are withheld until approved; `es` is approved but held back
-          # because one value fails `checkCatalogueValuesAreRenderable` — fix it in Crowdin before
-          # adding `es` (D8e). Adding a language to the app means adding it here, in the same pull request as its `register-locale-data.ts` entry
-          # and its `availableLanguages` entry.
-          # These are Crowdin language IDs. Simplified Chinese is `zh-CN`, which
-          # `%two_letters_code%` writes as `zh.json` — the app's locale id is therefore `zh`.
-          download_translations_args: '--language=fr --language=de --language=ja --language=nl --language=th --language=zh-CN'
+          # The nine non-English languages the app declares, aligned to Nuxeo Web UI's set.
+          # `th` and `zh-CN` were here and were dropped with their catalogues.
+          #
+          # ## This list is ahead of the Crowdin project, and that breaks the pull until it is not
+          #
+          # Four of these — `ar`, `he`, `it`, `sv` — were not target languages on Crowdin project
+          # 160 when they were added here, which carried nine targets
+          # (`de es fr ja nl pl pt th zh`). The CLI rejects a `--language` the project does not
+          # have, and it rejects the whole invocation rather than the one flag, so **this step
+          # fails and no catalogue updates at all** — including `fr`, `de`, `ja` and `nl`, which
+          # have nothing wrong with them.
+          #
+          # That is deliberate and it is the tracking mechanism: the app's language set is the
+          # decision, and the Crowdin project has to catch up to it. The owner action is to add
+          # the four as target languages on project 160. Until then the nightly pull is red and
+          # the four shipped languages hold at their current catalogues, which are at 99%
+          # approved and not moving.
+          #
+          # **Confirm each id against the project when you add it.** These are Crowdin language
+          # IDs, not the app's locale ids, and the two differ: Simplified Chinese was `zh-CN`
+          # here and `zh` in the app. `%two_letters_code%` is what reconciles them — it wrote
+          # `zh.json` for `zh-CN`, and the real pull in #282 wrote bare two-letter names for all
+          # nine targets including the region-qualified `pt-PT`, `nl-NL` and `th-TH` (D8a). The
+          # four new ids below are the bare forms, consistent with the `nl` and `th` entries they
+          # replace; a wrong one fails exactly as an absent target does.
+          #
+          # A language added here needs its `availableLanguages`, `register-locale-data.ts` and
+          # `DATE_FNS_LOCALES` entries in the same pull request.
+          download_translations_args: '--language=fr --language=de --language=ja --language=nl --language=ar --language=es --language=he --language=it --language=sv'
 
           create_pull_request: true
           localization_branch_name: crowdin-translations-update

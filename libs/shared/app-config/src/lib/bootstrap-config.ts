@@ -223,18 +223,27 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   // locale here that has no catalogue would advertise a language the application cannot
   // render, which `checkAdvertisedLocalesShip` fails.
   //
-  // Six ship besides English — fr, de, ja, nl, th and zh (Simplified Chinese, Crowdin's
-  // `zh-CN`) — each pulled from Crowdin once approved. It does NOT mean every key is translated:
-  // `setFallbackLang('en')` covers gaps, and a Crowdin pull fills every unapproved string with its
-  // English source. `checkTranslationCatalogues` warns on a missing key and fails only on one
-  // `en.json` does not have. See D8d in docs/i18n-localization-plan.md.
+  // **This is five of the ten languages the application targets.** The target set is Nuxeo Web
+  // UI's — `ar`, `nl`, `en`, `fr`, `de`, `he`, `it`, `ja`, `es`, `sv` — and `th` and `zh` were
+  // dropped from here to match it. The other five are already set up everywhere a language can
+  // be set up ahead of its translations: Angular locale data in `register-locale-data.ts`, and a
+  // `--language` in the Crowdin pull. What is missing is only the catalogue, and this list is
+  // the one touchpoint that cannot run ahead of one — advertising a language renders the English
+  // fallback throughout, which reads as broken rather than absent (D8e, `D8e-webui`).
+  //
+  // So each of `ar`, `es`, `he`, `it`, `sv` joins this list — and `DATE_FNS_LOCALES`, which a
+  // test holds equal to it — in the pull request that brings its catalogue. `es` needs one
+  // Crowdin string fixed first (`Seleccionado(s)`); `ar` and `he` additionally need RTL support,
+  // which does not exist yet, so a catalogue alone does not make them shippable.
+  //
+  // Shipping a catalogue does NOT mean every key is translated: `setFallbackLang('en')` covers
+  // gaps, and a Crowdin pull fills every unapproved string with its English source.
+  // `checkTranslationCatalogues` warns on a missing key and fails only on one `en.json` does not
+  // have. See D8d in docs/i18n-localization-plan.md.
   //
   // Nothing renders this list yet: there is no language picker (NXSAT-294), and only the config
   // parser reads it. A deployment selects its language through `defaultLanguage`.
-  //
-  // Adding a language here also means adding it to `download_translations_args` in
-  // .github/workflows/crowdin-pull.yaml, which downloads only the languages the app ships.
-  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl', 'th', 'zh'],
+  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl'],
   integrations: {
     arender: null,
     knowledgeDiscoveryOperations: {},

@@ -13,6 +13,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { TranslateService } from '@ngx-translate/core';
 
+import { canFormatDatesIn } from '@nuxeo/satori-platform/ui';
+
 import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
 import { firstValueFrom } from 'rxjs';
 import { AI_BACKEND_URL } from '@agentic-ui/shared/ai-client';
@@ -102,9 +104,49 @@ export function initialiseAppConfigAndLanguage(
  *
  * So the string language and the formatting locale are allowed to differ, on purpose. Strings
  * follow the configuration; formatting follows it only where we have the data to honour it.
+ *
+ * ## Why registration alone is not enough to admit a locale
+ *
+ * This checked `REGISTERED_LOCALES` alone, which was correct only while every registered locale
+ * also shipped a catalogue. It stopped being true when `ar`, `es`, `he`, `it` and `sv` were
+ * registered ahead of their translations (`D8e-webui`): registration made them admissible as
+ * `LOCALE_ID`, and `DATE_FNS_LOCALES` does not carry them, so `defaultLanguage: 'es'` gave
+ * Angular's pipes Spanish dates — `3/4/2026`, day-first — while `provideSatoriDateAdapter()`
+ * fell through to `enUS` and read `03/04/2026` back as **4 March**.
+ *
+ * That is NXSAT-629 exactly: display honouring the locale while parsing does not, which has no
+ * symptom on screen because the calendar overlay looks right. Caught in review on #522 rather
+ * than by a test, which is why there is one now.
+ *
+ * ## Why `availableLanguages` is not sufficient either
+ *
+ * The first fix for the above checked `availableLanguages`, which closed the hole for the
+ * **packaged** config — `checkAdvertisedLocalesShip` fails a packaged language with no catalogue
+ * — and left it open for every customer override, as the #522 review then pointed out. Layer 0
+ * is customer-editable: `{ "defaultLanguage": "es", "availableLanguages": ["en", "es"] }` is
+ * valid, parses cleanly, and still names a locale the bundled date-fns map has no entry for. The
+ * config cannot be the authority on a capability that is decided at build time.
+ *
+ * So admission is the intersection of three things, each answering a different question:
+ *
+ * | Check | Question | Authority |
+ * | --- | --- | --- |
+ * | `REGISTERED_LOCALES` | can Angular format it without `NG0701`? | this build |
+ * | `canFormatDatesIn` | can the date adapter parse it back? | this build |
+ * | `availableLanguages` | does this deployment offer it? | the customer |
+ *
+ * The two build-time checks are what a customer cannot edit their way past; the third is intent,
+ * and keeps a language registered ahead of its catalogue out until it ships. English is the
+ * fallback and needs none of them: Angular bundles its data and the date map names it.
  */
-export function resolveFormattingLocale(defaultLanguage: string): string {
-  return REGISTERED_LOCALES.includes(defaultLanguage) ? defaultLanguage : 'en';
+export function resolveFormattingLocale(
+  defaultLanguage: string,
+  availableLanguages: readonly string[],
+): string {
+  const angularCanFormat = REGISTERED_LOCALES.includes(defaultLanguage);
+  const adapterCanParse = canFormatDatesIn(defaultLanguage);
+  const deploymentOffers = availableLanguages.includes(defaultLanguage);
+  return angularCanFormat && adapterCanParse && deploymentOffers ? defaultLanguage : 'en';
 }
 
 /**
@@ -208,8 +250,10 @@ export function provideAppConfig(): (Provider | EnvironmentProviders)[] {
      */
     {
       provide: LOCALE_ID,
-      useFactory: () =>
-        resolveFormattingLocale(inject(AppConfigService).bootstrap().defaultLanguage),
+      useFactory: () => {
+        const bootstrap = inject(AppConfigService).bootstrap();
+        return resolveFormattingLocale(bootstrap.defaultLanguage, bootstrap.availableLanguages);
+      },
     },
     {
       provide: NUXEO_API_ORIGIN,

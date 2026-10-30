@@ -4948,7 +4948,7 @@ function writeClipboardDocs(docs: ClipboardDoc[]): void;
 
 ## @nuxeo/satori-platform/ui
 
-49 exported symbol(s).
+50 exported symbol(s).
 
 ```ts
 class ConfirmDialogComponent {
@@ -5466,6 +5466,7 @@ class WidgetGridComponent {
     }, {}, never, ["*"], true, never>;
     }
 }
+function canFormatDatesIn(localeId: string): boolean;
 function dateMaskFor(localeId: string, translatedMask: string): string;
 function observeMatTabListKeyboardA11y(root: HTMLElement): (() => void) | null;
 function observeStripRedundantMatInputAriaRequired(input: HTMLInputElement | null | undefined): MutationObserver | null;
