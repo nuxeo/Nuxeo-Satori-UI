@@ -97,8 +97,6 @@ export interface VideoInfo {
  * 9. (pdf rendition)   → PDF iframe using server-rendered PDF of office docs
  * 10. (fallback)       → Generic iframe with preview URL, or "no preview" placeholder
  */
-const VIEWER_TEMPLATE = '<video [poster]="posterUrl()"></video>' as const;
-
 @Component({
   selector: 'lib-document-viewer',
   standalone: true,
@@ -111,7 +109,7 @@ const VIEWER_TEMPLATE = '<video [poster]="posterUrl()"></video>' as const;
     CdkAriaLive,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: VIEWER_TEMPLATE,
+  templateUrl: './document-viewer.component.html',
   styleUrl: './document-viewer.component.scss',
 })
 export class DocumentViewerComponent {
@@ -169,7 +167,7 @@ export class DocumentViewerComponent {
   readonly videoSources = input<VideoSource[]>([]);
   readonly storyboard = input<StoryboardItem[]>([]);
   /** Raw string, not `SafeResourceUrl`: `video[poster]` is `SecurityContext.NONE`. See `rawBlobUrl`. */
-  readonly posterUrl = input<SafeResourceUrl | null>(null);
+  readonly posterUrl = input<string | null>(null);
   readonly hasPdfRendition = input<boolean>(false);
   readonly previewUrl = input<SafeResourceUrl | null>(null);
 
