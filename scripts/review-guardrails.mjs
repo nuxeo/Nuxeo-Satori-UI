@@ -4566,6 +4566,453 @@ function checkAdvertisedLocalesShip() {
   }
 }
 
+const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
+
+/**
+ * `UPSTREAM_FOLDERS` names exactly the languages the installed package actually ships.
+ *
+ * ## The defect this exists to make unrepeatable
+ *
+ * `AppTranslateLoader` used to request `<folder>/i18n/<lang>.json` for whatever language was
+ * active. `@hylandsoftware/satori-ui` ships de, en, es, fr, it, pl and pt; `availableLanguages`
+ * advertises en, fr, de, ja, nl, th and zh. So four of the seven asked for a file that does not
+ * exist and every page load answered 404 and logged a console error (NXSAT-732). The request was
+ * caught into `{}`, so nothing broke — which is why it survived.
+ *
+ * The fix declares the shipped set per folder, and a declared set is a set that rots. A version
+ * bump that adds a language would leave it unrequested and silently untranslated; one that drops
+ * a language would put the 404 straight back. Neither is visible in a diff of `package.json`.
+ *
+ * ## Why it reads three sources rather than two
+ *
+ * The TS constant, the `assets` glob in `angular.json` that copies the folder into the build, and
+ * the package directory on disk. Comparing the constant to the package alone would pass while
+ * the glob pointed somewhere else entirely, and the served path would then 404 for *every*
+ * language — so the glob is what links a declared asset path to a real directory, and it is read
+ * rather than assumed.
+ */
+function checkUpstreamCatalogueLanguages() {
+  if (!fileExists(LOADER)) {
+    fail(`${LOADER} is missing, so \`checkUpstreamCatalogueLanguages\` asserted nothing.`);
+    return;
+  }
+
+  const source = ts.createSourceFile(LOADER, read(LOADER), ts.ScriptTarget.Latest, true);
+
+  /** The `UPSTREAM_FOLDERS` initializer, as an array of `{ path, languages }` literals. */
+  let declaration;
+  /** Read from the source rather than duplicated here, so the two cannot diverge. */
+  let translationDirectory;
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      if (node.name.text === 'UPSTREAM_FOLDERS') declaration = node.initializer;
+      if (
+        node.name.text === 'TRANSLATION_DIRECTORY' &&
+        node.initializer &&
+        ts.isStringLiteral(node.initializer)
+      ) {
+        translationDirectory = node.initializer.text;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+
+  if (translationDirectory === undefined) {
+    fail(
+      `${LOADER} no longer declares \`TRANSLATION_DIRECTORY\` as a string literal, so this gate ` +
+        'cannot work out which directory the loader actually fetches from.',
+    );
+    return;
+  }
+
+  if (!declaration || !ts.isArrayLiteralExpression(declaration)) {
+    fail(
+      `${LOADER} no longer declares \`UPSTREAM_FOLDERS\` as an array literal, so this gate ` +
+        'cannot read the languages each folder claims to ship. Keep it a literal, or teach ' +
+        '`checkUpstreamCatalogueLanguages` the new shape — do not leave it asserting nothing.',
+    );
+    return;
+  }
+
+  /**
+   * Every element of an array literal, or a description of the first one that is not a literal.
+   *
+   * Filtering to `ts.isStringLiteral` and dropping the rest is what this used to do, and it is a
+   * silent failure of the worst kind here: `languages: ['de', 'en', 'fr', extra]` would read as
+   * three languages and pass against a package shipping exactly those three, while the loader
+   * — which evaluates the real array — would go on requesting the fourth and 404ing. The gate
+   * would be green on the defect it exists to catch.
+   */
+  const stringsOf = (node) => {
+    if (!ts.isArrayLiteralExpression(node)) return { problem: 'not an array literal' };
+    const values = [];
+    for (const element of node.elements) {
+      if (!ts.isStringLiteral(element)) {
+        return { problem: `\`${element.getText()}\` is not a string literal` };
+      }
+      values.push(element.text);
+    }
+    return { values };
+  };
+
+  /**
+   * The installed package directory a `node_modules` path belongs to, or `null` for a repo path.
+   *
+   * Used to tell "this dependency is not installed" — which a clean checkout legitimately is —
+   * from "the dependency is installed and the directory this rule names is not there", which is
+   * a typo or a vendor that dropped the folder in a version bump. Only the second can be judged,
+   * and it has to be judged: it means the build copies nothing and the loader 404s for every
+   * language.
+   */
+  function installedPackageRoot(inputDir) {
+    const segments = inputDir.split('/');
+    const index = segments.lastIndexOf('node_modules');
+    if (index === -1) return null;
+    const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
+    const root = segments.slice(0, index + span).join('/');
+    return segments.length > index + span - 1 ? root : null;
+  }
+
+  /**
+   * The `assets` arrays of `nuxeo-ui`'s own build target — the base one and one per configuration.
+   *
+   * Scoped to that target, and kept as separate arrays rather than pooled, for the reason
+   * `phase-6-a11y` already records: **Angular REPLACES this array per configuration rather than
+   * merging it**, so an entry present in `build.options` and absent from `configurations.development`
+   * copies the folder in one build and not the other. Pooling every `{input, output}` object in the
+   * file would let a development-only mapping — or another project's — satisfy a check about the
+   * production build, which is the opposite of what this gate is for.
+   */
+  let assetArrays = [];
+  try {
+    const angular = JSON.parse(read('angular.json'));
+    const project = angular?.projects?.['nuxeo-ui'];
+    const build = project?.architect?.build ?? project?.targets?.build;
+    if (!build) {
+      fail(
+        'angular.json has no build target for `nuxeo-ui`, so `checkUpstreamCatalogueLanguages` ' +
+          'cannot find the asset globs that put the upstream catalogues in the bundle.',
+      );
+      return;
+    }
+    assetArrays = [
+      ['options', build.options?.assets],
+      ...Object.entries(build.configurations ?? {}).map(([name, config]) => [name, config?.assets]),
+    ].filter(([, assets]) => Array.isArray(assets));
+  } catch (error) {
+    fail(`angular.json is not valid JSON: ${error.message}`);
+    return;
+  }
+
+  if (assetArrays.length === 0) {
+    fail(
+      '`nuxeo-ui`’s build target declares no `assets` array, so nothing copies the upstream ' +
+        'catalogues into the bundle and this gate cannot check what they contain.',
+    );
+    return;
+  }
+
+  /**
+   * Whether an asset rule actually copies `<lang>.json` out of its input directory.
+   *
+   * The rule's `glob` is part of what it copies, and ignoring it would compare the declared
+   * languages against every file in the directory while the build copied a subset — green while
+   * the served folder was missing catalogues. Only the shapes this repository uses are
+   * interpreted; anything else fails rather than being assumed to match, because a glob this gate
+   * cannot read is a gate that has stopped asserting.
+   */
+  function globCopies(glob, file) {
+    if (glob === '**/*' || glob === '*' || glob === '**') return true;
+    if (glob === '*.json' || glob === '**/*.json') return file.endsWith('.json');
+    if (!/[*?{}[\]]/.test(glob)) return glob === file;
+    return null;
+  }
+
+  let folders = 0;
+  for (const element of declaration.elements) {
+    folders += 1;
+
+    // Counted and judged BEFORE the shape is known, because a `continue` here is the same silent
+    // skip as dropping a non-literal language: the loader iterates the real array and would
+    // request this folder, while the gate would say nothing about it and still pass on the
+    // entries it could read. Every element has to be legible or the gate has to fail.
+    if (!ts.isObjectLiteralExpression(element)) {
+      fail(
+        `${LOADER} declares an entry in \`UPSTREAM_FOLDERS\` that is not an object literal ` +
+          `(\`${element.getText().slice(0, 60)}\`). The loader iterates the real array, so an ` +
+          'entry this gate cannot read is a folder whose languages nobody checks — and it would ' +
+          'pass on the entries that are readable.',
+      );
+      continue;
+    }
+
+    // One rule rather than a growing list of shapes, because four review rounds each found a
+    // different way for the entry to be only partly static and the gate to validate the legible
+    // half: a computed language, a computed `path`, a non-object entry, and a spread that
+    // overrides a field already read. The last is the clearest statement of the class — the
+    // `path` and `languages` this gate validates are not necessarily the ones the loader ends up
+    // with. So the WHOLE entry has to be statically legible, and anything else fails.
+    const illegible = element.properties.find(
+      (property) =>
+        !ts.isPropertyAssignment(property) ||
+        (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name)),
+    );
+    if (illegible) {
+      fail(
+        `${LOADER} declares an upstream folder with a member this gate cannot read statically ` +
+          `(\`${illegible.getText().slice(0, 60)}\`). A spread, a shorthand or a computed key can ` +
+          'supply or override `path` and `languages` at run time, so the values validated here ' +
+          'would not be the ones the loader requests — and the check would pass on the half it ' +
+          'could read. Write every member as a literal key and value.',
+      );
+      continue;
+    }
+
+    const read_ = (name) =>
+      element.properties.find(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+          property.name.text === name,
+      )?.initializer;
+
+    const pathNode = read_('path');
+    const languagesNode = read_('languages');
+    if (!pathNode) {
+      fail(
+        `${LOADER} declares an entry in \`UPSTREAM_FOLDERS\` with no \`path\`, so this gate ` +
+          'cannot tell which served directory its languages are meant to match.',
+      );
+      continue;
+    }
+    if (!ts.isStringLiteral(pathNode)) {
+      fail(
+        `${LOADER} declares an upstream folder whose \`path\` is not a string literal ` +
+          `(\`${pathNode.getText().slice(0, 60)}\`). A computed path is resolved by the loader ` +
+          'and not by this gate, so the folder it actually requests would go unchecked.',
+      );
+      continue;
+    }
+    const folderPath = pathNode.text;
+
+    if (!languagesNode) {
+      fail(
+        `${LOADER} declares the upstream folder "${folderPath}" with no \`languages\` array. ` +
+          'Without one the loader cannot tell a language the folder ships from one it does not, ' +
+          'which is the 404 on every page load that NXSAT-732 reported.',
+      );
+      continue;
+    }
+
+    const languages = stringsOf(languagesNode);
+    if (languages.problem) {
+      fail(
+        `${LOADER} declares the upstream folder "${folderPath}" with a \`languages\` array this ` +
+          `gate cannot read: ${languages.problem}. Every element must be a string literal, ` +
+          'because a computed one is evaluated by the loader and not by this gate — it would be ' +
+          'dropped here, compared against a shorter list, and pass while the loader went on ' +
+          'requesting the language it names.',
+      );
+      continue;
+    }
+    const declared = languages.values;
+
+    // The loader fetches `<path>/<TRANSLATION_DIRECTORY>/<lang>.json`, so the rule that has to
+    // exist is the one whose `output` is that directory; its `input` is the package directory.
+    const served = `${folderPath}/${translationDirectory}`;
+    const rulesByArray = assetArrays.map(([name, assets]) => [
+      name,
+      assets.filter(
+        (asset) =>
+          asset &&
+          typeof asset === 'object' &&
+          typeof asset.input === 'string' &&
+          typeof asset.output === 'string' &&
+          asset.output.replace(/^\/+|\/+$/g, '') === served,
+      ),
+    ]);
+
+    // Every array, not any array: a configuration that omits the rule produces a build whose
+    // served folder is simply absent, and the loader would 404 for every language there.
+    const without = rulesByArray.filter(([, rules]) => rules.length === 0).map(([name]) => name);
+    if (without.length > 0) {
+      fail(
+        `${LOADER} declares the upstream folder "${folderPath}", but \`nuxeo-ui\`’s ` +
+          `${without.map((name) => `\`${name}\``).join(', ')} asset array(s) in angular.json copy ` +
+          `nothing to "${served}". Angular replaces this array per configuration rather than ` +
+          'merging it, so those builds would serve no upstream catalogue at all — a 404 for ' +
+          'every language rather than only the unshipped ones.',
+      );
+      continue;
+    }
+
+    /**
+     * One asset array at a time; within it, the UNION of what its rules copy.
+     *
+     * Both halves of that matter, and they are the two review findings this loop spent the
+     * longest on.
+     *
+     * Not pooled across arrays: Angular replaces `assets` per configuration rather than merging
+     * it, so a union across configurations is satisfied by whichever is most permissive — a
+     * `development` rule with a match-everything glob would mask an `options` rule narrowed to
+     * `en.json`, and the production build would serve one catalogue while this gate reported all
+     * of them present.
+     *
+     * But pooled WITHIN an array, because several rules may legitimately copy to the same output
+     * from different inputs — one package contributing `de`, another `fr`. Within one build the
+     * served folder is their union, so comparing each input against the whole declared list
+     * would report each rule's languages as missing from the other and reject a correct setup.
+     */
+    const perArray = rulesByArray.map(([arrayName, rules]) => {
+      const byInput = new Map();
+      for (const rule of rules) {
+        const inputDir = rule.input.replace(/^\/+|\/+$/g, '');
+        const glob = typeof rule.glob === 'string' ? rule.glob : '**/*';
+        if (!byInput.has(inputDir)) byInput.set(inputDir, new Set());
+        byInput.get(inputDir).add(glob);
+      }
+      return {
+        arrayName,
+        inputs: [...byInput.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([inputDir, globs]) => ({ inputDir, globs: [...globs].sort() })),
+      };
+    });
+
+    // Configurations that copy exactly the same things are one verdict, reported once.
+    const seenArrays = new Set();
+    for (const { arrayName, inputs } of perArray) {
+      const arrayPrint = inputs
+        .map(({ inputDir, globs }) => `${inputDir}\u0001${globs.join('\u0001')}`)
+        .join('\u0000');
+      if (seenArrays.has(arrayPrint)) continue;
+      seenArrays.add(arrayPrint);
+      const where = `\`${arrayName}\``;
+
+      /** Every language this build actually serves at `served`, across all of its rules. */
+      const servedLangs = new Set();
+      let readable = true;
+
+      for (const { inputDir, globs } of inputs) {
+        const absolute = join(repoRoot, inputDir);
+        if (!existsSync(absolute)) {
+        // Two very different situations, and warning for both let the dangerous one pass.
+        //
+        // A dependency that is not installed cannot be judged: `node_modules` is not checked in,
+        // and a clean checkout is legitimately in that state. That warns — a gate that goes quiet
+        // without saying so is how a check becomes no check at all — and the `guardrails` gate
+        // runs after `npm ci` anyway.
+        //
+        // But a package that IS installed while the directory this rule names is absent is a
+        // typo, or a vendor that dropped the folder in a version bump. The build then copies
+        // nothing and the loader 404s for **every** language, which is worse than the defect
+        // NXSAT-732 reported, so it fails.
+          const packageRoot = installedPackageRoot(inputDir);
+          if (packageRoot === null) {
+            fail(
+              `the ${where} asset rule copies ${inputDir} to "${served}", but that directory ` +
+                'does not exist in the repository, so that build copies nothing from it.',
+            );
+            readable = false;
+          } else if (existsSync(join(repoRoot, packageRoot))) {
+            fail(
+              `${packageRoot} is installed but has no ${inputDir}, which the ${where} asset rule ` +
+                `copies to "${served}". Either the path is a typo or this version of the package ` +
+                'dropped the directory — either way that build serves nothing from it and the ' +
+                'loader 404s for any language it was the source of.',
+            );
+            readable = false;
+          } else {
+            warn(
+              `${packageRoot} is not installed, so the languages "${folderPath}" claims to ship ` +
+                'could not be checked against it. Run `npm ci` and re-run the guardrails.',
+            );
+            readable = false;
+          }
+          continue;
+        }
+
+        const unreadable = globs.filter((glob) => globCopies(glob, 'en.json') === null);
+        if (unreadable.length > 0) {
+          fail(
+            `the ${where} asset rule copying ${inputDir} to "${served}" uses glob ` +
+              `${unreadable.map((glob) => `\`${glob}\``).join(', ')}, which ` +
+              '`checkUpstreamCatalogueLanguages` cannot interpret — so it cannot tell which ' +
+              'catalogues actually reach the bundle. Teach the gate that glob rather than ' +
+              'leaving it asserting nothing.',
+          );
+          readable = false;
+          continue;
+        }
+
+        // What this rule actually copies: the directory filtered by the glob, not every file
+        // that happens to sit in it.
+        const files = readdirSync(absolute).filter((entry) => entry.endsWith('.json'));
+        for (const file of files) {
+          if (globs.some((glob) => globCopies(glob, file))) {
+            servedLangs.add(file.slice(0, -'.json'.length));
+          }
+        }
+
+        const uncopied = files
+          .filter((file) => !globs.some((glob) => globCopies(glob, file)))
+          .map((file) => file.slice(0, -'.json'.length))
+          .sort();
+        // Not a failure on its own — a vendor may ship a catalogue we deliberately do not serve,
+        // and another rule in the same build may supply it — but it must be visible, because it
+        // is the difference between "the package has it" and "the bundle has it".
+        if (uncopied.length > 0) {
+          warn(
+            `${inputDir} contains ${uncopied.join(', ')}, which the ${where} glob ` +
+              `${globs.map((glob) => `\`${glob}\``).join(', ')} does not copy to "${served}".`,
+          );
+        }
+      }
+
+      // One verdict per build, against the union of its rules. Comparing each input separately
+      // reported each rule's languages as missing from the other, so two packages contributing
+      // complementary catalogues to one output — which is what `UPSTREAM_FOLDERS` being a list
+      // is for — would have been rejected as a defect.
+      if (!readable) continue;
+
+      const served_ = [...servedLangs].sort();
+      const missing = served_.filter((lang) => !declared.includes(lang));
+      const stale = [...declared].sort().filter((lang) => !servedLangs.has(lang));
+      const from = inputs.map(({ inputDir }) => inputDir).join(' + ');
+
+      if (missing.length > 0) {
+        fail(
+          `the ${where} build copies a catalogue for ${missing.join(', ')} to "${served}" from ` +
+            `${from}, but "${folderPath}" does not list it in \`languages\` in ${LOADER}. An ` +
+            'unlisted language is never requested, so its shared strings stay in the fallback ' +
+            'language with nothing reporting it.',
+        );
+      }
+      if (stale.length > 0) {
+        fail(
+          `"${folderPath}" lists ${stale.join(', ')} in \`languages\` in ${LOADER}, but the ` +
+            `${where} build serves "${served}" no catalogue for it from ${from}. A listed ` +
+            'language the served folder does not have is a request that cannot succeed: a 404 ' +
+            'and a console error on every page load, which is NXSAT-732.',
+        );
+      }
+    }
+  }
+
+  // An empty array is legitimate — the application need not layer any upstream catalogue — but
+  // it means this gate asserted nothing, and a gate that can assert nothing without saying so is
+  // how the loader's own `UPSTREAM_FOLDERS` went a year unchecked. Every unreadable entry now
+  // fails above, so this is only ever reached by a genuinely empty list.
+  if (folders === 0) {
+    warn(
+      `${LOADER} declares no upstream catalogue folder, so \`checkUpstreamCatalogueLanguages\` ` +
+        'asserted nothing. That is legitimate if the application layers none; if it should, the ' +
+        'list has been emptied.',
+    );
+  }
+}
+
 /**
  * The Crowdin config points at catalogues that exist, and cannot reach `node_modules`.
  *
@@ -11478,6 +11925,7 @@ const GUARDRAILS = [
   checkCataloguesAreTranslated,
   checkCataloguePlaceholders,
   checkAdvertisedLocalesShip,
+  checkUpstreamCatalogueLanguages,
   checkCrowdinConfig,
   checkPackagedConfigIsNotADemo,
   checkInstallerOwnsNoCustomerFile,

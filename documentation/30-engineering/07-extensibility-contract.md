@@ -63,9 +63,26 @@ fragment's `content` is a `bootstrap` fragment in your configuration package.
 | `nuxeoApiOrigin`                         | Where the Nuxeo REST API lives                                               |
 | `branding`                               | Product name, browser tab title, and `logo` (below)                          |
 | `themes` / `defaultThemeId`              | Named token sets applied to `<html>`                                         |
-| `defaultLanguage` / `availableLanguages` | i18n                                                                         |
+| `defaultLanguage` / `availableLanguages` | i18n — see the coverage caveat below                                         |
 | `sso`                                    | Sign-in buttons and the post-login return URL (below)                        |
 | `presales`                               | Presales presets, honoured only where a package sets `presetSwitching: true` |
+
+### `availableLanguages` is not uniform coverage
+
+Seven languages are advertised — `en`, `fr`, `de`, `ja`, `nl`, `th`, `zh` — and all seven have a
+complete application catalogue. **Only `en`, `fr` and `de` also have the shared-component
+strings.** `@hylandsoftware/satori-ui` ships catalogues for `de es fr it pl pt` and `en` only, so
+under `ja`, `nl`, `th` or `zh` every `sat.*` string the vendor's components render — including
+the accessible names on the navigation rail — falls back to English inside an otherwise
+translated application. Tracked upstream as
+[DS-2803](https://hyland.atlassian.net/browse/DS-2803); it cannot be closed in this repository,
+because the strings are the vendor's to author.
+
+A customer adding a language to `availableLanguages` gets the same split: their own catalogue is
+honoured, the shared components are not. `checkAdvertisedLocalesShip` fails a config that
+advertises a language with no application catalogue behind it, and
+`checkUpstreamCatalogueLanguages` keeps the loader's view of the vendor's coverage equal to what
+the installed package actually contains.
 
 ### `branding.logo`
 

@@ -59,6 +59,13 @@ export const appConfig: ApplicationConfig = {
       useValue: { color: 'primary' },
     },
     provideTranslateService({
+      // No `fallbackLang` here on purpose, and `initialiseAppConfigAndLanguage` calls
+      // `setFallbackLang('en')` instead. `TranslateService` applies a configured `fallbackLang`
+      // in its constructor — before `AppConfigService.load()` has been awaited — and
+      // ngx-translate never re-fetches a language already in its store, so the English
+      // catalogue would be cached without the manifest's `labels` and a customer's relabelling
+      // would be lost for the session. Measured on NXSAT-732; guarded by
+      // `shared-strings-at-startup.spec.ts`.
       loader: { provide: TranslateLoader, useClass: AppTranslateLoader },
     }),
     {

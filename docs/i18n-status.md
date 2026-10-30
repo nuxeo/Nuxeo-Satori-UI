@@ -533,17 +533,30 @@ an unknown.
 
 ### Locale coverage is uneven upstream, and that bites
 
-| Catalogue source                          | Locales shipped                    |
-| ----------------------------------------- | ---------------------------------- |
-| `@alfresco/adf-core`                      | 19                                 |
-| `@hylandsoftware/satori-ui`               | 15                                 |
-| `adf-hx-content-services` (ui + services) | **7** — `de es fr it pl pt` + `en` |
-| ours                                      | 3                                  |
+The adf-hx rows this table used to carry are gone with the dependency (NXSAT-635, NXSAT-637).
+One upstream catalogue is left, and the problem they described is live in it:
 
-**A locale outside adf-hx's seven gets English adf-hx strings inside an otherwise translated
-application.** That is why `fr` and `de` were chosen for the first pass: both are covered by
-every catalogue we seed, so switching locale exercises the whole stack rather than our own file
-alone.
+| Catalogue source                            | Locales shipped                                              |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| `@hylandsoftware/satori-ui@1.0.0-alpha.171` | **7** — `de es fr it pl pt` + `en`, plus 8 regional variants |
+| ours (`apps/nuxeo-ui/public/i18n`)          | 7 — `en fr de ja nl th zh`                                   |
+
+**Only three of the seven languages we advertise have shared-component strings at all.** The
+intersection of the two rows is `en`, `fr` and `de`. For `ja`, `nl`, `th` and `zh` the vendor
+ships no catalogue, so every `sat.*` string — including the accessible names on
+`sat-platform-nav` — renders in English inside an otherwise translated application. Those four
+are the reason `fr` and `de` were chosen for the first pass: both are covered by every catalogue
+we seed, so switching locale exercises the whole stack rather than our own file alone.
+
+This is **not** something this repository can fix. Authoring a vendor's component strings is not
+ours to do, and the loader cannot invent them; it is tracked upstream as
+[DS-2803](https://hyland.atlassian.net/browse/DS-2803). What was ours was asking for a file that
+does not exist: the loader requested `assets/satori-ui/i18n/<lang>.json` for whatever language
+was active, so those four 404'd and logged a console error on every page load (NXSAT-732). Each
+folder in `UPSTREAM_FOLDERS` now names the languages it ships, and
+`checkUpstreamCatalogueLanguages` compares that list to the installed package on every pull
+request — so a version bump that adds or drops a language fails the `guardrails` gate with the
+difference rather than silently reinstating the 404 or leaving a new language unrequested.
 
 ---
 

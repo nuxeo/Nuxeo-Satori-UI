@@ -32,8 +32,25 @@ export function flattenCatalogue(
   return target;
 }
 
+/** An upstream catalogue folder, and the languages it actually contains. */
+interface UpstreamCatalogueFolder {
+  /** Asset path the folder is copied to, as the `assets` glob in `angular.json` writes it. */
+  readonly path: string;
+  /**
+   * Every language the folder ships, by catalogue filename.
+   *
+   * Declared rather than discovered because the folder is served over HTTP and a directory
+   * listing is not: the only way to find out at runtime is to ask for a file and see whether it
+   * 404s, which is the defect this list exists to remove. `checkUpstreamCatalogueLanguages` in
+   * `scripts/review-guardrails.mjs` compares it to the installed package on every pull request,
+   * so a dependency bump that adds or drops a language fails the `guardrails` gate with the
+   * difference rather than rotting here unnoticed.
+   */
+  readonly languages: readonly string[];
+}
+
 /**
- * Upstream catalogue folders, fetched as `<folder>/i18n/<lang>.json` beneath this app's own.
+ * Upstream catalogue folders, fetched as `<path>/i18n/<lang>.json` beneath this app's own.
  *
  * `@hylandsoftware/satori-ui` — the `sat.*` keys, copied in by an asset glob in `angular.json`.
  * Added 2026-08-24, and this one was not a cosmetic omission: it was **the most widespread
@@ -49,8 +66,41 @@ export function flattenCatalogue(
  * it calls `provideTranslateService` with its own `MultiTranslateHttpLoader`, which would
  * replace this loader and take the manifest `labels` layering — a shipped Layer 0 capability —
  * with it. Fetching the folder here gets the strings with no such trade.
+ *
+ * ## Why each folder names its languages (NXSAT-732)
+ *
+ * A folder is asked only for a language it ships. `availableLanguages` advertises en, fr, de,
+ * ja, nl, th and zh; `@hylandsoftware/satori-ui@1.0.0-alpha.171` ships de, en, es, fr, it, pl
+ * and pt with regional variants. So ja, nl, th and zh — four of the seven — requested a file
+ * that does not exist, and every page load answered 404 and logged a console error. The failure
+ * was already caught into `{}`, so nothing broke; the request was simply doomed.
+ *
+ * Those four still render the shared strings in **English**, through the fallback language
+ * `initialiseAppConfigAndLanguage` sets. That is not fixed here and cannot be: the catalogues
+ * do not exist upstream, which is DS-2803.
  */
-const UPSTREAM_FOLDERS: readonly string[] = ['assets/satori-ui'];
+const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
+  {
+    path: 'assets/satori-ui',
+    languages: [
+      'de',
+      'de-DE',
+      'en',
+      'en-AU',
+      'en-US',
+      'es',
+      'es-ES',
+      'fr',
+      'fr-FR',
+      'it',
+      'it-IT',
+      'pl',
+      'pl-PL',
+      'pt',
+      'pt-PT',
+    ],
+  },
+];
 
 /**
  * Loads the shipped translation catalogue and layers the manifest's `labels` over it.
@@ -68,10 +118,14 @@ export class AppTranslateLoader implements TranslateLoader {
   private readonly config = inject(AppConfigService);
 
   getTranslation(lang: string): Observable<Record<string, string>> {
-    const folders$ = UPSTREAM_FOLDERS.map((folder) =>
-      this.http
-        .get<unknown>(`${folder}/${TRANSLATION_DIRECTORY}/${encodeURIComponent(lang)}.json`)
-        .pipe(catchError(() => of({}))),
+    // Only folders that ship this language. `catchError` stays on the ones that are asked: a
+    // build without the asset glob, or a folder that answers 500, must still degrade rather
+    // than leave the application with no strings at all.
+    const folders$ = UPSTREAM_FOLDERS.filter((folder) => folder.languages.includes(lang)).map(
+      (folder) =>
+        this.http
+          .get<unknown>(`${folder.path}/${TRANSLATION_DIRECTORY}/${encodeURIComponent(lang)}.json`)
+          .pipe(catchError(() => of({}))),
     );
     const app$ = this.http
       .get<unknown>(translationUrl(lang, document.baseURI))

@@ -11294,6 +11294,449 @@ expectRed(
   /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
+/* ---------------- checkUpstreamCatalogueLanguages ---------------- */
+
+/**
+ * NXSAT-732 — the loader asked an upstream folder for a language it does not ship, so four of
+ * the seven advertised languages 404'd and logged a console error on every page load.
+ *
+ * The fix declares the shipped set per folder, and a declared set rots on a dependency bump in
+ * both directions: a language added upstream is never requested, one dropped upstream puts the
+ * 404 back. Both are controlled here, because neither is visible in a diff of `package.json`.
+ */
+const LOADER_PATH = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
+const VENDOR_I18N = 'node_modules/@hylandsoftware/satori-ui/i18n';
+
+/** `nuxeo-ui`'s build target, with the asset arrays a control wants to give it. */
+const upstreamAngularJson = (base, configurations = {}) =>
+  `${JSON.stringify(
+    {
+      projects: {
+        'nuxeo-ui': {
+          architect: {
+            build: {
+              options: { assets: base },
+              ...(Object.keys(configurations).length ? { configurations } : {}),
+            },
+          },
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+
+/** The asset rule as the repository actually declares it. */
+const SATORI_RULE = { glob: '**/*', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' };
+
+const UPSTREAM_ANGULAR_JSON = upstreamAngularJson([SATORI_RULE], {
+  development: { assets: [SATORI_RULE] },
+});
+
+/**
+ * The loader, with whatever language list a control wants to put in it.
+ *
+ * `languages` is a list of raw source expressions, not of values, so a control can put an
+ * identifier or a spread in the array and assert the gate refuses it rather than dropping it.
+ */
+const loaderWith = (languages) =>
+  `const extra = 'ja';
+
+export const TRANSLATION_DIRECTORY = 'i18n';
+
+interface UpstreamCatalogueFolder {
+  readonly path: string;
+  readonly languages: readonly string[];
+}
+
+const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
+  {
+    path: 'assets/satori-ui',
+${languages === null ? '' : `    languages: [${languages.join(', ')}],\n`}  },
+];
+`;
+
+/**
+ * The loader with raw `UPSTREAM_FOLDERS` entries, for controls about the ENTRY shape rather than
+ * about the language list. `loaderWith` can only vary the languages of one well-formed entry, so
+ * it could not express a non-object entry or a computed `path` — the defects round 4 found.
+ */
+const loaderWithEntries = (entries) =>
+  `const assetsRoot = 'assets';
+
+export const TRANSLATION_DIRECTORY = 'i18n';
+
+interface UpstreamCatalogueFolder {
+  readonly path: string;
+  readonly languages: readonly string[];
+}
+
+const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
+${entries.map((entry) => `  ${entry},`).join('\n')}
+];
+`;
+
+/** A well-formed entry, for use beside a malformed one. */
+const GOOD_ENTRY = "{ path: 'assets/satori-ui', languages: ['de', 'en', 'fr'] }";
+
+/** Quote a list of plain language codes into source literals. */
+const literals = (codes) => codes.map((code) => `'${code}'`);
+
+/** A vendor folder shipping exactly `de`, `en` and `fr`. */
+const VENDOR_FILES = {
+  [`${VENDOR_I18N}/de.json`]: '{}\n',
+  [`${VENDOR_I18N}/en.json`]: '{}\n',
+  [`${VENDOR_I18N}/fr.json`]: '{}\n',
+};
+
+expectRed(
+  'a language listed that the installed package does not ship — the NXSAT-732 404',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr', 'ja'])),
+  },
+  null,
+  /lists ja in `languages`[\s\S]*build serves[\s\S]*no catalogue for it/,
+);
+
+expectRed(
+  'a language the package ships that the loader never asks for',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+  null,
+  /`options` build copies a catalogue for fr[\s\S]*does not list it in `languages`/,
+);
+
+// The pre-fix shape: a folder with no language list at all, which is what made every language
+// a candidate for a doomed request.
+expectRed(
+  'an upstream folder declared with no languages list',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(null),
+  },
+  null,
+  /with no `languages` array\./,
+);
+
+// A declared asset path nothing copies to would 404 for EVERY language, not only the unshipped
+// ones — a worse version of the same defect, and invisible without reading the glob.
+expectRed(
+  'a folder path no assets glob writes to',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: VENDOR_I18N, output: 'assets/somewhere-else/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /`options` asset array\(s\) in angular.json copy nothing to "assets\/satori-ui\/i18n"/,
+);
+
+// Angular REPLACES `assets` per configuration rather than merging it, so a rule present in the
+// base array and absent from a configuration's produces a build that serves no upstream
+// catalogue at all. Pooling every entry in the file would have reported this as fine.
+expectRed(
+  'a configuration whose assets array omits the rule the base array has',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([SATORI_RULE], {
+      development: { assets: [{ glob: '**/*', input: 'apps/nuxeo-ui/public', output: '.' }] },
+    }),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /`development` asset array\(s\)[\s\S]*replaces this array per configuration/,
+);
+
+// The glob is part of what the rule copies. A narrower one serves a subset, and comparing the
+// declaration against the whole directory would be green while the bundle was missing files.
+expectRed(
+  'a glob that copies only some of the catalogues the package ships',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: 'en.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /build serves "assets\/satori-ui\/i18n" no catalogue for it/,
+);
+
+// Round 2 of the review: pooling the globs across configurations means the union is satisfied
+// by whichever array is most permissive, so a `development` rule with `**/*` masks an `options`
+// rule narrowed to `en.json` — the production build serves one catalogue while the gate reports
+// all three. Each configuration is a build of its own and is judged as one.
+expectRed(
+  'a permissive development glob masking a narrow glob in the base array',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson(
+      [{ glob: 'en.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' }],
+      { development: { assets: [SATORI_RULE] } },
+    ),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /`options` build serves[\s\S]*no catalogue for it/,
+);
+
+// And a glob the gate cannot interpret must say so rather than assume it matches everything.
+expectRed(
+  'a glob shape the gate cannot interpret',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '{de,en}.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /cannot interpret/,
+);
+
+// Rewriting `UPSTREAM_FOLDERS` into a shape this gate cannot read must fail loudly rather than
+// pass silently — a gate that stops asserting without saying so is how a check becomes no check.
+expectRed(
+  'UPSTREAM_FOLDERS rewritten into a shape the gate cannot read',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: `export const TRANSLATION_DIRECTORY = 'i18n';
+
+const UPSTREAM_FOLDERS = buildFolders();
+`,
+  },
+  null,
+  /no longer declares `UPSTREAM_FOLDERS` as an array literal/,
+);
+
+// Round 3: a non-literal element was silently DROPPED, so `['de','en','fr', extra]` read as
+// three languages, matched a package shipping exactly those three, and passed — while the
+// loader, which evaluates the real array, went on requesting `ja` and 404ing.
+expectRed(
+  'an identifier among the declared languages',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith([...literals(['de', 'en', 'fr']), 'extra']),
+  },
+  null,
+  /`languages` array this gate cannot read: `extra` is not a string literal/,
+);
+
+expectRed(
+  'a spread among the declared languages',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(["...literals(['de'])", "'en'"]),
+  },
+  null,
+  /`languages` array this gate cannot read[\s\S]*is not a string literal/,
+);
+
+// Round 3, second finding: an input directory absent from an INSTALLED package is a typo or a
+// vendor that dropped the folder, so the build copies nothing and the loader 404s for every
+// language. That used to warn and pass. A package that is not installed at all still warns —
+// the control below proves the two are told apart.
+expectRed(
+  'an asset input absent from an installed package',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: 'node_modules/@hylandsoftware/satori-ui/translations', output: 'assets/satori-ui/i18n' },
+    ]),
+    'node_modules/@hylandsoftware/satori-ui/package.json': '{ "name": "@hylandsoftware/satori-ui" }\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /is installed but has no node_modules\/@hylandsoftware\/satori-ui\/translations/,
+);
+
+// The other half of that distinction: with the package absent entirely there is nothing to
+// judge, so the gate warns and stays green. Without this control, "fail on a missing input"
+// would have been free to fail every clean checkout too.
+falsePositiveControls += 1;
+expectGreen(
+  'an asset input whose package is not installed at all',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+// Round 4: a non-object entry, or one whose `path` is computed, was silently SKIPPED. The
+// loader iterates the real array and would request that folder, so its languages went unchecked
+// while the gate passed on the entries it could read. Each control pairs the malformed entry
+// with a well-formed one, which is what made the old `folders === 0` catch-all useless.
+expectRed(
+  'a non-object entry beside a well-formed one',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([GOOD_ENTRY, '...extraFolders']),
+  },
+  null,
+  /entry in `UPSTREAM_FOLDERS` that is not an object literal/,
+);
+
+expectRed(
+  'an entry whose path is computed, beside a well-formed one',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      GOOD_ENTRY,
+      "{ path: `${assetsRoot}/other`, languages: ['en'] }",
+    ]),
+  },
+  null,
+  /`path` is not a string literal/,
+);
+
+expectRed(
+  'an entry with no path at all, beside a well-formed one',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([GOOD_ENTRY, "{ languages: ['en'] }"]),
+  },
+  null,
+  /entry in `UPSTREAM_FOLDERS` with no `path`/,
+);
+
+// Round 5: a spread inside the entry can override `path` or `languages` AFTER this gate has
+// read them, so the values validated are not the ones the loader requests. Rounds 3, 4 and 5
+// were three instances of one class — the entry being only partly static — so the gate now
+// requires the whole entry to be statically legible and these controls pin each spelling.
+expectRed(
+  'a spread inside a folder entry',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      "{ path: 'assets/satori-ui', languages: ['de', 'en', 'fr'], ...override }",
+    ]),
+  },
+  null,
+  /member this gate cannot read statically/,
+);
+
+expectRed(
+  'a computed key inside a folder entry',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      "{ ['pa' + 'th']: 'assets/satori-ui', languages: ['de', 'en', 'fr'] }",
+    ]),
+  },
+  null,
+  /member this gate cannot read statically/,
+);
+
+expectRed(
+  'a shorthand property inside a folder entry',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries(["{ path, languages: ['de', 'en', 'fr'] }"]),
+  },
+  null,
+  /member this gate cannot read statically/,
+);
+
+// A string-literal key is static and must still be ACCEPTED — the legibility rule is about what
+// can be read, not about one spelling of it.
+falsePositiveControls += 1;
+expectGreen(
+  'a folder entry written with string-literal keys',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      "{ 'path': 'assets/satori-ui', 'languages': ['de', 'en', 'fr'] }",
+    ]),
+  },
+);
+
+// Round 6: within ONE build the served folder is the union of its rules, so two packages
+// contributing complementary catalogues to the same output — which is what `UPSTREAM_FOLDERS`
+// being a list is for — must be accepted. Comparing each input against the whole declared list
+// reported each rule's languages as missing from the other and rejected a correct setup.
+falsePositiveControls += 1;
+expectGreen(
+  'two complementary asset inputs copying to one output',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: 'node_modules/@hylandsoftware/satori-ui/i18n', output: 'assets/satori-ui/i18n' },
+      { glob: '**/*', input: 'node_modules/@acme/extra-i18n', output: 'assets/satori-ui/i18n' },
+    ]),
+    'node_modules/@hylandsoftware/satori-ui/i18n/de.json': '{}\n',
+    'node_modules/@hylandsoftware/satori-ui/i18n/en.json': '{}\n',
+    'node_modules/@acme/extra-i18n/fr.json': '{}\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+// And the union must not hide a gap: with the same two inputs, a language neither of them
+// serves is still a doomed request.
+expectRed(
+  'a language neither of two complementary inputs serves',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: 'node_modules/@hylandsoftware/satori-ui/i18n', output: 'assets/satori-ui/i18n' },
+      { glob: '**/*', input: 'node_modules/@acme/extra-i18n', output: 'assets/satori-ui/i18n' },
+    ]),
+    'node_modules/@hylandsoftware/satori-ui/i18n/de.json': '{}\n',
+    'node_modules/@hylandsoftware/satori-ui/i18n/en.json': '{}\n',
+    'node_modules/@acme/extra-i18n/fr.json': '{}\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr', 'ja'])),
+  },
+  null,
+  /lists ja in `languages`[\s\S]*serves "assets\/satori-ui\/i18n" no catalogue for it/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a language list that matches the installed package exactly',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;
