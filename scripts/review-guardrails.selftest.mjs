@@ -11408,7 +11408,7 @@ expectRed(
     [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
   },
   null,
-  /ships a catalogue for fr and the `options` build copies it[\s\S]*does not list it in `languages`/,
+  /`options` build copies a catalogue for fr[\s\S]*does not list it in `languages`/,
 );
 
 // The pre-fix shape: a folder with no language list at all, which is what made every language
@@ -11683,6 +11683,45 @@ expectGreen(
       "{ 'path': 'assets/satori-ui', 'languages': ['de', 'en', 'fr'] }",
     ]),
   },
+);
+
+// Round 6: within ONE build the served folder is the union of its rules, so two packages
+// contributing complementary catalogues to the same output — which is what `UPSTREAM_FOLDERS`
+// being a list is for — must be accepted. Comparing each input against the whole declared list
+// reported each rule's languages as missing from the other and rejected a correct setup.
+falsePositiveControls += 1;
+expectGreen(
+  'two complementary asset inputs copying to one output',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: 'node_modules/@hylandsoftware/satori-ui/i18n', output: 'assets/satori-ui/i18n' },
+      { glob: '**/*', input: 'node_modules/@acme/extra-i18n', output: 'assets/satori-ui/i18n' },
+    ]),
+    'node_modules/@hylandsoftware/satori-ui/i18n/de.json': '{}\n',
+    'node_modules/@hylandsoftware/satori-ui/i18n/en.json': '{}\n',
+    'node_modules/@acme/extra-i18n/fr.json': '{}\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+// And the union must not hide a gap: with the same two inputs, a language neither of them
+// serves is still a doomed request.
+expectRed(
+  'a language neither of two complementary inputs serves',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: 'node_modules/@hylandsoftware/satori-ui/i18n', output: 'assets/satori-ui/i18n' },
+      { glob: '**/*', input: 'node_modules/@acme/extra-i18n', output: 'assets/satori-ui/i18n' },
+    ]),
+    'node_modules/@hylandsoftware/satori-ui/i18n/de.json': '{}\n',
+    'node_modules/@hylandsoftware/satori-ui/i18n/en.json': '{}\n',
+    'node_modules/@acme/extra-i18n/fr.json': '{}\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr', 'ja'])),
+  },
+  null,
+  /lists ja in `languages`[\s\S]*serves "assets\/satori-ui\/i18n" no catalogue for it/,
 );
 
 falsePositiveControls += 1;
