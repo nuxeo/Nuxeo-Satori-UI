@@ -347,6 +347,11 @@ jobs:
           # implementation while the line above keeps passing. This is the load-bearing half:
           # without it CI verifies the audit runs, not that it can fail.
           npm run beta:sanitizers-selftest
+          # The recovery the line above depends on when it is interrupted. Named here as well as
+          # registered in `ALL_GATES`, because this job runs npm scripts rather than the gate
+          # list — so a gate added to `ALL_GATES` alone would never run in CI, which is the
+          # "committed code that nothing executes" trap in a new shape (NXSAT-751).
+          npm run beta:sanitizers-recovery
 
   # Lint, build and typecheck, then the published-package checks and the bundle ceiling.
   #

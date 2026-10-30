@@ -31,8 +31,8 @@ its catalogue arrives. See `D8e-webui`.
 | Spanish  | `es` | —         | `es`       | **registered, awaiting catalogue** — 99% approved, but `kd.knowledge-discovery.selected` is `Seleccionado(s)`, which `checkCatalogueValuesAreRenderable` fails. Fix in Crowdin |
 | Italian  | `it` | —         | ?          | **registered, awaiting catalogue** — not a target language on Crowdin project 160; translation not started                                                                     |
 | Swedish  | `sv` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160; translation not started                                                                                      |
-| Arabic   | `ar` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160. Mirrors since NXSAT-752: the layout is right-to-left, the strings English                                    |
-| Hebrew   | `he` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160. Mirrors since NXSAT-752: the layout is right-to-left, the strings English                                    |
+| Arabic   | `ar` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160. RTL ready (NXSAT-752); refused until its catalogue lands (NXSAT-733), so it runs as `en` today  |
+| Hebrew   | `he` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160. RTL ready (NXSAT-752); refused until its catalogue lands (NXSAT-733), so it runs as `en` today  |
 
 Dropped: **Thai** (`th`) and **Chinese Simplified** (`zh`), both at 99% approved when removed.
 Their translations remain in Crowdin, so re-adding either is a pull rather than new work.
@@ -57,9 +57,21 @@ none of them.
 
 ### Right to left — delivered, NXSAT-752
 
-`ar` and `he` mirror. The layout flips, the chevrons point the other way, and the arrow keys swap
-their inward and outward meanings. The **strings are still English**, because the catalogues are
-item 1 above — so the thing to look at when checking this is the direction, not the text.
+The direction mechanism is in place: when `ar` or `he` is the active language the layout flips, the
+chevrons point the other way, and the arrow keys swap their inward and outward meanings.
+
+**Neither language is reachable today, and that is correct.** NXSAT-733 made
+`resolveStringLanguage` refuse a `defaultLanguage` this build ships no catalogue for, so `ar` and
+`he` fall back to `en` and the application runs left-to-right in English with a diagnostic. That
+refusal is the fix for a real WCAG 3.1.1 defect — `<html lang="ar">` over English text — and it is
+not a regression of this work: the two are ordered, not opposed. **The moment `ar.json` lands the
+language is accepted, `syncDocumentDirection` sees it on `onLangChange`, and the layout mirrors
+with no further change.** A date-fns `ar` entry has to arrive with it, or dates stay English while
+strings and direction do not.
+
+So the direction behaviour is verified by unit tests and by a manual pass taken before NXSAT-733
+closed the startup path, not by booting `ar` today — which is why the registration test below
+boots `fr` from a stale `rtl` instead.
 
 **The whole defect was one missing attribute.** Seven `nxs-` components already carried
 `:host-context([dir='rtl'])` rules, `rich-tooltip` and `details-panel` already read
@@ -124,14 +136,26 @@ entry arrive together.
 an overlay is created, so an overlay already open when the language changes keeps the direction it
 opened with. There is no language picker (NXSAT-294), so nothing a user can do reaches that state.
 
-Coverage: `text-direction.spec.ts` (9), the `syncDocumentDirection` block in
-`provide-app-config.spec.ts` (8), `overlay-direction.spec.ts` (3), and a `keyboard, right to left`
-block in each of `document-tree.component.spec.ts` (4) and `document-list.component.spec.ts` (3).
-Forcing the two components' `rtl` checks to `false` turns exactly three of those red and nothing
-else, which is how the mirroring tests were confirmed to assert the mirroring.
+Coverage, in `text-direction.spec.ts`, `provide-app-config.spec.ts`, `overlay-direction.spec.ts`
+and a `keyboard, right to left` block in each of `document-tree.component.spec.ts` and
+`document-list.component.spec.ts`. No totals here on purpose — the counts moved three times during
+review and a number in prose beside a suite it does not come from goes wrong immediately.
 
-There is **no language picker** (NXSAT-294): `availableLanguages` is read only by the config
-parser, so a deployment selects its language through `defaultLanguage`. Every shipped catalogue is
+What makes them evidence rather than decoration is that each was watched to fail:
+
+- forcing the two components' `rtl` checks to `false` turns **exactly three** assertions red and
+  nothing else;
+- deleting the `provideAppInitializer` entry left **every** test in `provide-app-config.spec.ts`
+  green before the startup test existed, and turns **exactly one** red now;
+- `overlay-direction.spec.ts`'s third case is a negative control: with the attribute set and
+  `Directionality` left alone, every CDK overlay opens left-to-right.
+
+There is **no language picker** (NXSAT-294), so a deployment selects its language through
+`defaultLanguage`. `availableLanguages` is no longer only parsed and stored: it is one half of the
+admission check on `defaultLanguage` — `resolveFormattingLocale` for Angular's formatting locale,
+and `resolveStringLanguage` for ngx-translate's string language since NXSAT-733. Both intersect it
+with a build-time capability, because Layer 0 is customer-editable and so cannot be the authority
+on what this build can render. Every shipped catalogue is
 checked by `checkCataloguePlaceholders`, which fails a translation whose `{{ … }}` placeholders differ
 from English; all of the delivered ones had zero mismatches when added.
 
@@ -609,27 +633,50 @@ an unknown.
 The adf-hx rows this table used to carry are gone with the dependency (NXSAT-635, NXSAT-637).
 One upstream catalogue is left, and the problem they described is live in it:
 
-| Catalogue source                            | Locales shipped                                              |
-| ------------------------------------------- | ------------------------------------------------------------ |
-| `@hylandsoftware/satori-ui@1.0.0-alpha.171` | **7** — `de es fr it pl pt` + `en`, plus 8 regional variants |
-| ours (`apps/nuxeo-ui/public/i18n`)          | 7 — `en fr de ja nl th zh`                                   |
+| Catalogue source                            | Locale ids shipped                                                                  |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `@hylandsoftware/satori-ui@1.0.0-alpha.171` | **15** — `de en es fr it pl pt` + `de-DE en-AU en-US es-ES fr-FR it-IT pl-PL pt-PT` |
+| ours (`apps/nuxeo-ui/public/i18n`)          | one per advertised language — see `availableLanguages`                              |
 
-**Only three of the seven languages we advertise have shared-component strings at all.** The
-intersection of the two rows is `en`, `fr` and `de`. For `ja`, `nl`, `th` and `zh` the vendor
-ships no catalogue, so every `sat.*` string — including the accessible names on
-`sat-platform-nav` — renders in English inside an otherwise translated application. Those four
-are the reason `fr` and `de` were chosen for the first pass: both are covered by every catalogue
-we seed, so switching locale exercises the whole stack rather than our own file alone.
+**Locale ids, matched exactly.** The loader requests `<lang>.json` for the active language
+verbatim, so `en-US` and `fr-FR` are covered upstream while `pt-BR` is not, even though `pt` is:
+nothing falls back from a regional variant to its base language. A regional variant the vendor
+does not ship is in the same position as a language it never shipped.
+
+**The advertised set is deliberately not written out here.** It is Layer 0 configuration and it
+moves: it was `en fr de ja nl th zh`, Thai and Chinese have since been dropped, and the supported
+set is being taken to ten. Every prose copy of that list in this repository has gone stale at
+least once. Read it from `availableLanguages` in `libs/shared/app-config/src/lib/bootstrap-config.ts`.
+
+What is stable is the shape of the problem: **an advertised locale id outside the vendor's fifteen
+has no shared-component strings at all**, so every `sat.*` string — including the accessible names
+on `sat-platform-nav` — renders in English inside an otherwise translated application. `fr` and
+`de` were chosen for the first pass precisely because they are inside the intersection, so
+switching locale exercises the whole stack rather than our own file alone.
 
 This is **not** something this repository can fix. Authoring a vendor's component strings is not
 ours to do, and the loader cannot invent them; it is tracked upstream as
 [DS-2803](https://hyland.atlassian.net/browse/DS-2803). What was ours was asking for a file that
 does not exist: the loader requested `assets/satori-ui/i18n/<lang>.json` for whatever language
-was active, so those four 404'd and logged a console error on every page load (NXSAT-732). Each
-folder in `UPSTREAM_FOLDERS` now names the languages it ships, and
-`checkUpstreamCatalogueLanguages` compares that list to the installed package on every pull
-request — so a version bump that adds or drops a language fails the `guardrails` gate with the
-difference rather than silently reinstating the 404 or leaving a new language unrequested.
+was active, so every language outside the intersection 404'd and logged a console error on every
+page load (NXSAT-732). Each folder in `UPSTREAM_FOLDERS` now names the languages it ships and is
+asked only for those, and `checkUpstreamCatalogueLanguages` compares that list to the installed
+package on every pull request — so a version bump that adds or drops a language fails the
+`guardrails` gate with the difference rather than silently reinstating the 404 or leaving a new
+language unrequested.
+
+The loader does **not** read `availableLanguages`, which is what makes the two independent:
+adding a language needs no change there. It is requested if the vendor ships it and skipped if
+not, and `app-translate-loader.spec.ts` asserts that by iterating the configured list rather than
+by naming it, so the assertion survives the list changing.
+
+**Right-to-left is a separate concern, owned by NXSAT-752.** The vendor's components carry
+`:dir(rtl)` rules and depend on `@angular/cdk/bidi`. On `main` as of this change, this
+application sets no `dir` at all — not in `apps/nuxeo-ui/src`, not from configuration — so a
+right-to-left language would give correct text in a mirrored-the-wrong-way layout. NXSAT-752 sets
+the document direction from the active language; **this paragraph records the state at the time of
+writing, not the current one**, so check whether it has landed rather than citing it. Not
+addressed by NXSAT-732.
 
 ---
 
@@ -1049,9 +1096,11 @@ fails any source that is not.
 
 ### Separate stories, not part of either ticket
 
-9. **A language picker** (NXSAT-294). `availableLanguages` is validated, unit-tested and read only
-   by the config parser, so a deployment selects its language through `defaultLanguage`.
-   adf-core ships `LanguagePickerComponent`.
+9. **A language picker** (NXSAT-294). `availableLanguages` is validated and unit-tested, and
+   nothing *renders* it, so a deployment still selects its language through `defaultLanguage`.
+   It is read by the two admission checks on that key — `resolveFormattingLocale` and, since
+   NXSAT-733, `resolveStringLanguage` — which is why the wording here no longer says it is read
+   only by the config parser. adf-core ships `LanguagePickerComponent`.
 10. **`LOCALE_ID` — CLOSED 2026-09-22.** Locale _data_ is registered for `fr` and `de` (and for `ja`, `nl`, `th`, `zh` since NXSAT-293), adf-core's
     formatting locale follows the configuration, and `LOCALE_ID` is now **provided** from it too,
     in `provide-app-config.ts`. Both consumers share `resolveFormattingLocale()`, so Angular's

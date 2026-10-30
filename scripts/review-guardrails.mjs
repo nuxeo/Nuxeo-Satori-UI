@@ -4566,6 +4566,194 @@ function checkAdvertisedLocalesShip() {
   }
 }
 
+/**
+ * `SHIPPED_CATALOGUE_LANGUAGES` names exactly the catalogues `apps/nuxeo-ui/public/i18n` holds.
+ *
+ * ## The defect this exists to make unrepeatable
+ *
+ * `defaultLanguage` used to reach `translate.use()` unchecked, so a value this build ships no
+ * catalogue for produced `<html lang="xx">` over English text and a 404 for `i18n/xx.json`
+ * (NXSAT-733). The guard that closes it has to know which catalogues exist, and it cannot find
+ * out at runtime: the folder is served over HTTP and a directory listing is not, so the only
+ * runtime test is to request a file and see whether it 404s — the very thing being removed.
+ *
+ * So the set is declared, and a declared set rots. Adding `es.json` without adding `es` here
+ * would leave Spanish refused and silently rendered in English; removing a catalogue without
+ * removing its entry would put the 404 straight back. Neither is visible in a diff of either
+ * file alone, which is why this compares them.
+ *
+ * ## Why both directions fail rather than one warning
+ *
+ * `checkLocaleDataRegistered` only *warns* when registration leads its catalogue, because that
+ * direction is harmless — Angular locale data nothing formats in is dead weight, not a defect.
+ * Here neither direction is harmless: both make the guard's answer disagree with what the
+ * browser would actually load, and a language guard that is wrong in either direction is worse
+ * than none, because it is trusted.
+ */
+function checkShippedCatalogueLanguages() {
+  const declaration = 'apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts';
+  const catalogueDir = 'apps/nuxeo-ui/public/i18n';
+  if (!fileExists(declaration)) {
+    fail(
+      `${declaration} is missing, so \`checkShippedCatalogueLanguages\` asserted nothing — and ` +
+        'the string-language guard in `provide-app-config.ts` has nothing to read.',
+    );
+    return;
+  }
+
+  /**
+   * Both declarations, read from the AST.
+   *
+   * A regex over the source was wrong in two ways that review on #531 found, and both of them
+   * were green-on-the-defect rather than noisy. Appending an identifier whose value is `'xx'`
+   * left the quoted elements still matching the catalogues on disk, while the application — which
+   * evaluates the real array — admitted a fourth language. And commenting an entry out left its
+   * quotes in the source for the regex to find, so this gate reported a locale the runtime array
+   * does not contain, which would disable pseudo-locale admission while the gate said the two
+   * sets agreed. `stringsOfArrayLiteral` refuses a non-literal element by name, and the AST
+   * cannot see into a comment at all.
+   */
+  const ast = ts.createSourceFile(
+    declaration,
+    read(declaration),
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ true,
+  );
+  const initialisers = new Map();
+  const collect = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      initialisers.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(ast);
+
+  /** One declaration's locales, or `null` having already failed with the reason. */
+  const localesOf = (name, consequence) => {
+    const { values, problem } = stringsOfArrayLiteral(initialisers.get(name));
+    if (problem) {
+      fail(
+        `${declaration} no longer declares \`${name}\` as an array of string literals ` +
+          `(${problem}), so ${consequence}\n` +
+          '    Keep it a literal list, or teach `checkShippedCatalogueLanguages` the new shape — ' +
+          'do not leave it asserting nothing. An element this gate cannot evaluate is refused ' +
+          'rather than skipped, because the application evaluates the real array.',
+      );
+      return null;
+    }
+    return values;
+  };
+
+  /**
+   * `GENERATED_AUDIT_LOCALES` must name exactly the locales this file already excludes from every
+   * other locale check.
+   *
+   * The two sets answer the same question from opposite ends — "which locales exist only while
+   * someone is auditing" — and they are read by different layers: this script skips them, and
+   * `hasCatalogue` admits them on a dev server. If they drift, either the audit boots in English
+   * and silently stops finding hard-coded strings, or a locale gets admitted that no gate checks.
+   */
+  const declaredAuditLocales = localesOf(
+    'GENERATED_AUDIT_LOCALES',
+    'the pseudo-locale seam is unchecked.',
+  );
+  if (declaredAuditLocales) {
+    const declaredAudit = [...declaredAuditLocales].sort();
+    const generated = [...GENERATED_LOCALES].sort();
+    if (declaredAudit.join(',') !== generated.join(',')) {
+      fail(
+        `${declaration} declares GENERATED_AUDIT_LOCALES as [${declaredAudit.join(', ')}] but ` +
+          `\`GENERATED_LOCALES\` in this script is [${generated.join(', ')}].\n` +
+          '    The two must agree: this script skips those locales in every other check, and ' +
+          '`hasCatalogue` admits them on a dev server so `npm run i18n:audit` can boot into one.\n' +
+          '    Drift one way makes the pseudo-locale audit boot in English and stop finding ' +
+          'hard-coded strings; the other way admits a locale no gate checks.',
+      );
+    }
+  }
+
+  const declaredLanguages = localesOf(
+    'SHIPPED_CATALOGUE_LANGUAGES',
+    'it asserted nothing about which catalogues ship.',
+  );
+  if (!declaredLanguages) return;
+  const declared = new Set(declaredLanguages);
+  if (declared.size === 0) {
+    fail(`${declaration} declares no language, so every configured language would be refused.`);
+    return;
+  }
+
+  // `en.context.json` is translator context, not a language, and the two-letter pattern already
+  // excludes it — `.context` breaks the match. Generated locales are excluded for the same
+  // reason `checkLocaleDataRegistered` excludes them.
+  const shipped = new Set(
+    [
+      ...walk(
+        catalogueDir,
+        (path) => /\/[a-z]{2}(-[A-Za-z]{2,4})?\.json$/.test(path) && !isGeneratedLocale(path),
+      ),
+    ].map((path) => path.slice(path.lastIndexOf('/') + 1).replace(/\.json$/, '')),
+  );
+  if (shipped.size === 0) {
+    fail(
+      `${catalogueDir} yielded no catalogue, so this gate asserted nothing. Check the path — the ` +
+        'application cannot render any language without one.',
+    );
+    return;
+  }
+
+  for (const locale of shipped) {
+    if (declared.has(locale)) continue;
+    fail(
+      `${catalogueDir} ships ${locale}.json but ${declaration} does not declare "${locale}".\n` +
+        `    \`resolveStringLanguage\` would refuse \`defaultLanguage: "${locale}"\` and boot in ` +
+        'English, so the catalogue would be shipped and never rendered.\n' +
+        `    Add "${locale}" to SHIPPED_CATALOGUE_LANGUAGES.`,
+    );
+  }
+
+  for (const locale of declared) {
+    if (shipped.has(locale)) continue;
+    fail(
+      `${declaration} declares "${locale}" but ${catalogueDir} ships no catalogue for it.\n` +
+        `    \`resolveStringLanguage\` would admit \`defaultLanguage: "${locale}"\`, so the ` +
+        'application would announce `<html lang="' +
+        locale +
+        '">` over English text and request a ' +
+        `catalogue that 404s — NXSAT-733 again, for ${locale} instead of xx.\n` +
+        `    Remove "${locale}", or ship ${catalogueDir}/${locale}.json.`,
+    );
+  }
+}
+
+/**
+ * Every element of an array literal, or a description of the first one that is not a literal.
+ *
+ * Filtering to `ts.isStringLiteral` and dropping the rest is a silent failure of the worst kind
+ * for a locale list: `['de', 'en', 'fr', extra]` reads as three languages and passes against a
+ * build shipping exactly those three, while the application — which evaluates the real array —
+ * goes on treating the fourth as admissible. The gate would be green on the defect it exists to
+ * catch.
+ *
+ * Reading the AST rather than the text also means a commented-out entry is simply absent, where a
+ * regex over the source would still find the quotes inside the comment and report a list the
+ * runtime does not have. Both halves of that were found by review on #531.
+ *
+ * Shared by `checkUpstreamCatalogueLanguages` and `checkShippedCatalogueLanguages` so the two
+ * cannot disagree about what counts as a readable declaration.
+ */
+function stringsOfArrayLiteral(node) {
+  if (!node || !ts.isArrayLiteralExpression(node)) return { problem: 'not an array literal' };
+  const values = [];
+  for (const element of node.elements) {
+    if (!ts.isStringLiteral(element)) {
+      return { problem: `\`${element.getText()}\` is not a string literal` };
+    }
+    values.push(element.text);
+  }
+  return { values };
+}
+
 const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
 
 /**
@@ -4635,26 +4823,6 @@ function checkUpstreamCatalogueLanguages() {
     return;
   }
 
-  /**
-   * Every element of an array literal, or a description of the first one that is not a literal.
-   *
-   * Filtering to `ts.isStringLiteral` and dropping the rest is what this used to do, and it is a
-   * silent failure of the worst kind here: `languages: ['de', 'en', 'fr', extra]` would read as
-   * three languages and pass against a package shipping exactly those three, while the loader
-   * — which evaluates the real array — would go on requesting the fourth and 404ing. The gate
-   * would be green on the defect it exists to catch.
-   */
-  const stringsOf = (node) => {
-    if (!ts.isArrayLiteralExpression(node)) return { problem: 'not an array literal' };
-    const values = [];
-    for (const element of node.elements) {
-      if (!ts.isStringLiteral(element)) {
-        return { problem: `\`${element.getText()}\` is not a string literal` };
-      }
-      values.push(element.text);
-    }
-    return { values };
-  };
 
   /**
    * The installed package directory a `node_modules` path belongs to, or `null` for a repo path.
@@ -4805,7 +4973,7 @@ function checkUpstreamCatalogueLanguages() {
       continue;
     }
 
-    const languages = stringsOf(languagesNode);
+    const languages = stringsOfArrayLiteral(languagesNode);
     if (languages.problem) {
       fail(
         `${LOADER} declares the upstream folder "${folderPath}" with a \`languages\` array this ` +
@@ -12273,6 +12441,7 @@ const GUARDRAILS = [
   checkCataloguesAreTranslated,
   checkCataloguePlaceholders,
   checkAdvertisedLocalesShip,
+  checkShippedCatalogueLanguages,
   checkUpstreamCatalogueLanguages,
   checkCrowdinConfig,
   checkPackagedConfigIsNotADemo,

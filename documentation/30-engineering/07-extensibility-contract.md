@@ -69,20 +69,74 @@ fragment's `content` is a `bootstrap` fragment in your configuration package.
 
 ### `availableLanguages` is not uniform coverage
 
-Seven languages are advertised — `en`, `fr`, `de`, `ja`, `nl`, `th`, `zh` — and all seven have a
-complete application catalogue. **Only `en`, `fr` and `de` also have the shared-component
-strings.** `@hylandsoftware/satori-ui` ships catalogues for `de es fr it pl pt` and `en` only, so
-under `ja`, `nl`, `th` or `zh` every `sat.*` string the vendor's components render — including
-the accessible names on the navigation rail — falls back to English inside an otherwise
-translated application. Tracked upstream as
+An advertised language is **two** promises, and only one of them is ours to keep.
+
+The application's own catalogue is ours, and every advertised language has a complete one —
+`checkAdvertisedLocalesShip` fails a configuration that advertises a language without one. The
+shared-component strings are the vendor's, and `@hylandsoftware/satori-ui` ships **fifteen**
+catalogues: `de en es fr it pl pt` plus the regional variants `de-DE`, `en-AU`, `en-US`,
+`es-ES`, `fr-FR`, `it-IT`, `pl-PL` and `pt-PT`.
+
+**The match is exact on the catalogue filename**, which is the part worth knowing. A deployment
+set to `en-US` or `fr-FR` is covered, because those files exist. One set to `pt-BR` is **not**,
+even though `pt` exists — nothing falls back from a regional variant to its base language, so
+`pt-BR` is in the same position as a language the vendor never shipped. **Any locale id outside
+those fifteen renders every `sat.*` string in English** — including the accessible names on the
+navigation rail — inside an otherwise translated application. Tracked upstream as
 [DS-2803](https://hyland.atlassian.net/browse/DS-2803); it cannot be closed in this repository,
 because the strings are the vendor's to author.
 
-A customer adding a language to `availableLanguages` gets the same split: their own catalogue is
-honoured, the shared components are not. `checkAdvertisedLocalesShip` fails a config that
-advertises a language with no application catalogue behind it, and
-`checkUpstreamCatalogueLanguages` keeps the loader's view of the vendor's coverage equal to what
-the installed package actually contains.
+The advertised set is deliberately not listed here. It is Layer 0 configuration, it changes
+without this document, and a list written down in prose is one that goes stale silently and is
+believed anyway. Read it from `availableLanguages` in `bootstrap-config.ts` and intersect it with
+the vendor set above; `checkUpstreamCatalogueLanguages` keeps the loader's view of that vendor set
+equal to what the installed package actually contains, so the intersection is always computable
+rather than remembered.
+
+A customer adding a language gets the same split: their own catalogue is honoured, the shared
+components are not. Nothing breaks and nothing 404s — the loader asks the vendor's folder only
+for languages it ships — but the shared strings stay in the fallback language.
+
+> **Right-to-left is a separate concern, and it is being addressed elsewhere.** The vendor's
+> components carry `:dir(rtl)` rules and depend on `@angular/cdk/bidi`. On `main` as of this
+> change, this application sets no `dir` at all — so advertising a right-to-left language would
+> render its text correctly and its layout mirrored the wrong way. **NXSAT-752 sets the document
+> direction from the active language**; check whether it has landed before relying on either
+> statement, and do not take the absence recorded here as current.
+
+### `defaultLanguage` must name a language this build ships
+
+An unsupported value — a typo, or a language dropped from a later release — falls back to `en`,
+and the console records one `[agentic-ui-config]` diagnostic naming the value, the reason and the
+fallback. It is not honoured as written, for two reasons that are both about honesty rather than
+about the strings: `<html lang>` is what a screen reader picks a voice from and what browser
+translation offers as the source language, so announcing a language the text is not in is a WCAG
+3.1.1 failure (NXSAT-733); and asking for a catalogue that cannot exist answers 404 on every
+load.
+
+A value is honoured only if **both** are true:
+
+| Check                                | Question                             | Who decides  |
+| ------------------------------------ | ------------------------------------ | ------------ |
+| a catalogue ships in the build       | will the text actually render in it? | this build   |
+| it is listed in `availableLanguages` | does this deployment offer it?       | the customer |
+
+`availableLanguages` alone is **not** sufficient, and this is the case worth knowing about when
+writing a fragment: `{ "defaultLanguage": "es", "availableLanguages": ["en", "es"] }` is valid
+configuration that parses cleanly, and because no `es.json` ships, the application's own strings
+would render English under `<html lang="es">`. `checkAdvertisedLocalesShip` cannot catch it —
+that gate reads the packaged config, not a customer's — so the build-time check is what refuses
+it, and the deployment gets `en` with a diagnostic rather than a page that misdescribes itself.
+
+Strings falling back to English is separate, deliberate, and unchanged: `setFallbackLang('en')`
+means any individual key missing from a catalogue renders its English source rather than a raw
+key.
+
+One locale is admitted by a third route, and it is not reachable from a deployment: the generated
+`zz` pseudo-locale, which `npm run i18n:audit` writes into the build to find strings hard-coded
+past the translation layer. It is honoured **only** under a development server — a release build
+refuses it exactly like any other language it ships no catalogue for — so it cannot be configured
+into a customer deployment.
 
 ### `branding.logo`
 

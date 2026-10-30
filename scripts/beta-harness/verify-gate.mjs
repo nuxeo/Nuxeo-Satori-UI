@@ -239,6 +239,23 @@ const ALL_GATES = [
     // Which checks were observed failing on purpose is the evidence, so surface it on a pass too.
     echoOnPass: true,
   },
+  // The recovery that the gate above now depends on when it is interrupted. Registered rather than
+  // left to be run by hand, for the reason this repository already applies to a committed scenes
+  // file: nothing in CI referenced it, so it would be code that never executes and rots as the
+  // selftest's perturbations move. Runs straight after, because it perturbs the same real files.
+  {
+    id: 'sanitizer-recovery-selftest',
+    // The recovery it proves is a marker file and a byte comparison — pure filesystem, identical on
+    // every OS. What is *not* identical is how a process dies: Windows has no signals, so Node turns
+    // a hard kill into an abrupt exit. The controls accept either, but the trigger being a different
+    // mechanism there is why this is not worth a second slow Windows job (NXSAT-751).
+    platformSensitive: false,
+    label: 'Sanitizer selftest crash-recovery controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/sanitizer-selftest-recovery.selftest.mjs'],
+    // Same reasoning as above: the controls are the evidence, so show them on a pass.
+    echoOnPass: true,
+  },
   // Static, so it belongs with the cheap gates — and it guards the one thing the
   // other six structurally cannot. Lint, test, build and typecheck all check the
   // *application*; nothing checked whether the *evidence* was capable of failing.

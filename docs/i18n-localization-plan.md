@@ -910,17 +910,23 @@ Hebrew, Italian, Spanish and Swedish were added to the target, and **five of the
 `en`, `fr`, `de`, `ja`, `nl`.
 
 The useful part of this decision is not the list — it is which touchpoints a language may appear
-in before it has translations. Of the five from D8e, they split cleanly:
+in before it has translations. Of the six (five from D8e, plus the one NXSAT-733 added), they
+split cleanly:
 
-| Touchpoint                          | May run ahead? | Why                                                       |
-| ----------------------------------- | -------------- | --------------------------------------------------------- |
-| `register-locale-data.ts`           | **yes**        | missing-catalogue is a warning; the reverse throws NG0701 |
-| `--language` in `crowdin-pull.yaml` | **yes**        | it is the request that produces the catalogue             |
-| Catalogue in `public/i18n/`         | n/a            | it is the thing being waited for                          |
-| `availableLanguages`                | **no**         | `checkAdvertisedLocalesShip` fails it                     |
-| `DATE_FNS_LOCALES`                  | **no**         | a test pins it to `availableLanguages`                    |
+| Touchpoint                          | May run ahead? | Why                                                                |
+| ----------------------------------- | -------------- | ------------------------------------------------------------------ |
+| `register-locale-data.ts`           | **yes**        | missing-catalogue is a warning; the reverse throws NG0701          |
+| `--language` in `crowdin-pull.yaml` | **yes**        | it is the request that produces the catalogue                      |
+| Catalogue in `public/i18n/`         | n/a            | it is the thing being waited for                                   |
+| `SHIPPED_CATALOGUE_LANGUAGES`       | **no**         | `checkShippedCatalogueLanguages` fails **either** direction        |
+| `availableLanguages`                | **no**         | `checkAdvertisedLocalesShip` fails it                              |
+| `DATE_FNS_LOCALES`                  | **no**         | a test pins it to `availableLanguages`                             |
 
-So `ar`, `es`, `he`, `it` and `sv` are registered and requested, and absent from the last two.
+`SHIPPED_CATALOGUE_LANGUAGES` is the only one that cannot lag either: it is what
+`resolveStringLanguage` consults, so a catalogue present without it is shipped and never
+rendered. It therefore moves in the same commit as the catalogue, not before and not after.
+
+So `ar`, `es`, `he`, `it` and `sv` are registered and requested, and absent from the last three.
 Each joins them in the small pull request that brings its catalogue. The gate stays green
 throughout, which is the point: D8e's rule is not suspended, it is scoped.
 
@@ -939,10 +945,11 @@ Two things that follow, neither optional:
   because nothing set `dir`. `syncDocumentDirection` sets it from the active language and writes
   CDK's `Directionality` too, which is the load-bearing half: `Directionality` reads the attribute
   once at construction, and every CDK overlay takes its direction from that service rather than
-  from the document. So these two now owe only their catalogues, and — because `defaultLanguage`
-  is a free string that nothing validates against `availableLanguages` — a deployment that selects
-  `ar` today already gets a mirrored layout rather than a broken one. See "Right to left" in
-  [`docs/i18n-status.md`](i18n-status.md).
+  from the document. So these two now owe only their catalogues — and the ordering is strict
+  rather than incidental: NXSAT-733 refuses a `defaultLanguage` with no catalogue, so `ar` and `he`
+  run as `en` until theirs land, at which point the language is accepted and the layout mirrors
+  with no further change. Direction is ready and waiting on translation, not the other way round.
+  See "Right to left" in [`docs/i18n-status.md`](i18n-status.md).
 
 One cost is carried deliberately: the pull list names `ar`, `he`, `it` and `sv` while Crowdin
 project 160 does not have them as targets, and the CLI rejects the whole invocation rather than
@@ -1167,6 +1174,12 @@ say so in the report rather than leaving it unstated.
 > catalogue fails `checkAdvertisedLocalesShip`, and since `.husky/pre-push` runs
 > `review:guardrails`, such a branch cannot be pushed at all. Caught in review on
 > [#522](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/522).
+>
+> **A sixth touchpoint, 30 October 2026.** NXSAT-733 made `SHIPPED_CATALOGUE_LANGUAGES` the
+> authority on whether a language renders at all, so it is now step 2's first entry and it is
+> mandatory. A checklist that omits it sends you to ship a catalogue the application then refuses
+> to use. Caught in review on
+> [#531](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/531) — the checklist, not the code.
 
 **Step 1 — request the language.** Nothing here waits on a translation, and all three belong in one
 pull request.
@@ -1195,13 +1208,20 @@ pull request.
 **Step 2 — advertise it, once `apps/nuxeo-ui/public/i18n/<lang>.json` has actually landed.** Not
 before; each of these fails if it leads.
 
-1. Add it to `availableLanguages` in the packaged bootstrap defaults **and** in
+1. Add it to `SHIPPED_CATALOGUE_LANGUAGES` in
+   `apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts`. **This is the one that makes the language
+   render at all**: `resolveStringLanguage` refuses a `defaultLanguage` outside that list and
+   boots in English instead, so a catalogue added without it ships and is never used — NXSAT-733,
+   in the opposite direction. `checkShippedCatalogueLanguages` fails both a declaration with no
+   catalogue and a catalogue with no declaration, so it moves in the same commit as the file.
+
+2. Add it to `availableLanguages` in the packaged bootstrap defaults **and** in
    `libs/shared/app-config/src/lib/bootstrap-config.ts`, and add it to `DATE_FNS_LOCALES` in
    `libs/shared/ui/.../satori-date-adapter.ts` — a test holds the latter equal to the former, so
    they move together or the suite goes red. Bring any regional variant whose date-fns `P` differs
    from the base language with it.
 
-2. **Check whether the upstream catalogue covers it**, because ours is not the only one rendering.
+3. **Check whether the upstream catalogue covers it**, because ours is not the only one rendering.
    `@hylandsoftware/satori-ui` ships 15 files in `i18n/` but only **seven distinct languages** —
    `de en es fr it pl pt`. A language outside those gets English satori-ui strings inside an
    otherwise translated application, which reads to a user as a bug rather than as a gap.
@@ -1219,7 +1239,7 @@ before; each of these fails if it leads.
    gone — no `@alfresco` package has been installed since NXSAT-637 and the adf-hx bridge went with
    NXSAT-635 — so only the satori-ui half still describes anything that runs.
 
-3. Add it to the evidence capture's locale matrix.
+4. Add it to the evidence capture's locale matrix.
 
 The gap between the two steps is however long translation takes, and a language sitting in it is in
 its normal state rather than a half-finished one.
