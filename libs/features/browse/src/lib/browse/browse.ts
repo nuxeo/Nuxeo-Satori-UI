@@ -3,6 +3,7 @@ import {
   NXS_PERMISSIONS_PANEL_ID,
   NXS_PRIMITIVE_IDS,
   NxsActionMenuComponent,
+  NxsAvatarComponent,
   NxsBreadcrumbsComponent,
   NxsCardComponent,
   NxsColumnPickerComponent,
@@ -16,6 +17,7 @@ import {
   NxsPagerComponent,
   NxsPermissionsPanelComponent,
   NxsSpinnerComponent,
+  NxsTagComponent,
   NxsTagEditorComponent,
   NxsThumbnailComponent,
   NxsUploadQueue,
@@ -50,7 +52,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { forkJoin, of, Subject, timer, EMPTY } from 'rxjs';
@@ -130,9 +132,6 @@ import {
   permissionRightLabel,
   DocTypeLabelPipe,
 } from '@nuxeo/satori-platform/nuxeo-client';
-
-import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
-import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 
 import {
   ConfirmDialogComponent,
@@ -239,6 +238,7 @@ export const FILTER_DEBOUNCE_MS = 250;
   imports: [
     NxsDateInputComponent,
     NxsActionMenuComponent,
+    NxsAvatarComponent,
     NxsBreadcrumbsComponent,
     NxsCardComponent,
     NxsColumnPickerComponent,
@@ -248,12 +248,14 @@ export const FILTER_DEBOUNCE_MS = 250;
     NxsFolderHeaderComponent,
     NxsPagerComponent,
     NxsSpinnerComponent,
+    NxsTagComponent,
     NxsTagEditorComponent,
     NxsThumbnailComponent,
     NxsUploadQueueComponent,
     DocTypeLabelPipe,
     TranslatePipe,
     DatePipe,
+    NgTemplateOutlet,
     FormsModule,
     MatIconModule,
     MatProgressSpinnerModule,
@@ -269,8 +271,6 @@ export const FILTER_DEBOUNCE_MS = 250;
     MatInputModule,
     MatSelectModule,
     MatChipsModule,
-    SatAvatarModule,
-    SatTagModule,
     ExtensionOutletComponent,
     NxsPermissionsPanelComponent,
   ],
@@ -836,6 +836,8 @@ export class BrowseComponent {
 
   /** Rendered by ID, so the product shows Satori's and a host without it the built-in one. */
   readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
+  /** The avatar and tag in the template's `primitiveAvatar` and `primitiveTag`, by ID likewise. */
+  readonly primitiveIds = NXS_PRIMITIVE_IDS;
   /** Rendered by ID, so the product shows Satori's status tag and a host without it the built-in one. */
   readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   /** Each card in the card view is rendered by ID, so a component registered under it replaces them. */

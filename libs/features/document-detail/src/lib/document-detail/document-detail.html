@@ -27,10 +27,17 @@
     </button>
     <div class="header-info">
       <div class="header-title" role="heading" aria-level="1">{{ doc()!.title }}</div>
-      <sat-breadcrumbs
-        [items]="breadcrumbItems()"
-        (click)="onBreadcrumbClick($event)"
-      ></sat-breadcrumbs>
+      @let trailLabel = 'document-detail.document-detail.breadcrumbs' | translate;
+      <div class="detail-breadcrumbs">
+        <lib-extension-outlet
+          #breadcrumbsOutlet
+          [componentId]="primitiveIds.breadcrumbs"
+          [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
+        />
+        @if (breadcrumbsOutlet.unresolved()) {
+          <nxs-breadcrumbs [items]="breadcrumbItems()" [label]="trailLabel" />
+        }
+      </div>
     </div>
     <!-- By ID, so whatever is registered as the action bar renders here: Satori's in our app. -->
     <lib-extension-outlet
@@ -904,9 +911,14 @@
                         <span class="ai-meta-key">{{
                           'document-detail.document-detail.primary-category' | translate
                         }}</span>
-                        <sat-category-tag category="blue">{{
-                          aiClassification()!.nature
-                        }}</sat-category-tag>
+                        <lib-extension-outlet
+                          #natureOutlet
+                          [componentId]="primitiveIds.tag"
+                          [componentInputs]="{ label: aiClassification()!.nature, color: 'blue' }"
+                        />
+                        @if (natureOutlet.unresolved()) {
+                          <nxs-tag [label]="aiClassification()!.nature" color="blue" />
+                        }
                       </div>
                       <div class="ai-meta-row">
                         <span class="ai-meta-key">{{
@@ -1116,7 +1128,16 @@
               @if (doc(); as versioned) {
                 <!-- A publication has no versions of its own to pick from; Web UI shows a tag too. -->
                 @if (versioned.isProxy) {
-                  <nxs-tag nxsVersion [label]="versionLabel()" />
+                  <span nxsVersion class="detail-version-tag">
+                    <lib-extension-outlet
+                      #versionTagOutlet
+                      [componentId]="primitiveIds.tag"
+                      [componentInputs]="{ label: versionLabel(), color: 'gray' }"
+                    />
+                    @if (versionTagOutlet.unresolved()) {
+                      <nxs-tag [label]="versionLabel()" color="gray" />
+                    }
+                  </span>
                 } @else {
                   <nxs-manage-versions
                     nxsVersion
@@ -1290,13 +1311,15 @@
               } @else {
                 @for (entry of panelActivity(); track $index) {
                   <div class="activity-card">
-                    <sat-avatar
-                      [initials]="entry.principalName"
-                      [category]="avatarColor(entry.principalName)"
-                      size="28"
-                      [borderless]="true"
-                      aria-hidden="true"
+                    @let color = avatarColor(entry.principalName);
+                    <lib-extension-outlet
+                      #avatarOutlet
+                      [componentId]="primitiveIds.avatar"
+                      [componentInputs]="{ initials: entry.principalName, color, size: '28' }"
                     />
+                    @if (avatarOutlet.unresolved()) {
+                      <nxs-avatar [initials]="entry.principalName" [color]="color" size="28" />
+                    }
                     <div class="activity-info">
                       <span class="activity-user">{{ entry.principalName }}</span>
                       <span class="activity-action">{{ activityLabel(entry) }}</span>

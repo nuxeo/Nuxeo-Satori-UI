@@ -9724,15 +9724,18 @@ const ADOPTION_SCAN_SKIP = /(\.spec\.ts|\.stories\.ts|test-setup\.ts|\/__mocks__
 /**
  * Sites that already bypassed an adopted primitive when this guardrail landed (NXSAT-676).
  *
- * The ticket asks for *new* use to fail, and twelve sites predate it: the tag, avatar and
+ * The ticket asks for *new* use to fail, and twelve sites predated it: the tag, avatar and
  * breadcrumbs primitives were adopted in NXSAT-673 after this code was written against Satori
  * directly. Failing them here would have made the gate red on arrival, which is how a gate gets
- * demoted to a warning and then deleted.
+ * demoted to a warning and then deleted. NXSAT-652 moved the screens onto the primitive IDs and
+ * left four: the app shell's header avatar, the dashboard's two, and document detail's
+ * `SatTagCategory`.
  *
  * Exempt per symbol, not per file. Listing only the file exempted every *future* import from that
- * entry point there too: adding `SatStatusTag` beside trash's `SatTagModule` collapsed into the
- * same exempt pair and passed. The legacy symbols are recorded, under the names the module
- * exports, so a site keeps exactly the imports it already had and a new one fails.
+ * entry point there too: adding `SatStatusTag` beside trash's then-baselined `SatTagModule`
+ * collapsed into the same exempt pair and passed. The legacy symbols are recorded, under the
+ * names the module exports, so a site keeps exactly the imports it already had and a new one
+ * fails.
  *
  * The list may only shrink, in both directions. A file that no longer imports the entry point is
  * reported as stale, and so is a listed symbol it no longer imports — migrating a site and
@@ -9747,49 +9750,18 @@ const ADOPTION_BASELINE = new Map([
   [
     '@hylandsoftware/satori-ui/avatar',
     new Map([
-      [
-        'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
-        new Set(['SatAvatarModule', 'SatAvatarCategory']),
-      ],
+      ['apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts', new Set(['SatAvatarCategory'])],
       ['apps/nuxeo-ui/src/app/shell/app-shell.component.ts', new Set(['SatAvatarModule'])],
-      ['libs/features/browse/src/lib/browse/browse.ts', new Set(['SatAvatarModule'])],
-      [
-        'libs/features/collections/src/lib/collection-detail/collection-detail.ts',
-        new Set(['SatAvatarModule']),
-      ],
-      [
-        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
-        new Set(['SatAvatarModule']),
-      ],
-    ]),
-  ],
-  [
-    '@hylandsoftware/satori-ui/breadcrumbs',
-    new Map([
-      [
-        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
-        new Set(['SatBreadcrumbs', 'SatBreadcrumbsItem']),
-      ],
-      [
-        'libs/features/tasks/src/lib/tasks-page/tasks-page.component.ts',
-        new Set(['SatBreadcrumbs', 'SatBreadcrumbsItem']),
-      ],
     ]),
   ],
   [
     '@hylandsoftware/satori-ui/tag',
     new Map([
       ['apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts', new Set(['SatTagModule'])],
-      ['libs/features/browse/src/lib/browse/browse.ts', new Set(['SatTagModule'])],
       [
         'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
-        new Set(['SatTagModule', 'SatTagCategory']),
+        new Set(['SatTagCategory']),
       ],
-      [
-        'libs/features/tasks/src/lib/task-detail/task-detail.component.ts',
-        new Set(['SatTagModule']),
-      ],
-      ['libs/features/trash/src/lib/trash/trash.component.ts', new Set(['SatTagModule'])],
     ]),
   ],
 ]);
@@ -10128,7 +10100,7 @@ function adoptedSatoriEntryPoints() {
  * ticket's goal sentence asks for.
  *
  * Not scoped to the diff either. It reads the whole tree, so a bypass that moves between files
- * in a refactor stays caught; `ADOPTION_BASELINE` carries the twelve pre-existing sites instead.
+ * in a refactor stays caught; `ADOPTION_BASELINE` carries the sites that predate it instead.
  */
 function checkAdoptedPatternsNotBypassed() {
   if (!fileExists(SATORI_ADOPTION_REGISTRY)) {

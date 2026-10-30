@@ -3,6 +3,7 @@ import {
   NXS_PERMISSIONS_PANEL_ID,
   NXS_PRIMITIVE_IDS,
   NxsBreadcrumbsComponent,
+  NxsAvatarComponent,
   NxsDeletePermissionDialogComponent,
   NxsDocumentListComponent,
   NxsFolderHeaderComponent,
@@ -83,7 +84,6 @@ import {
   decodeNuxeoPathSegment,
   permissionRightLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import {
   ShareDialogComponent,
   ShareDialogData,
@@ -126,6 +126,7 @@ const MEMBER_PAGE_SIZE = 50;
   imports: [
     NxsDateInputComponent,
     ExtensionOutletComponent,
+    NxsAvatarComponent,
     NxsBreadcrumbsComponent,
     NxsDocumentListComponent,
     NxsFolderHeaderComponent,
@@ -146,7 +147,6 @@ const MEMBER_PAGE_SIZE = 50;
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    SatAvatarModule,
   ],
   templateUrl: './collection-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -256,6 +256,8 @@ export class CollectionDetailComponent {
   private breadcrumbItemsCache: NxsBreadcrumbItem[] = [];
   /** Rendered by ID, so the product shows Satori's and a host without it the built-in one. */
   readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
+  /** A member's avatar, by ID likewise. */
+  readonly avatarId = NXS_PRIMITIVE_IDS.avatar;
   /** Rendered by ID, so the product shows Satori's status tag and a host without it the built-in one. */
   readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
 

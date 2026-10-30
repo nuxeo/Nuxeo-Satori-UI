@@ -26,7 +26,8 @@
  * ## Staying compatible, without importing the design system
  *
  * The union must remain exactly upstream's `SatAvatarCategory`, because the values are
- * handed straight to `<sat-avatar [category]>`. The two-way assertion that holds it there is
+ * handed to `nxs.primitives.avatar`, whose Satori implementation passes them to
+ * `<sat-avatar [category]>`. The two-way assertion that holds it there is
  * in `apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts`, which imports both types
  * and is compiled by every build, CI's included.
  *

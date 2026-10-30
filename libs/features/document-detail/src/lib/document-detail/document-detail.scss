@@ -53,9 +53,16 @@
   white-space: nowrap;
 }
 
-sat-breadcrumbs {
+.detail-breadcrumbs {
+  min-width: 0;
   font-size: 11px;
-  color: #888;
+  color: var(--mat-sys-on-surface-variant);
+
+  ::ng-deep nxs-breadcrumbs,
+  ::ng-deep .sat-breadcrumbs-nav {
+    font: inherit;
+    color: inherit;
+  }
 
   /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .sat-breadcrumbs-chevron {

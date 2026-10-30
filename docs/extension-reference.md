@@ -712,19 +712,36 @@ from a button you pass in `headerAction` or `actions`. The one difference: on Sa
 few pixels of padding _around_ those controls opens the item, where on Material it does nothing. A
 replacement you register decides this for itself.
 
-**Where packaged screens render them.** Browse and the collection page render their breadcrumb
-trail through `nxs.primitives.breadcrumbs`. Browse, the collection page, document detail and task
-detail render their status tags through `nxs.primitives.statusTag`. Document detail renders its tab
-strip through `nxs.primitives.tabs` and its header's action row through `nxs.primitives.actionBar`
-(section 8 and 9). Browse's and search's card views render each card through `nxs.primitives.card`,
-passing its open and selection handlers and the templates for its thumbnail and actions as inputs,
-because the outlet binds no outputs. `nxs-document-list` renders each row's type through
-`nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`. An override of those
-IDs reaches these screens.
+**Where packaged screens render them.** The screens place no `sat-avatar`, `sat-category-tag` or
+`sat-breadcrumbs` of their own: each of those uses is resolved through its ID, so an override of the
+ID reaches it. The uses resolved by ID are these:
 
-Other `sat-*` uses in packaged screens are not yet on these IDs, so an override does not reach them.
-Those elements render directly until they move onto the IDs. Nor does an override of the tabs or the
-action bar reach any other tab group or action row: browse's and the collection page's tabs are
+| Component ID                 | Rendered on                                                                                                                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nxs.primitives.avatar`      | browse (the history tab's users, the info panel's creator and contributor, activity), document detail (activity), the collection page (the history tab's users), the dashboard, `nxs-document-list` |
+| `nxs.primitives.tag`         | browse (a trashed child's type), search (a list row's type), document detail (the AI primary category, a publication's version), task detail, trash, `nxs-document-list`                            |
+| `nxs.primitives.breadcrumbs` | browse, document detail, the collection page, the tasks page                                                                                                                                        |
+| `nxs.primitives.statusTag`   | browse, document detail, the collection page, task detail                                                                                                                                           |
+| `nxs.primitives.card`        | browse's and search's card views, one per document; the card shows the type as its subheading                                                                                                       |
+| `nxs.primitives.tabs`        | document detail's tab strip (sections 8 and 9)                                                                                                                                                      |
+| `nxs.primitives.actionBar`   | document detail's header action row (sections 8 and 9)                                                                                                                                              |
+
+Search shows no avatar, breadcrumb trail or status tag.
+
+Breadcrumb page layout belongs to the screen, not the registered implementation. Browse,
+document detail, collections and tasks wrap both the outlet and its fallback in the same layout
+container, preserving spacing and compact header typography when the registration changes.
+The built-in Material breadcrumb inherits that compact typography in headers; its own component
+still owns separators, folding and RTL mirroring. The packaged Satori registration retains the
+screens' compact text separators, scoped through the wrapper rather than the outlet's internals.
+Custom implementations own their internal separators and may deliberately supply their own typography.
+
+**Not reached by an override yet.** Four library components on document detail draw the built-in
+`nxs-avatar` or `nxs-tag` themselves rather than resolving the ID, so an override does not replace
+them there: `nxs-comments` (each author's avatar), `nxs-document-history` (each entry's avatar and
+lifecycle tag), `nxs-properties-panel` (the creator and contributor avatars, and its state, tag,
+coverage and collection tags) and `nxs-tag-editor` (each tag). Nor does an override of the tabs or
+the action bar reach any other tab group or action row: browse's and the collection page's tabs are
 Material tab groups and their header actions their own markup, the search and trash toolbars are
 their own markup, and the metadata editor writes `nxs-tabs` into its template. Nothing in a packaged screen renders
 `nxs.primitives.errorState`, `nxs.primitives.richTooltip`, `nxs.primitives.emptyState` or

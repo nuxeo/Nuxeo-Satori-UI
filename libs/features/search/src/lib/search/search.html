@@ -452,9 +452,14 @@
               >
                 {{ row.name }}
               </button>
-              <span class="simple-list-type-badge" [title]="row.type | docTypeLabel">{{
-                row.type | docTypeLabel
-              }}</span>
+              <span class="simple-list-type" [title]="row.type | docTypeLabel">
+                <ng-container
+                  *ngTemplateOutlet="
+                    primitiveTag;
+                    context: { $implicit: (row.type | docTypeLabel) }
+                  "
+                />
+              </span>
             </div>
             <div class="simple-list-actions col-hover-actions">
               <nxs-favorite-toggle
@@ -497,3 +502,18 @@
     />
   }
 </div>
+
+<!--
+  A result's type as the tag primitive, by registered ID, so a component registered under
+  `nxs.primitives.tag` replaces it. `nxs-tag` is the fallback for a host that registers none.
+-->
+<ng-template #primitiveTag let-label>
+  <lib-extension-outlet
+    #tagOutlet
+    [componentId]="tagId"
+    [componentInputs]="{ label, color: 'gray' }"
+  />
+  @if (tagOutlet.unresolved()) {
+    <nxs-tag [label]="label" color="gray" />
+  }
+</ng-template>

@@ -793,9 +793,9 @@ The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Sa
 
 ## How our own app uses this
 
-The app registers both entry points, so anything rendered by an ID that has a Satori variant shows Satori. Browse and the collection page render their breadcrumbs by ID, browse, the collection page, document detail and task detail render their status tags by ID, document detail renders its tab strip and its header's action row by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's, and a provider that registers its own component under the ID swaps them. Browse's and search's card views render each card by ID too, so there the app shows Satori's interactive card, and a provider that registers its own card under the ID swaps it. A manifest only names the ID; it does not choose the implementation. Its other screens still use `<sat-avatar>`, `<sat-category-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and no ID reaches them.
+The app registers both entry points, so anything rendered by an ID that has a Satori variant shows Satori. The screens resolve each avatar, category tag, status tag and breadcrumb trail of their own by ID, and document detail its tab strip and its header's action row — `docs/extension-reference.md` §6a lists where — so there the app shows Satori's, and a component registered later under the same ID, with `provideSatoriExtensions({ components })`, replaces it; no JSON manifest entry selects a component for these IDs. Browse's and search's card views render each card by ID too, so there the app shows Satori's interactive card, and a component registered under its ID replaces it the same way. Library components nested in a screen, such as the comments, history and properties panel on document detail, still draw the built-in avatar and tag directly; a registration does not reach them until they render by ID.
 
-Only things rendered by ID, such as customer extensions, go through the choice.
+Only things rendered by ID — these screens, and customer extensions — go through the choice.
 
 ## Known gaps
 
