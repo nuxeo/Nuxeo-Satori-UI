@@ -325,6 +325,28 @@ describe('DocumentLayoutService', () => {
     );
   });
 
+  it('leaves out the sections with nothing to show, and still names every field it skipped', async () => {
+    const layout = resolve();
+    answerType();
+    http.expectOne(INDEX).flush(index('Claim/metadata'));
+    http.expectOne(CLAIM_FILE).flush(
+      envelope({
+        version: 1,
+        sections: [
+          { id: 'details', label: 'Details', fields: ['dc:title'] },
+          { id: 'extra', label: 'Extra info', fields: ['claim:missing', 'claim:gone'] },
+          { id: 'nothing', label: 'Nothing here', fields: [] },
+        ],
+      }),
+    );
+    expect(sectionIds(await layout)).toEqual(['details']);
+    for (const xpath of ['claim:missing', 'claim:gone']) {
+      expect(warnings).toContain(
+        `[agentic-ui-layouts] Claim/metadata layout: field ${xpath} is not on the Claim type or this document's facets; skipped`,
+      );
+    }
+  });
+
   it('logs what the server reported about the contributions it replaced or rejected', async () => {
     const layout = resolve();
     answerType();
