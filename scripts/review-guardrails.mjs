@@ -4823,7 +4823,6 @@ function checkUpstreamCatalogueLanguages() {
     return;
   }
 
-
   /**
    * The installed package directory a `node_modules` path belongs to, or `null` for a repo path.
    *
@@ -9880,7 +9879,7 @@ function nativeDateAdapterUses(file) {
  *
  * ## Why this gate exists
  *
- * NXSAT-752 found seven of these across six components, and every one of them was a real
+ * NXSAT-752 replaced physical declarations in six components, and every one was a real
  * right-to-left defect: a clear button on the far side of the text it clears, a dropdown panel
  * hanging off the opposite side of its own trigger, a select's chevron sitting over the text
  * instead of over the gutter reserved for it. They had never been noticed because nothing set
@@ -9935,8 +9934,20 @@ const LOGICAL_PROPERTY_ALTERNATIVES = new Map([
   ['right', 'inset-inline-end'],
 ]);
 
-/** `// logical-properties-ok: it overrides upstream inside a [dir='rtl'] block` — prose required. */
 const LOGICAL_PROPERTY_WAIVER = /^\s*(?:\/\/|\/\*)\s*logical-properties-ok:\s*\S/;
+
+/**
+ * Whether the line above a declaration waives it: `// logical-properties-ok: <reason>`.
+ *
+ * The reason is required, and the **block** terminator has to be stripped before asking. `\S`
+ * alone was satisfied by the `*` of `*/ `, so `; /* logical-properties-ok: *\/` — a waiver with no
+ * reason at all — silently disabled the check for the declaration below it. The `//` spelling was
+ * never affected, because nothing follows its colon; that asymmetry is why this strips the
+ * terminator rather than loosening the reason test, which would have opened the `//` form too.
+ */
+function hasLogicalPropertyWaiver(line) {
+  return LOGICAL_PROPERTY_WAIVER.test((line ?? '').replace(/\*\/\s*$/, ''));
+}
 
 /**
  * A value's top-level space-separated parts, with `calc(100% - 8px)` counted as **one**.
@@ -10140,9 +10151,25 @@ function checkSatoriStylesheetsAreLogical() {
         // names are case-insensitive, so `MARGIN-LEFT` is the same declaration as `margin-left`.
         const property = declared.toLowerCase();
         const line = statement.line;
-        if (LOGICAL_PROPERTY_WAIVER.test(original[line - 2] ?? '')) continue;
+        if (hasLogicalPropertyWaiver(original[line - 2])) continue;
         const at = `${file}:${line}`;
         const value = withoutPriority(rawValue);
+        /*
+         * The one place a value is case-folded, because CSS keywords are case-insensitive and
+         * `text-align: LEFT` hardcodes a direction exactly as `left` does.
+         *
+         * Folded here rather than at each comparison, and this is the third round of the same
+         * mistake: the property-name lookup and the identifier guard were both case-sensitive
+         * (`MARGIN-LEFT` went unreported), and `#{}` was taught to `scssDeclarations` and not to
+         * `topLevelParts`. Each time, one of the places that needed teaching got taught. One
+         * named value is the cheap insurance against a fourth.
+         *
+         * Deliberately NOT applied to the shorthand parts below. Sass identifiers are
+         * case-sensitive, so folding them would make `margin: 0 $Gutter 0 $gutter` compare equal
+         * and hide a real asymmetry — a missed defect, which is the worse direction. `12PX` versus
+         * `12px` would then over-report, and nobody writes that.
+         */
+        const keyword = value.toLowerCase();
 
         const logical = LOGICAL_PROPERTY_ALTERNATIVES.get(property);
         if (logical) {
@@ -10159,16 +10186,17 @@ function checkSatoriStylesheetsAreLogical() {
 
         if (
           (property === 'text-align' || property === 'float' || property === 'clear') &&
-          /^(left|right)$/.test(value)
+          (keyword === 'left' || keyword === 'right')
         ) {
           const replacement =
             property === 'text-align'
-              ? value === 'left'
+              ? keyword === 'left'
                 ? 'start'
                 : 'end'
-              : value === 'left'
+              : keyword === 'left'
                 ? 'inline-start'
                 : 'inline-end';
+          // Reported as written, so the line is findable; the advice uses the canonical spelling.
           fail(
             `${at} sets \`${property}: ${value}\`, which hardcodes a reading direction. ` +
               `Use \`${property}: ${replacement}\`.`,
@@ -10178,7 +10206,7 @@ function checkSatoriStylesheetsAreLogical() {
 
         // A four-value shorthand is only a problem when its horizontal values differ: `0 8px 8px`
         // and `8px 12px` are already symmetric. `padding: 12px 8px 12px 16px` is the shape that
-        // produced three of NXSAT-752's seven findings, and it reads as deliberate rather than as
+        // produced five of NXSAT-752's physical declarations, and it reads as deliberate rather than as
         // an oversight, which is why it needs naming explicitly.
         if (property === 'margin' || property === 'padding') {
           const parts = topLevelParts(value);

@@ -8635,6 +8635,61 @@ expectRed(
   /uses the physical property `margin-left`/,
 );
 
+/*
+ * The case-insensitivity of keyword VALUES, which is the other half of the property-name fix
+ * above and was missed at the time — the third round of "one of the places that needed teaching
+ * got taught". Folding now happens once, where the declaration is parsed.
+ */
+
+expectRed(
+  '[logical properties] text-align: LEFT in upper case',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  text-align: LEFT;') },
+  null,
+  /sets `text-align: LEFT`.*Use `text-align: start`/s,
+);
+
+expectRed(
+  '[logical properties] float and clear in mixed case',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  float: RIGHT;\n  clear: Left;') },
+  null,
+  /sets `float: RIGHT`.*Use `float: inline-end`/s,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a logical keyword in upper case is still logical',
+  'checkSatoriStylesheetsAreLogical',
+  // The mirror: folding case must not start flagging values that were never physical.
+  { [NXS_STYLE]: style('  text-align: START;') },
+);
+
+/*
+ * The waiver's reason requirement, which had a hole specific to the block spelling: `\S` was
+ * satisfied by the asterisk of the closing delimiter, so a waiver with no reason at all disabled
+ * the check. The `//` spelling was never affected, and that asymmetry is why the fix strips the
+ * terminator rather than loosening the reason test — which would have opened the `//` form too.
+ */
+
+expectRed(
+  '[logical properties] an empty BLOCK waiver suppresses nothing',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  /* logical-properties-ok: */\n  margin-left: 4px;') },
+  null,
+  /uses the physical property `margin-left`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a block waiver that does give a reason still waives',
+  'checkSatoriStylesheetsAreLogical',
+  // The control that stops the fix above becoming "block waivers never work".
+  {
+    [NXS_STYLE]: style('  /* logical-properties-ok: fixed toolbar chrome */\n  margin-left: 4px;'),
+  },
+);
+
 falsePositiveControls += 1;
 expectGreen(
   'a physical declaration inside a quoted value',

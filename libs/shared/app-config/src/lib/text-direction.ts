@@ -6,13 +6,21 @@ export type TextDirection = 'ltr' | 'rtl';
  *
  * ## Why a named set rather than `lang === 'ar' || lang === 'he'`
  *
- * Two of these ship today — `ar` and `he` — and the inline comparison would have been shorter.
- * It would also have been the wrong shape: the set a deployment can select from is Layer 0
- * `availableLanguages`, which a customer may extend, and `defaultLanguage` is a free string that
- * nothing validates against a fixed list. A customer who configures Persian gets a language that
- * renders English text (no catalogue) but should still mirror, because the direction is a property
- * of the reader's script, not of whether we have translated anything into it. One named set is
- * also the thing a future Layer 0 override would point at.
+ * The application targets two of these — `ar` and `he` — and an inline comparison against those
+ * two would have been shorter. It would also have coupled this to the wrong thing.
+ *
+ * **Direction is a property of a script, not of what we ship.** Which languages are *shipped*,
+ * *advertised* and *selectable* are three separate lists that each moved during October alone:
+ * `availableLanguages` gained five languages and lost them again, and NXSAT-733 added
+ * `SHIPPED_CATALOGUE_LANGUAGES` as the gate on `defaultLanguage`. The mapping from `he` to `rtl`
+ * moved none of those times, and must not have to. So this names the languages whose script runs
+ * right to left and reads none of those lists; `syncDocumentDirection` applies it to whatever
+ * language actually became active, which is already validated by the time it sees it.
+ *
+ * The practical payoff is that adding a language is one edit, not two: when `ar.json` lands, `ar`
+ * becomes selectable and mirrors with no change here. Covering languages the product does not
+ * target — Persian, Urdu, Yiddish — is the same argument one step further out, and is what a
+ * future Layer 0 override would point at.
  *
  * ## Why these particular codes
  *

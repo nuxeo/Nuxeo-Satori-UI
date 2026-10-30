@@ -3,11 +3,14 @@ import { RTL_LANGUAGES, textDirectionForLanguage } from './text-direction';
 
 describe('textDirectionForLanguage', () => {
   /**
-   * The two right-to-left languages the application **targets**. Neither is in
-   * `availableLanguages` today — D8e-webui keeps a language out of that list until its catalogue
-   * lands — and that is exactly why this function does not read it: `defaultLanguage` is a free
-   * string that nothing validates against the array, and locale data is registered for both, so a
-   * deployment can select either right now.
+   * The two right-to-left languages the application **targets** — neither of which is selectable
+   * today: they are out of `availableLanguages` (D8e-webui) and refused by `resolveStringLanguage`
+   * for want of a catalogue (NXSAT-733).
+   *
+   * That is the point rather than a caveat. This mapping is deliberately not coupled to which
+   * languages are shipped, advertised or selectable, because those three lists each changed during
+   * October while `he` → `rtl` did not. When `he.json` lands the language becomes selectable and
+   * mirrors with no edit here.
    */
   it('answers rtl for Arabic and Hebrew', () => {
     expect(textDirectionForLanguage('ar')).toBe('rtl');

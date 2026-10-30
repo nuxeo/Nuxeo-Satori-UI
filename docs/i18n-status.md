@@ -73,13 +73,32 @@ So the direction behaviour is verified by unit tests and by a manual pass taken 
 closed the startup path, not by booting `ar` today — which is why the registration test below
 boots `fr` from a stale `rtl` instead.
 
-**The whole defect was one missing attribute.** Seven `nxs-` components already carried
-`:host-context([dir='rtl'])` rules, `rich-tooltip` and `details-panel` already read
-`getComputedStyle(…).direction`, and `document-tree` and `document-list` already swapped their
-arrow keys off `Directionality` — and none of it had ever run, because nothing set `dir`.
-`index.html` ships `lang="en"` and no `dir` at all. This is the same family as gap 10 below:
-`translate.use()` sets the string language and touches neither `LOCALE_ID` nor the document's
-direction.
+**The whole defect was one missing attribute.** Right-to-left handling already existed in `nxs-`
+components, through three mechanisms — **seven components in total, four of them via the CSS
+attribute**, with `document-tree` in two rows:
+
+| mechanism                      | components                                            |
+| ------------------------------ | ----------------------------------------------------- |
+| `:host-context([dir='rtl'])`   | `breadcrumbs`, `document-tree`, `folder-picker`, `pager` |
+| `inject(Directionality)`       | `document-list`, `document-tree`                      |
+| `getComputedStyle(…).direction`| `details-panel`, `rich-tooltip`                       |
+
+```bash
+grep -rl "host-context(\[dir='rtl'\])" --include='*.scss' libs/shared/satori-components/src
+grep -rl 'inject(Directionality' --include='*.ts' libs/shared/satori-components/src | grep -v spec
+```
+
+Upstream's own `platform-nav` and `split-button` carry `:dir(rtl)` too. **None of it had ever
+run**, because nothing set `dir`: `index.html` ships `lang="en"` and no `dir` at all. Same family
+as gap 10 below — `translate.use()` sets the string language and touches neither `LOCALE_ID` nor
+the document's direction.
+
+The commands are here because the prose was wrong twice without them. An earlier revision said
+"seven components carried `:host-context` rules", which runs two claims together — seven handle
+right-to-left, four through that mechanism — and a count of the CSS declarations replaced appeared
+as "seven" in two places when it is thirteen across six files, five of those being asymmetric
+four-value shorthands. A number nothing checks is a number that drifts; a number with the command
+beside it can be falsified in two seconds.
 
 `syncDocumentDirection` in `provide-app-config.ts` sets it, beside the existing `lang` sync and off
 the same `onLangChange`, so a language changed after startup is honoured and not only the
@@ -105,13 +124,15 @@ Two things were established rather than assumed, and each of them changed the im
   that fails when only the attribute is set — which is what makes the point above load-bearing
   rather than decorative.
 
-Mirrored layout itself is **CSS logical properties**, not more `[dir='rtl']` overrides: seven
-declarations across `search-filters`, `column-picker`, `saved-search-select`, `drive-dialog`,
-`details-panel` and `upload-queue` moved from `right`/`margin-left`/`text-align: left` and
-asymmetric four-value shorthands to `inset-inline-end`, `margin-inline-start`, `text-align: start`
-and `padding-inline`. The existing `:host-context([dir='rtl'])` rules were left alone: all five
-are `transform: scaleX(-1)` on a chevron or arrow, which is a mirrored **glyph** and has no
-logical-property equivalent.
+Mirrored layout itself is **CSS logical properties**, not more `[dir='rtl']` overrides.
+`search-filters`, `column-picker`, `saved-search-select`, `drive-dialog`, `details-panel` and
+`upload-queue` moved from `right`, `margin-left`, `text-align: left` and asymmetric four-value
+shorthands to `inset-inline-end`, `margin-inline-start`, `text-align: start` and
+`padding-inline` — the shorthands being five of them, and the subtle kind, because
+`padding: 12px 8px 12px 16px` reads as deliberate rather than as an oversight.
+
+The existing `:host-context([dir='rtl'])` rules were left alone. Each is `transform: scaleX(-1)`
+on a chevron or arrow, which is a mirrored **glyph** and has no logical-property equivalent.
 
 **`checkSatoriStylesheetsAreLogical` keeps it that way.** Both `nxs-` libraries are now free of
 physical inline-direction declarations, so the guardrail is an absolute rule over their `.scss`
@@ -1116,7 +1137,7 @@ fails any source that is not.
     And the recommendation of _no_ against plan decision Q3 was made when RTL was hypothetical;
     advertising `ar` and `he` (D8e-webui) changed that input, because once those two are
     advertised, rendering them left-to-right is a defect rather than an absent feature. The app
-    half turned out to be one attribute and seven CSS declarations, not weeks: see "Right to
+    half turned out to be one attribute and six stylesheets, not weeks: see "Right to
     left" above. Q3 itself is a plan decision and this does not close it — what it closes is the
     claim that the design system was the blocker.
 12. **Pluralisation — the deferral has expired, and the convention is now two keys.** This entry
