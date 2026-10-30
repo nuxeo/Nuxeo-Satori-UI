@@ -24,6 +24,19 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import {
+  MARKER,
+  PERTURBED_PATHS,
+  SELFTEST_ENV_FLAG,
+  recoverPerturbations,
+  retainMarker,
+  writeFileAtomic,
+  writeMarker,
+} from './sanitizer-selftest-state.mjs';
+
+/** This script's own path, for the recovery command printed in messages. */
+const SELFTEST_SELF = 'scripts/beta-harness/sanitizer-audit.selftest.mjs';
+
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const AUDIT = 'scripts/beta-harness/sanitizer-audit.mjs';
 const ALLOWLIST = '.ai/state/sanitizer-allowlist.json';
@@ -91,6 +104,9 @@ function runAudit(extraArgs = []) {
   const env = { ...process.env };
   if (baseRefOverride) env['SANITIZER_AUDIT_BASE_REF'] = baseRefOverride;
   else delete env['SANITIZER_AUDIT_BASE_REF'];
+  // Here a perturbation is the point, not an accident, so the audit must not append its
+  // "this may be a leftover" explanation to output the controls are about to read.
+  env[SELFTEST_ENV_FLAG] = '1';
   const r = spawnSync('node', [AUDIT, ...extraArgs], { cwd: ROOT, encoding: 'utf8', env });
   return { code: r.status, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
 }
@@ -104,16 +120,38 @@ function runAudit(extraArgs = []) {
  */
 const backups = new Map();
 function edit(relPath, transform) {
+  // Registered-path check, so the marker cannot go stale against the controls. A perturbation of
+  // something `PERTURBED_PATHS` does not list would be invisible to recovery and to the audit's
+  // leftover hint, and the only way to notice would be the next reader's confusion (NXSAT-751).
+  if (!PERTURBED_PATHS.includes(relPath))
+    throw new Error(
+      `${relPath} is perturbed by a control but not listed in PERTURBED_PATHS ` +
+        `(scripts/beta-harness/sanitizer-selftest-state.mjs) — add it, or recovery cannot undo it`,
+    );
   const abs = join(ROOT, relPath);
   const current = readFileSync(abs, 'utf8');
   const original = backups.get(relPath)?.original ?? current;
   const next = transform(current);
   if (next === original)
     throw new Error(`perturbation for ${relPath} changed nothing — the selftest would be vacuous`);
-  writeFileSync(abs, next, 'utf8');
   backups.set(relPath, { original, written: next });
+  // **Write-ahead**: the record goes down before the file, so there is no window in which a
+  // perturbation exists with nothing describing it. The first version wrote the file first, on the
+  // reasoning that a record of a perturbation that was never applied would make the next run
+  // "restore" a file nobody touched — which was wrong, because the marker names both states and
+  // recovery recognises an unapplied write as already-clean (review of PR 521).
+  writeMarker(ROOT, backups);
+  // Atomic, like the marker: `writeFileSync` truncates in place, so a kill mid-write would leave
+  // bytes matching neither recorded state — the one outcome recovery can only refuse (review of
+  // PR 521).
+  writeFileAtomic(abs, next);
 }
 function restoreAll() {
+  // A no-op when this process perturbed nothing. The `uncaughtException` handler calls this, and a
+  // throw during *startup recovery* reached it with `backups` empty — which then handed an empty
+  // map to the marker writer and dropped an inherited marker while files were still perturbed
+  // (review of PR 521). Nothing of ours to undo means nothing of ours to say about the marker.
+  if (backups.size === 0) return;
   const clobbered = [];
   for (const [relPath, { original, written }] of backups) {
     const abs = join(ROOT, relPath);
@@ -131,15 +169,29 @@ function restoreAll() {
       clobbered.push(relPath);
       continue;
     }
-    writeFileSync(abs, original, 'utf8');
+    writeFileAtomic(abs, original);
   }
+  // **The records for refused paths are kept.** This is the in-process twin of the rule
+  // `recoverPerturbations` follows, and it was missed here when that one was fixed: a path under
+  // `clobbered` is one an IDE save or a concurrent edit has rewritten, and the marker holds the
+  // only copy of what was in it *before* this run — including an uncommitted edit that predates
+  // the run entirely. Deleting the marker on the way past therefore destroyed exactly what
+  // refusing to overwrite was protecting (review of PR 521).
+  const retained = new Map([...backups].filter(([relPath]) => clobbered.includes(relPath)));
   backups.clear();
+  retainMarker(ROOT, retained);
   baseRefOverride = null;
   if (clobbered.length > 0) {
     console.error(
       `\nselftest: NOT restoring ${clobbered.join(', ')} — changed by something else mid-run.\n` +
-        `  Those files may still hold a perturbation. Check them, and use 'git diff' before committing.`,
+        `  Those files may still hold a perturbation, and the marker has been kept so their\n` +
+        `  pre-run contents are not lost. Inspect with 'git diff', then either resolve them or\n` +
+        `  run 'node ${SELFTEST_SELF} --recover-only'.\n` +
+        `  Stopping here: a later control's cleanup would clear those records.`,
     );
+    // Stopping is the point. Continuing would let the next control's `restoreAll()` narrow the
+    // marker again and drop the entries this one just preserved.
+    process.exit(1);
   }
 }
 
@@ -201,6 +253,81 @@ process.on('uncaughtException', (err) => {
   console.error(err);
   process.exit(1);
 });
+
+/**
+ * Undo anything a previous run was killed in the middle of, before the baseline looks at the tree.
+ *
+ * Ordering matters twice. Before the baseline, because a leftover perturbation makes every check
+ * red there and the message would blame the audit rather than the interrupted run. And before the
+ * controls, because `edit()` captures `original` from the working tree — perturbing an
+ * already-perturbed file would bake the leftover into the "original" it restores to, turning a
+ * recoverable mess into a committed one.
+ *
+ * Prints nothing when there is nothing to do, so a normal run is unchanged (NXSAT-751).
+ */
+function recoverInterruptedRun() {
+  const { found, restored, refused, alreadyClean, startedAt, unreadable } =
+    recoverPerturbations(ROOT);
+  if (!found) return [];
+  if (unreadable) {
+    // Not treated as a clean start: an unreadable marker is the signature of a kill during the
+    // marker write, which is exactly when something is most likely still perturbed.
+    console.error(
+      `selftest: the interruption marker ${MARKER} ${unreadable}.\n` +
+        `  It has been left in place as evidence. Check these paths by hand before trusting a run:\n` +
+        PERTURBED_PATHS.map((p) => `    ${p}\n`).join(''),
+    );
+    return ['<unreadable marker>'];
+  }
+  console.log(
+    `selftest: a previous run was interrupted${startedAt ? ` (started ${startedAt})` : ''} ` +
+      `and left perturbations behind — SIGKILL cannot be caught, so its handlers never ran.`,
+  );
+  if (restored.length > 0) console.log(`  restored: ${restored.join(', ')}`);
+  if (alreadyClean.length > 0) {
+    console.log(
+      `  already clean: ${alreadyClean.join(', ')} — recorded before the write landed, nothing to undo`,
+    );
+  }
+  if (refused.length > 0) {
+    console.error(
+      `  NOT restored: ${refused.join(', ')}\n` +
+        `    Those no longer hold that run's bytes, so something else has written them since and\n` +
+        `    restoring would discard it. Inspect with 'git diff' and decide by hand.`,
+    );
+  }
+  return refused;
+}
+
+// `--recover-only` exists so the audit's own hint can name one command. Repairing the tree should
+// not require sitting through every control, and after a killed `beta:gate` the run that fails is
+// `sanitizer-audit` — which is registered *before* this selftest, so the gate stops and this file
+// never gets the chance to recover on its own.
+if (process.argv.includes('--recover-only')) {
+  // Non-zero only when a path was left for a human: "nothing to recover" is a success, or the
+  // hint the audit prints would send the reader round the same loop a second time.
+  const refused = recoverInterruptedRun();
+  if (refused.length > 0) process.exit(1);
+  console.log('selftest: nothing left to recover.');
+  process.exit(0);
+}
+
+// A normal run stops here when recovery could not finish the job. The first version discarded this
+// result on the normal path, so a post-crash edit that the audit does not flag — an added comment,
+// say — was reported as NOT restored and the suite then ran to a green PASS with the perturbation
+// still in the tree. A gate cannot report success while recovery is waiting on a human, and
+// `edit()` would go on to capture the foreign content as the `original` it restores to (review of
+// PR 521).
+{
+  const refused = recoverInterruptedRun();
+  if (refused.length > 0) {
+    console.error(
+      `\nselftest: refusing to run — recovery left ${refused.length} path(s) for a human.\n` +
+        `  Resolve them, then re-run. 'git diff' shows what is there; 'git checkout --' discards it.`,
+    );
+    process.exit(1);
+  }
+}
 
 const results = [];
 
