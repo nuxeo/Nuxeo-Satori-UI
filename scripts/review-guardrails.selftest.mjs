@@ -11354,6 +11354,29 @@ ${languages === null ? '' : `    languages: [${languages.join(', ')}],\n`}  },
 ];
 `;
 
+/**
+ * The loader with raw `UPSTREAM_FOLDERS` entries, for controls about the ENTRY shape rather than
+ * about the language list. `loaderWith` can only vary the languages of one well-formed entry, so
+ * it could not express a non-object entry or a computed `path` — the defects round 4 found.
+ */
+const loaderWithEntries = (entries) =>
+  `const assetsRoot = 'assets';
+
+export const TRANSLATION_DIRECTORY = 'i18n';
+
+interface UpstreamCatalogueFolder {
+  readonly path: string;
+  readonly languages: readonly string[];
+}
+
+const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
+${entries.map((entry) => `  ${entry},`).join('\n')}
+];
+`;
+
+/** A well-formed entry, for use beside a malformed one. */
+const GOOD_ENTRY = "{ path: 'assets/satori-ui', languages: ['de', 'en', 'fr'] }";
+
 /** Quote a list of plain language codes into source literals. */
 const literals = (codes) => codes.map((code) => `'${code}'`);
 
@@ -11558,6 +11581,49 @@ expectGreen(
     'angular.json': UPSTREAM_ANGULAR_JSON,
     [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
   },
+);
+
+// Round 4: a non-object entry, or one whose `path` is computed, was silently SKIPPED. The
+// loader iterates the real array and would request that folder, so its languages went unchecked
+// while the gate passed on the entries it could read. Each control pairs the malformed entry
+// with a well-formed one, which is what made the old `folders === 0` catch-all useless.
+expectRed(
+  'a non-object entry beside a well-formed one',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([GOOD_ENTRY, '...extraFolders']),
+  },
+  null,
+  /entry in `UPSTREAM_FOLDERS` that is not an object literal/,
+);
+
+expectRed(
+  'an entry whose path is computed, beside a well-formed one',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      GOOD_ENTRY,
+      "{ path: `${assetsRoot}/other`, languages: ['en'] }",
+    ]),
+  },
+  null,
+  /`path` is not a string literal/,
+);
+
+expectRed(
+  'an entry with no path at all, beside a well-formed one',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([GOOD_ENTRY, "{ languages: ['en'] }"]),
+  },
+  null,
+  /entry in `UPSTREAM_FOLDERS` with no `path`/,
 );
 
 falsePositiveControls += 1;

@@ -4731,7 +4731,22 @@ function checkUpstreamCatalogueLanguages() {
 
   let folders = 0;
   for (const element of declaration.elements) {
-    if (!ts.isObjectLiteralExpression(element)) continue;
+    folders += 1;
+
+    // Counted and judged BEFORE the shape is known, because a `continue` here is the same silent
+    // skip as dropping a non-literal language: the loader iterates the real array and would
+    // request this folder, while the gate would say nothing about it and still pass on the
+    // entries it could read. Every element has to be legible or the gate has to fail.
+    if (!ts.isObjectLiteralExpression(element)) {
+      fail(
+        `${LOADER} declares an entry in \`UPSTREAM_FOLDERS\` that is not an object literal ` +
+          `(\`${element.getText().slice(0, 60)}\`). The loader iterates the real array, so an ` +
+          'entry this gate cannot read is a folder whose languages nobody checks — and it would ' +
+          'pass on the entries that are readable.',
+      );
+      continue;
+    }
+
     const read_ = (name) =>
       element.properties.find(
         (property) =>
@@ -4742,9 +4757,22 @@ function checkUpstreamCatalogueLanguages() {
 
     const pathNode = read_('path');
     const languagesNode = read_('languages');
-    if (!pathNode || !ts.isStringLiteral(pathNode)) continue;
+    if (!pathNode) {
+      fail(
+        `${LOADER} declares an entry in \`UPSTREAM_FOLDERS\` with no \`path\`, so this gate ` +
+          'cannot tell which served directory its languages are meant to match.',
+      );
+      continue;
+    }
+    if (!ts.isStringLiteral(pathNode)) {
+      fail(
+        `${LOADER} declares an upstream folder whose \`path\` is not a string literal ` +
+          `(\`${pathNode.getText().slice(0, 60)}\`). A computed path is resolved by the loader ` +
+          'and not by this gate, so the folder it actually requests would go unchecked.',
+      );
+      continue;
+    }
     const folderPath = pathNode.text;
-    folders += 1;
 
     if (!languagesNode) {
       fail(
@@ -4920,10 +4948,15 @@ function checkUpstreamCatalogueLanguages() {
     }
   }
 
+  // An empty array is legitimate — the application need not layer any upstream catalogue — but
+  // it means this gate asserted nothing, and a gate that can assert nothing without saying so is
+  // how the loader's own `UPSTREAM_FOLDERS` went a year unchecked. Every unreadable entry now
+  // fails above, so this is only ever reached by a genuinely empty list.
   if (folders === 0) {
-    fail(
-      `${LOADER} declares no upstream folder with a string \`path\`, so this gate asserted ` +
-        'nothing. Check the shape `checkUpstreamCatalogueLanguages` reads.',
+    warn(
+      `${LOADER} declares no upstream catalogue folder, so \`checkUpstreamCatalogueLanguages\` ` +
+        'asserted nothing. That is legitimate if the application layers none; if it should, the ' +
+        'list has been emptied.',
     );
   }
 }
