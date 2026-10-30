@@ -50,8 +50,11 @@ export interface AppThemeConfig {
 export interface AppBrandingLogo {
   /**
    * As written in `bootstrap.json`: a file name or relative path, resolved against the directory
-   * `bootstrap.json` is served from; an `https:` URL; or a `data:image/` URI. Any other form keeps
-   * the Satori marks — see `resolveBrandingLogoUrl` for the check on where it actually points.
+   * `bootstrap.json` is served from; an `https:` URL; or a `data:image/` URI.
+   *
+   * Any other form is refused, and what shows then depends on **which check refused it** — see
+   * {@link readLogo} for the two layers. `resolveBrandingLogoUrl` is the check on where the value
+   * actually points.
    */
   readonly src: string;
   /** Accessible name for the login page's brand link. Empty falls back to `applicationTitle`. */
@@ -493,27 +496,89 @@ function readSsoEndpoints(
  * absolute path, a `..` segment (including `%2e%2e`) or no path at all in a relative one.
  */
 function isAcceptedLogoSrc(src: string): boolean {
-  if (src.includes('\\') || [...src].some((char) => char < ' ' || char === '\u007f')) return false;
-  // `#` starts a fragment, so a payload that begins with it is empty.
-  if (/^data:/i.test(src)) return /^data:image\/[a-z0-9.+-]+(?:;[^,#]*)?,[^#]/i.test(src);
-  if (/^[a-z][a-z0-9+.-]*:/i.test(src)) {
-    if (!/^https:\/\/[^/]/i.test(src)) return false;
-    try {
-      return new URL(src).protocol === 'https:';
-    } catch {
-      return false;
-    }
-  }
-  if (src.startsWith('/')) return false;
-  const path = src.split(/[?#]/, 1)[0] ?? '';
-  // A query or fragment alone resolves to bootstrap.json itself, which no <img> can render.
-  if (!path) return false;
-  return !path.replace(/%2e/gi, '.').split('/').includes('..');
+  return describeLogoSrcForm(src) === null;
 }
 
 /**
- * `null` clears a logo an earlier layer set; anything unusable keeps `base`, so a malformed entry
- * degrades to the packaged marks rather than to a broken image.
+ * Why the `src` is refused on its written form, or `null` when that form is acceptable.
+ *
+ * This is the single implementation of the rules {@link isAcceptedLogoSrc} applies: that function
+ * is a wrapper over it, so the verdict and the reason given for it cannot drift apart. Reasons are
+ * written for the administrator who set the value, not for us (NXSAT-724).
+ */
+function describeLogoSrcForm(src: string): string | null {
+  // `readLogo` already discards a blank, so this branch changes no verdict — it exists so a
+  // value that was written and is blank can be reported rather than passed over in silence.
+  if (src.trim() === '') {
+    return 'it is blank, so it names no file';
+  }
+  // Split rather than reported together: these are different mistakes, and a log line that cannot
+  // say which one it was does not help the administrator who wrote the value (review of PR 512).
+  if (src.includes('\\')) {
+    return 'it contains a backslash, which the URL parser rewrites as a path separator';
+  }
+  if ([...src].some((char) => char < ' ' || char === '\u007f')) {
+    return 'it contains a control character, which the URL parser drops, so the value is not what it looks like';
+  }
+  // `#` starts a fragment, so a payload that begins with it is empty.
+  if (/^data:/i.test(src)) {
+    return /^data:image\/[a-z0-9.+-]+(?:;[^,#]*)?,[^#]/i.test(src)
+      ? null
+      : 'it is a data: URI that is not an image, or that carries no payload';
+  }
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(src)?.[1];
+  if (scheme !== undefined) {
+    // The scheme is named rather than just refused. `javascript:` and `http:` are very different
+    // mistakes and used to produce one message, so a log line could not tell an insecure address
+    // from an attempt to put script in a configuration value (review of PR 512).
+    if (scheme.toLowerCase() !== 'https') {
+      return `only https: is allowed for an absolute address, and this one uses "${scheme.toLowerCase()}:"`;
+    }
+    if (!/^https:\/\/[^/]/i.test(src)) {
+      return 'an absolute https: address must name a host';
+    }
+    try {
+      new URL(src);
+      return null;
+    } catch {
+      return 'it is not a valid URL';
+    }
+  }
+  if (src.startsWith('/')) {
+    return 'an absolute path is not allowed; use a path relative to the configuration directory';
+  }
+  const path = src.split(/[?#]/, 1)[0] ?? '';
+  // A query or fragment alone resolves to bootstrap.json itself, which no <img> can render.
+  if (!path) {
+    return 'it has no path, so it would load bootstrap.json itself';
+  }
+  // States the rule, not an outcome: a `..` is refused wherever it resolves to, because the
+  // server may read the path differently from the browser. `assets/../acme.svg` carries one and
+  // lands *inside* the configuration directory, so the old wording — "would leave the
+  // configuration directory" — was untrue for it (review of PR 512).
+  return path.replace(/%2e/gi, '.').split('/').includes('..')
+    ? 'it contains a parent-directory segment (".."), which is not allowed in a relative path however it resolves'
+    : null;
+}
+
+/**
+ * `null` clears a logo an earlier layer set; anything unusable keeps `base`.
+ *
+ * **What a refusal falls back to depends on which of the two layers refused it**, and saying
+ * "the packaged marks" for both is wrong — which this comment used to do, and the log message
+ * used to repeat (review of PR 512):
+ *
+ * - **Here, during the merge.** The value is dropped and `base` stands, so an earlier package's
+ *   valid logo keeps rendering and only a deployment with no valid logo before it falls back to
+ *   the packaged marks. A later valid contribution can also replace a refused earlier one.
+ *   Pinned by "keeps a logo an earlier layer set when this one omits or garbles it".
+ * - **Afterwards, on the merged value.** Once merging has settled which contribution won,
+ *   `AppConfigService.brandingLogo` resolves that one `src`; if `resolveBrandingLogoUrl` refuses
+ *   the URL, or the browser cannot show the image (`reportBrandingLogoUnavailable`), there is no
+ *   earlier layer left to fall back to and the packaged marks are what renders.
+ *
+ * So a value this function retains can still end up not displayed, and the two layers report
+ * themselves differently for exactly that reason.
  */
 function readLogo(value: unknown, base: AppBrandingLogo | null): AppBrandingLogo | null {
   if (value === null) return null;
@@ -532,10 +597,24 @@ function readLogo(value: unknown, base: AppBrandingLogo | null): AppBrandingLogo
  * installer replaces the application bundle on every upgrade and leaves that directory alone.
  *
  * The check runs on the **resolved** URL, after the parser has dropped tabs and newlines and
- * collapsed `..` and `%2e%2e` — the forms a check on the raw string can be talked past. On any
- * origin that serves Nuxeo the URL must stay inside the configuration directory: anywhere else
- * there may be a REST endpoint, which an `<img>` requests with the session cookie and without the
- * HTTP interceptor. Elsewhere only `https:` is allowed, so a CDN logo still works.
+ * collapsed `..` and `%2e%2e` — the forms a check on the raw string can be talked past.
+ *
+ * Two different rules apply, with two different justifications, and conflating them overstated
+ * the second (review of PR 512):
+ *
+ * - **On the application's own origin** the URL must stay inside the configuration directory.
+ *   Anywhere else there may be a REST endpoint, and a **same-origin** `<img>` request does carry
+ *   the session cookie — `crossorigin="anonymous"` means credentials mode "same-origin", so it
+ *   withholds them cross-origin only. Measured in Chrome: a same-origin anonymous `<img>` sends
+ *   the cookie, a cross-origin one does not.
+ * - **On any other host that serves Nuxeo** the URL is refused whatever the scheme or port. This
+ *   one is *not* about the cookie on that request: being cross-origin, it is credential-less
+ *   while the attribute is there. It is a second, independent control — the attribute is the
+ *   first, and NXSAT-712 explicitly asked whether it was required, so it is exactly the kind of
+ *   thing a later change removes. It also keeps the browser from asking a Nuxeo endpoint at all,
+ *   rather than relying on that endpoint to refuse.
+ *
+ * Elsewhere only `https:` is allowed, so a CDN logo still works.
  *
  * @param nuxeoOrigins origins that serve Nuxeo besides the one `configUrl` is on
  */
@@ -544,46 +623,215 @@ export function resolveBrandingLogoUrl(
   configUrl: string,
   nuxeoOrigins: readonly string[] = [],
 ): string | null {
+  const outcome = resolveLogoTarget(src, configUrl, nuxeoOrigins);
+  return 'url' in outcome ? outcome.url : null;
+}
+
+/**
+ * Why a configured `logo.src` is refused, or `null` when it is accepted — covering both the
+ * written form and where the resolved URL points.
+ *
+ * Exists because a refusal used to be a bare `null`: the packaged mark stayed, which is correct,
+ * and nothing anywhere said why, so a typo in `logo.src` gave an administrator no signal at all
+ * (NXSAT-724). `AppConfigService` logs this once per load, per contributing package.
+ *
+ * It calls the same two implementations the verdict comes from, so it cannot report a reason for
+ * something that was accepted, or stay silent about something that was refused.
+ */
+export function describeBrandingLogoRefusal(
+  src: string,
+  configUrl: string,
+  nuxeoOrigins: readonly string[] = [],
+): string | null {
+  const form = describeLogoSrcForm(src);
+  if (form !== null) return form;
+  const outcome = resolveLogoTarget(src, configUrl, nuxeoOrigins);
+  return 'refused' in outcome ? outcome.refused : null;
+}
+
+/** The single implementation of the resolved-URL rules: the URL to load, or why not. */
+function resolveLogoTarget(
+  src: string,
+  configUrl: string,
+  nuxeoOrigins: readonly string[],
+): { url: string } | { refused: string } {
   let url: URL;
   try {
     url = new URL(src, configUrl);
   } catch {
-    return null;
+    return { refused: 'it is not a valid URL' };
   }
-  if (url.protocol === 'data:') return url.href;
+  if (url.protocol === 'data:') return { url: url.href };
 
   const config = new URL(configUrl);
   if (url.origin === config.origin) {
-    return isInsideDirectory(url.pathname, new URL('.', config).pathname) ? url.href : null;
+    const refused = describeDirectoryContainment(url.pathname, new URL('.', config).pathname);
+    return refused === null ? { url: url.href } : { refused };
   }
-  // Cookies are scoped by host, not by scheme or port, so any origin on a Nuxeo host carries the
-  // session.
-  const nuxeoHosts = [config.origin, ...nuxeoOrigins].map((origin) => parseUrl(origin)?.hostname);
-  if (nuxeoHosts.includes(url.hostname)) return null;
-  return url.protocol === 'https:' ? url.href : null;
+  // Scheme and port are ignored on purpose: the rule is about the host, so that a later change
+  // to either cannot step around it. See the note above on why this is defence in depth rather
+  // than a cookie control.
+  const nuxeoHosts = [config.origin, ...nuxeoOrigins]
+    .map((origin) => parseUrl(origin)?.hostname)
+    .filter((hostname): hostname is string => hostname !== undefined);
+  if (nuxeoHosts.some((hostname) => isSameHost(hostname, url.hostname))) {
+    return {
+      refused: 'it names a host that serves Nuxeo, which a branding logo may not address',
+    };
+  }
+  return url.protocol === 'https:'
+    ? { url: url.href }
+    : { refused: 'a logo on another host must use https:' };
 }
 
 /**
- * Whether the server, not just the browser, reads `pathname` as lying inside `directory`.
+ * Whether two hostnames reach the same host, for the Nuxeo-host rule above.
+ *
+ * The URL parser already lowercases names and canonicalises every IPv4 form — `127.1` and
+ * `0x7f.0.0.1` both arrive as `127.0.0.1` — so neither case nor IPv4 notation was ever a way
+ * past the rule. Two things it does not do, and this does (NXSAT-724):
+ *
+ * - **A trailing dot is kept.** `example.com.` is the fully-qualified form of `example.com`, the
+ *   same host to DNS and to the browser, and it compared unequal as a string.
+ * - **Loopback has several spellings.** `localhost`, anything in `127.0.0.0/8` and `[::1]` all
+ *   name this machine, so on a single-host deployment each of them reaches the Nuxeo the
+ *   configuration itself came from.
+ *
+ * It cannot go further than that: resolving a name to an address needs DNS, which the browser
+ * does not expose, so a Nuxeo named `nuxeo.internal` and addressed as `10.0.0.5` still compares
+ * unequal. That residue is not a credential risk — the request is credential-less cross-origin,
+ * and the two spellings do not share a cookie jar either — and it is now reported rather than
+ * silent.
+ */
+function isSameHost(a: string, b: string): boolean {
+  const left = canonicalHost(a);
+  const right = canonicalHost(b);
+  // Every loopback spelling means this machine, so any two of them are the same host. Expressed
+  // as a predicate on both sides rather than by mapping them to one representative string: a
+  // sentinel like `'loopback'` is itself a legal DNS name, so a third-party server actually
+  // called `loopback` collided with it and had its logo refused (review of PR 512).
+  if (isLoopbackHost(left) && isLoopbackHost(right)) return true;
+  return left === right;
+}
+
+/**
+ * A hostname in the form two spellings of the same host share.
+ *
+ * Drops the trailing dot of the fully-qualified form, and reads out an IPv4 address embedded in
+ * IPv6 — for **any** address, not only loopback, since `10.0.0.5` and `[::ffff:10.0.0.5]` are the
+ * same host and deciding that needs no DNS (review of PR 512).
+ */
+function canonicalHost(hostname: string): string {
+  const bare = hostname.replace(/\.+$/, '');
+  return embeddedIpv4(bare) ?? bare;
+}
+
+/** `localhost` and its subdomains, `127.0.0.0/8`, and the IPv6 loopback. */
+function isLoopbackHost(hostname: string): boolean {
+  // RFC 6761: `*.localhost` resolves to loopback, and browsers honour it — so a logo at
+  // `tenant.localhost` reaches the same Nuxeo the configuration came from (review of PR 512).
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
+  if (hostname === '[::1]') return true;
+  // Embedded IPv4 loopback arrives here already read out by `canonicalHost`.
+  return /^127\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname);
+}
+
+/**
+ * An IPv6 host as its eight 16-bit groups, or `null` when it is not one.
+ *
+ * The parser hands back a bracketed, already-abbreviated address — `[::ffff:7f00:1]` — so the
+ * `::` has to be expanded before any group can be read positionally.
+ */
+function ipv6Groups(hostname: string): number[] | null {
+  const inner = /^\[(.+)]$/.exec(hostname)?.[1];
+  if (inner === undefined || !/^[0-9a-f:]+$/i.test(inner)) return null;
+  const [head, tail, ...rest] = inner.split('::');
+  if (rest.length > 0) return null;
+  const parse = (part: string) => (part === '' ? [] : part.split(':').map((g) => parseInt(g, 16)));
+  const left = parse(head ?? '');
+  const right = tail === undefined ? [] : parse(tail);
+  const zeros = 8 - left.length - right.length;
+  // No `::` means the address must already be eight groups; with one, it must stand for at least one.
+  if (tail === undefined ? zeros !== 0 : zeros < 1) return null;
+  const groups = [...left, ...Array.from({ length: zeros }, () => 0), ...right];
+  return groups.every((group) => Number.isInteger(group) && group >= 0 && group <= 0xffff)
+    ? groups
+    : null;
+}
+
+/**
+ * The dotted IPv4 address an IPv6 host embeds in its low 32 bits, or `null` when it embeds none.
+ *
+ * Three embeddings reach an IPv4 host and the URL parser accepts all of them: IPv4-mapped
+ * (`::ffff:127.0.0.1`), the deprecated IPv4-compatible (`::127.0.0.1`), and IPv4-translated
+ * (`::ffff:0:127.0.0.1`). They arrive as `[::ffff:7f00:1]`, `[::7f00:1]` and `[::ffff:0:7f00:1]`,
+ * so none of them matches a check written against the IPv4 or the `::1` spelling (NXSAT-724,
+ * review of PR 512).
+ *
+ * The upper six groups must be **exactly** one of the three defined prefixes. An earlier version
+ * accepted any mix of `0` and `ffff` there, on the reasoning that enumerating prefixes would be
+ * incomplete the moment a fourth embedding existed. That traded incompleteness for unsoundness,
+ * which is worse: it read an address out of hosts that embed none, so `[::ffff:ffff:7f00:1]` was
+ * treated as loopback and `[::ffff:0:0:0:1]` and `[::ffff:0:1]` — two distinct addresses —
+ * collapsed onto one key. Both refused logos that should load (review of PR 512). If a fourth
+ * embedding is ever standardised, add its prefix here.
+ *
+ * Returning the address rather than just its first octet is what makes the equivalence hold for
+ * every host and not only loopback: with the configuration on `10.0.0.5`, a logo at
+ * `[::ffff:10.0.0.5]` names the same machine, and that needs no DNS to decide.
+ */
+const IPV4_EMBEDDING_PREFIXES: readonly (readonly number[])[] = [
+  [0, 0, 0, 0, 0, 0xffff], // IPv4-mapped, ::ffff:a.b.c.d
+  [0, 0, 0, 0, 0xffff, 0], // IPv4-translated, ::ffff:0:a.b.c.d
+  [0, 0, 0, 0, 0, 0], // IPv4-compatible, ::a.b.c.d — deprecated, still parsed
+];
+
+function embeddedIpv4(hostname: string): string | null {
+  const groups = ipv6Groups(hostname);
+  if (groups === null) return null;
+  const prefix = groups.slice(0, 6);
+  const embeds = IPV4_EMBEDDING_PREFIXES.some(
+    (candidate) => candidate.length === prefix.length && candidate.every((g, i) => g === prefix[i]),
+  );
+  if (!embeds) return null;
+  // Under the all-zero prefix, `::1` and `::` embed no address — the low 32 bits are the address
+  // itself only when the high half is set.
+  if (prefix.every((group) => group === 0) && (groups[6] ?? 0) === 0) return null;
+  const high = groups[6] ?? 0;
+  const low = groups[7] ?? 0;
+  return [high >>> 8, high & 0xff, low >>> 8, low & 0xff].join('.');
+}
+
+/**
+ * Why the server, not just the browser, would not read `pathname` as lying inside `directory` —
+ * or `null` when both read it that way.
  *
  * Tomcat drops `;` path parameters from each segment before it collapses dot segments, so `..;x`
  * is an ordinary segment to the browser and a parent directory to Nuxeo. A proxy that decodes
  * before forwarding does the same with `%3b`, with `%2f` as a separator, and with `%252e%252e`,
  * which Tomcat then decodes again to `..`. A segment carrying any of those — including an escape
  * left over after decoding once — or one that does not decode, is refused.
+ *
+ * Those are **three different reasons**, and reporting them as one was a false claim: a file named
+ * `acme;v=1.svg` or `acme%e0.svg` is inside the configuration directory, and saying it points
+ * outside tells an administrator to look in the wrong place (review of PR 512).
  */
-function isInsideDirectory(pathname: string, directory: string): boolean {
-  if (!pathname.startsWith(directory)) return false;
-  return pathname
-    .slice(directory.length)
-    .split('/')
-    .every((segment) => {
-      try {
-        return !/[;/\\%]/.test(decodeURIComponent(segment));
-      } catch {
-        return false;
-      }
-    });
+function describeDirectoryContainment(pathname: string, directory: string): string | null {
+  if (!pathname.startsWith(directory)) {
+    return 'it points outside the configuration directory on the application’s own host';
+  }
+  for (const segment of pathname.slice(directory.length).split('/')) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      return 'a path segment carries a percent escape that does not decode, so the server and the browser would not read the path the same way';
+    }
+    if (/[;/\\%]/.test(decoded)) {
+      return 'a path segment decodes to a ";", "%", "/" or "\\", which the server strips or re-reads, so the path could leave the configuration directory there while staying inside it in the browser';
+    }
+  }
+  return null;
 }
 
 /**

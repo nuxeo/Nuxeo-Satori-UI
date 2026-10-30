@@ -91,6 +91,44 @@ describe('AppConfigService and the host application’s interceptors', () => {
   });
 });
 
+/**
+ * Review of PR 512. `load()` never rejects, by contract — it is an `APP_INITIALIZER` and the
+ * application has to start on the packaged defaults whatever the configuration says. The
+ * diagnostic pass added for NXSAT-724 parsed the configuration URL unguarded, so a malformed
+ * `APP_BOOTSTRAP_CONFIG_URL` override turned a tolerated load failure into a failed startup.
+ */
+describe('AppConfigService with a malformed configuration URL', () => {
+  it('still starts on the packaged defaults, and says why nothing was checked', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const malformed = 'https://[';
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: malformed },
+      ],
+    });
+    const service = TestBed.inject(AppConfigService);
+    const http = TestBed.inject(HttpTestingController);
+
+    const loaded = service.load();
+    // Both URLs are matched by shape rather than by name: the manifest URL is derived from the
+    // bootstrap one, so a malformed override makes it malformed too.
+    const requests = http.match(() => true);
+    expect(requests).toHaveLength(2);
+    requests.forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+
+    // The assertion is that this resolves at all: it used to reject with a TypeError.
+    await expect(loaded).resolves.toBeUndefined();
+    expect(service.bootstrap()).toEqual(DEFAULT_APP_BOOTSTRAP_CONFIG);
+    expect(service.diagnostics().messages.some((m) => m.includes('not a valid URL'))).toBe(true);
+    expect(service.brandingLogo()).toBeNull();
+
+    http.verify();
+    warn.mockRestore();
+  });
+});
+
 describe('AppConfigService', () => {
   let service: AppConfigService;
   let http: HttpTestingController;
@@ -514,6 +552,213 @@ describe('AppConfigService', () => {
 
       return loadWithLogo().then(() => {
         expect(service.brandingLogo()).toEqual({ url: logoUrl(), alt: 'Acme' });
+      });
+    });
+  });
+
+  /**
+   * NXSAT-724. A refused `logo.src` kept the packaged mark, which is correct, and said nothing at
+   * all — so a typo was indistinguishable from configuring no logo. Each case here is one the
+   * ticket reports.
+   */
+  describe('a refused branding.logo is reported', () => {
+    async function loadWithSrc(src: string, component = 'com.acme.branding') {
+      await load(
+        envelope('bootstrap', [
+          { name: 'acme', component, content: { branding: { logo: { src, alt: 'Acme' } } } },
+        ]),
+      );
+    }
+
+    /** The messages this load recorded that are about `branding.logo`. */
+    const logoMessages = () =>
+      service.diagnostics().messages.filter((message) => message.includes('branding.logo'));
+
+    it.each([
+      ['a parent-directory segment', '../x.svg', 'parent-directory segment'],
+      // The scheme is named, so these two are no longer the same message.
+      ['a javascript: URL', 'javascript:alert(1)', 'uses "javascript:"'],
+      ['an http: URL', 'http://example.com/l.svg', 'uses "http:"'],
+      ['an absolute path', '/nuxeo/api/v1/me', 'absolute path is not allowed'],
+      ['a backslash', 'a\\b.svg', 'contains a backslash'],
+      ['a query with no path', '?v=2', 'no path'],
+      ['a data: URI that is not an image', 'data:text/html,<b>x', 'not an image'],
+    ])('reports %s, naming the value and the reason', async (_label, src, expected) => {
+      await loadWithSrc(src);
+
+      const messages = logoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain(src);
+      expect(messages[0]).toContain('com.acme.branding');
+      expect(messages[0]).toContain(expected);
+      expect(warn).toHaveBeenCalledWith(`[agentic-ui-config] ${messages[0]}`);
+      expect(service.brandingLogo()).toBeNull();
+    });
+
+    it('reports a logo on a Nuxeo host, including the trailing-dot and loopback spellings', async () => {
+      // BOOTSTRAP_URL is served from this document's origin, so the configuration host is the
+      // one the test page runs on — the same situation as the dev server in the ticket.
+      const host = new URL(document.baseURI).hostname;
+      await loadWithSrc(`https://${host}./nuxeo/icons/x.png`);
+
+      const messages = logoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('serves Nuxeo');
+      expect(service.brandingLogo()).toBeNull();
+    });
+
+    it('says nothing when the logo is accepted', async () => {
+      await loadWithSrc('assets/acme-logo.svg');
+
+      expect(logoMessages()).toEqual([]);
+      expect(service.brandingLogo()).not.toBeNull();
+    });
+
+    it('names each contributing package when more than one logo is refused', async () => {
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'one',
+            component: 'com.one',
+            content: { branding: { logo: { src: '../a.svg', alt: 'A' } } },
+          },
+          {
+            name: 'two',
+            component: 'com.two',
+            content: { branding: { logo: { src: 'http://two.example/b.svg', alt: 'B' } } },
+          },
+        ]),
+      );
+
+      const messages = logoMessages();
+      expect(messages).toHaveLength(2);
+      expect(messages[0]).toContain('com.one');
+      expect(messages[1]).toContain('com.two');
+    });
+
+    it('reports once per load, not once per read of the logo', async () => {
+      await loadWithSrc('../x.svg');
+      service.brandingLogo();
+      service.brandingLogo();
+
+      expect(logoMessages()).toHaveLength(1);
+    });
+
+    /** Review of PR 512 — four things this pass got wrong. */
+    describe('review of PR 512', () => {
+      it('reports a src written as a blank string, which is refused but looked like none', async () => {
+        await loadWithSrc('   ');
+
+        const messages = logoMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('blank');
+        expect(service.brandingLogo()).toBeNull();
+      });
+
+      it('stays silent for a contribution that declares no logo at all', async () => {
+        await load(
+          envelope('bootstrap', [
+            { name: 'acme', content: { branding: { applicationTitle: 'Acme' } } },
+          ]),
+        );
+
+        expect(logoMessages()).toEqual([]);
+      });
+
+      it('does not claim which mark is displayed, because an earlier logo survives a refusal', async () => {
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'one',
+              component: 'com.one',
+              content: { branding: { logo: { src: 'assets/a.svg', alt: 'A' } } },
+            },
+            {
+              name: 'two',
+              component: 'com.two',
+              content: { branding: { logo: { src: '../b.svg', alt: 'B' } } },
+            },
+          ]),
+        );
+
+        const messages = logoMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('com.two');
+        expect(messages[0]).not.toContain('Satori marks');
+        // The earlier valid logo is what is actually shown, so any such claim would be wrong.
+        expect(service.brandingLogo()?.url).toContain('/agentic-ui-config/assets/a.svg');
+      });
+
+      /**
+       * Fifth review round of PR 512: the documented retention guarantee and what actually
+       * renders are two different layers, and the docs used to conflate them. A value the merge
+       * keeps can still be refused afterwards, on the URL it resolves to — so the configuration
+       * holds a logo while the packaged marks are what shows.
+       */
+      it('keeps a value the merge accepts even when the resolved URL is refused afterwards', async () => {
+        const host = new URL(document.baseURI).host;
+        const src = `https://${host}/nuxeo/api/v1/me`;
+        await loadWithSrc(src);
+
+        // Retained: the written form is acceptable, so the merge does not drop it.
+        expect(service.bootstrap().branding.logo).toEqual({ src, alt: 'Acme' });
+        // Not displayed: this document is served over http, so an https URL on the same host is
+        // a different origin and the host rule refuses it — an `<img>` there would carry the
+        // session cookie.
+        expect(service.brandingLogo()).toBeNull();
+        expect(logoMessages()).toHaveLength(1);
+        expect(logoMessages()[0]).toContain('serves Nuxeo');
+      });
+
+      it('reports a logo the active preset contributes, naming the preset', async () => {
+        window.history.replaceState({}, '', '/?preset=insurance');
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'presales',
+              content: {
+                presales: {
+                  presetSwitching: true,
+                  presets: {
+                    insurance: {
+                      label: 'Insurance',
+                      bootstrap: { branding: { logo: { src: '../x.svg', alt: 'Acme' } } },
+                    },
+                  },
+                },
+              },
+            },
+          ]),
+        );
+
+        const messages = logoMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('preset "insurance"');
+        expect(messages[0]).toContain('../x.svg');
+      });
+
+      it('stays silent about a preset nobody selected', async () => {
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'presales',
+              content: {
+                presales: {
+                  presetSwitching: true,
+                  presets: {
+                    insurance: {
+                      label: 'Insurance',
+                      bootstrap: { branding: { logo: { src: '../x.svg', alt: 'Acme' } } },
+                    },
+                  },
+                },
+              },
+            },
+          ]),
+        );
+
+        expect(service.activePreset()).toBeNull();
+        expect(logoMessages()).toEqual([]);
       });
     });
   });

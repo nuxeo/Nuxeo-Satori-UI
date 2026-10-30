@@ -83,13 +83,25 @@ key for the favicon.
   logo is loaded without cookies and a redirect from it to a Nuxeo URL cannot carry the session —
   which means an `https:` logo only renders if its host sends `Access-Control-Allow-Origin`. A
   contributed asset is same-origin and unaffected.
-- **Every other form is rejected** and the Satori marks are kept. An `<img>` request bypasses the
-  HTTP interceptor but still sends the session cookie, so a `src` that could name a Nuxeo REST
-  endpoint is refused rather than left to fail. The deciding check runs on the **resolved** URL,
+- **Every other form is rejected.** What shows instead depends on which check rejected it, and the
+  two are not the same: a value rejected **while the fragments merge** is dropped and the previous
+  layer stands, so another package's valid logo keeps rendering and only a deployment with no
+  valid logo before it falls back to the Satori marks; a value rejected **after the merge**, on
+  the URL it resolves to, has no earlier layer left to fall back to and the Satori marks render.
+  A contributed value can therefore be retained by the merge and still not be displayed. An
+  `<img>` request bypasses the
+  HTTP interceptor. A **same-origin** `<img>` still sends the session cookie — `crossorigin="anonymous"`
+  means credentials mode "same-origin", so it withholds credentials cross-origin only — so a `src`
+  that could name a Nuxeo REST endpoint on the application's own origin is refused rather than left
+  to fail. Measured in Chrome: a same-origin anonymous `<img>` carries the cookie; a cross-origin
+  one does not. The deciding check runs on the **resolved** URL,
   after the URL parser has dropped tabs and newlines and collapsed `..` and `%2e%2e`. On any host
   that serves Nuxeo — the application's, and those of `nuxeoApiOrigin` and `nuxeoServerUrl`,
-  including protocol-relative values — it is refused whatever the scheme or port, because cookies
-  are scoped by host. The one exception is the configuration directory itself, where no path
+  including protocol-relative values — it is refused whatever the scheme or port. That rule is
+  **not** a cookie control: those requests are cross-origin and therefore credential-less while
+  `crossorigin="anonymous"` is present. It is a second, independent control, because the attribute
+  is the first and NXSAT-712 asked whether it was even required; it also keeps the browser from
+  asking a Nuxeo endpoint at all rather than relying on that endpoint to refuse. The one exception is the configuration directory itself, where no path
   segment may carry a `;`, an encoded `;` or `/`, or a double-encoded escape such as `%252e` —
   Tomcat strips `;` path parameters before it collapses `..`, so `..;/api/v1/me` would leave the
   directory on the server while staying inside it in the browser, and a proxy that decodes before
@@ -99,6 +111,54 @@ key for the favicon.
   or fragment with no path (it would load `bootstrap.json` itself), `http:`, `javascript:`, and a
   `data:` URI that is not an image or has no payload (a payload that starts with `#` is a
   fragment, so it counts as none).
+- **"The same host" means the same host however it is spelled** (NXSAT-724). The URL parser
+  lowercases names and canonicalises every IPv4 form — `127.1` and `0x7f.0.0.1` both arrive as
+  `127.0.0.1` — so neither case nor IPv4 notation was ever a way past the rule above. Two things
+  it does not do, and the check now does: a **trailing dot** is stripped, because `example.com.`
+  is the fully-qualified form of `example.com` and shares its cookie jar; and `localhost`,
+  anything in `127.0.0.0/8`, `[::1]` and any `*.localhost` subdomain are treated as one host,
+  because on a single-host deployment each of them reaches the Nuxeo the configuration itself came
+  from — `*.localhost` because RFC 6761 resolves it to loopback and browsers honour that. An IPv4
+  address embedded in IPv6 is **decoded**, for each of the three standardised embeddings the URL
+  parser accepts (`::ffff:127.0.0.1`, the deprecated `::127.0.0.1`, and `::ffff:0:127.0.0.1`,
+  which arrive as `[::ffff:7f00:1]`, `[::7f00:1]` and `[::ffff:0:7f00:1]`) and only those — an
+  address outside them embeds no IPv4 host and is left alone, because reading the low 32 bits of
+  anything that merely looks similar collapses distinct hosts together and refuses logos that
+  should load. Decoding applies to **every**
+  address, not just loopback, so a deployment on `10.0.0.5` also refuses `[::ffff:10.0.0.5]`;
+  that equivalence needs no DNS. Names that merely contain the word are unaffected —
+  `mylocalhost`, `localhost.example.com` and a host actually called `loopback` are ordinary
+  third-party hosts. A side effect
+  worth knowing: a logo inside the configuration directory is refused if its host carries a
+  trailing dot, since the same-origin exception is matched on the origin as written — write the
+  host the way the application is served, or use a relative path. What the check still cannot do
+  is resolve a name to an address, so a Nuxeo named `nuxeo.internal` and addressed as `10.0.0.5`
+  compares unequal; that is not a credential risk, because such a request is credential-less
+  cross-origin and the two spellings do not share a cookie jar either.
+- **Every refusal is reported** (NXSAT-724). A refused `src` used to keep the packaged mark and
+  say nothing, so a typo looked exactly like configuring no logo at all. Each contributed value
+  the checks refuse is now written once per load to the console as `[agentic-ui-config] …` and
+  recorded in `diagnostics().messages`, naming the value, where it came from and the reason. The
+  reason text comes from the same function that decides the verdict, so the two cannot drift
+  apart. The active preset's contribution is included and named as such; unselected presets
+  contribute nothing and stay quiet. A `src` written as an empty or whitespace-only string is
+  reported too — it is refused, and it used to be indistinguishable from declaring no logo.
+  What the report deliberately does **not** say is which mark ends up on screen: a refusal leaves
+  whatever an earlier layer set, so an earlier valid logo still wins and a later valid one
+  replaces a refused earlier one. Each cause gives its own wording — the scheme is named, so
+  `javascript:` and `http:` do not read alike; a backslash is not reported as a control
+  character; and a path refused for syntax the server re-reads is not reported as pointing outside
+  the configuration directory, because a file named `acme;v=1.svg` or `acme%e0.svg` is inside it
+  and saying otherwise sends the administrator looking in the wrong place. A `..` segment is
+  likewise reported as not allowed rather than as leaving the directory, since
+  `assets/../acme.svg` carries one and resolves back inside — it is refused on the written form
+  wherever it would resolve to, which is the point of checking the form at all. One log line
+  identifies what was wrong with the value.
+- **The two logo messages make different claims on purpose.** A failure _after_ loading (the
+  NXSAT-721 case above) says the Satori marks are in use, because the merge has already settled
+  which contribution won and suppressing that one URL leaves nothing to render but the packaged
+  marks. A refusal _during_ the merge says only that the value was refused, because an earlier
+  layer's valid logo survives it.
 - **A logo that is accepted and then does not render keeps the Satori marks too** (NXSAT-721).
   Every check above runs before the image is requested, so none of them can know whether the file
   exists, whether the bytes decode, or whether a remote host sent the CORS header. The two `<img>`
