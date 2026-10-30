@@ -6,12 +6,16 @@ describe('drawerExpiredLabel', () => {
    * at each end of it. Outside UTC, local formatting moves one of the two across a day boundary,
    * so the pair can only agree if the formatting is UTC.
    *
-   * **Stated limitation:** in UTC the two formattings are identical, so this case cannot fail
-   * there, and `nuxeo-ui` has no time-zone pin to fix that — it runs under Karma
-   * (`ng test --browsers=ChromeHeadless`), not Vitest, so there is no config hook of the kind
-   * `satori-components`, `features/browse` and `shared/ui` use. Running `TZ=<any non-UTC zone> ng
-   * test nuxeo-ui` does discriminate. The rule itself is pinned by the suites that can pin a zone;
-   * this case guards the call site against losing its `'UTC'` argument.
+   * In UTC the two formattings are identical, so this case can only fail outside it. `nuxeo-ui`
+   * runs under Karma rather than Vitest, so it has no `vite.config.mts` to pin the way
+   * `satori-components`, `features/browse` and `shared/ui` do — the zone is pinned on the Nx
+   * target instead (`apps/nuxeo-ui/project.json`, `test.options.env.TZ`), which reaches the
+   * browser Karma launches.
+   *
+   * Watched failing on purpose, which is the only reason to believe any of that: with the `'UTC'`
+   * argument removed and `TZ=UTC` on the shell, this case reports
+   * `Expected 'Mar 7, 2024' to be 'Mar 6, 2024'` — so the target pin beats the shell, and the
+   * case is protecting the call site rather than restating it.
    */
   it('shows the UTC calendar day, so both ends of that day read alike', () => {
     expect(drawerExpiredLabel('2024-03-06T00:00:00.000Z', 'en-US')).toBe('Mar 6, 2024');

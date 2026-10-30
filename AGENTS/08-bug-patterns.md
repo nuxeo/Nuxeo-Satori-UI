@@ -1100,6 +1100,11 @@ Regression test pattern — and this is the part that is easy to get wrong:
 - **A pin in a config file is an unenforced guarantee.** Delete it and the suite goes quietly green
   and stops protecting anything, with no failure to notice. Assert the zone in a spec of its own —
   `suite-timezone.spec.ts` in `satori-components`, `features/browse` and `shared/ui`.
+- **A Karma project pins on the Nx target, not in a vite config.** `apps/nuxeo-ui` runs
+  `ng test --browsers=ChromeHeadless`, so there is no `vite.config.mts`; `test.options.env.TZ` in
+  `project.json` reaches the browser Karma launches, and beats an inherited shell `TZ`. Stating the
+  gap in a comment instead — "this case cannot fail in UTC, and this project has no pin" — is a
+  documented hole, not a tested one.
 - **A zone override has to be an Nx cache input.** The three pinned suites take `SATORI_TEST_TZ`,
   and `nx.json` lists it as an `env` input on the `test` targets. Without that, a second run asking
   for another zone is answered from the first run's cache — the command reports a pass it never
