@@ -214,10 +214,19 @@ jobs:
           #      so an unapproved language arrives all-English, fails
           #      `checkCataloguesAreTranslated` (D8d), and holds every other language red with it.
           #
-          #   3. **Advertise it**, once `public/i18n/<lang>.json` has actually landed.
+          #   3. **Advertise it**, in the same change that brings `public/i18n/<lang>.json`.
+          #      `SHIPPED_CATALOGUE_LANGUAGES` in `apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts`
+          #      first — it is what `resolveStringLanguage` consults, so a catalogue without it
+          #      ships and never renders, and `checkShippedCatalogueLanguages` fails **both** a
+          #      declaration with no catalogue and a catalogue with no declaration. Then
           #      `availableLanguages` in both Layer 0 configs, and `DATE_FNS_LOCALES` in
-          #      `satori-date-adapter.ts`, which a test holds equal to that list. Neither may
-          #      precede the catalogue.
+          #      `satori-date-adapter.ts`, which a test holds equal to that list. None of the three
+          #      may precede the catalogue, and the first may not lag it either.
+          #
+          #      **This applies to `es` now.** `SHIPPED_CATALOGUE_LANGUAGES` is
+          #      `['de', 'en', 'fr', 'ja', 'nl']`, so the pull request that delivers `es.json`
+          #      goes red until someone adds `es` to it. The pull is automated and will not;
+          #      that commit is a person's.
           #
           # So a language sits between steps for as long as translation takes, and that is the
           # normal state rather than an unfinished one. `ar`, `he`, `it` and `sv` are between 1

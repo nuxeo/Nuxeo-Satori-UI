@@ -99,8 +99,15 @@ it travelled into a request to another team and made it sound more damaging than
 
 What remains:
 
-1. **Translation itself**, for `ar`, `he`, `it` and `sv`. Not started; Spanish is the exception at
-   99% approved and needs only a pull.
+1. **Translation itself**, for `ar`, `he`, `it` and `sv`. Not started.
+
+   Spanish is the exception at 99% approved — but "needs only a pull" is not quite true, and an
+   earlier revision of this page said it was. `SHIPPED_CATALOGUE_LANGUAGES` in
+   `apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts` is `['de', 'en', 'fr', 'ja', 'nl']`, and
+   `resolveStringLanguage` refuses anything outside it, so **the pull request that delivers
+   `es.json` will be red until someone adds `es` there**. `checkShippedCatalogueLanguages` fails
+   both directions, so it cannot be added in advance either — it lands in the same commit as the
+   catalogue, and the automated pull will not write it. That commit is a person's.
 
 2. **Nothing, now — `ar`, `he`, `it` and `sv` were taken out of the pull list on 30 October, and
    that is why.** Recorded because the reasoning is not obvious from the list itself.
