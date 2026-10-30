@@ -545,7 +545,11 @@ function nestingDepth(text) {
   return deepest;
 }
 
-/** The server's checks on a fragment or layout body: it parses, repeats no key, is an object. */
+/**
+ * The server's checks on a fragment or layout body: it is not nested deeper than the parser
+ * accepts, it parses, it repeats no key, and it is an object. Both bodies the server reads go
+ * through here — a `src` file and inline `<json>` — so a check added here covers both.
+ */
 function parseObject(text, report) {
   // First, before `JSON.parse` and before the recursive walk in `rejectDuplicateKeys`: both are
   // depth-sensitive, and on every supported Node the walk overflows first and throws a RangeError
