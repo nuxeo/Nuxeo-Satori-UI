@@ -1,4 +1,4 @@
-import { Component, input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ElementRef, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 
@@ -38,6 +38,47 @@ class DocumentViewComponent {
 })
 class RequiresInputComponent {
   readonly mandatory = input.required<string>();
+}
+
+/**
+ * Records whether its host element was in the document when `ngAfterViewInit` ran.
+ *
+ * Review of PR 532: the guarded draw was originally run *before* insertion, which left this
+ * `false` — so a custom view that focuses a field or measures layout in that hook was quietly
+ * broken, and insertion does not re-run the hook to repair it.
+ */
+let connectedAtAfterViewInit: boolean | null = null;
+
+@Component({
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: '<p class="measured">measured</p>',
+})
+class MeasuresOnInitComponent {
+  private readonly host = inject(ElementRef);
+  ngAfterViewInit(): void {
+    connectedAtAfterViewInit = (this.host.nativeElement as HTMLElement).isConnected;
+  }
+}
+
+/**
+ * Throws while drawn *and* again while torn down.
+ *
+ * Review of PR 532: a component whose draw threw may never have finished initialising, so its
+ * `ngOnDestroy` can throw on a resource it expected to hold — and that error propagates out of
+ * `ViewContainerRef.clear()`. Unguarded it escaped the catch, leaving the slot blank with
+ * `unresolved()` never set.
+ */
+@Component({
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: '<p class="hostile">{{ mandatory() }}</p>',
+})
+class HostileOnDestroyComponent {
+  readonly mandatory = input.required<string>();
+  ngOnDestroy(): void {
+    throw new Error('teardown blew up too');
+  }
 }
 
 /** Throws for one input value and draws for the others — one bad document, not a bad entry. */
@@ -366,9 +407,57 @@ describe('ExtensionOutletComponent', () => {
     });
 
     /**
-     * The guard must not swallow a working render. `detectChanges()` on the host view runs the
-     * component's first pass one step earlier than `insert` would have; a valid component has
-     * to come out the other side rendered, with its inputs applied and no warning.
+     * Review of PR 532. The containment must not cost a valid component its connected DOM: the
+     * guarded pass runs the component's lifecycle hooks, and a view that focuses a field or
+     * measures layout in `ngAfterViewInit` needs its host element to be in the document by then.
+     *
+     * Seen red on purpose by moving the guarded `detectChanges()` back above `outlet.insert(…)`,
+     * which is how this shipped for review: `isConnected` was `false`.
+     */
+    it('runs the component’s lifecycle hooks against DOM that is in the document', async () => {
+      connectedAtAfterViewInit = null;
+      TestBed.inject(ExtensionComponentRegistry).register({
+        'acme.views.measured': MeasuresOnInitComponent,
+      });
+      const fixture = TestBed.createComponent(ExtensionOutletComponent);
+      fixture.componentRef.setInput('componentId', 'acme.views.measured');
+      await settle(fixture);
+
+      expect(fixture.nativeElement.querySelector('.measured')).toBeTruthy();
+      expect(connectedAtAfterViewInit).toBe(true);
+      expect(reported()).toHaveLength(0);
+    });
+
+    /**
+     * Review of PR 532. A failed draw leaves a half-initialised component, so its `ngOnDestroy`
+     * can throw as well — and that error comes out of `ViewContainerRef.clear()`. The fallback
+     * must not depend on the teardown succeeding.
+     *
+     * Seen red on purpose by tearing down before setting `unresolved()`: the teardown's throw
+     * escaped `render()` and the outlet reported nothing, so the host had no fallback signal.
+     */
+    it('still falls back when the component’s own teardown throws as well', async () => {
+      TestBed.inject(ExtensionComponentRegistry).register({
+        'acme.views.hostile': HostileOnDestroyComponent,
+      });
+      const fixture = TestBed.createComponent(ExtensionOutletComponent);
+      fixture.componentRef.setInput('componentId', 'acme.views.hostile');
+      await settle(fixture);
+
+      expect(fixture.componentInstance.unresolved()).toBe(true);
+      expect(fixture.componentInstance.loading()).toBe(false);
+      expect(fixture.nativeElement.querySelector('.hostile')).toBeNull();
+      // One report, naming the entry, covering both errors rather than reading as two problems.
+      expect(reported()).toHaveLength(1);
+      expect(reported()[0]).toContain('acme.views.hostile');
+      expect(reported()[0]).toContain('discarded');
+      expect(() => fixture.detectChanges()).not.toThrow();
+    });
+
+    /**
+     * The guard must not swallow a working render. `detectChanges()` on the inserted host view
+     * runs the component's first pass a step earlier than the enclosing view would have; a valid
+     * component has to come out the other side rendered, with its inputs applied and no warning.
      */
     it('renders a valid component through the same guarded pass', async () => {
       TestBed.inject(ExtensionComponentRegistry).register({
