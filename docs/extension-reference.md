@@ -1021,6 +1021,28 @@ refetched or another document using the same entry opens — at most twice, so a
 is permanently missing is requested three times in all. The packaged view stays on screen
 while a retry is in flight.
 
+**A component that throws while it is drawn** falls back the same way, and one warning is
+written to the console naming the component the entry asked for — its `componentId`, which is
+the descriptor `id` unless you set it to something else. That covers the mistakes a manifest can
+make: a component
+with a required input the entry's `inputs` does not supply, an input name spelled wrong, or a
+view that cannot read a particular document. Until this was contained, such an entry emptied the
+View tab **and removed the whole tab group with it** — Annotations, Permissions, History and
+Publishing went too, because the throw escaped the change detection that draws the tab body and
+tore down the view around it (NXSAT-746).
+
+The containment has a limit worth knowing, because Angular has no error boundary. The host draws
+your component once on its own before putting it on the page, and that is where a throw can be
+caught. A component that draws successfully and throws **later** — when its own asynchronous
+state settles, say — throws on a change detection pass the host does not own, and that still
+takes the surrounding view with it. A custom view is ordinary Angular code and has to handle its
+own failures; what is guaranteed is that a view which cannot be drawn at all costs the customer
+their view rather than the page. Each new document is drawn afresh, so a view that fails on one
+document still renders for the next.
+
+The same containment applies to every slot that names a component, not just this one: the host
+shows whatever it falls back to when the slot is empty.
+
 **The document is the host's.** The component receives the focused document on its
 `document` input. A manifest `inputs.document` is overwritten, so configuration cannot
 make the tab show a different document from the one the toolbar and properties panel act
