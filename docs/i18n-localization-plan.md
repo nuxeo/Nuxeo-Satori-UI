@@ -948,7 +948,8 @@ failure for an invisible stall.
 
 The window was **21 minutes** and no run fell in it: `main` gained the flags at 11:39Z on
 30 October, INTERN-1363 made them targets at 12:00Z, and the workflow is `0 0 * * *`, so the runs
-either side — 30 Oct 00:03Z and 31 Oct 00:00Z — were both outside it. Twelve consecutive scheduled
+before it — 30 Oct 00:03Z — succeeded, and the next one is not due until 31 Oct 00:00Z, after the
+window had closed. Twelve consecutive scheduled
 runs succeeded.
 
 So the bet came off, by luck rather than by design. This paragraph previously asserted the failure

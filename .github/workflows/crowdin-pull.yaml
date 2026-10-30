@@ -147,8 +147,9 @@ jobs:
           #
           # No run fell in it. The workflow is `0 0 * * *` against `main`: the last run before
           # the window was 30 Oct 00:03Z and it succeeded, `main` gained the four flags at
-          # 11:39Z, Crowdin had them by 12:00Z, and the next run was 31 Oct 00:00Z. Twelve
-          # consecutive scheduled runs succeeded.
+          # 11:39Z, and Crowdin had them by 12:00Z — while the next scheduled run is not due
+          # until 31 Oct 00:00Z, by which time the window had closed. Twelve consecutive
+          # scheduled runs have succeeded.
           #
           # That is luck, not design, and this comment previously claimed the failure as a
           # present fact — "this step fails and no catalogue updates at all… the nightly pull is

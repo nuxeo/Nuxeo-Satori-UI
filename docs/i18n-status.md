@@ -21,9 +21,13 @@ exist — Angular locale data in `register-locale-data.ts`, and a `--language` i
 languages today, with each of the other five becoming advertisable in a small pull request when
 its catalogue arrives. See `D8e-webui`.
 
-**The Crowdin side is no longer the blocker.** All four missing target languages were added and the
-one failing Spanish string was fixed on 30 October, so the nightly pull works and the catalogues
-arrive as translation produces them. What is left is translation, and RTL for Arabic and Hebrew.
+**Crowdin configuration is no longer the blocker — approvals are.** All four missing target
+languages were added and the one failing Spanish string was fixed on 30 October, so the pull can
+run. What gates it now is translation: the pull delivers all nine languages into **one** shared
+pull request, so a language with no approvals arrives as an all-English catalogue and holds that
+one pull request red, Spanish and the four shipping languages included. See item 2 below; it is
+the live consequence on the next run. Beyond that: translation itself, and RTL for Arabic and
+Hebrew.
 
 | Language | Code | Catalogue | Crowdin id | Status                                                                                                                                                                         |
 | -------- | ---- | --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -54,7 +58,16 @@ named, so nothing in the repository had to change. The nine the project carried 
 **The two Crowdin items are done**, both on 30 October (INTERN-1363, Enrico Stengert): `ar`, `he`,
 `it` and `sv` are target languages on project 160, and the `Seleccionado(s)` string is corrected to
 `Seleccionado`. A proof-reading step plus post-translation localization QA is confirmed configured,
-which closes the last open conformance item in `D8-standard`.
+which closes the proof-reading row in `D8-standard` — **one row, not the file**. An earlier
+revision of this page called it "the last open conformance item", which it is not:
+`D8-standard` still carries Project Content Initialization seeding, setup-token revocation and the
+service-account commit identity as `OWNER-ACTION-PENDING`.
+
+It does not fully settle the export half either. Enrico confirmed the Crowdin project's workflow
+while noting the Localization team cannot see our `crowdin-conf.yml`; we confirmed
+`export_only_approved: 'true'` is present while being unable to see the project's own export
+settings, which the Guidelines say take precedence. Each side has confirmed its own half and
+nobody has confirmed the combination.
 
 **The pull never actually broke, and saying it had is an error worth keeping visible.** Earlier
 revisions of this page and of `crowdin-pull.yaml` asserted in the present tense that the nightly
@@ -83,11 +96,24 @@ What remains:
 1. **Translation itself**, for `ar`, `he`, `it` and `sv`. Not started; Spanish is the exception at
    99% approved and needs only a pull.
 
-2. **Expect a red pull request per language, and do not read it as a fault.** Approved-only export
-   fills an unapproved string with its English source, so the first pull carrying a new language
-   delivers a catalogue that is **entirely English** — and `checkCataloguesAreTranslated` fails
-   exactly that, on purpose, because it is indistinguishable from a destructive sync (D8d). It turns
-   green per language as approvals land. Nothing is advertised to a user in the meantime.
+2. **The next pull will go red, and it is one shared pull request, so that blocks everything in
+   it.** Approved-only export fills an unapproved string with its English source, so a language
+   with no approvals arrives as a catalogue that is **entirely English**, and
+   `checkCataloguesAreTranslated` fails exactly that on purpose — it is indistinguishable from a
+   destructive sync (D8d).
+
+   The part that matters is the granularity. There is **one** `create_pull_request`, **one**
+   `localization_branch_name: crowdin-translations-update`, and all nine languages in a single
+   `download_translations_args`, so the pull opens or pushes to a single pull request carrying
+   every language at once. An untranslated `ar`, `he` or `sv` therefore does not sit quietly
+   beside the others: it holds that one pull request red, and with it Spanish — which is ready
+   now — and routine updates to `fr`, `de`, `ja` and `nl`, which have nothing wrong with them.
+
+   So this is **not** "it turns green per language as approvals land", which an earlier revision
+   of this page said and which the branching model makes impossible. The options are to wait for
+   approvals on all three, or to drop `ar`, `he` and `sv` from `download_translations_args` until
+   they have some — a one-line change here, reversible, and the only thing that decouples Spanish
+   from them. Nothing is advertised to a user either way.
 
 3. **RTL, for Arabic and Hebrew.** No longer "tracked separately" — it is
    [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523), which sets `<html dir>` from the
