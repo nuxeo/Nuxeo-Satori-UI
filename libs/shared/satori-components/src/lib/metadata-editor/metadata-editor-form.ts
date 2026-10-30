@@ -165,32 +165,39 @@ function toUtcMidnight(local: Date): string {
 }
 
 /**
- * Whether `instant` and `local` name the same calendar day — `instant` read in UTC, `local` in the
- * picker's own calendar, which is the pairing `toCalendarDay` creates.
- *
- * Compared field by field rather than through a formatted string: `toISOString` widens a year
- * outside 1000–9999 to six digits, so slicing `YYYY-MM-DD` off it is not safe for the years the
- * field accepts.
+ * Whether two local `Date`s name the same calendar day, field by field rather than through a
+ * formatted string: `toISOString` widens a year outside 1000–9999 to six digits, so slicing
+ * `YYYY-MM-DD` off it is not safe for the years the field accepts.
  */
-function sameCalendarDay(instant: Date, local: Date): boolean {
+function sameLocalDay(a: Date, b: Date): boolean {
   return (
-    instant.getUTCFullYear() === local.getFullYear() &&
-    instant.getUTCMonth() === local.getMonth() &&
-    instant.getUTCDate() === local.getDate()
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
   );
 }
 
 /**
- * The instant each date control was built from. A Nuxeo date property is an instant, and the date
- * field edits only its day: whatever the adapter, a day typed or picked arrives as a JS `Date` at
- * local midnight, and an adapter holding calendar days never held the time at all. So the instant
- * is written back while the control still names its day — cleared and typed again included.
+ * What each date control was built from: the property's instant, and the local `Date` that instant
+ * was converted to. A Nuxeo date property is an instant, and the date field edits only its day:
+ * whatever the adapter, a day typed or picked arrives as a JS `Date` at local midnight, and an
+ * adapter holding calendar days never held the time at all. So the instant is written back while
+ * the control still names the day it was given — cleared and typed again included.
  *
- * "Its day" is the day the instant names **in UTC**, which is the day `toCalendarDay` put in the
- * control. Comparing the instant's local day instead, as this did before NXSAT-727, made the two
- * disagree west of UTC and rewrote an untouched field a day earlier.
+ * **Both halves are kept, not just the instant.** Deriving "the day it was given" from the instant
+ * at write time assumes the conversion is reversible, and it is not: `new Date(y, m, d)` rolls a
+ * day its zone skipped forward, so in `Pacific/Apia` a stored `2011-12-30T00:00:00.000Z` reaches
+ * the picker as 31 December — 30 December did not exist there. Re-deriving 30 and comparing it with
+ * the 31 the picker holds reads as a user edit, and an untouched field is rewritten to
+ * `2011-12-31T00:00:00.000Z`. Comparing against the day actually handed over cannot: whatever the
+ * conversion did, an untouched control still holds the same day it was given.
  */
-const builtInstants = new WeakMap<AbstractControl, Date>();
+interface BuiltDate {
+  readonly instant: Date;
+  /** The local `Date` handed to the adapter — after any normalisation `new Date` applied. */
+  readonly given: Date;
+}
+const builtDates = new WeakMap<AbstractControl, BuiltDate>();
 
 /** A date field's control, holding the property's date as `adapter` holds dates. */
 function dateControl(
@@ -199,11 +206,12 @@ function dateControl(
   adapter: DateAdapter<unknown>,
 ): FormControl<unknown> {
   const instant = toDate(value);
+  const given = instant && toCalendarDay(instant);
   const control = new FormControl<unknown>(
-    nxsDateToAdapter(adapter, instant && toCalendarDay(instant)),
+    nxsDateToAdapter(adapter, given),
     validatorFor(definition),
   );
-  if (instant) builtInstants.set(control, instant);
+  if (instant && given) builtDates.set(control, { instant, given });
   return control;
 }
 
@@ -215,13 +223,14 @@ function dateControl(
  * Keeping the original instant for an untouched day is what stops an edit of a neighbouring field
  * from moving a date that already carries a time — the same rule `dateToWrite` applies to an ACE
  * date, and `docs/api-integrations.md` records the 23-hour move measured when it was not applied.
- * The day it is compared against is the UTC one, because that is the day the control was built on.
+ * The day it is compared against is the one the control was handed, not one re-derived from the
+ * instant; see `builtDates` for the zone transition that makes those two differ.
  */
 function dateProperty(control: AbstractControl, adapter: DateAdapter<unknown>): string | null {
   const day = nxsDateFromAdapter(adapter, control.value);
   if (!day) return null;
-  const instant = builtInstants.get(control);
-  if (instant && sameCalendarDay(instant, day)) return instant.toISOString();
+  const built = builtDates.get(control);
+  if (built && sameLocalDay(built.given, day)) return built.instant.toISOString();
   return toUtcMidnight(day);
 }
 

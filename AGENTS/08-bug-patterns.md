@@ -1052,12 +1052,23 @@ Regression test pattern — and this is the part that is easy to get wrong:
   and stops protecting anything, with no failure to notice. Assert the zone in a spec of its own —
   `suite-timezone.spec.ts` in `satori-components`, `features/browse` and `shared/ui`.
 
-**Find every writer before calling it fixed.** `dc:expired` had four, in three libraries: the
-metadata editor, browse's edit-metadata dialog, the collection dialog and the create/import dialog.
-Fixing one and formatting the row in UTC makes the others _newly_ wrong, because their locally
-anchored values are then read in UTC. `grep -rn "toISOString()"` over `libs/` and `apps/` is the
-search that finds them; the dependency graph does not, because each dialog does its own conversion
-inline.
+**`new Date(y, m, d)` is not reversible.** A day its zone skipped — Samoa has no 30 December 2011 —
+rolls forward, so a stored `2011-12-30T00:00:00.000Z` reaches a picker in `Pacific/Apia` as the
+31st. Re-deriving the stored day from the instant at write time then reads that as a user edit and
+rewrites an untouched field. Remember the day you actually handed over, not the instant you derived
+it from: whatever the conversion did, an untouched control still holds the day it was given.
+
+**Find every writer AND every reader before calling it fixed.** `dc:expired` had five sites across
+four libraries: the metadata editor, browse's edit-metadata dialog, the collection dialog, the
+create/import dialog, and the nav drawer's Expired queue. Fixing one writer and formatting one row
+in UTC makes the other writers _newly_ wrong, because their locally anchored values are then read in
+UTC — and a reader left in the browser's zone says "Mar 5" for a document whose Properties panel
+says March 6.
+
+`grep -rn "toISOString()"` and a grep for the **property name** over `libs/` and `apps/` are the
+searches that find them. Following the symbols you edited does not: each site does its own
+conversion inline, so there is no shared symbol and the dependency graph shows nothing. After
+fixing the writers, search again for readers — that is the step this fix skipped, twice.
 
 ---
 

@@ -645,6 +645,10 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
     component.docTitle = 'My photo';
     component.description = 'A picture';
     component.nature = 'article';
+    // A day as the picker hands it over, local midnight: the import writer anchors it in UTC like
+    // every other `dc:expired` writer, so this is `2027-12-31T00:00:00.000Z` in every zone and not
+    // `2027-12-30T18:30:00.000Z` under the pinned one (NXSAT-727).
+    component.onExpiresChange(new Date(2027, 11, 31));
     component.importFileIndex.set(0);
 
     component.runImportWithProperties();
@@ -659,6 +663,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
             'dc:title': 'My photo',
             'dc:description': 'A picture',
             'dc:nature': 'article',
+            'dc:expired': '2027-12-31T00:00:00.000Z',
           }),
         }),
       ],
@@ -2112,7 +2117,11 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       component.startCreateFromType({ type: 'Folder', label: 'Folder' });
       component.docTitle = 'Reports';
       component.onExpiresInput(changeEvent(inputWith('12/31/2027')));
-      component.onExpiresChange(new Date('2027-12-31T00:00:00.000Z'));
+      // A day as the picker hands it over — local midnight — not a UTC instant. Seeding
+      // `new Date('2027-12-31T00:00:00.000Z')` made this assertion pass whichever way the day was
+      // anchored, because under the pinned +05:30 zone that instant's local day is the 31st too
+      // (NXSAT-727).
+      component.onExpiresChange(new Date(2027, 11, 31));
       expect(component.expiresRawText).toBe('');
 
       component.createDocument();

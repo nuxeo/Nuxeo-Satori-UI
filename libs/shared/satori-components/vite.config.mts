@@ -15,8 +15,13 @@ import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
  * `Asia/Calcutta` is the zone the defect was reported from, and its half-hour offset also catches
  * a conversion that rounds to whole hours. Set here rather than in `test-setup.ts` because Node
  * reads the zone once at startup: it has to be in the environment before the worker exists.
+ *
+ * It deliberately **overrides** an inherited `TZ`, so the suite's verdict is the same on every
+ * machine. `SATORI_TEST_TZ` is the way to ask for a different one — a named variable rather than
+ * `TZ` precisely so that running in another zone is a deliberate act and cannot happen by
+ * inheriting a shell. `metadata-editor-skipped-day.spec.ts` needs `Pacific/Apia`; see its header.
  */
-process.env['TZ'] = 'Asia/Calcutta';
+process.env['TZ'] = process.env['SATORI_TEST_TZ'] ?? 'Asia/Calcutta';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,

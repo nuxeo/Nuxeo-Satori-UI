@@ -14,12 +14,17 @@
  *
  * Changing the pin is fine; change it here too, and re-read the cases that name a local day
  * (`properties-panel.component.spec.ts` asserts one deliberately).
+ *
+ * `SATORI_TEST_TZ` is honoured, because one spec needs a zone with a skipped calendar day
+ * (`metadata-editor-skipped-day.spec.ts`). Asking for another zone through a named variable keeps
+ * it deliberate: an inherited `TZ` cannot quietly move the suite.
  */
 describe('the suite’s time zone', () => {
-  const PINNED = 'Asia/Calcutta';
+  /** What `vite.config.mts` resolves the pin to: its default, or an explicit `SATORI_TEST_TZ`. */
+  const EXPECTED = process.env['SATORI_TEST_TZ'] ?? 'Asia/Calcutta';
 
   it('is the zone vite.config.mts pins, so date assertions can fail', () => {
-    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(PINNED);
+    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(EXPECTED);
   });
 
   it('is offset from UTC, which is what gives those assertions their teeth', () => {
