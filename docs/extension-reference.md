@@ -1124,16 +1124,16 @@ nothing generated is merged in. The type must match exactly.
 }
 ```
 
-| Key                   | Meaning                                                                                                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `version`             | Required, `1`. Any other value and the file is refused.                                                                                    |
-| `display`             | `"sections"` (default), or `"tabs"` for one tab per section.                                                                               |
-| `sections`            | Required list, may be empty — an empty layout shows nothing.                                                                               |
-| `sections[].id`       | Required, unique; 1 to 64 letters, digits, `.`, `_` or `-`, starting with a letter or digit.                                               |
-| `sections[].label`    | Heading, as a literal. Wins over `labelKey`. A section with neither has no heading (a tab is named from `id`).                             |
-| `sections[].labelKey` | Heading, as a translation key.                                                                                                             |
-| `sections[].fields`   | Required list of `"<prefix>:<field>"`, or `{ "field", "label"?, "labelKey"?, "required"? }`. Top-level fields only, each once per section. |
-| `fields[].required`   | `true` makes the field required in an `edit` or `create` form, on top of the schema's own constraints. Ignored in `metadata`.              |
+| Key                   | Meaning                                                                                                                                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`             | Required, `1`. Any other value and the file is refused.                                                                                                                                                   |
+| `display`             | `"sections"` (default), or `"tabs"` for one tab per section.                                                                                                                                              |
+| `sections`            | Required list, may be empty — an empty layout shows nothing.                                                                                                                                              |
+| `sections[].id`       | Required, unique; 1 to 64 letters, digits, `.`, `_` or `-`, starting with a letter or digit.                                                                                                              |
+| `sections[].label`    | Heading, as a literal. Wins over `labelKey`. A section with neither has no heading (a tab is named from `id`).                                                                                            |
+| `sections[].labelKey` | Heading, as a translation key.                                                                                                                                                                            |
+| `sections[].fields`   | Required list of `"<prefix>:<field>"`, or `{ "field", "label"?, "labelKey"?, "required"? }`. Top-level fields only, each once per section. May be empty, but a section with no field to show is left out. |
+| `fields[].required`   | `true` makes the field required in an `edit` or `create` form, on top of the schema's own constraints. Ignored in `metadata`.                                                                             |
 
 A field neither the type nor the document's facets have, an entry that is not `<prefix>:<field>`, or a field listed twice in
 one section is skipped and the rest of the file applies; a file that is refused shows the generated layout instead. Both are logged in
@@ -1141,10 +1141,18 @@ the browser console under `[agentic-ui-layouts]`, and the page never breaks. A s
 is addressed by its name, as Nuxeo does: `file:content`. Unknown keys are ignored without a message,
 so that a file written for a later version still loads.
 
+**A section left with no field is not shown** — whether it listed none or every field it listed
+was skipped. There is no heading with nothing under it, and in `"tabs"` display no tab with
+nothing in it, the same way the generated layout leaves out a schema with no fields. A file whose
+every section ends up empty therefore shows nothing at all, as an empty `sections` list does.
+The skipped fields are still named in the console, so a typo is still reported even where the
+section holding it has gone.
+
 A file may name a field of a facet's schema, such as `externalEntity:origin` in a File layout. It
 shows on a document that carries the facet; on one that does not, it is skipped and logged as for
-any field the document lacks, so expect that message for every such document. If the facet's
-schema could not be read, the message says so instead of calling the field absent.
+any field the document lacks, so expect that message for every such document — and a section
+holding only such fields is left out on those documents, rather than showing a dangling heading.
+If the facet's schema could not be read, the message says so instead of calling the field absent.
 
 How each value is shown is decided by its schema type — there is no widget name to set:
 
