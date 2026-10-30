@@ -1038,6 +1038,55 @@ otherwise a prefix match passes for an exact one.
 
 ---
 
+## 28. Two paths to one view model, and only one of them drops the empty rows
+
+```typescript
+// BAD ❌ — the generated path ends with a filter; the contributed path, which builds the same
+// shape for the same template, just maps.
+function sectionsOf(schemas, mode) {
+  return schemas.map(/* … */).filter((section) => section.fields.length > 0);
+}
+export function applyLayoutFile(type, mode, file) {
+  const sections = file.sections.map((section) => ({ ...section, fields: resolve(section) }));
+  return { layout: { sections }, skipped };
+}
+
+// GOOD ✅ — the same emptiness rule, in the same place, on both paths.
+const sections = file.sections
+  .map((section) => ({ ...section, fields: resolve(section) }))
+  // Mapped first, so a field dropped from a section that is itself dropped is still reported.
+  .filter((section) => section.fields.length > 0);
+```
+
+When two code paths produce the same view model, the test to apply is not "does each one look
+right" but **"do they agree"**. Put the invariant where both reach it, or assert it of both; a
+rule that lives at the end of one `.map()` chain is invisible from the other.
+
+NXSAT-728: a contributed `<Type>/metadata.layout.json` whose section listed no fields, or only
+fields the document type does not have, rendered its heading with nothing under it — and in
+`"tabs"` display, a tab with nothing in it. The generated layout had dropped such a section since
+it was written, and the metadata editor's `typeSections` filters the same way, so the contributed
+path was the only one of three that did not.
+
+- **Fix it in the resolver, not the template.** The empty-layout and empty-tab cases then fall
+  out of guards that already exist (`@if (layout.sections.length > 0)`, `@for (section of
+layout.sections)`) instead of needing a new branch each, and the edit/create path gets the
+  same behaviour without a second change.
+- **Dropping a container must not drop its diagnostics.** Map before you filter: the console
+  warning naming each unknown field is the only signal a typo in a customer's layout file gets,
+  and a `flatMap` that skipped the section before resolving its fields would have silenced it.
+- **The reference is the sibling path, not the ticket.** The expected behaviour here was already
+  written down twice in this repo — in `sectionsOf`'s filter and in the editor's — which settles
+  it without a product decision.
+
+Regression test pattern: assert the dropped cases **and the control** — a section that does
+resolve a field still renders its rows — or a fix that renders nothing at all passes. Cover the
+empty list, the all-unknown list, every-section-empty, and the tabs surface.
+`libs/shared/document-layouts/src/lib/resolve-layout.spec.ts`,
+`document-layout/document-layout.spec.ts`.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.

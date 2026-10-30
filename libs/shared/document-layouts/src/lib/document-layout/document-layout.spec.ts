@@ -12,7 +12,9 @@ import { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { Observable, Subject, of } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
-import { LayoutSection, ResolvedLayout } from '../layout.model';
+import { readLayoutFile } from '../layout-file';
+import { DocumentTypeDefinition, LayoutSection, ResolvedLayout } from '../layout.model';
+import { applyLayoutFile, readDocumentType } from '../resolve-layout';
 import { DocumentLayoutComponent } from './document-layout';
 
 const claimDocument = (overrides: Record<string, unknown> = {}): NuxeoDocument =>
@@ -385,6 +387,91 @@ describe('DocumentLayoutComponent', () => {
         host().querySelector('[data-layout-entry="acme.documentMetadata.claim"]'),
       ).not.toBeNull();
       expect(host().querySelector('[data-section-id="claim"]')).not.toBeNull();
+    });
+  });
+
+  /**
+   * Rendered from the real resolver rather than a hand-built layout, so these assert what a
+   * contributed file puts on screen — the surface NXSAT-728 was reported against.
+   */
+  describe('a contributed section with nothing to show', () => {
+    const claimType = (): DocumentTypeDefinition => {
+      const type = readDocumentType(
+        {
+          schemas: [
+            { name: 'dublincore', '@prefix': 'dc', fields: { title: 'string' } },
+            { name: 'claim', '@prefix': 'claim', fields: { number: 'string' } },
+          ],
+        },
+        'Claim',
+      );
+      if (!type) throw new Error('fixture did not read');
+      return type;
+    };
+
+    const fromFile = (content: Record<string, unknown>): ResolvedLayout => {
+      const read = readLayoutFile(content);
+      if ('invalid' in read) throw new Error(read.invalid);
+      return applyLayoutFile(claimType(), 'metadata', read).layout;
+    };
+
+    const headings = () =>
+      [...host().querySelectorAll('.document-layout__heading')].map((heading) =>
+        heading.textContent?.trim(),
+      );
+
+    it('renders only the section that resolved a field, heading and rows included', async () => {
+      await render(
+        claimDocument(),
+        fromFile({
+          version: 1,
+          sections: [
+            { id: 'details', label: 'Details', fields: ['claim:number'] },
+            { id: 'extra', label: 'Extra info', fields: ['qa:missing', 'qa:gone'] },
+            { id: 'nothing', label: 'Nothing here', fields: [] },
+          ],
+        }),
+      );
+      expect(headings()).toEqual(['Details']);
+      // The control: the section that does resolve a field still renders its row, so the fix
+      // cannot pass by rendering nothing at all.
+      expect(host().querySelector('[data-section-id="details"]')).not.toBeNull();
+      expect(value('claim:number')).toBe('CLM-1');
+      expect(host().querySelector('[data-section-id="extra"]')).toBeNull();
+      expect(host().querySelector('[data-section-id="nothing"]')).toBeNull();
+    });
+
+    it('renders no layout at all when no section resolved a field', async () => {
+      await render(
+        claimDocument(),
+        fromFile({
+          version: 1,
+          sections: [
+            { id: 'only', label: 'Nothing at all', fields: ['qa:missing'] },
+            { id: 'empty', label: 'Nothing here either', fields: [] },
+          ],
+        }),
+      );
+      expect(host().querySelector('.document-layout')).toBeNull();
+      expect(headings()).toEqual([]);
+    });
+
+    it('offers no tab for a section with nothing under it', async () => {
+      await render(
+        claimDocument(),
+        fromFile({
+          version: 1,
+          display: 'tabs',
+          sections: [
+            { id: 'details', label: 'Details', fields: ['claim:number'] },
+            { id: 'extra', label: 'Extra info', fields: ['qa:missing'] },
+          ],
+        }),
+      );
+      expect(
+        [...host().querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim()),
+      ).toEqual(['Details']);
+      expect(value('claim:number')).toBe('CLM-1');
     });
   });
 });
