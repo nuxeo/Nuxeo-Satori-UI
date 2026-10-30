@@ -1015,7 +1015,10 @@ not own — the fragment name in the component XML, the Marketplace package name
 on disk. A package named `defaults` therefore contributed `fragment bootstrap/defaults`, the key
 Satori's own packaged defaults occupy, and `ContributionRegistry.resolve()` did what it is
 designed to do and let the later contribution take the key. Replacement is a documented feature,
-so the server was not the thing to change. The only trace was an `info` diagnostic.
+so the server was not the thing to change. The only trace was an `info` diagnostic — which
+NXSAT-747 since raised to a `warning` with its own code for the case where what was displaced is
+something we packaged, because the generator can only protect the names it hands out and a
+hand-written component XML reaches the server regardless.
 
 - **The operating system is one of those namespaces.** A name that becomes a path has to clear
   the Windows device names (`con`, `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9`) — through

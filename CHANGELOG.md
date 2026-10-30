@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `0.1.0`). This section holds breaking changes made since `0.1.0`, and `^0.1.0` admits only `0.1.x`,
 so the next publish has to be a minor. Nothing has been published yet.
 
+### Changed (configuration service) — a displaced packaged default is a warning
+
+A fragment, layout or asset that replaces or disables one **we** packaged is now reported at
+`warning` with its own diagnostic code — `replaced-packaged-default` or
+`removed-packaged-default` — instead of `info` with `replaced` / `removed` (NXSAT-747). It reaches
+`server.log` at `WARN` and the `diagnostics` of the served `bootstrap.json` and `manifest.json`.
+The usual way to arrive is naming a configuration package `defaults`, which makes its fragment
+`defaults` too and silently takes the place of ours; the generator refuses that name since
+NXSAT-729, but a hand-written component XML still reaches the server.
+
+Displacing **another package's** contribution is unchanged — ordinary layering, still `replaced` /
+`removed` at `info`. Nothing is blocked either way: replacement remains a supported operation, so
+a customer who meant it keeps the behaviour and gains a record of it. The distinction is drawn on
+the bundle that contributed the displaced item, so it covers anything we package rather than only
+the fragments named `defaults`. `level` was already one of `error` / `warning` / `info` and `code`
+is an open string, so neither is a schema change — but a consumer that matched on `replaced` or
+`removed` to notice this case should match the new codes instead.
+
 ### Changed — BREAKING (registered IDs) — one Browse entry again
 
 The adf-hx proof of concept is removed, with its two routes and its navigation entry.
