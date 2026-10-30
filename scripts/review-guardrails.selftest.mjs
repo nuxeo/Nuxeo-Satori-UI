@@ -11369,7 +11369,7 @@ expectRed(
     [SHIPPED_DECL]: 'export const SHIPPED_CATALOGUE_LANGUAGES = new Set(["en"]);\n',
   },
   null,
-  /no longer holds a `SHIPPED_CATALOGUE_LANGUAGES` array literal[\s\S]*asserted nothing/,
+  /no longer declares `SHIPPED_CATALOGUE_LANGUAGES` as an array of string literals[\s\S]*asserted nothing about which catalogues ship/,
 );
 
 expectRed(
@@ -11426,7 +11426,83 @@ expectRed(
       `export const GENERATED_AUDIT_LOCALES = new Set(['zz']);\n`,
   },
   null,
-  /no longer holds a `GENERATED_AUDIT_LOCALES` array literal[\s\S]*pseudo-locale seam is unchecked/,
+  /no longer declares `GENERATED_AUDIT_LOCALES` as an array of string literals[\s\S]*pseudo-locale seam is unchecked/,
+);
+
+/**
+ * An element this gate cannot evaluate must be **refused**, not skipped — the failure review on
+ * #531 found twice, and both directions were green on the defect rather than noisy.
+ *
+ * The application evaluates the real array, so a list read as "the three quoted ones" passes
+ * against a build shipping exactly those three while a fourth element admits a language with no
+ * catalogue. And a commented-out entry leaves its quotes in the source, so a regex reports a
+ * locale the runtime array does not have.
+ */
+expectRed(
+  'an identifier element, whose value this gate cannot see but the application can',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `const extra = 'xx';\n` +
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en', 'fr', extra];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /`extra` is not a string literal[\s\S]*asserted nothing about which catalogues ship/,
+);
+
+expectRed(
+  'a spread element, which hides a whole list from this gate',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `const more = ['xx'];\n` +
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en', 'fr', ...more];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /`\.\.\.more` is not a string literal/,
+);
+
+expectRed(
+  'a template-literal element, which a quote-matching parser would also miss',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      'export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = [`en`, `fr`];\n' +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /is not a string literal/,
+);
+
+expectRed(
+  'the only generated entry commented out, so admission is off while the quotes remain',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en', 'fr'];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = [/* 'zz' */];\n`,
+  },
+  null,
+  /GENERATED_AUDIT_LOCALES as \[\] but `GENERATED_LOCALES` in this script is \[zz\]/,
+);
+
+expectRed(
+  'a shipped language commented out while its catalogue is still on disk',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en' /*, 'fr' */];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /ships fr\.json but[\s\S]*does not declare "fr"/,
 );
 
 /* ---------------- checkUpstreamCatalogueLanguages ---------------- */

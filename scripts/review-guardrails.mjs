@@ -4601,7 +4601,48 @@ function checkShippedCatalogueLanguages() {
     return;
   }
 
-  const source = read(declaration);
+  /**
+   * Both declarations, read from the AST.
+   *
+   * A regex over the source was wrong in two ways that review on #531 found, and both of them
+   * were green-on-the-defect rather than noisy. Appending an identifier whose value is `'xx'`
+   * left the quoted elements still matching the catalogues on disk, while the application — which
+   * evaluates the real array — admitted a fourth language. And commenting an entry out left its
+   * quotes in the source for the regex to find, so this gate reported a locale the runtime array
+   * does not contain, which would disable pseudo-locale admission while the gate said the two
+   * sets agreed. `stringsOfArrayLiteral` refuses a non-literal element by name, and the AST
+   * cannot see into a comment at all.
+   */
+  const ast = ts.createSourceFile(
+    declaration,
+    read(declaration),
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ true,
+  );
+  const initialisers = new Map();
+  const collect = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      initialisers.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(ast);
+
+  /** One declaration's locales, or `null` having already failed with the reason. */
+  const localesOf = (name, consequence) => {
+    const { values, problem } = stringsOfArrayLiteral(initialisers.get(name));
+    if (problem) {
+      fail(
+        `${declaration} no longer declares \`${name}\` as an array of string literals ` +
+          `(${problem}), so ${consequence}\n` +
+          '    Keep it a literal list, or teach `checkShippedCatalogueLanguages` the new shape — ' +
+          'do not leave it asserting nothing. An element this gate cannot evaluate is refused ' +
+          'rather than skipped, because the application evaluates the real array.',
+      );
+      return null;
+    }
+    return values;
+  };
 
   /**
    * `GENERATED_AUDIT_LOCALES` must name exactly the locales this file already excludes from every
@@ -4612,18 +4653,12 @@ function checkShippedCatalogueLanguages() {
    * `hasCatalogue` admits them on a dev server. If they drift, either the audit boots in English
    * and silently stops finding hard-coded strings, or a locale gets admitted that no gate checks.
    */
-  const auditLiteral = /GENERATED_AUDIT_LOCALES\s*:\s*readonly string\[\]\s*=\s*\[([^\]]*)\]/.exec(
-    source,
+  const declaredAuditLocales = localesOf(
+    'GENERATED_AUDIT_LOCALES',
+    'the pseudo-locale seam is unchecked.',
   );
-  if (!auditLiteral) {
-    fail(
-      `${declaration} no longer holds a \`GENERATED_AUDIT_LOCALES\` array literal this gate can ` +
-        'read, so the pseudo-locale seam is unchecked. Update the parser here before trusting a pass.',
-    );
-  } else {
-    const declaredAudit = [...auditLiteral[1].matchAll(/'([a-z]{2}(?:-[A-Za-z]{2,4})?)'/g)]
-      .map(([, locale]) => locale)
-      .sort();
+  if (declaredAuditLocales) {
+    const declaredAudit = [...declaredAuditLocales].sort();
     const generated = [...GENERATED_LOCALES].sort();
     if (declaredAudit.join(',') !== generated.join(',')) {
       fail(
@@ -4637,19 +4672,12 @@ function checkShippedCatalogueLanguages() {
     }
   }
 
-  const literal = /SHIPPED_CATALOGUE_LANGUAGES\s*:\s*readonly string\[\]\s*=\s*\[([^\]]*)\]/.exec(
-    source,
+  const declaredLanguages = localesOf(
+    'SHIPPED_CATALOGUE_LANGUAGES',
+    'it asserted nothing about which catalogues ship.',
   );
-  if (!literal) {
-    fail(
-      `${declaration} no longer holds a \`SHIPPED_CATALOGUE_LANGUAGES\` array literal this gate ` +
-        'can read, so it asserted nothing. Update the parser here before trusting a pass.',
-    );
-    return;
-  }
-  const declared = new Set(
-    [...literal[1].matchAll(/'([a-z]{2}(?:-[A-Za-z]{2,4})?)'/g)].map(([, locale]) => locale),
-  );
+  if (!declaredLanguages) return;
+  const declared = new Set(declaredLanguages);
   if (declared.size === 0) {
     fail(`${declaration} declares no language, so every configured language would be refused.`);
     return;
@@ -4696,6 +4724,34 @@ function checkShippedCatalogueLanguages() {
         `    Remove "${locale}", or ship ${catalogueDir}/${locale}.json.`,
     );
   }
+}
+
+/**
+ * Every element of an array literal, or a description of the first one that is not a literal.
+ *
+ * Filtering to `ts.isStringLiteral` and dropping the rest is a silent failure of the worst kind
+ * for a locale list: `['de', 'en', 'fr', extra]` reads as three languages and passes against a
+ * build shipping exactly those three, while the application — which evaluates the real array —
+ * goes on treating the fourth as admissible. The gate would be green on the defect it exists to
+ * catch.
+ *
+ * Reading the AST rather than the text also means a commented-out entry is simply absent, where a
+ * regex over the source would still find the quotes inside the comment and report a list the
+ * runtime does not have. Both halves of that were found by review on #531.
+ *
+ * Shared by `checkUpstreamCatalogueLanguages` and `checkShippedCatalogueLanguages` so the two
+ * cannot disagree about what counts as a readable declaration.
+ */
+function stringsOfArrayLiteral(node) {
+  if (!node || !ts.isArrayLiteralExpression(node)) return { problem: 'not an array literal' };
+  const values = [];
+  for (const element of node.elements) {
+    if (!ts.isStringLiteral(element)) {
+      return { problem: `\`${element.getText()}\` is not a string literal` };
+    }
+    values.push(element.text);
+  }
+  return { values };
 }
 
 const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
@@ -4767,26 +4823,6 @@ function checkUpstreamCatalogueLanguages() {
     return;
   }
 
-  /**
-   * Every element of an array literal, or a description of the first one that is not a literal.
-   *
-   * Filtering to `ts.isStringLiteral` and dropping the rest is what this used to do, and it is a
-   * silent failure of the worst kind here: `languages: ['de', 'en', 'fr', extra]` would read as
-   * three languages and pass against a package shipping exactly those three, while the loader
-   * — which evaluates the real array — would go on requesting the fourth and 404ing. The gate
-   * would be green on the defect it exists to catch.
-   */
-  const stringsOf = (node) => {
-    if (!ts.isArrayLiteralExpression(node)) return { problem: 'not an array literal' };
-    const values = [];
-    for (const element of node.elements) {
-      if (!ts.isStringLiteral(element)) {
-        return { problem: `\`${element.getText()}\` is not a string literal` };
-      }
-      values.push(element.text);
-    }
-    return { values };
-  };
 
   /**
    * The installed package directory a `node_modules` path belongs to, or `null` for a repo path.
@@ -4937,7 +4973,7 @@ function checkUpstreamCatalogueLanguages() {
       continue;
     }
 
-    const languages = stringsOf(languagesNode);
+    const languages = stringsOfArrayLiteral(languagesNode);
     if (languages.problem) {
       fail(
         `${LOADER} declares the upstream folder "${folderPath}" with a \`languages\` array this ` +
