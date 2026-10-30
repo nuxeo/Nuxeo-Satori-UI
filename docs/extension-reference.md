@@ -76,8 +76,12 @@ Scaffold that package rather than writing it by hand. In a clone of this reposit
 Node 20 — no `npm ci`, no registry token:
 `node tools/satori-generators/src/config-package/create.mjs acme-config --owner=acme` writes both
 declarations, starter fragments with JSON schemas for your editor, and a `build.mjs` that refuses
-what the server would reject — JSON that does not parse, a repeated key, a fragment over 1 MiB, a
-missing asset — and writes the installable zip: `node config-packages/acme-config/build.mjs`. The
+what the server would reject — JSON that does not parse, a repeated key, a fragment over 1 MiB or
+nested more than 1000 deep, a missing asset — and writes the installable zip:
+`node config-packages/acme-config/build.mjs`. Nesting is the one of those limits the server does
+not set itself: `ConfigSnapshot` parses with a plain Jackson `ObjectMapper`, so the depth it
+accepts is jackson-core's `StreamReadConstraints` default, and a fragment past it is dropped at
+`error invalid-json` while the package installs and Nuxeo starts normally (NXSAT-730). The
 `config-package` Nx generator writes the same files, byte for byte, where Nx is installed:
 `npx nx g ./tools/satori-generators:config-package acme-config --owner=acme` after a full install
 of this repository, or `npx nx g @nuxeo/satori-platform:config-package acme-config --owner=acme`
