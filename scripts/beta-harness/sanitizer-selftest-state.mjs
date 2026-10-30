@@ -22,7 +22,16 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -66,35 +75,62 @@ export const MARKER = '.ai/state/.sanitizer-selftest-interrupted.json';
 /** The environment flag the selftest sets on the audit it invokes itself. See {@link isLeftover}. */
 export const SELFTEST_ENV_FLAG = 'SANITIZER_SELFTEST_RUNNING';
 
-const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
+export const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
 
 /**
- * Record the perturbations currently in force, so a process that dies without running its
- * handlers leaves behind enough to undo them.
+ * Record the perturbations in force, so a process that dies without running its handlers leaves
+ * behind enough to undo them.
+ *
+ * **Write-ahead.** Callers record the intent *before* replacing the tracked file, so there is no
+ * window where a perturbation exists with no record of it. That costs nothing in safety because
+ * the marker names both states: {@link recoverPerturbations} compares what is on disk against the
+ * perturbed hash **and** the original hash, so a record whose write never landed is recognised as
+ * already-clean rather than restored over or reported as a conflict (review of PR 521).
  *
  * Stores each file's `original` bytes and a **hash** of the perturbed bytes rather than both
  * copies: recovery only needs to *compare* against what it wrote, and hashing halves a marker that
- * would otherwise hold up to ~470 KB of source. `original` is stored in full because it cannot be
- * recovered any other way — `git checkout` would restore the *index* version, which silently
- * destroys an uncommitted edit the developer already had in the file before the selftest ran.
+ * would otherwise hold up to ~470 KB of source. `original` is kept in full because nothing else
+ * can supply it — `git checkout` restores the *index* version, silently destroying an uncommitted
+ * edit the developer already had in that file before the selftest ran.
+ *
+ * **Atomic.** Written to a sibling temp file, flushed, then renamed over the marker. A plain
+ * `writeFileSync` truncates in place, so a kill mid-write would destroy the saved originals of
+ * every *earlier* file still perturbed — losing exactly what the marker exists to protect. Merged
+ * with any entry already on disk that this process does not know about, so a second writer cannot
+ * drop the first one's record (review of PR 521).
  *
  * @param {string} root repository root
  * @param {Map<string, { original: string, written: string }>} backups
  */
 export function writeMarker(root, backups) {
-  if (backups.size === 0) {
+  const existing = readMarker(root);
+  const inherited = existing && 'paths' in existing ? existing.paths : {};
+  const paths = { ...inherited };
+  for (const [relPath, { original, written }] of backups) {
+    paths[relPath] = { original, originalSha256: sha256(original), writtenSha256: sha256(written) };
+  }
+  if (Object.keys(paths).length === 0) {
     removeMarker(root);
     return;
   }
-  const paths = {};
-  for (const [relPath, { original, written }] of backups) {
-    paths[relPath] = { original, writtenSha256: sha256(written) };
+
+  const abs = join(root, MARKER);
+  const tmp = `${abs}.${process.pid}.tmp`;
+  const body = `${JSON.stringify(
+    { pid: process.pid, startedAt: existing?.startedAt ?? new Date().toISOString(), paths },
+    null,
+    2,
+  )}\n`;
+  // Flushed before the rename, or the rename can be durable while the bytes it points at are not —
+  // which is the power-loss case this file claims to cover, so it has to actually hold.
+  const fd = openSync(tmp, 'w');
+  try {
+    writeFileSync(fd, body, 'utf8');
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
   }
-  writeFileSync(
-    join(root, MARKER),
-    `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), paths }, null, 2)}\n`,
-    'utf8',
-  );
+  renameSync(tmp, abs);
 }
 
 /** Drop the marker. Safe to call when there is none. */
@@ -102,15 +138,32 @@ export function removeMarker(root) {
   rmSync(join(root, MARKER), { force: true });
 }
 
-/** The marker a previous run left, or `null`. A marker that will not parse is treated as absent. */
+/**
+ * The marker a previous run left: `null` when there is none, `{ unreadable }` when there is one
+ * that cannot be used, otherwise its contents.
+ *
+ * An unreadable marker is **not** reported as a clean start. It is the signature of a kill during
+ * the write, which is precisely when something is most likely to be perturbed — so treating it as
+ * absent would hide the one case the marker exists for. It is also never deleted, so whoever reads
+ * the warning still has it (review of PR 521).
+ */
 export function readMarker(root) {
   const abs = join(root, MARKER);
   if (!existsSync(abs)) return null;
+  let text;
   try {
-    const parsed = JSON.parse(readFileSync(abs, 'utf8'));
-    return parsed && typeof parsed === 'object' && parsed.paths ? parsed : null;
-  } catch {
-    return null;
+    text = readFileSync(abs, 'utf8');
+  } catch (err) {
+    return { unreadable: `could not be read: ${err.message}` };
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object' || !parsed.paths || typeof parsed.paths !== 'object') {
+      return { unreadable: 'does not describe any perturbed paths' };
+    }
+    return parsed;
+  } catch (err) {
+    return { unreadable: `is not valid JSON (${err.message}) — most likely a kill mid-write` };
   }
 }
 
@@ -132,10 +185,23 @@ export function readMarker(root) {
  */
 export function recoverPerturbations(root) {
   const marker = readMarker(root);
-  if (!marker) return { found: false, restored: [], refused: [], startedAt: null };
+  if (!marker) return { found: false, restored: [], refused: [], alreadyClean: [], startedAt: null };
+  if ('unreadable' in marker) {
+    // Left in place deliberately: it is evidence, and deleting it would take away the only record
+    // of what might still be perturbed.
+    return {
+      found: true,
+      restored: [],
+      refused: [],
+      alreadyClean: [],
+      startedAt: null,
+      unreadable: marker.unreadable,
+    };
+  }
 
   const restored = [];
   const refused = [];
+  const alreadyClean = [];
   for (const [relPath, entry] of Object.entries(marker.paths)) {
     if (!PERTURBED_PATHS.includes(relPath)) {
       // A marker naming something the selftest never perturbs is not ours to act on.
@@ -150,15 +216,24 @@ export function recoverPerturbations(root) {
       refused.push(relPath);
       continue;
     }
-    if (sha256(onDisk) !== entry.writtenSha256) {
-      refused.push(relPath);
+    const digest = sha256(onDisk);
+    if (digest === entry.writtenSha256) {
+      writeFileSync(abs, entry.original, 'utf8');
+      restored.push(relPath);
       continue;
     }
-    writeFileSync(abs, entry.original, 'utf8');
-    restored.push(relPath);
+    // The write-ahead window: the record landed and the perturbation did not. Nothing to undo, and
+    // reporting it as a conflict would send a reader looking for a problem that does not exist.
+    // `originalSha256` is read from the entry where present, and derived otherwise, so a marker
+    // written before that field existed still recovers (review of PR 521).
+    if (digest === (entry.originalSha256 ?? sha256(entry.original))) {
+      alreadyClean.push(relPath);
+      continue;
+    }
+    refused.push(relPath);
   }
   removeMarker(root);
-  return { found: true, restored, refused, startedAt: marker.startedAt ?? null };
+  return { found: true, restored, refused, alreadyClean, startedAt: marker.startedAt ?? null };
 }
 
 /**

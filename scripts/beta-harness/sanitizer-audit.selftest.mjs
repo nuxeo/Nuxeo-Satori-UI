@@ -130,11 +130,14 @@ function edit(relPath, transform) {
   const next = transform(current);
   if (next === original)
     throw new Error(`perturbation for ${relPath} changed nothing — the selftest would be vacuous`);
-  writeFileSync(abs, next, 'utf8');
   backups.set(relPath, { original, written: next });
-  // Written after the file, never before: a marker describing a perturbation that was not applied
-  // would make the next run "restore" a file nobody touched.
+  // **Write-ahead**: the record goes down before the file, so there is no window in which a
+  // perturbation exists with nothing describing it. The first version wrote the file first, on the
+  // reasoning that a record of a perturbation that was never applied would make the next run
+  // "restore" a file nobody touched — which was wrong, because the marker names both states and
+  // recovery recognises an unapplied write as already-clean (review of PR 521).
   writeMarker(ROOT, backups);
+  writeFileSync(abs, next, 'utf8');
 }
 function restoreAll() {
   const clobbered = [];
@@ -241,13 +244,29 @@ process.on('uncaughtException', (err) => {
  * Prints nothing when there is nothing to do, so a normal run is unchanged (NXSAT-751).
  */
 function recoverInterruptedRun() {
-  const { found, restored, refused, startedAt } = recoverPerturbations(ROOT);
-  if (!found) return refused;
+  const { found, restored, refused, alreadyClean, startedAt, unreadable } =
+    recoverPerturbations(ROOT);
+  if (!found) return [];
+  if (unreadable) {
+    // Not treated as a clean start: an unreadable marker is the signature of a kill during the
+    // marker write, which is exactly when something is most likely still perturbed.
+    console.error(
+      `selftest: the interruption marker ${MARKER} ${unreadable}.\n` +
+        `  It has been left in place as evidence. Check these paths by hand before trusting a run:\n` +
+        PERTURBED_PATHS.map((p) => `    ${p}\n`).join(''),
+    );
+    return ['<unreadable marker>'];
+  }
   console.log(
     `selftest: a previous run was interrupted${startedAt ? ` (started ${startedAt})` : ''} ` +
       `and left perturbations behind — SIGKILL cannot be caught, so its handlers never ran.`,
   );
   if (restored.length > 0) console.log(`  restored: ${restored.join(', ')}`);
+  if (alreadyClean.length > 0) {
+    console.log(
+      `  already clean: ${alreadyClean.join(', ')} — recorded before the write landed, nothing to undo`,
+    );
+  }
   if (refused.length > 0) {
     console.error(
       `  NOT restored: ${refused.join(', ')}\n` +
@@ -271,7 +290,22 @@ if (process.argv.includes('--recover-only')) {
   process.exit(0);
 }
 
-recoverInterruptedRun();
+// A normal run stops here when recovery could not finish the job. The first version discarded this
+// result on the normal path, so a post-crash edit that the audit does not flag — an added comment,
+// say — was reported as NOT restored and the suite then ran to a green PASS with the perturbation
+// still in the tree. A gate cannot report success while recovery is waiting on a human, and
+// `edit()` would go on to capture the foreign content as the `original` it restores to (review of
+// PR 521).
+{
+  const refused = recoverInterruptedRun();
+  if (refused.length > 0) {
+    console.error(
+      `\nselftest: refusing to run — recovery left ${refused.length} path(s) for a human.\n` +
+        `  Resolve them, then re-run. 'git diff' shows what is there; 'git checkout --' discards it.`,
+    );
+    process.exit(1);
+  }
+}
 
 const results = [];
 

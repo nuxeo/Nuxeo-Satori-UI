@@ -18,6 +18,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import {
   MARKER,
@@ -29,7 +30,12 @@ import {
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const SELFTEST = 'scripts/beta-harness/sanitizer-audit.selftest.mjs';
-const STATE_MODULE = join(ROOT, 'scripts', 'beta-harness', 'sanitizer-selftest-state.mjs');
+// A file URL, not a path. `C:\\...` is read by Node as an unsupported URL scheme, so the child
+// would fail before perturbing anything and the control would report the wrong thing on Windows
+// (review of PR 521).
+const STATE_MODULE = pathToFileURL(
+  join(ROOT, 'scripts', 'beta-harness', 'sanitizer-selftest-state.mjs'),
+).href;
 
 /** A small, real, registered file — cheap to perturb and quick to compare. */
 const SUBJECT = 'libs/shared/nuxeo-client/src/lib/utils/navigable-url.ts';
@@ -119,6 +125,26 @@ const runAudit = (...args) =>
     encoding: 'utf8',
   });
 
+// Refuse to start while a marker exists. These controls write their own markers, and `writeMarker`
+// merges rather than replaces — but a run that began with someone else's interruption outstanding
+// would still finish by clearing it, and could record an existing perturbation as a file's
+// "original". Recover first; do not let a suite that writes to the tree start on an unknown one
+// (review of PR 521).
+{
+  const inherited = readMarker(ROOT);
+  if (inherited) {
+    console.error(
+      `sanitizer-selftest-recovery: refusing to start — ${MARKER} already exists` +
+        (inherited.unreadable ? ` and ${inherited.unreadable}` : '') +
+        `.\n  An earlier run was interrupted. Recover it first:\n` +
+        `    node scripts/beta-harness/sanitizer-audit.selftest.mjs --recover-only\n` +
+        `  These controls perturb real files, so starting on an unknown marker could record a\n` +
+        `  leftover as a file's original and leave it behind for good.`,
+    );
+    process.exit(1);
+  }
+}
+
 console.log('sanitizer-selftest recovery controls\n');
 
 // ---- the defect NXSAT-751 reports --------------------------------------------------------------
@@ -165,10 +191,19 @@ console.log('sanitizer-selftest recovery controls\n');
   const { original } = crashMidPerturbation();
   try {
     const full = runSelftest();
+    // The detail names the likely cause rather than only the exit code. A tree that already held
+    // a marker-less perturbation — one left by an earlier interrupted run of the real selftest —
+    // makes this control fail for a reason that has nothing to do with the code under test, and
+    // the first version reported only `exit 1, file restored`, which sent me looking in the wrong
+    // place for ten minutes.
+    const firstProblem = `${full.stdout ?? ''}${full.stderr ?? ''}`
+      .split('\n')
+      .find((l) => /FAIL|refusing|NOT restored/i.test(l));
     check(
       'a normal selftest run repairs an inherited perturbation and still passes',
       read(SUBJECT) === original && full.status === 0,
-      `exit ${full.status}, file ${read(SUBJECT) === original ? 'restored' : 'STILL PERTURBED'}`,
+      `exit ${full.status}, file ${read(SUBJECT) === original ? 'restored' : 'STILL PERTURBED'}` +
+        (full.status === 0 ? '' : ` — ${firstProblem?.trim() ?? 'no FAIL line; check the tree for leftovers'}`),
     );
     check(
       'and reports the interrupted run rather than failing its baseline',
@@ -185,6 +220,64 @@ console.log('sanitizer-selftest recovery controls\n');
     check('and leaves no marker behind after a clean finish', !existsSync(markerAbs));
   } finally {
     write(SUBJECT, original);
+  }
+}
+
+// ---- the write-ahead window: killed BETWEEN the record and the file ----------------------------
+// Review of PR 521 asked for the boundaries to be tested, not just "after both writes finish".
+// With the record written first, a kill in that window leaves a marker describing a perturbation
+// that never landed — which must be recognised as already-clean, not restored over and not
+// reported as a conflict needing a human.
+{
+  const original = read(SUBJECT);
+  const script = `
+    import { writeMarker } from ${JSON.stringify(STATE_MODULE)};
+    import { readFileSync } from 'node:fs';
+    const abs = ${JSON.stringify(join(ROOT, SUBJECT))};
+    const original = readFileSync(abs, 'utf8');
+    // The record goes down, and the process dies before the file is touched.
+    writeMarker(${JSON.stringify(ROOT)}, new Map([[${JSON.stringify(SUBJECT)}, { original, written: original + '\\n// never written\\n' }]]));
+    process.kill(process.pid, 'SIGKILL');
+  `;
+  spawnSync('node', ['--input-type=module', '-e', script], { cwd: ROOT, encoding: 'utf8' });
+  try {
+    check(
+      'a marker exists although the file was never perturbed',
+      existsSync(markerAbs) && read(SUBJECT) === original,
+    );
+    const recovered = runSelftest('--recover-only');
+    check(
+      'recovery calls it already clean rather than a conflict',
+      /already clean/i.test(recovered.stdout ?? '') && !/NOT restored/i.test(recovered.stderr ?? ''),
+      (recovered.stdout ?? '').split('\n').find((l) => /already clean/i.test(l))?.trim(),
+    );
+    check('leaves the file untouched', read(SUBJECT) === original);
+    check('exits 0, because nothing needs a human', recovered.status === 0);
+    check('and drops the marker', !existsSync(markerAbs));
+  } finally {
+    write(SUBJECT, original);
+    runSelftest('--recover-only');
+  }
+}
+
+// ---- an unreadable marker is not a clean start -------------------------------------------------
+// The signature of a kill during the marker write, which is when something is most likely still
+// perturbed — so treating it as absent would hide the one case the marker exists for.
+{
+  writeFileSync(markerAbs, '{ "paths": { truncated mid-w', 'utf8');
+  try {
+    const recovered = runSelftest('--recover-only');
+    check(
+      'an unparseable marker is reported, not ignored',
+      /not valid JSON|kill mid-write/i.test(recovered.stderr ?? ''),
+    );
+    check('and exits non-zero', recovered.status !== 0);
+    check('and is left in place as evidence', existsSync(markerAbs));
+  } finally {
+    writeFileSync(markerAbs, '', 'utf8');
+    spawnSync('node', ['-e', `require('fs').rmSync(${JSON.stringify(markerAbs)},{force:true})`], {
+      cwd: ROOT,
+    });
   }
 }
 
@@ -265,6 +358,39 @@ console.log('sanitizer-selftest recovery controls\n');
     );
   } finally {
     write(AUDIT_SUBJECT, original);
+    runSelftest('--recover-only');
+  }
+}
+
+// ---- the hint covers a leftover BUDGET change, which names no path ------------------------------
+// Asked for in review of PR 521, and it found a real gap: four of the six `[ratchet]` phrasings
+// name a category and a number without naming the allowlist, so path matching alone missed the
+// most dangerous leftover there is. A perturbed allowlist changes which bypasses count as
+// accounted for — the very first reproduction of NXSAT-751 left `"B": 1` as `"B": 0`.
+{
+  const ALLOWLIST = '.ai/state/sanitizer-allowlist.json';
+  const lowerABudget = (text) => {
+    const parsed = JSON.parse(text);
+    const [cat] = Object.entries(parsed.budgets).find(([, v]) => typeof v === 'number' && v > 0) ?? [];
+    if (!cat) throw new Error('no positive budget to lower — update this control');
+    parsed.budgets[cat] -= 1;
+    return `${JSON.stringify(parsed, null, 2)}\n`;
+  };
+  const { original } = crashMidPerturbation(lowerABudget, ALLOWLIST);
+  try {
+    const audit = runAudit();
+    const out = `${audit.stdout ?? ''}${audit.stderr ?? ''}`;
+    check(
+      'a leftover budget change is reported by the audit',
+      audit.status === 1 && /\[ratchet\]/.test(out),
+      `exit ${audit.status}`,
+    );
+    check(
+      'and the hint names the allowlist even though the finding does not',
+      out.includes('--recover-only') && out.includes(`\n    ${ALLOWLIST}\n`),
+    );
+  } finally {
+    write(ALLOWLIST, original);
     runSelftest('--recover-only');
   }
 }

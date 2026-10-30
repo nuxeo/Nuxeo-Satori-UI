@@ -1960,7 +1960,13 @@ function main() {
  * (NXSAT-751).
  */
 function explainPossibleLeftovers(findings) {
-  const suspect = [...new Set(findings.flatMap((f) => isLeftover(f) || []))];
+  // A `[ratchet]` finding is about the allowlist by construction, and four of the six phrasings
+  // name a category and a number without naming the file — so path matching alone missed the most
+  // dangerous leftover of all. A perturbed allowlist changes which bypasses count as accounted
+  // for, which is how the audit stays green while the budget it enforces is wrong; the very first
+  // reproduction of NXSAT-751 left `"B": 1` as `"B": 0` (review of PR 521).
+  const attribute = (f) => (f.startsWith('[ratchet]') ? `${f} ${ALLOWLIST_PATH}` : f);
+  const suspect = [...new Set(findings.flatMap((f) => isLeftover(attribute(f)) || []))];
   if (suspect.length === 0) return;
 
   const marker = readMarker(ROOT);
