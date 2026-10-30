@@ -145,6 +145,20 @@ private readonly locale = inject(LOCALE_ID);
 
 ### Changed (`@nuxeo-satori/platform` generators)
 
+- A generated package's `build.mjs` refuses JSON nested deeper than the server accepts, which was
+  the one server limit it did not know (NXSAT-730). Between 1001 and about 3700 deep the build used
+  to succeed and the package to install, while the server dropped the fragment at
+  `error invalid-json` and the customer's setting silently did nothing; deeper than that the
+  recursive duplicate-key check overflowed the stack and the build reported the bare words
+  "Maximum call stack size exceeded". Depth is now counted with an explicit stack before anything
+  walks the document, so the refusal names the file and the limit at any depth:
+  `nested 1001 deep; the server's JSON parser refuses a fragment or layout nested deeper than 1000`.
+  That limit is jackson-core's `StreamReadConstraints` default rather than one `nuxeo-agentic-core`
+  sets — `ConfigSnapshot` parses with a plain `ObjectMapper` — so the message names the parser, and
+  on a server whose Jackson raised the default the build is stricter than it needs to be rather
+  than generous enough to ship a package that does not work. Component XML is bounded the same way
+  at 256 elements, this script's own limit, because the recursive well-formedness walk used to
+  overflow and print a raw Node stack trace.
 - The `config-package` generator and `create.mjs` refuse a package name they cannot honour, before
   writing anything, and say what it would clash with (NXSAT-729). Refused: `defaults`, the name of
   Satori's own packaged fragments in both layers — a package of that name contributed a fragment on
