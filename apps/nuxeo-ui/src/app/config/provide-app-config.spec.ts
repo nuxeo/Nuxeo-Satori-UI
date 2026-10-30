@@ -5,6 +5,7 @@ import { Subject, of } from 'rxjs';
 import {
   initialiseAppConfigAndLanguage,
   provideAppConfig,
+  resolveStringLanguage,
   syncDocumentLanguage,
   syncDocumentTitle,
 } from './provide-app-config';
@@ -31,6 +32,7 @@ import { provideSatoriDateAdapter } from '@nuxeo/satori-platform/ui';
 
 import { appConfig } from '../app.config';
 import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
+import { SHIPPED_CATALOGUE_LANGUAGES } from '../i18n/shipped-catalogues';
 
 /**
  * The language comes from the configuration that has just loaded, on every boot.
@@ -42,7 +44,7 @@ import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
  * applies.
  */
 describe('initialiseAppConfigAndLanguage', () => {
-  function harness(defaultLanguage: string) {
+  function harness(defaultLanguage: string, availableLanguages?: readonly string[]) {
     const order: string[] = [];
     const config = {
       load: jasmine.createSpy('load').and.callFake(async () => {
@@ -52,7 +54,12 @@ describe('initialiseAppConfigAndLanguage', () => {
       // carries a brand a bare function does not have — and the real config shape, because a
       // partial literal was rejected too. Both caught by narrowing the signature rather than
       // casting past it.
-      bootstrap: signal({ ...DEFAULT_APP_BOOTSTRAP_CONFIG, defaultLanguage }),
+      bootstrap: signal({
+        ...DEFAULT_APP_BOOTSTRAP_CONFIG,
+        defaultLanguage,
+        availableLanguages: availableLanguages ?? DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages,
+      }),
+      reportUnsupportedDefaultLanguage: jasmine.createSpy('reportUnsupportedDefaultLanguage'),
     };
     const translate = {
       setFallbackLang: jasmine.createSpy('setFallbackLang'),
@@ -66,8 +73,8 @@ describe('initialiseAppConfigAndLanguage', () => {
 
   // No casts: the function takes only the members it uses, so these doubles satisfy it
   // structurally and a signature change becomes a compile error here.
-  const run = async (language: string) => {
-    const h = harness(language);
+  const run = async (language: string, availableLanguages?: readonly string[]) => {
+    const h = harness(language, availableLanguages);
     await initialiseAppConfigAndLanguage(h.config, h.translate)();
     return h;
   };
@@ -92,9 +99,99 @@ describe('initialiseAppConfigAndLanguage', () => {
     expect(second.translate.use).toHaveBeenCalledOnceWith('de');
   });
 
-  it('still uses an unshipped locale for strings, because the fallback handles them', async () => {
+  /**
+   * This used to read "still uses an unshipped locale for strings, because the fallback handles
+   * them", and asserted `use('xx')`. That rationale is still true — the strings do fall through
+   * to English, and NXSAT-733 is explicitly not a request to change the fallback — but it was
+   * written before `syncDocumentLanguage` existed, and the two decisions together produced the
+   * defect: ngx-translate believing it was in `xx` is what put `lang="xx"` on an English page and
+   * what sent a doomed request for `i18n/xx.json`.
+   *
+   * So the behaviour the old spec pinned is deliberately changed here, and the thing its title
+   * cared about is asserted below instead: English strings, by fallback, unchanged.
+   */
+  it('does not hand an unshipped locale to the string loader', async () => {
     const h = await run('xx');
-    expect(h.translate.use).toHaveBeenCalledWith('xx');
+    expect(h.translate.use).toHaveBeenCalledOnceWith('en');
+    expect(h.translate.use).not.toHaveBeenCalledWith('xx');
+  });
+
+  it('still falls back to English, which is what made the unshipped case survivable', async () => {
+    const h = await run('xx');
+    expect(h.translate.setFallbackLang).toHaveBeenCalledWith('en');
+  });
+
+  it('reports the refused value, the fallback and the reason', async () => {
+    const h = await run('xx');
+    expect(h.config.reportUnsupportedDefaultLanguage).toHaveBeenCalledOnceWith(
+      'xx',
+      'en',
+      'this build ships no translation catalogue for it',
+    );
+  });
+
+  it('says so differently when the language ships but the deployment does not offer it', async () => {
+    // Two refusals that need different fixes from whoever reads the console: a typo, versus a
+    // language this deployment deliberately narrowed away.
+    const h = await run('fr', ['en', 'de']);
+    expect(h.config.reportUnsupportedDefaultLanguage).toHaveBeenCalledOnceWith(
+      'fr',
+      'en',
+      'availableLanguages does not offer it',
+    );
+    expect(h.translate.use).toHaveBeenCalledOnceWith('en');
+  });
+
+  it('reports nothing for a language it accepts', async () => {
+    const h = await run('fr');
+    expect(h.config.reportUnsupportedDefaultLanguage).not.toHaveBeenCalled();
+    expect(h.translate.use).toHaveBeenCalledOnceWith('fr');
+  });
+
+  it('accepts English even where a customer narrowed it out of availableLanguages', async () => {
+    // English is the fallback and is always renderable, so refusing it would leave nothing to
+    // fall back to.
+    const h = await run('en', ['fr']);
+    expect(h.config.reportUnsupportedDefaultLanguage).not.toHaveBeenCalled();
+    expect(h.translate.use).toHaveBeenCalledOnceWith('en');
+  });
+});
+
+/**
+ * `resolveStringLanguage` against the lists as they actually are, rather than through a boot.
+ *
+ * These are the premise guards: each one would pass for the wrong reason if the lists drifted,
+ * so they assert the relationship rather than the literal set.
+ */
+describe('resolveStringLanguage', () => {
+  const advertised = DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages;
+
+  it('admits every language that both ships a catalogue and is advertised', () => {
+    for (const language of SHIPPED_CATALOGUE_LANGUAGES.filter((l) => advertised.includes(l))) {
+      expect(resolveStringLanguage(language, advertised))
+        .withContext(`"${language}" ships a catalogue and is advertised`)
+        .toBe(language);
+    }
+  });
+
+  it('refuses every locale registered ahead of its catalogue', () => {
+    // The five mid-flight languages of `D8e-webui`: Angular locale data registered, no catalogue
+    // yet. Admitting them on registration alone would render English under their own `lang`.
+    const registeredOnly = REGISTERED_LOCALES.filter(
+      (locale) => !SHIPPED_CATALOGUE_LANGUAGES.includes(locale),
+    );
+    expect(registeredOnly.length)
+      .withContext('premise: some locale must be registered ahead of its catalogue')
+      .toBeGreaterThan(0);
+    for (const locale of registeredOnly) {
+      expect(resolveStringLanguage(locale, [...advertised, locale]))
+        .withContext(`"${locale}" has no catalogue, so it must not reach the string loader`)
+        .toBe('en');
+    }
+  });
+
+  it('refuses a value that is in no list at all', () => {
+    expect(resolveStringLanguage('xx', advertised)).toBe('en');
   });
 });
 
@@ -121,8 +218,22 @@ describe('the configured language at startup', () => {
     };
   }
 
-  /** One application start, configured with `defaultLanguage`; resolves to the language in force. */
-  async function boot(defaultLanguage: string): Promise<string> {
+  /**
+   * One application start, configured with `defaultLanguage`; reports everything that boot did.
+   *
+   * It returns the requested URLs and the recorded diagnostics as well as the language, because
+   * NXSAT-733 is only partly about the language in force: the other halves of it are a request for
+   * a catalogue that cannot exist and a refusal nobody was told about. Neither is visible from the
+   * language alone.
+   */
+  async function boot(
+    defaultLanguage: string,
+    availableLanguages?: readonly string[],
+  ): Promise<{
+    readonly lang: string;
+    readonly urls: readonly string[];
+    readonly messages: readonly string[];
+  }> {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       providers: [
@@ -133,22 +244,39 @@ describe('the configured language at startup', () => {
     });
     const http = TestBed.inject(HttpTestingController);
     const status = TestBed.inject(ApplicationInitStatus);
+    const urls: string[] = [];
+    const bootstrapContent: Record<string, unknown> = { defaultLanguage };
+    if (availableLanguages) bootstrapContent['availableLanguages'] = [...availableLanguages];
     for (const layer of ['bootstrap', 'manifest'] as const) {
       for (const request of http.match((r) => r.url.endsWith(`/agentic-ui-config/${layer}.json`))) {
-        request.flush(envelope(layer, layer === 'bootstrap' ? { defaultLanguage } : {}));
+        urls.push(request.request.url);
+        request.flush(envelope(layer, layer === 'bootstrap' ? bootstrapContent : {}));
       }
     }
     for (let turn = 0; turn < 50 && !status.done; turn++) {
       await new Promise((resolve) => setTimeout(resolve));
-      http.match(() => true).forEach((request) => request.flush({}));
+      http
+        .match(() => true)
+        .forEach((request) => {
+          urls.push(request.request.url);
+          request.flush({});
+        });
     }
     expect(status.done).withContext(`initializers settled for ${defaultLanguage}`).toBeTrue();
-    return TestBed.inject(TranslateService).getCurrentLang() ?? 'en';
+    return {
+      lang: TestBed.inject(TranslateService).getCurrentLang() ?? 'en',
+      urls,
+      messages: TestBed.inject(AppConfigService).diagnostics().messages,
+    };
   }
 
   beforeEach(() => {
     htmlLang = document.documentElement.lang;
     localStorage.setItem(STALE_LOCALE_KEY, 'de');
+    // `note()` writes to the console as well as recording, and the assertions below read the
+    // record. Spying keeps the expected warnings out of the test output without suppressing a
+    // real one, because `callThrough` is deliberately not used.
+    spyOn(console, 'warn');
   });
 
   afterEach(() => {
@@ -158,14 +286,107 @@ describe('the configured language at startup', () => {
   });
 
   it('applies the configured language on every boot, over a stored one', async () => {
-    expect(await boot('fr')).toBe('fr');
-    expect(await boot('de')).toBe('de');
-    expect(await boot('en')).toBe('en');
+    expect((await boot('fr')).lang).toBe('fr');
+    expect((await boot('de')).lang).toBe('de');
+    expect((await boot('en')).lang).toBe('en');
   });
 
   it('announces that language on <html lang> once startup has settled', async () => {
     await boot('fr');
     expect(document.documentElement.lang).toBe('fr');
+  });
+
+  /**
+   * NXSAT-733 — the string language, through the real startup.
+   *
+   * The ticket's summary reads as though the English text were the defect. It is not:
+   * `setFallbackLang('en')` makes English the fallback deliberately, and the strings are working
+   * as designed. What is wrong is narrower — `<html lang>` claiming a language the text is not in
+   * (WCAG 3.1.1: a screen reader picks a voice from it, and browser translation offers it as the
+   * source language), plus a request for a catalogue that cannot exist.
+   *
+   * These assert through `boot()` rather than through `resolveStringLanguage` directly, for the
+   * reason the `LOCALE_ID` block above gives: the function was easy to get right and the defect
+   * was that nothing consulted it.
+   */
+  describe('an unsupported defaultLanguage', () => {
+    const catalogueRequests = (urls: readonly string[], lang: string) =>
+      urls.filter((url) => new RegExp(`(^|/)i18n/${lang}\\.json$`).test(url));
+
+    it('announces en on <html lang>, matching the English text that renders', async () => {
+      await boot('xx');
+      expect(document.documentElement.lang).toBe('en');
+    });
+
+    it('does not ask for a catalogue that cannot exist', async () => {
+      const { urls } = await boot('xx');
+      expect(catalogueRequests(urls, 'xx')).toEqual([]);
+    });
+
+    it('records exactly one diagnostic, and it names the rejected value', async () => {
+      const { messages } = await boot('xx');
+      const naming = messages.filter((message) => message.includes('"xx"'));
+      expect(naming.length).withContext(messages.join(' | ')).toBe(1);
+      expect(naming[0]).toContain('defaultLanguage');
+    });
+
+    it('writes that diagnostic to the console under the configuration prefix', async () => {
+      const { messages } = await boot('xx');
+      const naming = messages.filter((message) => message.includes('"xx"'));
+      // The channel, not a second one: `note()` records and logs, so support finds it in the
+      // console and a diagnostics surface can read it back.
+      expect(console.warn).toHaveBeenCalledWith(`[agentic-ui-config] ${naming[0]}`);
+    });
+
+    it('keeps the English fallback for strings, which is designed behaviour', async () => {
+      // The correction to the ticket's framing, pinned: refusing the language must not also
+      // remove the fallback that makes the text readable.
+      const { lang } = await boot('xx');
+      expect(lang).toBe('en');
+    });
+
+    /**
+     * The control. A guard that refused everything would satisfy every assertion above and break
+     * the product, so a shipped language has to survive untouched — including its catalogue
+     * request, which is the thing the unsupported case must no longer make.
+     */
+    it('still applies a supported language and still loads its catalogue', async () => {
+      const { lang, urls, messages } = await boot('fr');
+      expect(lang).toBe('fr');
+      expect(document.documentElement.lang).toBe('fr');
+      expect(catalogueRequests(urls, 'fr').length).toBeGreaterThan(0);
+      expect(messages.filter((message) => message.includes('defaultLanguage'))).toEqual([]);
+    });
+
+    it('applies every language the packaged configuration advertises', async () => {
+      for (const language of DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages) {
+        expect((await boot(language)).lang)
+          .withContext(`"${language}" is advertised, so it must survive the guard`)
+          .toBe(language);
+      }
+    });
+
+    /**
+     * The customer-override hole, which `availableLanguages` alone cannot close — the same
+     * argument the #522 review made against the first version of `resolveFormattingLocale`, and
+     * the reason this guard reads the shipped catalogues rather than the configuration.
+     *
+     * `{ defaultLanguage: 'es', availableLanguages: ['en', 'es'] }` is valid Layer 0: it parses,
+     * `mergeBootstrapConfig` accepts it, and `checkAdvertisedLocalesShip` never sees it because
+     * that gate reads the packaged config and not a customer's. No `es.json` is bundled, so the
+     * app's own strings render English and `<html lang="es">` would be the same false claim the
+     * ticket is about.
+     */
+    it('refuses a language a customer advertises but this build ships no catalogue for', async () => {
+      const { lang, urls } = await boot('es', ['en', 'es']);
+      expect(lang).toBe('en');
+      expect(catalogueRequests(urls, 'es')).toEqual([]);
+    });
+
+    it('still honours a customer override naming a language this build does ship', async () => {
+      // The mirror: narrowing the advertised list must not refuse a language that works.
+      expect((await boot('fr', ['en', 'fr'])).lang).toBe('fr');
+    });
   });
 });
 

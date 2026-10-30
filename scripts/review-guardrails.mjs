@@ -4566,6 +4566,102 @@ function checkAdvertisedLocalesShip() {
   }
 }
 
+/**
+ * `SHIPPED_CATALOGUE_LANGUAGES` names exactly the catalogues `apps/nuxeo-ui/public/i18n` holds.
+ *
+ * ## The defect this exists to make unrepeatable
+ *
+ * `defaultLanguage` used to reach `translate.use()` unchecked, so a value this build ships no
+ * catalogue for produced `<html lang="xx">` over English text and a 404 for `i18n/xx.json`
+ * (NXSAT-733). The guard that closes it has to know which catalogues exist, and it cannot find
+ * out at runtime: the folder is served over HTTP and a directory listing is not, so the only
+ * runtime test is to request a file and see whether it 404s — the very thing being removed.
+ *
+ * So the set is declared, and a declared set rots. Adding `es.json` without adding `es` here
+ * would leave Spanish refused and silently rendered in English; removing a catalogue without
+ * removing its entry would put the 404 straight back. Neither is visible in a diff of either
+ * file alone, which is why this compares them.
+ *
+ * ## Why both directions fail rather than one warning
+ *
+ * `checkLocaleDataRegistered` only *warns* when registration leads its catalogue, because that
+ * direction is harmless — Angular locale data nothing formats in is dead weight, not a defect.
+ * Here neither direction is harmless: both make the guard's answer disagree with what the
+ * browser would actually load, and a language guard that is wrong in either direction is worse
+ * than none, because it is trusted.
+ */
+function checkShippedCatalogueLanguages() {
+  const declaration = 'apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts';
+  const catalogueDir = 'apps/nuxeo-ui/public/i18n';
+  if (!fileExists(declaration)) {
+    fail(
+      `${declaration} is missing, so \`checkShippedCatalogueLanguages\` asserted nothing — and ` +
+        'the string-language guard in `provide-app-config.ts` has nothing to read.',
+    );
+    return;
+  }
+
+  const literal = /SHIPPED_CATALOGUE_LANGUAGES\s*:\s*readonly string\[\]\s*=\s*\[([^\]]*)\]/.exec(
+    read(declaration),
+  );
+  if (!literal) {
+    fail(
+      `${declaration} no longer holds a \`SHIPPED_CATALOGUE_LANGUAGES\` array literal this gate ` +
+        'can read, so it asserted nothing. Update the parser here before trusting a pass.',
+    );
+    return;
+  }
+  const declared = new Set(
+    [...literal[1].matchAll(/'([a-z]{2}(?:-[A-Za-z]{2,4})?)'/g)].map(([, locale]) => locale),
+  );
+  if (declared.size === 0) {
+    fail(`${declaration} declares no language, so every configured language would be refused.`);
+    return;
+  }
+
+  // `en.context.json` is translator context, not a language, and the two-letter pattern already
+  // excludes it — `.context` breaks the match. Generated locales are excluded for the same
+  // reason `checkLocaleDataRegistered` excludes them.
+  const shipped = new Set(
+    [
+      ...walk(
+        catalogueDir,
+        (path) => /\/[a-z]{2}(-[A-Za-z]{2,4})?\.json$/.test(path) && !isGeneratedLocale(path),
+      ),
+    ].map((path) => path.slice(path.lastIndexOf('/') + 1).replace(/\.json$/, '')),
+  );
+  if (shipped.size === 0) {
+    fail(
+      `${catalogueDir} yielded no catalogue, so this gate asserted nothing. Check the path — the ` +
+        'application cannot render any language without one.',
+    );
+    return;
+  }
+
+  for (const locale of shipped) {
+    if (declared.has(locale)) continue;
+    fail(
+      `${catalogueDir} ships ${locale}.json but ${declaration} does not declare "${locale}".\n` +
+        `    \`resolveStringLanguage\` would refuse \`defaultLanguage: "${locale}"\` and boot in ` +
+        'English, so the catalogue would be shipped and never rendered.\n' +
+        `    Add "${locale}" to SHIPPED_CATALOGUE_LANGUAGES.`,
+    );
+  }
+
+  for (const locale of declared) {
+    if (shipped.has(locale)) continue;
+    fail(
+      `${declaration} declares "${locale}" but ${catalogueDir} ships no catalogue for it.\n` +
+        `    \`resolveStringLanguage\` would admit \`defaultLanguage: "${locale}"\`, so the ` +
+        'application would announce `<html lang="' +
+        locale +
+        '">` over English text and request a ' +
+        `catalogue that 404s — NXSAT-733 again, for ${locale} instead of xx.\n` +
+        `    Remove "${locale}", or ship ${catalogueDir}/${locale}.json.`,
+    );
+  }
+}
+
 const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
 
 /**
@@ -11925,6 +12021,7 @@ const GUARDRAILS = [
   checkCataloguesAreTranslated,
   checkCataloguePlaceholders,
   checkAdvertisedLocalesShip,
+  checkShippedCatalogueLanguages,
   checkUpstreamCatalogueLanguages,
   checkCrowdinConfig,
   checkPackagedConfigIsNotADemo,

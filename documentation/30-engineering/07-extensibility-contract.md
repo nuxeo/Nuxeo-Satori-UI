@@ -69,20 +69,47 @@ fragment's `content` is a `bootstrap` fragment in your configuration package.
 
 ### `availableLanguages` is not uniform coverage
 
-Seven languages are advertised — `en`, `fr`, `de`, `ja`, `nl`, `th`, `zh` — and all seven have a
-complete application catalogue. **Only `en`, `fr` and `de` also have the shared-component
-strings.** `@hylandsoftware/satori-ui` ships catalogues for `de es fr it pl pt` and `en` only, so
-under `ja`, `nl`, `th` or `zh` every `sat.*` string the vendor's components render — including
-the accessible names on the navigation rail — falls back to English inside an otherwise
-translated application. Tracked upstream as
-[DS-2803](https://hyland.atlassian.net/browse/DS-2803); it cannot be closed in this repository,
-because the strings are the vendor's to author.
+Five languages are advertised — `en`, `fr`, `de`, `ja`, `nl` — and all five have a complete
+application catalogue. **Only `en`, `fr` and `de` also have the shared-component strings.**
+`@hylandsoftware/satori-ui` ships catalogues for `de es fr it pl pt` and `en` only, so under `ja`
+or `nl` every `sat.*` string the vendor's components render — including the accessible names on
+the navigation rail — falls back to English inside an otherwise translated application. Tracked
+upstream as [DS-2803](https://hyland.atlassian.net/browse/DS-2803); it cannot be closed in this
+repository, because the strings are the vendor's to author.
 
 A customer adding a language to `availableLanguages` gets the same split: their own catalogue is
 honoured, the shared components are not. `checkAdvertisedLocalesShip` fails a config that
 advertises a language with no application catalogue behind it, and
 `checkUpstreamCatalogueLanguages` keeps the loader's view of the vendor's coverage equal to what
 the installed package actually contains.
+
+### `defaultLanguage` must name a language this build ships
+
+An unsupported value — a typo, or a language dropped from a later release — falls back to `en`,
+and the console records one `[agentic-ui-config]` diagnostic naming the value, the reason and the
+fallback. It is not honoured as written, for two reasons that are both about honesty rather than
+about the strings: `<html lang>` is what a screen reader picks a voice from and what browser
+translation offers as the source language, so announcing a language the text is not in is a WCAG
+3.1.1 failure (NXSAT-733); and asking for a catalogue that cannot exist answers 404 on every
+load.
+
+A value is honoured only if **both** are true:
+
+| Check                                | Question                             | Who decides  |
+| ------------------------------------ | ------------------------------------ | ------------ |
+| a catalogue ships in the build       | will the text actually render in it? | this build   |
+| it is listed in `availableLanguages` | does this deployment offer it?       | the customer |
+
+`availableLanguages` alone is **not** sufficient, and this is the case worth knowing about when
+writing a fragment: `{ "defaultLanguage": "es", "availableLanguages": ["en", "es"] }` is valid
+configuration that parses cleanly, and because no `es.json` ships, the application's own strings
+would render English under `<html lang="es">`. `checkAdvertisedLocalesShip` cannot catch it —
+that gate reads the packaged config, not a customer's — so the build-time check is what refuses
+it, and the deployment gets `en` with a diagnostic rather than a page that misdescribes itself.
+
+Strings falling back to English is separate, deliberate, and unchanged: `setFallbackLang('en')`
+means any individual key missing from a catalogue renders its English source rather than a raw
+key.
 
 ### `branding.logo`
 
