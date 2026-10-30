@@ -23,11 +23,14 @@ its catalogue arrives. See `D8e-webui`.
 
 **Crowdin configuration is no longer the blocker — approvals are.** All four missing target
 languages were added and the one failing Spanish string was fixed on 30 October, so the pull can
-run. What gates it now is translation: the pull delivers all nine languages into **one** shared
-pull request, so a language with no approvals arrives as an all-English catalogue and holds that
-one pull request red, Spanish and the four shipping languages included. See item 2 below; it is
-the live consequence on the next run. Beyond that: translation itself, and RTL for Arabic and
-Hebrew.
+run.
+
+Because the pull delivers everything it is asked for into **one** shared pull request, a language
+with no approvals would arrive as an all-English catalogue and hold that one pull request red —
+Spanish and the four shipping languages with it. So the pull list is now `fr de ja nl es`:
+`ar`, `he`, `it` and `sv` are registered and are Crowdin targets, but are **not requested until
+they have approvals**. Item 2 below has the reasoning. What is left is translation, and RTL for
+Arabic and Hebrew.
 
 | Language | Code | Catalogue | Crowdin id | Status                                                                                                                                                                         |
 | -------- | ---- | --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -36,11 +39,11 @@ Hebrew.
 | German   | `de` | `de.json` | `de`       | ships, 99% approved                                                                                                                                                            |
 | Japanese | `ja` | `ja.json` | `ja`       | ships since NXSAT-293, 99% approved                                                                                                                                            |
 | Dutch    | `nl` | `nl.json` | `nl`       | ships since NXSAT-293, 99% approved                                                                                                                                            |
-| Spanish  | `es` | —         | `es`       | **requested, awaiting the pull** — 99% approved, and the `Seleccionado(s)` string that was failing `checkCatalogueValuesAreRenderable` is fixed. Nothing is holding it but a pull |
-| Italian  | `it` | —         | `it`       | **requested, awaiting translation** — a target since 30 October; translation not started                                                                                       |
-| Swedish  | `sv` | —         | `sv`       | **requested, awaiting translation** — a target since 30 October; translation not started                                                                                       |
-| Arabic   | `ar` | —         | `ar`       | **requested, awaiting translation** — a target since 30 October; translation not started. RTL is in flight, not absent — [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523) |
-| Hebrew   | `he` | —         | `he`       | **requested, awaiting translation** — a target since 30 October; translation not started. RTL as above                                                                         |
+| Spanish  | `es` | —         | `es`       | **requested, arriving next pull** — 99% approved, and the `Seleccionado(s)` string that was failing `checkCatalogueValuesAreRenderable` is fixed. In the pull list; nothing else holds it |
+| Italian  | `it` | —         | `it`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2)                                                                                       |
+| Swedish  | `sv` | —         | `sv`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2)                                                                                       |
+| Arabic   | `ar` | —         | `ar`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2). RTL is in flight — [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523) |
+| Hebrew   | `he` | —         | `he`       | **target, not yet requested** — as Arabic, including RTL                                                                         |
 
 Dropped: **Thai** (`th`) and **Chinese Simplified** (`zh`), both at 99% approved when removed.
 Their translations remain in Crowdin, so re-adding either is a pull rather than new work.
@@ -96,24 +99,29 @@ What remains:
 1. **Translation itself**, for `ar`, `he`, `it` and `sv`. Not started; Spanish is the exception at
    99% approved and needs only a pull.
 
-2. **The next pull will go red, and it is one shared pull request, so that blocks everything in
-   it.** Approved-only export fills an unapproved string with its English source, so a language
-   with no approvals arrives as a catalogue that is **entirely English**, and
-   `checkCataloguesAreTranslated` fails exactly that on purpose — it is indistinguishable from a
-   destructive sync (D8d).
+2. **Nothing, now — `ar`, `he`, `it` and `sv` were taken out of the pull list on 30 October, and
+   that is why.** Recorded because the reasoning is not obvious from the list itself.
 
-   The part that matters is the granularity. There is **one** `create_pull_request`, **one**
-   `localization_branch_name: crowdin-translations-update`, and all nine languages in a single
-   `download_translations_args`, so the pull opens or pushes to a single pull request carrying
-   every language at once. An untranslated `ar`, `he` or `sv` therefore does not sit quietly
-   beside the others: it holds that one pull request red, and with it Spanish — which is ready
-   now — and routine updates to `fr`, `de`, `ja` and `nl`, which have nothing wrong with them.
+   The pull is **one** pull request, not one per language: a single `create_pull_request`, a
+   single `localization_branch_name: crowdin-translations-update`, and every `--language` landing
+   in that one branch. So one language that is not ready holds the whole pull request red, and
+   with it every language that is.
 
-   So this is **not** "it turns green per language as approvals land", which an earlier revision
-   of this page said and which the branching model makes impossible. The options are to wait for
-   approvals on all three, or to drop `ar`, `he` and `sv` from `download_translations_args` until
-   they have some — a one-line change here, reversible, and the only thing that decouples Spanish
-   from them. Nothing is advertised to a user either way.
+   All four became Crowdin targets on 30 October but have no approvals yet. Approved-only export
+   fills an unapproved string with its English source, so each would arrive as an entirely
+   English catalogue, and `checkCataloguesAreTranslated` fails exactly that on purpose — it
+   cannot be told apart from a destructive sync (D8d). Leaving them listed would have blocked
+   **Spanish, which is at 99% approved and ready**, plus routine updates to the four shipping
+   languages.
+
+   An earlier revision of this page said the pull "turns green per language as approvals land".
+   The branching model makes that impossible, and the workflow's own `pull_request_body` had it
+   right all along — "**this** pull request stays red until approvals exist", singular.
+
+   Nothing is lost by holding them back: all four stay registered in `register-locale-data.ts`
+   and stay targets on the project. **Add each `--language` back when its approvals exist**,
+   which is the same pull request that brings its `availableLanguages` and `DATE_FNS_LOCALES`
+   entries (`D8e-webui`, step 2).
 
 3. **RTL, for Arabic and Hebrew.** No longer "tracked separately" — it is
    [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523), which sets `<html dir>` from the

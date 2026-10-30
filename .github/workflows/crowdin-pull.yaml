@@ -130,8 +130,28 @@ jobs:
           #
           # See D8d and D8h in docs/i18n-localization-plan.md.
 
-          # The nine non-English languages the app declares, aligned to Nuxeo Web UI's set.
-          # `th` and `zh-CN` were here and were dropped with their catalogues.
+          # Five of the nine non-English languages the app declares. `th` and `zh-CN` were here
+          # and were dropped with their catalogues; `ar`, `he`, `it` and `sv` are deliberately
+          # held back — see below.
+          #
+          # ## Why `ar`, `he`, `it` and `sv` are NOT here, though the app declares them
+          #
+          # Because **this is one pull request, not one per language.** There is a single
+          # `create_pull_request` and a single `localization_branch_name` below, and every
+          # `--language` here lands in that one branch. So one language that is not ready holds
+          # the whole pull request red, and with it every language that is.
+          #
+          # All four became Crowdin targets on 30 October (INTERN-1363) but have no approvals
+          # yet. Approved-only export fills an unapproved string with its English source, so each
+          # would arrive as an entirely English catalogue, and `checkCataloguesAreTranslated`
+          # fails exactly that on purpose — it cannot be told apart from a destructive sync
+          # (D8d). Listing them would therefore have blocked `es`, which is at 99% approved and
+          # ready, plus routine updates to `fr`, `de`, `ja` and `nl`.
+          #
+          # They are still registered in `register-locale-data.ts` and still targets on the
+          # project, so nothing is lost: **add each `--language` back when its approvals exist**,
+          # which is also when its `availableLanguages` and `DATE_FNS_LOCALES` entries land
+          # (`D8e-webui`, step 2). This is the one touchpoint that is cheap to reverse.
           #
           # ## An unknown `--language` fails the WHOLE pull, not the one flag
           #
@@ -187,7 +207,7 @@ jobs:
           #
           # So a language sits between the two steps for as long as translation takes, and that is
           # the normal state rather than an unfinished one.
-          download_translations_args: '--language=fr --language=de --language=ja --language=nl --language=ar --language=es --language=he --language=it --language=sv'
+          download_translations_args: '--language=fr --language=de --language=ja --language=nl --language=es'
 
           create_pull_request: true
           localization_branch_name: crowdin-translations-update

@@ -15,7 +15,8 @@ seven target languages. **That changed by 5 October 2026**: Crowdin Status showe
 NXSAT-293 ships `ja`, `nl`, `th` and `zh` beside `fr` and `de`. `es` is held back on one string —
 see D8e. **Changed again on 30 October 2026**: the target set was aligned to Nuxeo Web UI's ten,
 dropping `th` and `zh` and adding `ar`, `he`, `it`, `es` and `sv`. Five ship (`en fr de ja nl`);
-the additions are registered and requested from Crowdin but not yet advertised — `D8e-webui`.
+the additions are registered, and `es` is requested from Crowdin; `ar`, `he`, `it` and `sv` are
+Crowdin targets held out of the pull list until they have approvals — `D8e-webui`.
 Project membership is resolved (Manager access on
 28 September) and the translation team has confirmed it can begin (INTERN-1346, 28 September).
 Until 5 October that was separate from what the repository shipped: `fr.json` and `de.json`
@@ -915,12 +916,16 @@ in before it has translations. Of the five from D8e, they split cleanly:
 | Touchpoint                          | May run ahead? | Why                                                       |
 | ----------------------------------- | -------------- | --------------------------------------------------------- |
 | `register-locale-data.ts`           | **yes**        | missing-catalogue is a warning; the reverse throws NG0701 |
-| `--language` in `crowdin-pull.yaml` | **yes**        | it is the request that produces the catalogue             |
+| `--language` in `crowdin-pull.yaml` | **yes, with care** | it is the request that produces the catalogue — but the pull is ONE shared pull request, so an unapproved language listed here holds every other language's catalogue red |
 | Catalogue in `public/i18n/`         | n/a            | it is the thing being waited for                          |
 | `availableLanguages`                | **no**         | `checkAdvertisedLocalesShip` fails it                     |
 | `DATE_FNS_LOCALES`                  | **no**         | a test pins it to `availableLanguages`                    |
 
-So `ar`, `es`, `he`, `it` and `sv` are registered and requested, and absent from the last two.
+So all five are registered and absent from the last two. Only `es` is requested: `ar`, `he`, `it`
+and `sv` were taken out of `download_translations_args` on 30 October, because the pull delivers
+everything into one shared pull request and an unapproved language would have held Spanish and the
+four shipping languages red with it. Each `--language` goes back when its approvals exist, in the
+same pull request as its step 2 entries.
 Each joins them in the small pull request that brings its catalogue. The gate stays green
 throughout, which is the point: D8e's rule is not suspended, it is scoped.
 
@@ -1198,6 +1203,11 @@ pull request.
    `.github/workflows/crowdin-pull.yaml`. The pull downloads only the languages listed there, so
    without it the nightly pull never produces the catalogue. Nothing checks this yet. Confirm the id
    against the Crowdin project: these are Crowdin ids, not the app's locale ids.
+
+   **Do this when the language has approvals, not before.** The pull delivers every listed language
+   into one shared pull request, so one with no approvals arrives as an all-English catalogue,
+   fails `checkCataloguesAreTranslated` (D8d), and holds every other language in that pull request
+   red. Adding the flag early is safe for the CLI but not for the queue behind it.
 
 **Step 2 — advertise it, once `apps/nuxeo-ui/public/i18n/<lang>.json` has actually landed.** Not
 before; each of these fails if it leads.
