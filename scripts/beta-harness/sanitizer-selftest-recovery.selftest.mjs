@@ -16,8 +16,17 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -447,21 +456,27 @@ console.log('sanitizer-selftest recovery controls\n');
 // A rename replaces the inode, so without carrying the mode across, the executable bit of a
 // shebang script is silently lost. `sanitizer-audit.mjs` is 755 and is itself in the perturbable
 // set, so the first atomic-replacement commit stripped it — caught by `git` reporting a mode
-// change, not by any control. Now there is a control (review of PR 521).
+// change, not by any control.
+//
+// Probed on a **temp file**, not on that script. The first version of this control replaced the
+// real `sanitizer-audit.mjs` with no marker recorded, so killing this gate inside it would have
+// left a perturbation with no recovery record — recreating the exact defect this PR fixes, inside
+// the suite that tests the fix. The claim is about `writeFileAtomic` and needs no tracked file at
+// all, which makes the temp file both safer and a more honest test of the property (review of
+// PR 521).
 {
-  const AUDIT_SCRIPT = 'scripts/beta-harness/sanitizer-audit.mjs';
-  const before = statSync(join(ROOT, AUDIT_SCRIPT)).mode;
-  const original = read(AUDIT_SCRIPT);
-  try {
-    writeFileAtomic(join(ROOT, AUDIT_SCRIPT), `${original}\n// mode probe\n`);
-    check(
-      'writeFileAtomic keeps the file mode, so a shebang script stays executable',
-      statSync(join(ROOT, AUDIT_SCRIPT)).mode === before,
-      `mode ${(statSync(join(ROOT, AUDIT_SCRIPT)).mode & 0o777).toString(8)} was ${(before & 0o777).toString(8)}`,
-    );
-  } finally {
-    writeFileAtomic(join(ROOT, AUDIT_SCRIPT), original);
-  }
+  const probe = join(mkdtempSync(join(tmpdir(), 'nxsat751-mode-')), 'shebang.mjs');
+  writeFileSync(probe, '#!/usr/bin/env node\nconsole.log(1);\n', 'utf8');
+  chmodSync(probe, 0o755);
+  const before = statSync(probe).mode;
+  writeFileAtomic(probe, '#!/usr/bin/env node\nconsole.log(2);\n');
+  check(
+    'writeFileAtomic keeps the file mode, so a shebang script stays executable',
+    statSync(probe).mode === before,
+    `mode ${(statSync(probe).mode & 0o777).toString(8)} was ${(before & 0o777).toString(8)}`,
+  );
+  check('and the replacement landed', readFileSync(probe, 'utf8').includes('console.log(2)'));
+  rmSync(dirname(probe), { recursive: true, force: true });
 }
 
 // ---- every perturbed path is registered --------------------------------------------------------
