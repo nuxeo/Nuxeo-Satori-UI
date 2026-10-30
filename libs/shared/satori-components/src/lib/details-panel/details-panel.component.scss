@@ -11,10 +11,13 @@
   background: var(--nxs-details-panel-surface);
 }
 
+// The title leads and the close button trails, so the wider inset belongs at the inline start:
+// physical values put the 8px against the title and the 16px against the button once mirrored.
 .nxs-details-panel__header {
   display: flex;
   align-items: center;
-  padding: 12px 8px 12px 16px;
+  padding: 12px 0;
+  padding-inline: 16px 8px;
   border-bottom: 1px solid var(--nxs-details-panel-divider);
   flex-shrink: 0;
 }

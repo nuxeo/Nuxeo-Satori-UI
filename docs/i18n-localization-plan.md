@@ -935,9 +935,14 @@ Two things that follow, neither optional:
 - **Do not seed empty or English-filled catalogues** to make a language advertisable sooner.
   `checkCataloguesAreTranslated` fails an all-English catalogue by design, and D8e is right about
   why: a user who selects Spanish and reads English has been lied to.
-- **`ar` and `he` need RTL support, not just translations.** Component-level RTL exists in seven
-  `nxs-` components and two inject `Directionality`, but nothing sets `dir`, so none of it
-  activates. A catalogue alone does not make either shippable.
+- ~~**`ar` and `he` need RTL support, not just translations.**~~ **Done — NXSAT-752, 30 October 2026.** The component-level RTL in seven `nxs-` components was real and had simply never run,
+  because nothing set `dir`. `syncDocumentDirection` sets it from the active language and writes
+  CDK's `Directionality` too, which is the load-bearing half: `Directionality` reads the attribute
+  once at construction, and every CDK overlay takes its direction from that service rather than
+  from the document. So these two now owe only their catalogues, and — because `defaultLanguage`
+  is a free string that nothing validates against `availableLanguages` — a deployment that selects
+  `ar` today already gets a mirrored layout rather than a broken one. See "Right to left" in
+  [`docs/i18n-status.md`](i18n-status.md).
 
 One cost is carried deliberately: the pull list names `ar`, `he`, `it` and `sv` while Crowdin
 project 160 does not have them as targets, and the CLI rejects the whole invocation rather than

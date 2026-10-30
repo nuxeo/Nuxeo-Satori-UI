@@ -31,11 +31,14 @@
   }
 }
 
+// The leading inset is the wider one, against the row's icon; logical keeps it there when
+// mirrored rather than swapping it with the trailing 8px.
 .nxs-upload-queue__item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 8px 8px 12px;
+  padding: 8px 0;
+  padding-inline: 12px 8px;
   border-bottom: 1px solid var(--mat-sys-outline-variant);
 
   &:last-child {

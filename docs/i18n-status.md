@@ -31,8 +31,8 @@ its catalogue arrives. See `D8e-webui`.
 | Spanish  | `es` | —         | `es`       | **registered, awaiting catalogue** — 99% approved, but `kd.knowledge-discovery.selected` is `Seleccionado(s)`, which `checkCatalogueValuesAreRenderable` fails. Fix in Crowdin |
 | Italian  | `it` | —         | ?          | **registered, awaiting catalogue** — not a target language on Crowdin project 160; translation not started                                                                     |
 | Swedish  | `sv` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160; translation not started                                                                                      |
-| Arabic   | `ar` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160, **and renders left-to-right** (no RTL support)                                                               |
-| Hebrew   | `he` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160, **and renders left-to-right** (no RTL support)                                                               |
+| Arabic   | `ar` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160. Mirrors since NXSAT-752: the layout is right-to-left, the strings English                                    |
+| Hebrew   | `he` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160. Mirrors since NXSAT-752: the layout is right-to-left, the strings English                                    |
 
 Dropped: **Thai** (`th`) and **Chinese Simplified** (`zh`), both at 99% approved when removed.
 Their translations remain in Crowdin, so re-adding either is a pull rather than new work.
@@ -52,10 +52,64 @@ none of them.
    they exist** and `fr`, `de`, `ja` and `nl` stop updating with it. They are at 99% and static,
    so the exposure is small, but it is real — and it is why this is first.
 2. **Fix `Seleccionado(s)` in Crowdin** so `es` can pass `checkCatalogueValuesAreRenderable`.
-3. **RTL support** before Arabic or Hebrew is shippable, not merely translated. Seven `nxs-`
-   components already handle `[dir='rtl']` and two inject `Directionality`, but **nothing sets
-   `dir`** — `syncDocumentLanguage` sets `<html lang>` and stops there, so none of that
-   component work activates. Tracked separately; it is a feature, not a list entry.
+3. **Nothing. RTL is delivered** — see the section below. What `ar` and `he` still owe is their
+   catalogues, which is item 1.
+
+### Right to left — delivered, NXSAT-752
+
+`ar` and `he` mirror. The layout flips, the chevrons point the other way, and the arrow keys swap
+their inward and outward meanings. The **strings are still English**, because the catalogues are
+item 1 above — so the thing to look at when checking this is the direction, not the text.
+
+**The whole defect was one missing attribute.** Seven `nxs-` components already carried
+`:host-context([dir='rtl'])` rules, `rich-tooltip` and `details-panel` already read
+`getComputedStyle(…).direction`, and `document-tree` and `document-list` already swapped their
+arrow keys off `Directionality` — and none of it had ever run, because nothing set `dir`.
+`index.html` ships `lang="en"` and no `dir` at all. This is the same family as gap 10 below:
+`translate.use()` sets the string language and touches neither `LOCALE_ID` nor the document's
+direction.
+
+`syncDocumentDirection` in `provide-app-config.ts` sets it, beside the existing `lang` sync and off
+the same `onLangChange`, so a language changed after startup is honoured and not only the
+configured default. The right-to-left set is `RTL_LANGUAGES` in
+`libs/shared/app-config/src/lib/text-direction.ts` — one named place, mirroring the primary
+subtags in Angular CDK's own `RTL_LOCALE_PATTERN`, so a customer who configures a language we do
+not ship still gets the right direction.
+
+Two things were established rather than assumed, and each of them changed the implementation:
+
+- **CDK's `Directionality` has to be written, not just read.** It reads
+  `body.dir || documentElement.dir` **once in its constructor** and never observes the attribute
+  again, so setting `<html dir>` alone leaves `Directionality.value` stale for the application's
+  lifetime. `valueSignal` and `change` are public members in CDK 22; the sync writes both, and
+  that is the only write site. `BidiModule` does not help and is not imported — it declares the
+  `[dir]` **directive**, and `<html>` is outside the application, so there is no element for it.
+- **Overlays need nothing extra.** NXSAT-752 expected otherwise, on the strength of satori-ui's
+  `syncOverlayDirection`, but that is a **private** method of upstream's own rich tooltip rather
+  than an exported helper. Measured instead: CDK 22's `createOverlayRef()` runs
+  `overlayConfig.direction = overlayConfig.direction || directionality.value`, so dialogs, menus,
+  selects and date pickers all pick the direction up from the service. No provider was added.
+  `overlay-direction.spec.ts` carries that as three tests, the third being the negative control
+  that fails when only the attribute is set — which is what makes the point above load-bearing
+  rather than decorative.
+
+Mirrored layout itself is **CSS logical properties**, not more `[dir='rtl']` overrides: seven
+declarations across `search-filters`, `column-picker`, `saved-search-select`, `drive-dialog`,
+`details-panel` and `upload-queue` moved from `right`/`margin-left`/`text-align: left` and
+asymmetric four-value shorthands to `inset-inline-end`, `margin-inline-start`, `text-align: start`
+and `padding-inline`. The existing `:host-context([dir='rtl'])` rules were left alone: all five
+are `transform: scaleX(-1)` on a chevron or arrow, which is a mirrored **glyph** and has no
+logical-property equivalent.
+
+**Known limit, not worth code today.** `createOverlayRef` snapshots the direction as a string when
+an overlay is created, so an overlay already open when the language changes keeps the direction it
+opened with. There is no language picker (NXSAT-294), so nothing a user can do reaches that state.
+
+Coverage: `text-direction.spec.ts` (9), the `syncDocumentDirection` block in
+`provide-app-config.spec.ts` (8), `overlay-direction.spec.ts` (3), and a `keyboard, right to left`
+block in each of `document-tree.component.spec.ts` (4) and `document-list.component.spec.ts` (3).
+Forcing the two components' `rtl` checks to `false` turns exactly three of those red and nothing
+else, which is how the mirroring tests were confirmed to assert the mirroring.
 
 There is **no language picker** (NXSAT-294): `availableLanguages` is read only by the config
 parser, so a deployment selects its language through `defaultLanguage`. Every shipped catalogue is
@@ -987,8 +1041,16 @@ fails any source that is not.
     `inject(LOCALE_ID)` — got the built-in `en-US` regardless of configuration. Covered by
     `LOCALE_ID provider` in `provide-app-config.spec.ts`; deleting the provider turns four tests
     red. See "Locale-aware date formatting" above.
-11. **RTL** — DS-2277. Satori needs 4–6 weeks of its own work before an app can start, and the
-    target should be the "good enough" level from its spectrum, agreed explicitly.
+11. **RTL — CLOSED 2026-10-30 (NXSAT-752).** Both of this entry's premises had expired.
+    [DS-2277](https://hyland.atlassian.net/browse/DS-2277) is **Done** (resolved 21 October 2026),
+    so "Satori needs 4–6 weeks before an app can start" was stale — satori-ui ships `:dir(rtl)`
+    rules and depends on `@angular/cdk/bidi`, reading direction and expecting the host to own it.
+    And the recommendation of _no_ against plan decision Q3 was made when RTL was hypothetical;
+    advertising `ar` and `he` (D8e-webui) changed that input, because once those two are
+    advertised, rendering them left-to-right is a defect rather than an absent feature. The app
+    half turned out to be one attribute and seven CSS declarations, not weeks: see "Right to
+    left" above. Q3 itself is a plan decision and this does not close it — what it closes is the
+    claim that the design system was the blocker.
 12. **Pluralisation — the deferral has expired, and the convention is now two keys.** This entry
     said "no ICU usage anywhere; defer until a real plural string appears". Real plural strings
     appeared during NXSAT-284: **21 complete singular/plural pairs** exist, measured with

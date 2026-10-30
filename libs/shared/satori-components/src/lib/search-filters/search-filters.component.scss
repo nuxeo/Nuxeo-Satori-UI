@@ -60,9 +60,11 @@
   }
 }
 
+// Logical, so the clear control stays at the end of the field rather than crossing to the far
+// side of the text it clears when the direction flips.
 .nxs-search-filters__clear {
   position: absolute;
-  right: 0;
+  inset-inline-end: 0;
 }
 
 .nxs-search-filters__toggle {
@@ -75,7 +77,7 @@
   background: none;
   color: var(--mat-sys-on-surface, inherit);
   font: var(--mat-sys-label-large, inherit);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 
   &:focus {
@@ -96,7 +98,7 @@
 }
 
 .nxs-search-filters__count {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   color: var(--mat-sys-on-surface-variant, inherit);
 }
 

@@ -1,10 +1,12 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
+import { DIR_DOCUMENT, Directionality } from '@angular/cdk/bidi';
 import {
   Component,
   provideZonelessChangeDetection,
   signal,
   viewChild,
   ChangeDetectionStrategy,
+  type Provider,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BrowseService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
@@ -121,6 +123,7 @@ describe('NxsDocumentTreeComponent', () => {
     path = '/',
     domains: NuxeoDocument[] = [DOMAIN, OTHER_DOMAIN],
     children: Record<string, NuxeoDocument[]> = CHILDREN,
+    extra: Provider[] = [],
   ): Promise<void> {
     browse = {
       getNavTreeBootstrap: vi.fn(() => of({ root: ROOT, entries: domains })),
@@ -136,6 +139,7 @@ describe('NxsDocumentTreeComponent', () => {
         provideZonelessChangeDetection(),
         { provide: BrowseService, useValue: browse },
         { provide: LiveAnnouncer, useValue: { announce } },
+        ...extra,
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(HostComponent);
@@ -323,6 +327,61 @@ describe('NxsDocumentTreeComponent', () => {
       await render();
       expect(item('Workspaces').getAttribute('aria-expanded')).toBe('false');
       expect(host.opened).toHaveLength(1);
+    });
+  });
+
+  /**
+   * The ARIA tree pattern puts "inward" on the key that points along the reading direction, so
+   * right to left it is Left that expands and Right that collapses. The component reads
+   * `Directionality`, which the shell's `syncDocumentDirection` writes from the active language;
+   * providing `DIR_DOCUMENT` lets the real `Directionality` resolve from it rather than asserting
+   * a double's behaviour.
+   *
+   * Untested until Arabic and Hebrew were advertised: nothing set `dir`, so this branch of
+   * `onKeydown` had never run.
+   */
+  describe('keyboard, right to left', () => {
+    beforeEach(() => {
+      const rtlDocument = document.implementation.createHTMLDocument('rtl');
+      rtlDocument.documentElement.dir = 'rtl';
+      return create('/default-domain/workspaces', [DOMAIN, OTHER_DOMAIN], CHILDREN, [
+        { provide: DIR_DOCUMENT, useValue: rtlDocument },
+      ]);
+    });
+
+    it('reads rtl from Directionality', () => {
+      expect(TestBed.inject(Directionality).value).toBe('rtl');
+    });
+
+    it('expands with Left, then steps into the first child', async () => {
+      item('Claims').focus();
+      key(item('Claims'), 'ArrowLeft');
+      await render();
+      expect(item('Claims').getAttribute('aria-expanded')).toBe('true');
+      key(item('Claims'), 'ArrowLeft');
+      await render();
+      expect(document.activeElement).toBe(item('Archive'));
+    });
+
+    it('collapses with Right, then steps out to the parent', async () => {
+      item('Workspaces').focus();
+      key(item('Workspaces'), 'ArrowRight');
+      await render();
+      expect(item('Workspaces').getAttribute('aria-expanded')).toBe('false');
+      key(item('Workspaces'), 'ArrowRight');
+      await render();
+      expect(document.activeElement).toBe(item('Domain'));
+    });
+
+    it('leaves Up and Down alone, which do not mirror', async () => {
+      const start = item('Workspaces');
+      start.focus();
+      key(start, 'ArrowDown');
+      await render();
+      expect(document.activeElement).toBe(item('Claims'));
+      key(item('Claims'), 'ArrowUp');
+      await render();
+      expect(document.activeElement).toBe(item('Workspaces'));
     });
   });
 

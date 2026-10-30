@@ -38,6 +38,7 @@ export {
   type AppConfigServerDiagnostic,
 } from './lib/config-response';
 export { PRESET_QUERY_PARAM, PRESET_STORAGE_KEY } from './lib/presales-presets';
+export { RTL_LANGUAGES, textDirectionForLanguage, type TextDirection } from './lib/text-direction';
 export {
   AppConfigService,
   type AppActivePreset,
