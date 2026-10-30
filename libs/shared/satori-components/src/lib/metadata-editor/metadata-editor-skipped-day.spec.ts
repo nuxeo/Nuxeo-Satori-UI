@@ -11,7 +11,7 @@
  * **The zone has to be the process's, and it is not this project's pinned one.** Vitest runs
  * `satori-components` `pool: 'threads'`, where Node reads the zone once at startup and
  * `process.env.TZ` assigned later is accepted and ignored, so a case cannot switch zones for itself
- * — `AGENTS/08-bug-patterns.md` pattern 28 records that trap.
+ * — `AGENTS/08-bug-patterns.md` pattern 29 records that trap.
  *
  * `vite.config.mts` resolves the pin to `SATORI_TEST_TZ ?? 'Asia/Calcutta'` and **overrides an
  * inherited `TZ`**, so `TZ=Pacific/Apia` does nothing here: it has to be `SATORI_TEST_TZ`. The
