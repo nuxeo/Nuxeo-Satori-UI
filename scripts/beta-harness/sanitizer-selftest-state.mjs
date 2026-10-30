@@ -23,6 +23,7 @@
 
 import { createHash } from 'node:crypto';
 import {
+  chmodSync,
   closeSync,
   existsSync,
   fsyncSync,
@@ -30,6 +31,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -87,6 +89,16 @@ export const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest
  */
 export function writeFileAtomic(abs, text) {
   const tmp = `${abs}.${process.pid}.selftest-tmp`;
+  // The mode is carried across. A rename replaces the inode, so the new file keeps the temp
+  // file's default permissions and the old file's are gone — which silently stripped the
+  // executable bit from `sanitizer-audit.mjs`, a shebang script that was 755. Caught by the mode
+  // change in the commit that introduced atomic replacement, not by any test (review of PR 521).
+  let mode;
+  try {
+    mode = statSync(abs).mode;
+  } catch {
+    mode = undefined;
+  }
   const fd = openSync(tmp, 'w');
   try {
     writeFileSync(fd, text, 'utf8');
@@ -94,6 +106,7 @@ export function writeFileAtomic(abs, text) {
   } finally {
     closeSync(fd);
   }
+  if (mode !== undefined) chmodSync(tmp, mode);
   renameSync(tmp, abs);
 }
 

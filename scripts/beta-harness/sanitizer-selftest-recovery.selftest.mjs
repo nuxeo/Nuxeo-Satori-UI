@@ -16,7 +16,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -26,6 +26,7 @@ import {
   SELFTEST_ENV_FLAG,
   isLeftover,
   readMarker,
+  writeFileAtomic,
 } from './sanitizer-selftest-state.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
@@ -440,6 +441,27 @@ console.log('sanitizer-selftest recovery controls\n');
     'while the selftest flag suppresses even a genuine leftover',
     isLeftover(leftoverFinding, { [SELFTEST_ENV_FLAG]: '1' }) === false,
   );
+}
+
+// ---- atomic replacement preserves the file mode ------------------------------------------------
+// A rename replaces the inode, so without carrying the mode across, the executable bit of a
+// shebang script is silently lost. `sanitizer-audit.mjs` is 755 and is itself in the perturbable
+// set, so the first atomic-replacement commit stripped it — caught by `git` reporting a mode
+// change, not by any control. Now there is a control (review of PR 521).
+{
+  const AUDIT_SCRIPT = 'scripts/beta-harness/sanitizer-audit.mjs';
+  const before = statSync(join(ROOT, AUDIT_SCRIPT)).mode;
+  const original = read(AUDIT_SCRIPT);
+  try {
+    writeFileAtomic(join(ROOT, AUDIT_SCRIPT), `${original}\n// mode probe\n`);
+    check(
+      'writeFileAtomic keeps the file mode, so a shebang script stays executable',
+      statSync(join(ROOT, AUDIT_SCRIPT)).mode === before,
+      `mode ${(statSync(join(ROOT, AUDIT_SCRIPT)).mode & 0o777).toString(8)} was ${(before & 0o777).toString(8)}`,
+    );
+  } finally {
+    writeFileAtomic(join(ROOT, AUDIT_SCRIPT), original);
+  }
 }
 
 // ---- every perturbed path is registered --------------------------------------------------------
