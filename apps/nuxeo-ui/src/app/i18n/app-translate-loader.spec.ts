@@ -116,7 +116,15 @@ describe('AppTranslateLoader', () => {
   describe('over every advertised language', () => {
     const advertised = DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages;
 
+    // `configure()` even though this assertion needs no HTTP: the suite's `afterEach` calls
+    // `httpMock.verify()`, and `httpMock` is only assigned here. Karma runs specs in random
+    // order by default, so without this the teardown dereferences `undefined` whenever this
+    // spec happens to run first — an intermittent failure that a full run masks, because some
+    // other spec has usually configured already. Verified by focusing this spec alone:
+    // `TypeError: Cannot read properties of undefined (reading 'verify')`.
     it('has languages to check, so the loop cannot pass by iterating nothing', () => {
+      configure();
+
       expect(advertised.length).toBeGreaterThan(0);
     });
 
