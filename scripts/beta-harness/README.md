@@ -446,47 +446,65 @@ verdict  PASS (INCOMPLETE) — 28 green, 1 NOT RUN (code-scanning)
 
 `npm run beta:gate-selftest` holds the runner to this, against the real runner and gate.
 
-### Do not force-kill a run: selftests perturb the tree
+### Do not force-kill a run: one selftest perturbs tracked source
 
-Eighteen selftests prove their check by breaking real source, asserting the audit goes red for the
-stated reason, and restoring it. Find them with:
+**Exactly one** — `sanitizer-audit.selftest.mjs`. It proves its check by editing real files,
+asserting the audit goes red for the stated reason, and restoring them. Every other selftest that
+writes at all writes to a temporary directory and says so in its own docstring:
+`parity-surface-audit.selftest.mjs` with "Nothing tracked is touched",
+`review-guardrails.selftest.mjs` with "nothing outside that directory is ever written".
 
-```bash
-grep -lE "writeFileSync" scripts/beta-harness/*.selftest.mjs scripts/*.selftest.mjs
-```
+So do not scope this by searching for writers. `grep -lE "writeFileSync" scripts/**/*.selftest.mjs`
+returns eighteen files and seventeen of them are harmless — an earlier revision of this section
+said "eighteen selftests break real source" on exactly that basis, which overstated the hazard by
+a factor of eighteen. The honest test is `mkdtemp`: everything except the sanitizer selftest uses
+one.
 
 The restore is well defended — a `finally`, plus `SIGINT`/`SIGTERM`/`SIGHUP` and
-`uncaughtException` handlers for the paths `finally` misses. `sanitizer-audit.selftest.mjs` says
-where that ends: **"SIGKILL and power loss remain uncatchable"**. A forced stop — `kill -9`, an
-agent harness cancelling a background task, a crashed terminal — is exactly the case no handler
-covers, and it leaves the perturbation on disk.
+`uncaughtException` handlers for the paths `finally` misses. Its own docstring says where that
+ends: **"SIGKILL and power loss remain uncatchable"**. A forced stop — `kill -9`, an agent harness
+cancelling a background task, a crashed terminal — is the case no handler covers, and it leaves
+the perturbation in tracked source.
 
-What makes that expensive is what happens next, because the damage is not the dirty tree:
+#### What the next run does with a leftover, which is the dangerous part
 
-1. The **next** run detects the file no longer matches what it expects and refuses to restore it,
-   which is correct — it cannot tell a leftover perturbation from an edit you made meanwhile:
+`edit()` captures `original = backups.get(relPath)?.original ?? current` — the first time a run
+touches a file, "original" is **whatever is on disk at that moment**. So a run starting on a dirty
+tree can adopt the leftover as the pristine state and faithfully restore to it, leaving the
+perturbation in place and no longer flagged by anything. That is the quiet outcome and the worst
+one.
 
-   ```text
-   selftest: NOT restoring libs/shared/ui/src/lib/document-viewer/document-viewer.component.ts
-     — changed by something else mid-run.
-     Those files may still hold a perturbation. Check them, and use 'git diff' before committing.
-   ```
+The louder outcomes:
 
-2. It then fails with something that reads like a stale control rather than a dirty tree —
-   `document-viewer posterUrl changed — update these controls` — so the obvious next move is to
-   "fix" a control that was never wrong.
-3. `git add -A` commits the perturbation. It will not look like scaffolding in review: the
-   perturbations are plausible code, and one of them swaps `templateUrl` for an inline `template`,
-   which contradicts a repo convention and reads as deliberate.
+- It throws on an anchor that the leftover already changed —
+  `document-viewer posterUrl changed — update these controls` — which reads as a stale control
+  rather than a dirty tree, so the obvious next move is to "fix" a control that was never wrong.
+- `git add -A` commits it. The perturbations are plausible code, and one swaps `templateUrl` for
+  an inline `template`, so in review it reads as deliberate rather than as scaffolding.
 
-**Recovery** is `git checkout` on the paths the failure output names — `sanitizer-audit.selftest.mjs`
-says so itself, and the paths are printed for exactly this reason. Confirm with `git diff` that
-nothing else came back with them.
+**Do not rely on the `NOT restoring … changed by something else mid-run` warning to tell you.**
+That is a _concurrent-edit_ safeguard: `restoreAll()` compares the bytes on disk against what this
+run wrote, so it fires when something edits a file **during** the run — an IDE save mid-control —
+and is silent about a tree that was already dirty when the run began. It may never appear in the
+case you need it for.
 
-So: let a run finish, or accept that you must read `git diff` before the next commit. Both
-mistakes above were made on [#522](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/522) — a gate
-stopped twice mid-selftest, then `git add -A` — and the perturbation reached a commit, which is
-the only reason this section exists.
+#### Recovery
+
+Look before you restore, and look in two places:
+
+```bash
+git diff -- <path>           # unstaged: the leftover, possibly mixed with your own edits
+git diff --cached -- <path>  # staged: if the perturbation is here, checkout RESTORES it
+```
+
+`git checkout -- <path>` takes the file from the **index**, so it reinstates a staged perturbation
+and discards unstaged work in the same file. Reach for it only when the unstaged change is purely
+the leftover and the index is known good. Otherwise restore from a ref —
+`git checkout <ref> -- <path>` — or remove just the perturbation by hand and keep your own edits.
+
+Both mistakes above were made on [#522](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/522): a gate
+stopped twice mid-selftest, then `git add -A`, and the perturbation reached a commit and a pushed
+branch. It was caught by the gate rather than by the author.
 
 ## Environment
 
