@@ -61,16 +61,19 @@ named, so nothing in the repository had to change. The nine the project carried 
 **The two Crowdin items are done**, both on 30 October (INTERN-1363, Enrico Stengert): `ar`, `he`,
 `it` and `sv` are target languages on project 160, and the `Seleccionado(s)` string is corrected to
 `Seleccionado`. A proof-reading step plus post-translation localization QA is confirmed configured,
-which closes the proof-reading row in `D8-standard` — **one row, not the file**. An earlier
-revision of this page called it "the last open conformance item", which it is not:
-`D8-standard` still carries Project Content Initialization seeding, setup-token revocation and the
-service-account commit identity as `OWNER-ACTION-PENDING`.
+which closes the proof-reading row in `D8-standard` — **one row, not the file**. That row is
+updated to `CONFORMS` in the same change as this page, because a status page claiming a row is
+closed while the conformance record still reads `OWNER-ACTION-PENDING` is worse than either
+document being wrong alone.
 
-It does not fully settle the export half either. Enrico confirmed the Crowdin project's workflow
-while noting the Localization team cannot see our `crowdin-conf.yml`; we confirmed
-`export_only_approved: 'true'` is present while being unable to see the project's own export
-settings, which the Guidelines say take precedence. Each side has confirmed its own half and
-nobody has confirmed the combination.
+An earlier revision of this page called it "the last open conformance item", which it is not.
+`D8-standard` still carries Project Content Initialization seeding, setup-token revocation, the
+service-account commit identity, **and the row immediately below the one just closed**: project
+-level export settings take precedence over the pipeline's, and nobody has seen project 160's.
+Enrico confirmed the project's workflow while noting the Localization team cannot see our
+`crowdin-conf.yml`; we confirmed `export_only_approved: 'true'` while unable to see the project's
+settings. Each side confirmed its own half, so "approved-only export actually happens" remains
+unverified even though both halves look right.
 
 **The pull never actually broke, and saying it had is an error worth keeping visible.** Earlier
 revisions of this page and of `crowdin-pull.yaml` asserted in the present tense that the nightly
@@ -119,9 +122,12 @@ What remains:
    right all along — "**this** pull request stays red until approvals exist", singular.
 
    Nothing is lost by holding them back: all four stay registered in `register-locale-data.ts`
-   and stay targets on the project. **Add each `--language` back when its approvals exist**,
-   which is the same pull request that brings its `availableLanguages` and `DATE_FNS_LOCALES`
-   entries (`D8e-webui`, step 2).
+   and stay targets on the project. **Add each `--language` back when its approvals exist** — and
+   note that is a change of its own, not the one that advertises the language. It has to reach
+   `main` and then wait for a scheduled run before any catalogue exists; `availableLanguages` and
+   `DATE_FNS_LOCALES` follow in a third change, once that catalogue is on disk. Three pull
+   requests per language, and they cannot be collapsed: one cannot be both before and after the
+   pull.
 
 3. **RTL, for Arabic and Hebrew.** No longer "tracked separately" — it is
    [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523), which sets `<html dir>` from the

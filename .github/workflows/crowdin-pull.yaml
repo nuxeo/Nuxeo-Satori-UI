@@ -149,9 +149,11 @@ jobs:
           # ready, plus routine updates to `fr`, `de`, `ja` and `nl`.
           #
           # They are still registered in `register-locale-data.ts` and still targets on the
-          # project, so nothing is lost: **add each `--language` back when its approvals exist**,
-          # which is also when its `availableLanguages` and `DATE_FNS_LOCALES` entries land
-          # (`D8e-webui`, step 2). This is the one touchpoint that is cheap to reverse.
+          # project, so nothing is lost: **add each `--language` back when its approvals exist**.
+          # That is a change of its own, and it has to merge and then wait for a scheduled run —
+          # the `availableLanguages` and `DATE_FNS_LOCALES` entries come afterwards, in a third
+          # change, once the catalogue that run produced is on disk. See the three steps below.
+          # This is the one touchpoint that is cheap to reverse.
           #
           # ## An unknown `--language` fails the WHOLE pull, not the one flag
           #
@@ -185,7 +187,7 @@ jobs:
           # four new ids below are the bare forms, consistent with the `nl` and `th` entries they
           # replace; a wrong one fails exactly as an absent target does.
           #
-          # ## Adding a language here is the FIRST of two steps, not one of four done together
+          # ## Adding a language here is the MIDDLE of three steps, not one of four done together
           #
           # This said "a language added here needs its `availableLanguages`,
           # `register-locale-data.ts` and `DATE_FNS_LOCALES` entries in the same pull request",
@@ -194,19 +196,32 @@ jobs:
           # fails `checkAdvertisedLocalesShip` — and since `.husky/pre-push` runs
           # `review:guardrails`, the branch could not even be pushed. Caught in review on #522.
           #
-          # The two steps, in order (`D8e-webui`):
+          # ## THREE pull requests, not two, and they cannot be collapsed
           #
-          #   1. Requesting it. A `--language` here, plus `LOCALE_DATA` in
-          #      `register-locale-data.ts`. Both may run ahead of any translation: this list is
-          #      what *causes* the catalogue to arrive, and a registration with no catalogue
-          #      behind it only warns, while the reverse throws `NG0701` wherever a date renders.
-          #   2. Advertising it, once `public/i18n/<lang>.json` has actually landed.
+          # An earlier version of this comment said two steps and put the `--language` in the same
+          # change as `availableLanguages`. That cannot work: the flag has to be on `main` for a
+          # scheduled run to download anything, and `availableLanguages` cannot precede the
+          # catalogue that run produces. One change cannot be both before and after the pull.
+          #
+          #   1. **Register it.** `LOCALE_DATA` in `register-locale-data.ts`, and add the language
+          #      on Crowdin project 160 (Translation Team). This may run ahead of everything: a
+          #      registration with no catalogue behind it only warns, while the reverse throws
+          #      `NG0701` wherever a date renders.
+          #
+          #   2. **Request it — once it has approvals.** A `--language` here, merged to `main`,
+          #      then wait for a scheduled run. The flag may run ahead of a *catalogue* — that is
+          #      what causes one — but **not ahead of approvals**: this is one shared pull request,
+          #      so an unapproved language arrives all-English, fails
+          #      `checkCataloguesAreTranslated` (D8d), and holds every other language red with it.
+          #
+          #   3. **Advertise it**, once `public/i18n/<lang>.json` has actually landed.
           #      `availableLanguages` in both Layer 0 configs, and `DATE_FNS_LOCALES` in
           #      `satori-date-adapter.ts`, which a test holds equal to that list. Neither may
           #      precede the catalogue.
           #
-          # So a language sits between the two steps for as long as translation takes, and that is
-          # the normal state rather than an unfinished one.
+          # So a language sits between steps for as long as translation takes, and that is the
+          # normal state rather than an unfinished one. `ar`, `he`, `it` and `sv` are between 1
+          # and 2 today: registered, targets on the project, awaiting approvals.
           download_translations_args: '--language=fr --language=de --language=ja --language=nl --language=es'
 
           create_pull_request: true
