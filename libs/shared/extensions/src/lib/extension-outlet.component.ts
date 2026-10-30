@@ -44,6 +44,11 @@ import { TranslatePipe } from '@ngx-translate/core';
  * or of which declared inputs are set, recreates it: in place, an input the new inputs
  * omit would keep its previous value. While a lazy component loads, nothing is shown.
  * After a loader rejects, the next `componentInputs` change retries it, at most twice.
+ *
+ * A component that is found and loaded and then **throws while being drawn** leaves the outlet
+ * unresolved too, rather than taking the enclosing view down with it — see
+ * {@link drawInserted} for why that needs its own change-detection pass, and for the limit on
+ * how much of the failure it can contain.
  */
 @Component({
   selector: 'lib-extension-outlet',
@@ -71,7 +76,15 @@ export class ExtensionOutletComponent {
   readonly componentInputs = input<Readonly<Record<string, unknown>> | null | undefined>({});
 
   readonly loading = signal(false);
-  /** True when nothing could be resolved, so the host can render a fallback. */
+  /**
+   * True when there is nothing rendered here, so the host can render a fallback.
+   *
+   * Three ways to get there: no component is registered under the id, its loader rejected, or
+   * it threw while being drawn ({@link drawInserted}). The name reads as the first two, and the
+   * third is deliberately folded in rather than given a signal of its own: what a host needs to
+   * know is the same in all three cases — the slot is empty, show your own content — and a
+   * second signal would mean every host had to read both and would quietly miss one of them.
+   */
   readonly unresolved = signal(false);
 
   @ViewChild('outlet', { static: true, read: ViewContainerRef })
@@ -93,6 +106,12 @@ export class ExtensionOutletComponent {
   /** A retry's load is pending; updates meanwhile ride on it rather than starting another. */
   private retrying = false;
   private static readonly MAX_RETRIES = 2;
+  /** The type whose draw threw — {@link drawInserted}. Not reloaded; redrawn on new inputs. */
+  private failedType: Type<unknown> | null = null;
+  /** The `componentInputs` value that draw was given, so the same one is not drawn twice. */
+  private failedInputs: Readonly<Record<string, unknown>> | null | undefined = undefined;
+  /** The id {@link reportFailedDraw} has already warned about. */
+  private warnedFor: string | null = null;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.clear());
@@ -125,14 +144,30 @@ export class ExtensionOutletComponent {
     });
 
     effect(() => {
-      const inputs = this.componentInputs() ?? {};
+      const requested = this.componentInputs();
+      const inputs = requested ?? {};
       untracked(() => {
+        const failed = this.failedType;
+        if (failed) {
+          // Draw it again, rather than resolving it again. A draw that threw is not a load
+          // that rejected: the registry holds the type and would hand back the same one, so
+          // {@link retryUnresolved} could only reach the same throw. A new inputs value can
+          // genuinely differ — it is usually the next document — so that is what retries,
+          // and the value already tried is not tried twice.
+          if (requested !== this.failedInputs) this.render(failed, this.generation);
+          return;
+        }
         if (!this.componentRef || !this.renderedType) {
           this.retryUnresolved();
           return;
         }
         if (this.setsAppliedKeys(inputs)) {
           this.applyInputs(this.componentRef, inputs);
+          // Draw it here too. `setInput` only marks the view dirty, so a component that drew one
+          // document and throws on the next would otherwise throw on Angular's next pass, with
+          // nothing to catch it — the live-instance update was the one way back into the defect
+          // after the first draw was guarded. Caught in review of PR 532.
+          this.drawInserted(this.componentRef, this.renderedType);
         } else {
           this.render(this.renderedType, this.generation);
         }
@@ -179,6 +214,10 @@ export class ExtensionOutletComponent {
    * An update while a retry is still loading starts nothing and spends nothing: the
    * registry would fold it onto the pending load, and the retry renders with whatever
    * inputs are current when it lands.
+   *
+   * This is for a loader that **rejected**. A component that loaded and then threw while being
+   * drawn does not come through here at all — {@link drawInserted} redraws it instead, because
+   * the registry is holding the type and would only hand back the same one.
    */
   private retryUnresolved(): void {
     const id = this.componentId();
@@ -202,11 +241,154 @@ export class ExtensionOutletComponent {
     );
     this.applyInputs(ref, this.componentInputs() ?? {});
 
+    // Insert first, then draw — see {@link drawInserted}. The component's lifecycle hooks must
+    // run against DOM that is in the document, which only insertion makes true.
     this.outlet.insert(ref.hostView);
+
+    if (!this.drawInserted(ref, type)) return;
+
     this.componentRef = ref;
     this.renderedType = type;
     this.loading.set(false);
     this.unresolved.set(false);
+  }
+
+  /**
+   * Drive the inserted component's first change detection ourselves, where a throw is catchable.
+   *
+   * Angular has no error boundary. Insertion attaches the host view to the **enclosing** view's
+   * change detection, so a component that throws while being drawn — a required input the
+   * descriptor never supplies, a mistyped input name, a document it cannot read — throws on a
+   * later tick, and whatever that pass was drawing is abandoned with it. That is how one
+   * `documentView` entry emptied the View tab, with no fallback and nothing reported: 33
+   * uncaught NG0950s in a single page load (NXSAT-746). How much goes with it depends on where
+   * the enclosing view's boundaries fall — the ticket reported the whole tab group, and on the
+   * build this landed on the tab strip survives and only the body is lost — so the useful
+   * guarantee is about what the throw cannot reach, not about which neighbours happened to live.
+   *
+   * Three shapes of guard that look right, and what each actually does — all measured against
+   * Angular 22.2.3 rather than reasoned about:
+   *
+   * - `try { this.outlet.insert(…) } catch {}` catches nothing. `insert` does not detect changes
+   *   synchronously, so the throw arrives after the `try` has returned — the same "catch that
+   *   never fires" {@link applyInputs} is pointed about.
+   * - refusing the descriptor up front needs to know an input is required, and
+   *   `reflectComponentType(type).inputs` exposes `propName`, `templateName`, `transform` and
+   *   `isSignal` and nothing else. There is no public metadata to read.
+   * - detecting changes **before** inserting also catches it, and was how this first shipped for
+   *   review. It is wrong: the host element is not in the document until insertion, so
+   *   `ngAfterViewInit` ran against a disconnected tree — measured `isConnected === false` — and
+   *   insertion does not re-run the hook. Any custom view that focuses a field or measures
+   *   layout there would have been quietly broken, which is a steep price for containing a
+   *   failure. Caught in review of PR 532.
+   *
+   * So: insert, then draw. Forcing that pass is what puts the throw inside a `try`, and it is
+   * work the enclosing view's next pass would have done anyway — a valid component pays only for
+   * the order of two statements.
+   *
+   * Called for **both** ways a draw happens: a newly created component, and a live one whose
+   * inputs have just changed. `setInput` only marks the view dirty, so without the second call a
+   * component that drew one document and threw on the next was back to throwing on a pass nobody
+   * guarded. Review of PR 532 found that gap, which the documentation had already promised away.
+   *
+   * **What it still does not contain:** a throw on a change detection *we* did not trigger — the
+   * component's own asynchronous state settling, or a signal it writes to itself. That tick
+   * belongs to Angular, and catching it needs an error boundary Angular does not have.
+   *
+   * **And one thing it costs, on the recovery path only.** A draw that follows an earlier failure
+   * runs while `unresolved()` is still true, because only a successful draw clears it. A host may
+   * be hiding the outlet on exactly that signal — `document-detail` does, with `display: none` —
+   * so a recovering component's `ngAfterViewInit` can run in a hidden subtree, where a
+   * one-shot `getBoundingClientRect()` reads zero and `focus()` does nothing. Raised in review of
+   * PR 532 and **not fixed here**: the class belongs to the host's template, so clearing the
+   * signal first would not remove it synchronously, and coordinating properly needs a third
+   * outlet state — public API this ticket is not the place to widen. NXSAT-758.
+   *
+   * @returns whether the component drew, and may therefore be kept.
+   */
+  private drawInserted(ref: ComponentRef<unknown>, type: Type<unknown>): boolean {
+    try {
+      ref.changeDetectorRef.detectChanges();
+      // Here rather than in `render`, so a draw that recovers clears the key whichever call site
+      // drew it — a component that breaks again after working is news again.
+      this.warnedFor = null;
+      return true;
+    } catch (error) {
+      // The fallback state goes first, before anything that could throw again: the host reads
+      // `unresolved()` to decide what to render, and reaching the teardown is not a precondition
+      // for the slot being empty.
+      this.failedType = type;
+      this.failedInputs = this.componentInputs();
+      // Null for the same reason: called for a live instance, this leaves nothing rendered, and
+      // a stale `componentRef` would send the next inputs change to a destroyed component.
+      this.componentRef = null;
+      this.renderedType = null;
+      this.declaredInputs = new Set();
+      this.appliedKeys = new Set();
+      this.loading.set(false);
+      this.unresolved.set(true);
+      this.reportFailedDraw(type, error, this.discard(ref));
+      return false;
+    }
+  }
+
+  /**
+   * Remove and destroy a view that could not be drawn, surviving a teardown that throws too.
+   *
+   * A component whose draw threw may never have finished initialising, so its `ngOnDestroy` can
+   * throw on a resource it expected to hold — measured: a throwing `ngOnDestroy` propagates out
+   * of `ViewContainerRef.clear()`. Unguarded, that escaped the `catch` above and left the slot
+   * blank with `unresolved()` never set, which is the defect this method exists inside. Each step
+   * is attempted whatever the other did, because skipping the second would leak the one the first
+   * failed to clean up. Caught in review of PR 532.
+   *
+   * @returns the first error the teardown threw, for the diagnostic, or `null`.
+   */
+  private discard(ref: ComponentRef<unknown>): unknown {
+    let thrown: unknown = null;
+    try {
+      this.outlet.clear();
+    } catch (error) {
+      thrown = error;
+    }
+    try {
+      ref.destroy();
+    } catch (error) {
+      thrown ??= error;
+    }
+    return thrown;
+  }
+
+  /**
+   * Say so once, naming the component, because nothing else reports this.
+   *
+   * Keyed on the id so a document the component cannot draw is reported when it is first seen
+   * and not again on every refetch of it — the symptom is a configuration mistake, and
+   * repeating it per change-detection cycle would bury it. A successful draw clears the key,
+   * so a component that breaks again after working is news again.
+   *
+   * One call, both errors: a failed teardown is a consequence of the failed draw, and reporting
+   * it separately would read as two unrelated problems.
+   */
+  private reportFailedDraw(type: Type<unknown>, error: unknown, teardownError: unknown): void {
+    const label = this.componentId() ?? type.name;
+    if (this.warnedFor === label) return;
+    this.warnedFor = label;
+    if (teardownError) {
+      console.warn(
+        `[agentic-ui-extensions] "${label}" threw while it was being drawn, and again while it ` +
+          `was being discarded, so the slot kept its packaged content instead. Check the inputs ` +
+          `the manifest entry sets for it.`,
+        error,
+        teardownError,
+      );
+      return;
+    }
+    console.warn(
+      `[agentic-ui-extensions] "${label}" threw while it was being drawn, so the slot kept its ` +
+        `packaged content instead. Check the inputs the manifest entry sets for it.`,
+      error,
+    );
   }
 
   /**
@@ -251,5 +433,7 @@ export class ExtensionOutletComponent {
     this.renderedType = null;
     this.declaredInputs = new Set();
     this.appliedKeys = new Set();
+    this.failedType = null;
+    this.failedInputs = undefined;
   }
 }

@@ -1021,6 +1021,40 @@ refetched or another document using the same entry opens — at most twice, so a
 is permanently missing is requested three times in all. The packaged view stays on screen
 while a retry is in flight.
 
+**A component that throws while it is drawn** falls back the same way, and one warning is
+written to the console naming the component the entry asked for — its `componentId`, which is
+the descriptor `id` unless you set it to something else. That covers the mistakes a manifest can
+make: a component with a required input the entry's `inputs` does not supply, an input name
+spelled wrong, or a view that cannot read a particular document. Until this was contained, such
+an entry left the View tab **empty**, with no fallback and nothing said — the throw escaped the
+change detection that draws the tab body, so whatever Angular was drawing at that moment was
+abandoned (NXSAT-746, which also reported the surrounding tab group disappearing; on the build
+the fix landed on, the tab strip survives and only the body is lost).
+
+What is covered, precisely. The host draws your component itself — once when it first puts it on
+the page, and again each time it hands it a new document — and those are the passes where a throw
+is caught. So a view that cannot be drawn at all falls back, and so does one that draws some
+documents and throws on another; the next document is drawn afresh, so a failure on one does not
+cost you the view for the rest of the session.
+
+The limit, because Angular has no error boundary: a component that draws successfully and throws
+**later**, on a change detection the host did not trigger — when its own asynchronous state
+settles, or on a signal it writes to itself — throws on a pass nobody is guarding, and that still
+takes the surrounding view with it. A custom view is ordinary Angular code and has to handle its
+own failures. What is guaranteed is narrower than "it cannot break the page": it is that the
+drawing the host asks for cannot.
+
+One known wrinkle if your view **measures layout or moves focus** in `ngAfterViewInit`. When a
+view is drawn as a _recovery_ — the attempt after a failed load or a failed draw of the same slot
+— the host may still be hiding the slot at that moment, because it stops hiding it only once the
+draw has succeeded. In the View tab that means `display: none`, so a one-shot
+`getBoundingClientRect()` reads zero and `focus()` does nothing; the element becomes visible
+immediately afterwards, but the hook does not run again. A view that measures in
+`afterNextRender`, or watches with a `ResizeObserver`, is unaffected. Tracked as NXSAT-758.
+
+The same containment applies to every slot that names a component, not just this one: the host
+shows whatever it falls back to when the slot is empty.
+
 **The document is the host's.** The component receives the focused document on its
 `document` input. A manifest `inputs.document` is overwritten, so configuration cannot
 make the tab show a different document from the one the toolbar and properties panel act
