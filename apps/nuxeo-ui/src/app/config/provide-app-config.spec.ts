@@ -114,6 +114,7 @@ describe('initialiseAppConfigAndLanguage', () => {
 describe('the configured language at startup', () => {
   const STALE_LOCALE_KEY = 'GUEST__locale';
   let htmlLang: string;
+  let htmlDir: string;
 
   function envelope(layer: AppConfigLayer, content: Record<string, unknown>) {
     return {
@@ -151,12 +152,17 @@ describe('the configured language at startup', () => {
 
   beforeEach(() => {
     htmlLang = document.documentElement.lang;
+    htmlDir = document.documentElement.dir;
+    // Cleared rather than saved-and-left, so the direction assertions below start from the state
+    // `index.html` actually ships: a language, and no `dir` at all.
+    document.documentElement.dir = '';
     localStorage.setItem(STALE_LOCALE_KEY, 'de');
   });
 
   afterEach(() => {
     localStorage.removeItem(STALE_LOCALE_KEY);
     document.documentElement.lang = htmlLang;
+    document.documentElement.dir = htmlDir;
     TestBed.resetTestingModule();
   });
 
@@ -169,6 +175,36 @@ describe('the configured language at startup', () => {
   it('announces that language on <html lang> once startup has settled', async () => {
     await boot('fr');
     expect(document.documentElement.lang).toBe('fr');
+  });
+
+  /**
+   * The registration, not the function.
+   *
+   * Every other direction test in this file calls `syncDocumentDirection` directly, which proves
+   * the function and says nothing about whether anything calls it. Measured: deleting the
+   * `provideAppInitializer` entry from `provideAppConfig()` left all 29 tests in this file green
+   * while restoring the original defect in full — `ar` rendering right-to-left text in a
+   * left-to-right layout.
+   *
+   * That is the same gap this file's own `LOCALE_ID` section was written against: "Asserting
+   * `resolveFormattingLocale` alone would not [be enough]: it was already correct as an inline
+   * expression, and the defect was that nothing connected it to DI."
+   *
+   * Both halves are load-bearing, and the order is deliberate. `Directionality` is constructed
+   * during startup — `provideAppConfig()` injects it to build the initializer — so it samples the
+   * attribute BEFORE the language resolves. On the first boot that sample is `''` → `ltr`, so
+   * reading `rtl` afterwards can only come from the service being written. On the second it is the
+   * `rtl` the first boot left, so reading `ltr` proves the reset is written too. Neither assertion
+   * can be satisfied by the attribute alone.
+   */
+  it('mirrors the layout for a right-to-left language, and resets for a left-to-right one', async () => {
+    await boot('ar');
+    expect(document.documentElement.dir).withContext('<html dir> for ar').toBe('rtl');
+    expect(TestBed.inject(Directionality).value).withContext('CDK for ar').toBe('rtl');
+
+    await boot('fr');
+    expect(document.documentElement.dir).withContext('<html dir> for fr').toBe('ltr');
+    expect(TestBed.inject(Directionality).value).withContext('CDK for fr').toBe('ltr');
   });
 });
 

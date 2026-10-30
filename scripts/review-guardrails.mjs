@@ -4897,17 +4897,17 @@ function checkUpstreamCatalogueLanguages() {
       for (const { inputDir, globs } of inputs) {
         const absolute = join(repoRoot, inputDir);
         if (!existsSync(absolute)) {
-        // Two very different situations, and warning for both let the dangerous one pass.
-        //
-        // A dependency that is not installed cannot be judged: `node_modules` is not checked in,
-        // and a clean checkout is legitimately in that state. That warns — a gate that goes quiet
-        // without saying so is how a check becomes no check at all — and the `guardrails` gate
-        // runs after `npm ci` anyway.
-        //
-        // But a package that IS installed while the directory this rule names is absent is a
-        // typo, or a vendor that dropped the folder in a version bump. The build then copies
-        // nothing and the loader 404s for **every** language, which is worse than the defect
-        // NXSAT-732 reported, so it fails.
+          // Two very different situations, and warning for both let the dangerous one pass.
+          //
+          // A dependency that is not installed cannot be judged: `node_modules` is not checked in,
+          // and a clean checkout is legitimately in that state. That warns — a gate that goes quiet
+          // without saying so is how a check becomes no check at all — and the `guardrails` gate
+          // runs after `npm ci` anyway.
+          //
+          // But a package that IS installed while the directory this rule names is absent is a
+          // typo, or a vendor that dropped the folder in a version bump. The build then copies
+          // nothing and the loader 404s for **every** language, which is worse than the defect
+          // NXSAT-732 reported, so it fails.
           const packageRoot = installedPackageRoot(inputDir);
           if (packageRoot === null) {
             fail(
@@ -9820,6 +9820,109 @@ function withoutPriority(value) {
   return value.replace(/!\s*(important|default|global)\b/gi, '').trim();
 }
 
+/**
+ * Every `property: value` declaration in a stylesheet, with the line its property starts on.
+ *
+ * ## Why a scanner and not a regex
+ *
+ * This is the fourth attempt and the first one that is not a regex, because the previous three
+ * each bought one case and sold another. Anchoring to the start of a line missed
+ * `.x { margin-left: 4px; }`; un-anchoring then found `left: 4px` inside `$left: 4px` and
+ * `margin-left: 4px;` inside `content: "…; margin-left: 4px;"`. Requiring a brace-free value kept
+ * `&:focus {` from parsing as a declaration but could not cross `#{`, so
+ * `margin-left: #{$gutter}` escaped entirely. Three rounds of refinement, each fixing and
+ * breaking, is the signal to stop refining: CSS is not a line-oriented format and a regex cannot
+ * be told that.
+ *
+ * So: one pass, tracking quotes, `#{}` interpolation and parentheses. A statement ends at a
+ * top-level `;` or `}`; a statement ended by `{` was a selector or an at-rule prelude and is
+ * discarded, which is what keeps `&:focus`, `:host-context([dir='rtl'])` and
+ * `@media (min-width: 600px)` out without a special case for any of them.
+ *
+ * What makes `$gutter: 4px` and `--nxs-left: 0` safe is this statement-wise reading, not the
+ * identifier guard below it: the property comes out as `$gutter`, whole, so it simply is not a
+ * key in any of the maps. The old regex found `left` *inside* `$left` because it matched a
+ * fragment rather than a statement. Said explicitly because mutation testing showed no control
+ * depends on the identifier guard — it is a scope guard, not a defect-catcher.
+ *
+ * Comments are the caller's business: pass source that has been through `blankComments`.
+ */
+function* scssDeclarations(source) {
+  let buffer = '';
+  let colonAt = -1;
+  let line = 1;
+  let startLine = 1;
+  let quote = null;
+  let paren = 0;
+  let interpolation = 0;
+
+  const flush = (terminator) => {
+    const statement = { text: buffer, colonAt, line: startLine, terminator };
+    buffer = '';
+    colonAt = -1;
+    return statement;
+  };
+
+  for (let i = 0; i < source.length; i += 1) {
+    const c = source[i];
+    if (c === '\n') line += 1;
+    if (!buffer.trim()) startLine = line;
+
+    if (quote) {
+      buffer += c;
+      if (c === '\\') buffer += source[++i] ?? '';
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      buffer += c;
+      continue;
+    }
+    if (c === '#' && source[i + 1] === '{') {
+      interpolation += 1;
+      buffer += '#{';
+      i += 1;
+      continue;
+    }
+    if (interpolation > 0 && c === '}') {
+      interpolation -= 1;
+      buffer += c;
+      continue;
+    }
+    if (c === '(') paren += 1;
+    else if (c === ')') paren = Math.max(0, paren - 1);
+
+    if (paren === 0 && interpolation === 0) {
+      if (c === ':' && colonAt === -1) {
+        colonAt = buffer.length;
+        buffer += c;
+        continue;
+      }
+      if (c === ';' || c === '}') {
+        const statement = flush(c);
+        if (statement.colonAt !== -1) yield statement;
+        continue;
+      }
+      if (c === '{') {
+        flush(c); // a selector or at-rule prelude, not a declaration
+        continue;
+      }
+    }
+    buffer += c;
+  }
+}
+
+/**
+ * A plain CSS property name: not `$sass`, not `--custom`, not an at-rule, no whitespace.
+ *
+ * A scope guard — it keeps declarations this gate has no opinion about out of the lookup — rather
+ * than something that catches a defect on its own. Case-insensitive because CSS property names
+ * are: `MARGIN-LEFT: 4px` is a physical declaration, and both it and the lookup below were
+ * case-sensitive, so it went unreported. A control covers that.
+ */
+const CSS_PROPERTY = /^[a-z][a-z0-9-]*$/i;
+
 function checkSatoriStylesheetsAreLogical() {
   let scanned = 0;
   for (const { root } of SATORI_LIBRARIES) {
@@ -9841,16 +9944,14 @@ function checkSatoriStylesheetsAreLogical() {
        */
       const scannable = blankComments(source, 'scss');
 
-      /*
-       * Declarations are matched anywhere, not anchored to the start of a line, and must end in
-       * `;` or `}`. Anchoring missed `.thing { margin-left: 4px; }` — a whole rule on one line,
-       * which is both legal and used — and the terminator is what keeps a selector out: `&:focus {`
-       * offers no `;` or `}` after its value, and `[^;{}]+` refuses to cross a brace.
-       */
-      const declaration = /([a-z-]+)\s*:\s*([^;{}]+)[;}]/g;
-      for (const match of scannable.matchAll(declaration)) {
-        const [, property, rawValue] = match;
-        const line = scannable.slice(0, match.index).split('\n').length;
+      for (const statement of scssDeclarations(scannable)) {
+        const declared = statement.text.slice(0, statement.colonAt).trim();
+        const rawValue = statement.text.slice(statement.colonAt + 1).trim();
+        if (!CSS_PROPERTY.test(declared) || !rawValue) continue;
+        // Lower-cased for the lookups, which are keyed by the canonical spelling. CSS property
+        // names are case-insensitive, so `MARGIN-LEFT` is the same declaration as `margin-left`.
+        const property = declared.toLowerCase();
+        const line = statement.line;
         if (LOGICAL_PROPERTY_WAIVER.test(original[line - 2] ?? '')) continue;
         const at = `${file}:${line}`;
         const value = withoutPriority(rawValue);

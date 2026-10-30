@@ -8576,6 +8576,67 @@ expectRed(
   /uses the physical property `margin-left`/,
 );
 
+/*
+ * Round two of the same lesson, and the reason the matching is now a scanner rather than a regex:
+ * un-anchoring bought the one-line rule and sold the Sass variable and the quoted string, and the
+ * brace-free value class bought the selector and sold `#{}` interpolation. Each of these is a case
+ * a line-oriented pattern cannot hold at the same time as the others.
+ */
+
+falsePositiveControls += 1;
+expectGreen(
+  'a Sass variable whose name ends in a physical direction',
+  'checkSatoriStylesheetsAreLogical',
+  // `$left: 4px` was read as the physical property `left`, because the old regex matched a
+  // FRAGMENT of a line. Reading statement-wise is what fixes it: the property comes out as
+  // `$left`, whole, which is not a key in any map. (Not the identifier guard — mutation testing
+  // showed no control depends on that.)
+  {
+    [NXS_STYLE]: '$left: 4px;\n' + style('  padding-inline-start: $left;'),
+  },
+);
+
+expectRed(
+  '[logical properties] a physical property spelled in upper case',
+  'checkSatoriStylesheetsAreLogical',
+  // CSS property names are case-insensitive, so this is the same declaration as `margin-left`.
+  // Both the identifier guard and the map lookup were case-sensitive, so it went unreported.
+  // Found by probing the identifier guard rather than by review.
+  { [NXS_STYLE]: style('  MARGIN-LEFT: 4px;') },
+  null,
+  /uses the physical property `margin-left`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a physical declaration inside a quoted value',
+  'checkSatoriStylesheetsAreLogical',
+  // The `;` inside the string used to terminate the statement, so `margin-left: 4px;` was read as
+  // live CSS. Quote state is tracked, so `content` is the only property here.
+  { [NXS_STYLE]: style('  content: "example; margin-left: 4px;";') },
+);
+
+expectRed(
+  '[logical properties] a physical property whose value is interpolated',
+  'checkSatoriStylesheetsAreLogical',
+  // Escaped entirely: the value class `[^;{}]+` could not cross `#{`, so the statement never
+  // matched. This is a real defect and the worst of the three, being silent.
+  { [NXS_STYLE]: style('  margin-left: #{$gutter};') },
+  null,
+  /uses the physical property `margin-left`.*Use `margin-inline-start`/s,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an at-rule prelude containing a colon is not a declaration',
+  'checkSatoriStylesheetsAreLogical',
+  // `@media (min-width: 600px)` ends in `{`, so it is discarded as a prelude — the same mechanism
+  // that keeps selectors out, rather than a special case for at-rules.
+  {
+    [NXS_STYLE]: '@media (min-width: 600px) {\n' + style('  margin-inline-start: 2px;') + '}\n',
+  },
+);
+
 falsePositiveControls += 1;
 expectGreen(
   'a selector is not read as a declaration',
@@ -11796,9 +11857,14 @@ expectRed(
   'checkUpstreamCatalogueLanguages',
   {
     'angular.json': upstreamAngularJson([
-      { glob: '**/*', input: 'node_modules/@hylandsoftware/satori-ui/translations', output: 'assets/satori-ui/i18n' },
+      {
+        glob: '**/*',
+        input: 'node_modules/@hylandsoftware/satori-ui/translations',
+        output: 'assets/satori-ui/i18n',
+      },
     ]),
-    'node_modules/@hylandsoftware/satori-ui/package.json': '{ "name": "@hylandsoftware/satori-ui" }\n',
+    'node_modules/@hylandsoftware/satori-ui/package.json':
+      '{ "name": "@hylandsoftware/satori-ui" }\n',
     [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
   },
   null,
@@ -11908,17 +11974,13 @@ expectRed(
 // A string-literal key is static and must still be ACCEPTED — the legibility rule is about what
 // can be read, not about one spelling of it.
 falsePositiveControls += 1;
-expectGreen(
-  'a folder entry written with string-literal keys',
-  'checkUpstreamCatalogueLanguages',
-  {
-    'angular.json': UPSTREAM_ANGULAR_JSON,
-    ...VENDOR_FILES,
-    [LOADER_PATH]: loaderWithEntries([
-      "{ 'path': 'assets/satori-ui', 'languages': ['de', 'en', 'fr'] }",
-    ]),
-  },
-);
+expectGreen('a folder entry written with string-literal keys', 'checkUpstreamCatalogueLanguages', {
+  'angular.json': UPSTREAM_ANGULAR_JSON,
+  ...VENDOR_FILES,
+  [LOADER_PATH]: loaderWithEntries([
+    "{ 'path': 'assets/satori-ui', 'languages': ['de', 'en', 'fr'] }",
+  ]),
+});
 
 // Round 6: within ONE build the served folder is the union of its rules, so two packages
 // contributing complementary catalogues to the same output — which is what `UPSTREAM_FOLDERS`
@@ -11930,7 +11992,11 @@ expectGreen(
   'checkUpstreamCatalogueLanguages',
   {
     'angular.json': upstreamAngularJson([
-      { glob: '**/*', input: 'node_modules/@hylandsoftware/satori-ui/i18n', output: 'assets/satori-ui/i18n' },
+      {
+        glob: '**/*',
+        input: 'node_modules/@hylandsoftware/satori-ui/i18n',
+        output: 'assets/satori-ui/i18n',
+      },
       { glob: '**/*', input: 'node_modules/@acme/extra-i18n', output: 'assets/satori-ui/i18n' },
     ]),
     'node_modules/@hylandsoftware/satori-ui/i18n/de.json': '{}\n',
@@ -11947,7 +12013,11 @@ expectRed(
   'checkUpstreamCatalogueLanguages',
   {
     'angular.json': upstreamAngularJson([
-      { glob: '**/*', input: 'node_modules/@hylandsoftware/satori-ui/i18n', output: 'assets/satori-ui/i18n' },
+      {
+        glob: '**/*',
+        input: 'node_modules/@hylandsoftware/satori-ui/i18n',
+        output: 'assets/satori-ui/i18n',
+      },
       { glob: '**/*', input: 'node_modules/@acme/extra-i18n', output: 'assets/satori-ui/i18n' },
     ]),
     'node_modules/@hylandsoftware/satori-ui/i18n/de.json': '{}\n',
