@@ -9770,23 +9770,90 @@ const LOGICAL_PROPERTY_ALTERNATIVES = new Map([
 /** `// logical-properties-ok: it overrides upstream inside a [dir='rtl'] block` — prose required. */
 const LOGICAL_PROPERTY_WAIVER = /^\s*(?:\/\/|\/\*)\s*logical-properties-ok:\s*\S/;
 
+/**
+ * A value's top-level space-separated parts, with `calc(100% - 8px)` counted as **one**.
+ *
+ * `value.split(/\s+/)` is wrong in both directions and the first version of this gate did it:
+ * `padding: calc(100% - 8px) 0` became four parts and was rejected though it is symmetric, and
+ * `padding: 0 calc(8px + 2px) 0 16px` became six and was skipped though it is a real defect. So
+ * whitespace only separates at paren depth zero, and never inside a quoted string.
+ */
+function topLevelParts(value) {
+  const parts = [];
+  let current = '';
+  let depth = 0;
+  let quote = null;
+  for (const c of value) {
+    if (quote) {
+      current += c;
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      current += c;
+      continue;
+    }
+    if (c === '(') depth += 1;
+    else if (c === ')') depth = Math.max(0, depth - 1);
+    if (depth === 0 && /\s/.test(c)) {
+      if (current) parts.push(current);
+      current = '';
+      continue;
+    }
+    current += c;
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
+/**
+ * A declaration's value without its priority or SCSS flag.
+ *
+ * `!important` was counted as an edge value, which made symmetric `margin: 0 0 4px !important`
+ * fail on `0` vs `!important` while asymmetric `padding: 12px 8px 12px 16px !important` became a
+ * five-part value and was skipped entirely — a false rejection and a missed defect from one
+ * omission. `text-align: left !important` was missed for the same reason: the equality test saw
+ * `left !important`.
+ */
+function withoutPriority(value) {
+  return value.replace(/!\s*(important|default|global)\b/gi, '').trim();
+}
+
 function checkSatoriStylesheetsAreLogical() {
   let scanned = 0;
   for (const { root } of SATORI_LIBRARIES) {
     for (const file of walk(`${root}/src`, (path) => path.endsWith('.scss'))) {
       if (!fileExists(file)) continue;
       scanned += 1;
-      const lines = read(file).split('\n');
-      lines.forEach((text, index) => {
-        const trimmed = text.trim();
-        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*')) return;
-        if (LOGICAL_PROPERTY_WAIVER.test(lines[index - 1] ?? '')) return;
-        const at = `${file}:${index + 1}`;
+      const source = read(file);
+      const original = source.split('\n');
+      /*
+       * Comments blanked by the shared scanner rather than by testing whether a line *starts*
+       * with a marker, which only ever skipped a block comment's opening line — so a
+       * `margin-left: 4px;` on the second line of a `/* … *\/` block was read as live CSS and
+       * failed the gate on a stylesheet with no defect at all. `blankComments` keeps newlines, so
+       * offsets still map to the line as written, and it knows that the `//` in `url(//cdn…)` is
+       * not a comment.
+       *
+       * The waiver is matched against the ORIGINAL lines, because the waiver *is* a comment and
+       * would have been blanked away.
+       */
+      const scannable = blankComments(source, 'scss');
 
-        const declaration = /^([a-z-]+)\s*:\s*([^;]*);?/.exec(trimmed);
-        if (!declaration) return;
-        const [, property, rawValue] = declaration;
-        const value = rawValue.trim();
+      /*
+       * Declarations are matched anywhere, not anchored to the start of a line, and must end in
+       * `;` or `}`. Anchoring missed `.thing { margin-left: 4px; }` — a whole rule on one line,
+       * which is both legal and used — and the terminator is what keeps a selector out: `&:focus {`
+       * offers no `;` or `}` after its value, and `[^;{}]+` refuses to cross a brace.
+       */
+      const declaration = /([a-z-]+)\s*:\s*([^;{}]+)[;}]/g;
+      for (const match of scannable.matchAll(declaration)) {
+        const [, property, rawValue] = match;
+        const line = scannable.slice(0, match.index).split('\n').length;
+        if (LOGICAL_PROPERTY_WAIVER.test(original[line - 2] ?? '')) continue;
+        const at = `${file}:${line}`;
+        const value = withoutPriority(rawValue);
 
         const logical = LOGICAL_PROPERTY_ALTERNATIVES.get(property);
         if (logical) {
@@ -9798,7 +9865,7 @@ function checkSatoriStylesheetsAreLogical() {
               '    If the direction is genuinely fixed, put `// logical-properties-ok: <reason>` ' +
               'on the line above.',
           );
-          return;
+          continue;
         }
 
         if (
@@ -9817,7 +9884,7 @@ function checkSatoriStylesheetsAreLogical() {
             `${at} sets \`${property}: ${value}\`, which hardcodes a reading direction. ` +
               `Use \`${property}: ${replacement}\`.`,
           );
-          return;
+          continue;
         }
 
         // A four-value shorthand is only a problem when its horizontal values differ: `0 8px 8px`
@@ -9825,7 +9892,7 @@ function checkSatoriStylesheetsAreLogical() {
         // produced three of NXSAT-752's seven findings, and it reads as deliberate rather than as
         // an oversight, which is why it needs naming explicitly.
         if (property === 'margin' || property === 'padding') {
-          const parts = value.split(/\s+/).filter(Boolean);
+          const parts = topLevelParts(value);
           if (parts.length === 4 && parts[1] !== parts[3]) {
             fail(
               `${at} sets \`${property}\` with a four-value shorthand whose inline values differ ` +
@@ -9835,7 +9902,7 @@ function checkSatoriStylesheetsAreLogical() {
             );
           }
         }
-      });
+      }
     }
   }
 

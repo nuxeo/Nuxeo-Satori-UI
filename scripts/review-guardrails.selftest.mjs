@@ -8499,6 +8499,96 @@ expectRed(
   /No `nxs-` stylesheet was read, so the logical-property gate asserted nothing/,
 );
 
+/*
+ * Parsing controls — every one of these was a defect in the first version of this gate, and all
+ * four are the same mistake: reading a stylesheet as lines of `property: value` rather than as
+ * CSS. Three were found by review on #523, the fourth by probing for what review had not covered.
+ *
+ * They are kept as a block because the shape recurs. A gate that scans source with a
+ * line-anchored regex will mis-read a block comment, a `!important`, a `calc()` and a one-line
+ * rule, and each of those is either a false rejection on correct code or a defect waved through.
+ */
+
+falsePositiveControls += 1;
+expectGreen(
+  'a physical declaration inside a multiline block comment is inert',
+  'checkSatoriStylesheetsAreLogical',
+  {
+    // Was reported as live CSS: only the comment's OPENING line was skipped, so the second line
+    // read as a declaration and a stylesheet documenting what not to write failed the gate.
+    [NXS_STYLE]:
+      '/* NXSAT-752: this used to be\n   margin-left: 4px;\n   and text-align: left; */\n' +
+      style('  margin-inline-start: 4px;'),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a symmetric shorthand carrying !important',
+  'checkSatoriStylesheetsAreLogical',
+  // `!important` counted as a fourth edge value, so `0` vs `!important` "differed".
+  { [NXS_STYLE]: style('  margin: 0 0 4px !important;') },
+);
+
+expectRed(
+  '[logical properties] text-align: left is caught through !important',
+  'checkSatoriStylesheetsAreLogical',
+  // Missed, because the equality test saw the whole string `left !important`.
+  { [NXS_STYLE]: style('  text-align: left !important;') },
+  null,
+  /sets `text-align: left`.*Use `text-align: start`/s,
+);
+
+expectRed(
+  '[logical properties] an asymmetric shorthand is caught through !important',
+  'checkSatoriStylesheetsAreLogical',
+  // Missed: five parts rather than four, so the length test skipped it entirely.
+  { [NXS_STYLE]: style('  padding: 12px 8px 12px 16px !important;') },
+  null,
+  /four-value shorthand whose inline values differ \(`8px` then `16px`\)/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a symmetric shorthand whose values contain calc()',
+  'checkSatoriStylesheetsAreLogical',
+  // Splitting on all whitespace made this four parts — `calc(100%`, `-`, `8px)`, `0` — and
+  // rejected a two-value symmetric shorthand.
+  { [NXS_STYLE]: style('  padding: calc(100% - 8px) 0;') },
+);
+
+expectRed(
+  '[logical properties] an asymmetric shorthand is caught through calc()',
+  'checkSatoriStylesheetsAreLogical',
+  // Missed: six parts rather than four. The message must name the whole function as one value.
+  { [NXS_STYLE]: style('  padding: 0 calc(8px + 2px) 0 16px;') },
+  null,
+  /inline values differ \(`calc\(8px \+ 2px\)` then `16px`\)/,
+);
+
+expectRed(
+  '[logical properties] a whole rule written on one line',
+  'checkSatoriStylesheetsAreLogical',
+  // Not in the review; found by probing. The declaration regex was anchored to the start of a
+  // line, so `.thing { margin-left: 4px; }` — legal, and used in this repository — was invisible.
+  { [NXS_STYLE]: '.nxs-pager__thing { margin-left: 4px; }\n' },
+  null,
+  /uses the physical property `margin-left`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a selector is not read as a declaration',
+  'checkSatoriStylesheetsAreLogical',
+  // The other half of un-anchoring: `&:focus {` and `:host-context([dir='rtl'])` have a colon
+  // after a word too. The `;`/`}` terminator and the brace-free value are what separate them.
+  {
+    [NXS_STYLE]:
+      ":host-context([dir='rtl']) .nxs-pager__chevron {\n  transform: scaleX(-1);\n}\n" +
+      '.nxs-pager__thing {\n  &:focus {\n    outline: 2px solid red;\n  }\n}\n',
+  },
+);
+
 // checkPlatformEntryPointsListed (register item 23)
 
 expectGreen('every published entry point listed', 'checkPlatformEntryPointsListed', NXS_LIB());
