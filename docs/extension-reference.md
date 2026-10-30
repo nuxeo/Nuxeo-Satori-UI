@@ -89,8 +89,9 @@ from the published package. Both refuse a package name they cannot honour before
 anything, and say what it would clash with: a name Satori itself uses — `defaults`, the name of
 our own packaged fragments, and `nuxeo-agentic-ui`, the package yours depends on — or a device
 name Windows reserves, such as `con` or `nul`, which cannot be a directory there. A package named
-`defaults` would otherwise contribute a fragment on the same key as ours and take its place, and
-the server reports that only at `info`. `config-packages/presales-demo` in this repository is one, with two
+`defaults` would otherwise contribute a fragment on the same key as ours and take its place, which
+the server reports as a warning — see "Displacing one of our packaged defaults" below.
+`config-packages/presales-demo` in this repository is one, with two
 demo presets. The `bootstrap.json` that used to be copied and edited beside
 the bundle is **removed with no migration**: a file left in `nxserver/nuxeo.war/agentic-ui-config`
 is not served.
@@ -109,6 +110,31 @@ Nothing about configuration changes when a user signs in or out.
 `AppConfigService.diagnostics()` reports where each half came from (`configuration-service` or
 `packaged-default`), the package component behind every fragment, and the server's own
 diagnostics — a replacement it rejected, a contribution it removed.
+
+#### Displacing one of our packaged defaults
+
+A later fragment on the same key replaces the earlier one, and that is how you override our
+defaults deliberately. But replacing or disabling a fragment **we** packaged usually is not
+deliberate — the usual way to arrive is to name your package `defaults`, which makes its fragment
+`defaults` too — and the result is that you silently lose the documentation and themes defaults we
+ship. So the server distinguishes the two:
+
+| What happened                                            | Code                                                     | Level     |
+| -------------------------------------------------------- | -------------------------------------------------------- | --------- |
+| Your fragment replaces or disables **another package's** | `replaced` · `removed`                                   | `info`    |
+| Your fragment replaces or disables **one of ours**       | `replaced-packaged-default` · `removed-packaged-default` | `warning` |
+
+The warning reaches `server.log` at `WARN` and the served `bootstrap.json` / `manifest.json`
+`diagnostics`, and it names the fragment, the component that shipped it and the component that
+displaced it. It does not block anything: the contribution still takes effect, because replacement
+is a supported operation and you may well have meant it.
+
+If you did not mean it, **rename the fragment** — `name` on the `<fragment>` element in your
+component XML, which the `config-package` generator sets from the package name. If you did mean
+it, nothing needs doing; the warning is the record that our defaults are no longer in force.
+
+The distinction is drawn on the **bundle** that contributed the displaced fragment, not on its
+name, so it holds for anything we package rather than only for the fragments called `defaults`.
 
 The Layer 1 configuration is the `extensions` key of a manifest fragment:
 
