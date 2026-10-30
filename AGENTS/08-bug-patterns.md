@@ -807,6 +807,237 @@ simulated — `apps/nuxeo-ui/src/app/shell/app-shell-brand-logo.spec.ts`.
 
 ---
 
+## 24. A blank string accepted as a configured value
+
+```typescript
+// BAD ❌ — "" is a string, so it overrides the packaged default. An empty field in a
+// configuration tool is the usual way one arrives, and the result is a blank browser tab
+// title and a brand link a screen reader announces as just "link".
+applicationTitle: readString(branding, 'applicationTitle', base.branding.applicationTitle),
+
+// GOOD ✅ — blank and whitespace-only keep the fallback.
+applicationTitle: readNonBlankString(branding, 'applicationTitle', base.branding.applicationTitle),
+```
+
+Ask of every configured string whether the empty string is a value a customer could **mean**. For
+anything always shown to someone — a product name, a tab title, an accessible name — it is not:
+`""` is not a quieter choice, it is an absent one. This repo already took that view elsewhere and
+branding was the inconsistency: `readStringRecord` requires `entry.trim() !== ''` for manifest
+operation ids, `readStringArray` requires a non-empty result, and the ARender config requires a
+non-blank `viewerOrigin`.
+
+**The expensive half is the merge, not the default.** Configuration arrives as ordered fragments,
+so the question is not only "what does a blank give me" but "what does a blank do to a value an
+earlier package set correctly". It wiped it out: `{documentTitle: 'Acme Portal'}` followed by
+`{documentTitle: ''}` left the tab with no title at all, which is worse than the reported symptom
+and was not in the ticket (NXSAT-722). Assert the layering, not just the single value.
+
+Fix at the config-read layer rather than at each consumer: the readers are the one place that
+knows the packaged fallback, and a guard there fixes every consumer — including other apps on the
+same shared library — at once.
+
+---
+
+## 25. A reactive effect scoped to a component that does not mount on every route
+
+```typescript
+// BAD ❌ — in AppShellComponent's constructor. The effect is right: the configuration load is
+// asynchronous, so a reactive reader is what re-runs when it lands. The SCOPE is wrong — the
+// shell only mounts on authenticated routes, so the sign-in page never got the configured title.
+effect(() => {
+  document.title = this.appConfig.bootstrap().branding.documentTitle;
+});
+
+// GOOD ✅ — at application scope, where there is no route that escapes it.
+export function syncDocumentTitle(config, document, injector): void {
+  effect(
+    () => {
+      document.title = config.bootstrap().branding.documentTitle;
+    },
+    { injector },
+  );
+}
+```
+
+A global concern — the tab title, `<html lang>`, a theme class on `<html>` — belongs at
+application scope. Putting it in the shell makes it quietly conditional on being signed in, and
+the gap is invisible from inside the shell because everything looks right there. The sign-in page
+is the case to check: it is the first page a customer sees and the one that reaches their history
+and bookmarks.
+
+Two details that bite:
+
+- **`effect()` needs an injection context.** An `APP_INITIALIZER`'s returned closure runs after
+  provider resolution, so pass the `Injector` in (`{ injector }`) exactly as the neighbouring
+  `syncDocumentLanguage` takes a `DestroyRef`.
+- **Check the prose while you are there.** `index.html` claimed "AppShellComponent replaces it
+  from Layer 0 `branding.documentTitle`", which is what made the gap easy to miss for everyone who
+  read it. A comment asserting a guarantee nothing enforces is the `stale-prose` class the
+  pre-PR review skill exists for.
+
+---
+
+## 26. A security rule stated about hosts, compared as strings — and a refusal that says nothing
+
+```typescript
+// BAD ❌ — the rule is "any host that serves Nuxeo is refused", but this compares the
+// hostname the URL parser happened to produce. The parser normalises case and every IPv4
+// form, which hides how much it does NOT normalise: `localhost.` is the FQDN form of
+// `localhost`, shares its cookie jar, and compares unequal. Returning a bare `null` then
+// loses the reason, so nobody can tell a refusal from "nothing was configured".
+const nuxeoHosts = origins.map((o) => parseUrl(o)?.hostname);
+if (nuxeoHosts.includes(url.hostname)) return null;
+
+// GOOD ✅ — compare on a canonical form, and make the reason the return value.
+if (nuxeoHosts.some((host) => isSameHost(host, url.hostname))) {
+  return { refused: 'it names a host that serves Nuxeo, where an <img> would carry the cookie' };
+}
+```
+
+Two defects that travel together (NXSAT-724), both worth checking for separately.
+
+**A rule written about a concept, enforced on a representation.** `url.hostname` is already
+canonical for case and for IPv4 (`127.1` and `0x7f.0.0.1` both arrive as `127.0.0.1`) — which is
+exactly what makes this one hard to see: the partial normalisation reads as full normalisation.
+It keeps a trailing dot, and it cannot know `localhost`, `127.0.0.0/8` and `[::1]` are one
+machine. Before trusting a parser's output as canonical, **print the forms you care about and
+look**, rather than reasoning about what it ought to do:
+
+```bash
+node -e "for (const h of ['localhost','localhost.','127.1','[::1]']) console.log(h, new URL('https://'+h).hostname)"
+```
+
+Note where it must stop: resolving a name to an address needs DNS, which a browser does not
+expose. State the residual gap rather than implying the rule is total.
+
+**And check the other address family.** The first fix of this covered `localhost`, `127.0.0.0/8`
+and `[::1]`, and the reviewer found `[::ffff:127.0.0.1]` straight through it — IPv6 can embed an
+IPv4 address three ways, and the parser canonicalises each into a different shape
+(`[::ffff:7f00:1]`, `[::7f00:1]`, `[::ffff:0:7f00:1]`). Decode the embedded address for each of
+those three prefixes **and only those**.
+
+The first attempt generalised instead, accepting any address whose upper groups were `0` or
+`ffff` on the reasoning that an enumerated list "is incomplete the moment a fourth embedding
+exists". That reasoning is wrong here, and the next round of review caught it: the
+generalisation was **unsound**, not merely broad. It read an IPv4 address out of hosts that embed
+none, so `[::ffff:ffff:7f00:1]` was treated as loopback, and `[::ffff:0:0:0:1]` and
+`[::ffff:0:1]` — two distinct addresses — collapsed onto one key. Both refused logos that should
+have loaded.
+
+The distinction worth carrying: enumerating is right when the set is **defined by a
+specification** (three IPv4-in-IPv6 embeddings, which change only when a standard changes) and
+wrong when it is defined by an open-ended implementation (which elements a browser makes
+focusable). An incomplete list fails closed on something it has not heard of; an unsound
+generalisation fails _open_ in both directions, and in a host-equivalence rule that means
+refusing a customer's logo.
+
+**A guard added for diagnostics must not become a new failure mode.** The same review found that
+reporting the refusal parsed the configuration URL unguarded, inside a method documented to
+never reject because it runs as an `APP_INITIALIZER`. A malformed override turned a _tolerated_
+load failure into a failed startup — the reporting was worse than the silence it replaced. When
+you add a pass over configuration to explain it, the pass inherits that contract.
+
+**Say only what you know.** The first message read `refused, keeping the Satori marks`, which is
+false whenever an earlier layer set a valid value: a refusal falls back to `base`, not to the
+packaged default. Report what was refused and why; do not narrate the merged outcome from one
+contribution's point of view.
+
+**Never canonicalise to a sentinel drawn from the value space.** The second review round found
+that mapping every loopback spelling to the string `'loopback'` made a third-party server
+_actually named_ `loopback` compare equal to `localhost`, so its logo was refused. A sentinel
+only works where it cannot be a real value, and `'loopback'` is a legal DNS name. Express the
+equivalence as a predicate on both sides instead:
+
+```typescript
+// BAD ❌ — the key is itself a possible hostname.
+const key = (h: string) => (isLoopback(h) ? 'loopback' : h);
+return key(a) === key(b);
+
+// GOOD ✅ — no key, so nothing to collide with.
+if (isLoopback(a) && isLoopback(b)) return true;
+return a === b;
+```
+
+The same round found the narrower equivalence twice more: `*.localhost` resolves to loopback
+(RFC 6761) and was missed, and the embedded-IPv4 decode was applied only to loopback, so a
+deployment on `10.0.0.5` still accepted `[::ffff:10.0.0.5]`. **Decide the equivalence once, for
+all values**, rather than special-casing the one address you were looking at. Each fix needs a
+negative control — `mylocalhost` and `localhost.example.com` must stay allowed — because the
+failure mode of an over-broad host rule is a customer's logo silently refused.
+
+**A refusal with no reason is indistinguishable from no configuration.** A function returning
+`null` for "refused" throws the reason away at the moment it is known. Return the reason and
+derive the boolean from it — `isAccepted = describeRefusal(x) === null` — so the verdict and the
+explanation are one implementation and cannot disagree. Two functions that must agree, with
+nothing comparing them, is the `proxy-check` class the pre-PR review keeps finding. Then log it
+from the service, **once per load**, not from a `computed` that re-runs.
+
+**One reason per cause, not per rule.** A predicate that returns `false` for several unrelated
+reasons gives one message for all of them, and that message is then wrong for most of them. On
+this fix a path refused because the _server_ would re-read `;` or `%` was reported as pointing
+outside the configuration directory — untrue for a file named `acme;v=1.svg`, which is inside it,
+and it sends the administrator looking in the wrong place. Likewise `javascript:` and `http:`
+shared "must use https:". When a boolean predicate covers several causes, return the reason and
+let the boolean be `reason === null`.
+
+Regression test pattern: a table of every refused form asserting the message names the value, the
+contributing package and the reason, plus one accepted value asserting silence — that negative
+control is what proves the reporting is not unconditional
+(`libs/shared/app-config/src/lib/app-config.service.spec.ts`). Add one assertion that **no two
+causes share a message**: it is a single test over the table, and it is what caught both
+collisions above (`bootstrap-config.spec.ts`, `describeBrandingLogoRefusal`).
+
+---
+
+## 27. A name validated for its shape but not for the namespace it joins
+
+```typescript
+// BAD ❌ — every check is about the characters. None asks whether the name is already taken
+// in the namespace it is about to enter.
+if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name)) throw new Error(`"${name}" must be kebab-case.`);
+if (name.length > 128) throw new Error(`"${name}" is too long for a fragment name.`);
+if (tree.exists(projectRoot)) throw new Error(`${projectRoot} already exists.`);
+
+// GOOD ✅ — shape first, then the namespaces the value is copied into.
+const clash = SATORI_NAMES.get(name);
+if (clash !== undefined) throw new Error(`"${name}" is a name Satori itself uses: ${clash}.`);
+if (isWindowsDeviceName(name)) throw new Error(`"${name}" is a device name Windows reserves.`);
+```
+
+Ask of every generated or configured identifier **where the value ends up**, and who is already
+there. A pattern and a length are properties of the string; a collision is a property of the
+namespace, and the two look equally like "validation" in a diff. The existing-directory check is
+the tell: it reads as a uniqueness check and is why nobody noticed one was missing, but it can
+only see the one workspace in front of it.
+
+NXSAT-729: the `config-package` generator copies the package name into three namespaces it does
+not own — the fragment name in the component XML, the Marketplace package name, and a directory
+on disk. A package named `defaults` therefore contributed `fragment bootstrap/defaults`, the key
+Satori's own packaged defaults occupy, and `ContributionRegistry.resolve()` did what it is
+designed to do and let the later contribution take the key. Replacement is a documented feature,
+so the server was not the thing to change. The only trace was an `info` diagnostic.
+
+- **The operating system is one of those namespaces.** A name that becomes a path has to clear
+  the Windows device names (`con`, `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9`) — through
+  any case, and through a trailing extension, since `NUL.txt` reaches `NUL`. A directory
+  generated on macOS under one of them leaves a repository that cannot be checked out on Windows
+  at all, and this repository supports Windows deliberately.
+- **Enforce it where the message can explain itself.** A `not`/`enum` in an Nx `schema.json` is
+  validated before the generator runs, so the CLI user gets a generic schema violation instead of
+  the sentence naming what the name clashes with. Keep the list in the generator and document it
+  in the schema's `description`.
+- **Check the prior art before deciding the behaviour.** `scripts/dev-config.mjs` already refused
+  this exact collision, with this exact reasoning — "the server keeps only the later of two
+  fragments with the same name". When one tool in the repo refuses something and its sibling
+  accepts it, the sibling is the defect.
+
+Regression test pattern: refuse through **every** entry point, assert the message names the
+clash, and assert the near-misses (`defaults2`, `constellation`, `aux-config`) still generate —
+otherwise a prefix match passes for an exact one.
+`tools/satori-generators/src/config-package/generator.spec.ts`, `create.spec.ts`.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
@@ -826,3 +1057,5 @@ Fix proactively to avoid a review cycle:
 - "Absolute path to a bundled asset" → drop the leading `/` so it resolves against `<base href>`; the packaged app lives under `/nuxeo/agentic-ui/`
 - "Low contrast text" → if the colour is `var(--mat-sys-outline)`, that is a border token graded at 3:1; use `var(--mat-sys-on-surface-variant)` for text. If the use really is non-text (an icon, a divider), say so in a comment with the measured ratio
 - "No fallback if the image fails to load" → bind `(error)` and clear the state the template branches on, not a flag local to one component; and measure `naturalWidth` after `load` too, because an image that draws nothing fires no `error`
+- "Host comparison may be bypassed by equivalent forms" → canonicalise before comparing (strip a trailing dot, alias the loopback spellings); the URL parser normalises case and IPv4 but not those
+- "Silent rejection" → return the reason and derive the boolean from it, then log it once from the service; a bare `null` makes a refusal look like nothing was configured

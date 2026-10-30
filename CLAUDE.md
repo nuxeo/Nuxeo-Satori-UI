@@ -74,7 +74,8 @@ start npm, npx and nx through `scripts/beta-harness/package-command.mjs`, which 
 their JavaScript entry points with Node without a shell. Keep arguments as arrays;
 direct package-tool launches are rejected by `checkPackageToolLaunches`. The
 `Cross-platform Beta tooling` workflow tests argument transport on all three systems
-and runs the full gate on Windows. Its first real failure still stops the runner.
+and runs the platform-sensitive gates on Windows — each gate declares in `verify-gate.mjs`
+whether its verdict can differ by OS, and the harness refuses to run if one has not. Its first real failure still stops the runner.
 Windows needs permission to create symbolic links for the dependency-tree controls
 (Developer Mode or an administrator terminal). `.gitattributes` keeps text LF on checkout.
 `npm run beta:e2e-negative-control` also runs through Node on all three systems.

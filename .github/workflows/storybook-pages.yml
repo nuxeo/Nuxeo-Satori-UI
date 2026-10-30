@@ -77,6 +77,10 @@ jobs:
 
       # Satori FIRST, while GitHub Packages is still installed. `build-storybook` depends on
       # `compodoc`, which Nx runs once before either build.
+      #
+      # This is also the job's first `nx` invocation — `npm ci` runs only `husky` — so it is what
+      # computes the project graph, with `@hylandsoftware` present. The step below has to compute
+      # its own rather than inherit this one; its `env:` block says why.
       - name: Build the Satori-themed Storybook
         run: npx nx run satori-components:build-storybook:satori --skip-nx-cache
 
@@ -84,11 +88,63 @@ jobs:
       # so a Satori import fails this build instead of compiling into the root of the site. Nothing
       # later in this job needs them, so they are not put back.
       #
-      # The order is what keeps the root honest. Built with those packages still present, a stray
-      # Satori import would compile into the Material Storybook and the gate below would be the
-      # only thing between it and the root; this way it cannot compile at all.
+      # The order is what keeps the root honest at COMPILE level. Built with those packages still
+      # present, a stray Satori import would compile into the Material Storybook and the gate below
+      # would be the only thing between it and the root; this way it cannot compile at all.
+      #
+      # The order alone was not enough at GRAPH level, and the `env:` block is what fixes that.
       - name: Build the Material Storybook without GitHub Packages
         shell: bash
+        env:
+          # A project-graph cache of this step's own, so the graph is computed AFTER the two scopes
+          # are moved out of `node_modules`. Without it the removal proves nothing at graph level:
+          # the step still runs, but nothing re-reads the configuration the removal was meant to
+          # break, so a root config that cannot load without `@hylandsoftware` passes here.
+          #
+          # Nx loads the root `eslint.config.mjs` to infer lint targets while it computes the
+          # project graph, and that happens for every `nx run`. The Satori build above leaves a
+          # complete graph behind, computed while `@hylandsoftware` was installed, and this step
+          # would otherwise resolve the same cache and reuse it: `@nx/eslint/plugin` never re-reads
+          # the root config, so a module that config requires out of a removed scope is never
+          # resolved a second time. The graph cache is keyed on the hashes of TRACKED files, and
+          # moving a package out of `node_modules` changes none of them. `--skip-nx-cache` below
+          # does not help — it skips the TASK cache, not the project graph.
+          #
+          # Not hypothetical: it is this workflow's own history. `eslint.config.mjs` began requiring
+          # `@hylandsoftware/satori-lint/eslint` unguarded on 2026-10-25 (`e901c8c6d`), and
+          # publishing failed on both pushes to `main` of 2026-10-28 with `Failed to process project
+          # graph. ... Cannot find module '@hylandsoftware/satori-lint/eslint'` (runs 40672226172,
+          # 40672756635). It went green again on 2026-10-29 (runs 40793742248, 40793899388) with
+          # that require still unguarded, because the Satori build had just been moved ahead of this
+          # one and left a warm graph. Green by blindness, not by repair — #500 guarded the require
+          # afterwards, and #500 is the only reason `main` is honestly green rather than quietly so.
+          #
+          # Measured 2026-10-29 by running these two steps verbatim, with a canary package required
+          # unguarded from the root config standing in for the removed scope: warm graph with the
+          # canary deleted exits 0 after a full build, a graph directory of this step's own exits 1
+          # in two seconds with `Failed to process project graph. ... Cannot find module`, and with
+          # that require guarded the same cold graph exits 0 again and the build runs. A canary
+          # rather than `@hylandsoftware` itself because a worktree under this repository resolves
+          # the scope from the PARENT checkout's `node_modules` — measured, it resolves to
+          # `../../../node_modules/@hylandsoftware/satori-lint/eslint/index.cjs` — so moving the
+          # worktree's own copy out proves nothing locally. A runner has no parent checkout, which
+          # is why the real thing failed there and cannot be made to fail in a worktree. Delete this
+          # line and the blindness returns — that is the control.
+          #
+          # HOW TO CHECK THIS IS STILL LIVE, in one grep of a run log. With this line, the step
+          # below re-reads the root config with the scope gone, so `resolveSatoriLint`'s warning —
+          # `[eslint.config] @hylandsoftware/satori-lint/eslint is not installed` — appears inside
+          # it. Without it the config is never re-read and the warning cannot appear. Measured both
+          # ways on real runners: once in run 40848541113 (this workflow, dispatched on a branch),
+          # and not once in run 40846034299 (`main`, before this line). If that warning ever stops
+          # appearing here, the removal has stopped being tested, whatever the step's verdict says.
+          #
+          # A `workflow_dispatch` on a branch is the way to exercise this without publishing: the
+          # `deploy` job is gated on `main`, and the concurrency group is keyed by ref.
+          #
+          # #503 adds the same block, for the same reason, to ci.yml's `storybook` job, which runs
+          # this same token-free build.
+          NX_PROJECT_GRAPH_CACHE_DIRECTORY: ${{ runner.temp }}/nx-graph-without-github-packages
         run: |
           set -euo pipefail
           hidden="$RUNNER_TEMP/github-packages-scopes"

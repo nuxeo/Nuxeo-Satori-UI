@@ -5,6 +5,7 @@ import {
   initialiseAppConfigAndLanguage,
   provideAppConfig,
   syncDocumentLanguage,
+  syncDocumentTitle,
 } from './provide-app-config';
 import {
   APP_BOOTSTRAP_CONFIG_URL,
@@ -17,6 +18,7 @@ import {
   ApplicationInitStatus,
   DestroyRef,
   FactoryProvider,
+  Injector,
   LOCALE_ID,
   signal,
 } from '@angular/core';
@@ -262,5 +264,49 @@ describe('syncDocumentLanguage', () => {
     destroy();
     onLangChange.next(change('de'));
     expect(doc.documentElement.lang).toBe('en');
+  });
+});
+
+/**
+ * NXSAT-722 — the tab title has to be written at application scope.
+ *
+ * It used to be an effect in `AppShellComponent`, which only mounts on authenticated routes, so
+ * the sign-in page kept the packaged `<title>` from `index.html`. These assert the two properties
+ * that failure had: the title follows the configuration, and it keeps following it after the
+ * asynchronous load lands rather than being read once.
+ */
+describe('syncDocumentTitle', () => {
+  function harness(documentTitle: string) {
+    const bootstrap = signal({
+      ...DEFAULT_APP_BOOTSTRAP_CONFIG,
+      branding: { ...DEFAULT_APP_BOOTSTRAP_CONFIG.branding, documentTitle },
+    });
+    const doc = document.implementation.createHTMLDocument('title');
+    TestBed.runInInjectionContext(() =>
+      syncDocumentTitle({ bootstrap }, doc, TestBed.inject(Injector)),
+    );
+    return { bootstrap, doc };
+  }
+
+  it('writes the configured title, with no shell mounted', () => {
+    const { doc } = harness('Acme Portal');
+    TestBed.tick();
+    expect(doc.title).toBe('Acme Portal');
+  });
+
+  it('follows a later change, so an asynchronous configuration load is not missed', () => {
+    const { bootstrap, doc } = harness(DEFAULT_APP_BOOTSTRAP_CONFIG.branding.documentTitle);
+    TestBed.tick();
+    expect(doc.title).toBe('Nuxeo Platform');
+
+    // What the real load does: the packaged default is in place, then the fetched configuration
+    // replaces it. A one-shot read would leave the packaged value here.
+    bootstrap.set({
+      ...DEFAULT_APP_BOOTSTRAP_CONFIG,
+      branding: { ...DEFAULT_APP_BOOTSTRAP_CONFIG.branding, documentTitle: 'Acme Portal' },
+    });
+    TestBed.tick();
+
+    expect(doc.title).toBe('Acme Portal');
   });
 });

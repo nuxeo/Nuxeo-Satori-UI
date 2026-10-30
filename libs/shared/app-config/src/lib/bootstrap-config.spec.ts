@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_APP_BOOTSTRAP_CONFIG,
+  describeBrandingLogoRefusal,
   mergeBootstrapConfig,
   nuxeoOriginsOf,
   resolveBrandingLogoUrl,
@@ -121,7 +122,8 @@ describe('resolveBrandingLogoUrl — the check on the URL the browser loads', ()
     ).toBeNull();
   });
 
-  // Cookies are scoped by host, not by scheme or port, so these still carry the Nuxeo session.
+  // The rule is about the host, so neither a different scheme nor a different port steps around
+  // it. Not a cookie control for these cross-origin cases — see `resolveBrandingLogoUrl`.
   it('refuses another scheme or port on a host that serves Nuxeo', () => {
     expect(
       resolveBrandingLogoUrl('https://app.example:8443/nuxeo/api/v1/me', configUrl),
@@ -138,6 +140,180 @@ describe('resolveBrandingLogoUrl — the check on the URL the browser loads', ()
       'https://cdn.example/acme.svg',
     );
     expect(resolveBrandingLogoUrl('http://cdn.example/acme.svg', configUrl)).toBeNull();
+  });
+
+  /**
+   * NXSAT-724. The rule above is stated in terms of the host, but it compared the host as the URL
+   * parser left it. The parser canonicalises case and every IPv4 form (`127.1` and `0x7f.0.0.1`
+   * both become `127.0.0.1`), so those were never gaps — but it **keeps a trailing dot**, which is
+   * the FQDN form of the very same host.
+   */
+  it.each([
+    ['a trailing dot on the configuration host', 'https://app.example./nuxeo/api/v1/me'],
+    ['a trailing dot with an explicit port', 'https://app.example.:8443/nuxeo/api/v1/me'],
+    ['a trailing dot on the path of the configuration directory', 'https://app.example./x.svg'],
+  ])('refuses %s', (_label, src) => {
+    expect(resolveBrandingLogoUrl(src, configUrl)).toBeNull();
+  });
+
+  it('refuses a trailing dot on another configured Nuxeo origin', () => {
+    expect(
+      resolveBrandingLogoUrl('https://api.example./static/acme.svg', configUrl, [
+        'https://api.example',
+      ]),
+    ).toBeNull();
+  });
+
+  /**
+   * The documented side effect of normalising the host but matching the same-origin exception on
+   * the origin as written: a trailing dot takes a path that really is inside the configuration
+   * directory out of the exception, and the host rule then refuses it. Pinned here because the
+   * extensibility contract states it, and a stated guarantee with no test is not a guarantee.
+   */
+  it('refuses the configuration directory itself when the host carries a trailing dot', () => {
+    expect(
+      resolveBrandingLogoUrl('https://app.example./nuxeo/agentic-ui-config/acme.svg', configUrl),
+    ).toBeNull();
+    // Written the way the application is served, the same path is accepted.
+    expect(
+      resolveBrandingLogoUrl('https://app.example/nuxeo/agentic-ui-config/acme.svg', configUrl),
+    ).toBe('https://app.example/nuxeo/agentic-ui-config/acme.svg');
+  });
+
+  /**
+   * NXSAT-724 cases B and C as reported, against a dev deployment on loopback. `localhost`,
+   * `127.0.0.0/8` and `[::1]` all name this machine, so a logo at any of them reaches the same
+   * server the configuration came from.
+   */
+  it.each([
+    [
+      'the host written exactly (the control, already refused)',
+      'https://localhost:4200/nuxeo/icons/x.png',
+    ],
+    ['a trailing dot', 'https://localhost.:4200/nuxeo/icons/x.png'],
+    ['the IPv4 loopback address', 'https://127.0.0.1:4200/nuxeo/icons/x.png'],
+    ['a short IPv4 loopback form', 'https://127.1:4200/nuxeo/icons/x.png'],
+    ['another address in 127.0.0.0/8', 'https://127.0.0.2:4200/nuxeo/icons/x.png'],
+    ['the IPv6 loopback address', 'https://[::1]:4200/nuxeo/icons/x.png'],
+  ])('refuses a loopback Nuxeo host written as %s', (_label, src) => {
+    expect(
+      resolveBrandingLogoUrl(src, 'http://localhost:4200/agentic-ui-config/bootstrap.json'),
+    ).toBeNull();
+  });
+
+  /**
+   * Review of PR 512. An IPv4 address embedded in IPv6 reaches the IPv4 host, and the parser
+   * accepts all three embeddings — mapped, the deprecated compatible form, and translated — none
+   * of which matches a check written against the IPv4 or `::1` spelling.
+   */
+  it.each([
+    ['IPv4-mapped', 'https://[::ffff:127.0.0.1]:4200/nuxeo/icons/x.png'],
+    ['IPv4-mapped, already canonical', 'https://[::ffff:7f00:1]:4200/nuxeo/icons/x.png'],
+    ['IPv4-compatible (deprecated)', 'https://[::127.0.0.1]:4200/nuxeo/icons/x.png'],
+    ['IPv4-translated', 'https://[::ffff:0:127.0.0.1]:4200/nuxeo/icons/x.png'],
+    ['a fully written IPv6 loopback', 'https://[0:0:0:0:0:0:0:1]:4200/nuxeo/icons/x.png'],
+    ['another mapped address in 127.0.0.0/8', 'https://[::ffff:127.0.0.2]:4200/nuxeo/icons/x.png'],
+  ])('refuses a loopback Nuxeo host embedded in IPv6 as %s', (_label, src) => {
+    expect(
+      resolveBrandingLogoUrl(src, 'http://localhost:4200/agentic-ui-config/bootstrap.json'),
+    ).toBeNull();
+  });
+
+  /** The embedding check must not swallow addresses that merely end in those bits. */
+  it.each([
+    ['a routable address whose low bits look like loopback', 'https://[2001:db8::7f00:1]/acme.svg'],
+    ['a mapped address that is not loopback', 'https://[::ffff:10.0.0.5]/acme.svg'],
+    ['an ordinary IPv6 host', 'https://[2001:db8::1]/acme.svg'],
+    // Compared against the parser's own canonical form rather than the written one: it rewrites
+    // an embedded IPv4 to hex groups, so `[::ffff:10.0.0.5]` comes back as `[::ffff:a00:5]`.
+  ])('still allows %s on a loopback deployment', (_label, src) => {
+    expect(
+      resolveBrandingLogoUrl(src, 'http://localhost:4200/agentic-ui-config/bootstrap.json'),
+    ).toBe(new URL(src).href);
+  });
+
+  /**
+   * Second review of PR 512. Three ways the host comparison was still wrong, two of them
+   * refusing logos that should load.
+   */
+  describe('second review of PR 512', () => {
+    const onLoopback = 'http://localhost:4200/agentic-ui-config/bootstrap.json';
+
+    it('allows a third-party host actually named "loopback"', () => {
+      // The canonical form used to be the literal string 'loopback', which is itself a legal DNS
+      // name, so this host collided with `localhost` and was refused.
+      expect(resolveBrandingLogoUrl('https://loopback/acme.svg', onLoopback)).toBe(
+        'https://loopback/acme.svg',
+      );
+    });
+
+    it.each([
+      ['a name merely ending in the word', 'https://mylocalhost/acme.svg'],
+      ['a name with localhost as a label', 'https://localhost.example.com/acme.svg'],
+    ])('allows %s', (_label, src) => {
+      expect(resolveBrandingLogoUrl(src, onLoopback)).toBe(src);
+    });
+
+    it('refuses a .localhost subdomain, which resolves to loopback', () => {
+      expect(
+        resolveBrandingLogoUrl('https://tenant.localhost:4200/nuxeo/icons/x.png', onLoopback),
+      ).toBeNull();
+    });
+
+    /** An embedded IPv4 names the same host whatever its spelling, loopback or not. */
+    it('refuses an IPv4-mapped form of a non-loopback Nuxeo host', () => {
+      const onIpv4 = 'https://10.0.0.5/agentic-ui-config/bootstrap.json';
+      expect(
+        resolveBrandingLogoUrl('https://[::ffff:10.0.0.5]/nuxeo/api/v1/me', onIpv4),
+      ).toBeNull();
+      expect(resolveBrandingLogoUrl('https://[::10.0.0.5]/nuxeo/api/v1/me', onIpv4)).toBeNull();
+    });
+
+    it('still allows a different IPv4 host, mapped or plain', () => {
+      const onIpv4 = 'https://10.0.0.5/agentic-ui-config/bootstrap.json';
+      for (const src of ['https://10.0.0.6/acme.svg', 'https://[::ffff:10.0.0.6]/acme.svg']) {
+        expect(resolveBrandingLogoUrl(src, onIpv4)).toBe(new URL(src).href);
+      }
+    });
+
+    /**
+     * Seventh review round. Reading the low 32 bits of any address whose upper groups happen to be
+     * `0` or `ffff` is not the same as recognising an IPv4 embedding: it decodes addresses that
+     * embed nothing, so distinct hosts collapse onto one key and a valid logo is refused. Only the
+     * three standardised embeddings carry an IPv4 address.
+     */
+    it('does not read an IPv4 address out of a host that embeds none', () => {
+      // `::ffff:ffff:7f00:1` is its own address, not a mapped 127.0.0.1.
+      const src = 'https://[::ffff:ffff:7f00:1]/acme.svg';
+      expect(resolveBrandingLogoUrl(src, onLoopback)).toBe(new URL(src).href);
+    });
+
+    it('keeps two distinct addresses distinct when neither embeds IPv4', () => {
+      // Both used to decode to `0.0.0.1` and so compared equal to each other.
+      const config = 'https://[::ffff:0:0:0:1]/agentic-ui-config/bootstrap.json';
+      const src = 'https://[::ffff:0:1]/acme.svg';
+      expect(resolveBrandingLogoUrl(src, config)).toBe(new URL(src).href);
+    });
+
+    it('still refuses each of the three real embeddings of the Nuxeo host', () => {
+      const onIpv4 = 'https://10.0.0.5/agentic-ui-config/bootstrap.json';
+      for (const src of [
+        'https://[::ffff:10.0.0.5]/nuxeo/api/v1/me', // mapped
+        'https://[::10.0.0.5]/nuxeo/api/v1/me', // compatible, deprecated
+        'https://[::ffff:0:10.0.0.5]/nuxeo/api/v1/me', // translated
+      ]) {
+        expect(resolveBrandingLogoUrl(src, onIpv4)).toBeNull();
+      }
+    });
+  });
+
+  it('still allows a third-party https logo when the deployment is on loopback', () => {
+    expect(
+      resolveBrandingLogoUrl(
+        'https://cdn.example/acme.svg',
+        'http://localhost:4200/agentic-ui-config/bootstrap.json',
+      ),
+    ).toBe('https://cdn.example/acme.svg');
   });
 
   // Defence in depth: these are also refused when the configuration is read, but the resolved
@@ -181,6 +357,118 @@ describe('resolveBrandingLogoUrl — the check on the URL the browser loads', ()
 
   it('refuses an unparseable URL', () => {
     expect(resolveBrandingLogoUrl('https://exa mple.com/acme.svg', configUrl)).toBeNull();
+  });
+});
+
+/**
+ * The reason function is the single implementation behind both the verdict and the explanation,
+ * and nothing tested it directly — only its effect through `AppConfigService`. Third review round
+ * of PR 512 asked whether the messages distinguish the underlying cases, which is a property of
+ * this function, so it is asserted here.
+ */
+describe('describeBrandingLogoRefusal', () => {
+  const configUrl = 'https://app.example/nuxeo/agentic-ui-config/bootstrap.json';
+  const reasonFor = (src: string) => describeBrandingLogoRefusal(src, configUrl);
+
+  it('says nothing about a src it accepts', () => {
+    expect(reasonFor('assets/acme.svg')).toBeNull();
+    expect(reasonFor('https://cdn.example/acme.svg')).toBeNull();
+    expect(reasonFor('data:image/svg+xml,<svg/>')).toBeNull();
+  });
+
+  /** One distinct, administrator-readable reason per cause. */
+  const CAUSES: ReadonlyArray<readonly [string, string]> = [
+    ['blank', '   '],
+    ['backslash', 'a\\b.svg'],
+    ['control character', 'a\u0001b.svg'],
+    ['data: URI that is not an image', 'data:text/html,<b>x'],
+    ['http scheme', 'http://example.com/l.svg'],
+    ['javascript scheme', 'javascript:alert(1)'],
+    ['absolute path', '/nuxeo/api/v1/me'],
+    ['parent segment', '../x.svg'],
+    ['query with no path', '?v=2'],
+    ['outside the configuration directory', 'https://app.example/nuxeo/api/v1/me'],
+    ['a Nuxeo host', 'https://app.example./nuxeo/api/v1/me'],
+    // Fourth review round of PR 512: these are inside the directory and refused for how the
+    // server would re-read the path, which is not the same thing as pointing outside it.
+    ['a path parameter in a segment', 'acme;v=1.svg'],
+    ['a percent escape that does not decode', 'acme%e0.svg'],
+  ];
+
+  it.each(CAUSES)('gives a reason for %s', (_label, src) => {
+    expect(reasonFor(src)).toBeTruthy();
+  });
+
+  it('gives a different reason for every cause, so a log line identifies what went wrong', () => {
+    const byReason = new Map<string, string[]>();
+    for (const [label, src] of CAUSES) {
+      const reason = reasonFor(src) ?? '(accepted)';
+      byReason.set(reason, [...(byReason.get(reason) ?? []), label]);
+    }
+    const shared = [...byReason.entries()].filter(([, labels]) => labels.length > 1);
+    expect(shared).toEqual([]);
+  });
+
+  it('names the scheme it refused, so javascript: is not reported as merely not-https', () => {
+    expect(reasonFor('javascript:alert(1)')).toContain('javascript');
+    expect(reasonFor('http://example.com/l.svg')).toContain('http');
+  });
+
+  /**
+   * Fourth review round of PR 512. `isInsideDirectory` returned `false` both for a path that
+   * really does leave the directory and for one that stays inside it but carries syntax the
+   * server re-reads — and every one of those was reported as pointing outside the directory,
+   * which for the second group is simply untrue.
+   */
+  describe('a path refused for its syntax is not reported as pointing outside the directory', () => {
+    it('says a genuinely outside path points outside', () => {
+      expect(reasonFor('https://app.example/nuxeo/api/v1/me')).toContain(
+        'outside the configuration directory',
+      );
+    });
+
+    it.each([
+      ['a path parameter', 'acme;v=1.svg'],
+      ['an encoded semicolon', 'acme%3bv=1.svg'],
+      ['an encoded slash', 'brand%2facme.svg'],
+    ])('blames how the server re-reads %s, not the directory', (_label, src) => {
+      const reason = reasonFor(src);
+      expect(reason).toBeTruthy();
+      expect(reason).not.toContain('outside the configuration directory');
+    });
+
+    it('blames the escape when a segment does not decode', () => {
+      const reason = reasonFor('acme%e0.svg');
+      expect(reason).toContain('escape');
+      expect(reason).not.toContain('outside the configuration directory');
+    });
+  });
+
+  /**
+   * Sixth review round of PR 512. A `..` segment is refused on the written form wherever it
+   * resolves to, which is deliberate — the server may read the path differently from the browser.
+   * The reason given claimed it "would leave the configuration directory", and that is a claim
+   * about the resolved path: `assets/../acme.svg` carries a `..` and resolves *inside* the
+   * directory, so for those the stated reason was untrue.
+   */
+  describe('a parent-directory segment is not reported as escaping the directory', () => {
+    it.each([
+      ['one cancelled by a preceding segment', 'assets/../acme.svg'],
+      ['two cancelled by preceding segments', 'a/b/../../c.svg'],
+    ])('refuses %s without claiming it leaves the directory', (_label, src) => {
+      // Refused by the check on the written form. The resolved check alone would accept it —
+      // it lands inside the directory — which is exactly why the form rule is not redundant,
+      // and exactly why its reason must not borrow the resolved check's wording.
+      expect(resolveBrandingLogoUrl(src, configUrl)).not.toBeNull();
+
+      const reason = reasonFor(src);
+      expect(reason).toContain('parent-directory segment');
+      expect(reason).not.toMatch(/would leave|leaves|outside/);
+    });
+
+    it('still refuses one that does leave the directory, with the same reason', () => {
+      expect(reasonFor('../x.svg')).toBe(reasonFor('assets/../acme.svg'));
+    });
   });
 });
 
@@ -244,6 +532,58 @@ describe('mergeBootstrapConfig', () => {
     expect(merged.branding.applicationTitle).toBe('Acme Content');
     expect(merged.branding.documentTitle).toBe(DEFAULT_APP_BOOTSTRAP_CONFIG.branding.documentTitle);
     expect(merged.aiBackendUrl).toBe(DEFAULT_APP_BOOTSTRAP_CONFIG.aiBackendUrl);
+  });
+
+  /**
+   * NXSAT-722. A product name and a browser tab title are always shown to someone, so the empty
+   * string is not a value a customer can mean: it is a blank tab title, and an unnamed brand link
+   * where `applicationTitle` is the accessible name.
+   */
+  describe('blank branding titles', () => {
+    const branding = (patch: Record<string, unknown>) =>
+      mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, { branding: patch }).branding;
+    const packaged = DEFAULT_APP_BOOTSTRAP_CONFIG.branding;
+
+    it('keeps the packaged documentTitle for an empty string', () => {
+      expect(branding({ documentTitle: '' }).documentTitle).toBe(packaged.documentTitle);
+    });
+
+    it('keeps the packaged documentTitle for a whitespace-only value', () => {
+      expect(branding({ documentTitle: '   ' }).documentTitle).toBe(packaged.documentTitle);
+      expect(branding({ documentTitle: '\t\n' }).documentTitle).toBe(packaged.documentTitle);
+    });
+
+    it('keeps the packaged applicationTitle for an empty or whitespace-only value', () => {
+      expect(branding({ applicationTitle: '' }).applicationTitle).toBe(packaged.applicationTitle);
+      expect(branding({ applicationTitle: '  ' }).applicationTitle).toBe(packaged.applicationTitle);
+    });
+
+    it('still applies a non-blank title, and one that merely has padding', () => {
+      expect(branding({ documentTitle: 'Acme Portal' }).documentTitle).toBe('Acme Portal');
+      expect(branding({ applicationTitle: ' Acme Insurance ' }).applicationTitle).toBe(
+        ' Acme Insurance ',
+      );
+    });
+
+    it('does not let a later blank fragment wipe out a title an earlier package set', () => {
+      const configured = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+        branding: { documentTitle: 'Acme Portal', applicationTitle: 'Acme Insurance' },
+      });
+
+      const merged = mergeBootstrapConfig(configured, {
+        branding: { documentTitle: '', applicationTitle: '   ' },
+      });
+
+      expect(merged.branding.documentTitle).toBe('Acme Portal');
+      expect(merged.branding.applicationTitle).toBe('Acme Insurance');
+    });
+
+    it('leaves the logo and the other settings alone', () => {
+      const merged = branding({ documentTitle: '', logo: { src: 'acme.svg', alt: 'Acme' } });
+
+      expect(merged.logo).toEqual({ src: 'acme.svg', alt: 'Acme' });
+      expect(merged.documentTitle).toBe(packaged.documentTitle);
+    });
   });
 
   it('distinguishes an explicit null server URL from an absent one', () => {

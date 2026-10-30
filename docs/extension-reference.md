@@ -63,7 +63,7 @@ JSON fragment.
 
 ### Where the manifest lives, and how it survives upgrade
 
-Layer 0 and Layer 1 are contributed, not edited. Since NXSAT-312 a customer ships their own
+Layer 0 and Layer 1 are contributed, not edited. A customer ships their own
 Marketplace package that contributes `bootstrap` and `manifest` fragments to the
 `org.nuxeo.agentic.ui.config` extension point, and the server serves them after our defaults at
 `/nuxeo/agentic-ui-config/bootstrap.json` and `manifest.json`. Ordering needs two declarations:
@@ -81,7 +81,12 @@ missing asset — and writes the installable zip: `node config-packages/acme-con
 `config-package` Nx generator writes the same files, byte for byte, where Nx is installed:
 `npx nx g ./tools/satori-generators:config-package acme-config --owner=acme` after a full install
 of this repository, or `npx nx g @nuxeo/satori-platform:config-package acme-config --owner=acme`
-from the published package. `config-packages/presales-demo` in this repository is one, with two
+from the published package. Both refuse a package name they cannot honour before writing
+anything, and say what it would clash with: a name Satori itself uses — `defaults`, the name of
+our own packaged fragments, and `nuxeo-agentic-ui`, the package yours depends on — or a device
+name Windows reserves, such as `con` or `nul`, which cannot be a directory there. A package named
+`defaults` would otherwise contribute a fragment on the same key as ours and take its place, and
+the server reports that only at `info`. `config-packages/presales-demo` in this repository is one, with two
 demo presets. The `bootstrap.json` that used to be copied and edited beside
 the bundle is **removed with no migration**: a file left in `nxserver/nuxeo.war/agentic-ui-config`
 is not served.
@@ -93,7 +98,7 @@ wins over an earlier one. Each fragment's `extensions` block is handled in two s
 layers. Then the resolved blocks merge in the same order, and that merge is **not** isolated: slot
 entries with the same `id` merge across packages, so a later package can patch a descriptor an
 earlier one contributed. Nothing is read from the repository: the Nuxeo Note at
-`/default-domain/config/agentic-ui` that held the manifest before NXSAT-312 is no longer read, by
+`/default-domain/config/agentic-ui` that once held the manifest is no longer read, by
 any request, with **no migration** — re-create its content as a manifest fragment in your package.
 Nothing about configuration changes when a user signs in or out.
 
@@ -676,6 +681,11 @@ providers: [
   provideSatoriExtensions({ components: { 'nxs.primitives.tag': AcmeTag } }), // yours wins
 ];
 ```
+
+A host that shows `nxs-tag-editor` also lists `provideNxsTagWrites()` once in the same providers.
+It registers no ID; it keeps the editor's tag changes for as long as the application runs, so
+closing the panel that holds the editor mid-change neither cancels nor drops one, and the next
+editor for that document shows what Nuxeo stored.
 
 `provideNxsSatoriComponents()` also needs what any Satori host provides: `provideSatori()` for the
 theme and icons, and Satori's `sat.*` catalogue in ngx-translate (upstream's
