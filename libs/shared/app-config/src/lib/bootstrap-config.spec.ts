@@ -985,6 +985,51 @@ describe('mergeBootstrapConfig', () => {
     ]);
   });
 
+  /**
+   * Review of PR 519. The doc comment and the extensibility contract both claimed a refused entry
+   * fell back to whatever `sso.endpoints` an earlier layer set — reasoning carried over from
+   * `readLogo`, which really does return `base` on a refusal. `readSsoEndpoints` does not: a
+   * contribution that writes the key at all supplies the whole list. The claim was prose nobody
+   * compared to the branch, which is why it is now a test and not a sentence.
+   *
+   * The behaviour itself must not change. `"endpoints": []` is how a deployment turns SSO off, and
+   * per-entry fallback would make that indistinguishable from "every entry was refused".
+   */
+  it('replaces an earlier list rather than falling back to it, even when every entry is refused', () => {
+    const base = {
+      ...DEFAULT_APP_BOOTSTRAP_CONFIG,
+      sso: {
+        ...DEFAULT_APP_BOOTSTRAP_CONFIG.sso,
+        endpoints: [{ id: 'azure', label: 'Azure AD', path: '/nuxeo/login/azure' }],
+      },
+    };
+
+    // One refused entry does not rescue the earlier list — the accepted ones replace it.
+    expect(
+      mergeBootstrapConfig(base, {
+        sso: {
+          endpoints: [
+            { id: 'okta', label: 'Okta', path: '/nuxeo/login/okta' },
+            { id: 'company', label: 'Company SSO', path: '//evil.example/sso' },
+          ],
+        },
+      }).sso.endpoints,
+    ).toEqual([{ id: 'okta', label: 'Okta', path: '/nuxeo/login/okta' }]);
+
+    // Every entry refused leaves none, which is the same outcome as an explicit empty array.
+    expect(
+      mergeBootstrapConfig(base, {
+        sso: { endpoints: [{ id: 'company', label: 'Company SSO', path: '//evil.example/sso' }] },
+      }).sso.endpoints,
+    ).toEqual([]);
+
+    // A contribution that does not write the key keeps the earlier list, which is the one case
+    // the old prose described correctly.
+    expect(mergeBootstrapConfig(base, { sso: { postLoginPath: '/browse' } }).sso.endpoints).toEqual(
+      base.sso.endpoints,
+    );
+  });
+
   it('lets a customer turn every SSO button off', () => {
     expect(
       mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, { sso: { endpoints: [] } }).sso.endpoints,

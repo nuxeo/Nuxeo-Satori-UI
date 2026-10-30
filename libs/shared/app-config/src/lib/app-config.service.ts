@@ -220,9 +220,17 @@ export class AppConfigService {
    * application; now it renders nothing, and an administrator who is not told why would have no
    * way to tell a refused path from one they never contributed.
    *
-   * It says a value was refused and deliberately **not** which buttons end up on screen: a
-   * refusal here leaves whatever `sso.endpoints` an earlier layer set, so naming an outcome from
-   * one contribution's point of view would often be wrong.
+   * It says a value was refused and deliberately **not** which buttons end up on screen — but
+   * **not for the reason {@link noteRefusedLogos} gives**, and asserting that reason here was
+   * wrong (review of PR 519). `readLogo` returns `base` when it refuses a `src`, so an earlier
+   * layer's logo really does survive. `readSsoEndpoints` does not: whenever a contribution writes
+   * an **array**, the merged list is that contribution's accepted entries and the earlier list is
+   * gone. So a contribution whose every entry is refused removes an earlier layer's buttons, and
+   * is indistinguishable from the explicit `"endpoints": []` that turns SSO off — which is the
+   * behaviour a customer needs and must not change.
+   *
+   * The message therefore stays silent about the outcome because the outcome depends on the
+   * remaining contributions, not because an earlier one is guaranteed to win.
    */
   private noteRefusedSsoEndpoints(
     fragments: readonly AppConfigFragment[],

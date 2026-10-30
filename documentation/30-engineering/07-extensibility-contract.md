@@ -194,9 +194,15 @@ to after sign-in; `returnQueryParam: null` sends none.
   `https://idp.example` are very different mistakes to have made.
 - **A refused entry renders no button, and the refusal is reported** as
   `[agentic-ui-config] sso.endpoints[<n>].path "<value>" from <component> was refused — <reason>`,
-  both on the console and in `diagnostics().messages`. Like a refused logo, it falls back to
-  whatever `sso.endpoints` an earlier layer set rather than to the packaged default, so the
-  message names what was refused and not what ended up on screen.
+  both on the console and in `diagnostics().messages`. The message names what was refused and not
+  what ended up on screen, because the outcome depends on the remaining contributions.
+- **`endpoints` is replaced, not merged entry by entry, and that matters when an entry is
+  refused.** A contribution that writes the key at all supplies the whole list: the merged value is
+  that contribution's **accepted** entries, and an earlier package's list is gone. So a
+  contribution whose every entry is refused leaves no buttons at all, and is indistinguishable from
+  the `"endpoints": []` that deliberately turns SSO off — which is the behaviour a deployment needs,
+  so it does not change. **This is not how `branding.logo` behaves**: a refused `logo.src` keeps the
+  logo an earlier layer set. Do not reason from one to the other (review of PR 519).
 - **The refusal during the merge is not the security boundary.** `AuthService.startSamlLogin` is:
   it resolves the configured path against the Nuxeo origin and refuses to navigate unless the
   resolved origin is that origin, so a value that never passed through the merge — the
