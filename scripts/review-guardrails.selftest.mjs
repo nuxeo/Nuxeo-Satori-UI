@@ -8596,6 +8596,34 @@ expectGreen(
   },
 );
 
+falsePositiveControls += 1;
+expectGreen(
+  'a symmetric shorthand whose value is interpolated',
+  'checkSatoriStylesheetsAreLogical',
+  // `#{}` tracking was added to the statement scanner and NOT to the value splitter, so this
+  // split into four parts (`0`, `#{8px`, `+`, `2px}`) and was rejected. Two functions split on
+  // whitespace; only one had been taught.
+  { [NXS_STYLE]: style('  padding: 0 #{8px + 2px};') },
+);
+
+expectRed(
+  '[logical properties] an asymmetric shorthand is caught through interpolation',
+  'checkSatoriStylesheetsAreLogical',
+  // The other half: six parts, so the length test skipped a real defect. The message must name
+  // the whole interpolation as one value.
+  { [NXS_STYLE]: style('  padding: 0 #{8px + 2px} 0 16px;') },
+  null,
+  /inline values differ \(`#\{8px \+ 2px\}` then `16px`\)/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'interpolation nested inside a function',
+  'checkSatoriStylesheetsAreLogical',
+  // Both counters have to hold at once; this is the case that fails if either is dropped.
+  { [NXS_STYLE]: style('  padding: calc(#{$a} + 2px) 0;') },
+);
+
 expectRed(
   '[logical properties] a physical property spelled in upper case',
   'checkSatoriStylesheetsAreLogical',

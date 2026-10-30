@@ -9781,9 +9781,11 @@ const LOGICAL_PROPERTY_WAIVER = /^\s*(?:\/\/|\/\*)\s*logical-properties-ok:\s*\S
 function topLevelParts(value) {
   const parts = [];
   let current = '';
-  let depth = 0;
+  let paren = 0;
+  let interpolation = 0;
   let quote = null;
-  for (const c of value) {
+  for (let i = 0; i < value.length; i += 1) {
+    const c = value[i];
     if (quote) {
       current += c;
       if (c === quote) quote = null;
@@ -9794,9 +9796,27 @@ function topLevelParts(value) {
       current += c;
       continue;
     }
-    if (c === '(') depth += 1;
-    else if (c === ')') depth = Math.max(0, depth - 1);
-    if (depth === 0 && /\s/.test(c)) {
+    /*
+     * `#{…}` counts as one value, the same as `calc(…)`. This was fixed in `scssDeclarations` and
+     * NOT here, which is the whole defect: `padding: 0 #{8px + 2px}` split into four parts and was
+     * rejected though symmetric, while `padding: 0 #{8px + 2px} 0 16px` split into six and was
+     * skipped though asymmetric. Two functions split on whitespace and only one had been taught
+     * about interpolation — so when the next construct needs handling, fix both.
+     */
+    if (c === '#' && value[i + 1] === '{') {
+      interpolation += 1;
+      current += '#{';
+      i += 1;
+      continue;
+    }
+    if (interpolation > 0 && c === '}') {
+      interpolation -= 1;
+      current += c;
+      continue;
+    }
+    if (c === '(') paren += 1;
+    else if (c === ')') paren = Math.max(0, paren - 1);
+    if (paren === 0 && interpolation === 0 && /\s/.test(c)) {
       if (current) parts.push(current);
       current = '';
       continue;
