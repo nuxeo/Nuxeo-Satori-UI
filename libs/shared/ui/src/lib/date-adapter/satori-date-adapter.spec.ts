@@ -20,6 +20,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   DATE_ADAPTER_LANGUAGES,
+  canFormatDatesIn,
   dateFnsLocaleFor,
   provideSatoriDateAdapter,
 } from './satori-date-adapter';
@@ -262,6 +263,59 @@ describe('provideSatoriDateAdapter', () => {
     // A customer can set `defaultLanguage` to anything; a typo must not be fatal.
     expect(dateFnsLocaleFor('xx')).toBe(enUS);
     expect(dateFnsLocaleFor('')).toBe(enUS);
+  });
+
+  /**
+   * `DATE_FNS_LOCALES` is an object literal, so it inherits from `Object.prototype` and a bare
+   * `map[key]` answers for keys it does not own. Found by review on #522 against
+   * `canFormatDatesIn`, which returned `true` for `constructor` — but the exact-tag lookup in
+   * `dateFnsLocaleFor` had the same hole from the start, and there it is worse than a wrong
+   * boolean: it returns the `Object` function where a `Locale` is expected, and
+   * `provideSatoriDateAdapter` hands that straight to `MAT_DATE_LOCALE`.
+   *
+   * More than the two inputs the review named, because `constructor` is not special — every
+   * inherited member of `Object.prototype` is truthy and the regional split makes each one reachable
+   * with a suffix too.
+   */
+  const INHERITED_KEYS = [
+    'constructor',
+    'constructor-US',
+    '__proto__',
+    '__proto__-US',
+    'toString',
+    'valueOf',
+    'hasOwnProperty',
+    'isPrototypeOf',
+    'propertyIsEnumerable',
+  ] as const;
+
+  it('does not mistake an inherited Object property for locale data', () => {
+    // The key travels in the asserted value rather than a message, which is this file's existing
+    // habit and the only one that works here: `libs/shared/ui` runs Vitest, so Jasmine's
+    // `withContext` is not available and a bare loop would report "false !== true" with no input.
+    expect(INHERITED_KEYS.map((key) => [key, canFormatDatesIn(key)])).toEqual(
+      INHERITED_KEYS.map((key) => [key, false]),
+    );
+  });
+
+  it('returns a real Locale, not Object, for an inherited property name', () => {
+    // `toBe(enUS)` rather than "is truthy": the defect returned a truthy non-Locale, so an
+    // existence check would have passed on exactly the value this test exists to reject.
+    expect(INHERITED_KEYS.map((key) => [key, dateFnsLocaleFor(key)])).toEqual(
+      INHERITED_KEYS.map((key) => [key, enUS]),
+    );
+  });
+
+  it('still answers true for every locale the map really has', () => {
+    // The mirror: the own-property restriction must not start refusing real entries.
+    const probes = [...DATE_ADAPTER_LANGUAGES, 'en-GB', 'de-AT', 'xx'];
+    expect(probes.map((id) => [id, canFormatDatesIn(id)])).toEqual([
+      ...DATE_ADAPTER_LANGUAGES.map((id) => [id, true]),
+      ['en-GB', true],
+      // A region with no entry of its own, resolved through its base language.
+      ['de-AT', true],
+      ['xx', false],
+    ]);
   });
 
   // The map and the shipped languages are two lists that must not drift. They did once already:

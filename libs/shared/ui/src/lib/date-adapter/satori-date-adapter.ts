@@ -94,10 +94,29 @@ export const DATE_ADAPTER_LANGUAGES: readonly string[] = Object.keys(DATE_FNS_LO
   (id) => !id.includes('-'),
 );
 
+/**
+ * One entry of `DATE_FNS_LOCALES`, by its **own** key only.
+ *
+ * `DATE_FNS_LOCALES` is an object literal, so it inherits from `Object.prototype` and a bare
+ * `DATE_FNS_LOCALES[key]` answers for keys it does not have: `constructor` resolves to the
+ * `Object` function, `__proto__` to the prototype itself, and `toString`, `valueOf` and
+ * `hasOwnProperty` to functions. Every one of them is truthy, so the lookup reported locale data
+ * that does not exist — `canFormatDatesIn('constructor')` returned `true`, and `dateFnsLocaleFor`
+ * would hand `Object` to `MAT_DATE_LOCALE` as if it were a `Locale`.
+ *
+ * Found by review on #522 against `canFormatDatesIn`, which is where it was reachable from a
+ * host validating configuration. The exact-tag lookup in `dateFnsLocaleFor` had it from the
+ * start; exporting a predicate over the same map is what made it matter. Both go through here
+ * now, so neither can regress on its own.
+ */
+function ownLocale(key: string): Locale | undefined {
+  return Object.hasOwn(DATE_FNS_LOCALES, key) ? DATE_FNS_LOCALES[key] : undefined;
+}
+
 /** Exact tag, then bare language. `undefined` means this build has no data for the locale at all. */
 function dateFnsLocaleOrNone(localeId: string): Locale | undefined {
   const tag = (localeId ?? '').toLowerCase().replaceAll('_', '-');
-  return DATE_FNS_LOCALES[tag] ?? DATE_FNS_LOCALES[tag.split('-')[0]];
+  return ownLocale(tag) ?? ownLocale(tag.split('-')[0]);
 }
 
 /**
@@ -135,13 +154,13 @@ export function canFormatDatesIn(localeId: string): boolean {
  */
 export function dateFnsLocaleFor(localeId: string): Locale {
   const tag = (localeId ?? '').toLowerCase().replaceAll('_', '-');
-  const exact = DATE_FNS_LOCALES[tag];
+  const exact = ownLocale(tag);
   if (exact) return exact;
 
   const language = tag.split('-')[0];
-  // Same lookup `canFormatDatesIn` reports on, so the predicate and the resolution cannot
+  // Same `ownLocale` the predicate reports on, so `canFormatDatesIn` and the resolution cannot
   // disagree about whether this build has data for a locale.
-  const base = dateFnsLocaleOrNone(tag);
+  const base = ownLocale(language);
 
   // Warned only on a regional miss until #522, so a BARE language with no entry fell through to
   // `enUS` in silence — which is how `defaultLanguage: 'es'` came to display day-first Spanish
