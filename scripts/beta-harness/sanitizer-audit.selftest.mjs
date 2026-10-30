@@ -29,10 +29,13 @@ import {
   PERTURBED_PATHS,
   SELFTEST_ENV_FLAG,
   recoverPerturbations,
-  removeMarker,
+  retainMarker,
   writeFileAtomic,
   writeMarker,
 } from './sanitizer-selftest-state.mjs';
+
+/** This script's own path, for the recovery command printed in messages. */
+const SELFTEST_SELF = 'scripts/beta-harness/sanitizer-audit.selftest.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const AUDIT = 'scripts/beta-harness/sanitizer-audit.mjs';
@@ -163,17 +166,27 @@ function restoreAll() {
     }
     writeFileAtomic(abs, original);
   }
+  // **The records for refused paths are kept.** This is the in-process twin of the rule
+  // `recoverPerturbations` follows, and it was missed here when that one was fixed: a path under
+  // `clobbered` is one an IDE save or a concurrent edit has rewritten, and the marker holds the
+  // only copy of what was in it *before* this run — including an uncommitted edit that predates
+  // the run entirely. Deleting the marker on the way past therefore destroyed exactly what
+  // refusing to overwrite was protecting (review of PR 521).
+  const retained = new Map([...backups].filter(([relPath]) => clobbered.includes(relPath)));
   backups.clear();
-  // Dropped last, once nothing is left to undo. A path under `clobbered` no longer holds this
-  // run's bytes, so no later run could act on it from the marker anyway — keeping the marker would
-  // only make every subsequent run repeat a warning about a file it will never repair.
-  removeMarker(ROOT);
+  retainMarker(ROOT, retained);
   baseRefOverride = null;
   if (clobbered.length > 0) {
     console.error(
       `\nselftest: NOT restoring ${clobbered.join(', ')} — changed by something else mid-run.\n` +
-        `  Those files may still hold a perturbation. Check them, and use 'git diff' before committing.`,
+        `  Those files may still hold a perturbation, and the marker has been kept so their\n` +
+        `  pre-run contents are not lost. Inspect with 'git diff', then either resolve them or\n` +
+        `  run 'node ${SELFTEST_SELF} --recover-only'.\n` +
+        `  Stopping here: a later control's cleanup would clear those records.`,
     );
+    // Stopping is the point. Continuing would let the next control's `restoreAll()` narrow the
+    // marker again and drop the entries this one just preserved.
+    process.exit(1);
   }
 }
 

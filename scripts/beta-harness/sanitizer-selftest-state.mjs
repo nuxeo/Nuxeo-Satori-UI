@@ -62,9 +62,14 @@ export const PERTURBED_PATHS = Object.freeze([
   'libs/shared/nuxeo-client/src/index.ts',
   'libs/shared/nuxeo-client/src/lib/utils/navigable-url.ts',
   'libs/shared/nuxeo-client/src/lib/utils/render-trusted-html.ts',
-  'libs/shared/nuxeo-client/src/lib/utils/trust-object-url.ts',
   'libs/shared/ui/src/lib/document-viewer/document-viewer.component.html',
   'libs/shared/ui/src/lib/document-viewer/document-viewer.component.ts',
+  // Deliberately absent: `libs/shared/nuxeo-client/src/lib/utils/trust-object-url.ts`. It is named
+  // all over the selftest, but only ever as a **key inside the allowlist JSON**
+  // (`j.sites[CHECK1_SITE]`) — the file itself is never perturbed. It was registered here from a
+  // survey of string literals, which is the same over-matching that first missed
+  // `sanitizer-audit.mjs`; the drift control now reads the `edit()` call sites instead and caught
+  // it as a stale entry (review of PR 521).
 ]);
 
 /**
@@ -166,6 +171,40 @@ export function writeMarker(root, backups) {
     join(root, MARKER),
     `${JSON.stringify(
       { pid: process.pid, startedAt: existing?.startedAt ?? new Date().toISOString(), paths },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+/**
+ * Write a marker holding **exactly** these entries, replacing whatever is there.
+ *
+ * For the case where a run is giving up on some paths and has restored the rest: the records it
+ * still needs are the refused ones, and keeping the restored ones would make the next run report
+ * files that are already fine. Distinct from {@link writeMarker}, which merges, because merging is
+ * right while perturbations are accumulating and wrong when narrowing to what a human must handle.
+ *
+ * @param {string} root
+ * @param {Map<string, { original: string, written: string }>} entries
+ */
+export function retainMarker(root, entries) {
+  if (entries.size === 0) {
+    removeMarker(root);
+    return;
+  }
+  const paths = {};
+  for (const [relPath, { original, written }] of entries) {
+    paths[relPath] = {
+      original,
+      originalSha256: sha256(original),
+      writtenSha256: [sha256(written)],
+    };
+  }
+  writeFileAtomic(
+    join(root, MARKER),
+    `${JSON.stringify(
+      { pid: process.pid, startedAt: new Date().toISOString(), refusedAt: new Date().toISOString(), paths },
       null,
       2,
     )}\n`,

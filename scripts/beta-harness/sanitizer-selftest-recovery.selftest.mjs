@@ -70,8 +70,45 @@ const neutraliseSanitiser = (text) => {
 
 const results = [];
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
-const write = (rel, text) => writeFileSync(join(ROOT, rel), text, 'utf8');
 const markerAbs = join(ROOT, MARKER);
+
+/**
+ * Put a file back, but only from a state this suite is responsible for.
+ *
+ * The first version of the cleanup was a bare `writeFileSync(rel, original)` in every `finally`.
+ * Two problems, both raised in review of PR 521: it would overwrite an IDE save made while a child
+ * was running, and being non-atomic it could itself be interrupted and leave a partial tracked file
+ * with no recovery record — the defect this suite exists to test for, produced by its own cleanup.
+ *
+ * So: nothing to do when the file already holds `original`; an atomic replacement when it holds a
+ * state the suite wrote; and otherwise leave it alone, keep any marker, and fail a control, because
+ * an unexpected edit is a finding rather than something to tidy away.
+ *
+ * @param {string} rel  repo-relative path
+ * @param {string} original  the bytes to put back
+ * @param {string[]} ours  states this suite wrote for that path
+ */
+function restoreIfOurs(rel, original, ours) {
+  const abs = join(ROOT, rel);
+  let onDisk;
+  try {
+    onDisk = readFileSync(abs, 'utf8');
+  } catch {
+    check(`cleanup: ${rel} could not be read`, false, 'left as-is');
+    return;
+  }
+  if (onDisk === original) return;
+  if (ours.includes(onDisk)) {
+    writeFileAtomic(abs, original);
+    return;
+  }
+  check(
+    `cleanup: ${rel} holds an edit this suite did not write — left in place`,
+    false,
+    'inspect with git diff; the marker, if any, has been kept',
+  );
+}
+
 
 function check(name, pass, detail) {
   results.push({ name, pass, detail });
@@ -190,10 +227,8 @@ console.log('sanitizer-selftest recovery controls\n');
       (recovered.stdout ?? '').split('\n')[0]?.slice(0, 72),
     );
   } finally {
-    write(SUBJECT, original);
-    spawnSync('node', ['-e', `require('fs').rmSync(${JSON.stringify(markerAbs)},{force:true})`], {
-      cwd: ROOT,
-    });
+    restoreIfOurs(SUBJECT, original, [onDisk]);
+    rmSync(markerAbs, { force: true });
   }
 }
 
@@ -201,7 +236,8 @@ console.log('sanitizer-selftest recovery controls\n');
 // The gate runs the selftest without arguments, so that path has to repair as well. Asserted by
 // running the whole selftest, which is slow but is the thing the gate actually invokes.
 {
-  const { original } = crashMidPerturbation();
+  const { original, onDisk } = crashMidPerturbation();
+  const ourStates = [onDisk];
   try {
     const full = runSelftest();
     // The detail names the likely cause rather than only the exit code. A tree that already held
@@ -232,7 +268,7 @@ console.log('sanitizer-selftest recovery controls\n');
     // would carry an untracked file nobody put there.
     check('and leaves no marker behind after a clean finish', !existsSync(markerAbs));
   } finally {
-    write(SUBJECT, original);
+    restoreIfOurs(SUBJECT, original, ourStates);
   }
 }
 
@@ -268,7 +304,8 @@ console.log('sanitizer-selftest recovery controls\n');
     check('exits 0, because nothing needs a human', recovered.status === 0);
     check('and drops the marker', !existsSync(markerAbs));
   } finally {
-    write(SUBJECT, original);
+    // Nothing of ours was ever written to the file in this control — that is the point of it.
+    restoreIfOurs(SUBJECT, original, []);
     runSelftest('--recover-only');
   }
 }
@@ -298,10 +335,13 @@ console.log('sanitizer-selftest recovery controls\n');
 // The in-process `restoreAll` refuses to restore a file something else has written since. Recovery
 // inherits that, or a crash followed by a developer's own edit would silently discard their work.
 {
-  const { original } = crashMidPerturbation();
+  const { original, onDisk } = crashMidPerturbation();
   const mine = `${original}\n// an edit of my own, made after the crash\n`;
+  // `mine` is listed as ours because this control writes it deliberately; without that the
+  // cleanup would correctly refuse to touch it and the control would leak its own edit.
+  const ourStates = [onDisk, mine];
   try {
-    write(SUBJECT, mine);
+    writeFileAtomic(join(ROOT, SUBJECT), mine);
     const recovered = runSelftest('--recover-only');
     check(
       'recovery refuses a file something else has written since the crash',
@@ -327,13 +367,14 @@ console.log('sanitizer-selftest recovery controls\n');
       Boolean(held && 'paths' in held && held.paths[SUBJECT]?.original === original),
     );
   } finally {
-    write(SUBJECT, original);
+    restoreIfOurs(SUBJECT, original, ourStates);
   }
 }
 
 // ---- the audit explains itself, and does not repair ---------------------------------------------
 {
-  const { original } = crashMidPerturbation(neutraliseSanitiser, AUDIT_SUBJECT);
+  const { original, onDisk } = crashMidPerturbation(neutraliseSanitiser, AUDIT_SUBJECT);
+  const ourStates = [onDisk];
   try {
     const audit = runAudit();
     const out = `${audit.stdout ?? ''}${audit.stderr ?? ''}`;
@@ -356,7 +397,7 @@ console.log('sanitizer-selftest recovery controls\n');
       out.includes(`\n    ${AUDIT_SUBJECT}\n`),
     );
   } finally {
-    write(AUDIT_SUBJECT, original);
+    restoreIfOurs(AUDIT_SUBJECT, original, ourStates);
     runSelftest('--recover-only');
   }
 }
@@ -365,7 +406,8 @@ console.log('sanitizer-selftest recovery controls\n');
 // Otherwise every control's output would carry an explanation about a perturbation that is the
 // point, and the gate echoes the selftest's output on a pass.
 {
-  const { original } = crashMidPerturbation(neutraliseSanitiser, AUDIT_SUBJECT);
+  const { original, onDisk } = crashMidPerturbation(neutraliseSanitiser, AUDIT_SUBJECT);
+  const ourStates = [onDisk];
   try {
     const asSelftest = spawnSync('node', ['scripts/beta-harness/sanitizer-audit.mjs'], {
       cwd: ROOT,
@@ -385,7 +427,7 @@ console.log('sanitizer-selftest recovery controls\n');
       !out.includes('--recover-only'),
     );
   } finally {
-    write(AUDIT_SUBJECT, original);
+    restoreIfOurs(AUDIT_SUBJECT, original, ourStates);
     runSelftest('--recover-only');
   }
 }
@@ -404,7 +446,8 @@ console.log('sanitizer-selftest recovery controls\n');
     parsed.budgets[cat] -= 1;
     return `${JSON.stringify(parsed, null, 2)}\n`;
   };
-  const { original } = crashMidPerturbation(lowerABudget, ALLOWLIST);
+  const { original, onDisk } = crashMidPerturbation(lowerABudget, ALLOWLIST);
+  const ourStates = [onDisk];
   try {
     const audit = runAudit();
     const out = `${audit.stdout ?? ''}${audit.stderr ?? ''}`;
@@ -418,7 +461,7 @@ console.log('sanitizer-selftest recovery controls\n');
       out.includes('--recover-only') && out.includes(`\n    ${ALLOWLIST}\n`),
     );
   } finally {
-    write(ALLOWLIST, original);
+    restoreIfOurs(ALLOWLIST, original, ourStates);
     runSelftest('--recover-only');
   }
 }
@@ -487,20 +530,40 @@ console.log('sanitizer-selftest recovery controls\n');
 // it reports staleness in both directions.
 {
   const source = readFileSync(join(ROOT, SELFTEST), 'utf8');
+  // Scanned at the `edit(...)` call sites, not across every string literal in the file.
+  //
+  // The first version matched any quoted repo-relative path that exists on disk, and that
+  // over-matched the moment the selftest gained `const SELFTEST_SELF = '…selftest.mjs'` for a
+  // message — a path it names but never perturbs. A drift control that reports a path nobody
+  // perturbs is as useless as one that misses a path somebody does; both train the reader to
+  // ignore it. Identifiers are resolved against their `const` declarations, so both
+  // `edit(VIEWER_TS, …)` and `edit('libs/…', …)` are seen (review of PR 521).
+  // Literals and aliases both, resolved transitively: `const CHECK1_SITE = TRUST_OBJECT_URL;`
+  // points at another constant, so a literals-only map reported `trust-object-url.ts` as a stale
+  // registration while a control was perturbing it through the alias.
+  const literals = Object.fromEntries(
+    [...source.matchAll(/^const (\w+) =\s*\n?\s*'([^']+)';/gm)].map((m) => [m[1], m[2]]),
+  );
+  const aliases = Object.fromEntries(
+    [...source.matchAll(/^const (\w+) = (\w+);$/gm)].map((m) => [m[1], m[2]]),
+  );
+  const resolve = (name, seen = new Set()) => {
+    if (literals[name]) return literals[name];
+    if (aliases[name] && !seen.has(name)) return resolve(aliases[name], new Set([...seen, name]));
+    return undefined;
+  };
+  const constants = new Proxy({}, { get: (_t, name) => resolve(String(name)) });
   const named = [
     ...new Set(
-      [...source.matchAll(/'([A-Za-z0-9@._-]+(?:\/[A-Za-z0-9@._-]+)+\.(?:ts|html|scss|json|mjs))'/g)]
-        .map((m) => m[1])
-        .filter((p) => existsSync(join(ROOT, p))),
+      [...source.matchAll(/\bedit\(\s*(?:'([^']+)'|(\w+))/g)]
+        .map((m) => m[1] ?? constants[m[2]])
+        .filter((p) => typeof p === 'string' && existsSync(join(ROOT, p))),
     ),
   ];
-  const unregistered = named.filter((p) => !PERTURBED_PATHS.includes(p));
   check(
-    'every repo path the selftest names is registered in PERTURBED_PATHS',
-    unregistered.length === 0,
-    unregistered.length === 0
-      ? `${named.length} path(s) named, ${PERTURBED_PATHS.length} registered`
-      : `unregistered: ${unregistered.join(', ')}`,
+    'the scan found the edit() call sites at all',
+    named.length >= 5,
+    `${named.length} path(s) resolved from edit() call sites`,
   );
   const stale = PERTURBED_PATHS.filter((p) => !named.includes(p));
   check(
