@@ -4,6 +4,27 @@ import angular from '@analogjs/vite-plugin-angular';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
+/**
+ * Pin the time zone the suite runs in: several of its date assertions are only able to fail outside
+ * UTC (NXSAT-727).
+ *
+ * A date field edits a calendar day anchored in UTC. In UTC, anchoring it locally and anchoring it
+ * in UTC produce byte-identical results, so in UTC no assertion can tell the two apart — and CI
+ * runners are UTC. `satori-components` pins the same zone, for the same reason; see
+ * `AGENTS/08-bug-patterns.md` pattern 29, which also records why setting `process.env.TZ` from
+ * inside a case does not work.
+ *
+ * It deliberately **overrides** an inherited `TZ`, so the suite's verdict is the same on every
+ * machine. `SATORI_TEST_TZ` is the way to ask for a different one — a named variable rather than
+ * `TZ` precisely so that running in another zone is a deliberate act and cannot happen by
+ * inheriting a shell. `satori-components` resolves the pin the same way.
+ *
+ * `nx.json` lists `SATORI_TEST_TZ` as an `env` input on the `test` targets, so asking for
+ * another zone cannot be answered from the default zone's cache. Without that, the second
+ * run of a documented verification command returns the first run's result and reads as proof.
+ */
+process.env['TZ'] = process.env['SATORI_TEST_TZ'] ?? 'Asia/Calcutta';
+
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../../node_modules/.vite/libs/features/browse',

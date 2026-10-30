@@ -1196,6 +1196,23 @@ In an `edit` or `create` form, the schema type picks the control:
 | `complex[]`                        | one group per item, with Add and Remove                                                     |
 | `blob`, or `complex` nested deeper | shown, not editable                                                                         |
 
+**A `date` field edits a calendar day, and that day is anchored in UTC.** A day picked or typed is
+sent as that day at UTC midnight — 6 March 2024 is always `2024-03-06T00:00:00.000Z`, whatever zone
+the user is in — and a stored value is read back as the day it names in UTC, so the form opens on
+the day that was saved everywhere. This is the same anchoring the view uses (`date` renders in UTC,
+above) and the same one Nuxeo itself applies to a day-only write, so one picked day is one stored
+value and every surface showing it agrees.
+
+Two consequences worth designing around:
+
+- A `date` property that carries a meaningful time of day is **not** a calendar day, and the form
+  does not treat it as one beyond its day: it is shown and edited by day, and written back
+  unchanged — time of day included — as long as the day is not altered. Alter the day and the time
+  is replaced by UTC midnight.
+- A value written by another client at midnight in a local zone (Nuxeo Web UI does this) names the
+  previous UTC day when that zone is ahead of UTC, and will be shown and edited as that previous
+  day. Nothing records the zone it was written in, so it cannot be recovered.
+
 **Validation before saving.** Save checks the schema's constraints in the browser first: a
 required field (`NotNullConstraint`, or `"required": true` in the file), a `PatternConstraint`
 (the whole value must match), a `LengthConstraint` and a `NumericIntervalConstraint`, inclusive or
