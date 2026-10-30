@@ -102,9 +102,33 @@ export function initialiseAppConfigAndLanguage(
  *
  * So the string language and the formatting locale are allowed to differ, on purpose. Strings
  * follow the configuration; formatting follows it only where we have the data to honour it.
+ *
+ * ## Why registration alone is not enough to admit a locale
+ *
+ * This checked `REGISTERED_LOCALES` alone, which was correct only while every registered locale
+ * also shipped a catalogue. It stopped being true when `ar`, `es`, `he`, `it` and `sv` were
+ * registered ahead of their translations (`D8e-webui`): registration made them admissible as
+ * `LOCALE_ID`, and `DATE_FNS_LOCALES` does not carry them, so `defaultLanguage: 'es'` gave
+ * Angular's pipes Spanish dates — `3/4/2026`, day-first — while `provideSatoriDateAdapter()`
+ * fell through to `enUS` and read `03/04/2026` back as **4 March**.
+ *
+ * That is NXSAT-629 exactly: display honouring the locale while parsing does not, which has no
+ * symptom on screen because the calendar overlay looks right. Caught in review on #522 rather
+ * than by a test, which is why there is one now.
+ *
+ * So a locale is admitted only if it is **both** registered — or English, which Angular bundles
+ * — and advertised in `availableLanguages`. The second condition is what ties the formatting
+ * locale to the languages the application actually ships: `DATE_FNS_LOCALES`' bare ids are held
+ * equal to `availableLanguages` by a test, so anything advertised can be parsed as well as
+ * formatted, and a language registered ahead of its catalogue stays out until it lands.
  */
-export function resolveFormattingLocale(defaultLanguage: string): string {
-  return REGISTERED_LOCALES.includes(defaultLanguage) ? defaultLanguage : 'en';
+export function resolveFormattingLocale(
+  defaultLanguage: string,
+  availableLanguages: readonly string[],
+): string {
+  const canFormat = REGISTERED_LOCALES.includes(defaultLanguage);
+  const ships = availableLanguages.includes(defaultLanguage);
+  return canFormat && ships ? defaultLanguage : 'en';
 }
 
 /**
@@ -208,8 +232,10 @@ export function provideAppConfig(): (Provider | EnvironmentProviders)[] {
      */
     {
       provide: LOCALE_ID,
-      useFactory: () =>
-        resolveFormattingLocale(inject(AppConfigService).bootstrap().defaultLanguage),
+      useFactory: () => {
+        const bootstrap = inject(AppConfigService).bootstrap();
+        return resolveFormattingLocale(bootstrap.defaultLanguage, bootstrap.availableLanguages);
+      },
     },
     {
       provide: NUXEO_API_ORIGIN,

@@ -25,9 +25,11 @@ import {
  * variants date-fns ships for those languages.
  *
  * Keyed by the Angular locale id, lowercased. The five bare language ids are the ones this
- * application can actually produce — `resolveFormattingLocale` clamps `LOCALE_ID` to
- * `REGISTERED_LOCALES` — and a test asserts they match `availableLanguages`, so adding a
- * language cannot quietly leave its dates being parsed as English.
+ * application can actually produce — `resolveFormattingLocale` clamps `LOCALE_ID` to locales
+ * that are both registered and in `availableLanguages` — and a test asserts they match
+ * `availableLanguages`, so adding a language cannot quietly leave its dates being parsed as
+ * English. That clamp used to read `REGISTERED_LOCALES` alone, and registering `es` ahead of its
+ * catalogue was enough to admit a locale this map has no entry for (#522).
  *
  * That test is why this map holds five rather than the ten the application targets. `ar`, `es`,
  * `he`, `it` and `sv` have Angular locale data registered and are requested from Crowdin, but
@@ -110,10 +112,23 @@ export function dateFnsLocaleFor(localeId: string): Locale {
 
   const language = tag.split('-')[0];
   const base = DATE_FNS_LOCALES[language];
-  if (tag !== language && isDevMode()) {
+
+  // Warned only on a regional miss until #522, so a BARE language with no entry fell through to
+  // `enUS` in silence — which is how `defaultLanguage: 'es'` came to display day-first Spanish
+  // dates and parse them month-first without a word anywhere. The locale being admissible at all
+  // is `resolveFormattingLocale`'s job and it now checks `availableLanguages`; this is the
+  // backstop for every other way a locale reaches here, including a customer's own `LOCALE_ID`
+  // through the published provider.
+  if (!base && isDevMode()) {
     console.warn(
       `[satori-date-adapter] No date-fns locale for "${localeId}"; dates will be parsed and ` +
-        `formatted as "${base ? language : 'en'}". If that region orders or separates date ` +
+        'formatted as "en", which is month-first. Typed dates will be misread wherever this ' +
+        'locale is not. Add it to DATE_FNS_LOCALES.',
+    );
+  } else if (tag !== language && isDevMode()) {
+    console.warn(
+      `[satori-date-adapter] No date-fns locale for "${localeId}"; dates will be parsed and ` +
+        `formatted as "${language}". If that region orders or separates date ` +
         'fields differently, typed dates will be misread. Add it to DATE_FNS_LOCALES.',
     );
   }

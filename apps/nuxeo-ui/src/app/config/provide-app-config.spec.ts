@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { LangChangeEvent, TranslateService } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
 
@@ -20,12 +21,16 @@ import {
   FactoryProvider,
   Injector,
   LOCALE_ID,
+  provideZonelessChangeDetection,
   signal,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
+import { provideSatoriDateAdapter } from '@nuxeo/satori-platform/ui';
 
 import { appConfig } from '../app.config';
+import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
 
 /**
  * The language comes from the configuration that has just loaded, on every boot.
@@ -221,6 +226,98 @@ describe('LOCALE_ID provider', () => {
     // A test that only checked 'en' would pass with no provider at all, because Angular's
     // default already starts with those two letters.
     expect(injectLocaleFor('fr')).not.toBe('en-US');
+  });
+
+  /**
+   * The #522 regression, and the reason the clamp reads `availableLanguages` rather than
+   * `REGISTERED_LOCALES` alone.
+   *
+   * `ar`, `es`, `he`, `it` and `sv` have Angular locale data registered ahead of their
+   * catalogues (`D8e-webui`), which made them admissible as `LOCALE_ID` while `DATE_FNS_LOCALES`
+   * carried no entry for them. The result was the NXSAT-629 split restored: Angular's pipes
+   * showed `3/4/2026` day-first in Spanish while the Material adapter fell through to `enUS` and
+   * read `03/04/2026` back as 4 March. Nothing on screen looked wrong.
+   *
+   * These assert from configuration, not from the constant: `injectLocaleFor` goes through the
+   * real provider from `provideAppConfig()`.
+   */
+  const REGISTERED_BUT_NOT_SHIPPED = ['ar', 'es', 'he', 'it', 'sv'] as const;
+
+  it('does not admit a locale registered ahead of its catalogue', () => {
+    // Guards the premise: if these ever stop being registered-but-unadvertised the test below
+    // would pass for the wrong reason, asserting nothing.
+    for (const language of REGISTERED_BUT_NOT_SHIPPED) {
+      expect(REGISTERED_LOCALES)
+        .withContext(`${language} must still be registered for this test to mean anything`)
+        .toContain(language);
+      expect(DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages)
+        .withContext(`${language} must still be unadvertised for this test to mean anything`)
+        .not.toContain(language);
+    }
+
+    for (const language of REGISTERED_BUT_NOT_SHIPPED) {
+      expect(injectLocaleFor(language))
+        .withContext(`${language} has no date-fns locale, so it must not reach LOCALE_ID`)
+        .toBe('en');
+    }
+  });
+
+  it('admits every language it advertises, so the clamp is not simply refusing everything', () => {
+    for (const language of DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages) {
+      expect(injectLocaleFor(language)).toBe(language === 'en' ? 'en' : language);
+    }
+  });
+
+  /**
+   * Configuration through to adapter resolution — the two mechanisms that disagreed.
+   *
+   * The first version of this test asked the adapter to parse what the adapter had just
+   * formatted, and **passed with the defect in place**: `dateFnsLocaleFor('es')` falls through
+   * to `enUS` for both halves, so the adapter is perfectly self-consistent while being wrong.
+   * Round-tripping inside one mechanism cannot see a split between two.
+   *
+   * What a user actually hits is a date rendered by `DatePipe` in one order and read back by a
+   * date field in another: copy the date out of a document list, type it into a filter, get a
+   * different day. So this compares field order between Angular's formatting — which follows
+   * `LOCALE_ID`'s registered locale data — and the adapter's, which follows `DATE_FNS_LOCALES`.
+   *
+   * 3 April 2026 is the probe because `3` and `4` identify day and month unambiguously and the
+   * year contributes neither digit.
+   */
+  it('keeps Angular formatting and the date adapter on the same field order', () => {
+    const dayBeforeMonth = (rendered: string): boolean =>
+      rendered.indexOf('3') < rendered.indexOf('4');
+
+    const configurations = [
+      ...DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages,
+      ...REGISTERED_BUT_NOT_SHIPPED,
+      'xx',
+    ];
+
+    for (const configured of configurations) {
+      const locale = injectLocaleFor(configured);
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          provideZonelessChangeDetection(),
+          { provide: LOCALE_ID, useValue: locale },
+          provideSatoriDateAdapter(),
+        ],
+      });
+      const adapter = TestBed.inject(DateAdapter) as DateAdapter<Date>;
+      const formats = TestBed.inject(MAT_DATE_FORMATS);
+
+      const byPipe = formatDate(new Date(2026, 3, 3), 'shortDate', locale);
+      const byAdapter = adapter.format(adapter.createDate(2026, 3, 3), formats.display.dateInput);
+
+      expect(dayBeforeMonth(byAdapter))
+        .withContext(
+          `configured "${configured}" resolved to "${locale}": DatePipe writes "${byPipe}" ` +
+            `and the date field writes "${byAdapter}"`,
+        )
+        .toBe(dayBeforeMonth(byPipe));
+    }
   });
 });
 
