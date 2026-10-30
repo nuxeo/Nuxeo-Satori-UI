@@ -56,9 +56,27 @@ named, so nothing in the repository had to change. The nine the project carried 
 `Seleccionado`. A proof-reading step plus post-translation localization QA is confirmed configured,
 which closes the last open conformance item in `D8-standard`.
 
-So **the nightly pull is unblocked**. It had been failing outright — the CLI rejects the whole
-invocation on an unknown `--language` rather than the single flag, so the four names added ahead of
-their targets stopped `fr`, `de`, `ja` and `nl` updating as well. That clears on the next run.
+**The pull never actually broke, and saying it had is an error worth keeping visible.** Earlier
+revisions of this page and of `crowdin-pull.yaml` asserted in the present tense that the nightly
+pull was failing and that `fr`, `de`, `ja` and `nl` had stopped updating. Neither happened. The run
+history, which is the only thing that settles it:
+
+| Time (UTC) | |
+| --- | --- |
+| 30 Oct 00:03 | scheduled run — **succeeded**, `main` still had the old language list |
+| 30 Oct 11:39 | NXSAT-754 merged; `main` first carried `--language=ar/he/it/sv` |
+| 30 Oct 12:00 | INTERN-1363 — the four became targets on project 160 |
+| 31 Oct 00:00 | next scheduled run |
+
+The workflow is `0 0 * * *` against `main`, so the unknown languages were exposed for **21
+minutes** and no run fell inside them. The last twelve scheduled runs all succeeded, including the
+one that day.
+
+The underlying risk was real and is worth keeping: the CLI rejects the **whole** invocation on an
+unknown `--language` rather than the single flag, so declaring languages before Crowdin has them
+would have failed the pull entirely rather than per-language. What was wrong was the tense. A
+forecast written as a current outage is not a smaller mistake than being wrong about the mechanism —
+it travelled into a request to another team and made it sound more damaging than it was.
 
 What remains:
 

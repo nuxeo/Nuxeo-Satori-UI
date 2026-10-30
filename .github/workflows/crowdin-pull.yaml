@@ -133,20 +133,28 @@ jobs:
           # The nine non-English languages the app declares, aligned to Nuxeo Web UI's set.
           # `th` and `zh-CN` were here and were dropped with their catalogues.
           #
-          # ## This list is ahead of the Crowdin project, and that breaks the pull until it is not
+          # ## An unknown `--language` fails the WHOLE pull, not the one flag
           #
-          # Four of these — `ar`, `he`, `it`, `sv` — were not target languages on Crowdin project
-          # 160 when they were added here, which carried nine targets
-          # (`de es fr ja nl pl pt th zh`). The CLI rejects a `--language` the project does not
-          # have, and it rejects the whole invocation rather than the one flag, so **this step
-          # fails and no catalogue updates at all** — including `fr`, `de`, `ja` and `nl`, which
-          # have nothing wrong with them.
+          # This is the sharp edge of this list, and it is worth knowing before adding a name:
+          # the CLI rejects a `--language` the project does not have, and it rejects the entire
+          # invocation, so a single unknown language stops every catalogue updating — including
+          # `fr`, `de`, `ja` and `nl`, which have nothing wrong with them.
           #
-          # That is deliberate and it is the tracking mechanism: the app's language set is the
-          # decision, and the Crowdin project has to catch up to it. The owner action is to add
-          # the four as target languages on project 160. Until then the nightly pull is red and
-          # the four shipped languages hold at their current catalogues, which are at 99%
-          # approved and not moving.
+          # So add the language on Crowdin project 160 **before or with** the flag here, never
+          # after. `ar`, `he`, `it` and `sv` were added here first (NXSAT-754) and became targets
+          # 21 minutes later (INTERN-1363), which left a real window in which a scheduled run
+          # would have failed entirely.
+          #
+          # No run fell in it. The workflow is `0 0 * * *` against `main`: the last run before
+          # the window was 30 Oct 00:03Z and it succeeded, `main` gained the four flags at
+          # 11:39Z, Crowdin had them by 12:00Z, and the next run was 31 Oct 00:00Z. Twelve
+          # consecutive scheduled runs succeeded.
+          #
+          # That is luck, not design, and this comment previously claimed the failure as a
+          # present fact — "this step fails and no catalogue updates at all… the nightly pull is
+          # red". It never did. Stated here as the risk the ordering created rather than as an
+          # outage, because a forecast in the present tense reads as a live incident and this one
+          # travelled into a request to another team.
           #
           # **Confirm each id against the project when you add it.** These are Crowdin language
           # IDs, not the app's locale ids, and the two differ: Simplified Chinese was `zh-CN`

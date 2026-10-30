@@ -939,12 +939,23 @@ Two things that follow, neither optional:
   `nxs-` components and two inject `Directionality`, but nothing sets `dir`, so none of it
   activates. A catalogue alone does not make either shippable.
 
-One cost is carried deliberately: the pull list names `ar`, `he`, `it` and `sv` while Crowdin
-project 160 does not have them as targets, and the CLI rejects the whole invocation rather than
-the unknown flag — so the nightly pull fails until they are added, and `fr`, `de`, `ja` and `nl`
-stop updating with it. They are at 99% approved and static. The alternative was to leave the
+One cost was carried deliberately, and it is worth recording what it actually came to. The pull
+list named `ar`, `he`, `it` and `sv` before Crowdin project 160 had them as targets, and the CLI
+rejects the whole invocation rather than the unknown flag — so a scheduled run inside that window
+would have failed for **every** language, not per-language. The alternative was to leave the
 request out and have nothing pulling the new languages into existence, which trades a visible
 failure for an invisible stall.
+
+The window was **21 minutes** and no run fell in it: `main` gained the flags at 11:39Z on
+30 October, INTERN-1363 made them targets at 12:00Z, and the workflow is `0 0 * * *`, so the runs
+either side — 30 Oct 00:03Z and 31 Oct 00:00Z — were both outside it. Twelve consecutive scheduled
+runs succeeded.
+
+So the bet came off, by luck rather than by design. This paragraph previously asserted the failure
+in the present tense — "the nightly pull fails until they are added, and `fr`, `de`, `ja` and `nl`
+stop updating with it" — and that never happened. The same claim was in `crowdin-pull.yaml` and
+`docs/i18n-status.md`, and it reached a request to another team, where it made the ask sound more
+damaging than it was. The mechanism is real and worth keeping; the tense was the defect.
 
 ### D8a — `%two_letters_code%`, not `%locale%`
 
