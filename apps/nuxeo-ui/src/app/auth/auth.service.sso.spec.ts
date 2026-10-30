@@ -148,6 +148,23 @@ describe('resolveSsoLoginUrl', () => {
     }
   });
 
+  /**
+   * The base used to be built by stripping trailing slashes with `/\\/+$/` and appending one.
+   * Sonar flagged that as super-linear and it measurably is (2 ms at 2k slashes, 332 ms at 32k),
+   * so the strip is gone — the URL parser normalises all three spellings itself. Pinned here
+   * because "the parser already does it" is the whole reason it was safe to delete.
+   */
+  (['https://nuxeo.example', 'https://nuxeo.example/', 'https://nuxeo.example//'] as const).forEach(
+    (nuxeoOrigin) => {
+      it(`resolves the same URL whether the Nuxeo origin is written as "${nuxeoOrigin}"`, () => {
+        const target = resolve('/nuxeo/login/azure', { nuxeoOrigin });
+        expect('url' in target && target.url).toBe(
+          'https://nuxeo.example/nuxeo/login/azure?requestedUrl=https%3A%2F%2Fapp.example%2Fdashboard',
+        );
+      });
+    },
+  );
+
   it('fails closed when the configured Nuxeo origin is not a URL', () => {
     const target = resolve('/nuxeo/login/azure', { nuxeoOrigin: 'not a url' });
     expect('refused' in target).toBeTrue();
@@ -367,7 +384,7 @@ describe('AuthService.startSamlLogin', () => {
 
     service.startSamlLogin({ id: 'azure', label: 'Azure', path: '/nuxeo/login/azure' });
 
-    expect(assigned.length).toBe(1);
+    expect(assigned).toHaveSize(1);
     expect(new URL(assigned[0] as string).origin).toBe('https://app.example');
   });
 
