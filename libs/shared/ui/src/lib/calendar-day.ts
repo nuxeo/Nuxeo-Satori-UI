@@ -15,7 +15,7 @@
  * from the published platform API, which is a decision for a human and not for a bug fix. If that
  * is agreed, these two copies and the editor's should collapse into it.
  *
- * `AGENTS/08-bug-patterns.md` pattern 27 has the full rule and the test traps.
+ * `AGENTS/08-bug-patterns.md` pattern 28 has the full rule and the test traps.
  */
 
 /** The UTC calendar day of `iso`, as a JS `Date` at local midnight for an `nxs-date-input`. */

@@ -637,5 +637,62 @@ describe('DocumentLayoutService', () => {
         .flush(entry('claim_status', 'a b?', { label: 'Odd' }));
       expect(await answer).toBe('Odd');
     });
+
+    it('labels a value stored as a path by reading the leaf entry, not the path', async () => {
+      const answer = label('l10nsubjects', 'art/architecture');
+      // The whole path is never a path segment: Tomcat answers 400 to the encoded slash, and
+      // the unencoded form is a different resource that answers 404.
+      http.expectNone(ENTRY('l10nsubjects', 'art/architecture'));
+      http
+        .expectOne(ENTRY('l10nsubjects', 'architecture'))
+        .flush(entry('l10nsubjects', 'architecture', { parent: 'art', label_en: 'Architecture' }));
+      http
+        .expectOne(ENTRY('l10nsubjects', 'art'))
+        .flush(entry('l10nsubjects', 'art', { parent: '', label_en: 'Art' }));
+      expect(await answer).toBe('Art/Architecture');
+    });
+
+    it('keeps the stored id when the leaf entry is not the child that path names', async () => {
+      const answer = label('l10nsubjects', 'society/architecture');
+      http
+        .expectOne(ENTRY('l10nsubjects', 'architecture'))
+        .flush(entry('l10nsubjects', 'architecture', { parent: 'art', label_en: 'Architecture' }));
+      http
+        .expectOne(ENTRY('l10nsubjects', 'art'))
+        .flush(entry('l10nsubjects', 'art', { parent: '', label_en: 'Art' }));
+      expect(await answer).toBe('society/architecture');
+    });
+
+    it('splits at the last slash, as the Parent/Child formatter reads the same path', async () => {
+      // Both the stock l10n vocabularies and the formatter are two levels deep, so a deeper path
+      // has no entry to name: the leaf is read, its parent is not the rest of the path, and the
+      // stored id stands. Pinned here because the fix claims the two split a path alike — were
+      // one to split at the first slash instead, this would read `b` rather than `c`.
+      const answer = label('l10nsubjects', 'a/b/c');
+      http
+        .expectOne(ENTRY('l10nsubjects', 'c'))
+        .flush(entry('l10nsubjects', 'c', { parent: 'b', label_en: 'C' }));
+      http
+        .expectOne(ENTRY('l10nsubjects', 'b'))
+        .flush(entry('l10nsubjects', 'b', { parent: 'a', label_en: 'B' }));
+      expect(await answer).toBe('a/b/c');
+    });
+
+    it('reads nothing for a path with no leaf to name an entry', async () => {
+      const answer = label('l10nsubjects', 'art/');
+      http.expectNone((request) => request.url.includes('/directory/'));
+      expect(await answer).toBeNull();
+    });
+
+    it('reports an entry it could not read, rather than failing silently', async () => {
+      const answer = label('l10nsubjects', 'architecture');
+      http
+        .expectOne(ENTRY('l10nsubjects', 'architecture'))
+        .flush('', { status: 400, statusText: 'Bad Request' });
+      expect(await answer).toBeNull();
+      expect(warnings).toContain(
+        '[agentic-ui-layouts] vocabulary entry l10nsubjects/architecture not read: HTTP 400',
+      );
+    });
   });
 });

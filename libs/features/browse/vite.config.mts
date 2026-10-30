@@ -11,7 +11,7 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
  * A date field edits a calendar day anchored in UTC. In UTC, anchoring it locally and anchoring it
  * in UTC produce byte-identical results, so in UTC no assertion can tell the two apart — and CI
  * runners are UTC. `satori-components` pins the same zone, for the same reason; see
- * `AGENTS/08-bug-patterns.md` pattern 27, which also records why setting `process.env.TZ` from
+ * `AGENTS/08-bug-patterns.md` pattern 28, which also records why setting `process.env.TZ` from
  * inside a case does not work.
  *
  * It deliberately **overrides** an inherited `TZ`, so the suite's verdict is the same on every

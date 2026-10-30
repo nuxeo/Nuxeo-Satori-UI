@@ -94,6 +94,23 @@ function warn(message: string): void {
 }
 
 /**
+ * The entry id a hierarchical vocabulary value names: its last segment.
+ *
+ * `dc:subjects` and `dc:coverage` store the path through the vocabulary, `art/architecture`,
+ * while the entry carries only the leaf as its id — `architecture`, whose `parent` is `art`. So
+ * the leaf is the entry to read, and the whole path never is: as a path segment it is refused
+ * encoded (`%2F`, HTTP 400 from Tomcat) and is a different resource unencoded (HTTP 404).
+ *
+ * Split at the last slash, so this reads a path exactly as `formatHierarchicalL10nLabel` does.
+ * That is what makes a slashed id safe to split: were an entry to carry a slash in its own id,
+ * the formatter would accept the leaf only when its `parent` is the rest of the path — the same
+ * reading — and otherwise keep the stored id, which is what an unreadable value already showed.
+ */
+function leafOf(id: string): string {
+  return id.slice(id.lastIndexOf('/') + 1);
+}
+
+/**
  * Resolves the layout a document shows in a mode, from its type and its own schemas.
  *
  * The contributed files come from the configuration service: `layouts.json` names the types and
@@ -195,12 +212,20 @@ export class DocumentLayoutService {
    * l10n vocabulary, labelled `Parent/Child` as the panel's Subjects and Coverage rows are —
    * however many entries the vocabulary has. In English, as those rows are. Each entry is read
    * once per session; a failed read is asked again by the next document that shows it.
+   *
+   * An l10n value stores the path through the vocabulary, so the entry read is its leaf
+   * (`leafOf`); the label is still composed from the stored path, which is what names the parent.
    */
   vocabularyLabel(directory: string, id: string): Observable<string | null> {
-    return this.entry(directory, id).pipe(
+    const l10n = directoryUsesL10nLabel(directory);
+    const entryId = l10n ? leafOf(id) : id;
+    // `art/`: a path naming no entry, so there is nothing to read — and reading `` would ask the
+    // directory for its whole first page.
+    if (entryId === '') return of(null);
+    return this.entry(directory, entryId).pipe(
       switchMap((entry) => {
         if (!entry) return of(null);
-        if (!directoryUsesL10nLabel(directory)) {
+        if (!l10n) {
           const { label } = entry.properties;
           return of(
             directoryPickerLabel({
@@ -235,8 +260,10 @@ export class DocumentLayoutService {
             if (!entry) throw new Error('the response is not a directory entry');
             return entry;
           }),
-          catchError(() => {
+          catchError((error: unknown) => {
+            // Not cached, so the next document showing this value asks again.
             this.entries.delete(key);
+            warn(`vocabulary entry ${directory}/${id} not read: ${describe(error)}`);
             return of(null);
           }),
           shareReplay({ bufferSize: 1, refCount: false }),

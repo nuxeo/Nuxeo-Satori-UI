@@ -151,6 +151,13 @@ describe('create.mjs writes what the config-package generator writes', () => {
       'a one-letter name under a dotted directory, with a blank title and vendor',
       { name: 'x', owner: 'x', directory: '.config/_pkgs-1', title: '', vendor: '   ' },
     ],
+    // NXSAT-729: a name that merely resembles a reserved one must still generate, identically in
+    // both. A prefix match in one implementation and an exact match in the other would diverge
+    // here and nowhere else — the refusal parity suite below only compares refusals.
+    [
+      'a name that only resembles a reserved one, under a directory that is a reserved package name',
+      { name: 'defaults2', owner: 'qa', directory: 'defaults' },
+    ],
   ])('for %s', async (_case, options) => {
     const generator = generatorWorkspace();
     const create = createWorkspace();
@@ -221,6 +228,17 @@ describe('create.mjs writes what the config-package generator writes', () => {
     [{ version: '1.0' }],
     [{ version: 'v1.0.0' }],
     [{ name: 'Acme', owner: 'Acme', version: 'x' }],
+    // NXSAT-729. Both halves of the reserved-name refusal, through both implementations: a
+    // customer without this repository's install runs create.mjs, so a check that lives only in
+    // the generator protects nobody who skipped `npm ci`.
+    [{ name: 'defaults' }],
+    [{ name: 'nuxeo-agentic-ui' }],
+    [{ name: 'con' }],
+    [{ name: 'nul' }],
+    [{ name: 'com1' }],
+    [{ name: 'lpt0' }],
+    [{ directory: 'con' }],
+    [{ directory: 'customers/Nul.old' }],
   ])('refuses %j with the generator’s message, and writes nothing', async (invalid) => {
     const options = { name: 'acme-config', owner: 'acme', ...invalid };
     const generator = generatorWorkspace();
