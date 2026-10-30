@@ -11292,6 +11292,160 @@ expectRed(
   /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
+/* ---------------- checkUpstreamCatalogueLanguages ---------------- */
+
+/**
+ * NXSAT-732 — the loader asked an upstream folder for a language it does not ship, so four of
+ * the seven advertised languages 404'd and logged a console error on every page load.
+ *
+ * The fix declares the shipped set per folder, and a declared set rots on a dependency bump in
+ * both directions: a language added upstream is never requested, one dropped upstream puts the
+ * 404 back. Both are controlled here, because neither is visible in a diff of `package.json`.
+ */
+const LOADER_PATH = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
+const VENDOR_I18N = 'node_modules/@hylandsoftware/satori-ui/i18n';
+
+const UPSTREAM_ANGULAR_JSON = `${JSON.stringify(
+  {
+    projects: {
+      'nuxeo-ui': {
+        architect: {
+          build: {
+            options: {
+              assets: [
+                { glob: '**/*', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' },
+              ],
+            },
+          },
+        },
+      },
+    },
+  },
+  null,
+  2,
+)}\n`;
+
+/** The loader, with whatever language list a control wants to put in it. */
+const loaderWith = (languages) =>
+  `export const TRANSLATION_DIRECTORY = 'i18n';
+
+interface UpstreamCatalogueFolder {
+  readonly path: string;
+  readonly languages: readonly string[];
+}
+
+const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
+  {
+    path: 'assets/satori-ui',
+${languages === null ? '' : `    languages: [${languages.map((lang) => `'${lang}'`).join(', ')}],\n`}  },
+];
+`;
+
+/** A vendor folder shipping exactly `de`, `en` and `fr`. */
+const VENDOR_FILES = {
+  [`${VENDOR_I18N}/de.json`]: '{}\n',
+  [`${VENDOR_I18N}/en.json`]: '{}\n',
+  [`${VENDOR_I18N}/fr.json`]: '{}\n',
+};
+
+expectRed(
+  'a language listed that the installed package does not ship — the NXSAT-732 404',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(['de', 'en', 'fr', 'ja']),
+  },
+  null,
+  /lists ja in `languages`[\s\S]*ships no catalogue for it/,
+);
+
+expectRed(
+  'a language the package ships that the loader never asks for',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(['de', 'en']),
+  },
+  null,
+  /ships a catalogue for fr[\s\S]*does not list in `languages`/,
+);
+
+// The pre-fix shape: a folder with no language list at all, which is what made every language
+// a candidate for a doomed request.
+expectRed(
+  'an upstream folder declared with no languages list',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(null),
+  },
+  null,
+  /with no `languages` array of string literals/,
+);
+
+// A declared asset path nothing copies to would 404 for EVERY language, not only the unshipped
+// ones — a worse version of the same defect, and invisible without reading the glob.
+expectRed(
+  'a folder path no assets glob writes to',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': `${JSON.stringify(
+      {
+        projects: {
+          'nuxeo-ui': {
+            architect: {
+              build: {
+                options: {
+                  assets: [
+                    { glob: '**/*', input: VENDOR_I18N, output: 'assets/somewhere-else/i18n' },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+  },
+  null,
+  /no `assets` entry in angular.json copies anything to "assets\/satori-ui\/i18n"/,
+);
+
+// Rewriting `UPSTREAM_FOLDERS` into a shape this gate cannot read must fail loudly rather than
+// pass silently — a gate that stops asserting without saying so is how a check becomes no check.
+expectRed(
+  'UPSTREAM_FOLDERS rewritten into a shape the gate cannot read',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: `export const TRANSLATION_DIRECTORY = 'i18n';
+
+const UPSTREAM_FOLDERS = buildFolders();
+`,
+  },
+  null,
+  /no longer declares `UPSTREAM_FOLDERS` as an array literal/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a language list that matches the installed package exactly',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+  },
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

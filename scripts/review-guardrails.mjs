@@ -4566,6 +4566,193 @@ function checkAdvertisedLocalesShip() {
   }
 }
 
+const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
+
+/**
+ * `UPSTREAM_FOLDERS` names exactly the languages the installed package actually ships.
+ *
+ * ## The defect this exists to make unrepeatable
+ *
+ * `AppTranslateLoader` used to request `<folder>/i18n/<lang>.json` for whatever language was
+ * active. `@hylandsoftware/satori-ui` ships de, en, es, fr, it, pl and pt; `availableLanguages`
+ * advertises en, fr, de, ja, nl, th and zh. So four of the seven asked for a file that does not
+ * exist and every page load answered 404 and logged a console error (NXSAT-732). The request was
+ * caught into `{}`, so nothing broke — which is why it survived.
+ *
+ * The fix declares the shipped set per folder, and a declared set is a set that rots. A version
+ * bump that adds a language would leave it unrequested and silently untranslated; one that drops
+ * a language would put the 404 straight back. Neither is visible in a diff of `package.json`.
+ *
+ * ## Why it reads three sources rather than two
+ *
+ * The TS constant, the `assets` glob in `angular.json` that copies the folder into the build, and
+ * the package directory on disk. Comparing the constant to the package alone would pass while
+ * the glob pointed somewhere else entirely, and the served path would then 404 for *every*
+ * language — so the glob is what links a declared asset path to a real directory, and it is read
+ * rather than assumed.
+ */
+function checkUpstreamCatalogueLanguages() {
+  if (!fileExists(LOADER)) {
+    fail(`${LOADER} is missing, so \`checkUpstreamCatalogueLanguages\` asserted nothing.`);
+    return;
+  }
+
+  const source = ts.createSourceFile(LOADER, read(LOADER), ts.ScriptTarget.Latest, true);
+
+  /** The `UPSTREAM_FOLDERS` initializer, as an array of `{ path, languages }` literals. */
+  let declaration;
+  /** Read from the source rather than duplicated here, so the two cannot diverge. */
+  let translationDirectory;
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      if (node.name.text === 'UPSTREAM_FOLDERS') declaration = node.initializer;
+      if (
+        node.name.text === 'TRANSLATION_DIRECTORY' &&
+        node.initializer &&
+        ts.isStringLiteral(node.initializer)
+      ) {
+        translationDirectory = node.initializer.text;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+
+  if (translationDirectory === undefined) {
+    fail(
+      `${LOADER} no longer declares \`TRANSLATION_DIRECTORY\` as a string literal, so this gate ` +
+        'cannot work out which directory the loader actually fetches from.',
+    );
+    return;
+  }
+
+  if (!declaration || !ts.isArrayLiteralExpression(declaration)) {
+    fail(
+      `${LOADER} no longer declares \`UPSTREAM_FOLDERS\` as an array literal, so this gate ` +
+        'cannot read the languages each folder claims to ship. Keep it a literal, or teach ' +
+        '`checkUpstreamCatalogueLanguages` the new shape — do not leave it asserting nothing.',
+    );
+    return;
+  }
+
+  const stringsOf = (node) =>
+    ts.isArrayLiteralExpression(node)
+      ? node.elements.filter(ts.isStringLiteral).map((element) => element.text)
+      : null;
+
+  /** The `assets` entries of every build target, so a declared path can be traced to a directory. */
+  let assets = [];
+  try {
+    const angular = JSON.parse(read('angular.json'));
+    const collect = (value) => {
+      if (Array.isArray(value)) {
+        for (const entry of value) collect(entry);
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+      if (typeof value.input === 'string' && typeof value.output === 'string') assets.push(value);
+      for (const nested of Object.values(value)) collect(nested);
+    };
+    collect(angular);
+  } catch (error) {
+    fail(`angular.json is not valid JSON: ${error.message}`);
+    return;
+  }
+
+  let folders = 0;
+  for (const element of declaration.elements) {
+    if (!ts.isObjectLiteralExpression(element)) continue;
+    const read_ = (name) =>
+      element.properties.find(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          ts.isIdentifier(property.name) &&
+          property.name.text === name,
+      )?.initializer;
+
+    const pathNode = read_('path');
+    const languagesNode = read_('languages');
+    if (!pathNode || !ts.isStringLiteral(pathNode)) continue;
+    const folderPath = pathNode.text;
+    const declared = languagesNode ? stringsOf(languagesNode) : null;
+    folders += 1;
+
+    if (!declared) {
+      fail(
+        `${LOADER} declares the upstream folder "${folderPath}" with no \`languages\` array of ` +
+          'string literals. Without one the loader cannot tell a language the folder ships from ' +
+          'one it does not, which is the 404 on every page load that NXSAT-732 reported.',
+      );
+      continue;
+    }
+
+    // The loader fetches `<path>/i18n/<lang>.json`, so the glob that has to exist is the one
+    // whose `output` is that directory; its `input` is the package directory on disk.
+    const served = `${folderPath}/${translationDirectory}`;
+    const matches = assets.filter((asset) => asset.output.replace(/^\/+|\/+$/g, '') === served);
+    if (matches.length === 0) {
+      fail(
+        `${LOADER} declares the upstream folder "${folderPath}", but no \`assets\` entry in ` +
+          `angular.json copies anything to "${served}", so the loader would request a path the ` +
+          'build never writes — a 404 for every language rather than only the unshipped ones.',
+      );
+      continue;
+    }
+
+    // Deduplicated: `angular.json` repeats the glob in the build target and again in its
+    // development configuration, and failing once per copy printed every diagnostic twice.
+    const inputDirs = [
+      ...new Set(matches.map((asset) => asset.input.replace(/^\/+|\/+$/g, ''))),
+    ].sort();
+
+    for (const inputDir of inputDirs) {
+      const absolute = join(repoRoot, inputDir);
+      if (!existsSync(absolute)) {
+        // `node_modules` is not checked in, so a tree that has not been installed cannot answer
+        // this. A warning rather than a pass: a gate that goes quiet without saying so is how a
+        // check becomes no check at all. The `guardrails` gate runs after `npm ci`.
+        warn(
+          `${inputDir} is not present, so the languages "${folderPath}" claims to ship could not ` +
+            'be checked against it. Run `npm ci` and re-run the guardrails.',
+        );
+        continue;
+      }
+
+      const shipped = readdirSync(absolute)
+        .filter((entry) => entry.endsWith('.json'))
+        .map((entry) => entry.slice(0, -'.json'.length))
+        .sort();
+      const sortedDeclared = [...declared].sort();
+
+      const missing = shipped.filter((lang) => !declared.includes(lang));
+      const stale = sortedDeclared.filter((lang) => !shipped.includes(lang));
+
+      if (missing.length > 0) {
+        fail(
+          `${inputDir} ships a catalogue for ${missing.join(', ')}, which "${folderPath}" does ` +
+            `not list in \`languages\` in ${LOADER}. An unlisted language is never requested, so ` +
+            'its shared strings stay in the fallback language with nothing reporting it.',
+        );
+      }
+      if (stale.length > 0) {
+        fail(
+          `"${folderPath}" lists ${stale.join(', ')} in \`languages\` in ${LOADER}, but ` +
+            `${inputDir} ships no catalogue for it. A listed language the folder does not have ` +
+            'is a request that cannot succeed: a 404 and a console error on every page load, ' +
+            'which is NXSAT-732.',
+        );
+      }
+    }
+  }
+
+  if (folders === 0) {
+    fail(
+      `${LOADER} declares no upstream folder with a string \`path\`, so this gate asserted ` +
+        'nothing. Check the shape `checkUpstreamCatalogueLanguages` reads.',
+    );
+  }
+}
+
 /**
  * The Crowdin config points at catalogues that exist, and cannot reach `node_modules`.
  *
@@ -11478,6 +11665,7 @@ const GUARDRAILS = [
   checkCataloguesAreTranslated,
   checkCataloguePlaceholders,
   checkAdvertisedLocalesShip,
+  checkUpstreamCatalogueLanguages,
   checkCrowdinConfig,
   checkPackagedConfigIsNotADemo,
   checkInstallerOwnsNoCustomerFile,

@@ -72,6 +72,31 @@ describe('AppTranslateLoader', () => {
     expect(urls[1]).not.toContain('assets/');
   });
 
+  /**
+   * `@hylandsoftware/satori-ui` ships catalogues for de, en, es, fr, it, pl and pt only, while
+   * `availableLanguages` advertises en, fr, de, ja, nl, th and zh. Requesting the folder for a
+   * language it does not contain cannot succeed: it is a 404 and one browser console error on
+   * every page load, for four of the seven shipped languages (NXSAT-732).
+   *
+   * Asserted as the absence of the request rather than as a tolerated failure, because
+   * `catchError` already made the failure harmless — the defect is that the request is issued
+   * at all.
+   */
+  it('does not request an upstream folder for a language that folder does not ship', () => {
+    configure();
+    loader.getTranslation('ja').subscribe();
+
+    const urls = httpMock
+      .match(() => true)
+      .map((request) => {
+        request.flush({});
+        return request.request.url;
+      });
+
+    expect(urls).toEqual([jasmine.stringMatching(/\/i18n\/ja\.json$/)]);
+    expect(urls).not.toContain('assets/satori-ui/i18n/ja.json');
+  });
+
   it('applies precedence folders < app catalogue < manifest labels', () => {
     configure({ 'a.key': 'from manifest' });
     let merged: Record<string, string> | undefined;
