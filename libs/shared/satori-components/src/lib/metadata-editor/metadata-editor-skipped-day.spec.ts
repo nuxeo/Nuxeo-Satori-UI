@@ -8,20 +8,24 @@
  * rewrites an untouched field to `2011-12-31T00:00:00.000Z`. Comparing against the day the control
  * was actually handed cannot make that mistake.
  *
- * **In a file of its own because the zone has to be the process's, and it is not this project's
- * pinned one.** Vitest runs `satori-components` `pool: 'threads'`, where Node reads the zone once
- * at startup and `process.env.TZ` assigned later is accepted and ignored, so a case cannot switch
- * zones for itself — `AGENTS/08-bug-patterns.md` pattern 27 records that trap. A separate spec file
- * gets its own worker, and `vite.config.mts` applies the project pin before any worker starts, so
- * the pin is what decides the zone here too.
+ * **The zone has to be the process's, and it is not this project's pinned one.** Vitest runs
+ * `satori-components` `pool: 'threads'`, where Node reads the zone once at startup and
+ * `process.env.TZ` assigned later is accepted and ignored, so a case cannot switch zones for itself
+ * — `AGENTS/08-bug-patterns.md` pattern 27 records that trap.
  *
- * The consequence is that **this file only asserts anything under a zone with a skipped day**. Run
- * it deliberately, which is how it was verified:
+ * `vite.config.mts` resolves the pin to `SATORI_TEST_TZ ?? 'Asia/Calcutta'` and **overrides an
+ * inherited `TZ`**, so `TZ=Pacific/Apia` does nothing here: it has to be `SATORI_TEST_TZ`. The
+ * consequence is that **this file only asserts anything when asked for such a zone**. Run it
+ * deliberately, which is how it was verified:
  *
- *   TZ=Pacific/Apia npx vitest run --config libs/shared/satori-components/vite.config.mts \
+ *   SATORI_TEST_TZ=Pacific/Apia npx vitest run \
+ *     --config libs/shared/satori-components/vite.config.mts \
  *     libs/shared/satori-components/src/lib/metadata-editor/metadata-editor-skipped-day.spec.ts
  *
- * so the guard below states the limitation rather than letting the file read as proof it is not.
+ * Verified failing with the old comparison in place: both preservation cases report
+ * `expected '2011-12-31T00:00:00.000Z' to be '2011-12-30T00:00:00.000Z'`. Under the default pin
+ * they pass without exercising the skipped day at all, which is why the first case below says so
+ * out loud rather than letting the file read as proof it does.
  */
 import { Injector } from '@angular/core';
 
@@ -52,7 +56,8 @@ describe('a stored day its zone skipped', () => {
       console.warn(
         `[NXSAT-727] zone ${Intl.DateTimeFormat().resolvedOptions().timeZone} has no skipped day ` +
           'around 2011-12-30; the cases in this file cannot fail here. Run them with ' +
-          'TZ=Pacific/Apia.',
+          'SATORI_TEST_TZ=Pacific/Apia — an inherited TZ is overridden by the pin in ' +
+          'vite.config.mts and will not reach them.',
       );
     }
   });
