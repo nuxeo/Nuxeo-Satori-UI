@@ -914,25 +914,34 @@ Hebrew, Italian, Spanish and Swedish were added to the target, and **five of the
 `en`, `fr`, `de`, `ja`, `nl`.
 
 The useful part of this decision is not the list — it is which touchpoints a language may appear
-in before it has translations. Of the five from D8e, they split cleanly:
+in before it has translations. Of the six (five from D8e, plus the one NXSAT-733 added), they
+split cleanly:
 
-| Touchpoint                          | May run ahead? | Why                                                       |
-| ----------------------------------- | -------------- | --------------------------------------------------------- |
-| `register-locale-data.ts`           | **yes**        | missing-catalogue is a warning; the reverse throws NG0701 |
+| Touchpoint                          | May run ahead?     | Why                                                                                                                                                                     |
+| ----------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `register-locale-data.ts`           | **yes**            | missing-catalogue is a warning; the reverse throws NG0701                                                                                                               |
 | `--language` in `crowdin-pull.yaml` | **yes, with care** | it is the request that produces the catalogue — but the pull is ONE shared pull request, so an unapproved language listed here holds every other language's catalogue red |
-| Catalogue in `public/i18n/`         | n/a            | it is the thing being waited for                          |
-| `availableLanguages`                | **no**         | `checkAdvertisedLocalesShip` fails it                     |
-| `DATE_FNS_LOCALES`                  | **no**         | a test pins it to `availableLanguages`                    |
+| Catalogue in `public/i18n/`         | n/a                | it is the thing being waited for                                                                                                                                        |
+| `SHIPPED_CATALOGUE_LANGUAGES`       | **no**             | `checkShippedCatalogueLanguages` fails **either** direction                                                                                                             |
+| `availableLanguages`                | **no**             | `checkAdvertisedLocalesShip` fails it                                                                                                                                   |
+| `DATE_FNS_LOCALES`                  | **no**             | a test pins it to `availableLanguages`                                                                                                                                  |
 
-So all five are registered and absent from the last two. Only `es` is requested: `ar`, `he`, `it`
-and `sv` were taken out of `download_translations_args` on 30 October, because the pull delivers
-everything into one shared pull request and an unapproved language would have held Spanish and the
-four shipping languages red with it. Each `--language` goes back when its approvals exist — in a
-change of its own, which must reach `main` and then wait for a scheduled run, because the catalogue
-does not exist until that run produces it. The step 2 entries come after that, in a third change.
-One change cannot be both before and after the pull.
-Each joins them in the small pull request that brings its catalogue. The gate stays green
-throughout, which is the point: D8e's rule is not suspended, it is scoped.
+`SHIPPED_CATALOGUE_LANGUAGES` is the only one that cannot lag either: it is what
+`resolveStringLanguage` consults, so a catalogue present without it is shipped and never
+rendered. It therefore moves in the same commit as the catalogue, not before and not after.
+
+So all five are registered and absent from the last three. **Only `es` is requested**: `ar`, `he`,
+`it` and `sv` were taken out of `download_translations_args` on 30 October, because the pull
+delivers everything into one shared pull request and an unapproved language would have held Spanish
+and the four shipping languages red with it. So the `--language` row is "yes, with care" rather
+than plain "yes": the flag may precede a catalogue, which is what produces one, but not approvals.
+
+Each `--language` goes back when its approvals exist — in a change of its own, which must reach
+`main` and then wait for a scheduled run, because the catalogue does not exist until that run
+produces it. The last three entries come after that, in a third change — the one that brings the
+catalogue. One change cannot be both before and after the pull.
+
+The gate stays green throughout, which is the point: D8e's rule is not suspended, it is scoped.
 
 An earlier revision of this branch did declare all ten at once and left `checkAdvertisedLocalesShip`
 failing on five, on the reasoning that the red was a to-do list. That is recorded here because it
@@ -1184,6 +1193,12 @@ say so in the report rather than leaving it unstated.
 > catalogue fails `checkAdvertisedLocalesShip`, and since `.husky/pre-push` runs
 > `review:guardrails`, such a branch cannot be pushed at all. Caught in review on
 > [#522](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/522).
+>
+> **A sixth touchpoint, 30 October 2026.** NXSAT-733 made `SHIPPED_CATALOGUE_LANGUAGES` the
+> authority on whether a language renders at all, so it is now step 2's first entry and it is
+> mandatory. A checklist that omits it sends you to ship a catalogue the application then refuses
+> to use. Caught in review on
+> [#531](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/531) — the checklist, not the code.
 
 **Step 1 — register and request it.** Items 1 and 2 wait on nothing and belong together. **Item 3
 does not**: it waits on approvals, not merely on a translation existing, and it is a change of its
@@ -1223,13 +1238,20 @@ language in the worst case, and the reason is in item 3.
 **Step 2 — advertise it, once `apps/nuxeo-ui/public/i18n/<lang>.json` has actually landed.** Not
 before; each of these fails if it leads.
 
-1. Add it to `availableLanguages` in the packaged bootstrap defaults **and** in
+1. Add it to `SHIPPED_CATALOGUE_LANGUAGES` in
+   `apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts`. **This is the one that makes the language
+   render at all**: `resolveStringLanguage` refuses a `defaultLanguage` outside that list and
+   boots in English instead, so a catalogue added without it ships and is never used — NXSAT-733,
+   in the opposite direction. `checkShippedCatalogueLanguages` fails both a declaration with no
+   catalogue and a catalogue with no declaration, so it moves in the same commit as the file.
+
+2. Add it to `availableLanguages` in the packaged bootstrap defaults **and** in
    `libs/shared/app-config/src/lib/bootstrap-config.ts`, and add it to `DATE_FNS_LOCALES` in
    `libs/shared/ui/.../satori-date-adapter.ts` — a test holds the latter equal to the former, so
    they move together or the suite goes red. Bring any regional variant whose date-fns `P` differs
    from the base language with it.
 
-2. **Check whether the upstream catalogue covers it**, because ours is not the only one rendering.
+3. **Check whether the upstream catalogue covers it**, because ours is not the only one rendering.
    `@hylandsoftware/satori-ui` ships 15 files in `i18n/` but only **seven distinct languages** —
    `de en es fr it pl pt`. A language outside those gets English satori-ui strings inside an
    otherwise translated application, which reads to a user as a bug rather than as a gap.
@@ -1247,7 +1269,7 @@ before; each of these fails if it leads.
    gone — no `@alfresco` package has been installed since NXSAT-637 and the adf-hx bridge went with
    NXSAT-635 — so only the satori-ui half still describes anything that runs.
 
-3. Add it to the evidence capture's locale matrix.
+4. Add it to the evidence capture's locale matrix.
 
 The gap between steps is however long translation and approval take, and a language sitting in it is in
 its normal state rather than a half-finished one.

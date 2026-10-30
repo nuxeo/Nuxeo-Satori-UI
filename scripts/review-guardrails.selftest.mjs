@@ -11294,6 +11294,217 @@ expectRed(
   /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
 );
 
+/* ---------------- checkShippedCatalogueLanguages ---------------- */
+
+/**
+ * NXSAT-733 — `defaultLanguage` reached `translate.use()` unchecked, so a language with no
+ * catalogue announced itself on `<html lang>` over English text and 404'd for its catalogue.
+ *
+ * The guard that closes it reads a declared set, because the catalogue folder is served over HTTP
+ * and the only runtime test is the 404 being removed. A declared set rots in both directions, and
+ * neither is visible in a diff of either file alone — so both are controlled, and unlike
+ * `checkLocaleDataRegistered` both are failures: a language guard that is wrong either way is
+ * worse than none, because it is trusted.
+ */
+const SHIPPED_DECL = 'apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts';
+
+const asLiteral = (locales) => locales.map((locale) => `'${locale}'`).join(', ');
+
+const shippedDeclaration = (locales, audit = ['zz']) =>
+  `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = [${asLiteral(locales)}];\n` +
+  `export const GENERATED_AUDIT_LOCALES: readonly string[] = [${asLiteral(audit)}];\n`;
+
+/** A catalogue per locale, plus the declaration naming `declared`. */
+const shippedFixture = (onDisk, declared, audit) => ({
+  ...Object.fromEntries(
+    onDisk.map((locale) => [`apps/nuxeo-ui/public/i18n/${locale}.json`, '{"shell.title":"x"}\n']),
+  ),
+  [SHIPPED_DECL]: shippedDeclaration(declared, audit),
+});
+
+expectGreen(
+  'the declaration names exactly the catalogues on disk',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr', 'de'], ['de', 'en', 'fr']),
+);
+
+expectGreen(
+  'en.context.json is translator context, not a language',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    'apps/nuxeo-ui/public/i18n/en.context.json': '{"shell.title":"a title"}\n',
+  },
+);
+
+expectRed(
+  'a declared language with no catalogue — NXSAT-733 again, under a different code',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr'], ['en', 'es', 'fr']),
+  null,
+  /declares "es" but[\s\S]*ships no catalogue for it[\s\S]*announce/,
+);
+
+expectRed(
+  'a catalogue on disk that the declaration omits, so it would never be rendered',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr', 'de'], ['en', 'fr']),
+  null,
+  /ships de\.json but[\s\S]*does not declare "de"[\s\S]*never rendered/,
+);
+
+expectRed(
+  'the declaration file removed, leaving the string-language guard nothing to read',
+  'checkShippedCatalogueLanguages',
+  { 'apps/nuxeo-ui/public/i18n/en.json': '{"shell.title":"x"}\n' },
+  null,
+  /shipped-catalogues\.ts is missing[\s\S]*asserted nothing/,
+);
+
+expectRed(
+  'the literal reshaped into something the parser cannot read',
+  'checkShippedCatalogueLanguages',
+  {
+    'apps/nuxeo-ui/public/i18n/en.json': '{"shell.title":"x"}\n',
+    [SHIPPED_DECL]: 'export const SHIPPED_CATALOGUE_LANGUAGES = new Set(["en"]);\n',
+  },
+  null,
+  /no longer declares `SHIPPED_CATALOGUE_LANGUAGES` as an array of string literals[\s\S]*asserted nothing about which catalogues ship/,
+);
+
+expectRed(
+  'an empty declaration, which would refuse every configured language',
+  'checkShippedCatalogueLanguages',
+  {
+    'apps/nuxeo-ui/public/i18n/en.json': '{"shell.title":"x"}\n',
+    [SHIPPED_DECL]: shippedDeclaration([]),
+  },
+  null,
+  /declares no language, so every configured language would be refused/,
+);
+
+/**
+ * The pseudo-locale seam, which is where review of #531 found the first version of this guard
+ * breaking `npm run i18n:audit`: `zz` was refused, both audits booted in English, and
+ * `requireSentinel()` failed instead of finding hard-coded strings.
+ *
+ * The generated set is excluded from every other locale check in this script, and admitted on a
+ * dev server by `hasCatalogue`. Those are two readers of one fact, so they are pinned together.
+ */
+expectGreen(
+  'a generated audit locale on disk, excluded from the shipped list and declared as generated',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    'apps/nuxeo-ui/public/i18n/zz.json': '{"shell.title":"⟦x⟧"}\n',
+  },
+);
+
+expectRed(
+  'the generated set emptied, which would make the pseudo-locale audit boot in English',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr'], ['en', 'fr'], []),
+  null,
+  /GENERATED_AUDIT_LOCALES as \[\] but `GENERATED_LOCALES` in this script is \[zz\]/,
+);
+
+expectRed(
+  'a locale declared generated that this script does not treat as generated',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr'], ['en', 'fr'], ['zz', 'qq']),
+  null,
+  /GENERATED_AUDIT_LOCALES as \[qq, zz\] but `GENERATED_LOCALES` in this script is \[zz\]/,
+);
+
+expectRed(
+  'the generated literal reshaped so the seam goes unchecked',
+  'checkShippedCatalogueLanguages',
+  {
+    'apps/nuxeo-ui/public/i18n/en.json': '{"shell.title":"x"}\n',
+    [SHIPPED_DECL]:
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en'];\n` +
+      `export const GENERATED_AUDIT_LOCALES = new Set(['zz']);\n`,
+  },
+  null,
+  /no longer declares `GENERATED_AUDIT_LOCALES` as an array of string literals[\s\S]*pseudo-locale seam is unchecked/,
+);
+
+/**
+ * An element this gate cannot evaluate must be **refused**, not skipped — the failure review on
+ * #531 found twice, and both directions were green on the defect rather than noisy.
+ *
+ * The application evaluates the real array, so a list read as "the three quoted ones" passes
+ * against a build shipping exactly those three while a fourth element admits a language with no
+ * catalogue. And a commented-out entry leaves its quotes in the source, so a regex reports a
+ * locale the runtime array does not have.
+ */
+expectRed(
+  'an identifier element, whose value this gate cannot see but the application can',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `const extra = 'xx';\n` +
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en', 'fr', extra];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /`extra` is not a string literal[\s\S]*asserted nothing about which catalogues ship/,
+);
+
+expectRed(
+  'a spread element, which hides a whole list from this gate',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `const more = ['xx'];\n` +
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en', 'fr', ...more];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /`\.\.\.more` is not a string literal/,
+);
+
+expectRed(
+  'a template-literal element, which a quote-matching parser would also miss',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      'export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = [`en`, `fr`];\n' +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /is not a string literal/,
+);
+
+expectRed(
+  'the only generated entry commented out, so admission is off while the quotes remain',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en', 'fr'];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = [/* 'zz' */];\n`,
+  },
+  null,
+  /GENERATED_AUDIT_LOCALES as \[\] but `GENERATED_LOCALES` in this script is \[zz\]/,
+);
+
+expectRed(
+  'a shipped language commented out while its catalogue is still on disk',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en' /*, 'fr' */];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /ships fr\.json but[\s\S]*does not declare "fr"/,
+);
+
 /* ---------------- checkUpstreamCatalogueLanguages ---------------- */
 
 /**

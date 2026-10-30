@@ -34,10 +34,10 @@ import localeSv from '@angular/common/locales/sv';
  * That ordering is worth keeping in mind: **the i18n bug was hiding the l10n bug.** A
  * half-applied locale looks like a working one right up until it works.
  *
- * ## Adding a locale — five touchpoints, in two steps, not one change
+ * ## Adding a locale — six touchpoints, in two steps, not one change
  *
- * The order matters, and getting it wrong is not a style question: three of the five cannot
- * precede the translated catalogue, and one of those three cannot even be pushed early, because
+ * The order matters, and getting it wrong is not a style question: four of the six cannot
+ * precede the translated catalogue, and those cannot even be pushed early, because
  * `.husky/pre-push` runs `review:guardrails`.
  *
  * **Step 1 — request it.** Safe before any translation exists:
@@ -48,6 +48,11 @@ import localeSv from '@angular/common/locales/sv';
  *
  * **Step 2 — advertise it**, once `apps/nuxeo-ui/public/i18n/<lang>.json` has landed:
  *
+ * - `SHIPPED_CATALOGUE_LANGUAGES` in `shipped-catalogues.ts`. **Mandatory, and it is what
+ *   actually renders the language**: `resolveStringLanguage` refuses a `defaultLanguage` that is
+ *   not in it, so a catalogue added without it is shipped and never used, and the application
+ *   boots in English (NXSAT-733). `checkShippedCatalogueLanguages` fails either direction, so it
+ *   can neither lead nor lag;
  * - `availableLanguages` in both Layer 0 configs — earlier, and
  *   `checkAdvertisedLocalesShip` fails it;
  * - `DATE_FNS_LOCALES` in `libs/shared/ui/.../satori-date-adapter.ts`, easy to miss because it

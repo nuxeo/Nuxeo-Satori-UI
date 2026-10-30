@@ -100,6 +100,7 @@ class AppConfigService {
     readonly alt: string;
     } | null>;
     reportBrandingLogoUnavailable(url: string, reason: string): void;
+    reportUnsupportedDefaultLanguage(value: string, fallback: string, reason: string): void;
     load(): Promise<void>;
     resolveTheme(id: string | null): AppThemeConfig;
     featureToggle(id: string, fallback: boolean): boolean;

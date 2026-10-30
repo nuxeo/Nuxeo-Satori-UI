@@ -157,6 +157,33 @@ export class AppConfigService {
   }
 
   /**
+   * A configured `defaultLanguage` the host application refused, with the reason and what it used
+   * instead.
+   *
+   * Reported from outside for the same reason as {@link reportBrandingLogoUnavailable}: the check
+   * depends on something this library cannot see. Whether a language renders depends on which
+   * translation catalogues the application bundles, which is a build-time fact about the
+   * application, not a property of the configuration — and `availableLanguages` cannot stand in
+   * for it, because Layer 0 is customer-editable and may advertise a language no catalogue backs
+   * (the #522 review's argument, applied to the string language in NXSAT-733).
+   *
+   * The two differ in one way worth stating: a logo failure is discovered at runtime, this one is
+   * decidable before the first render. It still cannot live here, because the fact it turns on
+   * belongs to the consumer.
+   *
+   * It names the value, the reason and the fallback — all three, because "a typo" and "a language
+   * this deployment chose not to offer" need different fixes from whoever reads the console, and
+   * an administrator who is not told which language is in force has no way to tell a refusal from
+   * configuration that never arrived (the NXSAT-724 argument).
+   */
+  reportUnsupportedDefaultLanguage(value: string, fallback: string, reason: string): void {
+    this.note(
+      `defaultLanguage "${value}" was refused — ${reason}; using "${fallback}" instead, so ` +
+        'the language announced on <html lang> matches the text that renders',
+    );
+  }
+
+  /**
    * Fetch both halves, choose the preset, and apply everything in order. Never rejects, so it is
    * safe as an `APP_INITIALIZER`.
    *
