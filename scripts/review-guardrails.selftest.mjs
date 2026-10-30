@@ -11626,6 +11626,65 @@ expectRed(
   /entry in `UPSTREAM_FOLDERS` with no `path`/,
 );
 
+// Round 5: a spread inside the entry can override `path` or `languages` AFTER this gate has
+// read them, so the values validated are not the ones the loader requests. Rounds 3, 4 and 5
+// were three instances of one class — the entry being only partly static — so the gate now
+// requires the whole entry to be statically legible and these controls pin each spelling.
+expectRed(
+  'a spread inside a folder entry',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      "{ path: 'assets/satori-ui', languages: ['de', 'en', 'fr'], ...override }",
+    ]),
+  },
+  null,
+  /member this gate cannot read statically/,
+);
+
+expectRed(
+  'a computed key inside a folder entry',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      "{ ['pa' + 'th']: 'assets/satori-ui', languages: ['de', 'en', 'fr'] }",
+    ]),
+  },
+  null,
+  /member this gate cannot read statically/,
+);
+
+expectRed(
+  'a shorthand property inside a folder entry',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries(["{ path, languages: ['de', 'en', 'fr'] }"]),
+  },
+  null,
+  /member this gate cannot read statically/,
+);
+
+// A string-literal key is static and must still be ACCEPTED — the legibility rule is about what
+// can be read, not about one spelling of it.
+falsePositiveControls += 1;
+expectGreen(
+  'a folder entry written with string-literal keys',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      "{ 'path': 'assets/satori-ui', 'languages': ['de', 'en', 'fr'] }",
+    ]),
+  },
+);
+
 falsePositiveControls += 1;
 expectGreen(
   'a language list that matches the installed package exactly',

@@ -4747,11 +4747,33 @@ function checkUpstreamCatalogueLanguages() {
       continue;
     }
 
+    // One rule rather than a growing list of shapes, because four review rounds each found a
+    // different way for the entry to be only partly static and the gate to validate the legible
+    // half: a computed language, a computed `path`, a non-object entry, and a spread that
+    // overrides a field already read. The last is the clearest statement of the class — the
+    // `path` and `languages` this gate validates are not necessarily the ones the loader ends up
+    // with. So the WHOLE entry has to be statically legible, and anything else fails.
+    const illegible = element.properties.find(
+      (property) =>
+        !ts.isPropertyAssignment(property) ||
+        (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name)),
+    );
+    if (illegible) {
+      fail(
+        `${LOADER} declares an upstream folder with a member this gate cannot read statically ` +
+          `(\`${illegible.getText().slice(0, 60)}\`). A spread, a shorthand or a computed key can ` +
+          'supply or override `path` and `languages` at run time, so the values validated here ' +
+          'would not be the ones the loader requests — and the check would pass on the half it ' +
+          'could read. Write every member as a literal key and value.',
+      );
+      continue;
+    }
+
     const read_ = (name) =>
       element.properties.find(
         (property) =>
           ts.isPropertyAssignment(property) &&
-          ts.isIdentifier(property.name) &&
+          (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
           property.name.text === name,
       )?.initializer;
 
