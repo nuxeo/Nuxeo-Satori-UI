@@ -42,7 +42,7 @@ Arabic and Hebrew.
 | Spanish  | `es` | —         | `es`       | **requested, arriving next pull** — 99% approved, and the `Seleccionado(s)` string that was failing `checkCatalogueValuesAreRenderable` is fixed. In the pull list; nothing else holds it |
 | Italian  | `it` | —         | `it`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2)                                                                                       |
 | Swedish  | `sv` | —         | `sv`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2)                                                                                       |
-| Arabic   | `ar` | —         | `ar`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2). RTL is in flight — [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523) |
+| Arabic   | `ar` | —         | `ar`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2). RTL ready ([#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523)); refused until the catalogue lands (NXSAT-733), so it runs as `en` |
 | Hebrew   | `he` | —         | `he`       | **target, not yet requested** — as Arabic, including RTL                                                                         |
 
 Dropped: **Thai** (`th`) and **Chinese Simplified** (`zh`), both at 99% approved when removed.
@@ -157,6 +157,120 @@ What remains:
    ```bash
    ls node_modules/@hylandsoftware/satori-ui/i18n/*.json | xargs -n1 basename | sed 's/.json//'
    ```
+
+### Right to left — delivered, NXSAT-752
+
+The direction mechanism is in place: when `ar` or `he` is the active language the layout flips, the
+chevrons point the other way, and the arrow keys swap their inward and outward meanings.
+
+**Neither language is reachable today, and that is correct.** NXSAT-733 made
+`resolveStringLanguage` refuse a `defaultLanguage` this build ships no catalogue for, so `ar` and
+`he` fall back to `en` and the application runs left-to-right in English with a diagnostic. That
+refusal is the fix for a real WCAG 3.1.1 defect — `<html lang="ar">` over English text — and it is
+not a regression of this work: the two are ordered, not opposed. **The moment `ar.json` lands the
+language is accepted, `syncDocumentDirection` sees it on `onLangChange`, and the layout mirrors
+with no further change.** A date-fns `ar` entry has to arrive with it, or dates stay English while
+strings and direction do not.
+
+So the direction behaviour is verified by unit tests and by a manual pass taken before NXSAT-733
+closed the startup path, not by booting `ar` today — which is why the registration test below
+boots `fr` from a stale `rtl` instead.
+
+**The whole defect was one missing attribute.** Right-to-left handling already existed in `nxs-`
+components across three mechanisms — seven components, four of them via the CSS attribute, with
+`document-tree` in two rows. The table and the two `grep` commands that reproduce it are in
+`D8e-webui` in [the plan](i18n-localization-plan.md); they are **not** repeated here, because two
+copies of one inventory in two documents is how the inventory in `AGENTS/11-beta-program.md` went
+stale. Upstream's own `platform-nav` and `split-button` carry `:dir(rtl)` too.
+
+**None of it had ever run**, because nothing set `dir`: `index.html` ships `lang="en"` and no `dir`
+at all. Same family as gap 10 below — `translate.use()` sets the string language and touches
+neither `LOCALE_ID` nor the document's direction.
+
+One figure that is only here, with its command, because the prose got it wrong twice: the physical
+declarations replaced are **thirteen across six stylesheets** — eight of the simple kind, and five
+asymmetric four-value shorthands, which is the half a property-name pattern cannot see. It appeared
+as "seven" in two places.
+
+```bash
+git diff origin/main...HEAD -- '*.scss' | grep '^-' | grep -cE \
+  "margin-(left|right)|padding-(left|right)|^-[[:space:]]*(left|right):|text-align: (left|right)|^-[[:space:]]*(margin|padding): ([^;]+ ){3}[^;]+;"
+```
+
+Both halves are in that one expression on purpose. The first draft of it omitted the shorthand
+alternation and printed 8 beside a claim of 13 — a command that disagrees with the number it is
+meant to support is worse than no command, so it was run before being written down.
+
+`syncDocumentDirection` in `provide-app-config.ts` sets it, beside the existing `lang` sync and off
+the same `onLangChange`, so a language changed after startup is honoured and not only the
+configured default. The right-to-left set is `RTL_LANGUAGES` in
+`libs/shared/app-config/src/lib/text-direction.ts` — one named place, mirroring the primary
+subtags in Angular CDK's own `RTL_LOCALE_PATTERN`, so a customer who configures a language we do
+not ship still gets the right direction.
+
+Two things were established rather than assumed, and each of them changed the implementation:
+
+- **CDK's `Directionality` has to be written, not just read.** It reads
+  `body.dir || documentElement.dir` **once in its constructor** and never observes the attribute
+  again, so setting `<html dir>` alone leaves `Directionality.value` stale for the application's
+  lifetime. `valueSignal` and `change` are public members in CDK 22; the sync writes both, and
+  that is the only write site. `BidiModule` does not help and is not imported — it declares the
+  `[dir]` **directive**, and `<html>` is outside the application, so there is no element for it.
+- **Overlays need nothing extra.** NXSAT-752 expected otherwise, on the strength of satori-ui's
+  `syncOverlayDirection`, but that is a **private** method of upstream's own rich tooltip rather
+  than an exported helper. Measured instead: CDK 22's `createOverlayRef()` runs
+  `overlayConfig.direction = overlayConfig.direction || directionality.value`, so dialogs, menus,
+  selects and date pickers all pick the direction up from the service. No provider was added.
+  `overlay-direction.spec.ts` carries that as three tests, the third being the negative control
+  that fails when only the attribute is set — which is what makes the point above load-bearing
+  rather than decorative.
+
+Mirrored layout itself is **CSS logical properties**, not more `[dir='rtl']` overrides.
+`search-filters`, `column-picker`, `saved-search-select`, `drive-dialog`, `details-panel` and
+`upload-queue` moved from `right`, `margin-left`, `text-align: left` and asymmetric four-value
+shorthands to `inset-inline-end`, `margin-inline-start`, `text-align: start` and
+`padding-inline` — the shorthands being five of them, and the subtle kind, because
+`padding: 12px 8px 12px 16px` reads as deliberate rather than as an oversight.
+
+The existing `:host-context([dir='rtl'])` rules were left alone. Each is `transform: scaleX(-1)`
+on a chevron or arrow, which is a mirrored **glyph** and has no logical-property equivalent.
+
+**`checkSatoriStylesheetsAreLogical` keeps it that way.** Both `nxs-` libraries are now free of
+physical inline-direction declarations, so the guardrail is an absolute rule over their `.scss`
+rather than a ratchet: `margin-left`, `left`, `text-align: left`, `float: right`, the physical
+corner radii, and a four-value `margin`/`padding` shorthand whose inline values differ. The one
+symmetric `left: 0; right: 0` pair was converted to `inset-inline: 0` rather than special-cased,
+because a symmetry heuristic is more code than the rule it guards. `// logical-properties-ok:
+<reason>` waives a line and **requires prose** — a bare marker suppresses nothing, which the
+selftest asserts. `libs/features/` and `apps/` are deliberately out of scope: they hold 155 and 48
+such declarations, so a gate covering them would have to be born suppressed. A green run here does
+not mean the application is right-to-left clean, only the shipped components.
+
+**What is still English in `ar` or `he`, and is meant to be.** Beyond the strings: dates too.
+`resolveFormattingLocale` admits a locale only if Angular has its data, the deployment advertises
+it, **and** `canFormatDatesIn` finds a bundled date-fns entry — and `ar`/`he` fail the third until
+their catalogues land. So `LOCALE_ID` clamps to `en` and dates render US-ordered under
+`lang="ar" dir="rtl"`. That looks wrong and is correct: `format` and `parse` then agree on `enUS`,
+which is what keeps the misparse class out. All three converge when `ar.json` and a date-fns `ar`
+entry arrive together.
+
+**Known limit, not worth code today.** `createOverlayRef` snapshots the direction as a string when
+an overlay is created, so an overlay already open when the language changes keeps the direction it
+opened with. There is no language picker (NXSAT-294), so nothing a user can do reaches that state.
+
+Coverage, in `text-direction.spec.ts`, `provide-app-config.spec.ts`, `overlay-direction.spec.ts`
+and a `keyboard, right to left` block in each of `document-tree.component.spec.ts` and
+`document-list.component.spec.ts`. No totals here on purpose — the counts moved three times during
+review and a number in prose beside a suite it does not come from goes wrong immediately.
+
+What makes them evidence rather than decoration is that each was watched to fail:
+
+- forcing the two components' `rtl` checks to `false` turns **exactly three** assertions red and
+  nothing else;
+- deleting the `provideAppInitializer` entry left **every** test in `provide-app-config.spec.ts`
+  green before the startup test existed, and turns **exactly one** red now;
+- `overlay-direction.spec.ts`'s third case is a negative control: with the attribute set and
+  `Directionality` left alone, every CDK overlay opens left-to-right.
 
 There is **no language picker** (NXSAT-294), so a deployment selects its language through
 `defaultLanguage`. `availableLanguages` is no longer only parsed and stored: it is one half of the
@@ -1117,8 +1231,16 @@ fails any source that is not.
     `inject(LOCALE_ID)` — got the built-in `en-US` regardless of configuration. Covered by
     `LOCALE_ID provider` in `provide-app-config.spec.ts`; deleting the provider turns four tests
     red. See "Locale-aware date formatting" above.
-11. **RTL** — DS-2277. Satori needs 4–6 weeks of its own work before an app can start, and the
-    target should be the "good enough" level from its spectrum, agreed explicitly.
+11. **RTL — CLOSED 2026-10-30 (NXSAT-752).** Both of this entry's premises had expired.
+    [DS-2277](https://hyland.atlassian.net/browse/DS-2277) is **Done** (resolved 21 October 2026),
+    so "Satori needs 4–6 weeks before an app can start" was stale — satori-ui ships `:dir(rtl)`
+    rules and depends on `@angular/cdk/bidi`, reading direction and expecting the host to own it.
+    And the recommendation of _no_ against plan decision Q3 was made when RTL was hypothetical;
+    advertising `ar` and `he` (D8e-webui) changed that input, because once those two are
+    advertised, rendering them left-to-right is a defect rather than an absent feature. The app
+    half turned out to be one attribute and six stylesheets, not weeks: see "Right to
+    left" above. Q3 itself is a plan decision and this does not close it — what it closes is the
+    claim that the design system was the blocker.
 12. **Pluralisation — the deferral has expired, and the convention is now two keys.** This entry
     said "no ICU usage anywhere; defer until a real plural string appears". Real plural strings
     appeared during NXSAT-284: **21 complete singular/plural pairs** exist, measured with

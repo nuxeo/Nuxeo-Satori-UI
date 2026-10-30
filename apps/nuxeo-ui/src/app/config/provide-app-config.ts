@@ -1,3 +1,4 @@
+import { Directionality } from '@angular/cdk/bidi';
 import { DOCUMENT } from '@angular/common';
 import {
   DestroyRef,
@@ -11,7 +12,7 @@ import {
   provideAppInitializer,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { AppConfigService, textDirectionForLanguage } from '@nuxeo/satori-platform/app-config';
 import { TranslateService } from '@ngx-translate/core';
 
 import { canFormatDatesIn } from '@nuxeo/satori-platform/ui';
@@ -285,6 +286,68 @@ export function syncDocumentLanguage(
 }
 
 /**
+ * Keeps `<html dir>` — and Angular CDK's `Directionality` — equal to the active language's
+ * reading direction.
+ *
+ * Seven `nxs-` components carry `:host-context([dir='rtl'])` rules, `rich-tooltip` and
+ * `details-panel` read `getComputedStyle(…).direction`, and `document-tree` and `document-list`
+ * swap their inward and outward arrow keys off `Directionality`. **None of that activated**,
+ * because nothing ever set `dir`: `index.html` ships `lang="en"` and no `dir` at all, so every
+ * language rendered left to right and the component work was dead code. Arabic and Hebrew are
+ * declared in `availableLanguages` (D8e-webui), which is what made it visible.
+ *
+ * ## Why `Directionality` has to be written and not merely read
+ *
+ * CDK's root `Directionality` reads `body.dir || documentElement.dir` **once, in its
+ * constructor**, and then never observes the attribute again — it has no mutation observer, and
+ * its `change` emitter exists for the `[dir]` *directive*, `Dir`, which is the only thing
+ * upstream that ever emits on it. So setting `<html dir>` after bootstrap leaves
+ * `Directionality.value` permanently stale. Verified by reading
+ * `@angular/cdk/fesm2022/_directionality-chunk.mjs`, not inferred.
+ *
+ * That is not a detail about two keyboard handlers. **Every CDK overlay takes its direction from
+ * this service rather than from the document**: `createOverlayRef()` runs
+ * `overlayConfig.direction = overlayConfig.direction || directionality.value`, so with the
+ * service stale every dialog, menu, select and date picker in the application opens
+ * left-to-right no matter what `<html dir>` says. `overlay-direction.spec.ts` holds that as a
+ * negative control.
+ *
+ * `BidiModule` does **not** fix this and is not imported: it only declares `Dir`, which binds
+ * `[dir]` on an element inside an Angular template. `<html>` is outside the application, so
+ * there is no element for the directive to sit on. `valueSignal` and `change` are both public,
+ * documented members of `Directionality` in CDK 22 — writing them is the supported way to tell
+ * it about a direction it cannot see for itself, and this function is the single write site.
+ *
+ * Reactive readers follow `valueSignal`; `change` is emitted for the imperative subscribers,
+ * and only on an actual change, so a `fr` → `de` switch does not wake them for nothing.
+ *
+ * Follows `onLangChange` rather than the configured default for the same reason
+ * `syncDocumentLanguage` does: a later `translate.use()` has to be honoured, not just the boot
+ * value. Note that a language with no catalogue still emits it — `AppTranslateLoader` catches
+ * the 404 and resolves with the English fallback — so `ar` and `he` mirror today, ahead of their
+ * translations.
+ */
+export function syncDocumentDirection(
+  translate: Pick<TranslateService, 'onLangChange' | 'getCurrentLang'>,
+  document: Document,
+  directionality: Pick<Directionality, 'valueSignal' | 'change'>,
+  destroyRef: DestroyRef,
+): void {
+  const apply = (lang: string | undefined): void => {
+    if (!lang) return;
+    const direction = textDirectionForLanguage(lang);
+    document.documentElement.dir = direction;
+    if (directionality.valueSignal() === direction) return;
+    directionality.valueSignal.set(direction);
+    directionality.change.emit(direction);
+  };
+  apply(translate.getCurrentLang() ?? undefined);
+  translate.onLangChange
+    .pipe(takeUntilDestroyed(destroyRef))
+    .subscribe((event) => apply(event.lang));
+}
+
+/**
  * Keeps the browser tab title equal to Layer 0 `branding.documentTitle`, on every route.
  *
  * This used to be an `effect` in `AppShellComponent`'s constructor. The effect itself was right —
@@ -334,6 +397,18 @@ export function provideAppConfig(): (Provider | EnvironmentProviders)[] {
     ),
     provideAppInitializer(() =>
       syncDocumentLanguage(inject(TranslateService), inject(DOCUMENT), inject(DestroyRef)),
+    ),
+    // Beside the language sync rather than inside it: both derive from the same `onLangChange`,
+    // but one writes `lang` for assistive technology and the other writes `dir` for layout, and
+    // keeping them separate is what lets each be tested on its own. Registered immediately after,
+    // so there is no window in which the two disagree.
+    provideAppInitializer(() =>
+      syncDocumentDirection(
+        inject(TranslateService),
+        inject(DOCUMENT),
+        inject(Directionality),
+        inject(DestroyRef),
+      ),
     ),
     // Application scope rather than the shell, so the sign-in page gets the configured title
     // too (NXSAT-722). An effect, so it re-runs when the asynchronous load lands and does not

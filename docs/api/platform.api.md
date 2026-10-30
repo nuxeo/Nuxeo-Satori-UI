@@ -21,7 +21,7 @@ type PlatformEntryPoint = (typeof PLATFORM_ENTRY_POINTS)[number];
 
 ## @nuxeo/satori-platform/app-config
 
-37 exported symbol(s).
+40 exported symbol(s).
 
 ```ts
 const APP_BOOTSTRAP_CONFIG_FILE = "bootstrap.json";
@@ -181,11 +181,14 @@ interface ManifestNavItem {
 }
 const PRESET_QUERY_PARAM = "preset";
 const PRESET_STORAGE_KEY = "agentic-ui.preset";
+const RTL_LANGUAGES: readonly string[];
+type TextDirection = 'ltr' | 'rtl';
 function mergeBootstrapConfig(base: AppBootstrapConfig, patch: unknown): AppBootstrapConfig;
 function mergeRuntimeManifest(base: AppRuntimeManifest, patch: unknown): AppRuntimeManifest;
 function resolveBootstrapConfigUrl(baseUri: string): string;
 function resolveManifestConfigUrl(bootstrapUrl: string): string;
 function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeConfig;
+function textDirectionForLanguage(language: string | null | undefined): TextDirection;
 ```
 
 ## @nuxeo/satori-platform/components

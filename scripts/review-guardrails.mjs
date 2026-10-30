@@ -4823,7 +4823,6 @@ function checkUpstreamCatalogueLanguages() {
     return;
   }
 
-
   /**
    * The installed package directory a `node_modules` path belongs to, or `null` for a repo path.
    *
@@ -5065,17 +5064,17 @@ function checkUpstreamCatalogueLanguages() {
       for (const { inputDir, globs } of inputs) {
         const absolute = join(repoRoot, inputDir);
         if (!existsSync(absolute)) {
-        // Two very different situations, and warning for both let the dangerous one pass.
-        //
-        // A dependency that is not installed cannot be judged: `node_modules` is not checked in,
-        // and a clean checkout is legitimately in that state. That warns — a gate that goes quiet
-        // without saying so is how a check becomes no check at all — and the `guardrails` gate
-        // runs after `npm ci` anyway.
-        //
-        // But a package that IS installed while the directory this rule names is absent is a
-        // typo, or a vendor that dropped the folder in a version bump. The build then copies
-        // nothing and the loader 404s for **every** language, which is worse than the defect
-        // NXSAT-732 reported, so it fails.
+          // Two very different situations, and warning for both let the dangerous one pass.
+          //
+          // A dependency that is not installed cannot be judged: `node_modules` is not checked in,
+          // and a clean checkout is legitimately in that state. That warns — a gate that goes quiet
+          // without saying so is how a check becomes no check at all — and the `guardrails` gate
+          // runs after `npm ci` anyway.
+          //
+          // But a package that IS installed while the directory this rule names is absent is a
+          // typo, or a vendor that dropped the folder in a version bump. The build then copies
+          // nothing and the loader 404s for **every** language, which is worse than the defect
+          // NXSAT-732 reported, so it fails.
           const packageRoot = installedPackageRoot(inputDir);
           if (packageRoot === null) {
             fail(
@@ -9869,6 +9868,371 @@ function nativeDateAdapterUses(file) {
 }
 
 /**
+ * Physical inline-direction properties, which the `nxs-` libraries' stylesheets must not use.
+ *
+ * `margin-left`, `padding-right`, `left`, `right`, `text-align: left`, `float: right`,
+ * `border-left`, the corner radii, and a four-value `margin`/`padding` shorthand whose second
+ * and fourth values differ — each of those hardcodes a reading direction. The logical form is
+ * `margin-inline-start`, `padding-inline-end`, `inset-inline-start`, `text-align: start`,
+ * `padding-inline: <start> <end>`, and so on; it compiles to the identical result in
+ * left-to-right and mirrors itself in right-to-left.
+ *
+ * ## Why this gate exists
+ *
+ * NXSAT-752 replaced physical declarations in six components, and every one was a real
+ * right-to-left defect: a clear button on the far side of the text it clears, a dropdown panel
+ * hanging off the opposite side of its own trigger, a select's chevron sitting over the text
+ * instead of over the gutter reserved for it. They had never been noticed because nothing set
+ * `dir`, so the mirrored layout had never rendered. Now that it does, the next
+ * `margin-left: 4px` is a bug the moment it is written, and nothing was watching for it — the
+ * repository has no stylelint configuration, and `lint` has nothing to say about CSS.
+ *
+ * ## Scope, and why it is this narrow
+ *
+ * The two `nxs-` libraries only. They are what customers consume, they are where the
+ * right-to-left contract lives — five components carry `:host-context([dir='rtl'])` rules — and,
+ * after NXSAT-752, they contain **no** physical inline-direction declaration at all, which is
+ * what lets this be an absolute rule rather than a ratchet over a baseline.
+ *
+ * `libs/features/` and `apps/` are deliberately **not** covered: they hold 155 and 48 such
+ * declarations respectively. Mirroring those is real work and a separate ticket; a gate that
+ * failed on all 203 today would have to be born suppressed, and a suppressed gate is the kind
+ * that is still suppressed two years later. Stated here so a green run is not read as "the
+ * application is right-to-left clean".
+ *
+ * ## The escape hatch, and why it demands a reason
+ *
+ * `// logical-properties-ok: <reason>` on the preceding line. Nothing uses it today. It exists
+ * because a physical property inside a `[dir='rtl']` block is unambiguous by construction, and
+ * forcing a rewrite there would be the gate making the code worse. Requiring prose after the
+ * colon is what stops it becoming a reflex: a bare marker does not suppress anything.
+ *
+ * Block structure is deliberately not parsed. A symmetric `left: 0; right: 0` pair *is*
+ * direction-neutral and this rule still refuses it, in favour of `inset-inline: 0` — the one such
+ * pair in the libraries was converted rather than special-cased, because a symmetry heuristic is
+ * more code than the rule it guards and would have to be right about nesting, `@media` and SCSS
+ * interpolation to be worth having.
+ */
+const LOGICAL_PROPERTY_ALTERNATIVES = new Map([
+  ['margin-left', 'margin-inline-start'],
+  ['margin-right', 'margin-inline-end'],
+  ['padding-left', 'padding-inline-start'],
+  ['padding-right', 'padding-inline-end'],
+  ['border-left', 'border-inline-start'],
+  ['border-right', 'border-inline-end'],
+  ['border-left-width', 'border-inline-start-width'],
+  ['border-right-width', 'border-inline-end-width'],
+  ['border-left-color', 'border-inline-start-color'],
+  ['border-right-color', 'border-inline-end-color'],
+  ['border-left-style', 'border-inline-start-style'],
+  ['border-right-style', 'border-inline-end-style'],
+  ['border-top-left-radius', 'border-start-start-radius'],
+  ['border-top-right-radius', 'border-start-end-radius'],
+  ['border-bottom-left-radius', 'border-end-start-radius'],
+  ['border-bottom-right-radius', 'border-end-end-radius'],
+  ['left', 'inset-inline-start'],
+  ['right', 'inset-inline-end'],
+]);
+
+const LOGICAL_PROPERTY_WAIVER = /^\s*(?:\/\/|\/\*)\s*logical-properties-ok:\s*\S/;
+
+/**
+ * Whether the line above a declaration waives it: `// logical-properties-ok: <reason>`.
+ *
+ * The reason is required, and the **block** terminator has to be stripped before asking. `\S`
+ * alone was satisfied by the `*` of `*/ `, so `; /* logical-properties-ok: *\/` — a waiver with no
+ * reason at all — silently disabled the check for the declaration below it. The `//` spelling was
+ * never affected, because nothing follows its colon; that asymmetry is why this strips the
+ * terminator rather than loosening the reason test, which would have opened the `//` form too.
+ */
+function hasLogicalPropertyWaiver(line) {
+  return LOGICAL_PROPERTY_WAIVER.test((line ?? '').replace(/\*\/\s*$/, ''));
+}
+
+/**
+ * A value's top-level space-separated parts, with `calc(100% - 8px)` counted as **one**.
+ *
+ * `value.split(/\s+/)` is wrong in both directions and the first version of this gate did it:
+ * `padding: calc(100% - 8px) 0` became four parts and was rejected though it is symmetric, and
+ * `padding: 0 calc(8px + 2px) 0 16px` became six and was skipped though it is a real defect. So
+ * whitespace only separates at paren depth zero, and never inside a quoted string.
+ */
+function topLevelParts(value) {
+  const parts = [];
+  let current = '';
+  let paren = 0;
+  let interpolation = 0;
+  let quote = null;
+  for (let i = 0; i < value.length; i += 1) {
+    const c = value[i];
+    if (quote) {
+      current += c;
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      current += c;
+      continue;
+    }
+    /*
+     * `#{…}` counts as one value, the same as `calc(…)`. This was fixed in `scssDeclarations` and
+     * NOT here, which is the whole defect: `padding: 0 #{8px + 2px}` split into four parts and was
+     * rejected though symmetric, while `padding: 0 #{8px + 2px} 0 16px` split into six and was
+     * skipped though asymmetric. Two functions split on whitespace and only one had been taught
+     * about interpolation — so when the next construct needs handling, fix both.
+     */
+    if (c === '#' && value[i + 1] === '{') {
+      interpolation += 1;
+      current += '#{';
+      i += 1;
+      continue;
+    }
+    if (interpolation > 0 && c === '}') {
+      interpolation -= 1;
+      current += c;
+      continue;
+    }
+    if (c === '(') paren += 1;
+    else if (c === ')') paren = Math.max(0, paren - 1);
+    if (paren === 0 && interpolation === 0 && /\s/.test(c)) {
+      if (current) parts.push(current);
+      current = '';
+      continue;
+    }
+    current += c;
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
+/**
+ * A declaration's value without its priority or SCSS flag.
+ *
+ * `!important` was counted as an edge value, which made symmetric `margin: 0 0 4px !important`
+ * fail on `0` vs `!important` while asymmetric `padding: 12px 8px 12px 16px !important` became a
+ * five-part value and was skipped entirely — a false rejection and a missed defect from one
+ * omission. `text-align: left !important` was missed for the same reason: the equality test saw
+ * `left !important`.
+ */
+function withoutPriority(value) {
+  return value.replace(/!\s*(important|default|global)\b/gi, '').trim();
+}
+
+/**
+ * Every `property: value` declaration in a stylesheet, with the line its property starts on.
+ *
+ * ## Why a scanner and not a regex
+ *
+ * This is the fourth attempt and the first one that is not a regex, because the previous three
+ * each bought one case and sold another. Anchoring to the start of a line missed
+ * `.x { margin-left: 4px; }`; un-anchoring then found `left: 4px` inside `$left: 4px` and
+ * `margin-left: 4px;` inside `content: "…; margin-left: 4px;"`. Requiring a brace-free value kept
+ * `&:focus {` from parsing as a declaration but could not cross `#{`, so
+ * `margin-left: #{$gutter}` escaped entirely. Three rounds of refinement, each fixing and
+ * breaking, is the signal to stop refining: CSS is not a line-oriented format and a regex cannot
+ * be told that.
+ *
+ * So: one pass, tracking quotes, `#{}` interpolation and parentheses. A statement ends at a
+ * top-level `;` or `}`; a statement ended by `{` was a selector or an at-rule prelude and is
+ * discarded, which is what keeps `&:focus`, `:host-context([dir='rtl'])` and
+ * `@media (min-width: 600px)` out without a special case for any of them.
+ *
+ * What makes `$gutter: 4px` and `--nxs-left: 0` safe is this statement-wise reading, not the
+ * identifier guard below it: the property comes out as `$gutter`, whole, so it simply is not a
+ * key in any of the maps. The old regex found `left` *inside* `$left` because it matched a
+ * fragment rather than a statement. Said explicitly because mutation testing showed no control
+ * depends on the identifier guard — it is a scope guard, not a defect-catcher.
+ *
+ * Comments are the caller's business: pass source that has been through `blankComments`.
+ */
+function* scssDeclarations(source) {
+  let buffer = '';
+  let colonAt = -1;
+  let line = 1;
+  let startLine = 1;
+  let quote = null;
+  let paren = 0;
+  let interpolation = 0;
+
+  const flush = (terminator) => {
+    const statement = { text: buffer, colonAt, line: startLine, terminator };
+    buffer = '';
+    colonAt = -1;
+    return statement;
+  };
+
+  for (let i = 0; i < source.length; i += 1) {
+    const c = source[i];
+    if (c === '\n') line += 1;
+    if (!buffer.trim()) startLine = line;
+
+    if (quote) {
+      buffer += c;
+      if (c === '\\') buffer += source[++i] ?? '';
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      buffer += c;
+      continue;
+    }
+    if (c === '#' && source[i + 1] === '{') {
+      interpolation += 1;
+      buffer += '#{';
+      i += 1;
+      continue;
+    }
+    if (interpolation > 0 && c === '}') {
+      interpolation -= 1;
+      buffer += c;
+      continue;
+    }
+    if (c === '(') paren += 1;
+    else if (c === ')') paren = Math.max(0, paren - 1);
+
+    if (paren === 0 && interpolation === 0) {
+      if (c === ':' && colonAt === -1) {
+        colonAt = buffer.length;
+        buffer += c;
+        continue;
+      }
+      if (c === ';' || c === '}') {
+        const statement = flush(c);
+        if (statement.colonAt !== -1) yield statement;
+        continue;
+      }
+      if (c === '{') {
+        flush(c); // a selector or at-rule prelude, not a declaration
+        continue;
+      }
+    }
+    buffer += c;
+  }
+}
+
+/**
+ * A plain CSS property name: not `$sass`, not `--custom`, not an at-rule, no whitespace.
+ *
+ * A scope guard — it keeps declarations this gate has no opinion about out of the lookup — rather
+ * than something that catches a defect on its own. Case-insensitive because CSS property names
+ * are: `MARGIN-LEFT: 4px` is a physical declaration, and both it and the lookup below were
+ * case-sensitive, so it went unreported. A control covers that.
+ */
+const CSS_PROPERTY = /^[a-z][a-z0-9-]*$/i;
+
+function checkSatoriStylesheetsAreLogical() {
+  let scanned = 0;
+  for (const { root } of SATORI_LIBRARIES) {
+    for (const file of walk(`${root}/src`, (path) => path.endsWith('.scss'))) {
+      if (!fileExists(file)) continue;
+      scanned += 1;
+      const source = read(file);
+      const original = source.split('\n');
+      /*
+       * Comments blanked by the shared scanner rather than by testing whether a line *starts*
+       * with a marker, which only ever skipped a block comment's opening line — so a
+       * `margin-left: 4px;` on the second line of a `/* … *\/` block was read as live CSS and
+       * failed the gate on a stylesheet with no defect at all. `blankComments` keeps newlines, so
+       * offsets still map to the line as written, and it knows that the `//` in `url(//cdn…)` is
+       * not a comment.
+       *
+       * The waiver is matched against the ORIGINAL lines, because the waiver *is* a comment and
+       * would have been blanked away.
+       */
+      const scannable = blankComments(source, 'scss');
+
+      for (const statement of scssDeclarations(scannable)) {
+        const declared = statement.text.slice(0, statement.colonAt).trim();
+        const rawValue = statement.text.slice(statement.colonAt + 1).trim();
+        if (!CSS_PROPERTY.test(declared) || !rawValue) continue;
+        // Lower-cased for the lookups, which are keyed by the canonical spelling. CSS property
+        // names are case-insensitive, so `MARGIN-LEFT` is the same declaration as `margin-left`.
+        const property = declared.toLowerCase();
+        const line = statement.line;
+        if (hasLogicalPropertyWaiver(original[line - 2])) continue;
+        const at = `${file}:${line}`;
+        const value = withoutPriority(rawValue);
+        /*
+         * The one place a value is case-folded, because CSS keywords are case-insensitive and
+         * `text-align: LEFT` hardcodes a direction exactly as `left` does.
+         *
+         * Folded here rather than at each comparison, and this is the third round of the same
+         * mistake: the property-name lookup and the identifier guard were both case-sensitive
+         * (`MARGIN-LEFT` went unreported), and `#{}` was taught to `scssDeclarations` and not to
+         * `topLevelParts`. Each time, one of the places that needed teaching got taught. One
+         * named value is the cheap insurance against a fourth.
+         *
+         * Deliberately NOT applied to the shorthand parts below. Sass identifiers are
+         * case-sensitive, so folding them would make `margin: 0 $Gutter 0 $gutter` compare equal
+         * and hide a real asymmetry — a missed defect, which is the worse direction. `12PX` versus
+         * `12px` would then over-report, and nobody writes that.
+         */
+        const keyword = value.toLowerCase();
+
+        const logical = LOGICAL_PROPERTY_ALTERNATIVES.get(property);
+        if (logical) {
+          fail(
+            `${at} uses the physical property \`${property}\`, which hardcodes a reading ` +
+              `direction. Use \`${logical}\`.\n` +
+              '    Arabic and Hebrew mirror the layout (NXSAT-752), so a physical left/right is a ' +
+              'right-to-left defect.\n' +
+              '    If the direction is genuinely fixed, put `// logical-properties-ok: <reason>` ' +
+              'on the line above.',
+          );
+          continue;
+        }
+
+        if (
+          (property === 'text-align' || property === 'float' || property === 'clear') &&
+          (keyword === 'left' || keyword === 'right')
+        ) {
+          const replacement =
+            property === 'text-align'
+              ? keyword === 'left'
+                ? 'start'
+                : 'end'
+              : keyword === 'left'
+                ? 'inline-start'
+                : 'inline-end';
+          // Reported as written, so the line is findable; the advice uses the canonical spelling.
+          fail(
+            `${at} sets \`${property}: ${value}\`, which hardcodes a reading direction. ` +
+              `Use \`${property}: ${replacement}\`.`,
+          );
+          continue;
+        }
+
+        // A four-value shorthand is only a problem when its horizontal values differ: `0 8px 8px`
+        // and `8px 12px` are already symmetric. `padding: 12px 8px 12px 16px` is the shape that
+        // produced five of NXSAT-752's physical declarations, and it reads as deliberate rather than as
+        // an oversight, which is why it needs naming explicitly.
+        if (property === 'margin' || property === 'padding') {
+          const parts = topLevelParts(value);
+          if (parts.length === 4 && parts[1] !== parts[3]) {
+            fail(
+              `${at} sets \`${property}\` with a four-value shorthand whose inline values differ ` +
+                `(\`${parts[1]}\` then \`${parts[3]}\`), so it hardcodes a reading direction.\n` +
+                `    Split it: \`${property}: ${parts[0]} 0 ${parts[2]};\` plus ` +
+                `\`${property}-inline: ${parts[3]} ${parts[1]};\` — inline takes start then end.`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  if (scanned === 0) {
+    fail(
+      'No `nxs-` stylesheet was read, so the logical-property gate asserted nothing. Either the ' +
+        'library roots moved or `walk` is not seeing `.scss` — fix the gate rather than leaving ' +
+        'it passing empty.',
+    );
+  }
+}
+
+/**
  * No library in the family puts Material's native date adapter in an injector (NXSAT-649).
  *
  * A component that lists `provideNativeDateAdapter()` or `MatNativeDateModule` hides the adapter a
@@ -10365,7 +10729,10 @@ const ADOPTION_BASELINE = new Map([
   [
     '@hylandsoftware/satori-ui/avatar',
     new Map([
-      ['apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts', new Set(['SatAvatarCategory'])],
+      [
+        'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
+        new Set(['SatAvatarCategory']),
+      ],
       ['apps/nuxeo-ui/src/app/shell/app-shell.component.ts', new Set(['SatAvatarModule'])],
     ]),
   ],
@@ -10913,8 +11280,9 @@ function workflowLines(body) {
     // script body back into the YAML the parser reads. Indentation is still measured from the raw
     // lines, because comment blanking would erase the indentation the boundary depends on.
     const header = stripTrailingYamlComment(raw[i]);
-    const blockScalar =
-      /^(\s*)((?:-\s+)?)['"]?([A-Za-z_][\w.-]*)['"]?\s*:\s*[|>][-+]?\d*\s*$/.exec(header);
+    const blockScalar = /^(\s*)((?:-\s+)?)['"]?([A-Za-z_][\w.-]*)['"]?\s*:\s*[|>][-+]?\d*\s*$/.exec(
+      header,
+    );
     /* A mapping whose VALUE is opaque data rather than workflow structure. Its body is blanked for
      * the same reason a `run:` script is: the gate scan treats any `if:` under `jobs:` as a
      * condition, so a job declaring `env.if` — or a `with:` input named `if` — had that data read
@@ -11108,8 +11476,7 @@ const LONG_LIVED_BRANCHES = ['main', 'master', 'develop', 'gh-pages'];
 const isLongLivedBranch = (branch) => LONG_LIVED_BRANCHES.includes(branch.toLowerCase());
 
 /** A filter pattern that names exactly one branch, rather than a family of them. */
-const isLiteralBranchPattern = (pattern) =>
-  !/[*?+[\]]/.test(pattern) && !pattern.startsWith('!');
+const isLiteralBranchPattern = (pattern) => !/[*?+[\]]/.test(pattern) && !pattern.startsWith('!');
 
 /**
  * A GitHub branch-filter pattern as a `RegExp`, or `null` for syntax this does not model.
@@ -11167,7 +11534,7 @@ function githubBranchFilterToRegExp(pattern) {
  * Also caught on #494. A doubled quote — GitHub's escape inside an expression string — is part of
  * the literal and is unescaped below.
  */
-const EXPRESSION_STRING = "'((?:[^']|'')*)'|\"((?:[^\"]|\"\")*)\"";
+const EXPRESSION_STRING = '\'((?:[^\']|\'\')*)\'|"((?:[^"]|"")*)"';
 
 /**
  * The comparison matcher, parameterised by which `github.*` contexts to look for.
@@ -11360,7 +11727,9 @@ function comparisonIsNegated(expression, index) {
 
   return (
     introducedByBang(index) ||
-    enclosing.some(([start, end]) => introducedByBang(start) || invertedByBooleanCompare(start, end))
+    enclosing.some(
+      ([start, end]) => introducedByBang(start) || invertedByBooleanCompare(start, end),
+    )
   );
 }
 
@@ -11463,12 +11832,15 @@ function parseWorkflowTriggersAndGates(body) {
        * YAML implementation, and not being one is the whole constraint this parser works under. */
       if (/^\s*[&*]/.test(ownValue)) return null;
       let filter = inlineFilter(
-        ownValue.trim().startsWith('{') ? [ownValue, ...lines.slice(i + 1, eventEnd)].join(' ') : ownValue,
+        ownValue.trim().startsWith('{')
+          ? [ownValue, ...lines.slice(i + 1, eventEnd)].join(' ')
+          : ownValue,
       );
       if (filter === null) {
         filter = NO_FILTER;
         for (let j = i + 1; j < eventEnd; j += 1) {
-          if (/^\s*['"]?tags(?:-ignore)?['"]?\s*:/.test(lines[j])) filter = { ...filter, tags: true };
+          if (/^\s*['"]?tags(?:-ignore)?['"]?\s*:/.test(lines[j]))
+            filter = { ...filter, tags: true };
           const match = /^\s*['"]?(branches|branches-ignore)['"]?\s*:/.exec(lines[j]);
           if (!match) continue;
           const list = parseYamlStringList(lines, j, yamlIndent(lines[j]));
@@ -11746,7 +12118,10 @@ function checkWorkflowRefGates() {
      * false positive, reported on #494 in the round after it. */
     let tagsArePossible = false;
     for (const [event, filter] of events) {
-      if (event === 'push' && (filter.tags || (!filter.unparsed && filter.branches === null && !filter.ignore))) {
+      if (
+        event === 'push' &&
+        (filter.tags || (!filter.unparsed && filter.branches === null && !filter.ignore))
+      ) {
         tagsArePossible = true;
       }
       if (!BRANCH_FILTERED_EVENTS.includes(event)) {
@@ -11769,7 +12144,8 @@ function checkWorkflowRefGates() {
      * is the mistake. `pull_request_target` is excluded deliberately: that one does run with the
      * base branch as `github.ref`, so a branch gate there is legitimate. Found in review on
      * #494, where this shape passed the check completely. */
-    const pullRequestOnly = events.size > 0 && [...events.keys()].every((e) => e === 'pull_request');
+    const pullRequestOnly =
+      events.size > 0 && [...events.keys()].every((e) => e === 'pull_request');
 
     /* The trigger half. An allowlist of nothing but pinned work-in-progress branches stops matching
      * anything the day they merge, and then the workflow does not run at all — which is how the
@@ -11963,7 +12339,7 @@ function checkWorkflowRefGates() {
               `${workflow}:${gate.line} gates ${where} on \`github.ref_name == '${literal}'\`, ` +
                 'and a tag can start this workflow, so this guardrail cannot tell whether ' +
                 `\`${literal}\` is a branch or a tag and has judged neither.\n` +
-                "    Compare `github.ref` to `refs/heads/…` or `refs/tags/…` — that form says " +
+                '    Compare `github.ref` to `refs/heads/…` or `refs/tags/…` — that form says ' +
                 'which it is — or assert `github.ref_type` alongside this comparison.',
             );
           }
@@ -11998,7 +12374,7 @@ function checkWorkflowRefGates() {
           if (!allowed) {
             fail(
               `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, which none ` +
-                'of the workflow\'s own branch filters admit:\n' +
+                "of the workflow's own branch filters admit:\n" +
                 allowlists
                   .map(
                     ([event, patterns]) =>
@@ -12114,6 +12490,7 @@ const GUARDRAILS = [
   checkSatoriComponentsHaveStories,
   checkSatoriComponentsHaveOverviews,
   checkSatoriComponentsHaveSpecs,
+  checkSatoriStylesheetsAreLogical,
   checkSatoriLibrariesKeepHostDateAdapter,
   checkMdxCodeSamplesFormatted,
   checkPlatformEntryPointsListed,

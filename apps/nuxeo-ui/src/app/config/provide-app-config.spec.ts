@@ -6,6 +6,7 @@ import {
   initialiseAppConfigAndLanguage,
   provideAppConfig,
   resolveStringLanguage,
+  syncDocumentDirection,
   syncDocumentLanguage,
   syncDocumentTitle,
 } from './provide-app-config';
@@ -19,12 +20,14 @@ import {
 import {
   ApplicationInitStatus,
   DestroyRef,
+  EventEmitter,
   FactoryProvider,
   Injector,
   LOCALE_ID,
   provideZonelessChangeDetection,
   signal,
 } from '@angular/core';
+import { DIR_DOCUMENT, Directionality } from '@angular/cdk/bidi';
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
@@ -264,6 +267,7 @@ describe('resolveStringLanguage', () => {
 describe('the configured language at startup', () => {
   const STALE_LOCALE_KEY = 'GUEST__locale';
   let htmlLang: string;
+  let htmlDir: string;
 
   function envelope(layer: AppConfigLayer, content: Record<string, unknown>) {
     return {
@@ -328,6 +332,10 @@ describe('the configured language at startup', () => {
 
   beforeEach(() => {
     htmlLang = document.documentElement.lang;
+    htmlDir = document.documentElement.dir;
+    // Cleared rather than saved-and-left, so the direction assertions below start from the state
+    // `index.html` actually ships: a language, and no `dir` at all.
+    document.documentElement.dir = '';
     localStorage.setItem(STALE_LOCALE_KEY, 'de');
     // `note()` writes to the console as well as recording, and the assertions below read the
     // record. Spying keeps the expected warnings out of the test output without suppressing a
@@ -338,6 +346,7 @@ describe('the configured language at startup', () => {
   afterEach(() => {
     localStorage.removeItem(STALE_LOCALE_KEY);
     document.documentElement.lang = htmlLang;
+    document.documentElement.dir = htmlDir;
     TestBed.resetTestingModule();
   });
 
@@ -443,6 +452,41 @@ describe('the configured language at startup', () => {
       // The mirror: narrowing the advertised list must not refuse a language that works.
       expect((await boot('fr', ['en', 'fr'])).lang).toBe('fr');
     });
+  });
+
+  /**
+   * The direction **registration**, not the function — and deliberately not through `ar`.
+   *
+   * Every other direction test in this file calls `syncDocumentDirection` directly, which proves
+   * the function and says nothing about whether anything calls it. Measured: deleting the
+   * `provideAppInitializer` entry from `provideAppConfig()` left every test in this file green
+   * while restoring the original defect in full.
+   *
+   * Same gap the `LOCALE_ID` block below was written against, and the same gap NXSAT-733's own
+   * tests cite: the function was easy to get right, and nothing consulted it.
+   *
+   * **Why this boots `fr` and not `ar`.** Since NXSAT-733, `resolveStringLanguage` refuses a
+   * language this build ships no catalogue for, and no `ar.json` or `he.json` ships — so
+   * `boot('ar')` applies `en` and a right-to-left direction is unreachable through startup today.
+   * That is NXSAT-733 working as intended (`<html lang="ar">` over English text is the WCAG 3.1.1
+   * defect it fixed), not a regression here. The mapping from language to direction is covered by
+   * `syncDocumentDirection` above; what only startup can show is that the initializer is wired.
+   *
+   * So both assertions are made load-bearing from the other side, by starting from a stale `rtl`
+   * — the state a previous boot, a cached shell or a server-rendered document would leave:
+   *
+   * - the attribute must be rewritten to `ltr`; with the registration deleted it stays `rtl`;
+   * - `Directionality` samples that same stale `rtl` when the provider constructs it during
+   *   startup, so reading `ltr` can only come from the service being written, not from the
+   *   attribute.
+   */
+  it('writes the direction at startup, correcting a stale one', async () => {
+    document.documentElement.dir = 'rtl';
+
+    await boot('fr');
+
+    expect(document.documentElement.dir).withContext('<html dir> after boot').toBe('ltr');
+    expect(TestBed.inject(Directionality).value).withContext('CDK after boot').toBe('ltr');
   });
 });
 
@@ -639,6 +683,28 @@ describe('LOCALE_ID provider', () => {
   });
 });
 
+/**
+ * A `DestroyRef` whose callbacks these tests can fire on demand, to assert that
+ * `takeUntilDestroyed` actually unsubscribes.
+ *
+ * `DestroyRef` declares exactly two abstract members — `onDestroy` and `destroyed` — so supplying
+ * both makes this structurally assignable and no broad type escape is needed. Each harness used to
+ * carry one; this is the typed adapter the guardrail asks for instead.
+ */
+function recordingDestroyRef(): { ref: DestroyRef; destroy: () => void } {
+  const callbacks: Array<() => void> = [];
+  return {
+    ref: {
+      destroyed: false,
+      onDestroy: (callback: () => void) => {
+        callbacks.push(callback);
+        return () => undefined;
+      },
+    },
+    destroy: () => callbacks.forEach((callback) => callback()),
+  };
+}
+
 describe('syncDocumentLanguage', () => {
   function harness(current: string) {
     const onLangChange = new Subject<LangChangeEvent>();
@@ -648,15 +714,9 @@ describe('syncDocumentLanguage', () => {
     };
     const doc = document.implementation.createHTMLDocument('lang');
     doc.documentElement.lang = 'en';
-    const destroyCallbacks: Array<() => void> = [];
-    const destroyRef = {
-      onDestroy: (callback: () => void) => {
-        destroyCallbacks.push(callback);
-        return () => undefined;
-      },
-    } as unknown as DestroyRef;
-    syncDocumentLanguage(translate, doc, destroyRef);
-    return { onLangChange, doc, destroy: () => destroyCallbacks.forEach((cb) => cb()) };
+    const { ref, destroy } = recordingDestroyRef();
+    syncDocumentLanguage(translate, doc, ref);
+    return { onLangChange, doc, destroy };
   }
 
   const change = (lang: string): LangChangeEvent => ({ lang, translations: {} });
@@ -679,6 +739,120 @@ describe('syncDocumentLanguage', () => {
     destroy();
     onLangChange.next(change('de'));
     expect(doc.documentElement.lang).toBe('en');
+  });
+});
+
+/**
+ * `dir` was never set, so every `[dir='rtl']` rule in `nxs-` components was dead and Arabic and
+ * Hebrew rendered left to right. Two properties are load-bearing here and each failed in a
+ * different way before this existed:
+ *
+ * 1. `<html dir>` follows the language, in both directions and on a **later** change — not just
+ *    at boot, because `translate.use()` can run again.
+ * 2. CDK's `Directionality` reports the new value. It reads the attribute once in its constructor
+ *    and never observes it again, so writing `<html dir>` alone leaves `document-tree` and
+ *    `document-list` mirroring nothing. The third block below uses the **real** `Directionality`
+ *    rather than a double, because a double would have agreed with a wrong implementation.
+ */
+describe('syncDocumentDirection', () => {
+  function harness(current: string) {
+    const onLangChange = new Subject<LangChangeEvent>();
+    const translate = { onLangChange, getCurrentLang: () => current };
+    const doc = document.implementation.createHTMLDocument('dir');
+    const directionality = {
+      valueSignal: signal<'ltr' | 'rtl'>('ltr'),
+      change: new EventEmitter<'ltr' | 'rtl'>(),
+    };
+    const emitted: string[] = [];
+    directionality.change.subscribe((value) => emitted.push(value));
+    const { ref, destroy } = recordingDestroyRef();
+    syncDocumentDirection(translate, doc, directionality, ref);
+    return { onLangChange, doc, directionality, emitted, destroy };
+  }
+
+  const change = (lang: string): LangChangeEvent => ({ lang, translations: {} });
+
+  describe('the document attribute', () => {
+    it('sets dir="rtl" for a right-to-left language already active', () => {
+      expect(harness('ar').doc.documentElement.dir).toBe('rtl');
+      expect(harness('he').doc.documentElement.dir).toBe('rtl');
+    });
+
+    it('sets dir="ltr" explicitly for a left-to-right language, rather than leaving it unset', () => {
+      const { doc } = harness('fr');
+      expect(doc.documentElement.dir).toBe('ltr');
+    });
+
+    it('follows a later language change in both directions', () => {
+      const { onLangChange, doc } = harness('en');
+      expect(doc.documentElement.dir).toBe('ltr');
+      onLangChange.next(change('he'));
+      expect(doc.documentElement.dir).toBe('rtl');
+      onLangChange.next(change('ar'));
+      expect(doc.documentElement.dir).toBe('rtl');
+      onLangChange.next(change('fr'));
+      expect(doc.documentElement.dir).toBe('ltr');
+    });
+
+    it('stops listening once the application is destroyed', () => {
+      const { onLangChange, doc, destroy } = harness('en');
+      destroy();
+      onLangChange.next(change('ar'));
+      expect(doc.documentElement.dir).toBe('ltr');
+    });
+  });
+
+  describe('Angular CDK', () => {
+    it('writes the direction into Directionality, which cannot see the attribute itself', () => {
+      const { onLangChange, directionality } = harness('en');
+      expect(directionality.valueSignal()).toBe('ltr');
+      onLangChange.next(change('ar'));
+      expect(directionality.valueSignal()).toBe('rtl');
+    });
+
+    it('emits change for the imperative subscribers', () => {
+      const { onLangChange, emitted } = harness('en');
+      onLangChange.next(change('ar'));
+      onLangChange.next(change('fr'));
+      expect(emitted).toEqual(['rtl', 'ltr']);
+    });
+
+    it('does not emit when a language change does not change the direction', () => {
+      const { onLangChange, emitted } = harness('fr');
+      onLangChange.next(change('de'));
+      onLangChange.next(change('ja'));
+      expect(emitted).toEqual([]);
+    });
+  });
+
+  /**
+   * The claim the two keyboard consumers actually depend on, asserted against the real class:
+   * `inject(Directionality).value` — the expression in `document-tree` and `document-list` — is
+   * `rtl` after a language change, having been `ltr` when the service was constructed.
+   */
+  describe('against the real Directionality', () => {
+    it('changes the value those components read, after construction', () => {
+      const doc = document.implementation.createHTMLDocument('dir');
+      TestBed.configureTestingModule({ providers: [{ provide: DIR_DOCUMENT, useValue: doc }] });
+      const directionality = TestBed.inject(Directionality);
+      expect(directionality.value).toBe('ltr');
+
+      const onLangChange = new Subject<LangChangeEvent>();
+      const seen: string[] = [];
+      directionality.change.subscribe((value) => seen.push(value));
+      syncDocumentDirection(
+        { onLangChange, getCurrentLang: () => 'en' },
+        doc,
+        directionality,
+        recordingDestroyRef().ref,
+      );
+
+      onLangChange.next(change('ar'));
+
+      expect(directionality.value).toBe('rtl');
+      expect(seen).toEqual(['rtl']);
+      expect(doc.documentElement.dir).toBe('rtl');
+    });
   });
 });
 

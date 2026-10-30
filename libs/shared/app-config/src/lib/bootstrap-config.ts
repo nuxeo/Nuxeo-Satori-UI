@@ -233,8 +233,18 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   //
   // So each of `ar`, `es`, `he`, `it`, `sv` joins this list — and `DATE_FNS_LOCALES`, which a
   // test holds equal to it — in the pull request that brings its catalogue. `es` needs one
-  // Crowdin string fixed first (`Seleccionado(s)`); `ar` and `he` additionally need RTL support,
-  // which does not exist yet, so a catalogue alone does not make them shippable.
+  // Crowdin string fixed first (`Seleccionado(s)`). `ar` and `he` need nothing further for
+  // layout: RTL landed in NXSAT-752, so `syncDocumentDirection` sets `<html dir>` from the
+  // active language and either one mirrors.
+  //
+  // Neither is reachable today, and that is deliberate: since NXSAT-733 `resolveStringLanguage`
+  // refuses a `defaultLanguage` this build ships no catalogue for, so `ar` and `he` fall back to
+  // `en` and the application runs left-to-right in English. `<html lang="ar">` over English text
+  // was the WCAG 3.1.1 defect that ticket fixed, so the refusal is the correct behaviour and the
+  // RTL work is not bypassed by it — the two land together. The moment `ar.json` exists the
+  // language is accepted, `syncDocumentDirection` sees it on `onLangChange`, and the layout
+  // mirrors with no further change. `LOCALE_ID` needs its own `DATE_FNS_LOCALES` entry at the
+  // same time, or dates stay English while strings and direction do not.
   //
   // Shipping a catalogue does NOT mean every key is translated: `setFallbackLang('en')` covers
   // gaps, and a Crowdin pull fills every unapproved string with its English source.
