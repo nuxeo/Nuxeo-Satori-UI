@@ -15,7 +15,8 @@ seven target languages. **That changed by 5 October 2026**: Crowdin Status showe
 NXSAT-293 ships `ja`, `nl`, `th` and `zh` beside `fr` and `de`. `es` is held back on one string —
 see D8e. **Changed again on 30 October 2026**: the target set was aligned to Nuxeo Web UI's ten,
 dropping `th` and `zh` and adding `ar`, `he`, `it`, `es` and `sv`. Five ship (`en fr de ja nl`);
-the additions are registered and requested from Crowdin but not yet advertised — `D8e-webui`.
+the additions are registered, and `es` is requested from Crowdin; `ar`, `he`, `it` and `sv` are
+Crowdin targets held out of the pull list until they have approvals — `D8e-webui`.
 Project membership is resolved (Manager access on
 28 September) and the translation team has confirmed it can begin (INTERN-1346, 28 September).
 Until 5 October that was separate from what the repository shipped: `fr.json` and `de.json`
@@ -450,9 +451,10 @@ clause we satisfy while deliberately declining an adjacent recommendation. Both 
 below and neither is a defect in the taxonomy — but the taxonomy said "three statuses" while the
 table used five and combined them, which was.
 
-**Five rows are owner actions**: seeding, revoking the setup token, the service-account commit
-identity, confirming the proof-reading workflow, and confirming the project-level export settings.
-They are listed rather than omitted so the pipeline is not read as finished.
+**Four rows are owner actions**: seeding, revoking the setup token, the service-account commit
+identity, and confirming the project-level export settings. Confirming the proof-reading workflow
+was the fifth and closed on 30 October (INTERN-1363). They are listed rather than omitted so the
+pipeline is not read as finished.
 
 | Requirement (quoted)                                                                                                                                                                                                                                                                                                                                           | Our implementation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -472,7 +474,7 @@ They are listed rather than omitted so the pipeline is not read as finished.
 | Sample source glob `/**/**/i18n/en.json`.                                                                                                                                                                                                                                                                                                                      | `/apps/*/public/i18n/en.json` — **one entry, apps only**. There is deliberately no `/libs/**` entry: Crowdin treats a pattern matching nothing as an error, and a forward-looking glob for NXSAT-284 once failed the push _after_ the catalogue had uploaded, which skipped the translator-context step behind it. It is added in the same change that ships the first library catalogue. `checkCrowdinConfig` rejects any source whose root is outside `apps/` or `libs/`, and separately fails each pattern that matches no file; it does **not** require both roots. | **DEVIATES-JUSTIFIED** — with `base_path: '.'` the sample sweeps `node_modules` and its 48 upstream catalogues, pushing another team's strings into our project.                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Sample translation pattern `%locale%`.                                                                                                                                                                                                                                                                                                                         | `%two_letters_code%`, asserted by `checkCrowdinConfig`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | **DEVIATES-JUSTIFIED** — `AppTranslateLoader` fetches `i18n/<lang>.json` for two-letter codes, so `%locale%` would download `fr-FR.json` and render English while reporting success (D8a). **No `languages_mapping` is needed**: the real pull in [#282](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/282) produced `fr de es ja nl pl pt th zh`.json — bare two-letter names for all nine, including the region-qualified `zh-CN`, `pt-PT`, `nl-NL` and `th-TH`. Confirmed again on 5 October 2026 when NXSAT-293 dispatched the pull with `--language=zh-CN`: it wrote `zh.json`. |
 | Translator-context helpers **SHOULD** be leveraged in future; the Guidelines record them as not yet explored.                                                                                                                                                                                                                                                  | Already built: `tools/i18n/crowdin-push-context.mjs` uploads 1,972 context entries from sibling `en.context.json` files, and `checkTranslatorContextPush` plus an ordering rule in `checkCrowdinConfig` keep the push from shipping sources without them.                                                                                                                                                                                                                                                                                                               | **EXCEEDS**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| A proof-reading step in the Crowdin workflow is **RECOMMENDED**, and the export MUST above is conditional on proof-reading being _"setup"_.                                                                                                                                                                                                                    | **Unverified.** Nothing we hold shows that workflow stage exists on project 160; the evidence on INTERN-1346 is that the team is ready to begin, which is readiness rather than workflow configuration. Confirming it is what turns the export MUST from dormant to binding, and what makes approval a gate rather than a formality nobody performs.                                                                                                                                                                                                                    | **OWNER-ACTION-PENDING** — confirm the configured workflow with the Translation Team or the Crowdin admin.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| A proof-reading step in the Crowdin workflow is **RECOMMENDED**, and the export MUST above is conditional on proof-reading being _"setup"_.                                                                                                                                                                                                                    | **Confirmed 30 October 2026 (INTERN-1363).** Enrico Stengert: "A proofreading step has been implemented in the Crowdin project workflow, with additional localization QA performed after translation." That is the workflow configuration this row was waiting for, rather than the readiness INTERN-1346 showed — so the export MUST above is now binding rather than dormant, and approval is a gate rather than a formality nobody performs. | **CONFORMS.** The adjacent row below stays open: a proof-reading step existing is not the same as the project's export settings being approved-only, and those take precedence over the pipeline's. |
 | _"project-level export settings in Crowdin take precedence over the settings used by pipelines."_                                                                                                                                                                                                                                                              | Unverified. Everything above configures the **pipeline**; if project 160 carries conflicting export settings, they win and this table describes intent rather than effect.                                                                                                                                                                                                                                                                                                                                                                                              | **OWNER-ACTION-PENDING** — confirm the project's export settings with the Crowdin admin.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ### D8 — Crowdin configuration, and the one trap in it
@@ -651,10 +653,11 @@ English while every progress figure says the work is done.
   never arrive — was already false when it was made. Enrico Stengert on
   [INTERN-1346](https://hyland.atlassian.net/browse/INTERN-1346), 28 September 2026: _"I can
   confirm all source strings for this project are synced and now visible in CrowdIn. Translations
-  can begin on our end."_ **That is readiness, not proof that a proof-reading step is configured**,
-  and the MUST is conditional on proof-reading being _"setup"_ — so this does not on its own make
-  the MUST binding. It does dispose of "approval can never arrive", which is what the case for
-  `'false'` rested on. Confirming the configured workflow is an open owner action in
+  can begin on our end."_ **That was readiness, not proof that a proof-reading step was
+  configured**, and the MUST is conditional on proof-reading being _"setup"_ — so it did not on its
+  own make the MUST binding. It did dispose of "approval can never arrive", which is what the case
+  for `'false'` rested on. The configured workflow was confirmed separately on 30 October
+  (INTERN-1363), so the MUST now binds directly. Recorded in
   `D8-standard`.
 - The stronger reason does not depend on that timing at all. The Guidelines' **Identified Security
   Risks** table carries _"Reputation Damage (insertion of controversial or profane content through
@@ -665,8 +668,9 @@ English while every progress figure says the work is done.
   setting that quietly invalidates an accepted risk rating is not a trade engineering gets to make
   on its own.
 
-**`'true'` is therefore right under either reading of the condition**, which is why the unverified
-proof-reading step does not leave this open. If proof-reading is set up, the MUST applies directly.
+**`'true'` is therefore right under either reading of the condition**, which is why the
+proof-reading step being unverified did not leave this open at the time. It is verified now
+(INTERN-1363, 30 October), so the first reading applies: the MUST binds directly.
 If it is not, the MUST is dormant — but the risk-table argument still holds, and the cost of being
 wrong in this direction is an empty export, which is visible, rather than unreviewed content in
 front of a customer, which is not.
@@ -913,22 +917,31 @@ The useful part of this decision is not the list — it is which touchpoints a l
 in before it has translations. Of the six (five from D8e, plus the one NXSAT-733 added), they
 split cleanly:
 
-| Touchpoint                          | May run ahead? | Why                                                                |
-| ----------------------------------- | -------------- | ------------------------------------------------------------------ |
-| `register-locale-data.ts`           | **yes**        | missing-catalogue is a warning; the reverse throws NG0701          |
-| `--language` in `crowdin-pull.yaml` | **yes**        | it is the request that produces the catalogue                      |
-| Catalogue in `public/i18n/`         | n/a            | it is the thing being waited for                                   |
-| `SHIPPED_CATALOGUE_LANGUAGES`       | **no**         | `checkShippedCatalogueLanguages` fails **either** direction        |
-| `availableLanguages`                | **no**         | `checkAdvertisedLocalesShip` fails it                              |
-| `DATE_FNS_LOCALES`                  | **no**         | a test pins it to `availableLanguages`                             |
+| Touchpoint                          | May run ahead?     | Why                                                                                                                                                                     |
+| ----------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `register-locale-data.ts`           | **yes**            | missing-catalogue is a warning; the reverse throws NG0701                                                                                                               |
+| `--language` in `crowdin-pull.yaml` | **yes, with care** | it is the request that produces the catalogue — but the pull is ONE shared pull request, so an unapproved language listed here holds every other language's catalogue red |
+| Catalogue in `public/i18n/`         | n/a                | it is the thing being waited for                                                                                                                                        |
+| `SHIPPED_CATALOGUE_LANGUAGES`       | **no**             | `checkShippedCatalogueLanguages` fails **either** direction                                                                                                             |
+| `availableLanguages`                | **no**             | `checkAdvertisedLocalesShip` fails it                                                                                                                                   |
+| `DATE_FNS_LOCALES`                  | **no**             | a test pins it to `availableLanguages`                                                                                                                                  |
 
 `SHIPPED_CATALOGUE_LANGUAGES` is the only one that cannot lag either: it is what
 `resolveStringLanguage` consults, so a catalogue present without it is shipped and never
 rendered. It therefore moves in the same commit as the catalogue, not before and not after.
 
-So `ar`, `es`, `he`, `it` and `sv` are registered and requested, and absent from the last three.
-Each joins them in the small pull request that brings its catalogue. The gate stays green
-throughout, which is the point: D8e's rule is not suspended, it is scoped.
+So all five are registered and absent from the last three. **Only `es` is requested**: `ar`, `he`,
+`it` and `sv` were taken out of `download_translations_args` on 30 October, because the pull
+delivers everything into one shared pull request and an unapproved language would have held Spanish
+and the four shipping languages red with it. So the `--language` row is "yes, with care" rather
+than plain "yes": the flag may precede a catalogue, which is what produces one, but not approvals.
+
+Each `--language` goes back when its approvals exist — in a change of its own, which must reach
+`main` and then wait for a scheduled run, because the catalogue does not exist until that run
+produces it. The last three entries come after that, in a third change — the one that brings the
+catalogue. One change cannot be both before and after the pull.
+
+The gate stays green throughout, which is the point: D8e's rule is not suspended, it is scoped.
 
 An earlier revision of this branch did declare all ten at once and left `checkAdvertisedLocalesShip`
 failing on five, on the reasoning that the red was a to-do list. That is recorded here because it
@@ -941,16 +954,51 @@ Two things that follow, neither optional:
 - **Do not seed empty or English-filled catalogues** to make a language advertisable sooner.
   `checkCataloguesAreTranslated` fails an all-English catalogue by design, and D8e is right about
   why: a user who selects Spanish and reads English has been lied to.
-- **`ar` and `he` need RTL support, not just translations.** Component-level RTL exists in seven
-  `nxs-` components and two inject `Directionality`, but nothing sets `dir`, so none of it
-  activates. A catalogue alone does not make either shippable.
+- **`ar` and `he` need RTL support, not just translations.** Component-level RTL already exists,
+  across **three different mechanisms**, which is worth naming rather than counting because an
+  earlier revision of this bullet said "seven components" and a count conceals the grouping:
 
-One cost is carried deliberately: the pull list names `ar`, `he`, `it` and `sv` while Crowdin
-project 160 does not have them as targets, and the CLI rejects the whole invocation rather than
-the unknown flag — so the nightly pull fails until they are added, and `fr`, `de`, `ja` and `nl`
-stop updating with it. They are at 99% approved and static. The alternative was to leave the
+  | Mechanism | Components |
+  | --- | --- |
+  | `:host-context([dir='rtl'])` in SCSS | `breadcrumbs`, `document-tree`, `folder-picker`, `pager` |
+  | injects CDK `Directionality` | `document-list`, `document-tree` |
+  | reads `getComputedStyle(…).direction` | `details-panel`, `rich-tooltip` |
+
+  Seven distinct components, four of them via the CSS attribute — not seven via the attribute.
+  `document-tree` appears twice. Re-measure rather than trusting the table:
+
+  ```bash
+  grep -rln "dir='rtl'" libs/shared/satori-components/src/lib --include="*.scss"
+  grep -rln Directionality libs/shared/satori-components/src/lib --include="*.ts" | grep -v spec
+  ```
+
+  [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523) adds what sets `dir` and writes the
+  `Directionality` service so overlays follow. A catalogue alone does not make either shippable.
+
+  This bullet said "nothing sets `dir`, so none of it activates", which read as a description of
+  what a user sees. It is not: since NXSAT-733, `describeUnsupportedLanguage` refuses a
+  `defaultLanguage` with no shipped catalogue, so `boot('ar')` applies `en` and neither language is
+  **reachable** at startup. Nothing activates because nothing selects them, which is a different
+  statement and the accurate one.
+
+One cost was carried deliberately, and it is worth recording what it actually came to. The pull
+list named `ar`, `he`, `it` and `sv` before Crowdin project 160 had them as targets, and the CLI
+rejects the whole invocation rather than the unknown flag — so a scheduled run inside that window
+would have failed for **every** language, not per-language. The alternative was to leave the
 request out and have nothing pulling the new languages into existence, which trades a visible
 failure for an invisible stall.
+
+The window was **21 minutes** and no run fell in it: `main` gained the flags at 11:39Z on
+30 October, INTERN-1363 made them targets at 12:00Z, and the workflow is `0 0 * * *`, so the runs
+before it — 30 Oct 00:03Z — succeeded, and the next one is not due until 31 Oct 00:00Z, after the
+window had closed. Twelve consecutive scheduled
+runs succeeded.
+
+So the bet came off, by luck rather than by design. This paragraph previously asserted the failure
+in the present tense — "the nightly pull fails until they are added, and `fr`, `de`, `ja` and `nl`
+stop updating with it" — and that never happened. The same claim was in `crowdin-pull.yaml` and
+`docs/i18n-status.md`, and it reached a request to another team, where it made the ask sound more
+damaging than it was. The mechanism is real and worth keeping; the tense was the defect.
 
 ### D8a — `%two_letters_code%`, not `%locale%`
 
@@ -1175,8 +1223,10 @@ say so in the report rather than leaving it unstated.
 > to use. Caught in review on
 > [#531](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/531) — the checklist, not the code.
 
-**Step 1 — request the language.** Nothing here waits on a translation, and all three belong in one
-pull request.
+**Step 1 — register and request it.** Items 1 and 2 wait on nothing and belong together. **Item 3
+does not**: it waits on approvals, not merely on a translation existing, and it is a change of its
+own that must reach `main` before a scheduled run can act on it. So this is three pull requests per
+language in the worst case, and the reason is in item 3.
 
 1. **Add the target language on the Crowdin project** (translation team). Until this is done, a
    `--language` for it makes the CLI reject the **whole** invocation, so the nightly pull fails for
@@ -1198,6 +1248,15 @@ pull request.
    `.github/workflows/crowdin-pull.yaml`. The pull downloads only the languages listed there, so
    without it the nightly pull never produces the catalogue. Nothing checks this yet. Confirm the id
    against the Crowdin project: these are Crowdin ids, not the app's locale ids.
+
+   **Do this when the language has approvals, not before.** The pull delivers every listed language
+   into one shared pull request, so one with no approvals arrives as an all-English catalogue,
+   fails `checkCataloguesAreTranslated` (D8d), and holds every other language in that pull request
+   red. Adding the flag early is safe for the CLI but not for the queue behind it.
+
+   And it cannot be combined with Step 2. The flag has to be on `main` for a scheduled run to
+   download anything, and Step 2 cannot precede the catalogue that run produces — so merge this,
+   wait for a run, then do Step 2. One change cannot be both before and after the pull.
 
 **Step 2 — advertise it, once `apps/nuxeo-ui/public/i18n/<lang>.json` has actually landed.** Not
 before; each of these fails if it leads.
@@ -1235,7 +1294,7 @@ before; each of these fails if it leads.
 
 4. Add it to the evidence capture's locale matrix.
 
-The gap between the two steps is however long translation takes, and a language sitting in it is in
+The gap between steps is however long translation and approval take, and a language sitting in it is in
 its normal state rather than a half-finished one.
 
 ### Known debt this plan deliberately leaves open
