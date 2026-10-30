@@ -446,6 +446,48 @@ verdict  PASS (INCOMPLETE) — 28 green, 1 NOT RUN (code-scanning)
 
 `npm run beta:gate-selftest` holds the runner to this, against the real runner and gate.
 
+### Do not force-kill a run: selftests perturb the tree
+
+Eighteen selftests prove their check by breaking real source, asserting the audit goes red for the
+stated reason, and restoring it. Find them with:
+
+```bash
+grep -lE "writeFileSync" scripts/beta-harness/*.selftest.mjs scripts/*.selftest.mjs
+```
+
+The restore is well defended — a `finally`, plus `SIGINT`/`SIGTERM`/`SIGHUP` and
+`uncaughtException` handlers for the paths `finally` misses. `sanitizer-audit.selftest.mjs` says
+where that ends: **"SIGKILL and power loss remain uncatchable"**. A forced stop — `kill -9`, an
+agent harness cancelling a background task, a crashed terminal — is exactly the case no handler
+covers, and it leaves the perturbation on disk.
+
+What makes that expensive is what happens next, because the damage is not the dirty tree:
+
+1. The **next** run detects the file no longer matches what it expects and refuses to restore it,
+   which is correct — it cannot tell a leftover perturbation from an edit you made meanwhile:
+
+   ```text
+   selftest: NOT restoring libs/shared/ui/src/lib/document-viewer/document-viewer.component.ts
+     — changed by something else mid-run.
+     Those files may still hold a perturbation. Check them, and use 'git diff' before committing.
+   ```
+
+2. It then fails with something that reads like a stale control rather than a dirty tree —
+   `document-viewer posterUrl changed — update these controls` — so the obvious next move is to
+   "fix" a control that was never wrong.
+3. `git add -A` commits the perturbation. It will not look like scaffolding in review: the
+   perturbations are plausible code, and one of them swaps `templateUrl` for an inline `template`,
+   which contradicts a repo convention and reads as deliberate.
+
+**Recovery** is `git checkout` on the paths the failure output names — `sanitizer-audit.selftest.mjs`
+says so itself, and the paths are printed for exactly this reason. Confirm with `git diff` that
+nothing else came back with them.
+
+So: let a run finish, or accept that you must read `git diff` before the next commit. Both
+mistakes above were made on [#522](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/522) — a gate
+stopped twice mid-selftest, then `git add -A` — and the perturbation reached a commit, which is
+the only reason this section exists.
+
 ## Environment
 
 | Variable                      | Default                         | Purpose                                              |
