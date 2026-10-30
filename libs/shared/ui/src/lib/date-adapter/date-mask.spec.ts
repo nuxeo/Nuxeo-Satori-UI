@@ -18,8 +18,6 @@ const CATALOGUE_MASKS = {
   de: 'tt.mm.jjjj',
   ja: 'yyyy/mm/dd',
   nl: 'dd-mm-jjjj',
-  th: 'dd/mm/yyyy',
-  zh: 'yy-mm-dd',
 } as const;
 
 describe('dateMaskFor', () => {
@@ -29,8 +27,12 @@ describe('dateMaskFor', () => {
 
   /**
    * A language's own mask is already right, and must come back untouched — including the
-   * localized letters a translator chose. Every locale this application can actually produce is
-   * one of these seven, so this row set is also "the app's behaviour does not change".
+   * localized letters a translator chose.
+   *
+   * These are the languages with a catalogue on disk. The other five the application advertises
+   * — `ar`, `es`, `he`, `it`, `sv` — have none yet, so they have no translator mask to leave
+   * alone and their real behaviour is the English fallback composed through their own field
+   * order, which the table below covers. Add a row here as each catalogue lands.
    */
   describe.each(Object.entries(CATALOGUE_MASKS))('%s', (language, mask) => {
     it('returns the catalogue value unchanged', () => {
@@ -94,8 +96,14 @@ describe('dateMaskFor', () => {
     { locale: 'de', expected: 'dd.mm.yyyy', why: 'German uses dots' },
     { locale: 'nl', expected: 'dd-mm-yyyy', why: 'Dutch uses hyphens' },
     { locale: 'ja', expected: 'yyyy/mm/dd', why: 'Japanese is year-first' },
-    { locale: 'th', expected: 'dd/mm/yyyy', why: 'Thai parses day-first' },
-    { locale: 'zh', expected: 'yy-mm-dd', why: 'Chinese is a two-digit year' },
+    // The five the application advertises with no catalogue yet: the English mask is what
+    // actually renders for them today, so these rows are their live behaviour, not a hypothetical.
+    { locale: 'ar', expected: 'dd/mm/yyyy', why: 'Arabic parses day-first' },
+    { locale: 'es', expected: 'dd/mm/yyyy', why: 'Spanish parses day-first' },
+    { locale: 'it', expected: 'dd/mm/yyyy', why: 'Italian parses day-first' },
+    { locale: 'he', expected: 'dd.mm.yyyy', why: 'Hebrew uses dots' },
+    { locale: 'sv', expected: 'yyyy-mm-dd', why: 'Swedish is ISO, year-first' },
+    { locale: 'ar-SA', expected: 'mm/dd/yyyy', why: 'a month-first Arabic region' },
     { locale: 'fr-CA', expected: 'yy-mm-dd', why: 'the yy-dd-mm case the review found' },
     { locale: 'fr-CH', expected: 'dd.mm.yyyy', why: 'French order, Swiss dots' },
     { locale: 'en-GB', expected: 'dd/mm/yyyy', why: 'English letters already' },

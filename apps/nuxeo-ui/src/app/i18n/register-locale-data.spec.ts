@@ -1,4 +1,4 @@
-import { formatDate, formatNumber, getLocaleCurrencyName } from '@angular/common';
+import { formatDate, formatNumber } from '@angular/common';
 
 import { REGISTERED_LOCALES, registerShippedLocaleData } from './register-locale-data';
 
@@ -21,7 +21,17 @@ describe('registerShippedLocaleData', () => {
 
   it('registers data for every locale it advertises', () => {
     // If these two ever disagree the guardrail is checking the wrong list.
-    expect([...REGISTERED_LOCALES].sort()).toEqual(['de', 'fr', 'ja', 'nl', 'th', 'zh']);
+    expect([...REGISTERED_LOCALES].sort()).toEqual([
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'he',
+      'it',
+      'ja',
+      'nl',
+      'sv',
+    ]);
   });
 
   it('formats a date in French rather than throwing NG0701', () => {
@@ -36,10 +46,15 @@ describe('registerShippedLocaleData', () => {
   const LONG_DATE_JULY: ReadonlyArray<readonly [locale: string, expected: string]> = [
     ['ja', '2026年7月14日'],
     ['nl', 'juli'],
-    ['th', 'กรกฎาคม'],
-    // Simplified, not Traditional: both spell July 7月, so assert the year-month-day form and
-    // rely on the currency name below to tell the scripts apart.
-    ['zh', '2026年7月14日'],
+    ['es', 'julio'],
+    ['it', 'luglio'],
+    // Non-Latin scripts, which is most of what a wrong-data registration would get wrong here:
+    // English data under `ar` or `he` would still format, in Latin letters.
+    ['ar', 'يوليو'],
+    ['he', 'יולי'],
+    // Swedish and Dutch both spell July `juli`, so this row cannot tell them apart on its own —
+    // the field order below is what does.
+    ['sv', 'juli'],
   ];
   for (const [locale, expected] of LONG_DATE_JULY) {
     it(`formats a date in ${locale} rather than throwing NG0701`, () => {
@@ -47,9 +62,11 @@ describe('registerShippedLocaleData', () => {
     });
   }
 
-  it('registers Simplified rather than Traditional Chinese under zh', () => {
-    // Traditional data would name the yuan 人民幣; Simplified writes 人民币.
-    expect(getLocaleCurrencyName('zh')).toBe('人民币');
+  it('tells Swedish and Dutch apart, which share every month name', () => {
+    // The pair this suite could otherwise pass with swapped: `juli` is `juli` in both. Swedish
+    // writes the ISO order and Dutch day-first, so the short form separates them.
+    expect(formatDate(MIDSUMMER, 'shortDate', 'sv')).toBe('2026-07-14');
+    expect(formatDate(MIDSUMMER, 'shortDate', 'nl')).toBe('14-07-2026');
   });
 
   it("uses each locale's own separators, not English ones", () => {

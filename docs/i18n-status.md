@@ -8,25 +8,55 @@ Re-measure before quoting anything here. The 16 September edition of this page c
 **23 of 23 green** while `guardrails` was failing, and put the catalogue at **1653** keys when it
 held 1968 — both figures had a command printed beside them and neither had been re-run.
 
-## Languages that ship — 5 October 2026
+## Languages — the set is Nuxeo Web UI's, 30 October 2026
 
-| Language             | Catalogue | Crowdin id | Status                                                                                                                                                  |
-| -------------------- | --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| English              | `en.json` | source     | ships                                                                                                                                                   |
-| French               | `fr.json` | `fr`       | ships, 99% approved                                                                                                                                     |
-| German               | `de.json` | `de`       | ships, 99% approved                                                                                                                                     |
-| Japanese             | `ja.json` | `ja`       | ships since NXSAT-293, 99% approved                                                                                                                     |
-| Dutch                | `nl.json` | `nl`       | ships since NXSAT-293, 99% approved                                                                                                                     |
-| Thai                 | `th.json` | `th`       | ships since NXSAT-293, 99% approved                                                                                                                     |
-| Chinese (Simplified) | `zh.json` | `zh-CN`    | ships since NXSAT-293, 99% approved                                                                                                                     |
-| Spanish              | —         | `es`       | **pending** — 99% approved, but `kd.knowledge-discovery.selected` is `Seleccionado(s)`, which `checkCatalogueValuesAreRenderable` fails. Fix in Crowdin |
-| Portuguese           | —         | `pt`       | **pending** — 88% approved                                                                                                                              |
-| Polish               | —         | `pl`       | **pending** — 99% translated, 2% approved (813 Crowdin QA issues)                                                                                       |
+The application's language set was aligned to the one Nuxeo Web UI supports. That **dropped Thai
+and Chinese**, which were shipping at 99% approved, and **added Arabic, Hebrew, Italian, Spanish
+and Swedish**, none of which has a catalogue yet.
+
+All ten are declared in `availableLanguages`, `register-locale-data.ts`, `DATE_FNS_LOCALES` and
+the Crowdin pull. **Declaration ran ahead of delivery deliberately** — see D8e — so five rows
+below are red and will stay red until Crowdin delivers. That red is the tracking mechanism.
+
+| Language | Code | Catalogue | Crowdin id | Status                                                                                                                                                                  |
+| -------- | ---- | --------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| English  | `en` | `en.json` | source     | ships                                                                                                                                                                   |
+| French   | `fr` | `fr.json` | `fr`       | ships, 99% approved                                                                                                                                                     |
+| German   | `de` | `de.json` | `de`       | ships, 99% approved                                                                                                                                                     |
+| Japanese | `ja` | `ja.json` | `ja`       | ships since NXSAT-293, 99% approved                                                                                                                                     |
+| Dutch    | `nl` | `nl.json` | `nl`       | ships since NXSAT-293, 99% approved                                                                                                                                     |
+| Spanish  | `es` | —         | `es`       | **declared, not delivered** — 99% approved, but `kd.knowledge-discovery.selected` is `Seleccionado(s)`, which `checkCatalogueValuesAreRenderable` fails. Fix in Crowdin |
+| Italian  | `it` | —         | ?          | **declared, not delivered** — not a target language on Crowdin project 160; translation not started                                                                     |
+| Swedish  | `sv` | —         | ?          | **declared, not delivered** — not a target on project 160; translation not started                                                                                      |
+| Arabic   | `ar` | —         | ?          | **declared, not delivered** — not a target on project 160, **and renders left-to-right** (no RTL support)                                                               |
+| Hebrew   | `he` | —         | ?          | **declared, not delivered** — not a target on project 160, **and renders left-to-right** (no RTL support)                                                               |
+
+Dropped: **Thai** (`th`) and **Chinese Simplified** (`zh`), both at 99% approved when removed.
+Their translations remain in Crowdin, so re-adding either is a pull rather than new work.
+Still in Crowdin and not in the app's set: **Portuguese** (`pt`, 88% approved) and **Polish**
+(`pl`, 99% translated / 2% approved).
+
+A `?` in the Crowdin column is not laziness — the id must be read off the project when the
+language is added there, because a wrong id fails the pull exactly as an absent target does. The
+nine the project carried were `de es fr ja nl pl pt th zh`, so four of the five additions were in
+none of them.
+
+### What is owed, and by whom
+
+1. **Add `ar`, `he`, `it`, `sv` as target languages on Crowdin project 160.** Until then the
+   nightly pull fails outright — the CLI rejects the whole invocation, not the one flag — so
+   `fr`, `de`, `ja` and `nl` stop updating too. They are at 99% and static, so the cost is low,
+   but it is not zero.
+2. **Fix `Seleccionado(s)` in Crowdin** so `es` can pass `checkCatalogueValuesAreRenderable`.
+3. **RTL support** before Arabic or Hebrew is shippable, not merely translated. Seven `nxs-`
+   components already handle `[dir='rtl']` and two inject `Directionality`, but **nothing sets
+   `dir`** — `syncDocumentLanguage` sets `<html lang>` and stops there, so none of that
+   component work activates. Tracked separately; it is a feature, not a list entry.
 
 There is **no language picker** (NXSAT-294): `availableLanguages` is read only by the config
 parser, so a deployment selects its language through `defaultLanguage`. Every shipped catalogue is
 checked by `checkCataloguePlaceholders`, which fails a translation whose `{{ … }}` placeholders differ
-from English; all six had zero mismatches when added.
+from English; all of the delivered ones had zero mismatches when added.
 
 This is the status page. The **plan** is [`docs/i18n-localization-plan.md`](i18n-localization-plan.md);
 the two are separate on purpose, because a plan that carries its own progress report goes stale
@@ -825,7 +855,8 @@ unapproved value `""` — all 1,972 in seven of them, all but 8 approved strings
 `de.json` — and
 `checkTranslationCatalogues` failed it, correctly. The Technical Usage Guide warns of exactly this.
 The pull now follows the standard: approved-only export, neither skip option, and only the
-shipped languages downloaded — `fr` and `de` then, `fr de ja nl th zh-CN` since NXSAT-293 (D8d, D8h).
+shipped languages downloaded — `fr` and `de` then, `fr de ja nl th zh-CN` after NXSAT-293, and
+`fr de ja nl ar es he it sv` since the Web UI alignment of 30 October 2026 (D8d, D8h, `D8e-webui`).
 
 Dispatched from that fix, the pull refreshed #293 to `fr.json` and `de.json` only, each 1,972 keys
 with no blank value, 1,964 English and 8 approved translations. That is 99% English, so

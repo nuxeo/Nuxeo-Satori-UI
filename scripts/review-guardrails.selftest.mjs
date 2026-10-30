@@ -4272,15 +4272,17 @@ expectGreen('short prose made of date-pattern characters', 'checkNoTranslatableD
     '  "k": "Off"\n}\n',
 });
 
-// Allowing non-ASCII literals through is the change most able to start flagging real prose,
-// so the CJK and Thai catalogues get their own control rather than being assumed safe.
+// Allowing non-ASCII literals through is the change most able to start flagging real prose, so
+// the non-Latin catalogues get their own control rather than being assumed safe. Arabic and
+// Hebrew replaced Chinese and Thai here when the language set was aligned to Web UI: both are
+// still non-Latin, and these are scripts the application now advertises.
 falsePositiveControls += 1;
 expectGreen('non-ASCII prose in a translated catalogue', 'checkNoTranslatableDatePatterns', {
   ...APP,
   'apps/nuxeo-ui/public/i18n/ja.json':
     '{\n  "a": "ダウンロード",\n  "b": "PDF をダウンロード"\n}\n',
-  'apps/nuxeo-ui/public/i18n/zh.json': '{\n  "a": "设置"\n}\n',
-  'apps/nuxeo-ui/public/i18n/th.json': '{\n  "a": "การตั้งค่า"\n}\n',
+  'apps/nuxeo-ui/public/i18n/ar.json': '{\n  "a": "الإعدادات"\n}\n',
+  'apps/nuxeo-ui/public/i18n/he.json': '{\n  "a": "הגדרות"\n}\n',
 });
 
 // A rendered date is not a pattern, and must not be read as one.

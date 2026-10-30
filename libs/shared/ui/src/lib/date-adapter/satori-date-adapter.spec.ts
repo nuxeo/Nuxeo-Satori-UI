@@ -15,7 +15,7 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
-import { de, enGB, enUS, fr, frCA, zhCN } from 'date-fns/locale';
+import { ar, arSA, de, enGB, enUS, fr, frCA } from 'date-fns/locale';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -45,6 +45,11 @@ const PARSE_CASES = [
     date: 3,
     why: 'Japanese is year-first',
   },
+  { locale: 'es', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'Spanish is day-first' },
+  { locale: 'it', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'Italian is day-first' },
+  { locale: 'ar', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'Arabic is day-first' },
+  { locale: 'he', input: '3.4.2026', year: 2026, month: 3, date: 3, why: 'Hebrew uses dots' },
+  { locale: 'sv', input: '2026-04-03', year: 2026, month: 3, date: 3, why: 'Swedish is ISO' },
 ];
 
 /**
@@ -193,15 +198,26 @@ describe('provideSatoriDateAdapter', () => {
     expect(dateFnsLocaleFor('fr-CA')).toBe(frCA);
   });
 
-  // `de-AT`, `zh-HK` and `zh-TW` have the same `P` as their base, so they are deliberately not
-  // in the map — an entry would add a locale to every bundle and change nothing. They must
-  // still resolve correctly through the fallback.
+  // `de-AT` and `ar-TN` have the same `P` as their base, so they are deliberately not in the
+  // map — an entry would add a locale to every bundle and change nothing. They must still
+  // resolve correctly through the fallback.
   it('resolves a region identical to its base through the bare-language fallback', () => {
     expect(dateFnsLocaleFor('de-AT')).toBe(de);
-    expect(dateFnsLocaleFor('zh-TW')).toBe(zhCN);
+    expect(dateFnsLocaleFor('ar-TN')).toBe(ar);
     expect([
       parseAsInput('de-AT', '03.04.2026')?.getMonth(),
       parseAsInput('de-AT', '03.04.2026')?.getDate(),
+    ]).toEqual([3, 3]);
+  });
+
+  // The reason the Arabic regions are in the map at all. `ar-SA` writes month-first while bare
+  // `ar` writes day-first, so reducing it to its base would parse `04/03/2026` as 4 March —
+  // the original defect, with an `ar-` prefix.
+  it('keeps a month-first Arabic region off its day-first base', () => {
+    expect(dateFnsLocaleFor('ar-SA')).toBe(arSA);
+    expect([
+      parseAsInput('ar-SA', '04/03/2026')?.getMonth(),
+      parseAsInput('ar-SA', '04/03/2026')?.getDate(),
     ]).toEqual([3, 3]);
   });
 
@@ -240,20 +256,24 @@ describe('provideSatoriDateAdapter', () => {
     }
   });
 
-  // NXSAT-629 review: the native adapter rendered Thai through `Intl`, which resolves `th` to
-  // the Buddhist calendar, so it showed 3 April 2026 as `03/04/2569` — a string its own
-  // `Date.parse` then read back as 4 March 2569. Angular's `DatePipe` has always shown the
-  // Gregorian year for `th` (it never calls `Intl`, and the locale data has no calendar), so
-  // Gregorian here makes the picker agree with every other date in the application.
-  it('renders Thai with the Gregorian year, matching every other date surface', () => {
-    const { adapter, formats } = adapterFor('th');
+  // NXSAT-629 found this on Thai, which shipped then and does not now: `Intl` resolves `th` to
+  // the Buddhist calendar, so the native adapter wrote 3 April 2026 as `03/04/2569` — a string
+  // its own `Date.parse` read back as 4 March 2569.
+  //
+  // Arabic is the surviving case of the same `Intl`-versus-date-fns split, and the mild half:
+  // `Intl` writes Arabic-Indic numerals (`٣/٤/٢٠٢٦`) where date-fns writes Latin ones. Both are
+  // Gregorian, so there is no year to get wrong — but the field must still read back exactly
+  // what it displayed, which is the property the Thai case broke.
+  it('round-trips Arabic through the digits it actually wrote', () => {
+    const { adapter, formats } = adapterFor('ar');
+    const written = adapter.format(adapter.createDate(2026, 3, 3), formats.display.dateInput);
 
-    expect(adapter.format(adapter.createDate(2026, 3, 3), formats.display.dateInput)).toBe(
-      '03/04/2026',
-    );
-    expect(adapter.format(adapter.createDate(2026, 3, 3), formats.display.dateInput)).not.toContain(
-      '2569',
-    );
+    expect(written).toBe('03/04/2026');
+    // The assertion that would have caught Thai: parse what was displayed, not a fresh string.
+    const readBack = adapter.parse(written, formats.parse.dateInput);
+    expect([readBack?.getFullYear(), readBack?.getMonth(), readBack?.getDate()]).toEqual([
+      2026, 3, 3,
+    ]);
   });
 
   it('falls back to English for a language it has no locale for, rather than failing to start', () => {

@@ -219,22 +219,29 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   defaultThemeId: 'nuxeo',
   themes: DEFAULT_APP_THEMES,
   defaultLanguage: 'en',
-  // The locales a catalogue actually ships for, in `apps/nuxeo-ui/public/i18n/`. Listing a
-  // locale here that has no catalogue would advertise a language the application cannot
-  // render, which `checkAdvertisedLocalesShip` fails.
+  // The ten languages Nuxeo Web UI supports, which this application is aligned to. `th` and
+  // `zh` were here and were dropped; `ar`, `es`, `he`, `it` and `sv` replace them.
   //
-  // Six ship besides English — fr, de, ja, nl, th and zh (Simplified Chinese, Crowdin's
-  // `zh-CN`) — each pulled from Crowdin once approved. It does NOT mean every key is translated:
-  // `setFallbackLang('en')` covers gaps, and a Crowdin pull fills every unapproved string with its
-  // English source. `checkTranslationCatalogues` warns on a missing key and fails only on one
-  // `en.json` does not have. See D8d in docs/i18n-localization-plan.md.
+  // **Five of the ten have no catalogue in `apps/nuxeo-ui/public/i18n/` yet** — ar, es, he, it
+  // and sv — and `checkAdvertisedLocalesShip` fails every one of them until Crowdin delivers it,
+  // because advertising a language renders the English fallback throughout and reads as a broken
+  // language rather than an absent one (D8e). The list is declared ahead of the catalogues on
+  // purpose, so the Crowdin pull has somewhere to land; the gate is red in the meantime and
+  // that red is the tracking mechanism, not a surprise. `es` additionally needs one Crowdin
+  // string fixed (`Seleccionado(s)`), and `ar`/`he` are left-to-right until RTL support exists.
+  //
+  // Shipping a catalogue does NOT mean every key is translated: `setFallbackLang('en')` covers
+  // gaps, and a Crowdin pull fills every unapproved string with its English source.
+  // `checkTranslationCatalogues` warns on a missing key and fails only on one `en.json` does not
+  // have. See D8d in docs/i18n-localization-plan.md.
   //
   // Nothing renders this list yet: there is no language picker (NXSAT-294), and only the config
   // parser reads it. A deployment selects its language through `defaultLanguage`.
   //
-  // Adding a language here also means adding it to `download_translations_args` in
-  // .github/workflows/crowdin-pull.yaml, which downloads only the languages the app ships.
-  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl', 'th', 'zh'],
+  // A language here needs three more entries: `download_translations_args` in
+  // .github/workflows/crowdin-pull.yaml, `LOCALE_DATA` in register-locale-data.ts, and
+  // `DATE_FNS_LOCALES` in satori-date-adapter.ts, which a test holds equal to this list.
+  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl', 'ar', 'es', 'he', 'it', 'sv'],
   integrations: {
     arender: null,
     knowledgeDiscoveryOperations: {},

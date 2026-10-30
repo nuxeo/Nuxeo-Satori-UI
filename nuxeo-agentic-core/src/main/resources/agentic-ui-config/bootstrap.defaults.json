@@ -18,5 +18,6 @@
   "themes": [],
 
   "defaultLanguage": "en",
-  "availableLanguages": ["en", "fr", "de", "ja", "nl", "th", "zh"]
+  "$availableLanguages": "The ten languages Nuxeo Web UI supports. ar, es, he, it and sv have no catalogue in apps/nuxeo-ui/public/i18n/ yet and arrive from Crowdin; checkAdvertisedLocalesShip fails each one until it lands. See D8e in docs/i18n-localization-plan.md.",
+  "availableLanguages": ["en", "fr", "de", "ja", "nl", "ar", "es", "he", "it", "sv"]
 }

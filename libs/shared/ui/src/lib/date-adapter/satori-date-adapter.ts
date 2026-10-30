@@ -3,6 +3,11 @@ import { provideDateFnsAdapter } from '@angular/material-date-fns-adapter';
 import { MAT_DATE_LOCALE } from '@angular/material/core';
 import type { Locale } from 'date-fns';
 import {
+  ar,
+  arDZ,
+  arEG,
+  arMA,
+  arSA,
   de,
   enAU,
   enCA,
@@ -12,21 +17,24 @@ import {
   enNZ,
   enUS,
   enZA,
+  es,
   fr,
   frCA,
   frCH,
+  he,
+  it,
+  itCH,
   ja,
   nl,
   nlBE,
-  th,
-  zhCN,
+  sv,
 } from 'date-fns/locale';
 
 /**
  * A date-fns locale for every language the application ships a catalogue for, plus the regional
  * variants date-fns ships for those languages.
  *
- * Keyed by the Angular locale id, lowercased. The seven bare language ids are the ones this
+ * Keyed by the Angular locale id, lowercased. The ten bare language ids are the ones this
  * application can actually produce — `resolveFormattingLocale` clamps `LOCALE_ID` to
  * `REGISTERED_LOCALES` — and a test asserts they match `availableLanguages`, so adding a
  * language cannot quietly leave its dates being parsed as English.
@@ -48,10 +56,18 @@ import {
  * | `fr-CA` | `yy-MM-dd` | `dd/MM/y` |
  * | `fr-CH` | `dd.MM.y` | `dd/MM/y` |
  * | `nl-BE` | `dd.MM.y` | `dd-MM-y` |
+ * | `ar-DZ` `ar-MA` `ar-SA` | `MM/dd/yyyy` | `dd/MM/yyyy` |
+ * | `ar-EG` | `d/MM/y` | `dd/MM/yyyy` |
+ * | `it-CH` | `dd.MM.y` | `dd/MM/y` |
  *
- * `de-AT`, `zh-HK` and `zh-TW` are deliberately **absent**: their `P` is identical to their
+ * The three month-first Arabic regions are the clearest case for this list existing: left to
+ * the bare-language fallback they would parse day-first, which is the original defect with an
+ * `ar-` prefix.
+ *
+ * `de-AT`, `ar-TN` and `nl-NL` are deliberately **absent**: their `P` is identical to their
  * base, so an entry would add a locale to every consumer's bundle and change no behaviour. They
- * resolve correctly through the bare-language fallback.
+ * resolve correctly through the bare-language fallback. date-fns ships no regional variant at
+ * all for `es`, `he` or `sv`.
  *
  * `en` maps to `enUS` and is present here although `register-locale-data.ts` omits it: Angular
  * bundles `en-US` locale data so registering it there would be a no-op, whereas date-fns ships
@@ -74,8 +90,16 @@ const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = {
   ja,
   nl,
   'nl-be': nlBE,
-  th,
-  zh: zhCN,
+  ar,
+  'ar-dz': arDZ,
+  'ar-eg': arEG,
+  'ar-ma': arMA,
+  'ar-sa': arSA,
+  es,
+  he,
+  it,
+  'it-ch': itCH,
+  sv,
 };
 
 /** The bare language ids above, for the test that keeps this map and `availableLanguages` in step. */
@@ -119,9 +143,9 @@ export function dateFnsLocaleFor(localeId: string): Locale {
  * `NativeDateAdapter` cannot parse a localized date, and says so in its own source: `parse()`
  * is `new Date(Date.parse(value))` above a comment explaining that the native `Date` offers no
  * way to apply a format or a locale. `Date.parse` reads `nn/nn/yyyy` as US month/day/year, so
- * in a French, German, Dutch, Japanese, Thai or Chinese deployment typing `03/04/2026` meaning
- * 3 April stored 4 March — with no error, and with the field still showing the text the user
- * typed, because `MatDatepickerInput` does not rewrite it.
+ * in a French, German, Dutch, Japanese, Spanish, Italian or Arabic deployment typing `03/04/2026`
+ * meaning 3 April stored 4 March — with no error, and with the field still showing the text the
+ * user typed, because `MatDatepickerInput` does not rewrite it.
  *
  * Only `format()` honoured the locale, via `Intl`. That asymmetry is why this survived seven
  * locales shipping: the calendar overlay renders perfect French while the typed input is
@@ -137,21 +161,22 @@ export function dateFnsLocaleFor(localeId: string): Locale {
  * calendar, the selected date and the typed input all agree" true by construction rather than
  * by two settings being kept in step by hand.
  *
- * ## Thai dates become Gregorian here, deliberately
+ * ## date-fns and `Intl` disagree about numerals and calendars, and date-fns is the one to follow
  *
- * `Intl.DateTimeFormat('th')` resolves to the **Buddhist** calendar, so the native adapter
- * showed 3 April 2026 as `03/04/2569`. date-fns' `th` locale is Gregorian and shows
- * `03/04/2026`. That is a real change, and it is the right way round for two reasons.
+ * This was found on Thai, which shipped until the language set was aligned to Web UI
+ * (NXSAT-293 added it, and it was dropped again with `zh`). `Intl.DateTimeFormat('th')`
+ * resolves to the **Buddhist** calendar, so the native adapter showed 3 April 2026 as
+ * `03/04/2569` — and `Date.parse('03/04/2569')` reads back as 4 March, so a user who retyped
+ * what the picker had just shown them got the wrong month *and* a year 543 years out. Angular's
+ * `DatePipe` never calls `Intl`, so every other date on the page had always shown `2026`. Only
+ * the picker disagreed, and only the picker was unparseable by itself.
  *
- * Angular's `DatePipe` never calls `Intl` and `@angular/common/locales/th` carries no calendar
- * system, so every other date in a Thai deployment — the document list, the audit table,
- * document detail — has always rendered the Gregorian year. Only the date picker disagreed.
- *
- * And the Buddhist display was not even round-trippable by the field that produced it:
- * `Date.parse('03/04/2569')` is 4 March 2569, so a Thai user who retyped what the picker had
- * just shown them got the wrong month *and* a year 543 years out. Showing the Gregorian year
- * removes the only thing that invited that. Asserted by the `th` case in the parse table and
- * by the explicit Buddhist-year test.
+ * The live case is now Arabic, and it is the milder half of the same split. `Intl` formats
+ * `ar-EG` and `ar-SA` with **Arabic-Indic** numerals (`٣/٤/٢٠٢٦`); date-fns' `ar` writes Latin
+ * ones (`03/04/2026`). Both resolve to the Gregorian calendar on our ICU — measured, not
+ * assumed — so unlike Thai there is no year to get wrong, and the field round-trips what it
+ * displays. That round-trip is the property this file is for, so the Latin digits stand rather
+ * than being papered over with `Intl`.
  *
  * ## Why every component provides it, rather than the app root
  *

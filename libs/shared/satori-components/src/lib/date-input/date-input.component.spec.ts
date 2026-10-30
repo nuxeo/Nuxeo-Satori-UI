@@ -35,6 +35,13 @@ describe('nxsParseLocaleDate', () => {
     ['de', '03.04.2026', '2026-04-03'],
     ['nl', '03-04-2026', '2026-04-03'],
     ['ja', '2026/04/03', '2026-04-03'],
+    ['es', '03/04/2026', '2026-04-03'],
+    ['it', '03/04/2026', '2026-04-03'],
+    ['ar', '03/04/2026', '2026-04-03'],
+    ['he', '3.4.2026', '2026-04-03'],
+    ['sv', '2026-04-03', '2026-04-03'],
+    // Not in the application's language set, kept because this adapter is locale-general and
+    // these two stress it hardest: a non-Gregorian calendar and a two-digit year.
     ['zh', '2026/4/3', '2026-04-03'],
     ['th', '03/04/2026', '2026-04-03'],
     ['en-CA', '2026-04-03', '2026-04-03'],
@@ -97,6 +104,9 @@ describe('nxsParseLocaleDate', () => {
     expect(nxsParseLocaleDate(text, 'fr', today)).toBeNull();
   });
 
+  // Thai is no longer one of the application's languages, but `LOCALE_ID` is a customer setting
+  // and this adapter is locale-general, so the Buddhist-calendar handling in `locale-date.ts`
+  // still has to hold. It is also the only non-Gregorian case anything here covers.
   it('shows Thai dates with the Gregorian year it reads them in', () => {
     TestBed.configureTestingModule({
       providers: [provideZonelessChangeDetection(), { provide: LOCALE_ID, useValue: 'th' }],
