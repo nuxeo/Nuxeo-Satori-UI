@@ -1,6 +1,6 @@
 import { Component, ElementRef, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { vi } from 'vitest';
+import { vi, type MockInstance } from 'vitest';
 
 import { ExtensionComponentRegistry } from './extension-component-registry.service';
 import { ExtensionOutletComponent } from './extension-outlet.component';
@@ -284,7 +284,11 @@ describe('ExtensionOutletComponent', () => {
    * Running that first pass ourselves, on the not-yet-inserted view, is what is catchable.
    */
   describe('a component that throws while it is drawn', () => {
-    let warn: ReturnType<typeof vi.spyOn>;
+    // `MockInstance<typeof console.warn>`, as the tasks specs do, not
+    // `ReturnType<typeof vi.spyOn>`: the latter resolves its generics to a loosely typed spy
+    // whose `mock.calls` is `any[]`, so `reported()` below had two implicit `any` parameters.
+    // Vitest strips types, so the test run was green and only `spec-types` saw it.
+    let warn: MockInstance<typeof console.warn>;
 
     beforeEach(() => {
       warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

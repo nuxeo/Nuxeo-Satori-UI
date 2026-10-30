@@ -1044,6 +1044,14 @@ takes the surrounding view with it. A custom view is ordinary Angular code and h
 own failures. What is guaranteed is narrower than "it cannot break the page": it is that the
 drawing the host asks for cannot.
 
+One known wrinkle if your view **measures layout or moves focus** in `ngAfterViewInit`. When a
+view is drawn as a _recovery_ — the attempt after a failed load or a failed draw of the same slot
+— the host may still be hiding the slot at that moment, because it stops hiding it only once the
+draw has succeeded. In the View tab that means `display: none`, so a one-shot
+`getBoundingClientRect()` reads zero and `focus()` does nothing; the element becomes visible
+immediately afterwards, but the hook does not run again. A view that measures in
+`afterNextRender`, or watches with a `ResizeObserver`, is unaffected. Tracked as NXSAT-758.
+
 The same containment applies to every slot that names a component, not just this one: the host
 shows whatever it falls back to when the slot is empty.
 

@@ -295,6 +295,15 @@ export class ExtensionOutletComponent {
    * component's own asynchronous state settling, or a signal it writes to itself. That tick
    * belongs to Angular, and catching it needs an error boundary Angular does not have.
    *
+   * **And one thing it costs, on the recovery path only.** A draw that follows an earlier failure
+   * runs while `unresolved()` is still true, because only a successful draw clears it. A host may
+   * be hiding the outlet on exactly that signal — `document-detail` does, with `display: none` —
+   * so a recovering component's `ngAfterViewInit` can run in a hidden subtree, where a
+   * one-shot `getBoundingClientRect()` reads zero and `focus()` does nothing. Raised in review of
+   * PR 532 and **not fixed here**: the class belongs to the host's template, so clearing the
+   * signal first would not remove it synchronously, and coordinating properly needs a third
+   * outlet state — public API this ticket is not the place to widen. NXSAT-758.
+   *
    * @returns whether the component drew, and may therefore be kept.
    */
   private drawInserted(ref: ComponentRef<unknown>, type: Type<unknown>): boolean {
