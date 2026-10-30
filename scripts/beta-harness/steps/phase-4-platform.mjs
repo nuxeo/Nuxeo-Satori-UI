@@ -44,8 +44,8 @@
  *   subpaths, `./components-satori` among them — by
  *   name, and every `types` file it names exists. An entry pointing at a missing file is an unresolvable import
  *   for a customer, which is how `ng-packagr-lite` shipped four broken subpaths.
- * - Step 11: `private: true` survives into the built artifact, so an accidental
- *   `npm publish` is refused while the scope is unconfirmed (R10).
+ * - Step 11: the built artifact is public and its `publishConfig` names the Nuxeo
+ *   registry (NXSAT-667 removed the `private` tripwire).
  *
  * **Negative / fallback** — regression guards that would also pass if parts of the
  * system were inert:
@@ -340,13 +340,15 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  await h.step('Publishing is still blocked while the scope is unconfirmed');
+  await h.step('The built artifact is publishable to the Nuxeo registry');
 
   h.check(
-    'private: true survives into the built artifact',
-    pkg.private === true,
-    'Without it `npm publish` would not refuse, and the @nuxeo-satori scope is ' +
-      'unconfirmed (R10). See docs/publishing-to-nuxeo-registry.md.',
+    'the built package is public and publishConfig names the Nuxeo registry',
+    !pkg.private &&
+      pkg.publishConfig?.access === 'public' &&
+      pkg.publishConfig?.registry === 'https://packages.nuxeo.com/repository/npm-public/',
+    'npm would refuse the publish (private) or send it to the wrong registry. ' +
+      'See docs/publishing-to-nuxeo-registry.md §2.',
   );
 
   h.note(

@@ -3,8 +3,11 @@
   "version": "0.2.0",
   "generators": "./generators.json",
   "description": "Nuxeo Satori platform — the Layer 0/1/2 extensibility contract, configuration loader, Nuxeo client and shared UI.",
-  "private": true,
   "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://packages.nuxeo.com/repository/npm-public/"
+  },
   "peerDependencies": {
     "@angular/cdk": "^22.2.0",
     "@angular/common": "^22.2.3",
