@@ -56,8 +56,30 @@ function dateView(value: unknown, context: ValueContext): ValueView {
   return { text: formatDate(date, 'longDate', context.locale, 'UTC') };
 }
 
+/**
+ * Enough fraction digits never to round (NXSAT-725).
+ *
+ * `formatNumber`'s own default is `1.0-3`, which showed `3.14159265` as `3.142` and — worse —
+ * `0.0004` as `0`, with nothing on screen to say the value had been cut. 20 is the most
+ * ECMA-402 guarantees for `maximumFractionDigits`, so this is the "do not round" setting rather
+ * than a larger threshold that would move the same defect further out and make it harder to find.
+ *
+ * Measured, because raising the limit could have traded one bug for a worse one: Angular's
+ * formatter does **not** expand a double's binary representation the way `toFixed(20)` does, so
+ * `0.1` stays `0.1`. At this setting the output matches `String(value)` for every value tried —
+ * the same text the edit form (`step="any"` on a double) and `nxsPropertyText` already show, so
+ * the view and the form no longer disagree.
+ *
+ * It is a digits format on `formatNumber` rather than `String(value)` because the locale still
+ * has to group: `2480` shows as `2,480`, and a tiny value as `0.0000001` rather than `1e-7`.
+ */
+const NO_ROUNDING = '1.0-20';
+
 function numberView(value: unknown, context: ValueContext): ValueView {
-  return { text: typeof value === 'number' ? formatNumber(value, context.locale) : textOf(value) };
+  return {
+    text:
+      typeof value === 'number' ? formatNumber(value, context.locale, NO_ROUNDING) : textOf(value),
+  };
 }
 
 function booleanView(value: unknown): ValueView {

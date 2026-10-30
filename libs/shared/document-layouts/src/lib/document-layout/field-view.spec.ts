@@ -55,6 +55,32 @@ describe('describeField', () => {
     expect(describe1('long', '12').value).toEqual({ text: '12' });
   });
 
+  /**
+   * NXSAT-725. `formatNumber`'s default digits format is `1.0-3`, so the panel showed a number
+   * that was not the stored value, and a non-zero value as `0`. The edit form stores and shows
+   * the full value (`step="any"` for a double), so the view disagreed with the form.
+   */
+  it('shows a decimal at full precision, rounding nothing', () => {
+    expect(describe1('double', 3.14159265).value).toEqual({ text: '3.14159265' });
+    expect(describe1('double', 100.0005).value).toEqual({ text: '100.0005' });
+    expect(describe1('double', 19.999999).value).toEqual({ text: '19.999999' });
+  });
+
+  it('shows a small decimal as itself rather than as zero', () => {
+    // The worst of the reported cases: a non-zero measurement read as absent.
+    expect(describe1('double', 0.0004).value).toEqual({ text: '0.0004' });
+    expect(describe1('double', -0.0004).value).toEqual({ text: '-0.0004' });
+    expect(describe1('double', 1e-7).value).toEqual({ text: '0.0000001' });
+  });
+
+  it('keeps grouping while not rounding, so it is not String(value)', () => {
+    // Full precision and thousands separators at once — the reason this is a digits format on
+    // `formatNumber` rather than `String(value)`, which would drop the separator.
+    expect(describe1('double', 123456789.12345679).value).toEqual({
+      text: '123,456,789.12345679',
+    });
+  });
+
   it('hands a boolean to the template to translate, keeping false distinct from empty', () => {
     expect(describe1('boolean', true).value).toEqual({ flag: true });
     expect(describe1('boolean', false)).toMatchObject({ kind: 'value', value: { flag: false } });
