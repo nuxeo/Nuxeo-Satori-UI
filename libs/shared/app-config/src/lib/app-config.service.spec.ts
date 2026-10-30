@@ -763,6 +763,148 @@ describe('AppConfigService', () => {
     });
   });
 
+  /**
+   * NXSAT-731. The refusal is new, so the silence would be too: before this fix one of these
+   * values rendered a sign-in button that left the application, and now it renders nothing. An
+   * administrator told nothing has no way to tell a refused path from one they never wrote —
+   * the same defect NXSAT-724 raised for `branding.logo`.
+   */
+  describe('a refused sso.endpoints[].path is reported', () => {
+    async function loadWithPath(path: string, component = 'com.acme.sso') {
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'acme',
+            component,
+            content: { sso: { endpoints: [{ id: 'company', label: 'Company SSO', path }] } },
+          },
+        ]),
+      );
+    }
+
+    /** The messages this load recorded that are about an SSO endpoint. */
+    const ssoMessages = () =>
+      service.diagnostics().messages.filter((message) => message.includes('sso.endpoints'));
+
+    it.each([
+      ['a protocol-relative path', '//evil.example/sso', 'starts with "//"'],
+      ['a backslash', '/\\evil.example/sso', 'contains a backslash'],
+      ['a tab the parser deletes', '/\t/evil.example/sso', 'control character'],
+      ['an absolute https address', 'https://evil.example/sso', 'absolute "https:" address'],
+      ['a javascript: URL', 'javascript:alert(1)', '"javascript:"'],
+      ['a path that is not absolute', 'nuxeo/login/azure', 'must start with "/"'],
+      ['a blank path', '   ', 'blank'],
+    ])('reports %s, naming the value and the reason', async (_label, path, expected) => {
+      await loadWithPath(path);
+
+      const messages = ssoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain(path);
+      expect(messages[0]).toContain('com.acme.sso');
+      expect(messages[0]).toContain(expected);
+      expect(warn).toHaveBeenCalledWith(`[agentic-ui-config] ${messages[0]}`);
+      expect(service.bootstrap().sso.endpoints).toEqual([]);
+    });
+
+    /**
+     * The negative control. Without it this whole pass could be unconditional and every test
+     * above would still be green.
+     */
+    it('says nothing when the path is accepted, and keeps the endpoint', async () => {
+      await loadWithPath('/nuxeo/login/azure');
+
+      expect(ssoMessages()).toEqual([]);
+      expect(service.bootstrap().sso.endpoints).toEqual([
+        { id: 'company', label: 'Company SSO', path: '/nuxeo/login/azure' },
+      ]);
+    });
+
+    it('names the index, so one bad entry among several can be found', async () => {
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'acme',
+            component: 'com.acme.sso',
+            content: {
+              sso: {
+                endpoints: [
+                  { id: 'azure', label: 'Azure', path: '/nuxeo/login/azure' },
+                  { id: 'company', label: 'Company SSO', path: '//evil.example/sso' },
+                ],
+              },
+            },
+          },
+        ]),
+      );
+
+      const messages = ssoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('sso.endpoints[1].path');
+      expect(service.bootstrap().sso.endpoints).toEqual([
+        { id: 'azure', label: 'Azure', path: '/nuxeo/login/azure' },
+      ]);
+    });
+
+    it('names each contributing package when more than one path is refused', async () => {
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'one',
+            component: 'com.one',
+            content: { sso: { endpoints: [{ id: 'a', path: '//evil.example/a' }] } },
+          },
+          {
+            name: 'two',
+            component: 'com.two',
+            content: { sso: { endpoints: [{ id: 'b', path: 'javascript:alert(1)' }] } },
+          },
+        ]),
+      );
+
+      const messages = ssoMessages();
+      expect(messages).toHaveLength(2);
+      expect(messages[0]).toContain('com.one');
+      expect(messages[1]).toContain('com.two');
+    });
+
+    it('stays silent for a contribution that configures no SSO at all', async () => {
+      await load(
+        envelope('bootstrap', [
+          { name: 'acme', content: { branding: { applicationTitle: 'Acme' } } },
+        ]),
+      );
+
+      expect(ssoMessages()).toEqual([]);
+    });
+
+    it('reports a path the active preset contributes, naming the preset', async () => {
+      window.history.replaceState({}, '', '/?preset=insurance');
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'presales',
+            content: {
+              presales: {
+                presetSwitching: true,
+                presets: {
+                  insurance: {
+                    label: 'Insurance',
+                    bootstrap: { sso: { endpoints: [{ id: 'x', path: '//evil.example/sso' }] } },
+                  },
+                },
+              },
+            },
+          },
+        ]),
+      );
+
+      const messages = ssoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('preset "insurance"');
+      expect(messages[0]).toContain('//evil.example/sso');
+    });
+  });
+
   describe('featureToggle', () => {
     it('returns the caller fallback when no package has configured the toggle', () => {
       expect(service.featureToggle('ai', true)).toBe(true);

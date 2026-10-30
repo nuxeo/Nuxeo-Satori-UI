@@ -64,6 +64,7 @@ fragment's `content` is a `bootstrap` fragment in your configuration package.
 | `branding`                               | Product name, browser tab title, and `logo` (below)                          |
 | `themes` / `defaultThemeId`              | Named token sets applied to `<html>`                                         |
 | `defaultLanguage` / `availableLanguages` | i18n                                                                         |
+| `sso`                                    | Sign-in buttons and the post-login return URL (below)                        |
 | `presales`                               | Presales presets, honoured only where a package sets `presetSwitching: true` |
 
 ### `branding.logo`
@@ -175,6 +176,45 @@ key for the favicon.
 - Contributed assets are served at `/nuxeo/agentic-ui-config/assets/<name>` (NXSAT-312). The servlet path is outside every
   `NuxeoAuthenticationFilter` URL pattern, which is what lets the login page load the logo before
   sign-in; the NXSAT-312 rehearsal fetched a contributed SVG there anonymously, as `image/svg+xml`.
+
+### `sso.endpoints`
+
+`{ "id": "azure", "label": "Log In With Azure SAML", "path": "/nuxeo/oauth2/authorization/azure" }`
+adds a sign-in button to the login page. The registration id has to match the Nuxeo
+OpenID/SAML setup, which is exactly the per-deployment fact that used to require editing our
+source. `postLoginPath` and `returnQueryParam` control the return URL Nuxeo is asked to redirect
+to after sign-in; `returnQueryParam: null` sends none.
+
+- **`path` must be a path on the Nuxeo origin**, and only that. It must begin with a single `/`,
+  and it may contain no backslash and no control character. Those two refusals are not cosmetic:
+  the URL parser rewrites `\` as a path separator and **deletes** tabs, newlines and carriage
+  returns before it reads anything, so `/\evil.example/sso` and `/<TAB>/evil.example/sso` both
+  resolve to another host while looking like paths (NXSAT-731). An absolute address is refused
+  whatever its scheme, and the scheme is named in the message, because `javascript:` and
+  `https://idp.example` are very different mistakes to have made.
+- **A refused entry renders no button, and the refusal is reported** as
+  `[agentic-ui-config] sso.endpoints[<n>].path "<value>" from <component> was refused — <reason>`,
+  both on the console and in `diagnostics().messages`. The message names what was refused and not
+  what ended up on screen, because the outcome depends on the remaining contributions.
+- **`endpoints` is replaced, not merged entry by entry, and that matters when an entry is
+  refused.** A contribution that writes the key at all supplies the whole list: the merged value is
+  that contribution's **accepted** entries, and an earlier package's list is gone. So a
+  contribution whose every entry is refused leaves no buttons at all, and is indistinguishable from
+  the `"endpoints": []` that deliberately turns SSO off — which is the behaviour a deployment needs,
+  so it does not change. **This is not how `branding.logo` behaves**: a refused `logo.src` keeps the
+  logo an earlier layer set. Do not reason from one to the other (review of PR 519).
+- **The refusal during the merge is not the security boundary.** `AuthService.startSamlLogin` is:
+  it resolves the configured path against the Nuxeo origin and refuses to navigate unless the
+  resolved origin is that origin, so a value that never passed through the merge — the
+  `NUXEO_SAML_LOGIN_ENDPOINTS` token is public, and a host application may fill it directly — is
+  still refused at the point the browser would be sent somewhere. The comparison is on the
+  resolved URL rather than on the string, so it does not depend on having enumerated the shapes a
+  parser can reach an authority from.
+- **`postLoginPath` is held to the same rule against the application's own origin**, and a bad one
+  drops the return parameter rather than refusing the sign-in. The return path is a convenience;
+  blocking SSO over it would be the worse outcome.
+- The JSON schema the `config-package` generator writes carries the same rule, so an editor marks
+  a bad `path` as you type rather than at run time.
 
 ### Why it is contributed, not edited
 
