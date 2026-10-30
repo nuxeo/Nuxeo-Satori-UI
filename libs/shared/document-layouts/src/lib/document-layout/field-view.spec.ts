@@ -73,6 +73,33 @@ describe('describeField', () => {
     expect(describe1('double', 1e-7).value).toEqual({ text: '0.0000001' });
   });
 
+  /**
+   * Caught in review on PR 515. A digits format counts fractional *places*, not significant
+   * digits, so any fixed maximum leaves the same defect intact below it — at `1.0-20`, `1e-21`
+   * still rendered as `0`. The precision is derived per value instead, so there is no magnitude
+   * at which the panel shows a number that is not the stored one.
+   */
+  it('shows a value below the old fixed limit rather than rounding it to zero', () => {
+    expect(describe1('double', 1e-21).value).toEqual({ text: '0.000000000000000000001' });
+    expect(describe1('double', -1e-21).value).toEqual({ text: '-0.000000000000000000001' });
+  });
+
+  it('keeps every digit of a value needing more than 20 fractional places', () => {
+    expect(describe1('double', 1.23456789012345e-7).value).toEqual({
+      text: '0.000000123456789012345',
+    });
+  });
+
+  it('falls back to the round-trip form past the formatter ceiling, rather than to zero', () => {
+    // Angular refuses a digits format above 100, and a denormal needs more. The exponential
+    // form is the only exact one left; what matters is that it is not 0.
+    expect(describe1('double', 5e-324).value).toEqual({ text: '5e-324' });
+  });
+
+  it('writes a large exponential value out in full, with grouping', () => {
+    expect(describe1('double', 1e21).value).toEqual({ text: '1,000,000,000,000,000,000,000' });
+  });
+
   it('keeps grouping while not rounding, so it is not String(value)', () => {
     // Full precision and thousands separators at once — the reason this is a digits format on
     // `formatNumber` rather than `String(value)`, which would drop the separator.
