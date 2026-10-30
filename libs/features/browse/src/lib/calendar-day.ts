@@ -43,3 +43,28 @@ export function utcMidnightOf(local: Date | null | undefined): string | null {
   instant.setUTCFullYear(year, month, day);
   return instant.toISOString();
 }
+
+/**
+ * The value to write for an expiry the user may not have touched: the instant the read returned
+ * when `local` still names the day that instant names, otherwise that day's UTC midnight.
+ *
+ * Without this, saving a title change rewrites an untouched `2027-12-31T20:00:00.000Z` to
+ * `2027-12-31T00:00:00.000Z` — the right day, but the value moved by 20 hours for an edit that
+ * never went near it. `docs/api-integrations.md` records the same defect measured on ACE dates,
+ * where a permission-only edit moved a CET entry's start by 23 hours, and `dateToWrite` in
+ * `permissions-model.ts` is the same rule for those. `nxs-metadata-editor` applies it through the
+ * instant it remembers per control.
+ */
+export function instantToWrite(
+  local: Date | null | undefined,
+  original: string | null | undefined,
+): string | null {
+  const picked = utcMidnightOf(local);
+  const originalDay = calendarDayOf(original);
+  if (!picked || !originalDay || !local) return picked;
+  const unchanged =
+    originalDay.getFullYear() === local.getFullYear() &&
+    originalDay.getMonth() === local.getMonth() &&
+    originalDay.getDate() === local.getDate();
+  return unchanged ? (original as string) : picked;
+}

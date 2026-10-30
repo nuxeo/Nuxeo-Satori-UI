@@ -26,7 +26,7 @@ import {
   NxsToastService,
   provideNxsToast,
 } from '@nuxeo/satori-platform/components';
-import { calendarDayOf, utcMidnightOf } from '../calendar-day';
+import { calendarDayOf, instantToWrite } from '../calendar-day';
 
 export interface EditCollectionDialogData {
   document: NuxeoDocument;
@@ -66,6 +66,8 @@ export class EditCollectionDialogComponent {
   subjects: string[] = [];
   coverage: string | null = null;
   expires: Date | null = null;
+  /** The instant `dc:expired` was read as, so an untouched day is written back unmoved. */
+  private readonly storedExpiry: string | null;
   constructor() {
     const doc = this.data.document;
     const props = doc.properties ?? {};
@@ -75,7 +77,8 @@ export class EditCollectionDialogComponent {
     this.subjects = [...((props['dc:subjects'] as string[]) ?? [])];
     this.coverage = (props['dc:coverage'] as string) ?? null;
     // The UTC day the stored instant names, not its local day (NXSAT-727).
-    this.expires = calendarDayOf(props['dc:expired'] as string | null);
+    this.storedExpiry = (props['dc:expired'] as string | null) ?? null;
+    this.expires = calendarDayOf(this.storedExpiry);
   }
   isExpiresValid(): boolean {
     return (
@@ -92,9 +95,10 @@ export class EditCollectionDialogComponent {
       'dc:nature': this.nature || null,
       'dc:subjects': this.subjects,
       'dc:coverage': this.coverage || null,
-      // The picked day at UTC midnight, so the stored instant does not depend on the
-      // editor's zone and every row showing it names the same day (NXSAT-727).
-      'dc:expired': utcMidnightOf(this.expires),
+      // The picked day at UTC midnight, so the stored instant does not depend on the editor's
+      // zone and every row showing it names the same day — but the instant the read returned
+      // when the day was not touched, so saving another field cannot move it (NXSAT-727).
+      'dc:expired': instantToWrite(this.expires, this.storedExpiry),
     };
     this.service
       .updateProperties(this.data.document.uid, properties)
