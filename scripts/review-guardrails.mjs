@@ -11407,8 +11407,8 @@ function parseWorkflowTriggersAndGates(body) {
  *       deploy:
  *         if: github.ref == 'refs/heads/integration/nxsat-308'
  *
- * That branch merged into `main` and was deleted. https://nuxeo.github.io/agentic-ui-poc/ then went
- * un-refreshed from 2026-10-23 until NXSAT-649, and the failure mode is the nastiest kind: a
+ * That branch merged into `main` and was deleted. https://nuxeo.github.io/Nuxeo-Satori-UI/ then
+ * went un-refreshed from 2026-10-23 until NXSAT-649, and the failure mode is the nastiest kind: a
  * `workflow_dispatch` from `main` still checked out, still built the Storybook, still passed
  * `scripts/storybook-publication-gate.mjs` — and then **skipped** `deploy`, because its `if:` was
  * false. A skipped job leaves the run **green**. So there was a green run, a stale site, and no
