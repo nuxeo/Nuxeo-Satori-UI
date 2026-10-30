@@ -273,13 +273,28 @@ describe('provideSatoriDateAdapter', () => {
    * boolean: it returns the `Object` function where a `Locale` is expected, and
    * `provideSatoriDateAdapter` hands that straight to `MAT_DATE_LOCALE`.
    *
-   * More than the two inputs the review named, because `constructor` is not special — every
-   * inherited member of `Object.prototype` is truthy and the regional split makes each one reachable
-   * with a suffix too.
+   * ## Which of these were actually reachable: `constructor` only
+   *
+   * Worth being exact, because the obvious answer is wrong twice over. The lookup normalises
+   * first — `tag = localeId.toLowerCase().replaceAll('_', '-')` — and that destroys almost every
+   * inherited name before it reaches the map:
+   *
+   * | input | after normalising | pre-fix result |
+   * | --- | --- | --- |
+   * | `constructor` | `constructor` | **the `Object` function** |
+   * | `constructor-US` | `constructor-us` → base `constructor` | **the `Object` function** |
+   * | `__proto__` | `--proto--` | `undefined` — `_` became `-` |
+   * | `toString`, `valueOf`, `hasOwnProperty`, … | `tostring`, `valueof`, … | `undefined` — camelCase lost |
+   *
+   * So `constructor` and its suffixed form are the regression; everything below it is
+   * **defensive**, and passed before the fix as well. They stay because the two normalising
+   * steps are what makes them unreachable, and someone dropping `replaceAll` or `toLowerCase`
+   * — neither obviously load-bearing for security — would hand the rest of `Object.prototype`
+   * straight back. Labelled rather than trimmed so this file is not read as evidence that nine
+   * keys were exploitable.
    */
-  const INHERITED_KEYS = [
-    'constructor',
-    'constructor-US',
+  const REACHABLE_BEFORE_FIX = ['constructor', 'constructor-US'] as const;
+  const DEFENSIVE_ONLY = [
     '__proto__',
     '__proto__-US',
     'toString',
@@ -288,6 +303,7 @@ describe('provideSatoriDateAdapter', () => {
     'isPrototypeOf',
     'propertyIsEnumerable',
   ] as const;
+  const INHERITED_KEYS = [...REACHABLE_BEFORE_FIX, ...DEFENSIVE_ONLY] as const;
 
   it('does not mistake an inherited Object property for locale data', () => {
     // The key travels in the asserted value rather than a message, which is this file's existing
