@@ -163,6 +163,11 @@ export class ExtensionOutletComponent {
         }
         if (this.setsAppliedKeys(inputs)) {
           this.applyInputs(this.componentRef, inputs);
+          // Draw it here too. `setInput` only marks the view dirty, so a component that drew one
+          // document and throws on the next would otherwise throw on Angular's next pass, with
+          // nothing to catch it — the live-instance update was the one way back into the defect
+          // after the first draw was guarded. Caught in review of PR 532.
+          this.drawInserted(this.componentRef, this.renderedType);
         } else {
           this.render(this.renderedType, this.generation);
         }
@@ -246,7 +251,6 @@ export class ExtensionOutletComponent {
     this.renderedType = type;
     this.loading.set(false);
     this.unresolved.set(false);
-    this.warnedFor = null;
   }
 
   /**
@@ -255,8 +259,12 @@ export class ExtensionOutletComponent {
    * Angular has no error boundary. Insertion attaches the host view to the **enclosing** view's
    * change detection, so a component that throws while being drawn — a required input the
    * descriptor never supplies, a mistyped input name, a document it cannot read — throws on a
-   * later tick, and the enclosing view goes with it. That is how one `documentView` entry
-   * emptied the View tab and nothing reported it (NXSAT-746).
+   * later tick, and whatever that pass was drawing is abandoned with it. That is how one
+   * `documentView` entry emptied the View tab, with no fallback and nothing reported: 33
+   * uncaught NG0950s in a single page load (NXSAT-746). How much goes with it depends on where
+   * the enclosing view's boundaries fall — the ticket reported the whole tab group, and on the
+   * build this landed on the tab strip survives and only the body is lost — so the useful
+   * guarantee is about what the throw cannot reach, not about which neighbours happened to live.
    *
    * Three shapes of guard that look right, and what each actually does — all measured against
    * Angular 22.2.3 rather than reasoned about:
@@ -274,20 +282,27 @@ export class ExtensionOutletComponent {
    *   layout there would have been quietly broken, which is a steep price for containing a
    *   failure. Caught in review of PR 532.
    *
-   * So: insert, then draw. Forcing that first pass is what puts the throw inside a `try`, and it
-   * is work the enclosing view's next pass would have done anyway — a valid component pays only
-   * for the order of two statements.
+   * So: insert, then draw. Forcing that pass is what puts the throw inside a `try`, and it is
+   * work the enclosing view's next pass would have done anyway — a valid component pays only for
+   * the order of two statements.
    *
-   * **It contains the first draw only.** A component that throws on a later change detection —
-   * its own async state settling, a signal it writes to itself — still escapes, because that
-   * tick belongs to Angular and not to us. Containing those needs an error boundary Angular
-   * does not have.
+   * Called for **both** ways a draw happens: a newly created component, and a live one whose
+   * inputs have just changed. `setInput` only marks the view dirty, so without the second call a
+   * component that drew one document and threw on the next was back to throwing on a pass nobody
+   * guarded. Review of PR 532 found that gap, which the documentation had already promised away.
+   *
+   * **What it still does not contain:** a throw on a change detection *we* did not trigger — the
+   * component's own asynchronous state settling, or a signal it writes to itself. That tick
+   * belongs to Angular, and catching it needs an error boundary Angular does not have.
    *
    * @returns whether the component drew, and may therefore be kept.
    */
   private drawInserted(ref: ComponentRef<unknown>, type: Type<unknown>): boolean {
     try {
       ref.changeDetectorRef.detectChanges();
+      // Here rather than in `render`, so a draw that recovers clears the key whichever call site
+      // drew it — a component that breaks again after working is news again.
+      this.warnedFor = null;
       return true;
     } catch (error) {
       // The fallback state goes first, before anything that could throw again: the host reads
@@ -295,6 +310,10 @@ export class ExtensionOutletComponent {
       // for the slot being empty.
       this.failedType = type;
       this.failedInputs = this.componentInputs();
+      // Null for the same reason: called for a live instance, this leaves nothing rendered, and
+      // a stale `componentRef` would send the next inputs change to a destroyed component.
+      this.componentRef = null;
+      this.renderedType = null;
       this.declaredInputs = new Set();
       this.appliedKeys = new Set();
       this.loading.set(false);

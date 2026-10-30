@@ -1024,21 +1024,25 @@ while a retry is in flight.
 **A component that throws while it is drawn** falls back the same way, and one warning is
 written to the console naming the component the entry asked for — its `componentId`, which is
 the descriptor `id` unless you set it to something else. That covers the mistakes a manifest can
-make: a component
-with a required input the entry's `inputs` does not supply, an input name spelled wrong, or a
-view that cannot read a particular document. Until this was contained, such an entry emptied the
-View tab **and removed the whole tab group with it** — Annotations, Permissions, History and
-Publishing went too, because the throw escaped the change detection that draws the tab body and
-tore down the view around it (NXSAT-746).
+make: a component with a required input the entry's `inputs` does not supply, an input name
+spelled wrong, or a view that cannot read a particular document. Until this was contained, such
+an entry left the View tab **empty**, with no fallback and nothing said — the throw escaped the
+change detection that draws the tab body, so whatever Angular was drawing at that moment was
+abandoned (NXSAT-746, which also reported the surrounding tab group disappearing; on the build
+the fix landed on, the tab strip survives and only the body is lost).
 
-The containment has a limit worth knowing, because Angular has no error boundary. The host draws
-your component once on its own before putting it on the page, and that is where a throw can be
-caught. A component that draws successfully and throws **later** — when its own asynchronous
-state settles, say — throws on a change detection pass the host does not own, and that still
+What is covered, precisely. The host draws your component itself — once when it first puts it on
+the page, and again each time it hands it a new document — and those are the passes where a throw
+is caught. So a view that cannot be drawn at all falls back, and so does one that draws some
+documents and throws on another; the next document is drawn afresh, so a failure on one does not
+cost you the view for the rest of the session.
+
+The limit, because Angular has no error boundary: a component that draws successfully and throws
+**later**, on a change detection the host did not trigger — when its own asynchronous state
+settles, or on a signal it writes to itself — throws on a pass nobody is guarding, and that still
 takes the surrounding view with it. A custom view is ordinary Angular code and has to handle its
-own failures; what is guaranteed is that a view which cannot be drawn at all costs the customer
-their view rather than the page. Each new document is drawn afresh, so a view that fails on one
-document still renders for the next.
+own failures. What is guaranteed is narrower than "it cannot break the page": it is that the
+drawing the host asks for cannot.
 
 The same containment applies to every slot that names a component, not just this one: the host
 shows whatever it falls back to when the slot is empty.

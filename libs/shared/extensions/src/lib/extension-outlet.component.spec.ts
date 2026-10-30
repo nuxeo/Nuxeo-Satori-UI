@@ -387,6 +387,42 @@ describe('ExtensionOutletComponent', () => {
       expect(fixture.nativeElement.querySelector('.picky')?.textContent).toBe('the next document');
     });
 
+    /**
+     * Review of PR 532. The other direction, and the one the documentation had already promised:
+     * a view that draws one document and throws on the **next**. That update goes through
+     * `applyInputs` on the live instance, where `setInput` only marks the view dirty — so before
+     * this, the throw landed on Angular's next pass with nothing guarding it, and the host got no
+     * fallback. Seen red by dropping the `drawInserted` call from the same-keys branch.
+     */
+    it('falls back when a live component throws on the next document', async () => {
+      TestBed.inject(ExtensionComponentRegistry).register({
+        'acme.views.picky': PickyViewComponent,
+      });
+      const fixture = TestBed.createComponent(ExtensionOutletComponent);
+      fixture.componentRef.setInput('componentId', 'acme.views.picky');
+      fixture.componentRef.setInput('componentInputs', { title: 'the first document' });
+      await settle(fixture);
+
+      expect(fixture.nativeElement.querySelector('.picky')?.textContent).toBe('the first document');
+      expect(fixture.componentInstance.unresolved()).toBe(false);
+
+      // Same declared key, so this is the live-instance update path, not a recreate.
+      fixture.componentRef.setInput('componentInputs', { title: 'undrawable' });
+      await settle(fixture);
+
+      expect(fixture.componentInstance.unresolved()).toBe(true);
+      expect(fixture.nativeElement.querySelector('.picky')).toBeNull();
+      expect(reported()).toHaveLength(1);
+      expect(() => fixture.detectChanges()).not.toThrow();
+
+      // And it comes back for the document after that, rather than staying fallen back.
+      fixture.componentRef.setInput('componentInputs', { title: 'the third document' });
+      await settle(fixture);
+
+      expect(fixture.componentInstance.unresolved()).toBe(false);
+      expect(fixture.nativeElement.querySelector('.picky')?.textContent).toBe('the third document');
+    });
+
     /** Reported once per broken entry, not once per refetch of a document it cannot draw. */
     it('does not repeat the warning for the same component on every refetch', async () => {
       TestBed.inject(ExtensionComponentRegistry).register({
