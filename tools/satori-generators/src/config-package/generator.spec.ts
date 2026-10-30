@@ -168,6 +168,84 @@ describe('config-package generator', () => {
     ).rejects.toThrow(/129 characters; a fragment name may have at most 128/);
   });
 
+  // NXSAT-729. The package name is copied into three namespaces it does not own — the fragment
+  // name in the component XML, the Marketplace package name, and a directory on disk — and the
+  // only uniqueness check there was looked at this workspace's directories. A package named
+  // `defaults` contributes `fragment bootstrap/defaults`, which is the key Satori's own packaged
+  // defaults occupy, and `ContributionRegistry.resolve()` lets the later contribution take it.
+  describe('refuses a name it does not own', () => {
+    it.each([
+      ['defaults', /Satori itself uses/],
+      ['nuxeo-agentic-ui', /Satori itself uses/],
+    ])('%s, which Satori itself uses', async (name, message) => {
+      await expect(configPackageGenerator(tree, { name, owner: 'acme' })).rejects.toThrow(message);
+    });
+
+    it('names what it clashes with, rather than only saying no', async () => {
+      await expect(
+        configPackageGenerator(tree, { name: 'defaults', owner: 'acme' }),
+      ).rejects.toThrow(/replaces them on the server/);
+      await expect(
+        configPackageGenerator(tree, { name: 'nuxeo-agentic-ui', owner: 'acme' }),
+      ).rejects.toThrow(/every configuration package depends on/);
+    });
+
+    // The name becomes a directory, and a directory with one of these names cannot be created on
+    // Windows — so one generated on macOS leaves a repository that cannot be checked out there.
+    it.each(['con', 'prn', 'aux', 'nul', 'com1', 'com0', 'com9', 'lpt1', 'lpt0', 'lpt9'])(
+      '%s, a device name Windows reserves',
+      async (name) => {
+        await expect(configPackageGenerator(tree, { name, owner: 'acme' })).rejects.toThrow(
+          /device name Windows reserves/,
+        );
+      },
+    );
+
+    // The same harm through the other option that becomes a directory. Mixed case and a trailing
+    // extension both reach the same device on Windows, and `--directory` — unlike the name —
+    // permits both.
+    it.each(['con', 'customers/nul', 'CON', 'con.v1', 'customers/Nul.old'])(
+      'a --directory segment "%s", for the same reason',
+      async (directory) => {
+        await expect(
+          configPackageGenerator(tree, { name: 'acme-config', owner: 'acme', directory }),
+        ).rejects.toThrow(/device name Windows reserves/);
+      },
+    );
+
+    // Satori's names are refused as a package name only: a parent directory is neither a
+    // fragment name nor a Marketplace package name, so it clashes with nothing.
+    it('accepts "defaults" as a --directory segment, which clashes with nothing', async () => {
+      await expect(
+        configPackageGenerator(tree, { name: 'acme-config', owner: 'acme', directory: 'defaults' }),
+      ).resolves.toBeDefined();
+    });
+
+    it.each(['acme-config', 'contoso-claims', 'constellation', 'aux-config', 'nul2', 'defaults2'])(
+      'still accepts "%s", so the refusal is the listed names and not a prefix',
+      async (name) => {
+        await expect(
+          configPackageGenerator(createTreeWithEmptyWorkspace(), { name, owner: 'acme' }),
+        ).resolves.toBeDefined();
+      },
+    );
+
+    it('writes nothing when it refuses', async () => {
+      // The paths, not their count: a refusal that wrote one file and removed another would
+      // leave the count alone, and "writes nothing" is a claim about the files.
+      const paths = () =>
+        tree
+          .listChanges()
+          .map((change) => change.path)
+          .sort();
+      const before = paths();
+      await expect(
+        configPackageGenerator(tree, { name: 'defaults', owner: 'acme' }),
+      ).rejects.toThrow();
+      expect(paths()).toEqual(before);
+    });
+  });
+
   it.each([
     [{ owner: 'Acme Corp' }, /--owner "Acme Corp" must be/],
     [{ owner: 'acme', version: '1.0' }, /--version "1\.0" must be/],

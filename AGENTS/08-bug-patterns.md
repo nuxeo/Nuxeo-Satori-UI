@@ -989,6 +989,55 @@ collisions above (`bootstrap-config.spec.ts`, `describeBrandingLogoRefusal`).
 
 ---
 
+## 27. A name validated for its shape but not for the namespace it joins
+
+```typescript
+// BAD ❌ — every check is about the characters. None asks whether the name is already taken
+// in the namespace it is about to enter.
+if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name)) throw new Error(`"${name}" must be kebab-case.`);
+if (name.length > 128) throw new Error(`"${name}" is too long for a fragment name.`);
+if (tree.exists(projectRoot)) throw new Error(`${projectRoot} already exists.`);
+
+// GOOD ✅ — shape first, then the namespaces the value is copied into.
+const clash = SATORI_NAMES.get(name);
+if (clash !== undefined) throw new Error(`"${name}" is a name Satori itself uses: ${clash}.`);
+if (isWindowsDeviceName(name)) throw new Error(`"${name}" is a device name Windows reserves.`);
+```
+
+Ask of every generated or configured identifier **where the value ends up**, and who is already
+there. A pattern and a length are properties of the string; a collision is a property of the
+namespace, and the two look equally like "validation" in a diff. The existing-directory check is
+the tell: it reads as a uniqueness check and is why nobody noticed one was missing, but it can
+only see the one workspace in front of it.
+
+NXSAT-729: the `config-package` generator copies the package name into three namespaces it does
+not own — the fragment name in the component XML, the Marketplace package name, and a directory
+on disk. A package named `defaults` therefore contributed `fragment bootstrap/defaults`, the key
+Satori's own packaged defaults occupy, and `ContributionRegistry.resolve()` did what it is
+designed to do and let the later contribution take the key. Replacement is a documented feature,
+so the server was not the thing to change. The only trace was an `info` diagnostic.
+
+- **The operating system is one of those namespaces.** A name that becomes a path has to clear
+  the Windows device names (`con`, `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9`) — through
+  any case, and through a trailing extension, since `NUL.txt` reaches `NUL`. A directory
+  generated on macOS under one of them leaves a repository that cannot be checked out on Windows
+  at all, and this repository supports Windows deliberately.
+- **Enforce it where the message can explain itself.** A `not`/`enum` in an Nx `schema.json` is
+  validated before the generator runs, so the CLI user gets a generic schema violation instead of
+  the sentence naming what the name clashes with. Keep the list in the generator and document it
+  in the schema's `description`.
+- **Check the prior art before deciding the behaviour.** `scripts/dev-config.mjs` already refused
+  this exact collision, with this exact reasoning — "the server keeps only the later of two
+  fragments with the same name". When one tool in the repo refuses something and its sibling
+  accepts it, the sibling is the defect.
+
+Regression test pattern: refuse through **every** entry point, assert the message names the
+clash, and assert the near-misses (`defaults2`, `constellation`, `aux-config`) still generate —
+otherwise a prefix match passes for an exact one.
+`tools/satori-generators/src/config-package/generator.spec.ts`, `create.spec.ts`.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
