@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { AppConfigService, DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
 import { signal } from '@angular/core';
 
-import { AppTranslateLoader } from './app-translate-loader';
+import { AppTranslateLoader, UPSTREAM_FOLDERS } from './app-translate-loader';
 import { EN_FALLBACK_TRANSLATIONS } from './en-fallback';
 
 /** The one upstream folder `UPSTREAM_FOLDERS` declares, then the app's own catalogue last. */
@@ -95,6 +95,73 @@ describe('AppTranslateLoader', () => {
 
     expect(urls).toEqual([jasmine.stringMatching(/\/i18n\/ja\.json$/)]);
     expect(urls).not.toContain('assets/satori-ui/i18n/ja.json');
+  });
+
+  /**
+   * The rule, over whatever `availableLanguages` currently holds rather than over a list spelled
+   * out here.
+   *
+   * Which languages a deployment advertises is Layer 0 configuration and it moves: it was
+   * `en fr de ja nl th zh`, Thai and Chinese were dropped, and the supported set is being taken
+   * to ten — Arabic, Hebrew, Italian, Spanish and Swedish among them. A spec naming the set it
+   * expected would have to be edited on each of those changes, and until someone did it would be
+   * asserting the old world. Iterating the configured list instead means this test states the
+   * invariant — **a folder is asked for a language exactly when it ships it** — and keeps
+   * asserting it for free as the list changes.
+   *
+   * It is also what makes the declared `languages` list safe: the loader never reads
+   * `availableLanguages`, so adding a language needs no change in the loader, and this is the
+   * check that says so.
+   */
+  describe('over every advertised language', () => {
+    const advertised = DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages;
+
+    it('has languages to check, so the loop cannot pass by iterating nothing', () => {
+      expect(advertised.length).toBeGreaterThan(0);
+    });
+
+    /** The upstream URLs one `getTranslation` issues. Configured once — the loader is stateless. */
+    function upstreamUrlsFor(lang: string): string[] {
+      loader.getTranslation(lang).subscribe();
+      return httpMock
+        .match(() => true)
+        .map((request) => {
+          request.flush({});
+          return request.request.url;
+        })
+        .filter((url) => url.startsWith('assets/'));
+    }
+
+    it('asks a folder for a language exactly when that folder ships it', () => {
+      configure();
+      const unexpected: string[] = [];
+      const missing: string[] = [];
+
+      for (const lang of advertised) {
+        const urls = upstreamUrlsFor(lang);
+        for (const folder of UPSTREAM_FOLDERS) {
+          const url = `${folder.path}/i18n/${lang}.json`;
+          const requested = urls.includes(url);
+          const ships = folder.languages.includes(lang);
+          if (requested && !ships) unexpected.push(`${lang} -> ${url}`);
+          if (!requested && ships) missing.push(`${lang} -> ${url}`);
+        }
+      }
+
+      // A doomed request is the defect NXSAT-732 reported: a 404 and a console error per load.
+      expect(unexpected)
+        .withContext('requests for a language the folder does not ship')
+        .toEqual([]);
+      // And the inverse, so the fix cannot degrade into fetching no upstream catalogue at all.
+      expect(missing).withContext('shipped languages that were not requested').toEqual([]);
+    });
+
+    it('still asks for at least one upstream catalogue, so the filter is not a blanket skip', () => {
+      configure();
+      const asked = advertised.flatMap((lang) => upstreamUrlsFor(lang));
+
+      expect(asked.length).toBeGreaterThan(0);
+    });
   });
 
   it('applies precedence folders < app catalogue < manifest labels', () => {

@@ -69,17 +69,27 @@ interface UpstreamCatalogueFolder {
  *
  * ## Why each folder names its languages (NXSAT-732)
  *
- * A folder is asked only for a language it ships. `availableLanguages` advertises en, fr, de,
- * ja, nl, th and zh; `@hylandsoftware/satori-ui@1.0.0-alpha.171` ships de, en, es, fr, it, pl
- * and pt with regional variants. So ja, nl, th and zh — four of the seven — requested a file
- * that does not exist, and every page load answered 404 and logged a console error. The failure
- * was already caught into `{}`, so nothing broke; the request was simply doomed.
+ * A folder is asked only for a language it ships. `@hylandsoftware/satori-ui@1.0.0-alpha.171`
+ * ships `de en es fr it pl pt` with regional variants, and `availableLanguages` advertises more
+ * than that — so every language outside the intersection requested a file that does not exist,
+ * answering 404 and logging a console error on every page load. The failure was already caught
+ * into `{}`, so nothing broke; the request was simply doomed.
  *
- * Those four still render the shared strings in **English**, through the fallback language
- * `initialiseAppConfigAndLanguage` sets. That is not fixed here and cannot be: the catalogues
- * do not exist upstream, which is DS-2803.
+ * **The two sets are deliberately not restated here, and this list is not derived from
+ * `availableLanguages`.** Which languages a deployment advertises is Layer 0 configuration that
+ * changes without this file, so a comment enumerating it goes stale silently and a filter keyed
+ * on it would couple the loader to configuration it must not read. The only question this list
+ * answers is what the *folder* contains, which changes only when the dependency is bumped — and
+ * `checkUpstreamCatalogueLanguages` fails the `guardrails` gate on exactly that. The consequence
+ * is that adding a language to `availableLanguages` needs no change here: it is requested if the
+ * vendor ships it and skipped if not, which `app-translate-loader.spec.ts` asserts by iterating
+ * the configured list rather than by naming it.
+ *
+ * A language the vendor does not ship still renders the shared strings in **English**, through
+ * the fallback language `initialiseAppConfigAndLanguage` sets. That is not fixed here and cannot
+ * be: those catalogues do not exist upstream, which is DS-2803.
  */
-const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
+export const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
   {
     path: 'assets/satori-ui',
     languages: [

@@ -69,20 +69,33 @@ fragment's `content` is a `bootstrap` fragment in your configuration package.
 
 ### `availableLanguages` is not uniform coverage
 
-Seven languages are advertised — `en`, `fr`, `de`, `ja`, `nl`, `th`, `zh` — and all seven have a
-complete application catalogue. **Only `en`, `fr` and `de` also have the shared-component
-strings.** `@hylandsoftware/satori-ui` ships catalogues for `de es fr it pl pt` and `en` only, so
-under `ja`, `nl`, `th` or `zh` every `sat.*` string the vendor's components render — including
-the accessible names on the navigation rail — falls back to English inside an otherwise
-translated application. Tracked upstream as
+An advertised language is **two** promises, and only one of them is ours to keep.
+
+The application's own catalogue is ours, and every advertised language has a complete one —
+`checkAdvertisedLocalesShip` fails a configuration that advertises a language without one. The
+shared-component strings are the vendor's: `@hylandsoftware/satori-ui` ships catalogues for
+`de es fr it pl pt` and `en` only. **Any advertised language outside that set renders every
+`sat.*` string in English** — including the accessible names on the navigation rail — inside an
+otherwise translated application. Tracked upstream as
 [DS-2803](https://hyland.atlassian.net/browse/DS-2803); it cannot be closed in this repository,
 because the strings are the vendor's to author.
 
-A customer adding a language to `availableLanguages` gets the same split: their own catalogue is
-honoured, the shared components are not. `checkAdvertisedLocalesShip` fails a config that
-advertises a language with no application catalogue behind it, and
-`checkUpstreamCatalogueLanguages` keeps the loader's view of the vendor's coverage equal to what
-the installed package actually contains.
+The advertised set is deliberately not listed here. It is Layer 0 configuration, it changes
+without this document, and a list written down in prose is one that goes stale silently and is
+believed anyway. Read it from `availableLanguages` in `bootstrap-config.ts` and intersect it with
+the vendor set above; `checkUpstreamCatalogueLanguages` keeps the loader's view of that vendor set
+equal to what the installed package actually contains, so the intersection is always computable
+rather than remembered.
+
+A customer adding a language gets the same split: their own catalogue is honoured, the shared
+components are not. Nothing breaks and nothing 404s — the loader asks the vendor's folder only
+for languages it ships — but the shared strings stay in the fallback language.
+
+> **Right-to-left is a separate, open gap.** The vendor's components carry `:dir(rtl)` rules and
+> depend on `@angular/cdk/bidi`, but this application sets no `dir` anywhere — no `dir="rtl"`, no
+> `[attr.dir]`, nothing driven from configuration. So advertising a right-to-left language would
+> render its text correctly and its layout mirrored the wrong way. Advertising one needs that work
+> done first.
 
 ### `branding.logo`
 
