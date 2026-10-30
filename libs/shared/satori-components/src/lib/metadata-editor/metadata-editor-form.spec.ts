@@ -250,8 +250,14 @@ describe('a picked calendar day is anchored in UTC', () => {
 
   it('opens the picker on the day the value names in UTC, not the day it names locally', () => {
     // 20:00Z is the next day east of UTC+04:00, so reading the local day gives 7 March here.
-    const control = buildControl({ type: 'date' }, '2024-03-06T20:00:00.000Z', calendarDays);
+    const instant = '2024-03-06T20:00:00.000Z';
+    const control = buildControl({ type: 'date' }, instant, calendarDays);
     expect(control.value).toEqual({ year: 2024, month: 2, day: 6 });
+    // And the write-back agrees with the read: untouched, it is the same instant, time of day
+    // included. If the two sides disagreed about which day this is, an edit of a neighbouring
+    // field would silently rewrite this one — which is what `sameCalendarDay` exists to prevent,
+    // and what comparing a UTC day against a local day used to do.
+    expect(propertyValue({ type: 'date' }, control, calendarDays)).toBe(instant);
   });
 
   it('round-trips through the form without drifting', () => {

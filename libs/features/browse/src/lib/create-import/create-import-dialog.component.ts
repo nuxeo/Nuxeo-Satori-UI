@@ -79,6 +79,7 @@ import {
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
+import { utcMidnightOf } from '../calendar-day';
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */
@@ -1177,10 +1178,8 @@ export class CreateImportDialogComponent implements OnInit {
       'dc:nature': state.nature || null,
       'dc:subjects': [...state.subjects],
       'dc:coverage': state.coverage || null,
-      'dc:expired':
-        state.expires && !Number.isNaN(state.expires.getTime())
-          ? state.expires.toISOString()
-          : null,
+      // The picked day at UTC midnight, as the edit dialogs write it (NXSAT-727).
+      'dc:expired': utcMidnightOf(state.expires),
     };
   }
 
@@ -1192,8 +1191,8 @@ export class CreateImportDialogComponent implements OnInit {
       'dc:nature': this.nature || null,
       'dc:subjects': this.subjects,
       'dc:coverage': this.coverage || null,
-      'dc:expired':
-        this.expires && !Number.isNaN(this.expires.getTime()) ? this.expires.toISOString() : null,
+      // The picked day at UTC midnight, as the edit dialogs write it (NXSAT-727).
+      'dc:expired': utcMidnightOf(this.expires),
     };
 
     if (docType?.type === 'Note') {

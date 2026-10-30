@@ -1048,6 +1048,16 @@ Regression test pattern — and this is the part that is easy to get wrong:
   UTC). `09:00Z` is the same day in most zones and proves nothing.
 - Angular's `DatePipe` memoises on (value, pattern, timezone, locale). Re-asserting a value an
   earlier render in the same file used returns the cached string and passes unfixed.
+- **A pin in a config file is an unenforced guarantee.** Delete it and the suite goes quietly green
+  and stops protecting anything, with no failure to notice. Assert the zone in a spec of its own —
+  `suite-timezone.spec.ts` in `satori-components`, `features/browse` and `shared/ui`.
+
+**Find every writer before calling it fixed.** `dc:expired` had four, in three libraries: the
+metadata editor, browse's edit-metadata dialog, the collection dialog and the create/import dialog.
+Fixing one and formatting the row in UTC makes the others _newly_ wrong, because their locally
+anchored values are then read in UTC. `grep -rn "toISOString()"` over `libs/` and `apps/` is the
+search that finds them; the dependency graph does not, because each dialog does its own conversion
+inline.
 
 ---
 
