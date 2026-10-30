@@ -954,10 +954,26 @@ Two things that follow, neither optional:
 - **Do not seed empty or English-filled catalogues** to make a language advertisable sooner.
   `checkCataloguesAreTranslated` fails an all-English catalogue by design, and D8e is right about
   why: a user who selects Spanish and reads English has been lied to.
-- **`ar` and `he` need RTL support, not just translations.** Component-level RTL exists in seven
-  `nxs-` components and two inject `Directionality`; [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523)
-  adds what sets `dir` and writes the `Directionality` service so overlays follow. A catalogue
-  alone does not make either shippable.
+- **`ar` and `he` need RTL support, not just translations.** Component-level RTL already exists,
+  across **three different mechanisms**, which is worth naming rather than counting because an
+  earlier revision of this bullet said "seven components" and a count conceals the grouping:
+
+  | Mechanism | Components |
+  | --- | --- |
+  | `:host-context([dir='rtl'])` in SCSS | `breadcrumbs`, `document-tree`, `folder-picker`, `pager` |
+  | injects CDK `Directionality` | `document-list`, `document-tree` |
+  | reads `getComputedStyle(…).direction` | `details-panel`, `rich-tooltip` |
+
+  Seven distinct components, four of them via the CSS attribute — not seven via the attribute.
+  `document-tree` appears twice. Re-measure rather than trusting the table:
+
+  ```bash
+  grep -rln "dir='rtl'" libs/shared/satori-components/src/lib --include="*.scss"
+  grep -rln Directionality libs/shared/satori-components/src/lib --include="*.ts" | grep -v spec
+  ```
+
+  [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523) adds what sets `dir` and writes the
+  `Directionality` service so overlays follow. A catalogue alone does not make either shippable.
 
   This bullet said "nothing sets `dir`, so none of it activates", which read as a description of
   what a user sees. It is not: since NXSAT-733, `describeUnsupportedLanguage` refuses a
