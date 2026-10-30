@@ -13,16 +13,27 @@ import { appConfig } from '../app.config';
 /**
  * What a `sat.*` accessible name renders as, through the **production** translate configuration.
  *
- * ## Why this is not in `app-translate-loader.spec.ts`, and not with `testTranslateModule()`
+ * ## Why this is not with `testTranslateModule()`, and what it does NOT claim
  *
- * Every other spec in this application configures translation through
- * `translate-testing.ts`, which passes `fallbackLang: 'en'` to `provideTranslateService`.
- * Production does not: it calls `translate.setFallbackLang('en')` from
- * `initialiseAppConfigAndLanguage`, after the manifest has loaded. The two arrangements resolve a
- * missing key identically, so a spec written against the helper would have proved nothing about
- * the one that ships — a check testing a proxy for the thing in its own name, which is the class
- * of defect `AGENTS/08-bug-patterns.md` catalogues. NXSAT-732 was reported against four languages
- * for which no spec in the suite could have spoken.
+ * Every other spec configures translation through `translate-testing.ts`, which passes
+ * `fallbackLang: 'en'` to `provideTranslateService`. Production sets the same fallback a
+ * different way — `translate.setFallbackLang('en')` in the initializer, after the manifest has
+ * loaded. **For resolving a missing key the two are equivalent, so the helper is representative
+ * on that point and this spec claims no gap there.** An earlier version of this comment implied
+ * one, which does not survive its own next sentence.
+ *
+ * What the helper cannot speak for is the **ordering**, and that is what this spec guards. The
+ * fallback catalogue is loaded by whoever sets it; `AppTranslateLoader` stamps the manifest's
+ * `labels` on at response time; and ngx-translate never re-fetches a language already in its
+ * store. So a catalogue loaded before the configuration has landed is cached *without* a
+ * customer's relabelling, permanently for that session — and nothing in a helper-configured spec
+ * can see that, because the helper's loader has no manifest to layer.
+ *
+ * Measured on NXSAT-732 rather than argued: passing `fallbackLang` to `provideTranslateService`
+ * applies it in the `TranslateService` constructor, which runs before `await config.load()`, and
+ * with the configuration response delayed 400ms a manifest relabelling was silently dropped. The
+ * ordering assertion below goes red on that change; so does one spec in
+ * `configuration-at-startup.spec.ts`. Everything else in the suite stays green.
  *
  * So this boots `appConfig.providers` — the real initializers, the real `TranslateService`, the
  * real `AppTranslateLoader` — and reads the attribute off the vendor's own `sat-platform-nav`,

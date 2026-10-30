@@ -536,27 +536,50 @@ an unknown.
 The adf-hx rows this table used to carry are gone with the dependency (NXSAT-635, NXSAT-637).
 One upstream catalogue is left, and the problem they described is live in it:
 
-| Catalogue source                            | Locales shipped                                              |
-| ------------------------------------------- | ------------------------------------------------------------ |
-| `@hylandsoftware/satori-ui@1.0.0-alpha.171` | **7** — `de es fr it pl pt` + `en`, plus 8 regional variants |
-| ours (`apps/nuxeo-ui/public/i18n`)          | 7 — `en fr de ja nl th zh`                                   |
+| Catalogue source                            | Locale ids shipped                                                                  |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `@hylandsoftware/satori-ui@1.0.0-alpha.171` | **15** — `de en es fr it pl pt` + `de-DE en-AU en-US es-ES fr-FR it-IT pl-PL pt-PT` |
+| ours (`apps/nuxeo-ui/public/i18n`)          | one per advertised language — see `availableLanguages`                              |
 
-**Only three of the seven languages we advertise have shared-component strings at all.** The
-intersection of the two rows is `en`, `fr` and `de`. For `ja`, `nl`, `th` and `zh` the vendor
-ships no catalogue, so every `sat.*` string — including the accessible names on
-`sat-platform-nav` — renders in English inside an otherwise translated application. Those four
-are the reason `fr` and `de` were chosen for the first pass: both are covered by every catalogue
-we seed, so switching locale exercises the whole stack rather than our own file alone.
+**Locale ids, matched exactly.** The loader requests `<lang>.json` for the active language
+verbatim, so `en-US` and `fr-FR` are covered upstream while `pt-BR` is not, even though `pt` is:
+nothing falls back from a regional variant to its base language. A regional variant the vendor
+does not ship is in the same position as a language it never shipped.
+
+**The advertised set is deliberately not written out here.** It is Layer 0 configuration and it
+moves: it was `en fr de ja nl th zh`, Thai and Chinese have since been dropped, and the supported
+set is being taken to ten. Every prose copy of that list in this repository has gone stale at
+least once. Read it from `availableLanguages` in `libs/shared/app-config/src/lib/bootstrap-config.ts`.
+
+What is stable is the shape of the problem: **an advertised locale id outside the vendor's fifteen
+has no shared-component strings at all**, so every `sat.*` string — including the accessible names
+on `sat-platform-nav` — renders in English inside an otherwise translated application. `fr` and
+`de` were chosen for the first pass precisely because they are inside the intersection, so
+switching locale exercises the whole stack rather than our own file alone.
 
 This is **not** something this repository can fix. Authoring a vendor's component strings is not
 ours to do, and the loader cannot invent them; it is tracked upstream as
 [DS-2803](https://hyland.atlassian.net/browse/DS-2803). What was ours was asking for a file that
 does not exist: the loader requested `assets/satori-ui/i18n/<lang>.json` for whatever language
-was active, so those four 404'd and logged a console error on every page load (NXSAT-732). Each
-folder in `UPSTREAM_FOLDERS` now names the languages it ships, and
-`checkUpstreamCatalogueLanguages` compares that list to the installed package on every pull
-request — so a version bump that adds or drops a language fails the `guardrails` gate with the
-difference rather than silently reinstating the 404 or leaving a new language unrequested.
+was active, so every language outside the intersection 404'd and logged a console error on every
+page load (NXSAT-732). Each folder in `UPSTREAM_FOLDERS` now names the languages it ships and is
+asked only for those, and `checkUpstreamCatalogueLanguages` compares that list to the installed
+package on every pull request — so a version bump that adds or drops a language fails the
+`guardrails` gate with the difference rather than silently reinstating the 404 or leaving a new
+language unrequested.
+
+The loader does **not** read `availableLanguages`, which is what makes the two independent:
+adding a language needs no change there. It is requested if the vendor ships it and skipped if
+not, and `app-translate-loader.spec.ts` asserts that by iterating the configured list rather than
+by naming it, so the assertion survives the list changing.
+
+**Right-to-left is a separate concern, owned by NXSAT-752.** The vendor's components carry
+`:dir(rtl)` rules and depend on `@angular/cdk/bidi`. On `main` as of this change, this
+application sets no `dir` at all — not in `apps/nuxeo-ui/src`, not from configuration — so a
+right-to-left language would give correct text in a mirrored-the-wrong-way layout. NXSAT-752 sets
+the document direction from the active language; **this paragraph records the state at the time of
+writing, not the current one**, so check whether it has landed rather than citing it. Not
+addressed by NXSAT-732.
 
 ---
 
