@@ -35,3 +35,30 @@
  * membership here as the whole answer rather than having to special-case English.
  */
 export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['de', 'en', 'fr', 'ja', 'nl'];
+
+/**
+ * Locales whose catalogue exists only while someone is auditing, and only on a dev server.
+ *
+ * `tools/i18n/pseudo-locale.mjs` generates `zz` from `en.json` with every string wrapped in
+ * `⟦ ⟧`, writes it into `apps/nuxeo-ui/public/i18n/` **and** into the upstream catalogue
+ * directories inside `node_modules`, and `npm run i18n:audit` then boots the application with
+ * `defaultLanguage: 'zz'` and looks for strings with no sentinel — those are the ones hard-coded
+ * past the translation layer. A dedicated locale is what lets the generator write a catalogue
+ * everywhere without overwriting a real one.
+ *
+ * So at audit time `zz` genuinely does have a catalogue, and refusing it is wrong: the audits
+ * boot in English and fail `requireSentinel()` instead of finding hard-coded strings. That is
+ * what happened when the NXSAT-733 guard first landed, and it was caught in review of #531
+ * rather than by a test, which is why there is one now.
+ *
+ * It is **never** committed and never in a release build — `zz` is absent from
+ * `availableLanguages`, from `REGISTERED_LOCALES` and from `GENERATED_LOCALES`' own exclusion in
+ * `scripts/review-guardrails.mjs`, which is why every locale gate skips it. Admission is
+ * therefore gated on development mode: a production build refuses `zz` exactly like any other
+ * language it ships no catalogue for, so this seam cannot become a way to configure a deployment
+ * into announcing a language it does not render.
+ *
+ * `checkShippedCatalogueLanguages` holds this equal to `GENERATED_LOCALES` in the guardrail, so
+ * the two cannot drift into disagreeing about which locales are generated.
+ */
+export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];

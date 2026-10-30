@@ -111,6 +111,12 @@ Strings falling back to English is separate, deliberate, and unchanged: `setFall
 means any individual key missing from a catalogue renders its English source rather than a raw
 key.
 
+One locale is admitted by a third route, and it is not reachable from a deployment: the generated
+`zz` pseudo-locale, which `npm run i18n:audit` writes into the build to find strings hard-coded
+past the translation layer. It is honoured **only** under a development server — a release build
+refuses it exactly like any other language it ships no catalogue for — so it cannot be configured
+into a customer deployment.
+
 ### `branding.logo`
 
 `{ "src": "assets/acme-logo.svg", "alt": "Acme Insurance" }` replaces the Satori word mark in the header

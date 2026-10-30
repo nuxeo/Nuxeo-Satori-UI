@@ -7,6 +7,7 @@ import {
   Provider,
   effect,
   inject,
+  isDevMode,
   provideAppInitializer,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -16,7 +17,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { canFormatDatesIn } from '@nuxeo/satori-platform/ui';
 
 import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
-import { SHIPPED_CATALOGUE_LANGUAGES } from '../i18n/shipped-catalogues';
+import { GENERATED_AUDIT_LOCALES, SHIPPED_CATALOGUE_LANGUAGES } from '../i18n/shipped-catalogues';
 import { firstValueFrom } from 'rxjs';
 import { AI_BACKEND_URL } from '@agentic-ui/shared/ai-client';
 import { DEFAULT_KD_CIC_OPERATIONS, KD_CIC_OPERATIONS } from '@agentic-ui/shared/kd-client';
@@ -118,15 +119,32 @@ const FALLBACK_LANGUAGE = 'en';
 function describeUnsupportedLanguage(
   defaultLanguage: string,
   availableLanguages: readonly string[],
+  devMode: boolean,
 ): string | null {
   if (defaultLanguage === FALLBACK_LANGUAGE) return null;
-  if (!SHIPPED_CATALOGUE_LANGUAGES.includes(defaultLanguage)) {
+  if (!hasCatalogue(defaultLanguage, devMode)) {
     return 'this build ships no translation catalogue for it';
   }
   if (!availableLanguages.includes(defaultLanguage)) {
     return 'availableLanguages does not offer it';
   }
   return null;
+}
+
+/**
+ * Whether a catalogue for this language can actually be loaded here.
+ *
+ * `devMode` is a parameter rather than a call to `isDevMode()` inside, for the reason
+ * `insecureAllowedForHost(isDevMode())` in `document-detail.ts` is written the same way: the
+ * production branch is the one that must not regress, and a test cannot reach it if the mode is
+ * read from ambient state — Karma runs in development mode, so a seam read internally would only
+ * ever be exercised on its permissive side.
+ */
+function hasCatalogue(language: string, devMode: boolean): boolean {
+  if (SHIPPED_CATALOGUE_LANGUAGES.includes(language)) return true;
+  // See `GENERATED_AUDIT_LOCALES`: generated into `public/i18n` by `npm run i18n:pseudo`, never
+  // committed and never in a release build, so only a dev server may honour one.
+  return devMode && GENERATED_AUDIT_LOCALES.includes(language);
 }
 
 /**
@@ -144,8 +162,9 @@ function describeUnsupportedLanguage(
 export function resolveStringLanguage(
   defaultLanguage: string,
   availableLanguages: readonly string[],
+  devMode: boolean = isDevMode(),
 ): string {
-  return describeUnsupportedLanguage(defaultLanguage, availableLanguages) === null
+  return describeUnsupportedLanguage(defaultLanguage, availableLanguages, devMode) === null
     ? defaultLanguage
     : FALLBACK_LANGUAGE;
 }
@@ -175,7 +194,7 @@ export function initialiseAppConfigAndLanguage(
     translate.setFallbackLang(FALLBACK_LANGUAGE);
     // The fallback above is what makes an unsupported value survivable for strings; it is not
     // what makes it correct. See `resolveStringLanguage`.
-    const refusal = describeUnsupportedLanguage(defaultLanguage, availableLanguages);
+    const refusal = describeUnsupportedLanguage(defaultLanguage, availableLanguages, isDevMode());
     if (refusal) {
       config.reportUnsupportedDefaultLanguage(defaultLanguage, FALLBACK_LANGUAGE, refusal);
     }

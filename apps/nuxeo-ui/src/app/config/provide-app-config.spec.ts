@@ -32,7 +32,7 @@ import { provideSatoriDateAdapter } from '@nuxeo/satori-platform/ui';
 
 import { appConfig } from '../app.config';
 import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
-import { SHIPPED_CATALOGUE_LANGUAGES } from '../i18n/shipped-catalogues';
+import { GENERATED_AUDIT_LOCALES, SHIPPED_CATALOGUE_LANGUAGES } from '../i18n/shipped-catalogues';
 
 /**
  * The language comes from the configuration that has just loaded, on every boot.
@@ -192,6 +192,62 @@ describe('resolveStringLanguage', () => {
 
   it('refuses a value that is in no list at all', () => {
     expect(resolveStringLanguage('xx', advertised)).toBe('en');
+  });
+
+  /**
+   * The `zz` pseudo-locale, and the regression that shipping the first version of this guard
+   * would have caused — caught in review of #531.
+   *
+   * `tools/i18n/pseudo-locale.mjs` generates a `zz` catalogue with every string wrapped in
+   * `⟦ ⟧` and `npm run i18n:audit` boots into it to find strings hard-coded past the translation
+   * layer. Refusing `zz` made both audits boot in English and fail `requireSentinel()` — the
+   * audit still ran, still exited, and silently stopped checking the thing it exists for.
+   *
+   * `devMode` is passed explicitly here because Karma runs in development mode, so a seam read
+   * from ambient state could only ever be tested on its permissive side — and the production
+   * branch is the one that must not regress.
+   */
+  describe('the generated pseudo-locale', () => {
+    const withAudit = [...advertised, ...GENERATED_AUDIT_LOCALES];
+
+    it('is not a shipped catalogue, so it is admitted only through the audit seam', () => {
+      // Guards the premise: if `zz` were ever added to the shipped list, the dev-mode test below
+      // would pass for the wrong reason and assert nothing about the seam.
+      for (const locale of GENERATED_AUDIT_LOCALES) {
+        expect(SHIPPED_CATALOGUE_LANGUAGES)
+          .withContext(`"${locale}" must stay out of the shipped list`)
+          .not.toContain(locale);
+      }
+    });
+
+    it('is honoured on a dev server, so npm run i18n:audit can boot into it', () => {
+      for (const locale of GENERATED_AUDIT_LOCALES) {
+        expect(resolveStringLanguage(locale, withAudit, true))
+          .withContext(`"${locale}" is generated into public/i18n before the audit runs`)
+          .toBe(locale);
+      }
+    });
+
+    it('is refused in a production build, like any other language with no catalogue', () => {
+      // The seam must not become a way to configure a deployment into announcing a language it
+      // does not render: `zz` is never committed and never in a release build.
+      for (const locale of GENERATED_AUDIT_LOCALES) {
+        expect(resolveStringLanguage(locale, withAudit, false))
+          .withContext(`"${locale}" must not survive outside development mode`)
+          .toBe('en');
+      }
+    });
+
+    it('still needs advertising, so the audit harness adding it to the config is load-bearing', () => {
+      // `pseudo-locale-page.mjs` adds `zz` to `availableLanguages` for exactly this reason.
+      for (const locale of GENERATED_AUDIT_LOCALES) {
+        expect(resolveStringLanguage(locale, advertised, true)).toBe('en');
+      }
+    });
+
+    it('does not admit some other unshipped language just because dev mode is on', () => {
+      expect(resolveStringLanguage('xx', [...advertised, 'xx'], true)).toBe('en');
+    });
   });
 });
 

@@ -4601,8 +4601,44 @@ function checkShippedCatalogueLanguages() {
     return;
   }
 
+  const source = read(declaration);
+
+  /**
+   * `GENERATED_AUDIT_LOCALES` must name exactly the locales this file already excludes from every
+   * other locale check.
+   *
+   * The two sets answer the same question from opposite ends — "which locales exist only while
+   * someone is auditing" — and they are read by different layers: this script skips them, and
+   * `hasCatalogue` admits them on a dev server. If they drift, either the audit boots in English
+   * and silently stops finding hard-coded strings, or a locale gets admitted that no gate checks.
+   */
+  const auditLiteral = /GENERATED_AUDIT_LOCALES\s*:\s*readonly string\[\]\s*=\s*\[([^\]]*)\]/.exec(
+    source,
+  );
+  if (!auditLiteral) {
+    fail(
+      `${declaration} no longer holds a \`GENERATED_AUDIT_LOCALES\` array literal this gate can ` +
+        'read, so the pseudo-locale seam is unchecked. Update the parser here before trusting a pass.',
+    );
+  } else {
+    const declaredAudit = [...auditLiteral[1].matchAll(/'([a-z]{2}(?:-[A-Za-z]{2,4})?)'/g)]
+      .map(([, locale]) => locale)
+      .sort();
+    const generated = [...GENERATED_LOCALES].sort();
+    if (declaredAudit.join(',') !== generated.join(',')) {
+      fail(
+        `${declaration} declares GENERATED_AUDIT_LOCALES as [${declaredAudit.join(', ')}] but ` +
+          `\`GENERATED_LOCALES\` in this script is [${generated.join(', ')}].\n` +
+          '    The two must agree: this script skips those locales in every other check, and ' +
+          '`hasCatalogue` admits them on a dev server so `npm run i18n:audit` can boot into one.\n' +
+          '    Drift one way makes the pseudo-locale audit boot in English and stop finding ' +
+          'hard-coded strings; the other way admits a locale no gate checks.',
+      );
+    }
+  }
+
   const literal = /SHIPPED_CATALOGUE_LANGUAGES\s*:\s*readonly string\[\]\s*=\s*\[([^\]]*)\]/.exec(
-    read(declaration),
+    source,
   );
   if (!literal) {
     fail(

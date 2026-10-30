@@ -11308,17 +11308,18 @@ expectRed(
  */
 const SHIPPED_DECL = 'apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts';
 
-const shippedDeclaration = (locales) =>
-  `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = [${locales
-    .map((locale) => `'${locale}'`)
-    .join(', ')}];\n`;
+const asLiteral = (locales) => locales.map((locale) => `'${locale}'`).join(', ');
+
+const shippedDeclaration = (locales, audit = ['zz']) =>
+  `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = [${asLiteral(locales)}];\n` +
+  `export const GENERATED_AUDIT_LOCALES: readonly string[] = [${asLiteral(audit)}];\n`;
 
 /** A catalogue per locale, plus the declaration naming `declared`. */
-const shippedFixture = (onDisk, declared) => ({
+const shippedFixture = (onDisk, declared, audit) => ({
   ...Object.fromEntries(
     onDisk.map((locale) => [`apps/nuxeo-ui/public/i18n/${locale}.json`, '{"shell.title":"x"}\n']),
   ),
-  [SHIPPED_DECL]: shippedDeclaration(declared),
+  [SHIPPED_DECL]: shippedDeclaration(declared, audit),
 });
 
 expectGreen(
@@ -11380,6 +11381,52 @@ expectRed(
   },
   null,
   /declares no language, so every configured language would be refused/,
+);
+
+/**
+ * The pseudo-locale seam, which is where review of #531 found the first version of this guard
+ * breaking `npm run i18n:audit`: `zz` was refused, both audits booted in English, and
+ * `requireSentinel()` failed instead of finding hard-coded strings.
+ *
+ * The generated set is excluded from every other locale check in this script, and admitted on a
+ * dev server by `hasCatalogue`. Those are two readers of one fact, so they are pinned together.
+ */
+expectGreen(
+  'a generated audit locale on disk, excluded from the shipped list and declared as generated',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    'apps/nuxeo-ui/public/i18n/zz.json': '{"shell.title":"⟦x⟧"}\n',
+  },
+);
+
+expectRed(
+  'the generated set emptied, which would make the pseudo-locale audit boot in English',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr'], ['en', 'fr'], []),
+  null,
+  /GENERATED_AUDIT_LOCALES as \[\] but `GENERATED_LOCALES` in this script is \[zz\]/,
+);
+
+expectRed(
+  'a locale declared generated that this script does not treat as generated',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr'], ['en', 'fr'], ['zz', 'qq']),
+  null,
+  /GENERATED_AUDIT_LOCALES as \[qq, zz\] but `GENERATED_LOCALES` in this script is \[zz\]/,
+);
+
+expectRed(
+  'the generated literal reshaped so the seam goes unchecked',
+  'checkShippedCatalogueLanguages',
+  {
+    'apps/nuxeo-ui/public/i18n/en.json': '{"shell.title":"x"}\n',
+    [SHIPPED_DECL]:
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en'];\n` +
+      `export const GENERATED_AUDIT_LOCALES = new Set(['zz']);\n`,
+  },
+  null,
+  /no longer holds a `GENERATED_AUDIT_LOCALES` array literal[\s\S]*pseudo-locale seam is unchecked/,
 );
 
 /* ---------------- checkUpstreamCatalogueLanguages ---------------- */
