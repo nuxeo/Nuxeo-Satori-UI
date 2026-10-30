@@ -186,17 +186,36 @@ export function resolveSsoLoginUrl(request: SsoLoginRequest): SsoLoginTarget {
   }
   if (!request.returnQueryParam) return { url: url.href };
 
+  const warnings: string[] = [];
+  // **The return parameter is ours, so it is cleared before anything else is decided.** A
+  // configured path may carry its own — `"/nuxeo/login/azure?requestedUrl=https://evil.example/"`
+  // — and Nuxeo redirects there *after* sign-in. Overwriting it with `set()` below covers only
+  // the branch that has a return URL to write; the branch that refuses `postLoginPath` returned
+  // the URL untouched, so the smuggled value survived while the warning said none was sent. That
+  // is a post-authentication open redirect, strictly worse than the pre-authentication one
+  // NXSAT-731 reported, because by then the session exists (review of PR 519).
+  //
+  // Only this one name, and only when the deployment uses it: with `returnQueryParam: null` the
+  // deployment has said Nuxeo takes its relay state from its own configuration and not from this
+  // URL, so there is nothing here for it to honour.
+  if (url.searchParams.has(request.returnQueryParam)) {
+    url.searchParams.delete(request.returnQueryParam);
+    warnings.push(
+      `the configured path carried its own ${request.returnQueryParam}, which was dropped: ` +
+        `this application sets that parameter, from sso.postLoginPath`,
+    );
+  }
+
   const returnTo = resolveSsoReturnUrl(request.postLoginPath, request.appOrigin);
   if (returnTo === null) {
-    return {
-      url: url.href,
-      warning:
-        `sso.postLoginPath "${request.postLoginPath}" is not a path on this application, ` +
+    warnings.push(
+      `sso.postLoginPath "${request.postLoginPath}" is not a path on this application, ` +
         `so no ${request.returnQueryParam} was sent`,
-    };
+    );
+  } else {
+    url.searchParams.set(request.returnQueryParam, returnTo);
   }
-  url.searchParams.set(request.returnQueryParam, returnTo);
-  return { url: url.href };
+  return warnings.length > 0 ? { url: url.href, warning: warnings.join('; ') } : { url: url.href };
 }
 
 /**

@@ -202,6 +202,75 @@ describe('resolveSsoLoginUrl', () => {
       expect('url' in target && target.url).not.toContain('evil.example');
     });
 
+    /**
+     * Review of PR 519, and the combination that was missed: a configured path carrying its own
+     * `requestedUrl` *and* a refused `postLoginPath`. `set()` covered only the branch with a
+     * return URL to write, so this one returned the URL untouched and the smuggled value
+     * survived — while the warning said none was sent. Nuxeo redirects there after sign-in, so it
+     * is a post-authentication open redirect: worse than the defect this PR reports, because by
+     * then the session exists.
+     */
+    it('drops a return parameter the configured path smuggled in, even when postLoginPath is refused', () => {
+      const target = resolve('/nuxeo/login/azure?requestedUrl=https://evil.example/', {
+        postLoginPath: '//evil.example/landing',
+      });
+
+      expect('url' in target).toBeTrue();
+      if (!('url' in target)) return;
+      expect(target.url).not.toContain('evil.example');
+      expect(new URL(target.url).searchParams.has('requestedUrl')).toBeFalse();
+      expect(target.warning).toContain('carried its own requestedUrl');
+      expect(target.warning).toContain('no requestedUrl was sent');
+    });
+
+    it('replaces a smuggled return parameter when postLoginPath is good, and says it did', () => {
+      const target = resolve('/nuxeo/login/azure?requestedUrl=https://evil.example/');
+
+      expect('url' in target).toBeTrue();
+      if (!('url' in target)) return;
+      expect(target.url).not.toContain('evil.example');
+      expect(new URL(target.url).searchParams.get('requestedUrl')).toBe(
+        'https://app.example/dashboard',
+      );
+      expect(target.warning).toContain('carried its own requestedUrl');
+    });
+
+    it('drops every occurrence, not just the first', () => {
+      const target = resolve(
+        '/nuxeo/login/azure?requestedUrl=https://evil.example/a&requestedUrl=https://evil.example/b',
+        { postLoginPath: 'javascript:alert(1)' },
+      );
+
+      expect('url' in target).toBeTrue();
+      if (!('url' in target)) return;
+      expect(target.url).not.toContain('evil.example');
+      expect(new URL(target.url).searchParams.getAll('requestedUrl')).toEqual([]);
+    });
+
+    it('leaves a parameter that is not the return parameter alone', () => {
+      const target = resolve('/nuxeo/login/azure?tenant=acme&requestedUrl=https://evil.example/');
+
+      expect('url' in target).toBeTrue();
+      if (!('url' in target)) return;
+      expect(new URL(target.url).searchParams.get('tenant')).toBe('acme');
+      expect(target.url).not.toContain('evil.example');
+    });
+
+    /**
+     * With the parameter turned off the deployment has said Nuxeo takes its relay state from its
+     * own configuration rather than from this URL, so there is no name we own and nothing here
+     * for Nuxeo to honour. Pinned so the reasoning is visible rather than looking like a gap.
+     */
+    it('leaves the path untouched when the deployment sends no return parameter at all', () => {
+      const target = resolve('/nuxeo/login/azure?requestedUrl=https://evil.example/', {
+        returnQueryParam: null,
+      });
+
+      expect('url' in target && target.url).toBe(
+        'https://nuxeo.example/nuxeo/login/azure?requestedUrl=https://evil.example/',
+      );
+    });
+
     it('never attaches a return URL on another origin, whatever the configured value', () => {
       const values = [
         '/dashboard',
