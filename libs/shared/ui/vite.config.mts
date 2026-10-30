@@ -13,8 +13,13 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
  * runners are UTC. `satori-components` pins the same zone, for the same reason; see
  * `AGENTS/08-bug-patterns.md` pattern 27, which also records why setting `process.env.TZ` from
  * inside a case does not work.
+ *
+ * It deliberately **overrides** an inherited `TZ`, so the suite's verdict is the same on every
+ * machine. `SATORI_TEST_TZ` is the way to ask for a different one — a named variable rather than
+ * `TZ` precisely so that running in another zone is a deliberate act and cannot happen by
+ * inheriting a shell. `satori-components` resolves the pin the same way.
  */
-process.env['TZ'] = 'Asia/Calcutta';
+process.env['TZ'] = process.env['SATORI_TEST_TZ'] ?? 'Asia/Calcutta';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,

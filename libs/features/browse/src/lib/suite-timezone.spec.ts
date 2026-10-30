@@ -10,8 +10,11 @@
  * it is asserted here rather than left as a comment. `satori-components` carries the same guard.
  */
 describe('the suite’s time zone', () => {
+  /** What `vite.config.mts` resolves the pin to: its default, or an explicit `SATORI_TEST_TZ`. */
+  const EXPECTED = process.env['SATORI_TEST_TZ'] ?? 'Asia/Calcutta';
+
   it('is the zone vite.config.mts pins, so date assertions can fail', () => {
-    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('Asia/Calcutta');
+    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(EXPECTED);
   });
 
   it('is offset from UTC, which is what gives those assertions their teeth', () => {

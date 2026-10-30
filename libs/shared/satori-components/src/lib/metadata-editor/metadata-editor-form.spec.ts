@@ -238,8 +238,9 @@ describe('dates, with an adapter that does not hold JS dates', () => {
  * times and read as if it covered four.
  *
  * The west-of-UTC direction, where a naive form-only fix would have moved the same off-by-one
- * instead of removing it, is proved by running this suite under `TZ=America/New_York` and by the
- * browser capture in that zone; both are recorded on the ticket.
+ * instead of removing it, is proved by running this suite under
+ * `SATORI_TEST_TZ=America/New_York` — **not** `TZ`, which `vite.config.mts` overrides on purpose —
+ * and by the browser capture in that zone; both are recorded on the ticket.
  */
 describe('a picked calendar day is anchored in UTC', () => {
   it('is sent as that day at UTC midnight, not at the writer’s local midnight', () => {
