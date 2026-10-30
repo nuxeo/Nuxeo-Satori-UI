@@ -22,3 +22,16 @@
 # covers only the part before the blank line, and Prettier's ignore ranges need HTML comments,
 # which MDX 3 rejects.
 *.mdx
+
+# Three documents prettier has never formatted — and must not, for the same reason as the API
+# snapshot above: it rewrites what is inside their fenced code blocks. In the two i18n documents
+# the samples are quoted from real files, and prettier turns `'source':` into `"source":`, so the
+# YAML printed in the plan stops matching the `crowdin-conf.yml` it is quoting, and the
+# TypeScript sample in the status page stops matching a single-quote codebase. The charter is
+# worse: its section headings are bare `1. Overview` / `2. Pre-Requisites` lines, which prettier
+# reads as ordered-list items and then indents every following paragraph into, restructuring the
+# whole document. All three were already unformatted when this entry was added; staging any of
+# them without it silently rewrites far more than the edit.
+/README.charter.md
+/docs/i18n-localization-plan.md
+/docs/i18n-status.md

@@ -70,7 +70,7 @@ silently and gets believed anyway.
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Beta ticket  | [NXSAT-227](https://hyland.atlassian.net/browse/NXSAT-227) — delivered, in review                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | GA ticket    | [NXSAT-284](https://hyland.atlassian.net/browse/NXSAT-284) — delivered, in review. This row said **not started** while the branch implementing it was open, and the same page measured its output two sections below.                                                                                                                                                                                                                                                                                                                                  |
-| Pull request | [#198](https://github.com/nuxeo/agentic-ui-poc/pull/198) (NXSAT-227, merged) · [#217](https://github.com/nuxeo/agentic-ui-poc/pull/217) (NXSAT-284)                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Pull request | [#198](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/198) (NXSAT-227, merged) · [#217](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/217) (NXSAT-284)                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Branch       | `feature/nxsat-227a-i18n` (merged) · `feature/nxsat-284-descriptor-labels`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Gate         | `lockfile, guardrails, lint, test, build, typecheck, api-surface` all pass as of 2026-09-22, **under Node 20** — on Node 25 a built-in `localStorage` shadows jsdom's and `test` reports 126 false failures. `guardrails` was RED on pristine `origin/main` earlier the same day (`header-search-focus-ring.spec.html` carried a hard-coded `placeholder`); NXENG-755 fixed it by binding the pipe. Re-measure rather than reading this: `nvm use 20 && npm run beta:gate`. This row said **23 of 23 green** for six days while that gate was failing. |
 
@@ -729,7 +729,7 @@ Worth recording, because it is the argument for writing controls at all:
 
 ## Next steps
 
-### Immediate — what [#198](https://github.com/nuxeo/agentic-ui-poc/pull/198) is actually waiting on
+### Immediate — what [#198](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/198) is actually waiting on
 
 **One thing: a human approval.** CI is green, every review thread is resolved, and nothing here
 needs a repo admin.
@@ -854,7 +854,7 @@ See D8d.
 **29 September 2026 — the nightly pull exported blank values.** `skip_untranslated_strings: true`
 had been added to stop the English overwrite, on the untested belief that it would leave an
 untranslated key out. For our nested JSON it keeps the key and blanks the value. The nightly pull
-([#293](https://github.com/nuxeo/agentic-ui-poc/pull/293)) carried nine catalogues with every
+([#293](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/293)) carried nine catalogues with every
 unapproved value `""` — all 1,972 in seven of them, all but 8 approved strings in `fr.json` and
 `de.json` — and
 `checkTranslationCatalogues` failed it, correctly. The Technical Usage Guide warns of exactly this.
@@ -879,7 +879,7 @@ fails any source that is not.
 
 ### NXSAT-284 — GA extraction: 1350 template strings, 257 descriptor strings, plus an unknown number passed imperatively
 
-> **Delivered in [#217](https://github.com/nuxeo/agentic-ui-poc/pull/217).** What follows is the
+> **Delivered in [#217](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/217).** What follows is the
 > PLAN as it was written, kept because the decisions and the corrected assumptions in it are the
 > record of why the work took the shape it did. For what actually shipped, read the measured
 > table at the top of this page — not the counts here, which are the estimate this planning

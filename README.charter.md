@@ -1,4 +1,4 @@
-# agentic-ui-poc
+# Nuxeo Agentic UI — PoC charter
 PoC Charter: Agentic AI‑Built Nuxeo Angular UI
 1. Overview
 This Proof of Concept (PoC) evaluates the feasibility of using agentic AI tooling to generate a functional, deployable Nuxeo Angular UI with zero or near‑zero hand‑written application code authored by a Hyland engineer.

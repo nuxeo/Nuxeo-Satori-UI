@@ -1,6 +1,6 @@
 ---
 name: capture-phase-evidence
-description: Capture verified image evidence for a step or phase of agentic-ui-poc using the Playwright phase harness — write an assertion-bearing steps file, run it against the dev server, and produce a screenshot report (manifest.json plus INDEX.md with inlined images) that exits non-zero if any check fails. Use when asked to capture evidence, take before/after screenshots, prove a change works, produce artifacts for a PR or Confluence page, or record a Beta phase outcome.
+description: Capture verified image evidence for a step or phase of Nuxeo-Satori-UI using the Playwright phase harness — write an assertion-bearing steps file, run it against the dev server, and produce a screenshot report (manifest.json plus INDEX.md with inlined images) that exits non-zero if any check fails. Use when asked to capture evidence, take before/after screenshots, prove a change works, produce artifacts for a PR or Confluence page, or record a Beta phase outcome.
 ---
 
 # Capture phase evidence

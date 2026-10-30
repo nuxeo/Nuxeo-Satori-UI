@@ -2,7 +2,7 @@
 name: fix-bug
 description: >-
   End-to-end agentic playbook for fixing a Jira bug (NXSAT-<id>, NCO-<id>, NXENG-<id>) in the
-  agentic-ui-poc Nx/Angular monorepo: runs fully autonomously end-to-end (YOLO mode, no
+  Nuxeo-Satori-UI Nx/Angular monorepo: runs fully autonomously end-to-end (YOLO mode, no
   confirmation gates), analyse the ticket + all comments, derive acceptance criteria when the
   ticket has none, take an isolated per-ticket workspace (own worktree, own ports and a
   ticket-scoped Nuxeo data root on the shared instance; a dedicated container only with
@@ -14,7 +14,7 @@ description: >-
   "fix and raise PR", or take a defect to review.
 ---
 
-# Fix an agentic-ui-poc bug — agentic, end-to-end
+# Fix a Nuxeo-Satori-UI bug — agentic, end-to-end
 
 Drive the whole fix in **YOLO mode: run the entire workflow end-to-end without pausing for
 confirmation between phases** — reproduce → decide → fix → validate → commit → push → open the PR
@@ -44,8 +44,8 @@ and accessibility / i18n / cross-browser validation to [`validate-fix`](../valid
 Useful constants:
 
 - Atlassian cloudId: `252cce86-035e-4b0e-abd2-3c002935632f` (site `hyland.atlassian.net`)
-- Jira projects: `NXSAT` · `NCO` · `NXENG` — Upstream repo: `nuxeo/agentic-ui-poc` — base: `main`
-- SonarCloud: org `nuxeo`, project key `nuxeo_agentic-ui-poc`
+- Jira projects: `NXSAT` · `NCO` · `NXENG` — Upstream repo: `nuxeo/Nuxeo-Satori-UI` — base: `main`
+- SonarCloud: org `nuxeo`, project key `nuxeo_agentic-ui-poc` — the key kept the repo's old name
 - Shared dev infra you must **never** disturb: containers `nuxeo` (:8080) and `nuxeo-opensearch`
   (:9200), network `nuxeo-net`, and the primary checkout itself
 
@@ -138,7 +138,7 @@ walk the user through it** — do not silently continue past a missing prerequis
   `mcp_auth` for the Atlassian namespace; confirm access to **NXSAT**/**NCO**/**NXENG**.
 - **Jira token** for attachments: `~/.jira_email` and `~/.jira_token` exist. If absent, have the
   user create them — never accept a token pasted into chat.
-- **GitHub CLI**: `gh auth status` logged in with push access to `nuxeo/agentic-ui-poc`.
+- **GitHub CLI**: `gh auth status` logged in with push access to `nuxeo/Nuxeo-Satori-UI`.
 - **Signed commits**: `git config commit.gpgsign` is `true`, `gpg.format=ssh`, key registered on
   GitHub as a **Signing Key** (distinct from an Authentication key).
 - **Node 24** (`.nvmrc`) and `npm ci` done. On Node 25+ a built-in `localStorage` shadows jsdom's
@@ -605,7 +605,7 @@ This is the "fix and raise PR" trigger.
 - Open the PR against `main`, pushing to `origin`, **never a fork**:
 
   ```bash
-  gh pr create --repo nuxeo/agentic-ui-poc --base main \
+  gh pr create --repo nuxeo/Nuxeo-Satori-UI --base main \
     --title "fix(NXSAT-123): <summary>" \
     --body "$(cat .github/PULL_REQUEST_TEMPLATE.md)"
   ```
@@ -615,7 +615,7 @@ This is the "fix and raise PR" trigger.
   Embed the before/after screenshots. Tick checklist items only once true.
 
 - Confirm the commit is **Verified**:
-  `gh api repos/nuxeo/agentic-ui-poc/commits/<sha> --jq '.commit.verification'`. `unknown_key`
+  `gh api repos/nuxeo/Nuxeo-Satori-UI/commits/<sha> --jq '.commit.verification'`. `unknown_key`
   means the key is registered for authentication but not as a **Signing Key** — fix on GitHub, no
   re-push needed.
 
@@ -640,7 +640,7 @@ Poll **every 60 seconds, for at most 45 minutes**, reporting a compact table whe
 changes state:
 
 ```bash
-gh pr view <pr> --repo nuxeo/agentic-ui-poc --json statusCheckRollup \
+gh pr view <pr> --repo nuxeo/Nuxeo-Satori-UI --json statusCheckRollup \
   --jq '[.statusCheckRollup[]|{name:(.name//.context),conclusion:(.conclusion//.state)}]'
 ```
 
@@ -678,7 +678,7 @@ PR=<pr>
 
 # 1. resolve everything outstanding (the subagent), then snapshot and request
 BEFORE=$(node scripts/pr-review-analysis.mjs latest-review "$PR") || exit 1
-gh api -X POST "repos/nuxeo/agentic-ui-poc/pulls/$PR/requested_reviewers" \
+gh api -X POST "repos/nuxeo/Nuxeo-Satori-UI/pulls/$PR/requested_reviewers" \
   -f 'reviewers[]=copilot-pull-request-reviewer[bot]'   # or the GitHub MCP request_copilot_review
 
 # 2. poll for a review newer than the snapshot, capped at 10 minutes
@@ -860,7 +860,7 @@ curl -sS --fail-with-body -u "$U" -H "Content-Type: application/json" -X POST \
   -d "{\"globalId\":\"github-pr-<N>\",
        \"application\":{\"type\":\"com.github\",\"name\":\"GitHub\"},
        \"relationship\":\"fixed by\",
-       \"object\":{\"url\":\"https://github.com/nuxeo/agentic-ui-poc/pull/<N>\",
+       \"object\":{\"url\":\"https://github.com/nuxeo/Nuxeo-Satori-UI/pull/<N>\",
                   \"title\":\"PR #<N> — <commit subject>\"}}"
 ```
 

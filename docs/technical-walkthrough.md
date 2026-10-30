@@ -25,7 +25,7 @@
 ### Monorepo with Nx 23
 
 ```
-agentic-ui-poc/
+Nuxeo-Satori-UI/
 ├── apps/
 │   ├── nuxeo-ui/          ← Angular 19 SPA (the main UI)
 │                          (no ai-backend — AI ships as a separate marketplace package)

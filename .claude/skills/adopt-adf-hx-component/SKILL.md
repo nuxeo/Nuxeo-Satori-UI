@@ -1,6 +1,6 @@
 ---
 name: adopt-adf-hx-component
-description: Retired, kept as a record — adf-hx, the POC route and the bridge it describes were removed (NXSAT-635, NXSAT-637); do not follow it. Replace one hand-written hxp-* component in agentic-ui-poc with the real published adf-hx component — confirm the upstream export, provide the API tokens it needs, swap it behind the POC route, delete the local clone, and prove parity with image evidence. Use when asked to adopt, swap in or migrate to an adf-hx component (document list, document tree, breadcrumb, metadata sidebar, permissions, manage versions, document viewer), or to remove a hand-written hxp-* lookalike.
+description: Retired, kept as a record — adf-hx, the POC route and the bridge it describes were removed (NXSAT-635, NXSAT-637); do not follow it. Replace one hand-written hxp-* component in Nuxeo-Satori-UI with the real published adf-hx component — confirm the upstream export, provide the API tokens it needs, swap it behind the POC route, delete the local clone, and prove parity with image evidence. Use when asked to adopt, swap in or migrate to an adf-hx component (document list, document tree, breadcrumb, metadata sidebar, permissions, manage versions, document viewer), or to remove a hand-written hxp-* lookalike.
 ---
 
 # Adopt a real adf-hx component

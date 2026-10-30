@@ -1,6 +1,6 @@
 ---
 name: beta-phase
-description: End-to-end SDLC orchestrator for one phase of the Nuxeo Satori Beta program in agentic-ui-poc — load the phase contract, plan, implement in verifiable steps, iterate against the quality gate until green, capture per-step image evidence with assertions, run a multi-model adversarial review, open a conventional-commit PR with the evidence report attached, then monitor CI to green. Use when asked to run or continue a Beta phase (phase-0-baseline through phase-6-quality), to "execute the Beta plan", to implement Layer 0/1/2/3 work, or to adopt adf-hx components.
+description: End-to-end SDLC orchestrator for one phase of the Nuxeo Satori Beta program in Nuxeo-Satori-UI — load the phase contract, plan, implement in verifiable steps, iterate against the quality gate until green, capture per-step image evidence with assertions, run a multi-model adversarial review, open a conventional-commit PR with the evidence report attached, then monitor CI to green. Use when asked to run or continue a Beta phase (phase-0-baseline through phase-6-quality), to "execute the Beta plan", to implement Layer 0/1/2/3 work, or to adopt adf-hx components.
 ---
 
 # Run a Beta phase, end to end

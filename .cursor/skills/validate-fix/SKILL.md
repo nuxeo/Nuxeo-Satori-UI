@@ -1,7 +1,7 @@
 ---
 name: validate-fix
 description: >-
-  Independent validation pass over a delivered agentic-ui-poc bug fix, before it is pushed or
+  Independent validation pass over a delivered Nuxeo-Satori-UI bug fix, before it is pushed or
   before QA sign-off — runs the static and runtime accessibility gates, checks the fix across
   Chromium and WebKit, audits user-facing strings and theming, exercises corner cases and the
   blast radius, and produces a Pass/Fail/Blocked verdict with evidence. Use when asked to
@@ -40,7 +40,7 @@ all of a ticket's artifacts collect in one deletable folder.
 A generic QA checklist will ask for four things here and three of them do not apply. **Do not
 report on a capability that does not exist**; say it is not applicable and why.
 
-| Concern       | Reality in `agentic-ui-poc`                                                                                       |
+| Concern       | Reality in `Nuxeo-Satori-UI`                                                                                      |
 | ------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Accessibility | **Fully applicable.** Static gate + runtime axe gate, both at WCAG 2.1 AA with an empty known-violations list     |
 | Browsers      | **Partly.** `chromium` and `webkit` are the registered Playwright projects. **No Firefox.** WebKit ≠ Safari       |
