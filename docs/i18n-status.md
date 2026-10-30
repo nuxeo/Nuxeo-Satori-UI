@@ -21,6 +21,17 @@ exist — Angular locale data in `register-locale-data.ts`, and a `--language` i
 languages today, with each of the other five becoming advertisable in a small pull request when
 its catalogue arrives. See `D8e-webui`.
 
+**Crowdin configuration is no longer the blocker — approvals are.** All four missing target
+languages were added and the one failing Spanish string was fixed on 30 October, so the pull can
+run.
+
+Because the pull delivers everything it is asked for into **one** shared pull request, a language
+with no approvals would arrive as an all-English catalogue and hold that one pull request red —
+Spanish and the four shipping languages with it. So the pull list is now `fr de ja nl es`:
+`ar`, `he`, `it` and `sv` are registered and are Crowdin targets, but are **not requested until
+they have approvals**. Item 2 below has the reasoning. What is left is translation, and RTL for
+Arabic and Hebrew.
+
 | Language | Code | Catalogue | Crowdin id | Status                                                                                                                                                                         |
 | -------- | ---- | --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | English  | `en` | `en.json` | source     | ships                                                                                                                                                                          |
@@ -28,32 +39,124 @@ its catalogue arrives. See `D8e-webui`.
 | German   | `de` | `de.json` | `de`       | ships, 99% approved                                                                                                                                                            |
 | Japanese | `ja` | `ja.json` | `ja`       | ships since NXSAT-293, 99% approved                                                                                                                                            |
 | Dutch    | `nl` | `nl.json` | `nl`       | ships since NXSAT-293, 99% approved                                                                                                                                            |
-| Spanish  | `es` | —         | `es`       | **registered, awaiting catalogue** — 99% approved, but `kd.knowledge-discovery.selected` is `Seleccionado(s)`, which `checkCatalogueValuesAreRenderable` fails. Fix in Crowdin |
-| Italian  | `it` | —         | ?          | **registered, awaiting catalogue** — not a target language on Crowdin project 160; translation not started                                                                     |
-| Swedish  | `sv` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160; translation not started                                                                                      |
-| Arabic   | `ar` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160. RTL ready (NXSAT-752); refused until its catalogue lands (NXSAT-733), so it runs as `en` today  |
-| Hebrew   | `he` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160. RTL ready (NXSAT-752); refused until its catalogue lands (NXSAT-733), so it runs as `en` today  |
+| Spanish  | `es` | —         | `es`       | **requested, arriving next pull** — 99% approved, and the `Seleccionado(s)` string that was failing `checkCatalogueValuesAreRenderable` is fixed. In the pull list; nothing else holds it |
+| Italian  | `it` | —         | `it`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2)                                                                                       |
+| Swedish  | `sv` | —         | `sv`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2)                                                                                       |
+| Arabic   | `ar` | —         | `ar`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2). RTL ready ([#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523)); refused until the catalogue lands (NXSAT-733), so it runs as `en` |
+| Hebrew   | `he` | —         | `he`       | **target, not yet requested** — as Arabic, including RTL                                                                         |
 
 Dropped: **Thai** (`th`) and **Chinese Simplified** (`zh`), both at 99% approved when removed.
 Their translations remain in Crowdin, so re-adding either is a pull rather than new work.
 Still in Crowdin and not in the app's set: **Portuguese** (`pt`, 88% approved) and **Polish**
 (`pl`, 99% translated / 2% approved).
 
-A `?` in the Crowdin column is not laziness — the id must be read off the project when the
-language is added there, because a wrong id fails the pull exactly as an absent target does. The
-nine the project carried were `de es fr ja nl pl pt th zh`, so four of the five additions were in
-none of them.
+The Crowdin column carried `?` for four of these until 30 October, because an id must be read off
+the project rather than guessed — a wrong one fails the pull exactly as an absent target does. They
+are confirmed now, on INTERN-1363, and all four are the bare two-letter forms the pull list already
+named, so nothing in the repository had to change. The nine the project carried before were
+`de es fr ja nl pl pt th zh`.
 
 ### What is owed, and by whom
 
-1. **Add `ar`, `he`, `it`, `sv` as target languages on Crowdin project 160.** This is the one
-   item with a cost attached to leaving it: the pull list already names them, and the CLI
-   rejects the whole invocation rather than the unknown flag, so **the nightly pull fails until
-   they exist** and `fr`, `de`, `ja` and `nl` stop updating with it. They are at 99% and static,
-   so the exposure is small, but it is real — and it is why this is first.
-2. **Fix `Seleccionado(s)` in Crowdin** so `es` can pass `checkCatalogueValuesAreRenderable`.
-3. **Nothing. RTL is delivered** — see the section below. What `ar` and `he` still owe is their
-   catalogues, which is item 1.
+**The two Crowdin items are done**, both on 30 October (INTERN-1363, Enrico Stengert): `ar`, `he`,
+`it` and `sv` are target languages on project 160, and the `Seleccionado(s)` string is corrected to
+`Seleccionado`. A proof-reading step plus post-translation localization QA is confirmed configured,
+which closes the proof-reading row in `D8-standard` — **one row, not the file**. That row is
+updated to `CONFORMS` in the same change as this page, because a status page claiming a row is
+closed while the conformance record still reads `OWNER-ACTION-PENDING` is worse than either
+document being wrong alone.
+
+An earlier revision of this page called it "the last open conformance item", which it is not.
+`D8-standard` still carries Project Content Initialization seeding, setup-token revocation, the
+service-account commit identity, **and the row immediately below the one just closed**: project
+-level export settings take precedence over the pipeline's, and nobody has seen project 160's.
+Enrico confirmed the project's workflow while noting the Localization team cannot see our
+`crowdin-conf.yml`; we confirmed `export_only_approved: 'true'` while unable to see the project's
+settings. Each side confirmed its own half, so "approved-only export actually happens" remains
+unverified even though both halves look right.
+
+**The pull never actually broke, and saying it had is an error worth keeping visible.** Earlier
+revisions of this page and of `crowdin-pull.yaml` asserted in the present tense that the nightly
+pull was failing and that `fr`, `de`, `ja` and `nl` had stopped updating. Neither happened. The run
+history, which is the only thing that settles it:
+
+| Time (UTC) | |
+| --- | --- |
+| 30 Oct 00:03 | scheduled run — **succeeded**, `main` still had the old language list |
+| 30 Oct 11:39 | NXSAT-754 merged; `main` first carried `--language=ar/he/it/sv` |
+| 30 Oct 12:00 | INTERN-1363 — the four became targets on project 160 |
+| 31 Oct 00:00 | next scheduled run |
+
+The workflow is `0 0 * * *` against `main`, so the unknown languages were exposed for **21
+minutes** and no run fell inside them. The last twelve scheduled runs all succeeded, including the
+one that day.
+
+The underlying risk was real and is worth keeping: the CLI rejects the **whole** invocation on an
+unknown `--language` rather than the single flag, so declaring languages before Crowdin has them
+would have failed the pull entirely rather than per-language. What was wrong was the tense. A
+forecast written as a current outage is not a smaller mistake than being wrong about the mechanism —
+it travelled into a request to another team and made it sound more damaging than it was.
+
+What remains:
+
+1. **Translation itself**, for `ar`, `he`, `it` and `sv`. Not started.
+
+   Spanish is the exception at 99% approved — but "needs only a pull" is not quite true, and an
+   earlier revision of this page said it was. `SHIPPED_CATALOGUE_LANGUAGES` in
+   `apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts` is `['de', 'en', 'fr', 'ja', 'nl']`, and
+   `resolveStringLanguage` refuses anything outside it, so **the pull request that delivers
+   `es.json` will be red until someone adds `es` there**. `checkShippedCatalogueLanguages` fails
+   both directions, so it cannot be added in advance either — it lands in the same commit as the
+   catalogue, and the automated pull will not write it. That commit is a person's.
+
+2. **Nothing, now — `ar`, `he`, `it` and `sv` were taken out of the pull list on 30 October, and
+   that is why.** Recorded because the reasoning is not obvious from the list itself.
+
+   The pull is **one** pull request, not one per language: a single `create_pull_request`, a
+   single `localization_branch_name: crowdin-translations-update`, and every `--language` landing
+   in that one branch. So one language that is not ready holds the whole pull request red, and
+   with it every language that is.
+
+   All four became Crowdin targets on 30 October but have no approvals yet. Approved-only export
+   fills an unapproved string with its English source, so each would arrive as an entirely
+   English catalogue, and `checkCataloguesAreTranslated` fails exactly that on purpose — it
+   cannot be told apart from a destructive sync (D8d). Leaving them listed would have blocked
+   **Spanish, which is at 99% approved and ready**, plus routine updates to the four shipping
+   languages.
+
+   An earlier revision of this page said the pull "turns green per language as approvals land".
+   The branching model makes that impossible, and the workflow's own `pull_request_body` had it
+   right all along — "**this** pull request stays red until approvals exist", singular.
+
+   Nothing is lost by holding them back: all four stay registered in `register-locale-data.ts`
+   and stay targets on the project. **Add each `--language` back when its approvals exist** — and
+   note that is a change of its own, not the one that advertises the language. It has to reach
+   `main` and then wait for a scheduled run before any catalogue exists; `availableLanguages` and
+   `DATE_FNS_LOCALES` follow in a third change, once that catalogue is on disk. Three pull
+   requests per language, and they cannot be collapsed: one cannot be both before and after the
+   pull.
+
+3. **RTL, for Arabic and Hebrew.** No longer "tracked separately" — it is
+   [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523), which sets `<html dir>` from the
+   active language and writes CDK's `Directionality` so overlays follow.
+
+   An earlier revision of this item said that until #523 merges "either language renders
+   left-to-right". That is no longer true, and NXSAT-733 is why: `describeUnsupportedLanguage`
+   refuses a `defaultLanguage` with no shipped catalogue, so `boot('ar')` applies `en` and neither
+   language can be **reached** at startup at all. They do not render left-to-right; they do not
+   render as Arabic or Hebrew. The mechanism is ready and activates when the catalogue lands —
+   which is a claim with no shelf life, unlike "you can select it today".
+
+4. **Shared-component strings, which are a different team's.** `@hylandsoftware/satori-ui` ships
+   no catalogue for `ar`, `he`, `ja`, `nl` or `sv` — 15 files in its `i18n/` but only seven
+   distinct languages, `de en es fr it pl pt`. So `sat.*` strings, including accessible names,
+   render in English in those five. **`ja` and `nl` ship today**, so this is live rather than
+   pending. Tracked as [DS-2803](https://hyland.atlassian.net/browse/DS-2803) with the Satori
+   Design System team. Re-measure rather than quoting the figures:
+
+   ```bash
+   ls node_modules/@hylandsoftware/satori-ui/i18n/*.json | xargs -n1 basename | sed 's/.json//'
+   ```
 
 ### Right to left — delivered, NXSAT-752
 
@@ -74,31 +177,29 @@ closed the startup path, not by booting `ar` today — which is why the registra
 boots `fr` from a stale `rtl` instead.
 
 **The whole defect was one missing attribute.** Right-to-left handling already existed in `nxs-`
-components, through three mechanisms — **seven components in total, four of them via the CSS
-attribute**, with `document-tree` in two rows:
+components across three mechanisms — seven components, four of them via the CSS attribute, with
+`document-tree` in two rows. The table and the two `grep` commands that reproduce it are in
+`D8e-webui` in [the plan](i18n-localization-plan.md); they are **not** repeated here, because two
+copies of one inventory in two documents is how the inventory in `AGENTS/11-beta-program.md` went
+stale. Upstream's own `platform-nav` and `split-button` carry `:dir(rtl)` too.
 
-| mechanism                      | components                                            |
-| ------------------------------ | ----------------------------------------------------- |
-| `:host-context([dir='rtl'])`   | `breadcrumbs`, `document-tree`, `folder-picker`, `pager` |
-| `inject(Directionality)`       | `document-list`, `document-tree`                      |
-| `getComputedStyle(…).direction`| `details-panel`, `rich-tooltip`                       |
+**None of it had ever run**, because nothing set `dir`: `index.html` ships `lang="en"` and no `dir`
+at all. Same family as gap 10 below — `translate.use()` sets the string language and touches
+neither `LOCALE_ID` nor the document's direction.
+
+One figure that is only here, with its command, because the prose got it wrong twice: the physical
+declarations replaced are **thirteen across six stylesheets** — eight of the simple kind, and five
+asymmetric four-value shorthands, which is the half a property-name pattern cannot see. It appeared
+as "seven" in two places.
 
 ```bash
-grep -rl "host-context(\[dir='rtl'\])" --include='*.scss' libs/shared/satori-components/src
-grep -rl 'inject(Directionality' --include='*.ts' libs/shared/satori-components/src | grep -v spec
+git diff origin/main...HEAD -- '*.scss' | grep '^-' | grep -cE \
+  "margin-(left|right)|padding-(left|right)|^-[[:space:]]*(left|right):|text-align: (left|right)|^-[[:space:]]*(margin|padding): ([^;]+ ){3}[^;]+;"
 ```
 
-Upstream's own `platform-nav` and `split-button` carry `:dir(rtl)` too. **None of it had ever
-run**, because nothing set `dir`: `index.html` ships `lang="en"` and no `dir` at all. Same family
-as gap 10 below — `translate.use()` sets the string language and touches neither `LOCALE_ID` nor
-the document's direction.
-
-The commands are here because the prose was wrong twice without them. An earlier revision said
-"seven components carried `:host-context` rules", which runs two claims together — seven handle
-right-to-left, four through that mechanism — and a count of the CSS declarations replaced appeared
-as "seven" in two places when it is thirteen across six files, five of those being asymmetric
-four-value shorthands. A number nothing checks is a number that drifts; a number with the command
-beside it can be falsified in two seconds.
+Both halves are in that one expression on purpose. The first draft of it omitted the shorthand
+alternation and printed 8 beside a claim of 13 — a command that disagrees with the number it is
+meant to support is worse than no command, so it was run before being written down.
 
 `syncDocumentDirection` in `provide-app-config.ts` sets it, beside the existing `lang` sync and off
 the same `onLangChange`, so a language changed after startup is honoured and not only the
