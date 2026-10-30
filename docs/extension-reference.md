@@ -76,8 +76,12 @@ Scaffold that package rather than writing it by hand. In a clone of this reposit
 Node 20 — no `npm ci`, no registry token:
 `node tools/satori-generators/src/config-package/create.mjs acme-config --owner=acme` writes both
 declarations, starter fragments with JSON schemas for your editor, and a `build.mjs` that refuses
-what the server would reject — JSON that does not parse, a repeated key, a fragment over 1 MiB, a
-missing asset — and writes the installable zip: `node config-packages/acme-config/build.mjs`. The
+what the server would reject — JSON that does not parse, a repeated key, a fragment over 1 MiB or
+nested more than 1000 deep, a missing asset — and writes the installable zip:
+`node config-packages/acme-config/build.mjs`. Nesting is the one of those limits the server does
+not set itself: `ConfigSnapshot` parses with a plain Jackson `ObjectMapper`, so the depth it
+accepts is jackson-core's `StreamReadConstraints` default, and a fragment past it is dropped at
+`error invalid-json` while the package installs and Nuxeo starts normally (NXSAT-730). The
 `config-package` Nx generator writes the same files, byte for byte, where Nx is installed:
 `npx nx g ./tools/satori-generators:config-package acme-config --owner=acme` after a full install
 of this repository, or `npx nx g @nuxeo/satori-platform:config-package acme-config --owner=acme`
@@ -1195,6 +1199,23 @@ In an `edit` or `create` form, the schema type picks the control:
 | `complex`                          | a labelled group of its sub-fields, each with its own control                               |
 | `complex[]`                        | one group per item, with Add and Remove                                                     |
 | `blob`, or `complex` nested deeper | shown, not editable                                                                         |
+
+**A `date` field edits a calendar day, and that day is anchored in UTC.** A day picked or typed is
+sent as that day at UTC midnight — 6 March 2024 is always `2024-03-06T00:00:00.000Z`, whatever zone
+the user is in — and a stored value is read back as the day it names in UTC, so the form opens on
+the day that was saved everywhere. This is the same anchoring the view uses (`date` renders in UTC,
+above) and the same one Nuxeo itself applies to a day-only write, so one picked day is one stored
+value and every surface showing it agrees.
+
+Two consequences worth designing around:
+
+- A `date` property that carries a meaningful time of day is **not** a calendar day, and the form
+  does not treat it as one beyond its day: it is shown and edited by day, and written back
+  unchanged — time of day included — as long as the day is not altered. Alter the day and the time
+  is replaced by UTC midnight.
+- A value written by another client at midnight in a local zone (Nuxeo Web UI does this) names the
+  previous UTC day when that zone is ahead of UTC, and will be shown and edited as that previous
+  day. Nothing records the zone it was written in, so it cannot be recovered.
 
 **Validation before saving.** Save checks the schema's constraints in the browser first: a
 required field (`NotNullConstraint`, or `"required": true` in the file), a `PatternConstraint`

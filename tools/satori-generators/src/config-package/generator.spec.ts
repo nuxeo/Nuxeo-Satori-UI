@@ -416,6 +416,81 @@ describe('the generated build.mjs', () => {
     expect(build().status).toBe(0);
   });
 
+  // NXSAT-730. Nesting was the one server limit the build did not know, and it is the only one the
+  // server does not set itself: `ConfigSnapshot`'s ObjectMapper is a plain `new ObjectMapper()`, so
+  // the depth it accepts is jackson-core's `StreamReadConstraints` default. Measured against the
+  // server's own jars (jackson-core 2.20.0): 1000 parses, 1001 is refused with "Document nesting
+  // depth (1001) exceeds the maximum allowed (1000, from `StreamReadConstraints.getMaxNestingDepth()`)",
+  // and the fragment is then dropped at `error invalid-json` — so the package installed, Nuxeo
+  // started, and the customer's setting silently did nothing.
+  describe('nesting depth', () => {
+    /** `{}` is depth 1 and `{"a":{}}` is depth 2, which is how Jackson counts it. */
+    const nested = (depth: number) => `${'{"a":'.repeat(depth - 1)}{}${'}'.repeat(depth - 1)}`;
+
+    it('builds a fragment nested exactly as deep as the server accepts', async () => {
+      await generate();
+      write(fragment, nested(1000));
+      expect(build().status).toBe(0);
+    });
+
+    it('refuses one level deeper than the server accepts, naming the file', async () => {
+      await generate();
+      write(fragment, nested(1001));
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain('bundle/agentic-ui-config/bootstrap.json');
+      expect(output).toMatch(
+        /nested 1001 deep; the server’s JSON parser refuses a fragment or layout nested deeper than 1000/,
+      );
+    });
+
+    // The depth is counted with an explicit stack, before anything walks the document, because a
+    // recursive counter would overflow on exactly the input it exists to refuse. Before this,
+    // `rejectDuplicateKeys` — recursive, and reached first on every supported Node — threw a
+    // RangeError that `parseObject` caught and reported as the bare words "Maximum call stack size
+    // exceeded", naming no limit and no number.
+    it.each([5000, 50_000])(
+      'refuses a fragment nested %i deep in one line, with no stack trace',
+      async (depth) => {
+        await generate();
+        write(fragment, nested(depth));
+        const { status, output } = build();
+        expect(status).toBe(1);
+        expect(output).toMatch(
+          new RegExp(`nested ${depth} deep; the server’s JSON parser refuses`),
+        );
+        expect(output).not.toMatch(/Maximum call stack size exceeded/);
+        expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+      },
+    );
+
+    it('counts an array as one level, as the server’s parser does', async () => {
+      await generate();
+      // One object around 1000 arrays: depth 1001, the first the server refuses.
+      write(fragment, `{"a":${'['.repeat(1000)}${']'.repeat(1000)}}`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toMatch(/nested 1001 deep; the server’s JSON parser refuses/);
+    });
+
+    it('counts structure, not braces and brackets inside strings', async () => {
+      await generate();
+      // One shallow object whose single value holds 2000 of each, an escaped quote and a backslash.
+      write(fragment, JSON.stringify({ note: `${'{['.repeat(2000)}"\\` }));
+      expect(build().status).toBe(0);
+    });
+
+    it('checks inline JSON too, which the server reads the same way', async () => {
+      await generate();
+      contribute(`<fragment name="deep" layer="manifest"><json>${nested(1001)}</json></fragment>`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toMatch(
+        /inline JSON of fragment "deep" in manifest: nested 1001 deep; the server’s JSON parser refuses/,
+      );
+    });
+  });
+
   it.each([
     ['single quotes', `<asset name='logo.svg' src='agentic-ui-config/assets/logo.svg' />`],
     ['spaces around =', `<asset name = "logo.svg" src = "agentic-ui-config/assets/logo.svg" />`],
@@ -730,6 +805,27 @@ describe('the generated build.mjs', () => {
     expect(output).toContain('bundle/OSGI-INF/acme-config-config.xml: is not well-formed XML');
     expect(output).toMatch(message);
   });
+
+  // NXSAT-730. The element walker is recursive and its catch rethrows anything that is not a
+  // well-formedness failure, so XML nested past the stack left Node printing a raw RangeError
+  // trace — the stack trace the ticket reports, whose uncaught site is this walker rather than
+  // `JSON.stringify`. The bound is the script's own, not a limit the server sets: it exists so the
+  // refusal is the same on every machine instead of depending on how much stack happened to be
+  // left. A component XML in this format is about five elements deep.
+  it.each([1000, 50_000])(
+    'refuses component XML nested %i deep in one line, with no stack trace',
+    async (depth) => {
+      await generate();
+      write(componentXml, `<?xml version="1.0"?>\n${'<a>'.repeat(depth)}${'</a>'.repeat(depth)}\n`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toMatch(
+        /acme-config-config\.xml: is not well-formed XML: elements nested more than 256 deep/,
+      );
+      expect(output).not.toMatch(/Maximum call stack size exceeded/);
+      expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+    },
+  );
 
   it('builds the untouched scaffold of a 128-character name', async () => {
     const longest = `a${'-b'.repeat(63)}a`;

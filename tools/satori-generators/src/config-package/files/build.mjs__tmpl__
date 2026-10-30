@@ -20,10 +20,11 @@
  *     `<json>`;
  *   - a `src` that names no packaged file in `bundle/` — a directory or a Markdown file is not one;
  *   - a fragment or layout body — a `src` file whatever its name, or inline `<json>` — that does
- *     not parse, is not an object, repeats a key, or is packaged over 1 MiB; an asset over 2 MiB.
+ *     not parse, is not an object, repeats a key, nests deeper than the server's JSON parser
+ *     accepts, or is packaged over 1 MiB; an asset over 2 MiB.
  * And around them:
  *   - XML that is not UTF-8, or not well-formed as Nuxeo's namespace-aware parser reads it, which
- *     Nuxeo cannot load at all;
+ *     Nuxeo cannot load at all, or nested deeper than this script checks;
  *   - a `Nuxeo-Component` that names no packaged file in `bundle/`;
  *   - a component contributing configuration without
  *     `<require>org.nuxeo.agentic.ui.config.defaults</require>`, without which this package's
@@ -59,6 +60,20 @@ const PACKAGE = join(HERE, 'package');
 // nuxeo-agentic-core.
 const MAX_JSON_BYTES = 1024 * 1024;
 const MAX_ASSET_BYTES = 2 * 1024 * 1024;
+// Nesting is the one limit the server does not set itself, so it is the one number here that can
+// move under you: `ConfigSnapshot`'s mapper is a plain `new ObjectMapper()`, which leaves the depth
+// at jackson-core's `StreamReadConstraints` default — 1000 since Jackson 2.15, read from the
+// server's own jars rather than from the documentation. That is why the refusal below says "the
+// server's JSON parser" and not "the server": on a server whose Jackson raised the default this is
+// stricter than it needs to be, which refuses a package that would have worked, where being
+// generous would ship one that silently does not.
+const MAX_JSON_DEPTH = 1000;
+// This script's own bound, mirroring no server limit — Nuxeo's XML parser sets no comparable one.
+// It exists so that XML too deep for the recursive walk below is refused the same way on every
+// machine, rather than overflowing the stack at whatever depth that machine happens to have left.
+// Component XML in this format is about five elements deep, so this is far above anything real and
+// far below where the walk runs out.
+const MAX_XML_DEPTH = 256;
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const TYPE = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
 const MODE = /^[a-z][a-z0-9-]{0,31}$/;
@@ -215,8 +230,12 @@ function notWellFormed(xml) {
     }
   };
 
-  const element = (scope) => {
+  const element = (scope, depth) => {
     const at = i;
+    // Refused before the recursion below runs out of stack, so the verdict is the file's and not
+    // the machine's. Without this a deeply nested file threw a RangeError that the catch at the
+    // end rethrows — it carries no `malformed` flag — and Node printed a raw trace.
+    if (depth > MAX_XML_DEPTH) fail(`elements nested more than ${MAX_XML_DEPTH} deep`, at);
     i += 1;
     const tag = sticky(XML_QNAME)?.[0];
     if (!tag) fail('a tag with no valid element name', at);
@@ -289,10 +308,10 @@ function notWellFormed(xml) {
         fail(`<${tag}> has two attributes with the same namespace and name`, where);
       expanded.add(key);
     }
-    if (!empty) content(tag, at, declared);
+    if (!empty) content(tag, at, declared, depth);
   };
 
-  const content = (tag, at, scope) => {
+  const content = (tag, at, scope, depth) => {
     for (;;) {
       if (i >= xml.length) fail(`<${tag}> is never closed`, at);
       if (sticky(XML_TEXT)) continue;
@@ -314,7 +333,7 @@ function notWellFormed(xml) {
         i = end + 3;
       } else if (xml.startsWith('<?', i)) instruction();
       else if (xml.startsWith('<!', i)) fail('a declaration inside an element');
-      else if (xml[i] === '<') element(scope);
+      else if (xml[i] === '<') element(scope, depth + 1);
       else if (xml[i] === '&') reference();
       else if (xml.startsWith(']]>', i)) fail('a "]]>" in text');
       else i += 1;
@@ -341,7 +360,7 @@ function notWellFormed(xml) {
     misc();
     if (xml.startsWith('<!', i)) fail('a DOCTYPE, which none of these files needs');
     if (xml[i] !== '<') fail(i < xml.length ? 'text before the root element' : 'no root element');
-    element(new Map([['xml', XML_NAMESPACE]]));
+    element(new Map([['xml', XML_NAMESPACE]]), 1);
     misc();
     if (i < xml.length)
       fail(xml[i] === '<' ? 'markup after the root element' : 'text after the root element');
@@ -499,8 +518,49 @@ function inlineJson(xml, from, element) {
   }
 }
 
-/** The server's checks on a fragment or layout body: it parses, repeats no key, is an object. */
+/**
+ * How deeply `text` nests objects and arrays: `{}` is 1 and `{"a":{}}` is 2, which is how the
+ * server's parser counts. A scan of the raw text, not a parse — it is wanted before anything else
+ * looks at the document, and it has to answer for input that does not parse at all.
+ *
+ * Counted with a depth counter rather than by recursing, deliberately: a recursive counter would
+ * overflow on exactly the input it exists to refuse, and would look correct in a test at depth 100.
+ */
+function nestingDepth(text) {
+  let depth = 0;
+  let deepest = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const character = text[i];
+    if (inString) {
+      // A backslash escapes the next character, so a `\"` does not end the string.
+      if (character === '\\') i += 1;
+      else if (character === '"') inString = false;
+    } else if (character === '"') inString = true;
+    else if (character === '{' || character === '[') {
+      depth += 1;
+      if (depth > deepest) deepest = depth;
+    } else if (character === '}' || character === ']') depth -= 1;
+  }
+  return deepest;
+}
+
+/**
+ * The server's checks on a fragment or layout body: it is not nested deeper than the parser
+ * accepts, it parses, it repeats no key, and it is an object. Both bodies the server reads go
+ * through here — a `src` file and inline `<json>` — so a check added here covers both.
+ */
 function parseObject(text, report) {
+  // First, before `JSON.parse` and before the recursive walk in `rejectDuplicateKeys`: both are
+  // depth-sensitive, and on every supported Node the walk overflows first and throws a RangeError
+  // that the catch below would report as the bare words "Maximum call stack size exceeded".
+  const depth = nestingDepth(text);
+  if (depth > MAX_JSON_DEPTH) {
+    report(
+      `nested ${depth} deep; the server’s JSON parser refuses a fragment or layout nested deeper than ${MAX_JSON_DEPTH}`,
+    );
+    return null;
+  }
   let parsed;
   try {
     parsed = JSON.parse(text);

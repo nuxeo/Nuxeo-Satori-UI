@@ -1087,6 +1087,155 @@ empty list, the all-unknown list, every-section-empty, and the tabs surface.
 
 ---
 
+## 29. A calendar day anchored in one zone and read in another
+
+**Found in:** NXSAT-727 — a date picked in the Edit dialog was saved as local midnight, and the
+layout row, which formats in UTC, showed the previous day for every user ahead of UTC. Two rows of
+the same panel disagreed about the same property.
+
+**The pattern, not the instance.** A calendar day ("6 March") and an instant ("2024-03-06T05:00Z")
+are different kinds, and JavaScript gives you one type for both. Every bug in this family is the
+same mistake: a day is turned into an instant in one zone and turned back into a day in another.
+It has now been hit at least five times in this repo — the ACE begin/end dates
+(`permission-timeframe.utils.ts`, `permissions-model.ts`), the version-compare rows
+(`formatCompareDate`), the layout `date` renderer (`field-view.ts`) and the metadata editor.
+
+```ts
+// WRONG — the instant depends on the writer's zone, so the same picked day is five
+// different values across five zones, and only a reader in the writer's zone agrees.
+return pickedDay.toISOString(); // local midnight
+
+// WRONG, the mirror image — reads the day in the reader's zone
+const day = new Date(property).getDate();
+
+// RIGHT — one anchor, used on both sides
+return utcMidnightOf(pickedDay); // Date.UTC(y, m, d) from the picker's own y/m/d
+const day = new Date(property).getUTCDate();
+```
+
+**The rule:** pick UTC as the anchor for a day, write it there, read it there, and format it there.
+UTC because that is what Nuxeo stores for a day-only write (`2024-03-06` →
+`2024-03-06T00:00:00.000Z`), which makes it the one anchor the server, the client and another
+client all already agree on. Do not anchor a day locally "because the user is local" — the user
+who reads it is not always the user who wrote it.
+
+**Do not "recover" the day with a rounding heuristic** in general-purpose code. `dayToDate` in
+`permissions-model.ts` snaps an instant to the nearest UTC midnight and is correct _there_, because
+an ACE date really is midnight in some zone. Applied to a field that renders arbitrary `date`
+properties it is wrong for every timestamp after 12:00 UTC, which it reports as the next day.
+Narrow correctness does not generalise; check what the values actually are.
+
+**A real instant is not a calendar day and must not be converted.** In one panel,
+`dc:created`/`dc:modified` are server stamps and belong in the reader's zone, while `dc:expired` is
+a picked day and belongs in UTC. Formatting them alike is a second bug wearing consistency's
+clothes.
+
+Regression test pattern — and this is the part that is easy to get wrong:
+
+- **In UTC, local anchoring and UTC anchoring are byte-identical, so no assertion can tell them
+  apart.** CI runners are UTC. A date test that does not control the zone asserts nothing about
+  this family of bugs, which is how NXSAT-727 passed a 1 652-case suite. `satori-components`
+  pins `process.env['TZ']` in its `vite.config.mts` for exactly this reason.
+- **Setting `process.env.TZ` inside a case does not work** under `pool: 'threads'` (this repo's
+  default): Node reads the zone once at startup, so the assignment is accepted and ignored. A
+  four-zone loop written that way ran the host zone four times and read as though it proved four.
+  Verify with `Intl.DateTimeFormat().resolvedOptions().timeZone` before trusting any such loop.
+- Assert **literals** (`'2024-03-06T00:00:00.000Z'`), never `new Date(y, m, d).toISOString()` —
+  the derived form is the buggy behaviour restated, so it passes either way.
+- Use an instant whose UTC and local days actually differ (`20:00Z` at +05:30, `00:00Z` west of
+  UTC). `09:00Z` is the same day in most zones and proves nothing.
+- Angular's `DatePipe` memoises on (value, pattern, timezone, locale). Re-asserting a value an
+  earlier render in the same file used returns the cached string and passes unfixed.
+- **A pin in a config file is an unenforced guarantee.** Delete it and the suite goes quietly green
+  and stops protecting anything, with no failure to notice. Assert the zone in a spec of its own —
+  `suite-timezone.spec.ts` in `satori-components`, `features/browse` and `shared/ui`.
+- **A Karma project pins on the Nx target, not in a vite config.** `apps/nuxeo-ui` runs
+  `ng test --browsers=ChromeHeadless`, so there is no `vite.config.mts`; `test.options.env.TZ` in
+  `project.json` reaches the browser Karma launches, and beats an inherited shell `TZ`. Stating the
+  gap in a comment instead — "this case cannot fail in UTC, and this project has no pin" — is a
+  documented hole, not a tested one.
+- **A zone override has to be an Nx cache input.** The three pinned suites take `SATORI_TEST_TZ`,
+  and `nx.json` lists it as an `env` input on the `test` targets. Without that, a second run asking
+  for another zone is answered from the first run's cache — the command reports a pass it never
+  performed. Verified: the same `nx test` twice is a 1/1 cache hit, and with `SATORI_TEST_TZ` set it
+  is 0/1.
+- **Name the variable, and do not reuse `TZ`.** The pin overrides an inherited `TZ` so the verdict
+  is the same on every machine, which means prose documenting a `TZ=...` command is wrong the moment
+  the pin lands. That mistake was made twice in this fix, in two files, the second time after being
+  told about the first; `grep -rn "TZ="` is the check.
+
+**`new Date(y, m, d)` is not reversible.** A day its zone skipped — Samoa has no 30 December 2011 —
+rolls forward, so a stored `2011-12-30T00:00:00.000Z` reaches a picker in `Pacific/Apia` as the
+31st. Re-deriving the stored day from the instant at write time then reads that as a user edit and
+rewrites an untouched field. Remember the day you actually handed over, not the instant you derived
+it from: whatever the conversion did, an untouched control still holds the day it was given.
+
+**Find every writer AND every reader before calling it fixed.** `dc:expired` had five sites across
+four libraries: the metadata editor, browse's edit-metadata dialog, the collection dialog, the
+create/import dialog, and the nav drawer's Expired queue. Fixing one writer and formatting one row
+in UTC makes the other writers _newly_ wrong, because their locally anchored values are then read in
+UTC — and a reader left in the browser's zone says "Mar 5" for a document whose Properties panel
+says March 6.
+
+`grep -rn "toISOString()"` and a grep for the **property name** over `libs/` and `apps/` are the
+searches that find them. Following the symbols you edited does not: each site does its own
+conversion inline, so there is no shared symbol and the dependency graph shows nothing. After
+fixing the writers, search again for readers — that is the step this fix skipped, twice.
+
+---
+
+## 30. A recursive validator, and a mirrored limit whose owner was never asked
+
+```javascript
+// BAD ❌ — the walk that validates the input is itself a function of the input's depth, so it
+// dies on exactly what it exists to refuse. And the limit it does not check is the one that
+// belongs to somebody else.
+function rejectDuplicateKeys(text) {
+  const value = (path) => (text[i] === '{' ? object(path) : …); // object() calls value()
+}
+const MAX_JSON_BYTES = 1024 * 1024; // mirrored from ConfigSnapshot — which really does set it
+
+// GOOD ✅ — count with a counter, before anything descends; and say whose limit it is.
+function nestingDepth(text) {
+  for (let i = 0; i < text.length; i++) { /* ++ on { and [, -- on } and ] */ }
+}
+if (nestingDepth(text) > MAX_JSON_DEPTH) report(`nested ${depth} deep; the server’s JSON parser …`);
+```
+
+Two defects that travel together, because a checker that mirrors a server is where both live.
+
+**A recursive walk over untrusted input needs a bound, and the bound cannot be the stack.** The
+stack is a property of the machine, so the same file passes on one and fails on another, and the
+failure arrives as a `RangeError` rather than as the refusal the tool exists to produce. Worse when
+a `try` already wraps the walk for another purpose: NXSAT-730's overflow was _caught_, and reported
+as the bare words "Maximum call stack size exceeded" — a refusal naming no limit, no number and no
+remedy, which reads as a tool bug rather than as a verdict on the file. The one in the same file
+with no `try` printed a raw Node trace instead. Count iteratively, bound explicitly, and a
+recursive counter is not a fix: it overflows on the same input and looks correct in a test at
+depth 100. `libs/shared/extensions/src/lib/extension-rules.ts` had already settled this for
+manifest rules — `MAX_RULE_DEPTH = 32`, for the same reason.
+
+**Before mirroring a limit, establish who owns the number.** `MAX_JSON_BYTES` and
+`MAX_ASSET_BYTES` are `ConfigSnapshot`'s own constants, so copying them is safe. The nesting limit
+is not: `ConfigSnapshot` parses with a plain `new ObjectMapper()`, which leaves the depth at
+jackson-core's `StreamReadConstraints` default. The number is the parser's, it travels with the
+server's Jackson, and `nuxeo-agentic-core` never mentions it — grepping our own source for it
+finds nothing, which reads as "no such limit" rather than "somebody else's limit". Ask the
+dependency: the probe was eight lines of `jshell` against the server's own jars, and it returned
+the boundary and the message verbatim. Then **name the owner in the refusal** — "the server's JSON
+parser", not "the server" — so a customer on a server whose default moved knows which thing to go
+and read. And pick the safe direction to be wrong in: stricter than the server refuses a package
+that would have worked, which the customer sees immediately; more generous ships one that installs,
+starts, and silently does nothing.
+
+Regression test pattern: the boundary on **both** sides (1000 builds, 1001 refused), a depth far
+past any stack asserting no trace and a one-line refusal, both container kinds since the parser
+counts arrays too, a string full of `{` that must still build, and a shallow control — otherwise a
+check that refuses everything passes.
+`tools/satori-generators/src/config-package/generator.spec.ts`, "nesting depth".
+
+---
+
 ## 31. A URL rule enforced on the string, where the parser decides
 
 ```typescript

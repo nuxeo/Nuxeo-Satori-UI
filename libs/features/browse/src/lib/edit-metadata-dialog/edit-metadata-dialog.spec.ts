@@ -200,9 +200,59 @@ describe('EditMetadataDialogComponent shared pickers', () => {
     component.save();
     expect(update).toHaveBeenCalledWith(
       'doc-1',
-      expect.objectContaining({ 'dc:expired': new Date(2027, 11, 31).toISOString() }),
+      // The picked day at UTC midnight, the same instant in every zone (NXSAT-727).
+      expect.objectContaining({ 'dc:expired': '2027-12-31T00:00:00.000Z' }),
     );
   });
+  /**
+   * NXSAT-727. The dialog's own read path: a stored expiry seeded through `MAT_DIALOG_DATA`, which
+   * is what the constructor converts, rather than the helper called directly.
+   *
+   * Asserted with literals, so they are the right answer in every zone; `vite.config.mts` pins a
+   * non-UTC zone, which is what makes them able to fail at all — in UTC, anchoring a day locally
+   * and anchoring it in UTC are byte-identical. `20:00Z` is deliberate: it is the following day at
+   * +05:30, so reading the instant's local day gives 1 January and the case can tell the two apart.
+   */
+  it('reads a stored expiry as its UTC day, and leaves an untouched instant alone', async () => {
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [EditMetadataDialogComponent, testTranslateModule()],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: MAT_DIALOG_DATA, useValue: { ...data, expires: '2027-12-31T20:00:00.000Z' } },
+        { provide: MatDialogRef, useValue: { close } },
+        { provide: BrowseService, useValue: { updateDocument: update } },
+        { provide: DirectoryService, useValue: directories },
+      ],
+    }).compileComponents();
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
+    const seeded = TestBed.createComponent(EditMetadataDialogComponent);
+    seeded.detectChanges();
+    await seeded.whenStable();
+
+    const shown = seeded.componentInstance.expires;
+    expect([shown?.getFullYear(), shown?.getMonth(), shown?.getDate()]).toEqual([2027, 11, 31]);
+
+    // Untouched, then saved: the instant the read returned, byte for byte. Writing the day's UTC
+    // midnight here instead would be the right day and the wrong value — a title-only edit moving
+    // a date by 20 hours, which is the ACE defect `docs/api-integrations.md` measured.
+    seeded.componentInstance.save();
+    expect(update).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ 'dc:expired': '2027-12-31T20:00:00.000Z' }),
+    );
+
+    // Moved on a day: now it is that day's UTC midnight, and the old time of day is gone.
+    update.mockClear();
+    seeded.componentInstance.expires = new Date(2028, 0, 2);
+    seeded.componentInstance.save();
+    expect(update).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ 'dc:expired': '2028-01-02T00:00:00.000Z' }),
+    );
+  });
+
   it('blocks an invalid stored date and an empty title', () => {
     component.expires = new Date('invalid');
     component.save();

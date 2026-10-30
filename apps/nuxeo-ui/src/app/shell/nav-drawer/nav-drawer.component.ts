@@ -13,7 +13,7 @@ import {
   viewChild,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { NgTemplateOutlet, DatePipe, formatDate } from '@angular/common';
+import { NgTemplateOutlet, DatePipe } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -73,6 +73,7 @@ import {
 } from '../../platform-nav-items';
 import { ThemingFeatureFlagService } from '../../theme/theming-feature-flag.service';
 import { drawerDueKey } from './nav-drawer-due';
+import { drawerExpiredLabel } from './nav-drawer-expired';
 import { NxsDocumentTreeComponent } from '@nuxeo/satori-platform/components';
 
 export interface FolderNode {
@@ -423,14 +424,15 @@ export class NavDrawerComponent {
   }
 
   expiredDate(doc: NuxeoDocument): string {
-    const expired = doc.properties?.['dc:expired'] as string;
-    if (!expired) return '';
-    // `formatDate`, not `inject(DatePipe)`. Listing `DatePipe` in `imports` makes it usable as
-    // `| date` in the template; it does NOT provide it for injection, so injecting it threw
+    // `drawerExpiredLabel`, not `inject(DatePipe)`. Listing `DatePipe` in `imports` makes it usable
+    // as `| date` in the template; it does NOT provide it for injection, so injecting it threw
     // NG0201 in this component's constructor and took the app-shell header specs down with it.
-    // `providers: [DatePipe]` would also work, but this needs no DI at all — `formatDate` is the
-    // function `DatePipe.transform` delegates to, and it takes the locale as an argument.
-    return formatDate(new Date(expired), 'mediumDate', this.locale);
+    // `providers: [DatePipe]` would also work, but this needs no DI at all — the free function
+    // wraps `formatDate`, which is what `DatePipe.transform` delegates to.
+    //
+    // It is a free function so the UTC handling it carries can be asserted without standing up
+    // this component; see its own file for why that handling is UTC (NXSAT-727).
+    return drawerExpiredLabel(doc.properties?.['dc:expired'], this.locale);
   }
 
   // ── Recently Viewed ──
