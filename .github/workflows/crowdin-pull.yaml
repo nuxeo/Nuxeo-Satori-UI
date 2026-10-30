@@ -156,8 +156,28 @@ jobs:
           # four new ids below are the bare forms, consistent with the `nl` and `th` entries they
           # replace; a wrong one fails exactly as an absent target does.
           #
-          # A language added here needs its `availableLanguages`, `register-locale-data.ts` and
-          # `DATE_FNS_LOCALES` entries in the same pull request.
+          # ## Adding a language here is the FIRST of two steps, not one of four done together
+          #
+          # This said "a language added here needs its `availableLanguages`,
+          # `register-locale-data.ts` and `DATE_FNS_LOCALES` entries in the same pull request",
+          # which was true when the plan was to declare all ten at once and is actively wrong now.
+          # Following it would add `availableLanguages` for a language with no catalogue, which
+          # fails `checkAdvertisedLocalesShip` — and since `.husky/pre-push` runs
+          # `review:guardrails`, the branch could not even be pushed. Caught in review on #522.
+          #
+          # The two steps, in order (`D8e-webui`):
+          #
+          #   1. Requesting it. A `--language` here, plus `LOCALE_DATA` in
+          #      `register-locale-data.ts`. Both may run ahead of any translation: this list is
+          #      what *causes* the catalogue to arrive, and a registration with no catalogue
+          #      behind it only warns, while the reverse throws `NG0701` wherever a date renders.
+          #   2. Advertising it, once `public/i18n/<lang>.json` has actually landed.
+          #      `availableLanguages` in both Layer 0 configs, and `DATE_FNS_LOCALES` in
+          #      `satori-date-adapter.ts`, which a test holds equal to that list. Neither may
+          #      precede the catalogue.
+          #
+          # So a language sits between the two steps for as long as translation takes, and that is
+          # the normal state rather than an unfinished one.
           download_translations_args: '--language=fr --language=de --language=ja --language=nl --language=ar --language=es --language=he --language=it --language=sv'
 
           create_pull_request: true

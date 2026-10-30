@@ -1156,27 +1156,68 @@ say so in the report rather than leaving it unstated.
 
 ### Adding a locale — the touchpoints
 
-1. Add the target language on the Crowdin project (translation team).
-2. Add it to `availableLanguages` in the packaged bootstrap defaults.
-3. **Register Angular's locale data for it** — import `@angular/common/locales/<locale>` and add it
+> **Re-ordered 30 October 2026.** This list used to advertise the language at step 2, before any
+> catalogue existed, and told you to do steps 2–4 in one pull request. That is wrong under
+> `D8e-webui` and it fails closed rather than quietly: `availableLanguages` for a language with no
+> catalogue fails `checkAdvertisedLocalesShip`, and since `.husky/pre-push` runs
+> `review:guardrails`, such a branch cannot be pushed at all. Caught in review on
+> [#522](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/522).
+
+**Step 1 — request the language.** Nothing here waits on a translation, and all three belong in one
+pull request.
+
+1. **Add the target language on the Crowdin project** (translation team). Until this is done, a
+   `--language` for it makes the CLI reject the **whole** invocation, so the nightly pull fails for
+   every language at once — including the ones with nothing wrong with them.
+
+2. **Register Angular's locale data for it** — import `@angular/common/locales/<locale>` and add it
    to `LOCALE_DATA` in `apps/nuxeo-ui/src/app/i18n/register-locale-data.ts`. This step was missing
-   from the list, and the list is what someone follows: without it `checkLocaleDataRegistered` goes
-   red, and if that gate is bypassed every `DatePipe`, `DecimalPipe` and `CurrencyPipe` throws
+   from the list once, and the list is what someone follows: without it `checkLocaleDataRegistered`
+   goes red, and if that gate is bypassed every `DatePipe`, `DecimalPipe` and `CurrencyPipe` throws
    `NG0701` — surfacing as `NG02100: InvalidPipeArgument` wherever a date renders, nowhere near the
    file that was changed.
 
-   Translating strings and formatting dates are separate mechanisms, which is the whole reason this
-   is a step of its own rather than a consequence of step 2. Only `en-US` is built into Angular.
+   Translating strings and formatting dates are separate mechanisms, which is why this is a step of
+   its own rather than a consequence of advertising the language. Only `en-US` is built into
+   Angular. Registering early is the **safe** direction — a registration with no catalogue behind it
+   only warns — which is what lets this sit in step 1.
 
-4. **Add `--language=<Crowdin language id>` to `download_translations_args`** in
-   `.github/workflows/crowdin-pull.yaml`, in the same pull request as steps 2 and 3. The pull
-   downloads only the languages listed there, so without it the nightly pull never updates the new
-   locale. Nothing checks this yet.
-5. Confirm the upstream catalogues cover it. Coverage is **uneven**: adf-core ships 19
-   locales, both adf-hx bundles ship 7 (`de es fr it pl pt` + `en`), satori-ui ships 15. A
-   locale outside adf-hx's seven gets English adf-hx strings inside a translated
-   application — which reads as a bug, not as a gap.
-6. Add it to the evidence capture's locale matrix.
+3. **Add `--language=<Crowdin language id>` to `download_translations_args`** in
+   `.github/workflows/crowdin-pull.yaml`. The pull downloads only the languages listed there, so
+   without it the nightly pull never produces the catalogue. Nothing checks this yet. Confirm the id
+   against the Crowdin project: these are Crowdin ids, not the app's locale ids.
+
+**Step 2 — advertise it, once `apps/nuxeo-ui/public/i18n/<lang>.json` has actually landed.** Not
+before; each of these fails if it leads.
+
+1. Add it to `availableLanguages` in the packaged bootstrap defaults **and** in
+   `libs/shared/app-config/src/lib/bootstrap-config.ts`, and add it to `DATE_FNS_LOCALES` in
+   `libs/shared/ui/.../satori-date-adapter.ts` — a test holds the latter equal to the former, so
+   they move together or the suite goes red. Bring any regional variant whose date-fns `P` differs
+   from the base language with it.
+
+2. **Check whether the upstream catalogue covers it**, because ours is not the only one rendering.
+   `@hylandsoftware/satori-ui` ships 15 files in `i18n/` but only **seven distinct languages** —
+   `de en es fr it pl pt`. A language outside those gets English satori-ui strings inside an
+   otherwise translated application, which reads to a user as a bug rather than as a gap.
+
+   Measured 30 October 2026, and it is worse than "check the new one": **five of the ten languages
+   we target are absent** — `ar`, `he`, `ja`, `nl`, `sv` — and `ja` and `nl` ship **today**. So this
+   is a live gap, not a hypothetical for the next language. Re-measure rather than quoting the
+   figures here:
+
+   ```bash
+   ls node_modules/@hylandsoftware/satori-ui/i18n/*.json | xargs -n1 basename | sed 's/.json//'
+   ```
+
+   This item used to cite adf-core's 19 locales and adf-hx's seven beside that count. Both are
+   gone — no `@alfresco` package has been installed since NXSAT-637 and the adf-hx bridge went with
+   NXSAT-635 — so only the satori-ui half still describes anything that runs.
+
+3. Add it to the evidence capture's locale matrix.
+
+The gap between the two steps is however long translation takes, and a language sitting in it is in
+its normal state rather than a half-finished one.
 
 ### Known debt this plan deliberately leaves open
 
