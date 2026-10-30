@@ -1696,6 +1696,21 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(component.coverage).toBeNull();
     });
 
+    it('removes a nature, coverage or subject chip through the handler its chip set calls', async () => {
+      await createDialog();
+      component.nature = 'contract';
+      component.coverage = 'tanzania';
+      component.subjects = ['cinema', 'art'];
+
+      component.removeNatureChip();
+      component.removeCoverageChip();
+      component.removeSubjectChip({ id: 'cinema', label: 'Cinema', removeLabel: 'Remove Cinema' });
+
+      expect(component.nature).toBeNull();
+      expect(component.coverage).toBeNull();
+      expect(component.subjects).toEqual(['art']);
+    });
+
     it('groups subject children under their parent, ordered, dropping obsolete and parent rows', async () => {
       await createDialog();
 

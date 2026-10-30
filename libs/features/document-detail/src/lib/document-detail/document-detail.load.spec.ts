@@ -729,6 +729,20 @@ describe('DocumentDetailComponent — load chain', () => {
     });
   });
   describe('trash and permanent delete', () => {
+    it('offers Restore and Delete permanently on the trashed banner, through its actions', async () => {
+      await build(doc({ state: 'deleted' }));
+      mockDetailService.restoreFromTrash.mockReturnValue(of(undefined));
+      mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
+      mockDetailService.permanentlyDelete.mockReturnValue(of(undefined));
+
+      const [restore, remove] = component.trashedBanner().actions;
+      restore.press();
+      remove.press();
+
+      expect(mockDetailService.restoreFromTrash).toHaveBeenCalledWith('doc-1');
+      expect(mockDetailService.permanentlyDelete).toHaveBeenCalled();
+    });
+
     it('trashes after confirmation and navigates away', async () => {
       await build();
       mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });

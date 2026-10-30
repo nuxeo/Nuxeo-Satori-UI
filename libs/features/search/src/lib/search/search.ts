@@ -402,6 +402,9 @@ export class SearchComponent {
   /** Each card in the grid view is rendered by ID, so a component registered under it replaces them. */
   readonly cardId = NXS_PRIMITIVE_IDS.card;
 
+  /** The AI error banner is rendered by ID, so a component registered under it replaces the built-in one. */
+  readonly bannerId = NXS_PRIMITIVE_IDS.banner;
+
   /**
    * The grid view's cards, each with its own open and selection callbacks.
    *

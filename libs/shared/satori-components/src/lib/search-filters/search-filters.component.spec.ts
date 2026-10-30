@@ -1,8 +1,11 @@
 import {
   Component,
+  input,
   provideZonelessChangeDetection,
   signal,
   ChangeDetectionStrategy,
+  type EnvironmentProviders,
+  type Provider,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
@@ -16,6 +19,8 @@ import {
   type SearchAggregations,
   type SearchCollectionOption,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
+import { testTranslateProviders } from '@agentic-ui/testing/i18n';
 
 import { NxsSearchFiltersComponent } from './search-filters.component';
 import {
@@ -23,6 +28,8 @@ import {
   type NxsFacetLabels,
   type NxsSearchFilters,
 } from './search-filters.model';
+import { NXS_PRIMITIVE_IDS, type NxsChipItem, type NxsChipSetInputs } from '../primitives';
+import { provideNxsComponents } from '../provide-nxs-components';
 
 const AGGREGATIONS: SearchAggregations = {
   dc_modified_agg: {
@@ -59,6 +66,23 @@ class HostComponent {
   readonly labels = signal<NxsFacetLabels>({});
   resets = 0;
   saves = 0;
+}
+
+/** A chip set registered under `nxs.primitives.chipSet`: it shows each chip and calls the handler it was given. */
+@Component({
+  standalone: true,
+  selector: 'nxs-test-probe-chip-set',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `@for (item of items(); track item.id) {
+    <button type="button" class="probe-chip" (click)="removeHandler()?.(item)">
+      {{ item.label }}
+    </button>
+  }`,
+})
+class ProbeChipSetComponent implements NxsChipSetInputs {
+  readonly items = input<readonly NxsChipItem[]>([]);
+  readonly label = input('');
+  readonly removeHandler = input<((item: NxsChipItem) => void) | null>(null);
 }
 
 describe('NxsSearchFiltersComponent', () => {
@@ -144,18 +168,28 @@ describe('NxsSearchFiltersComponent', () => {
     getTagSuggestions = vi.fn((term: string): Observable<string[]> =>
       of(['annual', 'archive'].filter((tag) => tag.startsWith(term))),
     );
+    await configure();
+    await render();
+  });
+
+  /**
+   * Creates the host with these providers added, so a test can register a component under an ID.
+   * A reset discards the global translate providers, so `configure` brings them back.
+   */
+  async function configure(extra: (Provider | EnvironmentProviders)[] = []): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [HostComponent],
       providers: [
         provideZonelessChangeDetection(),
         provideNoopAnimations(),
+        testTranslateProviders(),
         { provide: SearchService, useValue: { getUserCollections, getTagSuggestions } },
+        ...extra,
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(HostComponent);
     host = fixture.componentInstance;
-    await render();
-  });
+  }
 
   afterEach(() => {
     document.querySelectorAll('.cdk-overlay-container').forEach((node) => node.remove());
@@ -475,5 +509,54 @@ describe('NxsSearchFiltersComponent', () => {
       node.textContent?.replace(/\(\d+\)/, '').trim(),
     );
     expect(shown).toEqual(['constructor', 'toString', '__proto__']);
+  });
+
+  describe('chips rendered by ID', () => {
+    /** Creates the host with a chip set registered under its ID, and one tag chosen. */
+    async function renderTags(providers: (Provider | EnvironmentProviders)[] = []): Promise<void> {
+      TestBed.resetTestingModule();
+      await configure(providers);
+      host.filters.set({ ...NXS_EMPTY_SEARCH_FILTERS, tags: ['q1'] });
+      await render();
+      // An outlet learns from a promise that its ID is unregistered, so it settles twice.
+      await new Promise((resolve) => setTimeout(resolve));
+      await render();
+    }
+
+    it('renders the chips through the registered ID, and a removal reaches the filters', async () => {
+      await renderTags([
+        provideSatoriExtensions({
+          components: { [NXS_PRIMITIVE_IDS.chipSet]: ProbeChipSetComponent },
+        }),
+      ]);
+
+      const probes = el().querySelectorAll('lib-extension-outlet nxs-test-probe-chip-set');
+      expect(probes).toHaveLength(1);
+      expect(el().querySelector('nxs-chip-set')).toBeNull();
+      expect(probes[0].querySelector('.probe-chip')?.textContent?.trim()).toBe('q1');
+
+      (probes[0].querySelector('.probe-chip') as HTMLButtonElement).click();
+      expect(host.filters().tags).toEqual([]);
+    });
+
+    it('falls back to the built-in chip set when nothing is registered under the ID', async () => {
+      await renderTags();
+
+      expect(el().querySelector('nxs-test-probe-chip-set')).toBeNull();
+      expect(chips('Tags').text).toEqual(['q1']);
+      (el().querySelector('nxs-chip-set mat-chip button') as HTMLButtonElement).click();
+      expect(host.filters().tags).toEqual([]);
+    });
+
+    // The app registers the built-in chip set under the ID, so the outlet resolves to it and the
+    // fallback never renders. The layout wrapper must hold it anyway, or the margin is lost.
+    it('keeps the layout wrapper around the built-in chip set the app registers under the ID', async () => {
+      await renderTags([provideNxsComponents()]);
+
+      expect(
+        el().querySelector('.nxs-search-filters__chips lib-extension-outlet nxs-chip-set'),
+      ).not.toBeNull();
+      expect(chips('Tags').text).toEqual(['q1']);
+    });
   });
 });

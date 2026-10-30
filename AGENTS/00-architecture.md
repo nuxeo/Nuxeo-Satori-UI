@@ -359,9 +359,13 @@ shipped in the package; customers use `extension-component`. By hand, the steps 
 8. Members only the template uses are `protected`, so the component's contract is its inputs and
    outputs. Specs reach them by element access (`panel()['save']()`).
 9. A component that replaces packaged markup is registered by ID (`nxs.<group>.<name>`, exported as
-   a constant) and rendered through `lib-extension-outlet` with the component as the unresolved
-   fallback, so a customer library can re-register the ID. `beta:reference` checks `nxs.*` IDs
-   against `docs/extension-reference.md` as it does `app.*` ones.
+   a constant). Where a packaged screen renders it, the screen goes through `lib-extension-outlet`
+   with the component as the unresolved fallback, so a customer library can re-register the ID. The
+   screens that do this are listed in `docs/extension-reference.md` §6a. A primitive written as a
+   selector into a template (`<nxs-error-state>`, `<nxs-empty-state>`, and the rest §6a names) is not
+   resolved by its ID yet: moving those screens onto the outlet is follow-up work, not a case the
+   rule excepts. `beta:reference` checks `nxs.*` IDs against `docs/extension-reference.md` as it
+   does `app.*` ones.
 10. Put it on the with-and-without-Satori page. `docs/satori-components/with-and-without-satori.md`
     is the source of the Confluence page that shows every component without and with Satori:
     - add a `### <Name>` section under "Side by side" with its `| Field | Value |` table — the

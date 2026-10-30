@@ -1,4 +1,9 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  provideZonelessChangeDetection,
+  signal,
+  type EnvironmentProviders,
+  type Provider,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -15,7 +20,7 @@ import { BehaviorSubject, Observable, of, Subject, throwError } from 'rxjs';
 import { type MockInstance, vi } from 'vitest';
 
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
-import { NxsToastService } from '@nuxeo/satori-platform/components';
+import { NxsToastService, provideNxsComponents } from '@nuxeo/satori-platform/components';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
@@ -153,6 +158,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
   async function render(
     focused: NuxeoDocument,
     route: { query?: Record<string, string>; paramMap?: Observable<ParamMap> } = {},
+    extra: (Provider | EnvironmentProviders)[] = [],
   ): Promise<void> {
     mockDetailService.getFullDocument.mockReturnValue(of(focused));
     TestBed.resetTestingModule();
@@ -163,6 +169,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
         provideRouter([], withDisabledInitialNavigation()),
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        ...extra,
         {
           provide: ActivatedRoute,
           useValue: {
@@ -446,6 +453,16 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(el('.version-banner')?.textContent).toContain("You're viewing the 0.1 version.");
       await click('.version-banner-latest');
       expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live']);
+    });
+
+    // The app registers the built-in banner under the ID, so the outlet resolves to it and the
+    // fallback never renders. The wrapper must still hold the banner, with its hook classes.
+    it('keeps the version banner in its wrapper when the app registers the built-in banner', async () => {
+      await render(version(1), {}, [provideNxsComponents()]);
+
+      expect(el('.version-banner lib-extension-outlet nxs-banner')).not.toBeNull();
+      expect(el('.version-banner-latest')).not.toBeNull();
+      expect(el('.version-banner')?.textContent).toContain("You're viewing the 0.1 version.");
     });
 
     it('is read-only even though the permissions enricher reports Write', async () => {
