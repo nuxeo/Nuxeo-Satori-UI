@@ -166,3 +166,8 @@ scripts/Untitled*
 # untracked directories here that a git add -A would commit.
 /a11y-reports/
 .nx/migrate-runs
+
+# Written by scripts/beta-harness/sanitizer-audit.selftest.mjs while a control holds a real
+# tracked file perturbed, and removed once it is restored. A leftover one means a run was killed:
+# `node scripts/beta-harness/sanitizer-audit.selftest.mjs --recover-only` undoes it (NXSAT-751).
+.ai/state/.sanitizer-selftest-interrupted.json

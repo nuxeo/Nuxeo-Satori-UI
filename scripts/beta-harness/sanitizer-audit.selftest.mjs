@@ -24,6 +24,15 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import {
+  MARKER,
+  PERTURBED_PATHS,
+  SELFTEST_ENV_FLAG,
+  recoverPerturbations,
+  removeMarker,
+  writeMarker,
+} from './sanitizer-selftest-state.mjs';
+
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const AUDIT = 'scripts/beta-harness/sanitizer-audit.mjs';
 const ALLOWLIST = '.ai/state/sanitizer-allowlist.json';
@@ -91,6 +100,9 @@ function runAudit(extraArgs = []) {
   const env = { ...process.env };
   if (baseRefOverride) env['SANITIZER_AUDIT_BASE_REF'] = baseRefOverride;
   else delete env['SANITIZER_AUDIT_BASE_REF'];
+  // Here a perturbation is the point, not an accident, so the audit must not append its
+  // "this may be a leftover" explanation to output the controls are about to read.
+  env[SELFTEST_ENV_FLAG] = '1';
   const r = spawnSync('node', [AUDIT, ...extraArgs], { cwd: ROOT, encoding: 'utf8', env });
   return { code: r.status, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
 }
@@ -104,6 +116,14 @@ function runAudit(extraArgs = []) {
  */
 const backups = new Map();
 function edit(relPath, transform) {
+  // Registered-path check, so the marker cannot go stale against the controls. A perturbation of
+  // something `PERTURBED_PATHS` does not list would be invisible to recovery and to the audit's
+  // leftover hint, and the only way to notice would be the next reader's confusion (NXSAT-751).
+  if (!PERTURBED_PATHS.includes(relPath))
+    throw new Error(
+      `${relPath} is perturbed by a control but not listed in PERTURBED_PATHS ` +
+        `(scripts/beta-harness/sanitizer-selftest-state.mjs) — add it, or recovery cannot undo it`,
+    );
   const abs = join(ROOT, relPath);
   const current = readFileSync(abs, 'utf8');
   const original = backups.get(relPath)?.original ?? current;
@@ -112,6 +132,9 @@ function edit(relPath, transform) {
     throw new Error(`perturbation for ${relPath} changed nothing — the selftest would be vacuous`);
   writeFileSync(abs, next, 'utf8');
   backups.set(relPath, { original, written: next });
+  // Written after the file, never before: a marker describing a perturbation that was not applied
+  // would make the next run "restore" a file nobody touched.
+  writeMarker(ROOT, backups);
 }
 function restoreAll() {
   const clobbered = [];
@@ -134,6 +157,10 @@ function restoreAll() {
     writeFileSync(abs, original, 'utf8');
   }
   backups.clear();
+  // Dropped last, once nothing is left to undo. A path under `clobbered` no longer holds this
+  // run's bytes, so no later run could act on it from the marker anyway — keeping the marker would
+  // only make every subsequent run repeat a warning about a file it will never repair.
+  removeMarker(ROOT);
   baseRefOverride = null;
   if (clobbered.length > 0) {
     console.error(
@@ -201,6 +228,50 @@ process.on('uncaughtException', (err) => {
   console.error(err);
   process.exit(1);
 });
+
+/**
+ * Undo anything a previous run was killed in the middle of, before the baseline looks at the tree.
+ *
+ * Ordering matters twice. Before the baseline, because a leftover perturbation makes every check
+ * red there and the message would blame the audit rather than the interrupted run. And before the
+ * controls, because `edit()` captures `original` from the working tree — perturbing an
+ * already-perturbed file would bake the leftover into the "original" it restores to, turning a
+ * recoverable mess into a committed one.
+ *
+ * Prints nothing when there is nothing to do, so a normal run is unchanged (NXSAT-751).
+ */
+function recoverInterruptedRun() {
+  const { found, restored, refused, startedAt } = recoverPerturbations(ROOT);
+  if (!found) return refused;
+  console.log(
+    `selftest: a previous run was interrupted${startedAt ? ` (started ${startedAt})` : ''} ` +
+      `and left perturbations behind — SIGKILL cannot be caught, so its handlers never ran.`,
+  );
+  if (restored.length > 0) console.log(`  restored: ${restored.join(', ')}`);
+  if (refused.length > 0) {
+    console.error(
+      `  NOT restored: ${refused.join(', ')}\n` +
+        `    Those no longer hold that run's bytes, so something else has written them since and\n` +
+        `    restoring would discard it. Inspect with 'git diff' and decide by hand.`,
+    );
+  }
+  return refused;
+}
+
+// `--recover-only` exists so the audit's own hint can name one command. Repairing the tree should
+// not require sitting through every control, and after a killed `beta:gate` the run that fails is
+// `sanitizer-audit` — which is registered *before* this selftest, so the gate stops and this file
+// never gets the chance to recover on its own.
+if (process.argv.includes('--recover-only')) {
+  // Non-zero only when a path was left for a human: "nothing to recover" is a success, or the
+  // hint the audit prints would send the reader round the same loop a second time.
+  const refused = recoverInterruptedRun();
+  if (refused.length > 0) process.exit(1);
+  console.log('selftest: nothing left to recover.');
+  process.exit(0);
+}
+
+recoverInterruptedRun();
 
 const results = [];
 

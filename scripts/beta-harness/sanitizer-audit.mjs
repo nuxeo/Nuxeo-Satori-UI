@@ -71,6 +71,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import ts from 'typescript';
 import { auditPath } from './sanitizer-path.mjs';
+import { isLeftover, readMarker } from './sanitizer-selftest-state.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const ALLOWLIST_PATH = '.ai/state/sanitizer-allowlist.json';
@@ -1940,7 +1941,43 @@ function main() {
   }
   console.log(`\nsanitizer-audit: FAIL — ${findings.length} finding(s)\n`);
   for (const f of findings) console.log(`${f}\n`);
+  explainPossibleLeftovers(findings);
   return 1;
+}
+
+/**
+ * Say so when a finding sits in a file `sanitizer-audit.selftest.mjs` perturbs on purpose.
+ *
+ * The verdict is **not** softened: the file really does contain that defect right now, and a gate
+ * that repaired the tree out from under itself would be a gate nobody could trust to have looked.
+ * This only explains, because without it the symptom is unreadable — a killed `beta:gate` leaves a
+ * perturbation behind, and the next run fails here, in a file the reader has never touched, with
+ * nothing on screen connecting it to the harness.
+ *
+ * This is the half that reaches a human. `sanitizer-audit` is registered **before**
+ * `sanitizer-selftest` and the gate stops at the first failure, so the selftest's own recovery
+ * never gets to run after an interrupted gate; the one command below is what breaks that loop
+ * (NXSAT-751).
+ */
+function explainPossibleLeftovers(findings) {
+  const suspect = [...new Set(findings.flatMap((f) => isLeftover(f) || []))];
+  if (suspect.length === 0) return;
+
+  const marker = readMarker(ROOT);
+  console.log(
+    `NOTE — ${suspect.length === 1 ? 'this file is' : 'these files are'} perturbed on purpose by\n` +
+      `  scripts/beta-harness/sanitizer-audit.selftest.mjs, which writes a defect into the real\n` +
+      `  file, checks that this audit reports it, and restores it afterwards:\n` +
+      suspect.map((p) => `    ${p}\n`).join('') +
+      (marker
+        ? `\n  A marker from an INTERRUPTED selftest run is present${
+            marker.startedAt ? ` (started ${marker.startedAt})` : ''
+          },\n  so the finding above is very likely that leftover rather than a defect you wrote.\n`
+        : `\n  No interrupted-run marker is present, so this is more likely a real finding — but if a\n  gate run was killed before this fix shipped, it may still be a leftover.\n`) +
+      `\n  To undo a leftover:  node scripts/beta-harness/sanitizer-audit.selftest.mjs --recover-only\n` +
+      `  It restores only files that still hold that run's bytes, so an edit of your own is never\n` +
+      `  discarded. If it declines, 'git diff' those paths and decide by hand.`,
+  );
 }
 
 process.exit(main());
