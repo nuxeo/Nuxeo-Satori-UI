@@ -502,17 +502,22 @@ an unknown.
 The adf-hx rows this table used to carry are gone with the dependency (NXSAT-635, NXSAT-637).
 One upstream catalogue is left, and the problem they described is live in it:
 
-| Catalogue source                            | Locales shipped                                              |
-| ------------------------------------------- | ------------------------------------------------------------ |
-| `@hylandsoftware/satori-ui@1.0.0-alpha.171` | **7** — `de es fr it pl pt` + `en`, plus 8 regional variants |
-| ours (`apps/nuxeo-ui/public/i18n`)          | one per advertised language — see `availableLanguages`       |
+| Catalogue source                            | Locale ids shipped                                                                  |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `@hylandsoftware/satori-ui@1.0.0-alpha.171` | **15** — `de en es fr it pl pt` + `de-DE en-AU en-US es-ES fr-FR it-IT pl-PL pt-PT` |
+| ours (`apps/nuxeo-ui/public/i18n`)          | one per advertised language — see `availableLanguages`                              |
+
+**Locale ids, matched exactly.** The loader requests `<lang>.json` for the active language
+verbatim, so `en-US` and `fr-FR` are covered upstream while `pt-BR` is not, even though `pt` is:
+nothing falls back from a regional variant to its base language. A regional variant the vendor
+does not ship is in the same position as a language it never shipped.
 
 **The advertised set is deliberately not written out here.** It is Layer 0 configuration and it
 moves: it was `en fr de ja nl th zh`, Thai and Chinese have since been dropped, and the supported
 set is being taken to ten. Every prose copy of that list in this repository has gone stale at
 least once. Read it from `availableLanguages` in `libs/shared/app-config/src/lib/bootstrap-config.ts`.
 
-What is stable is the shape of the problem: **an advertised language outside the vendor's seven
+What is stable is the shape of the problem: **an advertised locale id outside the vendor's fifteen
 has no shared-component strings at all**, so every `sat.*` string — including the accessible names
 on `sat-platform-nav` — renders in English inside an otherwise translated application. `fr` and
 `de` were chosen for the first pass precisely because they are inside the intersection, so
