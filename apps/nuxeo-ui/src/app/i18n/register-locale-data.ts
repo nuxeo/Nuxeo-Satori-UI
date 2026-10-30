@@ -34,26 +34,34 @@ import localeSv from '@angular/common/locales/sv';
  * That ordering is worth keeping in mind: **the i18n bug was hiding the l10n bug.** A
  * half-applied locale looks like a working one right up until it works.
  *
- * ## Adding a locale
+ * ## Adding a locale — five touchpoints, in two steps, not one change
  *
- * A locale needs four things that are easy to do only some of: a catalogue in
- * `apps/nuxeo-ui/public/i18n/`, an entry in `availableLanguages`, an entry here, and a
- * `--language` in `download_translations_args` in `.github/workflows/crowdin-pull.yaml`, which
- * downloads only the languages listed there. A fifth, easy to miss because it lives in another
- * library, is `DATE_FNS_LOCALES` in `libs/shared/ui/.../satori-date-adapter.ts` — a test holds
- * it equal to `availableLanguages`, so it cannot drift silently.
+ * The order matters, and getting it wrong is not a style question: three of the five cannot
+ * precede the translated catalogue, and one of those three cannot even be pushed early, because
+ * `.husky/pre-push` runs `review:guardrails`.
  *
- * Nine non-English languages are registered here, the set Nuxeo Web UI supports: `ar`, `de`,
- * `es`, `fr`, `he`, `it`, `ja`, `nl` and `sv`. **Five of them have no catalogue yet** — `ar`,
- * `es`, `he`, `it` and `sv` arrive from Crowdin — so registration runs ahead of translation
- * here on purpose. That direction is the harmless one: this check only warns about locale data
- * with no catalogue behind it, while the reverse throws `NG0701` at runtime.
+ * **Step 1 — request it.** Safe before any translation exists:
  *
- * So this file and the Crowdin pull list are the two touchpoints those five appear in, and the
- * only two that can legitimately run ahead of a catalogue. They are deliberately absent from
- * `availableLanguages` and `DATE_FNS_LOCALES`, which cannot: advertising a language with no
- * catalogue fails `checkAdvertisedLocalesShip`, and the date map is pinned to that list by a
- * test. Each of the five joins both in the pull request that brings its catalogue.
+ * - an entry in `LOCALE_DATA` here;
+ * - a `--language` in `download_translations_args` in `.github/workflows/crowdin-pull.yaml`,
+ *   which downloads only the languages listed there — so this is what *causes* the catalogue.
+ *
+ * **Step 2 — advertise it**, once `apps/nuxeo-ui/public/i18n/<lang>.json` has landed:
+ *
+ * - `availableLanguages` in both Layer 0 configs — earlier, and
+ *   `checkAdvertisedLocalesShip` fails it;
+ * - `DATE_FNS_LOCALES` in `libs/shared/ui/.../satori-date-adapter.ts`, easy to miss because it
+ *   is in another library; a test holds it equal to `availableLanguages`, so it cannot drift
+ *   silently — but that also means it cannot lead.
+ *
+ * A language sits between the two steps for as long as translation takes. That is the normal
+ * state, not an unfinished one: nine non-English languages are registered here, the set Nuxeo
+ * Web UI supports — `ar`, `de`, `es`, `fr`, `he`, `it`, `ja`, `nl`, `sv` — and **five of them
+ * are mid-flight**, with `ar`, `es`, `he`, `it` and `sv` requested and awaiting Crowdin.
+ *
+ * Registration leading is the harmless direction, which is the whole reason step 1 can run
+ * early: `checkLocaleDataRegistered` only *warns* about locale data with no catalogue behind it,
+ * while the reverse throws `NG0701` wherever a date renders. See `D8e-webui`.
  *
  * `checkLocaleDataRegistered` in `scripts/review-guardrails.mjs` fails the build when a
  * catalogue has no matching registration, because the symptom otherwise appears far from the
