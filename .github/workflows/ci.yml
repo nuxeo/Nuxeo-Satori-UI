@@ -576,6 +576,10 @@ jobs:
       - name: Resolve what this job needs to run
         id: scope
         shell: bash
+        env:
+          # The PR head, not the merge commit `actions/checkout` builds on pull_request, so the
+          # artifact name carries the sha the reviewer sees in the PR.
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
@@ -637,6 +641,7 @@ jobs:
 
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "interactions=$interactions" >> "$GITHUB_OUTPUT"
+          echo "sha=${HEAD_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
           # Said out loud. A step skipped by `if:` renders as "nothing happened", and this
           # repository treats a check that did not run as its own result rather than as a pass —
@@ -692,6 +697,20 @@ jobs:
           done
           npx nx run satori-components:build-storybook:ci --skip-nx-cache
           node scripts/storybook-publication-gate.mjs dist/storybook/satori-components
+
+      # The Material build, downloadable from the run page so a reviewer can open the component
+      # library for this commit without building it. Uploaded only after the publication gate has
+      # passed, and the same `build` condition as the build above, so an artifact exists exactly
+      # when a Storybook was built. `if-no-files-found: error` makes a missing or renamed output
+      # directory fail the run rather than upload nothing.
+      - name: Upload the Storybook build (satori-components)
+        if: steps.scope.outputs.build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-${{ steps.scope.outputs.sha }}
+          path: dist/storybook/satori-components
+          if-no-files-found: error
+          retention-days: 7
 
       # Read from the one runtime source for the pin (a11y/versions.mjs) so the cache key below
       # cannot drift from the version the next step installs — a cache keyed on a stale version

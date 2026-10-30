@@ -1,0 +1,61 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as GroupFormDialogStories from './group-form-dialog.stories';
+
+<Meta of={GroupFormDialogStories} name="Overview" />
+
+# Group form dialog
+
+The group form dialog creates a group or edits one, and sets its members. An administrator opens it
+from the users and groups page. The dialog does not save anything itself: it closes with the values,
+and the caller creates or updates the group.
+
+## Key features
+
+- **The name is the identity.** In edit mode the group name is fixed; the label and members can change.
+- **Members from the directory.** Search users as you type and pick one, or type a username and press
+  Enter. A user already in the group is not offered again.
+- **Create another.** In create mode, the dialog can close with a flag so the caller opens a fresh form.
+
+## Accessibility
+
+Each field has a label. Each member chip's remove button is named with the username. The member search
+announces its results through the autocomplete.
+
+## Demo showcase
+
+<Canvas of={GroupFormDialogStories.Creating} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsGroupFormDialogComponent,
+  type NxsGroupFormDialogData,
+  type NxsGroupFormDialogResult,
+} from '@nuxeo/satori-platform/components';
+
+this.dialog
+  .open<NxsGroupFormDialogComponent, NxsGroupFormDialogData, NxsGroupFormDialogResult>(
+    NxsGroupFormDialogComponent,
+    { data: { mode: 'create' } },
+  )
+  .afterClosed()
+  .subscribe((result) => {
+    if (result) this.saveGroup(result);
+  });`;
+
+<Source language="typescript" dark code={usageTs} />
+
+`mode` is required. In `edit` mode pass the `group` as well. The dialog's words are translated with
+ngx-translate under `satori-components.group-form-dialog.*`. It has no registered ID: open it with `MatDialog`.
+
+## Where its data comes from
+
+It searches users through `UserService.searchUsersPaged`. It writes nothing; saving the group is the
+caller's request, and Nuxeo checks the permission on it.
+
+## Examples
+
+### Editing
+
+<Canvas of={GroupFormDialogStories.Editing} />
