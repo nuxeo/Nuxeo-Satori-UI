@@ -557,6 +557,46 @@ describe('AppConfigService', () => {
   });
 
   /**
+   * NXSAT-733. Whether a language renders depends on which catalogues the *application* bundles,
+   * which this library cannot see — so, like the logo above, the refusal is decided by the
+   * consumer and only reported here.
+   */
+  describe('reportUnsupportedDefaultLanguage', () => {
+    it('records one diagnostic naming the value, the reason and the fallback, and logs it', () => {
+      const before = service.diagnostics().messages.length;
+
+      service.reportUnsupportedDefaultLanguage(
+        'xx',
+        'en',
+        'this build ships no translation catalogue for it',
+      );
+
+      const added = service.diagnostics().messages.slice(before);
+      expect(added).toHaveLength(1);
+      expect(added[0]).toContain('"xx"');
+      expect(added[0]).toContain('this build ships no translation catalogue for it');
+      expect(added[0]).toContain('"en"');
+      expect(warn).toHaveBeenCalledWith(`[agentic-ui-config] ${added[0]}`);
+    });
+
+    it('names the key, so an administrator knows which setting to change', () => {
+      service.reportUnsupportedDefaultLanguage('xx', 'en', 'a reason');
+
+      expect(service.diagnostics().messages.at(-1)).toContain('defaultLanguage');
+    });
+
+    it('distinguishes the two reasons a language can be refused', () => {
+      // A typo and a language the deployment narrowed away need different fixes, so the message
+      // has to carry which one it was rather than only that something was wrong.
+      service.reportUnsupportedDefaultLanguage('fr', 'en', 'availableLanguages does not offer it');
+
+      expect(service.diagnostics().messages.at(-1)).toContain(
+        'availableLanguages does not offer it',
+      );
+    });
+  });
+
+  /**
    * NXSAT-724. A refused `logo.src` kept the packaged mark, which is correct, and said nothing at
    * all — so a typo was indistinguishable from configuring no logo. Each case here is one the
    * ticket reports.

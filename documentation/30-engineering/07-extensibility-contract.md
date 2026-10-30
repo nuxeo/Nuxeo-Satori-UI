@@ -104,6 +104,40 @@ for languages it ships — but the shared strings stay in the fallback language.
 > direction from the active language**; check whether it has landed before relying on either
 > statement, and do not take the absence recorded here as current.
 
+### `defaultLanguage` must name a language this build ships
+
+An unsupported value — a typo, or a language dropped from a later release — falls back to `en`,
+and the console records one `[agentic-ui-config]` diagnostic naming the value, the reason and the
+fallback. It is not honoured as written, for two reasons that are both about honesty rather than
+about the strings: `<html lang>` is what a screen reader picks a voice from and what browser
+translation offers as the source language, so announcing a language the text is not in is a WCAG
+3.1.1 failure (NXSAT-733); and asking for a catalogue that cannot exist answers 404 on every
+load.
+
+A value is honoured only if **both** are true:
+
+| Check                                | Question                             | Who decides  |
+| ------------------------------------ | ------------------------------------ | ------------ |
+| a catalogue ships in the build       | will the text actually render in it? | this build   |
+| it is listed in `availableLanguages` | does this deployment offer it?       | the customer |
+
+`availableLanguages` alone is **not** sufficient, and this is the case worth knowing about when
+writing a fragment: `{ "defaultLanguage": "es", "availableLanguages": ["en", "es"] }` is valid
+configuration that parses cleanly, and because no `es.json` ships, the application's own strings
+would render English under `<html lang="es">`. `checkAdvertisedLocalesShip` cannot catch it —
+that gate reads the packaged config, not a customer's — so the build-time check is what refuses
+it, and the deployment gets `en` with a diagnostic rather than a page that misdescribes itself.
+
+Strings falling back to English is separate, deliberate, and unchanged: `setFallbackLang('en')`
+means any individual key missing from a catalogue renders its English source rather than a raw
+key.
+
+One locale is admitted by a third route, and it is not reachable from a deployment: the generated
+`zz` pseudo-locale, which `npm run i18n:audit` writes into the build to find strings hard-coded
+past the translation layer. It is honoured **only** under a development server — a release build
+refuses it exactly like any other language it ships no catalogue for — so it cannot be configured
+into a customer deployment.
+
 ### `branding.logo`
 
 `{ "src": "assets/acme-logo.svg", "alt": "Acme Insurance" }` replaces the Satori word mark in the header

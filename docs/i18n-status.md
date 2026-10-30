@@ -57,8 +57,12 @@ none of them.
    `dir`** — `syncDocumentLanguage` sets `<html lang>` and stops there, so none of that
    component work activates. Tracked separately; it is a feature, not a list entry.
 
-There is **no language picker** (NXSAT-294): `availableLanguages` is read only by the config
-parser, so a deployment selects its language through `defaultLanguage`. Every shipped catalogue is
+There is **no language picker** (NXSAT-294), so a deployment selects its language through
+`defaultLanguage`. `availableLanguages` is no longer only parsed and stored: it is one half of the
+admission check on `defaultLanguage` — `resolveFormattingLocale` for Angular's formatting locale,
+and `resolveStringLanguage` for ngx-translate's string language since NXSAT-733. Both intersect it
+with a build-time capability, because Layer 0 is customer-editable and so cannot be the authority
+on what this build can render. Every shipped catalogue is
 checked by `checkCataloguePlaceholders`, which fails a translation whose `{{ … }}` placeholders differ
 from English; all of the delivered ones had zero mismatches when added.
 
@@ -999,9 +1003,11 @@ fails any source that is not.
 
 ### Separate stories, not part of either ticket
 
-9. **A language picker** (NXSAT-294). `availableLanguages` is validated, unit-tested and read only
-   by the config parser, so a deployment selects its language through `defaultLanguage`.
-   adf-core ships `LanguagePickerComponent`.
+9. **A language picker** (NXSAT-294). `availableLanguages` is validated and unit-tested, and
+   nothing *renders* it, so a deployment still selects its language through `defaultLanguage`.
+   It is read by the two admission checks on that key — `resolveFormattingLocale` and, since
+   NXSAT-733, `resolveStringLanguage` — which is why the wording here no longer says it is read
+   only by the config parser. adf-core ships `LanguagePickerComponent`.
 10. **`LOCALE_ID` — CLOSED 2026-09-22.** Locale _data_ is registered for `fr` and `de` (and for `ja`, `nl`, `th`, `zh` since NXSAT-293), adf-core's
     formatting locale follows the configuration, and `LOCALE_ID` is now **provided** from it too,
     in `provide-app-config.ts`. Both consumers share `resolveFormattingLocale()`, so Angular's

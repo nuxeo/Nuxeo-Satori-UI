@@ -7,6 +7,7 @@ import {
   Provider,
   effect,
   inject,
+  isDevMode,
   provideAppInitializer,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -16,6 +17,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { canFormatDatesIn } from '@nuxeo/satori-platform/ui';
 
 import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
+import { GENERATED_AUDIT_LOCALES, SHIPPED_CATALOGUE_LANGUAGES } from '../i18n/shipped-catalogues';
 import { firstValueFrom } from 'rxjs';
 import { AI_BACKEND_URL } from '@agentic-ui/shared/ai-client';
 import { DEFAULT_KD_CIC_OPERATIONS, KD_CIC_OPERATIONS } from '@agentic-ui/shared/kd-client';
@@ -63,6 +65,111 @@ function derivedNuxeoServerUrl(): string {
  * same reason.
  */
 /**
+ * The language every other one falls back to.
+ *
+ * Both halves of i18n hold English unconditionally — `en.json` ships, `EN_FALLBACK_TRANSLATIONS`
+ * is compiled in besides, and Angular bundles `en` locale data — so it is the one value that is
+ * always honourable whatever Layer 0 says.
+ */
+const FALLBACK_LANGUAGE = 'en';
+
+/**
+ * Why `defaultLanguage` cannot be used as the string language, or `null` if it can.
+ *
+ * ## The defect this closes (NXSAT-733)
+ *
+ * `defaultLanguage` used to go straight to `translate.use()`. For **strings** that is harmless
+ * and deliberate: `setFallbackLang('en')` means every key falls through to English, so
+ * `translate.use('xx')` renders a perfectly readable English page. The ticket's summary reads as
+ * though the English text were the bug; it is not, and the fallback is not to be "fixed".
+ *
+ * Two things were wrong, and neither is about the strings:
+ *
+ * 1. `syncDocumentLanguage` mirrors whatever ngx-translate is actually using — correctly, that is
+ *    why a French page now announces French — so an unsupported value reached
+ *    `<html lang="xx">` over English text. A screen reader picks a voice from that attribute and
+ *    browser translation offers it as the source language, which is WCAG 3.1.1.
+ * 2. `AppTranslateLoader` asked for `i18n/xx.json`, which cannot exist, and got a 404 on every
+ *    load. Guarding here rather than in `syncDocumentLanguage` removes both: nothing downstream
+ *    is handed a language this build cannot render.
+ *
+ * ## Why the shipped catalogue is the authority, and `availableLanguages` is not sufficient
+ *
+ * The ticket suggests checking `availableLanguages`. That is necessary — a deployment that does
+ * not offer a language should not boot into it — but it cannot be the whole test, for exactly the
+ * reason the #522 review gave against the first version of {@link resolveFormattingLocale}:
+ * Layer 0 is customer-editable, so `{ "defaultLanguage": "es", "availableLanguages":
+ * ["en", "es"] }` is valid configuration that parses cleanly and still names a language this
+ * build has no catalogue for. `checkAdvertisedLocalesShip` closes that hole for the **packaged**
+ * config and cannot see a customer's.
+ *
+ * `<html lang>` is a claim about the text on the page, and only `SHIPPED_CATALOGUE_LANGUAGES`
+ * decides what language the text is in. So admission is the intersection: the catalogue says what
+ * this build *can* render, `availableLanguages` says what this deployment *will* offer.
+ *
+ * The configured-but-unshipped case is genuinely *partly* translated — upstream
+ * `@hylandsoftware/satori-ui` ships `es`, so the shared navigation strings would be Spanish while
+ * the application's own strings are English. `en` is still the honest answer for the document as a
+ * whole, because the app catalogue is the bulk of the text on every screen.
+ *
+ * Returns the reason rather than a boolean so the diagnostic can say which of the two checks
+ * refused the value — "a typo" and "a language this deployment chose not to offer" need
+ * different fixes from whoever reads the console.
+ */
+function describeUnsupportedLanguage(
+  defaultLanguage: string,
+  availableLanguages: readonly string[],
+  devMode: boolean,
+): string | null {
+  if (defaultLanguage === FALLBACK_LANGUAGE) return null;
+  if (!hasCatalogue(defaultLanguage, devMode)) {
+    return 'this build ships no translation catalogue for it';
+  }
+  if (!availableLanguages.includes(defaultLanguage)) {
+    return 'availableLanguages does not offer it';
+  }
+  return null;
+}
+
+/**
+ * Whether a catalogue for this language can actually be loaded here.
+ *
+ * `devMode` is a parameter rather than a call to `isDevMode()` inside, for the reason
+ * `insecureAllowedForHost(isDevMode())` in `document-detail.ts` is written the same way: the
+ * production branch is the one that must not regress, and a test cannot reach it if the mode is
+ * read from ambient state — Karma runs in development mode, so a seam read internally would only
+ * ever be exercised on its permissive side.
+ */
+function hasCatalogue(language: string, devMode: boolean): boolean {
+  if (SHIPPED_CATALOGUE_LANGUAGES.includes(language)) return true;
+  // See `GENERATED_AUDIT_LOCALES`: generated into `public/i18n` by `npm run i18n:pseudo`, never
+  // committed and never in a release build, so only a dev server may honour one.
+  return devMode && GENERATED_AUDIT_LOCALES.includes(language);
+}
+
+/**
+ * The configured language, narrowed to one whose text this build can actually render.
+ *
+ * The sibling of {@link resolveFormattingLocale}, for the other half of i18n: that one guards
+ * Angular's formatting locale, this one guards ngx-translate's string language. They are
+ * deliberately separate — see {@link resolveFormattingLocale} for why the two are allowed to
+ * differ — and they ask different questions of different lists, which is why neither can be
+ * expressed in terms of the other.
+ *
+ * Exported for the spec; the application reaches it through
+ * {@link initialiseAppConfigAndLanguage}.
+ */
+export function resolveStringLanguage(
+  defaultLanguage: string,
+  availableLanguages: readonly string[],
+  devMode: boolean = isDevMode(),
+): string {
+  return describeUnsupportedLanguage(defaultLanguage, availableLanguages, devMode) === null
+    ? defaultLanguage
+    : FALLBACK_LANGUAGE;
+}
+
+/**
  * Loads Layer 0 configuration, then applies the language it names.
  *
  * Exported and named rather than inline in the provider so it can be tested. The behaviour
@@ -73,7 +180,7 @@ export function initialiseAppConfigAndLanguage(
   // Narrowed to the members actually used, rather than the whole service. A test double then
   // needs no cast, and the signature states the real dependency surface — widening it later
   // is a visible change instead of an invisible one.
-  config: Pick<AppConfigService, 'load' | 'bootstrap'>,
+  config: Pick<AppConfigService, 'load' | 'bootstrap' | 'reportUnsupportedDefaultLanguage'>,
   translate: Pick<TranslateService, 'setFallbackLang' | 'use'>,
 ): () => Promise<void> {
   return async () => {
@@ -83,11 +190,17 @@ export function initialiseAppConfigAndLanguage(
     // is named by the configuration that has just been fetched. The
     // manifest's `labels` are layered on by `AppTranslateLoader`, so this
     // also has to happen after the manifest has landed.
-    const { defaultLanguage } = config.bootstrap();
-    translate.setFallbackLang('en');
+    const { defaultLanguage, availableLanguages } = config.bootstrap();
+    translate.setFallbackLang(FALLBACK_LANGUAGE);
+    // The fallback above is what makes an unsupported value survivable for strings; it is not
+    // what makes it correct. See `resolveStringLanguage`.
+    const refusal = describeUnsupportedLanguage(defaultLanguage, availableLanguages, isDevMode());
+    if (refusal) {
+      config.reportUnsupportedDefaultLanguage(defaultLanguage, FALLBACK_LANGUAGE, refusal);
+    }
     // Must not prefer a language stored by an earlier boot: it would outlive a customer's
     // change to `defaultLanguage` on every browser that had already run the app.
-    await firstValueFrom(translate.use(defaultLanguage));
+    await firstValueFrom(translate.use(refusal ? FALLBACK_LANGUAGE : defaultLanguage));
   };
 }
 
