@@ -4640,23 +4640,59 @@ function checkUpstreamCatalogueLanguages() {
       ? node.elements.filter(ts.isStringLiteral).map((element) => element.text)
       : null;
 
-  /** The `assets` entries of every build target, so a declared path can be traced to a directory. */
-  let assets = [];
+  /**
+   * The `assets` arrays of `nuxeo-ui`'s own build target — the base one and one per configuration.
+   *
+   * Scoped to that target, and kept as separate arrays rather than pooled, for the reason
+   * `phase-6-a11y` already records: **Angular REPLACES this array per configuration rather than
+   * merging it**, so an entry present in `build.options` and absent from `configurations.development`
+   * copies the folder in one build and not the other. Pooling every `{input, output}` object in the
+   * file would let a development-only mapping — or another project's — satisfy a check about the
+   * production build, which is the opposite of what this gate is for.
+   */
+  let assetArrays = [];
   try {
     const angular = JSON.parse(read('angular.json'));
-    const collect = (value) => {
-      if (Array.isArray(value)) {
-        for (const entry of value) collect(entry);
-        return;
-      }
-      if (!value || typeof value !== 'object') return;
-      if (typeof value.input === 'string' && typeof value.output === 'string') assets.push(value);
-      for (const nested of Object.values(value)) collect(nested);
-    };
-    collect(angular);
+    const project = angular?.projects?.['nuxeo-ui'];
+    const build = project?.architect?.build ?? project?.targets?.build;
+    if (!build) {
+      fail(
+        'angular.json has no build target for `nuxeo-ui`, so `checkUpstreamCatalogueLanguages` ' +
+          'cannot find the asset globs that put the upstream catalogues in the bundle.',
+      );
+      return;
+    }
+    assetArrays = [
+      ['options', build.options?.assets],
+      ...Object.entries(build.configurations ?? {}).map(([name, config]) => [name, config?.assets]),
+    ].filter(([, assets]) => Array.isArray(assets));
   } catch (error) {
     fail(`angular.json is not valid JSON: ${error.message}`);
     return;
+  }
+
+  if (assetArrays.length === 0) {
+    fail(
+      '`nuxeo-ui`’s build target declares no `assets` array, so nothing copies the upstream ' +
+        'catalogues into the bundle and this gate cannot check what they contain.',
+    );
+    return;
+  }
+
+  /**
+   * Whether an asset rule actually copies `<lang>.json` out of its input directory.
+   *
+   * The rule's `glob` is part of what it copies, and ignoring it would compare the declared
+   * languages against every file in the directory while the build copied a subset — green while
+   * the served folder was missing catalogues. Only the shapes this repository uses are
+   * interpreted; anything else fails rather than being assumed to match, because a glob this gate
+   * cannot read is a gate that has stopped asserting.
+   */
+  function globCopies(glob, file) {
+    if (glob === '**/*' || glob === '*' || glob === '**') return true;
+    if (glob === '*.json' || glob === '**/*.json') return file.endsWith('.json');
+    if (!/[*?{}[\]]/.test(glob)) return glob === file;
+    return null;
   }
 
   let folders = 0;
@@ -4686,26 +4722,48 @@ function checkUpstreamCatalogueLanguages() {
       continue;
     }
 
-    // The loader fetches `<path>/i18n/<lang>.json`, so the glob that has to exist is the one
-    // whose `output` is that directory; its `input` is the package directory on disk.
+    // The loader fetches `<path>/<TRANSLATION_DIRECTORY>/<lang>.json`, so the rule that has to
+    // exist is the one whose `output` is that directory; its `input` is the package directory.
     const served = `${folderPath}/${translationDirectory}`;
-    const matches = assets.filter((asset) => asset.output.replace(/^\/+|\/+$/g, '') === served);
-    if (matches.length === 0) {
+    const rulesByArray = assetArrays.map(([name, assets]) => [
+      name,
+      assets.filter(
+        (asset) =>
+          asset &&
+          typeof asset === 'object' &&
+          typeof asset.input === 'string' &&
+          typeof asset.output === 'string' &&
+          asset.output.replace(/^\/+|\/+$/g, '') === served,
+      ),
+    ]);
+
+    // Every array, not any array: a configuration that omits the rule produces a build whose
+    // served folder is simply absent, and the loader would 404 for every language there.
+    const without = rulesByArray.filter(([, rules]) => rules.length === 0).map(([name]) => name);
+    if (without.length > 0) {
       fail(
-        `${LOADER} declares the upstream folder "${folderPath}", but no \`assets\` entry in ` +
-          `angular.json copies anything to "${served}", so the loader would request a path the ` +
-          'build never writes — a 404 for every language rather than only the unshipped ones.',
+        `${LOADER} declares the upstream folder "${folderPath}", but \`nuxeo-ui\`’s ` +
+          `${without.map((name) => `\`${name}\``).join(', ')} asset array(s) in angular.json copy ` +
+          `nothing to "${served}". Angular replaces this array per configuration rather than ` +
+          'merging it, so those builds would serve no upstream catalogue at all — a 404 for ' +
+          'every language rather than only the unshipped ones.',
       );
       continue;
     }
 
-    // Deduplicated: `angular.json` repeats the glob in the build target and again in its
-    // development configuration, and failing once per copy printed every diagnostic twice.
-    const inputDirs = [
-      ...new Set(matches.map((asset) => asset.input.replace(/^\/+|\/+$/g, ''))),
-    ].sort();
+    /** Input directory → the globs that copy out of it, across every asset array. */
+    const globsByInput = new Map();
+    for (const [, rules] of rulesByArray) {
+      for (const rule of rules) {
+        const inputDir = rule.input.replace(/^\/+|\/+$/g, '');
+        const glob = typeof rule.glob === 'string' ? rule.glob : '**/*';
+        if (!globsByInput.has(inputDir)) globsByInput.set(inputDir, new Set());
+        globsByInput.get(inputDir).add(glob);
+      }
+    }
 
-    for (const inputDir of inputDirs) {
+    for (const inputDir of [...globsByInput.keys()].sort()) {
+      const globs = [...globsByInput.get(inputDir)].sort();
       const absolute = join(repoRoot, inputDir);
       if (!existsSync(absolute)) {
         // `node_modules` is not checked in, so a tree that has not been installed cannot answer
@@ -4718,28 +4776,59 @@ function checkUpstreamCatalogueLanguages() {
         continue;
       }
 
-      const shipped = readdirSync(absolute)
-        .filter((entry) => entry.endsWith('.json'))
-        .map((entry) => entry.slice(0, -'.json'.length))
+      const unreadable = globs.filter((glob) => globCopies(glob, 'en.json') === null);
+      if (unreadable.length > 0) {
+        fail(
+          `the asset rule copying ${inputDir} to "${served}" uses glob ` +
+            `${unreadable.map((glob) => `\`${glob}\``).join(', ')}, which ` +
+            '`checkUpstreamCatalogueLanguages` cannot interpret — so it cannot tell which ' +
+            'catalogues actually reach the bundle. Teach the gate that glob rather than leaving ' +
+            'it asserting nothing.',
+        );
+        continue;
+      }
+
+      // What the build actually copies, which is the directory filtered by the glob — not every
+      // file that happens to sit in the directory.
+      const files = readdirSync(absolute).filter((entry) => entry.endsWith('.json'));
+      const shipped = files
+        .filter((file) => globs.some((glob) => globCopies(glob, file)))
+        .map((file) => file.slice(0, -'.json'.length))
         .sort();
       const sortedDeclared = [...declared].sort();
+
+      const uncopied = files
+        .filter((file) => !globs.some((glob) => globCopies(glob, file)))
+        .map((file) => file.slice(0, -'.json'.length))
+        .sort();
+      // Not a failure on its own — a vendor may ship a catalogue we deliberately do not serve —
+      // but it must be visible, because it is the difference between "the package has it" and
+      // "the bundle has it", and only the second is something the loader can fetch.
+      if (uncopied.length > 0) {
+        warn(
+          `${inputDir} contains ${uncopied.join(', ')}, which glob ` +
+            `${globs.map((glob) => `\`${glob}\``).join(', ')} does not copy to "${served}". ` +
+            'Those are not servable, so they are judged absent here.',
+        );
+      }
 
       const missing = shipped.filter((lang) => !declared.includes(lang));
       const stale = sortedDeclared.filter((lang) => !shipped.includes(lang));
 
       if (missing.length > 0) {
         fail(
-          `${inputDir} ships a catalogue for ${missing.join(', ')}, which "${folderPath}" does ` +
-            `not list in \`languages\` in ${LOADER}. An unlisted language is never requested, so ` +
-            'its shared strings stay in the fallback language with nothing reporting it.',
+          `${inputDir} ships a catalogue for ${missing.join(', ')} and the build copies it to ` +
+            `"${served}", but "${folderPath}" does not list it in \`languages\` in ${LOADER}. An ` +
+            'unlisted language is never requested, so its shared strings stay in the fallback ' +
+            'language with nothing reporting it.',
         );
       }
       if (stale.length > 0) {
         fail(
           `"${folderPath}" lists ${stale.join(', ')} in \`languages\` in ${LOADER}, but ` +
-            `${inputDir} ships no catalogue for it. A listed language the folder does not have ` +
-            'is a request that cannot succeed: a 404 and a console error on every page load, ' +
-            'which is NXSAT-732.',
+            `"${served}" is served no catalogue for it from ${inputDir}. A listed language the ` +
+            'served folder does not have is a request that cannot succeed: a 404 and a console ' +
+            'error on every page load, which is NXSAT-732.',
         );
       }
     }

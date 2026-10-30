@@ -11305,25 +11305,31 @@ expectRed(
 const LOADER_PATH = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
 const VENDOR_I18N = 'node_modules/@hylandsoftware/satori-ui/i18n';
 
-const UPSTREAM_ANGULAR_JSON = `${JSON.stringify(
-  {
-    projects: {
-      'nuxeo-ui': {
-        architect: {
-          build: {
-            options: {
-              assets: [
-                { glob: '**/*', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' },
-              ],
+/** `nuxeo-ui`'s build target, with the asset arrays a control wants to give it. */
+const upstreamAngularJson = (base, configurations = {}) =>
+  `${JSON.stringify(
+    {
+      projects: {
+        'nuxeo-ui': {
+          architect: {
+            build: {
+              options: { assets: base },
+              ...(Object.keys(configurations).length ? { configurations } : {}),
             },
           },
         },
       },
     },
-  },
-  null,
-  2,
-)}\n`;
+    null,
+    2,
+  )}\n`;
+
+/** The asset rule as the repository actually declares it. */
+const SATORI_RULE = { glob: '**/*', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' };
+
+const UPSTREAM_ANGULAR_JSON = upstreamAngularJson([SATORI_RULE], {
+  development: { assets: [SATORI_RULE] },
+});
 
 /** The loader, with whatever language list a control wants to put in it. */
 const loaderWith = (languages) =>
@@ -11357,7 +11363,7 @@ expectRed(
     [LOADER_PATH]: loaderWith(['de', 'en', 'fr', 'ja']),
   },
   null,
-  /lists ja in `languages`[\s\S]*ships no catalogue for it/,
+  /lists ja in `languages`[\s\S]*is served no catalogue for it/,
 );
 
 expectRed(
@@ -11369,7 +11375,7 @@ expectRed(
     [LOADER_PATH]: loaderWith(['de', 'en']),
   },
   null,
-  /ships a catalogue for fr[\s\S]*does not list in `languages`/,
+  /ships a catalogue for fr and the build copies it[\s\S]*does not list it in `languages`/,
 );
 
 // The pre-fix shape: a folder with no language list at all, which is what made every language
@@ -11392,30 +11398,62 @@ expectRed(
   'a folder path no assets glob writes to',
   'checkUpstreamCatalogueLanguages',
   {
-    'angular.json': `${JSON.stringify(
-      {
-        projects: {
-          'nuxeo-ui': {
-            architect: {
-              build: {
-                options: {
-                  assets: [
-                    { glob: '**/*', input: VENDOR_I18N, output: 'assets/somewhere-else/i18n' },
-                  ],
-                },
-              },
-            },
-          },
-        },
-      },
-      null,
-      2,
-    )}\n`,
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: VENDOR_I18N, output: 'assets/somewhere-else/i18n' },
+    ]),
     ...VENDOR_FILES,
     [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
   },
   null,
-  /no `assets` entry in angular.json copies anything to "assets\/satori-ui\/i18n"/,
+  /`options` asset array\(s\) in angular.json copy nothing to "assets\/satori-ui\/i18n"/,
+);
+
+// Angular REPLACES `assets` per configuration rather than merging it, so a rule present in the
+// base array and absent from a configuration's produces a build that serves no upstream
+// catalogue at all. Pooling every entry in the file would have reported this as fine.
+expectRed(
+  'a configuration whose assets array omits the rule the base array has',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([SATORI_RULE], {
+      development: { assets: [{ glob: '**/*', input: 'apps/nuxeo-ui/public', output: '.' }] },
+    }),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+  },
+  null,
+  /`development` asset array\(s\)[\s\S]*replaces this array per configuration/,
+);
+
+// The glob is part of what the rule copies. A narrower one serves a subset, and comparing the
+// declaration against the whole directory would be green while the bundle was missing files.
+expectRed(
+  'a glob that copies only some of the catalogues the package ships',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: 'en.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+  },
+  null,
+  /is served no catalogue for it from node_modules/,
+);
+
+// And a glob the gate cannot interpret must say so rather than assume it matches everything.
+expectRed(
+  'a glob shape the gate cannot interpret',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '{de,en}.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+  },
+  null,
+  /cannot interpret/,
 );
 
 // Rewriting `UPSTREAM_FOLDERS` into a shape this gate cannot read must fail loudly rather than
