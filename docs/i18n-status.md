@@ -539,10 +539,13 @@ adding a language needs no change there. It is requested if the vendor ships it 
 not, and `app-translate-loader.spec.ts` asserts that by iterating the configured list rather than
 by naming it, so the assertion survives the list changing.
 
-**Right-to-left is a separate, open gap.** The vendor's components carry `:dir(rtl)` rules and
-depend on `@angular/cdk/bidi`; this application sets no `dir` anywhere — not in
-`apps/nuxeo-ui/src`, not from configuration. Advertising Arabic or Hebrew would give correct text
-in a mirrored-the-wrong-way layout, so that work has to land first. Not addressed by NXSAT-732.
+**Right-to-left is a separate concern, owned by NXSAT-752.** The vendor's components carry
+`:dir(rtl)` rules and depend on `@angular/cdk/bidi`. On `main` as of this change, this
+application sets no `dir` at all — not in `apps/nuxeo-ui/src`, not from configuration — so a
+right-to-left language would give correct text in a mirrored-the-wrong-way layout. NXSAT-752 sets
+the document direction from the active language; **this paragraph records the state at the time of
+writing, not the current one**, so check whether it has landed rather than citing it. Not
+addressed by NXSAT-732.
 
 ---
 

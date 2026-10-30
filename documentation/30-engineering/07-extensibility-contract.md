@@ -97,11 +97,12 @@ A customer adding a language gets the same split: their own catalogue is honoure
 components are not. Nothing breaks and nothing 404s — the loader asks the vendor's folder only
 for languages it ships — but the shared strings stay in the fallback language.
 
-> **Right-to-left is a separate, open gap.** The vendor's components carry `:dir(rtl)` rules and
-> depend on `@angular/cdk/bidi`, but this application sets no `dir` anywhere — no `dir="rtl"`, no
-> `[attr.dir]`, nothing driven from configuration. So advertising a right-to-left language would
-> render its text correctly and its layout mirrored the wrong way. Advertising one needs that work
-> done first.
+> **Right-to-left is a separate concern, and it is being addressed elsewhere.** The vendor's
+> components carry `:dir(rtl)` rules and depend on `@angular/cdk/bidi`. On `main` as of this
+> change, this application sets no `dir` at all — so advertising a right-to-left language would
+> render its text correctly and its layout mirrored the wrong way. **NXSAT-752 sets the document
+> direction from the active language**; check whether it has landed before relying on either
+> statement, and do not take the absence recorded here as current.
 
 ### `branding.logo`
 
