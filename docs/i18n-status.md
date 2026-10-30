@@ -138,8 +138,14 @@ What remains:
 
 3. **RTL, for Arabic and Hebrew.** No longer "tracked separately" — it is
    [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523), which sets `<html dir>` from the
-   active language and writes CDK's `Directionality` so overlays follow. Until that merges, either
-   language renders left-to-right, and a catalogue alone would not make it shippable.
+   active language and writes CDK's `Directionality` so overlays follow.
+
+   An earlier revision of this item said that until #523 merges "either language renders
+   left-to-right". That is no longer true, and NXSAT-733 is why: `describeUnsupportedLanguage`
+   refuses a `defaultLanguage` with no shipped catalogue, so `boot('ar')` applies `en` and neither
+   language can be **reached** at startup at all. They do not render left-to-right; they do not
+   render as Arabic or Hebrew. The mechanism is ready and activates when the catalogue lands —
+   which is a claim with no shelf life, unlike "you can select it today".
 
 4. **Shared-component strings, which are a different team's.** `@hylandsoftware/satori-ui` ships
    no catalogue for `ar`, `he`, `ja`, `nl` or `sv` — 15 files in its `i18n/` but only seven

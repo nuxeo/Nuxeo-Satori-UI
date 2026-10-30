@@ -955,8 +955,15 @@ Two things that follow, neither optional:
   `checkCataloguesAreTranslated` fails an all-English catalogue by design, and D8e is right about
   why: a user who selects Spanish and reads English has been lied to.
 - **`ar` and `he` need RTL support, not just translations.** Component-level RTL exists in seven
-  `nxs-` components and two inject `Directionality`, but nothing sets `dir`, so none of it
-  activates. A catalogue alone does not make either shippable.
+  `nxs-` components and two inject `Directionality`; [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523)
+  adds what sets `dir` and writes the `Directionality` service so overlays follow. A catalogue
+  alone does not make either shippable.
+
+  This bullet said "nothing sets `dir`, so none of it activates", which read as a description of
+  what a user sees. It is not: since NXSAT-733, `describeUnsupportedLanguage` refuses a
+  `defaultLanguage` with no shipped catalogue, so `boot('ar')` applies `en` and neither language is
+  **reachable** at startup. Nothing activates because nothing selects them, which is a different
+  statement and the accurate one.
 
 One cost was carried deliberately, and it is worth recording what it actually came to. The pull
 list named `ar`, `he`, `it` and `sv` before Crowdin project 160 had them as targets, and the CLI
