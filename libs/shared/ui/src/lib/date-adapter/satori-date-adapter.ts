@@ -3,11 +3,6 @@ import { provideDateFnsAdapter } from '@angular/material-date-fns-adapter';
 import { MAT_DATE_LOCALE } from '@angular/material/core';
 import type { Locale } from 'date-fns';
 import {
-  ar,
-  arDZ,
-  arEG,
-  arMA,
-  arSA,
   de,
   enAU,
   enCA,
@@ -17,27 +12,29 @@ import {
   enNZ,
   enUS,
   enZA,
-  es,
   fr,
   frCA,
   frCH,
-  he,
-  it,
-  itCH,
   ja,
   nl,
   nlBE,
-  sv,
 } from 'date-fns/locale';
 
 /**
  * A date-fns locale for every language the application ships a catalogue for, plus the regional
  * variants date-fns ships for those languages.
  *
- * Keyed by the Angular locale id, lowercased. The ten bare language ids are the ones this
+ * Keyed by the Angular locale id, lowercased. The five bare language ids are the ones this
  * application can actually produce — `resolveFormattingLocale` clamps `LOCALE_ID` to
  * `REGISTERED_LOCALES` — and a test asserts they match `availableLanguages`, so adding a
  * language cannot quietly leave its dates being parsed as English.
+ *
+ * That test is why this map holds five rather than the ten the application targets. `ar`, `es`,
+ * `he`, `it` and `sv` have Angular locale data registered and are requested from Crowdin, but
+ * they are not advertised until their catalogues land — so they do not belong here yet either.
+ * Each arrives with its catalogue, and `ar` brings the regional variants with it: date-fns'
+ * `ar-DZ`, `ar-MA` and `ar-SA` are month-first while bare `ar` is day-first, so they need their
+ * own entries by the rule below or they would parse day-first through the fallback.
  *
  * The regional entries are here for the **published** provider rather than for us. These
  * dialogs are exported from `@nuxeo/satori-platform/ui`, so a customer's `LOCALE_ID` reaches
@@ -56,18 +53,16 @@ import {
  * | `fr-CA` | `yy-MM-dd` | `dd/MM/y` |
  * | `fr-CH` | `dd.MM.y` | `dd/MM/y` |
  * | `nl-BE` | `dd.MM.y` | `dd-MM-y` |
- * | `ar-DZ` `ar-MA` `ar-SA` | `MM/dd/yyyy` | `dd/MM/yyyy` |
- * | `ar-EG` | `d/MM/y` | `dd/MM/yyyy` |
- * | `it-CH` | `dd.MM.y` | `dd/MM/y` |
  *
- * The three month-first Arabic regions are the clearest case for this list existing: left to
- * the bare-language fallback they would parse day-first, which is the original defect with an
- * `ar-` prefix.
- *
- * `de-AT`, `ar-TN` and `nl-NL` are deliberately **absent**: their `P` is identical to their
+ * `de-AT`, `zh-HK` and `zh-TW` are deliberately **absent**: their `P` is identical to their
  * base, so an entry would add a locale to every consumer's bundle and change no behaviour. They
- * resolve correctly through the bare-language fallback. date-fns ships no regional variant at
- * all for `es`, `he` or `sv`.
+ * resolve correctly through the bare-language fallback.
+ *
+ * The same rule decides what the five pending languages bring with them. Measured, so it does
+ * not have to be re-derived: `ar-DZ`, `ar-MA` and `ar-SA` are `MM/dd/yyyy` and `ar-EG` is
+ * `d/MM/y` against bare `ar`'s `dd/MM/yyyy`, so all four need entries; `ar-TN` matches its base
+ * and does not. `it-CH` is `dd.MM.y` against `it`'s `dd/MM/y`, so it does. date-fns ships no
+ * regional variant at all for `es`, `he` or `sv`.
  *
  * `en` maps to `enUS` and is present here although `register-locale-data.ts` omits it: Angular
  * bundles `en-US` locale data so registering it there would be a no-op, whereas date-fns ships
@@ -90,16 +85,6 @@ const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = {
   ja,
   nl,
   'nl-be': nlBE,
-  ar,
-  'ar-dz': arDZ,
-  'ar-eg': arEG,
-  'ar-ma': arMA,
-  'ar-sa': arSA,
-  es,
-  he,
-  it,
-  'it-ch': itCH,
-  sv,
 };
 
 /** The bare language ids above, for the test that keeps this map and `availableLanguages` in step. */
@@ -171,12 +156,12 @@ export function dateFnsLocaleFor(localeId: string): Locale {
  * `DatePipe` never calls `Intl`, so every other date on the page had always shown `2026`. Only
  * the picker disagreed, and only the picker was unparseable by itself.
  *
- * The live case is now Arabic, and it is the milder half of the same split. `Intl` formats
- * `ar-EG` and `ar-SA` with **Arabic-Indic** numerals (`٣/٤/٢٠٢٦`); date-fns' `ar` writes Latin
- * ones (`03/04/2026`). Both resolve to the Gregorian calendar on our ICU — measured, not
- * assumed — so unlike Thai there is no year to get wrong, and the field round-trips what it
- * displays. That round-trip is the property this file is for, so the Latin digits stand rather
- * than being papered over with `Intl`.
+ * Arabic will raise the milder half of the same split when it lands, so it is recorded here
+ * rather than rediscovered then. `Intl` formats `ar-EG` and `ar-SA` with **Arabic-Indic**
+ * numerals (`٣/٤/٢٠٢٦`); date-fns' `ar` writes Latin ones (`03/04/2026`). Both resolve to the
+ * Gregorian calendar on our ICU — measured, not assumed — so unlike Thai there is no year to get
+ * wrong, and the field round-trips what it displays. That round-trip is the property this file
+ * is for, so the Latin digits are the right answer and are not to be papered over with `Intl`.
  *
  * ## Why every component provides it, rather than the app root
  *

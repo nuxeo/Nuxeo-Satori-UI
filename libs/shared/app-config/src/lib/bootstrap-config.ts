@@ -219,16 +219,22 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   defaultThemeId: 'nuxeo',
   themes: DEFAULT_APP_THEMES,
   defaultLanguage: 'en',
-  // The ten languages Nuxeo Web UI supports, which this application is aligned to. `th` and
-  // `zh` were here and were dropped; `ar`, `es`, `he`, `it` and `sv` replace them.
+  // The locales a catalogue actually ships for, in `apps/nuxeo-ui/public/i18n/`. Listing a
+  // locale here that has no catalogue would advertise a language the application cannot
+  // render, which `checkAdvertisedLocalesShip` fails.
   //
-  // **Five of the ten have no catalogue in `apps/nuxeo-ui/public/i18n/` yet** — ar, es, he, it
-  // and sv — and `checkAdvertisedLocalesShip` fails every one of them until Crowdin delivers it,
-  // because advertising a language renders the English fallback throughout and reads as a broken
-  // language rather than an absent one (D8e). The list is declared ahead of the catalogues on
-  // purpose, so the Crowdin pull has somewhere to land; the gate is red in the meantime and
-  // that red is the tracking mechanism, not a surprise. `es` additionally needs one Crowdin
-  // string fixed (`Seleccionado(s)`), and `ar`/`he` are left-to-right until RTL support exists.
+  // **This is five of the ten languages the application targets.** The target set is Nuxeo Web
+  // UI's — `ar`, `nl`, `en`, `fr`, `de`, `he`, `it`, `ja`, `es`, `sv` — and `th` and `zh` were
+  // dropped from here to match it. The other five are already set up everywhere a language can
+  // be set up ahead of its translations: Angular locale data in `register-locale-data.ts`, and a
+  // `--language` in the Crowdin pull. What is missing is only the catalogue, and this list is
+  // the one touchpoint that cannot run ahead of one — advertising a language renders the English
+  // fallback throughout, which reads as broken rather than absent (D8e, `D8e-webui`).
+  //
+  // So each of `ar`, `es`, `he`, `it`, `sv` joins this list — and `DATE_FNS_LOCALES`, which a
+  // test holds equal to it — in the pull request that brings its catalogue. `es` needs one
+  // Crowdin string fixed first (`Seleccionado(s)`); `ar` and `he` additionally need RTL support,
+  // which does not exist yet, so a catalogue alone does not make them shippable.
   //
   // Shipping a catalogue does NOT mean every key is translated: `setFallbackLang('en')` covers
   // gaps, and a Crowdin pull fills every unapproved string with its English source.
@@ -237,11 +243,7 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   //
   // Nothing renders this list yet: there is no language picker (NXSAT-294), and only the config
   // parser reads it. A deployment selects its language through `defaultLanguage`.
-  //
-  // A language here needs three more entries: `download_translations_args` in
-  // .github/workflows/crowdin-pull.yaml, `LOCALE_DATA` in register-locale-data.ts, and
-  // `DATE_FNS_LOCALES` in satori-date-adapter.ts, which a test holds equal to this list.
-  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl', 'ar', 'es', 'he', 'it', 'sv'],
+  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl'],
   integrations: {
     arender: null,
     knowledgeDiscoveryOperations: {},

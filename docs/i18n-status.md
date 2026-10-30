@@ -14,22 +14,25 @@ The application's language set was aligned to the one Nuxeo Web UI supports. Tha
 and Chinese**, which were shipping at 99% approved, and **added Arabic, Hebrew, Italian, Spanish
 and Swedish**, none of which has a catalogue yet.
 
-All ten are declared in `availableLanguages`, `register-locale-data.ts`, `DATE_FNS_LOCALES` and
-the Crowdin pull. **Declaration ran ahead of delivery deliberately** — see D8e — so five rows
-below are red and will stay red until Crowdin delivers. That red is the tracking mechanism.
+The five additions are set up everywhere a language **can** be set up before its translations
+exist — Angular locale data in `register-locale-data.ts`, and a `--language` in the Crowdin pull
+— and are deliberately absent from the two touchpoints that cannot run ahead of a catalogue:
+`availableLanguages` and `DATE_FNS_LOCALES`. So the gate is green and the app ships five
+languages today, with each of the other five becoming advertisable in a small pull request when
+its catalogue arrives. See `D8e-webui`.
 
-| Language | Code | Catalogue | Crowdin id | Status                                                                                                                                                                  |
-| -------- | ---- | --------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| English  | `en` | `en.json` | source     | ships                                                                                                                                                                   |
-| French   | `fr` | `fr.json` | `fr`       | ships, 99% approved                                                                                                                                                     |
-| German   | `de` | `de.json` | `de`       | ships, 99% approved                                                                                                                                                     |
-| Japanese | `ja` | `ja.json` | `ja`       | ships since NXSAT-293, 99% approved                                                                                                                                     |
-| Dutch    | `nl` | `nl.json` | `nl`       | ships since NXSAT-293, 99% approved                                                                                                                                     |
-| Spanish  | `es` | —         | `es`       | **declared, not delivered** — 99% approved, but `kd.knowledge-discovery.selected` is `Seleccionado(s)`, which `checkCatalogueValuesAreRenderable` fails. Fix in Crowdin |
-| Italian  | `it` | —         | ?          | **declared, not delivered** — not a target language on Crowdin project 160; translation not started                                                                     |
-| Swedish  | `sv` | —         | ?          | **declared, not delivered** — not a target on project 160; translation not started                                                                                      |
-| Arabic   | `ar` | —         | ?          | **declared, not delivered** — not a target on project 160, **and renders left-to-right** (no RTL support)                                                               |
-| Hebrew   | `he` | —         | ?          | **declared, not delivered** — not a target on project 160, **and renders left-to-right** (no RTL support)                                                               |
+| Language | Code | Catalogue | Crowdin id | Status                                                                                                                                                                         |
+| -------- | ---- | --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| English  | `en` | `en.json` | source     | ships                                                                                                                                                                          |
+| French   | `fr` | `fr.json` | `fr`       | ships, 99% approved                                                                                                                                                            |
+| German   | `de` | `de.json` | `de`       | ships, 99% approved                                                                                                                                                            |
+| Japanese | `ja` | `ja.json` | `ja`       | ships since NXSAT-293, 99% approved                                                                                                                                            |
+| Dutch    | `nl` | `nl.json` | `nl`       | ships since NXSAT-293, 99% approved                                                                                                                                            |
+| Spanish  | `es` | —         | `es`       | **registered, awaiting catalogue** — 99% approved, but `kd.knowledge-discovery.selected` is `Seleccionado(s)`, which `checkCatalogueValuesAreRenderable` fails. Fix in Crowdin |
+| Italian  | `it` | —         | ?          | **registered, awaiting catalogue** — not a target language on Crowdin project 160; translation not started                                                                     |
+| Swedish  | `sv` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160; translation not started                                                                                      |
+| Arabic   | `ar` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160, **and renders left-to-right** (no RTL support)                                                               |
+| Hebrew   | `he` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160, **and renders left-to-right** (no RTL support)                                                               |
 
 Dropped: **Thai** (`th`) and **Chinese Simplified** (`zh`), both at 99% approved when removed.
 Their translations remain in Crowdin, so re-adding either is a pull rather than new work.
@@ -43,10 +46,11 @@ none of them.
 
 ### What is owed, and by whom
 
-1. **Add `ar`, `he`, `it`, `sv` as target languages on Crowdin project 160.** Until then the
-   nightly pull fails outright — the CLI rejects the whole invocation, not the one flag — so
-   `fr`, `de`, `ja` and `nl` stop updating too. They are at 99% and static, so the cost is low,
-   but it is not zero.
+1. **Add `ar`, `he`, `it`, `sv` as target languages on Crowdin project 160.** This is the one
+   item with a cost attached to leaving it: the pull list already names them, and the CLI
+   rejects the whole invocation rather than the unknown flag, so **the nightly pull fails until
+   they exist** and `fr`, `de`, `ja` and `nl` stop updating with it. They are at 99% and static,
+   so the exposure is small, but it is real — and it is why this is first.
 2. **Fix `Seleccionado(s)` in Crowdin** so `es` can pass `checkCatalogueValuesAreRenderable`.
 3. **RTL support** before Arabic or Hebrew is shippable, not merely translated. Seven `nxs-`
    components already handle `[dir='rtl']` and two inject `Directionality`, but **nothing sets

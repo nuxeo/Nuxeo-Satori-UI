@@ -18,6 +18,6 @@
   "themes": [],
 
   "defaultLanguage": "en",
-  "$availableLanguages": "The ten languages Nuxeo Web UI supports. ar, es, he, it and sv have no catalogue in apps/nuxeo-ui/public/i18n/ yet and arrive from Crowdin; checkAdvertisedLocalesShip fails each one until it lands. See D8e in docs/i18n-localization-plan.md.",
-  "availableLanguages": ["en", "fr", "de", "ja", "nl", "ar", "es", "he", "it", "sv"]
+  "$availableLanguages": "Only the languages with a catalogue in apps/nuxeo-ui/public/i18n/. The target set is Nuxeo Web UI's ten (ar nl en fr de he it ja es sv), so th and zh were dropped; ar, es, he, it and sv are registered and requested from Crowdin but cannot be advertised until their catalogues arrive, because checkAdvertisedLocalesShip fails a language that would render the English fallback throughout. See D8e-webui in docs/i18n-localization-plan.md.",
+  "availableLanguages": ["en", "fr", "de", "ja", "nl"]
 }

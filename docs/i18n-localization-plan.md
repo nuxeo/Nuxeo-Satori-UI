@@ -13,9 +13,9 @@ translations**: 8 strings each in French and German as of 29 September 2026, non
 seven target languages. **That changed by 5 October 2026**: Crowdin Status showed `de`, `es`, `fr`,
 `ja`, `nl`, `th` and `zh-CN` at 99% approved, `pt` at 88% and `pl` at 2% (99% translated), and
 NXSAT-293 ships `ja`, `nl`, `th` and `zh` beside `fr` and `de`. `es` is held back on one string —
-see D8e. **Changed again on 30 October 2026**: the language set was aligned to Nuxeo Web UI's ten,
-dropping `th` and `zh` and adding `ar`, `he`, `it`, `es` and `sv` — five of them declared with no
-catalogue behind them, which is `D8e-webui` and the reason the gate is red on this branch.
+see D8e. **Changed again on 30 October 2026**: the target set was aligned to Nuxeo Web UI's ten,
+dropping `th` and `zh` and adding `ar`, `he`, `it`, `es` and `sv`. Five ship (`en fr de ja nl`);
+the additions are registered and requested from Crowdin but not yet advertised — `D8e-webui`.
 Project membership is resolved (Manager access on
 28 September) and the translation team has confirmed it can begin (INTERN-1346, 28 September).
 Until 5 October that was separate from what the repository shipped: `fr.json` and `de.json`
@@ -841,13 +841,10 @@ re-derived it came back narrower or wider than the last.
 
 ### D8e — a language is advertised when it has translations, not when it is planned
 
-> **Superseded in part, 30 October 2026.** The rule below is still the right default and the
-> reasoning still holds. It was **overridden by an explicit product decision** to align the
-> application's language set to Nuxeo Web UI's, declaring all ten up front and letting Crowdin
-> fill in the catalogues. Five languages are therefore advertised with no catalogue, which
-> `checkAdvertisedLocalesShip` fails by design. Read `D8e-webui` below before concluding the gate
-> is broken. Keep the rule in mind when the next language is proposed: this was a decision taken
-> with its cost named, not a precedent that advertising ahead of translation is fine.
+> **Still in force, and extended, 30 October 2026.** The target set changed — it is now Nuxeo
+> Web UI's ten — but the rule below survived that change unaltered: a language is advertised when
+> it has translations. `D8e-webui` records the new set and which touchpoints a language may
+> legitimately appear in before its catalogue exists.
 
 Crowdin project 160 carries nine target languages. `availableLanguages` held seven — `en`, `fr`,
 `de`, `ja`, `nl`, `th` and `zh` (Simplified Chinese, Crowdin's `zh-CN`) — since NXSAT-293 added
@@ -897,36 +894,49 @@ the Guidelines leave the Crowdin workflow to them and recommend in-house transla
 proof-reading step. Machine pre-translation is theirs to choose, and with `export_only_approved`
 at `'true'` (D8g) nothing unapproved reaches the application either way.
 
-### D8e-webui — the set is Nuxeo Web UI's, declared ahead of the catalogues
+### D8e-webui — the set is Nuxeo Web UI's, and half of it is still in flight
 
-**Decision, 30 October 2026.** The application supports the ten languages Nuxeo Web UI supports:
-`ar`, `nl`, `en`, `fr`, `de`, `he`, `it`, `ja`, `es`, `sv`. Thai and Chinese were dropped; Arabic,
-Hebrew, Italian, Spanish and Swedish were added. All ten are declared across every touchpoint now,
-and Crowdin delivers the catalogues as they are produced.
+**Decision, 30 October 2026.** The application targets the ten languages Nuxeo Web UI supports:
+`ar`, `nl`, `en`, `fr`, `de`, `he`, `it`, `ja`, `es`, `sv`. Thai and Chinese were dropped. Arabic,
+Hebrew, Italian, Spanish and Swedish were added to the target, and **five of the ten ship**:
+`en`, `fr`, `de`, `ja`, `nl`.
 
-This **inverts D8e's ordering on purpose**, and the cost is not hypothetical:
+The useful part of this decision is not the list — it is which touchpoints a language may appear
+in before it has translations. Of the five from D8e, they split cleanly:
 
-- `checkAdvertisedLocalesShip` **fails on five languages** until their catalogues land. The gate
-  is red and stays red. That is the tracking mechanism, not an oversight — but it means this
-  branch cannot merge on a green gate, and whoever carries it needs to know why.
-- The nightly Crowdin pull **fails outright** until `ar`, `he`, `it` and `sv` are added as target
-  languages on project 160. The CLI rejects the whole invocation rather than the unknown flag, so
-  `fr`, `de`, `ja` and `nl` stop updating as collateral. They are at 99% approved and static, so
-  the exposure is small, but it is real.
-- `ar` and `he` **render left-to-right**. Component-level RTL exists in seven `nxs-` components,
-  but nothing sets `dir`, so none of it activates. Translating them does not make them shippable.
+| Touchpoint                          | May run ahead? | Why                                                       |
+| ----------------------------------- | -------------- | --------------------------------------------------------- |
+| `register-locale-data.ts`           | **yes**        | missing-catalogue is a warning; the reverse throws NG0701 |
+| `--language` in `crowdin-pull.yaml` | **yes**        | it is the request that produces the catalogue             |
+| Catalogue in `public/i18n/`         | n/a            | it is the thing being waited for                          |
+| `availableLanguages`                | **no**         | `checkAdvertisedLocalesShip` fails it                     |
+| `DATE_FNS_LOCALES`                  | **no**         | a test pins it to `availableLanguages`                    |
 
-The one thing that was **not** done, and must not be: seeding empty or English-filled catalogues
-to turn the gate green. `checkCataloguesAreTranslated` fails an all-English catalogue by design,
-and D8e's reasoning above is exactly right about why — a user who selects Spanish and reads
-English has been lied to. A red gate that names five absent catalogues is honest; a green one over
-five fake catalogues is not.
+So `ar`, `es`, `he`, `it` and `sv` are registered and requested, and absent from the last two.
+Each joins them in the small pull request that brings its catalogue. The gate stays green
+throughout, which is the point: D8e's rule is not suspended, it is scoped.
 
-Why declare early at all, then? Because the language set is a product decision and the Crowdin
-project is downstream of it. Declaring it here makes the repository the statement of intent and
-the gate the to-do list, rather than leaving the set implicit in whatever Crowdin happens to
-carry. That is a defensible trade and it was made deliberately; it is not a precedent for
-advertising a language because someone intends to translate it.
+An earlier revision of this branch did declare all ten at once and left `checkAdvertisedLocalesShip`
+failing on five, on the reasoning that the red was a to-do list. That is recorded here because it
+was wrong in a specific and checkable way rather than merely untidy: the repository's own
+`pre-push` hook is `npm run review:guardrails`, so a branch in that state **cannot be pushed at
+all**. A to-do list that prevents the work reaching review is not a to-do list.
+
+Two things that follow, neither optional:
+
+- **Do not seed empty or English-filled catalogues** to make a language advertisable sooner.
+  `checkCataloguesAreTranslated` fails an all-English catalogue by design, and D8e is right about
+  why: a user who selects Spanish and reads English has been lied to.
+- **`ar` and `he` need RTL support, not just translations.** Component-level RTL exists in seven
+  `nxs-` components and two inject `Directionality`, but nothing sets `dir`, so none of it
+  activates. A catalogue alone does not make either shippable.
+
+One cost is carried deliberately: the pull list names `ar`, `he`, `it` and `sv` while Crowdin
+project 160 does not have them as targets, and the CLI rejects the whole invocation rather than
+the unknown flag — so the nightly pull fails until they are added, and `fr`, `de`, `ja` and `nl`
+stop updating with it. They are at 99% approved and static. The alternative was to leave the
+request out and have nothing pulling the new languages into existence, which trades a visible
+failure for an invisible stall.
 
 ### D8a — `%two_letters_code%`, not `%locale%`
 

@@ -49,6 +49,12 @@ import localeSv from '@angular/common/locales/sv';
  * here on purpose. That direction is the harmless one: this check only warns about locale data
  * with no catalogue behind it, while the reverse throws `NG0701` at runtime.
  *
+ * So this file and the Crowdin pull list are the two touchpoints those five appear in, and the
+ * only two that can legitimately run ahead of a catalogue. They are deliberately absent from
+ * `availableLanguages` and `DATE_FNS_LOCALES`, which cannot: advertising a language with no
+ * catalogue fails `checkAdvertisedLocalesShip`, and the date map is pinned to that list by a
+ * test. Each of the five joins both in the pull request that brings its catalogue.
+ *
  * `checkLocaleDataRegistered` in `scripts/review-guardrails.mjs` fails the build when a
  * catalogue has no matching registration, because the symptom otherwise appears far from the
  * cause — as a pipe error on a page that has nothing to do with the locale that was added.
