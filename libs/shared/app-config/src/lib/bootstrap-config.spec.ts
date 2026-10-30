@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_APP_BOOTSTRAP_CONFIG,
   describeBrandingLogoRefusal,
+  describeSsoEndpointPathForm,
   mergeBootstrapConfig,
   nuxeoOriginsOf,
   resolveBrandingLogoUrl,
@@ -472,6 +473,113 @@ describe('describeBrandingLogoRefusal', () => {
   });
 });
 
+/**
+ * NXSAT-731 — the form rule for `sso.endpoints[].path`, asserted directly rather than only
+ * through the merge, because the reason it gives is part of the contract: an administrator whose
+ * button silently stopped rendering has nothing else to go on.
+ *
+ * The ticket suggested refusing the `//` and `/\` prefixes. That is why the tab, newline and
+ * carriage-return cases are here: the URL parser deletes those from the input before it looks at
+ * anything, so `/<TAB>/evil.example` passes a prefix check and still resolves to `evil.example`.
+ */
+describe('describeSsoEndpointPathForm', () => {
+  const ACCEPTED: readonly string[] = [
+    '/nuxeo/login/azure',
+    '/nuxeo/sso-ok',
+    '/nuxeo/oauth2/authorization/azure',
+    // Trailing and leading whitespace: `startSamlLogin` trims, so the rule is checked on the
+    // trimmed value and these are the same endpoint as the first one.
+    '  /nuxeo/login/azure  ',
+    // On the origin however the parser or the server reads it. `%2f` stays an escape in a path,
+    // and a `..` cannot climb above the root, so neither reaches another host.
+    '/%2f%2fevil.example',
+    '/./%2e%2e//evil.example',
+    '/ /evil.example',
+    '/nuxeo/login/azure?tenant=acme#top',
+  ];
+
+  it.each(ACCEPTED.map((path) => [path] as const))('accepts %j', (path) => {
+    expect(describeSsoEndpointPathForm(path)).toBeNull();
+  });
+
+  /** One distinct, administrator-readable reason per cause. */
+  const CAUSES: ReadonlyArray<readonly [string, string]> = [
+    ['blank', '   '],
+    ['protocol-relative', '//evil.example/sso'],
+    ['a backslash the parser rewrites as a separator', '/\\evil.example/sso'],
+    ['a control character the parser deletes', '/\t/evil.example/sso'],
+    ['an absolute https address', 'https://evil.example/sso'],
+    ['a javascript scheme', 'javascript:alert(1)'],
+    ['a path that is not absolute', 'nuxeo/login/azure'],
+  ];
+
+  it.each(CAUSES)('gives a reason for %s', (_label, path) => {
+    expect(describeSsoEndpointPathForm(path)).toBeTruthy();
+  });
+
+  it('gives a different reason for every cause, so a log line identifies what went wrong', () => {
+    const byReason = new Map<string, string[]>();
+    for (const [label, path] of CAUSES) {
+      const reason = describeSsoEndpointPathForm(path) ?? '(accepted)';
+      byReason.set(reason, [...(byReason.get(reason) ?? []), label]);
+    }
+    expect([...byReason.entries()].filter(([, labels]) => labels.length > 1)).toEqual([]);
+  });
+
+  it('names the scheme it refused, so javascript: is not reported as merely not-a-path', () => {
+    expect(describeSsoEndpointPathForm('javascript:alert(1)')).toContain('javascript');
+    expect(describeSsoEndpointPathForm('https://evil.example/sso')).toContain('https');
+  });
+
+  /** Every shape that has defeated a check on a URL-ish configuration value in this repo. */
+  const REFUSED_OFF_ORIGIN: ReadonlyArray<readonly [string, string]> = [
+    ['the protocol-relative form the ticket reports', '//evil.example/sso'],
+    ['a backslash in place of the second slash', '/\\evil.example/sso'],
+    ['a backslash before a slash', '/\\/evil.example/sso'],
+    ['a tab the parser deletes', '/\t/evil.example/sso'],
+    ['a newline the parser deletes', '/\n/evil.example/sso'],
+    ['a carriage return the parser deletes', '/\r/evil.example/sso'],
+    ['a tab before the leading slash', '\t//evil.example/sso'],
+    ['a NUL before the leading slash', '\u0000//evil.example/sso'],
+    ['a DEL inside the prefix', '/\u007f/evil.example/sso'],
+    ['an absolute address', 'https://evil.example/sso'],
+    ['an absolute address with a leading space', ' https://evil.example/sso'],
+    ['a javascript: URL', 'javascript:alert(1)'],
+  ];
+
+  it.each(REFUSED_OFF_ORIGIN)('refuses %s', (_label, path) => {
+    expect(describeSsoEndpointPathForm(path)).toBeTruthy();
+  });
+
+  /**
+   * The load-bearing assertion, and the one that makes this a rule rather than a list.
+   *
+   * The form check is a string rule; the thing it is supposed to guarantee is about the resolved
+   * URL. Two rules that must agree, with nothing comparing them, is exactly how a check ends up
+   * testing a proxy for the property in its own name — so this one resolves every accepted value
+   * and asserts the origin did not move, against more than one base so a rule that happened to
+   * suit one origin cannot pass.
+   */
+  it('accepts nothing that resolves onto another origin', () => {
+    const bases = ['http://localhost:4200/', 'https://nuxeo.example:8443/', 'http://127.0.0.1/'];
+    const every = [
+      ...ACCEPTED,
+      ...CAUSES.map(([, path]) => path),
+      ...REFUSED_OFF_ORIGIN.map(([, path]) => path),
+    ];
+
+    for (const base of bases) {
+      for (const path of every) {
+        if (describeSsoEndpointPathForm(path) !== null) continue;
+        const resolved = new URL(path.trim(), base);
+        expect(resolved.origin, `${JSON.stringify(path)} against ${base}`).toBe(
+          new URL(base).origin,
+        );
+      }
+    }
+  });
+});
+
 describe('nuxeoOriginsOf', () => {
   it('collects the application, API and server origins, skipping unset and unparseable ones', () => {
     const config = {
@@ -848,6 +956,33 @@ describe('mergeBootstrapConfig', () => {
     ]);
     expect(merged.sso.postLoginPath).toBe('/browse');
     expect(merged.sso.returnQueryParam).toBe(DEFAULT_APP_BOOTSTRAP_CONFIG.sso.returnQueryParam);
+  });
+
+  /**
+   * NXSAT-731. `path.startsWith('/')` was the whole check, so `//evil.example/sso` passed it and
+   * the sign-in page — pre-authentication, anonymous, the screen where a user types a password —
+   * offered a button that left the application for a host the configuration author chose.
+   *
+   * The control is in the same assertion on purpose: a check that refuses everything would pass a
+   * test that only looked at the attacks.
+   */
+  it('drops an SSO endpoint whose path would leave the application, and keeps the one that would not', () => {
+    const merged = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+      sso: {
+        endpoints: [
+          { id: 'azure', label: 'Azure AD', path: '/nuxeo/login/azure' },
+          { id: 'ok', label: 'Nuxeo SSO', path: '/nuxeo/sso-ok' },
+          { id: 'company', label: 'Company SSO', path: '//evil.example/sso' },
+          { id: 'backslash', label: 'Company SSO', path: '/\\evil.example/sso' },
+          { id: 'tab', label: 'Company SSO', path: '/\t/evil.example/sso' },
+        ],
+      },
+    });
+
+    expect(merged.sso.endpoints).toEqual([
+      { id: 'azure', label: 'Azure AD', path: '/nuxeo/login/azure' },
+      { id: 'ok', label: 'Nuxeo SSO', path: '/nuxeo/sso-ok' },
+    ]);
   });
 
   it('lets a customer turn every SSO button off', () => {

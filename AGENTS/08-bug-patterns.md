@@ -1087,6 +1087,60 @@ empty list, the all-unknown list, every-section-empty, and the tabs surface.
 
 ---
 
+## 31. A URL rule enforced on the string, where the parser decides
+
+```typescript
+// BAD ❌ — the rule is "this value is a path on our own origin", and this tests a prefix.
+// `//evil.example/sso` starts with a slash and the browser reads it as another host.
+if (typeof path !== 'string' || !path.startsWith('/')) continue;
+
+// STILL BAD ❌ — the two prefixes the ticket suggested. The parser DELETES tabs, newlines and
+// carriage returns from the input before it reads anything, so this sees a harmless string:
+//   new URL('/\t/evil.example/sso', 'http://app.example/') === 'http://evil.example/sso'
+if (path.startsWith('//') || path.startsWith('/\\')) continue;
+
+// GOOD ✅ — at the boundary, resolve and compare the thing the rule is actually about.
+const url = new URL(path, base.href);
+if (url.origin !== base.origin) return { refused: `resolves to ${url.origin}, not ${base.origin}` };
+```
+
+NXSAT-731: `sso.endpoints[].path` was checked with `startsWith('/')`, so an administrator-written
+`//evil.example/sso` put a "Company SSO" button on the **pre-authentication** login page that sent
+the user to another site — an open redirect on the screen where people type passwords.
+
+**Compare the resolved URL, not the string.** A string rule has to enumerate the shapes a parser
+can reach an authority from, and the list is longer than it looks: `//host`, `/\host`, `/\/host`,
+a tab/LF/CR anywhere in the prefix, and whatever the next browser version normalises. One
+`url.origin !== base.origin` closes all of them at once and keeps closing them. Prove it the way
+this repo already insists on — print the forms and look, rather than reasoning about the spec:
+
+```bash
+node -e "for (const p of ['//h/x','/\\\\h/x','/\t/h/x','/%2f%2fh']) console.log(JSON.stringify(p), new URL(p,'http://a.example/').origin)"
+```
+
+**Put the boundary where the browser is sent, not only where the value is parsed.** A fix at merge
+time alone leaves every other caller unguarded — `NUXEO_SAML_LOGIN_ENDPOINTS` is a public token a
+host application can fill directly. A fix at navigation time alone still renders a button that
+looks legitimate. Both, with the roles written down: the merge refuses what is wrong whatever it
+resolves to (so no button appears), and the navigation refuses on the resolved origin.
+
+**Do not reuse the neighbouring predicate because it looks like the same rule.** `isAcceptedLogoSrc`
+sits four lines away and refuses _every_ absolute path, because a logo must be relative. An SSO
+path must be absolute. Same technique, opposite requirement.
+
+**Watch the leniency that defeats the check.** `startSamlLogin` prepended a `/` to a path written
+without one, which quietly turned `https://evil.example/sso` into the path `/https://evil.example/sso`
+— on our origin, so the origin comparison allowed it, and all the administrator saw was a 404.
+Refuse a value that carries a scheme before any such normalisation, and name the scheme.
+
+Regression test pattern: one case per bypass class **plus the control** (`/nuxeo/login/azure` must
+still render a working button), and one property test that resolves every accepted value against
+more than one base and asserts the origin did not move — that last one is what ties the string
+rule to the behaviour it claims, rather than testing a proxy for it
+(`bootstrap-config.spec.ts`, `auth.service.sso.spec.ts`).
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
@@ -1108,3 +1162,4 @@ Fix proactively to avoid a review cycle:
 - "No fallback if the image fails to load" → bind `(error)` and clear the state the template branches on, not a flag local to one component; and measure `naturalWidth` after `load` too, because an image that draws nothing fires no `error`
 - "Host comparison may be bypassed by equivalent forms" → canonicalise before comparing (strip a trailing dot, alias the loopback spellings); the URL parser normalises case and IPv4 but not those
 - "Silent rejection" → return the reason and derive the boolean from it, then log it once from the service; a bare `null` makes a refusal look like nothing was configured
+- "Open redirect / unvalidated redirect" → resolve the value and compare `url.origin` against the origin it must stay on; a prefix check loses to the tab, newline and backslash forms the parser rewrites

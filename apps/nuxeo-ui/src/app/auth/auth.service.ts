@@ -1,3 +1,4 @@
+import { DOCUMENT } from '@angular/common';
 import { HttpClient, HttpContext, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import {
@@ -95,6 +96,137 @@ function isBuiltInAdministratorUsername(username: string): boolean {
   return username.trim().toLowerCase() === 'administrator';
 }
 
+/**
+ * `new URL` without the throw, so a misconfigured origin or path fails closed rather than
+ * throwing out of a click handler. `URL.parse` would do, but only browsers from 2024 have it.
+ */
+function parseUrl(value: string, base?: string): URL | null {
+  try {
+    return new URL(value, base);
+  } catch {
+    return null;
+  }
+}
+
+/** Everything {@link resolveSsoLoginUrl} reads, so the rule itself touches no DOM. */
+export interface SsoLoginRequest {
+  /** `sso.endpoints[].path` exactly as configured. */
+  readonly path: string;
+  /** Where SSO is served from: `NUXEO_API_ORIGIN`, or this application's origin when it is blank. */
+  readonly nuxeoOrigin: string;
+  /** This application's origin, which the post-login return URL must stay on. */
+  readonly appOrigin: string;
+  /** `sso.returnQueryParam`; `null` or blank sends no return URL at all. */
+  readonly returnQueryParam: string | null;
+  /** `sso.postLoginPath` — a path on this application, not on Nuxeo. */
+  readonly postLoginPath: string;
+}
+
+/**
+ * Where an SSO button may send the browser, or why it may not. `warning` reports a second value
+ * that was dropped without the navigation itself being refused.
+ */
+export type SsoLoginTarget =
+  { readonly url: string; readonly warning?: string } | { readonly refused: string };
+
+/**
+ * The URL an SSO button may send the browser to, or why the configured endpoint may not be opened.
+ *
+ * **This is the security boundary for `sso.endpoints[].path`**, by the same argument that makes
+ * `resolveBrandingLogoUrl` the boundary for a configured logo: it is the last point before the
+ * browser is sent somewhere, so it judges the URL that will actually be loaded rather than the
+ * string someone wrote. `bootstrap-config.ts` refuses the plainly wrong forms earlier, so no
+ * button is rendered for them, but that cannot be the boundary — `NUXEO_SAML_LOGIN_ENDPOINTS` is
+ * a token any host application can fill with endpoints that never went through the merge.
+ *
+ * The condition is `url.origin !== base.origin`, not a list of refused prefixes, because the
+ * parser reaches an authority from more shapes than a string check can enumerate:
+ * `//evil.example/sso` and `/\evil.example/sso` both resolve to `evil.example`, and so does
+ * `/<TAB>/evil.example` once the parser has dropped the tab — which is why the prefix pair
+ * NXSAT-731 suggested would not have closed this. One comparison closes the class, and it stays
+ * closed whatever normalisation a future browser adds (NXSAT-731).
+ *
+ * `postLoginPath` is resolved and checked the same way. It reaches the browser the long way round,
+ * as the `requestedUrl` Nuxeo redirects to after sign-in. A bad one drops the parameter rather
+ * than refusing the sign-in: the return path is a convenience, and blocking SSO altogether over it
+ * would be a worse outcome than landing on Nuxeo's own default page.
+ *
+ * Pure and exported for one reason: it is where the rule lives, and a rule that cannot be
+ * exercised without a browser navigation is a rule nothing asserts.
+ */
+export function resolveSsoLoginUrl(request: SsoLoginRequest): SsoLoginTarget {
+  // The trailing slash keeps a bare origin a usable base; parsed rather than interpolated so a
+  // malformed `nuxeoApiOrigin` fails closed here instead of throwing out of a click handler.
+  const base = parseUrl(`${request.nuxeoOrigin.replace(/\/+$/, '')}/`);
+  if (base === null || !isHttpUrl(base)) {
+    return {
+      refused: `cannot be resolved: "${request.nuxeoOrigin}" is not an http(s) Nuxeo origin`,
+    };
+  }
+  const trimmed = request.path.trim();
+  // Refused before the leniency below rather than left to the origin comparison. A value with a
+  // scheme is an absolute address, and prepending a slash to one turns `https://evil.example/sso`
+  // into the path `/https://evil.example/sso` — on the Nuxeo origin, so the comparison allows it,
+  // and a 404 is all the administrator ever sees. The scheme is named for the same reason as in
+  // `describeLogoSrcForm`: `javascript:` and `https:` are very different mistakes.
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed)?.[1];
+  if (scheme !== undefined) {
+    return {
+      refused: `is an absolute "${scheme.toLowerCase()}:" address rather than a path on the Nuxeo origin`,
+    };
+  }
+  // A path written without its leading slash is a typo worth tolerating, and after the check
+  // above it cannot carry an authority of its own.
+  const url = parseUrl(trimmed.startsWith('/') ? trimmed : `/${trimmed}`, base.href);
+  if (url === null) return { refused: 'does not resolve to a valid URL' };
+  if (url.origin !== base.origin) {
+    return {
+      refused: `resolves to ${url.origin}, which is not the Nuxeo origin ${base.origin}`,
+    };
+  }
+  if (!request.returnQueryParam) return { url: url.href };
+
+  const returnTo = resolveSsoReturnUrl(request.postLoginPath, request.appOrigin);
+  if (returnTo === null) {
+    return {
+      url: url.href,
+      warning:
+        `sso.postLoginPath "${request.postLoginPath}" is not a path on this application, ` +
+        `so no ${request.returnQueryParam} was sent`,
+    };
+  }
+  url.searchParams.set(request.returnQueryParam, returnTo);
+  return { url: url.href };
+}
+
+/** The absolute return URL for `postLoginPath`, or `null` when it does not stay on `appOrigin`. */
+function resolveSsoReturnUrl(postLoginPath: string, appOrigin: string): string | null {
+  const base = parseUrl(`${appOrigin.replace(/\/+$/, '')}/`);
+  if (base === null || !isHttpUrl(base)) return null;
+  const trimmed = postLoginPath.trim();
+  const url = parseUrl(trimmed.startsWith('/') ? trimmed : `/${trimmed}`, base.href);
+  return url !== null && url.origin === base.origin ? url.href : null;
+}
+
+/**
+ * Whether a base is one whose origin means anything, which is what lets the comparisons above be
+ * comparisons.
+ *
+ * `URL.origin` is the **string** `"null"` for every opaque origin — `file:`, `blob:`, `about:`,
+ * `data:` — so two unrelated ones compare equal to each other and a base on any of them would
+ * accept a path resolved onto it. Measured: `new URL('/x', 'file:///')` has origin `"null"`, and so
+ * does its base. That is the collision `AGENTS/08-bug-patterns.md` §26 records — a key drawn from
+ * the value space it is meant to distinguish — so the scheme is checked rather than assumed, and
+ * only here, where a base is built: a relative path cannot change the scheme once this has passed.
+ *
+ * Reachable only from a misconfigured `nuxeoApiOrigin` or a document with no origin of its own, so
+ * this is defence in depth rather than the reported defect. Failing closed costs nothing: SSO is
+ * served over HTTP(S) or it is not served.
+ */
+function isHttpUrl(url: URL): boolean {
+  return url.protocol === 'http:' || url.protocol === 'https:';
+}
+
 function readSessionFlagsFromMe(me: unknown): { isAdministrator: boolean; groups: string[] } {
   return {
     isAdministrator: readIsAdministratorFromMe(me),
@@ -113,6 +245,7 @@ export class SignInError extends Error {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
+  private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
   private readonly apiOrigin = inject(NUXEO_API_ORIGIN);
   private readonly samlEndpoints = inject(NUXEO_SAML_LOGIN_ENDPOINTS);
@@ -263,11 +396,9 @@ export class AuthService {
   }
 
   /** Public Nuxeo origin for full-page SAML redirects (matches API proxy in dev when origin is ''). */
-  private nuxeoBrowserOrigin(): string {
+  private nuxeoBrowserOrigin(view: Window): string {
     const o = this.apiOrigin.replace(/\/$/, '');
-    if (o) return o;
-    if (typeof window !== 'undefined') return window.location.origin;
-    return '';
+    return o || view.location.origin;
   }
 
   private restoreSession(): void {
@@ -438,22 +569,36 @@ export class AuthService {
 
   /**
    * Start SAML / browser SSO: full window navigation to Nuxeo.
+   *
+   * Nothing is navigated to, and nothing about the session is touched, unless the configured path
+   * resolves onto the Nuxeo origin — see {@link resolveSsoLoginUrl}, which is the boundary.
+   *
+   * The window comes from `DOCUMENT` rather than the global, so the navigation has a seam a test
+   * can hold: Chrome refuses to let a spy replace `window.location.assign`, and without a seam
+   * this method could only ever be asserted on in the direction where it does nothing.
    */
   startSamlLogin(endpoint: NuxeoSamlLoginEndpoint): void {
-    if (typeof window === 'undefined') return;
-    this.clearSignedOut();
-    const base = this.nuxeoBrowserOrigin();
-    let path = endpoint.path.trim();
-    if (!path.startsWith('/')) path = `/${path}`;
-    const url = new URL(path, `${base}/`);
-    if (this.ssoReturnQueryParam) {
-      const path = this.ssoPostLoginPath.startsWith('/')
-        ? this.ssoPostLoginPath
-        : `/${this.ssoPostLoginPath}`;
-      const returnTo = `${window.location.origin}${path}`;
-      url.searchParams.set(this.ssoReturnQueryParam, returnTo);
+    const view = this.document.defaultView;
+    if (!view) return;
+    const target = resolveSsoLoginUrl({
+      path: endpoint.path,
+      nuxeoOrigin: this.nuxeoBrowserOrigin(view),
+      appOrigin: view.location.origin,
+      returnQueryParam: this.ssoReturnQueryParam,
+      postLoginPath: this.ssoPostLoginPath,
+    });
+    if ('refused' in target) {
+      console.warn(
+        `[agentic-ui] SSO endpoint "${endpoint.id}" was not opened: its path ` +
+          `"${endpoint.path}" ${target.refused}`,
+      );
+      // Deliberately before `clearSignedOut()`: a refused action changes nothing at all, so an
+      // explicitly signed-out user stays signed out rather than being quietly re-enrolled.
+      return;
     }
-    window.location.assign(url.toString());
+    if (target.warning) console.warn(`[agentic-ui] ${target.warning}`);
+    this.clearSignedOut();
+    view.location.assign(target.url);
   }
 
   /**

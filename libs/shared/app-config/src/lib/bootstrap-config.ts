@@ -480,10 +480,80 @@ function readSsoEndpoints(
     const path = entry['path'];
     // A button with no ID or nowhere to send the browser is not a login option.
     if (typeof id !== 'string' || id.trim() === '') continue;
-    if (typeof path !== 'string' || !path.startsWith('/')) continue;
+    if (typeof path !== 'string' || !isAcceptedSsoEndpointPath(path)) continue;
     endpoints.push({ id, path, label: readString(entry, 'label', id) });
   }
   return endpoints;
+}
+
+/**
+ * Early rejection of a configured `sso.endpoints[].path`, on the string as written.
+ *
+ * Not the security boundary — `AuthService.startSamlLogin` is, because it checks the URL the
+ * browser is actually sent to, and `NUXEO_SAML_LOGIN_ENDPOINTS` is a token a host application can
+ * fill with endpoints that never passed through this merge. This only refuses what is wrong
+ * whatever it resolves to, so that no button is ever rendered for such an entry.
+ *
+ * Same technique as {@link isAcceptedLogoSrc} and deliberately **not** the same predicate: that
+ * one refuses *every* absolute path, because a logo must be relative, `https:` or `data:`. An SSO
+ * path must be absolute. The two rules agree only on the forms the URL parser rewrites.
+ */
+function isAcceptedSsoEndpointPath(path: string): boolean {
+  return describeSsoEndpointPathForm(path) === null;
+}
+
+/**
+ * Why an `sso.endpoints[].path` is refused on its written form, or `null` when that form is
+ * acceptable.
+ *
+ * The single implementation of the rules {@link isAcceptedSsoEndpointPath} applies, so the verdict
+ * and the reason given for it cannot drift apart — and, as for a logo, a refusal that returned a
+ * bare `false` would be indistinguishable from no endpoint having been configured. Reasons are
+ * written for the administrator who set the value (NXSAT-724).
+ *
+ * `path.startsWith('/')` used to be the whole check and it is not enough: `//evil.example/sso`
+ * starts with a slash and the browser reads it as another host, so the sign-in page offered a
+ * button that sent the user — before authentication, on the screen where they type a password —
+ * to a site the configuration author chose (NXSAT-731).
+ *
+ * Refusing the two literal prefixes `//` and `/\` is not enough either, because the parser
+ * **removes** tabs, newlines and carriage returns from the input before it looks at anything:
+ * `/<TAB>/evil.example` passes a prefix check and still resolves to `evil.example`. So the forms
+ * that are not what they look like are refused first, and only then is a second leading slash.
+ * With a backslash and every control character already out of the way, a leading `/` can no
+ * longer begin an authority — which is what makes this a rule rather than a list of the tricks we
+ * happened to think of.
+ *
+ * Checked on the trimmed value, because that is what `startSamlLogin` resolves.
+ */
+export function describeSsoEndpointPathForm(path: string): string | null {
+  const value = path.trim();
+  // `readSsoEndpoints` would discard a blank anyway, so this branch changes no verdict — it
+  // exists so a value that was written and is blank can be reported rather than passed over.
+  if (value === '') {
+    return 'it is blank, so it names nowhere to send the browser';
+  }
+  // Split rather than reported together, as for a logo: these are different mistakes, and one
+  // message for both cannot tell the administrator which they made.
+  if (value.includes('\\')) {
+    return 'it contains a backslash, which the URL parser rewrites as a path separator, so the value is not the path it looks like';
+  }
+  if ([...value].some((char) => char < ' ' || char === '\u007f')) {
+    return 'it contains a control character, which the URL parser drops, so the value is not the path it looks like';
+  }
+  // Named rather than just refused, for the same reason as a logo's: `javascript:` and
+  // `https://idp.example` are very different mistakes to have made in a configuration file.
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(value)?.[1];
+  if (scheme !== undefined) {
+    return `an SSO path must name a path on the Nuxeo origin, and this is an absolute "${scheme.toLowerCase()}:" address`;
+  }
+  if (!value.startsWith('/')) {
+    return 'an SSO path must start with "/", so that it names a path on the Nuxeo origin';
+  }
+  // The one form a leading slash can still take that is not a path.
+  return value.startsWith('//')
+    ? 'it starts with "//", which the browser reads as the start of another host rather than as a path'
+    : null;
 }
 
 /**

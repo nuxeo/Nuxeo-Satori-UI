@@ -8,6 +8,7 @@ import {
   AppThemeConfig,
   DEFAULT_APP_BOOTSTRAP_CONFIG,
   describeBrandingLogoRefusal,
+  describeSsoEndpointPathForm,
   mergeBootstrapConfig,
   nuxeoOriginsOf,
   resolveBrandingLogoUrl,
@@ -206,6 +207,35 @@ export class AppConfigService {
       );
     }
     this.noteRefusedLogos(bootstrapFragments, preset, bootstrapConfig);
+    this.noteRefusedSsoEndpoints(bootstrapFragments, preset);
+  }
+
+  /**
+   * Report every contributed `sso.endpoints[].path` the checks refuse, naming the value, where it
+   * came from and the reason.
+   *
+   * The same argument as {@link noteRefusedLogos}: a refused entry is dropped during the merge, so
+   * by the time the configuration is assembled the bad value is gone and the sign-in button has
+   * simply not appeared. Before NXSAT-731 one of these values rendered a button that left the
+   * application; now it renders nothing, and an administrator who is not told why would have no
+   * way to tell a refused path from one they never contributed.
+   *
+   * It says a value was refused and deliberately **not** which buttons end up on screen: a
+   * refusal here leaves whatever `sso.endpoints` an earlier layer set, so naming an outcome from
+   * one contribution's point of view would often be wrong.
+   */
+  private noteRefusedSsoEndpoints(
+    fragments: readonly AppConfigFragment[],
+    preset: AppPreset | null,
+  ): void {
+    for (const { label, content } of contributedSources(fragments, preset)) {
+      for (const { index, path } of configuredSsoPaths(content)) {
+        const reason = describeSsoEndpointPathForm(path);
+        if (reason) {
+          this.note(`sso.endpoints[${index}].path "${path}" from ${label} was refused — ${reason}`);
+        }
+      }
+    }
   }
 
   /**
@@ -244,16 +274,7 @@ export class AppConfigService {
     }
     const nuxeoOrigins = nuxeoOriginsOf(config, baseUri);
 
-    // The active preset is merged over the fragments, so a logo it names is live and a refusal of
-    // it is just as silent. Unselected presets contribute nothing and stay quiet.
-    const sources: readonly { readonly label: string; readonly content: unknown }[] = [
-      ...fragments.map((fragment) => ({ label: fragment.component, content: fragment.content })),
-      ...(preset?.bootstrap
-        ? [{ label: `preset "${preset.name}"`, content: preset.bootstrap }]
-        : []),
-    ];
-
-    for (const { label, content } of sources) {
+    for (const { label, content } of contributedSources(fragments, preset)) {
       // `null` is "declares none"; `''` is "declares a blank value", which `readLogo` refuses and
       // which used to be passed over here as if nothing had been written.
       const src = configuredLogoSrc(content);
@@ -381,6 +402,43 @@ function configuredLogoSrc(content: unknown): string | null {
   if (!isPlainRecord(logo)) return null;
   const src = logo['src'];
   return typeof src === 'string' ? src.trim() : null;
+}
+
+/**
+ * Every contribution whose values are live, each labelled by where it came from.
+ *
+ * The active preset is merged over the fragments, so a value it names is live and a refusal of it
+ * is just as silent as a fragment's. Unselected presets contribute nothing and stay quiet.
+ */
+function contributedSources(
+  fragments: readonly AppConfigFragment[],
+  preset: AppPreset | null,
+): readonly { readonly label: string; readonly content: unknown }[] {
+  return [
+    ...fragments.map((fragment) => ({ label: fragment.component, content: fragment.content })),
+    ...(preset?.bootstrap ? [{ label: `preset "${preset.name}"`, content: preset.bootstrap }] : []),
+  ];
+}
+
+/**
+ * Every `sso.endpoints[].path` a contribution writes, with the index it was written at.
+ *
+ * Read from the raw contribution, like {@link configuredLogoSrc}, so a value the merge is about to
+ * discard is still there to report on. Entries whose `path` is not a string are left out: the
+ * merge drops those for being the wrong type, which is a different complaint from a path that is
+ * a string and points somewhere it may not.
+ */
+function configuredSsoPaths(content: unknown): readonly { index: number; path: string }[] {
+  if (!isPlainRecord(content)) return [];
+  const sso = content['sso'];
+  if (!isPlainRecord(sso)) return [];
+  const endpoints = sso['endpoints'];
+  if (!Array.isArray(endpoints)) return [];
+  return endpoints.flatMap((entry, index) => {
+    if (!isPlainRecord(entry)) return [];
+    const path = entry['path'];
+    return typeof path === 'string' ? [{ index, path }] : [];
+  });
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
