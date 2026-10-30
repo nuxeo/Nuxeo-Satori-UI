@@ -21,6 +21,10 @@ exist — Angular locale data in `register-locale-data.ts`, and a `--language` i
 languages today, with each of the other five becoming advertisable in a small pull request when
 its catalogue arrives. See `D8e-webui`.
 
+**The Crowdin side is no longer the blocker.** All four missing target languages were added and the
+one failing Spanish string was fixed on 30 October, so the nightly pull works and the catalogues
+arrive as translation produces them. What is left is translation, and RTL for Arabic and Hebrew.
+
 | Language | Code | Catalogue | Crowdin id | Status                                                                                                                                                                         |
 | -------- | ---- | --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | English  | `en` | `en.json` | source     | ships                                                                                                                                                                          |
@@ -28,34 +32,60 @@ its catalogue arrives. See `D8e-webui`.
 | German   | `de` | `de.json` | `de`       | ships, 99% approved                                                                                                                                                            |
 | Japanese | `ja` | `ja.json` | `ja`       | ships since NXSAT-293, 99% approved                                                                                                                                            |
 | Dutch    | `nl` | `nl.json` | `nl`       | ships since NXSAT-293, 99% approved                                                                                                                                            |
-| Spanish  | `es` | —         | `es`       | **registered, awaiting catalogue** — 99% approved, but `kd.knowledge-discovery.selected` is `Seleccionado(s)`, which `checkCatalogueValuesAreRenderable` fails. Fix in Crowdin |
-| Italian  | `it` | —         | ?          | **registered, awaiting catalogue** — not a target language on Crowdin project 160; translation not started                                                                     |
-| Swedish  | `sv` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160; translation not started                                                                                      |
-| Arabic   | `ar` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160, **and renders left-to-right** (no RTL support)                                                               |
-| Hebrew   | `he` | —         | ?          | **registered, awaiting catalogue** — not a target on project 160, **and renders left-to-right** (no RTL support)                                                               |
+| Spanish  | `es` | —         | `es`       | **requested, awaiting the pull** — 99% approved, and the `Seleccionado(s)` string that was failing `checkCatalogueValuesAreRenderable` is fixed. Nothing is holding it but a pull |
+| Italian  | `it` | —         | `it`       | **requested, awaiting translation** — a target since 30 October; translation not started                                                                                       |
+| Swedish  | `sv` | —         | `sv`       | **requested, awaiting translation** — a target since 30 October; translation not started                                                                                       |
+| Arabic   | `ar` | —         | `ar`       | **requested, awaiting translation** — a target since 30 October; translation not started. RTL is in flight, not absent — [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523) |
+| Hebrew   | `he` | —         | `he`       | **requested, awaiting translation** — a target since 30 October; translation not started. RTL as above                                                                         |
 
 Dropped: **Thai** (`th`) and **Chinese Simplified** (`zh`), both at 99% approved when removed.
 Their translations remain in Crowdin, so re-adding either is a pull rather than new work.
 Still in Crowdin and not in the app's set: **Portuguese** (`pt`, 88% approved) and **Polish**
 (`pl`, 99% translated / 2% approved).
 
-A `?` in the Crowdin column is not laziness — the id must be read off the project when the
-language is added there, because a wrong id fails the pull exactly as an absent target does. The
-nine the project carried were `de es fr ja nl pl pt th zh`, so four of the five additions were in
-none of them.
+The Crowdin column carried `?` for four of these until 30 October, because an id must be read off
+the project rather than guessed — a wrong one fails the pull exactly as an absent target does. They
+are confirmed now, on INTERN-1363, and all four are the bare two-letter forms the pull list already
+named, so nothing in the repository had to change. The nine the project carried before were
+`de es fr ja nl pl pt th zh`.
 
 ### What is owed, and by whom
 
-1. **Add `ar`, `he`, `it`, `sv` as target languages on Crowdin project 160.** This is the one
-   item with a cost attached to leaving it: the pull list already names them, and the CLI
-   rejects the whole invocation rather than the unknown flag, so **the nightly pull fails until
-   they exist** and `fr`, `de`, `ja` and `nl` stop updating with it. They are at 99% and static,
-   so the exposure is small, but it is real — and it is why this is first.
-2. **Fix `Seleccionado(s)` in Crowdin** so `es` can pass `checkCatalogueValuesAreRenderable`.
-3. **RTL support** before Arabic or Hebrew is shippable, not merely translated. Seven `nxs-`
-   components already handle `[dir='rtl']` and two inject `Directionality`, but **nothing sets
-   `dir`** — `syncDocumentLanguage` sets `<html lang>` and stops there, so none of that
-   component work activates. Tracked separately; it is a feature, not a list entry.
+**The two Crowdin items are done**, both on 30 October (INTERN-1363, Enrico Stengert): `ar`, `he`,
+`it` and `sv` are target languages on project 160, and the `Seleccionado(s)` string is corrected to
+`Seleccionado`. A proof-reading step plus post-translation localization QA is confirmed configured,
+which closes the last open conformance item in `D8-standard`.
+
+So **the nightly pull is unblocked**. It had been failing outright — the CLI rejects the whole
+invocation on an unknown `--language` rather than the single flag, so the four names added ahead of
+their targets stopped `fr`, `de`, `ja` and `nl` updating as well. That clears on the next run.
+
+What remains:
+
+1. **Translation itself**, for `ar`, `he`, `it` and `sv`. Not started; Spanish is the exception at
+   99% approved and needs only a pull.
+
+2. **Expect a red pull request per language, and do not read it as a fault.** Approved-only export
+   fills an unapproved string with its English source, so the first pull carrying a new language
+   delivers a catalogue that is **entirely English** — and `checkCataloguesAreTranslated` fails
+   exactly that, on purpose, because it is indistinguishable from a destructive sync (D8d). It turns
+   green per language as approvals land. Nothing is advertised to a user in the meantime.
+
+3. **RTL, for Arabic and Hebrew.** No longer "tracked separately" — it is
+   [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523), which sets `<html dir>` from the
+   active language and writes CDK's `Directionality` so overlays follow. Until that merges, either
+   language renders left-to-right, and a catalogue alone would not make it shippable.
+
+4. **Shared-component strings, which are a different team's.** `@hylandsoftware/satori-ui` ships
+   no catalogue for `ar`, `he`, `ja`, `nl` or `sv` — 15 files in its `i18n/` but only seven
+   distinct languages, `de en es fr it pl pt`. So `sat.*` strings, including accessible names,
+   render in English in those five. **`ja` and `nl` ship today**, so this is live rather than
+   pending. Tracked as [DS-2803](https://hyland.atlassian.net/browse/DS-2803) with the Satori
+   Design System team. Re-measure rather than quoting the figures:
+
+   ```bash
+   ls node_modules/@hylandsoftware/satori-ui/i18n/*.json | xargs -n1 basename | sed 's/.json//'
+   ```
 
 There is **no language picker** (NXSAT-294): `availableLanguages` is read only by the config
 parser, so a deployment selects its language through `defaultLanguage`. Every shipped catalogue is
