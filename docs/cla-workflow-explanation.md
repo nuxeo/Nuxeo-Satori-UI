@@ -42,7 +42,7 @@ The repository uses **CLA Assistant** (https://cla-assistant.io/):
 If you haven't signed:
 
 1. CLA bot posts a comment with a link
-2. Click the link: `https://cla-assistant.io/nuxeo/agentic-ui-poc?pullRequest=<number>`
+2. Click the link: `https://cla-assistant.io/nuxeo/Nuxeo-Satori-UI?pullRequest=<number>`
 3. Sign in with GitHub
 4. Review and sign the CLA
 5. Bot automatically re-checks
@@ -102,7 +102,7 @@ Co-authored-by: Claude Sonnet 4.5 <noreply@anthropic.com>
 Add AI bots to CLA Assistant allowlist so they're exempted:
 
 1. Go to: https://cla-assistant.io/
-2. Sign in → Select `nuxeo/agentic-ui-poc`
+2. Sign in → Select `nuxeo/Nuxeo-Satori-UI`
 3. Go to "Allowlist"
 4. Add:
    - `cursoragent`
@@ -138,7 +138,7 @@ gh pr view <number> --json comments --jq '.comments[] | select(.user.login == "C
 
 ### For a User
 
-Visit: `https://cla-assistant.io/nuxeo/agentic-ui-poc`
+Visit: `https://cla-assistant.io/nuxeo/Nuxeo-Satori-UI`
 
 - Shows list of all contributors who signed
 - Shows pending signatures
@@ -191,8 +191,8 @@ Each person must sign individually at the link provided by the bot.
 ## Resources
 
 - [CLA Assistant Documentation](https://github.com/cla-assistant/cla-assistant)
-- [Configure Allowlist](https://cla-assistant.io/nuxeo/agentic-ui-poc)
-- [Example: PR #145](https://github.com/nuxeo/agentic-ui-poc/pull/145#issuecomment-5570683344)
+- [Configure Allowlist](https://cla-assistant.io/nuxeo/Nuxeo-Satori-UI)
+- [Example: PR #145](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/145#issuecomment-5570683344)
 
 ## Testing
 

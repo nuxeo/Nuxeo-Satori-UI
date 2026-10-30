@@ -982,4 +982,4 @@ This table and the screenshots are kept current as components are added.
 
 ## About this page
 
-Published from `docs/satori-components/with-and-without-satori.md` in the `nuxeo/agentic-ui-poc` repository, with screenshots captured from the component library's Storybook. Edit the Markdown there: publishing replaces this page.
+Published from `docs/satori-components/with-and-without-satori.md` in the `nuxeo/Nuxeo-Satori-UI` repository, with screenshots captured from the component library's Storybook. Edit the Markdown there: publishing replaces this page.

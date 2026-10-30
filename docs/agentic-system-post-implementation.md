@@ -1,6 +1,6 @@
 # Agentic Development System — Post Implementation Report
 
-**Repository:** `agentic-ui-poc`
+**Repository:** `Nuxeo-Satori-UI`
 **Implementation date:** April 2026
 **Status:** Implemented ✅
 **Branch:** `nuxeo-agentic-package`

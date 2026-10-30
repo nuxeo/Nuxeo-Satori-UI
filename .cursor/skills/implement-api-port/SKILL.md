@@ -1,6 +1,6 @@
 ---
 name: implement-api-port
-description: Retired, kept as a record — the adf-hx bridge and API ports it describes were removed (NXSAT-635, NXSAT-637); do not follow it. Implement one of the twelve adf-hx API ports against Nuxeo REST in the agentic-ui-poc bridge library — pick the port, map the upstream interface, implement over existing nuxeo-client services, register the upstream injection token, add unit tests including error paths, and gate it. Use when asked to implement or wire an adf-hx API port (document, query, upload, version, download, renditions, user, group, move, copy, checkIn, model), to back adf-hx with Nuxeo, or to extend libs/shared/adf-hx-bridge.
+description: Retired, kept as a record — the adf-hx bridge and API ports it describes were removed (NXSAT-635, NXSAT-637); do not follow it. Implement one of the twelve adf-hx API ports against Nuxeo REST in the Nuxeo-Satori-UI bridge library — pick the port, map the upstream interface, implement over existing nuxeo-client services, register the upstream injection token, add unit tests including error paths, and gate it. Use when asked to implement or wire an adf-hx API port (document, query, upload, version, download, renditions, user, group, move, copy, checkIn, model), to back adf-hx with Nuxeo, or to extend libs/shared/adf-hx-bridge.
 ---
 
 # Implement an adf-hx API port over Nuxeo

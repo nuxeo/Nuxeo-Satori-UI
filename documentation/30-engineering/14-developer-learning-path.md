@@ -1136,7 +1136,9 @@ rather than a fixed 90% cliff.
 
 #### 22.3 SonarCloud
 
-Organisation `nuxeo`, project key `nuxeo_agentic-ui-poc`. Coverage is **one explicit path** —
+Organisation `nuxeo`, project key `nuxeo_agentic-ui-poc` — still the repository's former name,
+because a Sonar key is an identifier and does not follow a GitHub rename. Coverage is **one
+explicit path** —
 `coverage/lcov.info`, written by `scripts/lcov-merge.mjs`, which rebases every project's LCOV onto
 the repository root and fails if any source path does not resolve. Sonar drops unresolvable paths
 silently and reports 0%, which is exactly what happened before the merge script existed.
