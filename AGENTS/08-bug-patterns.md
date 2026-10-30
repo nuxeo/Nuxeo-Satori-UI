@@ -1051,6 +1051,15 @@ Regression test pattern — and this is the part that is easy to get wrong:
 - **A pin in a config file is an unenforced guarantee.** Delete it and the suite goes quietly green
   and stops protecting anything, with no failure to notice. Assert the zone in a spec of its own —
   `suite-timezone.spec.ts` in `satori-components`, `features/browse` and `shared/ui`.
+- **A zone override has to be an Nx cache input.** The three pinned suites take `SATORI_TEST_TZ`,
+  and `nx.json` lists it as an `env` input on the `test` targets. Without that, a second run asking
+  for another zone is answered from the first run's cache — the command reports a pass it never
+  performed. Verified: the same `nx test` twice is a 1/1 cache hit, and with `SATORI_TEST_TZ` set it
+  is 0/1.
+- **Name the variable, and do not reuse `TZ`.** The pin overrides an inherited `TZ` so the verdict
+  is the same on every machine, which means prose documenting a `TZ=...` command is wrong the moment
+  the pin lands. That mistake was made twice in this fix, in two files, the second time after being
+  told about the first; `grep -rn "TZ="` is the check.
 
 **`new Date(y, m, d)` is not reversible.** A day its zone skipped — Samoa has no 30 December 2011 —
 rolls forward, so a stored `2011-12-30T00:00:00.000Z` reaches a picker in `Pacific/Apia` as the

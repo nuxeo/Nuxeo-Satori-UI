@@ -20,6 +20,10 @@ import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
  * machine. `SATORI_TEST_TZ` is the way to ask for a different one — a named variable rather than
  * `TZ` precisely so that running in another zone is a deliberate act and cannot happen by
  * inheriting a shell. `metadata-editor-skipped-day.spec.ts` needs `Pacific/Apia`; see its header.
+ *
+ * `nx.json` lists `SATORI_TEST_TZ` as an `env` input on the `test` targets, so asking for
+ * another zone cannot be answered from the default zone's cache. Without that, the second
+ * run of a documented verification command returns the first run's result and reads as proof.
  */
 process.env['TZ'] = process.env['SATORI_TEST_TZ'] ?? 'Asia/Calcutta';
 

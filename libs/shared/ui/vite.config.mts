@@ -18,6 +18,10 @@ import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
  * machine. `SATORI_TEST_TZ` is the way to ask for a different one — a named variable rather than
  * `TZ` precisely so that running in another zone is a deliberate act and cannot happen by
  * inheriting a shell. `satori-components` resolves the pin the same way.
+ *
+ * `nx.json` lists `SATORI_TEST_TZ` as an `env` input on the `test` targets, so asking for
+ * another zone cannot be answered from the default zone's cache. Without that, the second
+ * run of a documented verification command returns the first run's result and reads as proof.
  */
 process.env['TZ'] = process.env['SATORI_TEST_TZ'] ?? 'Asia/Calcutta';
 
