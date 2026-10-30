@@ -989,6 +989,68 @@ collisions above (`bootstrap-config.spec.ts`, `describeBrandingLogoRefusal`).
 
 ---
 
+## 27. A calendar day anchored in one zone and read in another
+
+**Found in:** NXSAT-727 — a date picked in the Edit dialog was saved as local midnight, and the
+layout row, which formats in UTC, showed the previous day for every user ahead of UTC. Two rows of
+the same panel disagreed about the same property.
+
+**The pattern, not the instance.** A calendar day ("6 March") and an instant ("2024-03-06T05:00Z")
+are different kinds, and JavaScript gives you one type for both. Every bug in this family is the
+same mistake: a day is turned into an instant in one zone and turned back into a day in another.
+It has now been hit at least five times in this repo — the ACE begin/end dates
+(`permission-timeframe.utils.ts`, `permissions-model.ts`), the version-compare rows
+(`formatCompareDate`), the layout `date` renderer (`field-view.ts`) and the metadata editor.
+
+```ts
+// WRONG — the instant depends on the writer's zone, so the same picked day is five
+// different values across five zones, and only a reader in the writer's zone agrees.
+return pickedDay.toISOString(); // local midnight
+
+// WRONG, the mirror image — reads the day in the reader's zone
+const day = new Date(property).getDate();
+
+// RIGHT — one anchor, used on both sides
+return utcMidnightOf(pickedDay); // Date.UTC(y, m, d) from the picker's own y/m/d
+const day = new Date(property).getUTCDate();
+```
+
+**The rule:** pick UTC as the anchor for a day, write it there, read it there, and format it there.
+UTC because that is what Nuxeo stores for a day-only write (`2024-03-06` →
+`2024-03-06T00:00:00.000Z`), which makes it the one anchor the server, the client and another
+client all already agree on. Do not anchor a day locally "because the user is local" — the user
+who reads it is not always the user who wrote it.
+
+**Do not "recover" the day with a rounding heuristic** in general-purpose code. `dayToDate` in
+`permissions-model.ts` snaps an instant to the nearest UTC midnight and is correct _there_, because
+an ACE date really is midnight in some zone. Applied to a field that renders arbitrary `date`
+properties it is wrong for every timestamp after 12:00 UTC, which it reports as the next day.
+Narrow correctness does not generalise; check what the values actually are.
+
+**A real instant is not a calendar day and must not be converted.** In one panel,
+`dc:created`/`dc:modified` are server stamps and belong in the reader's zone, while `dc:expired` is
+a picked day and belongs in UTC. Formatting them alike is a second bug wearing consistency's
+clothes.
+
+Regression test pattern — and this is the part that is easy to get wrong:
+
+- **In UTC, local anchoring and UTC anchoring are byte-identical, so no assertion can tell them
+  apart.** CI runners are UTC. A date test that does not control the zone asserts nothing about
+  this family of bugs, which is how NXSAT-727 passed a 1 652-case suite. `satori-components`
+  pins `process.env['TZ']` in its `vite.config.mts` for exactly this reason.
+- **Setting `process.env.TZ` inside a case does not work** under `pool: 'threads'` (this repo's
+  default): Node reads the zone once at startup, so the assignment is accepted and ignored. A
+  four-zone loop written that way ran the host zone four times and read as though it proved four.
+  Verify with `Intl.DateTimeFormat().resolvedOptions().timeZone` before trusting any such loop.
+- Assert **literals** (`'2024-03-06T00:00:00.000Z'`), never `new Date(y, m, d).toISOString()` —
+  the derived form is the buggy behaviour restated, so it passes either way.
+- Use an instant whose UTC and local days actually differ (`20:00Z` at +05:30, `00:00Z` west of
+  UTC). `09:00Z` is the same day in most zones and proves nothing.
+- Angular's `DatePipe` memoises on (value, pattern, timezone, locale). Re-asserting a value an
+  earlier render in the same file used returns the cached string and passes unfixed.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.

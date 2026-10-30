@@ -144,9 +144,11 @@ describe('buildControl values', () => {
 
 describe('propertyValue', () => {
   it('sends dates as ISO text, blank text as null and single-line text trimmed', () => {
-    expect(
-      propertyValue({ type: 'date' }, new FormControl(new Date('2027-01-31T00:00:00.000Z')), dates),
-    ).toBe('2027-01-31T00:00:00.000Z');
+    // Built from local components, as a picker's value is — not parsed from a UTC instant, which
+    // would name a different local day either side of UTC and make this assertion zone-dependent.
+    expect(propertyValue({ type: 'date' }, new FormControl(new Date(2027, 0, 31)), dates)).toBe(
+      '2027-01-31T00:00:00.000Z',
+    );
     expect(propertyValue({ type: 'string' }, new FormControl('  '), dates)).toBeNull();
     expect(propertyValue({ type: 'string' }, new FormControl(' a '), dates)).toBe('a');
     expect(propertyValue({ type: 'string' }, new FormControl(' a '), dates, 0, true)).toBe(' a ');
@@ -168,14 +170,11 @@ describe('propertyValue', () => {
 
 describe('dates, with an adapter that does not hold JS dates', () => {
   const instant = '2027-01-31T10:30:00.000Z';
-  /** The local day `instant` names, as the adapter holds it. */
-  const localDay = () => {
-    const date = new Date(instant);
-    return { year: date.getFullYear(), month: date.getMonth(), day: date.getDate() };
-  };
+  /** The calendar day `instant` names, as the adapter holds it: the UTC one (NXSAT-727). */
+  const utcDay = { year: 2027, month: 0, day: 31 };
 
-  it('starts a date control on the adapter’s date for the property’s local day', () => {
-    expect(buildControl({ type: 'date' }, instant, calendarDays).value).toEqual(localDay());
+  it('starts a date control on the adapter’s date for the property’s UTC day', () => {
+    expect(buildControl({ type: 'date' }, instant, calendarDays).value).toEqual(utcDay);
     expect(buildControl({ type: 'date' }, 'nonsense', calendarDays).value).toBeNull();
     expect(buildControl({ type: 'date' }, null, calendarDays).value).toBeNull();
   });
@@ -185,17 +184,13 @@ describe('dates, with an adapter that does not hold JS dates', () => {
     expect(propertyValue({ type: 'date' }, control, calendarDays)).toBe(instant);
   });
 
-  it('writes a day picked in the field as an ISO instant at its local midnight', () => {
+  it('writes a day picked in the field as an ISO instant at its UTC midnight', () => {
     const control = buildControl({ type: 'date' }, instant, calendarDays);
     control.setValue(calendarDays.createDate(2028, 1, 29));
-    expect(propertyValue({ type: 'date' }, control, calendarDays)).toBe(
-      new Date(2028, 1, 29).toISOString(),
-    );
+    expect(propertyValue({ type: 'date' }, control, calendarDays)).toBe('2028-02-29T00:00:00.000Z');
     const empty = buildControl({ type: 'date' }, null, calendarDays);
     empty.setValue(calendarDays.createDate(2028, 0, 2));
-    expect(propertyValue({ type: 'date' }, empty, calendarDays)).toBe(
-      new Date(2028, 0, 2).toISOString(),
-    );
+    expect(propertyValue({ type: 'date' }, empty, calendarDays)).toBe('2028-01-02T00:00:00.000Z');
   });
 
   it('writes no date for a cleared field or one holding no valid date', () => {
@@ -212,14 +207,85 @@ describe('dates, with an adapter that does not hold JS dates', () => {
       fields: { due: { type: 'date' }, note: { type: 'string' } },
     };
     const control = buildControl(definition, { due: instant, note: 'x' }, calendarDays);
-    expect(control.value).toEqual({ due: localDay(), note: 'x' });
+    expect(control.value).toEqual({ due: utcDay, note: 'x' });
     expect(propertyValue(definition, control, calendarDays)).toEqual({ due: instant, note: 'x' });
   });
 
-  it('keeps the JS date itself, time of day included, for an adapter that holds JS dates', () => {
+  it('holds the property’s calendar day, and still writes its instant, for a JS-date adapter', () => {
+    // The control holds the day at local midnight, not the instant: the field edits only a day,
+    // and `dateProperty` has to compare the day the control names against the day the instant
+    // names in UTC. Holding the instant made those two disagree west of UTC, so an untouched
+    // field was rewritten a day earlier (NXSAT-727).
     const control = buildControl({ type: 'date' }, instant, dates);
-    expect(control.value).toEqual(new Date(instant));
+    expect(control.value).toEqual(new Date(2027, 0, 31));
     expect(propertyValue({ type: 'date' }, control, dates)).toBe(instant);
+  });
+});
+
+/**
+ * The calendar day a user picks must become the same instant whatever zone they are in, and must
+ * come back as the day they picked (NXSAT-727).
+ *
+ * **These cases only assert anything outside UTC**, which is why `vite.config.mts` pins the suite
+ * to `Asia/Calcutta`. Anchoring a day locally and anchoring it in UTC agree exactly in UTC, so in
+ * UTC the defect and the fix are byte-identical — and a CI runner is UTC. The literals below are
+ * the correct answer in *every* zone, so they stay true if the pin is ever changed; what the pin
+ * buys is that they go red when the anchoring regresses.
+ *
+ * Setting `process.env.TZ` from inside a case does **not** work here and must not be used: Vitest
+ * runs this project `pool: 'threads'` and Node reads the zone once at startup, so the assignment
+ * is accepted and ignored. Measured — a four-zone loop written that way ran the host zone four
+ * times and read as if it covered four.
+ *
+ * The west-of-UTC direction, where a naive form-only fix would have moved the same off-by-one
+ * instead of removing it, is proved by running this suite under `TZ=America/New_York` and by the
+ * browser capture in that zone; both are recorded on the ticket.
+ */
+describe('a picked calendar day is anchored in UTC', () => {
+  it('is sent as that day at UTC midnight, not at the writer’s local midnight', () => {
+    // What the field holds once the user has picked 6 March 2024: that day, at local midnight.
+    const control = new FormControl(new Date(2024, 2, 6));
+    expect(propertyValue({ type: 'date' }, control, dates)).toBe('2024-03-06T00:00:00.000Z');
+  });
+
+  it('opens the picker on the day the value names in UTC, not the day it names locally', () => {
+    // 20:00Z is the next day east of UTC+04:00, so reading the local day gives 7 March here.
+    const control = buildControl({ type: 'date' }, '2024-03-06T20:00:00.000Z', calendarDays);
+    expect(control.value).toEqual({ year: 2024, month: 2, day: 6 });
+  });
+
+  it('round-trips through the form without drifting', () => {
+    const control = buildControl({ type: 'date' }, '2024-03-06T00:00:00.000Z', dates);
+    // Untouched: the instant the read returned, byte for byte.
+    expect(propertyValue({ type: 'date' }, control, dates)).toBe('2024-03-06T00:00:00.000Z');
+    // Moved on a day: the new day, still at UTC midnight.
+    control.setValue(new Date(2024, 2, 7));
+    expect(propertyValue({ type: 'date' }, control, dates)).toBe('2024-03-07T00:00:00.000Z');
+  });
+
+  it('names an afternoon instant’s own day, rather than rounding to the nearest midnight', () => {
+    // The rejected alternative — `dayToDate`, the ACE heuristic — snaps a value that is not
+    // midnight anywhere to the nearest UTC midnight, which would call this 6 March. A date field
+    // renders arbitrary `date` properties, timestamps included, so that rounding is not available
+    // here even though it recovers more of the days the old code mis-stored.
+    const control = buildControl({ type: 'date' }, '2024-03-05T14:23:11.000Z', calendarDays);
+    expect(control.value).toEqual({ year: 2024, month: 2, day: 5 });
+    expect(propertyValue({ type: 'date' }, control, calendarDays)).toBe('2024-03-05T14:23:11.000Z');
+  });
+
+  it('anchors a bare date definition, the shape a layout-added field arrives as', () => {
+    // The ticket reports `qa:d`, contributed by a layout rather than by the type's own schemas,
+    // behaving identically to `dc:expired`. This case asserts the serialisation for a definition
+    // with no schema context around it — which is the whole of what distinguishes the two, since
+    // `applyLayoutFile` resolves a layout field to the schema's own definition and both reach
+    // `propertyValue` through the same call in `metadata-editor.component.ts`.
+    //
+    // So: this proves the serialisation, and the shared call site is read from the code, not
+    // asserted here. Naming this case after the layout field would claim the second half too.
+    const layoutField: NxsEditorFieldType = { type: 'date' };
+    const control = buildControl(layoutField, null, calendarDays);
+    control.setValue(calendarDays.createDate(2024, 2, 6));
+    expect(propertyValue(layoutField, control, calendarDays)).toBe('2024-03-06T00:00:00.000Z');
   });
 });
 

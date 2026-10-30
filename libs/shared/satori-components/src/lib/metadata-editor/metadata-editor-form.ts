@@ -123,10 +123,72 @@ function toDate(value: unknown): Date | null {
 }
 
 /**
+ * The two crossings between a date field's calendar day and the instant its Nuxeo property holds,
+ * and the day comparison that pairs them.
+ *
+ * A date field edits a **calendar day**, and a calendar day is anchored in UTC — not in whichever
+ * zone the browser happens to be in (NXSAT-727). That is not a preference; it is what everything
+ * around this already assumes. Nuxeo stores a day-only write (`2024-03-06`) at midnight of the
+ * server's day, read back as `2024-03-06T00:00:00.000Z`. The layout `date` renderer formats in
+ * UTC, and `docs/extension-reference.md` publishes that as the field type's contract.
+ * `formatCompareDate` and the two ACE formatters do the same, each with a comment saying why.
+ *
+ * Anchoring the day locally instead made the stored instant depend on the writer's zone — one
+ * picked day became five different values across the five zones QA measured — so east of UTC it
+ * named the previous UTC day and the layout row showed that day.
+ *
+ * The picker still works in the local calendar, because that is what a picker is: these two
+ * functions are the boundary, and `nxsDateFromAdapter`/`nxsDateToAdapter` stay local on the far
+ * side of it.
+ */
+
+/** The UTC calendar day of `instant`, as a JS `Date` at local midnight for the picker. */
+function toCalendarDay(instant: Date): Date {
+  const year = instant.getUTCFullYear();
+  const month = instant.getUTCMonth();
+  const day = instant.getUTCDate();
+  const local = new Date(year, month, day);
+  // `new Date` reads a year below 100 as 19xx, as in `nxsDateFromAdapter`.
+  local.setFullYear(year, month, day);
+  return local;
+}
+
+/** The calendar day `local` names, as the ISO 8601 instant at its UTC midnight. */
+function toUtcMidnight(local: Date): string {
+  const year = local.getFullYear();
+  const month = local.getMonth();
+  const day = local.getDate();
+  const instant = new Date(Date.UTC(year, month, day));
+  // `Date.UTC` reads a year below 100 as 19xx, for the same reason `new Date` does.
+  instant.setUTCFullYear(year, month, day);
+  return instant.toISOString();
+}
+
+/**
+ * Whether `instant` and `local` name the same calendar day — `instant` read in UTC, `local` in the
+ * picker's own calendar, which is the pairing `toCalendarDay` creates.
+ *
+ * Compared field by field rather than through a formatted string: `toISOString` widens a year
+ * outside 1000–9999 to six digits, so slicing `YYYY-MM-DD` off it is not safe for the years the
+ * field accepts.
+ */
+function sameCalendarDay(instant: Date, local: Date): boolean {
+  return (
+    instant.getUTCFullYear() === local.getFullYear() &&
+    instant.getUTCMonth() === local.getMonth() &&
+    instant.getUTCDate() === local.getDate()
+  );
+}
+
+/**
  * The instant each date control was built from. A Nuxeo date property is an instant, and the date
  * field edits only its day: whatever the adapter, a day typed or picked arrives as a JS `Date` at
  * local midnight, and an adapter holding calendar days never held the time at all. So the instant
  * is written back while the control still names its day — cleared and typed again included.
+ *
+ * "Its day" is the day the instant names **in UTC**, which is the day `toCalendarDay` put in the
+ * control. Comparing the instant's local day instead, as this did before NXSAT-727, made the two
+ * disagree west of UTC and rewrote an untouched field a day earlier.
  */
 const builtInstants = new WeakMap<AbstractControl, Date>();
 
@@ -138,7 +200,7 @@ function dateControl(
 ): FormControl<unknown> {
   const instant = toDate(value);
   const control = new FormControl<unknown>(
-    nxsDateToAdapter(adapter, instant),
+    nxsDateToAdapter(adapter, instant && toCalendarDay(instant)),
     validatorFor(definition),
   );
   if (instant) builtInstants.set(control, instant);
@@ -147,19 +209,20 @@ function dateControl(
 
 /**
  * A date field's value as the property takes it, an ISO 8601 instant: the instant it was built
- * from while it names the same local day, otherwise that day's local midnight — what a JS date
- * picked in the field is. `null` when it holds no valid date.
+ * from while it names the same calendar day, otherwise that day's UTC midnight. `null` when it
+ * holds no valid date.
+ *
+ * Keeping the original instant for an untouched day is what stops an edit of a neighbouring field
+ * from moving a date that already carries a time — the same rule `dateToWrite` applies to an ACE
+ * date, and `docs/api-integrations.md` records the 23-hour move measured when it was not applied.
+ * The day it is compared against is the UTC one, because that is the day the control was built on.
  */
 function dateProperty(control: AbstractControl, adapter: DateAdapter<unknown>): string | null {
   const day = nxsDateFromAdapter(adapter, control.value);
   if (!day) return null;
   const instant = builtInstants.get(control);
-  const sameDay =
-    !!instant &&
-    instant.getFullYear() === day.getFullYear() &&
-    instant.getMonth() === day.getMonth() &&
-    instant.getDate() === day.getDate();
-  return (sameDay ? instant : day).toISOString();
+  if (instant && sameCalendarDay(instant, day)) return instant.toISOString();
+  return toUtcMidnight(day);
 }
 
 function toNumber(value: unknown): number | null {
