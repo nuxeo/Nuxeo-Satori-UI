@@ -609,13 +609,16 @@ at the table below, conflating the two.
 
 Components are referenced by ID and must already be compiled in. Contributing a new one is Layer 2.
 
-| Component ID                      | Renders                                                                                        |
-| --------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `app.sidebar.assets`              | Asset facet filters                                                                            |
-| `app.sidebar.searchFilters`       | Search filter panel                                                                            |
-| `app.sidebar.trashFilters`        | Trash filter panel                                                                             |
-| `app.page.contracts`              | A full-page surface, for the `routes` slot                                                     |
-| `nxs.components.permissionsPanel` | Local and inherited permissions in the document-detail, browse and collection Permissions tabs |
+| Component ID                           | Renders                                                                                                                                                  |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app.sidebar.assets`                   | Asset facet filters                                                                                                                                      |
+| `app.sidebar.searchFilters`            | Search filter panel                                                                                                                                      |
+| `app.sidebar.trashFilters`             | Trash filter panel                                                                                                                                       |
+| `app.page.contracts`                   | A full-page surface, for the `routes` slot                                                                                                               |
+| `nxs.components.permissionsPanel`      | Local and inherited permissions in the document-detail, browse and collection Permissions tabs                                                           |
+| `nxs.components.adminUsersGroupsPage`  | The users and groups administration screen at `/administration/users-groups`: search, recently created, and create, edit and delete for users and groups |
+| `nxs.components.adminUserDetailsPage`  | One user at `/administration/users-groups/user/:userId`: profile, groups, and direct and group permissions                                               |
+| `nxs.components.adminGroupDetailsPage` | One group at `/administration/users-groups/group/:groupId`: members, nested groups, and permissions                                                      |
 
 `app.page.contracts` is the first component registered for the **`routes`** slot rather than for a
 drawer, and it exists because that slot went live with **no component in the product able to serve

@@ -1,0 +1,65 @@
+:host {
+  display: block;
+  padding: 1rem 1.5rem 2rem;
+}
+
+.nxs-ugp__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.nxs-ugp__title.nxs-ugp__title {
+  flex: 1;
+  margin: 0;
+  font: var(--mat-sys-headline-small);
+}
+
+.nxs-ugp__search {
+  margin: 1rem 0;
+  max-width: 480px;
+}
+
+.nxs-ugp__search-field {
+  width: 100%;
+}
+
+.nxs-ugp__section-title.nxs-ugp__section-title {
+  margin: 1.5rem 0 0.5rem;
+  font: var(--mat-sys-title-medium);
+}
+
+.nxs-ugp__table {
+  width: 100%;
+}
+
+.nxs-ugp__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mat-sys-primary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.nxs-ugp__actions {
+  white-space: nowrap;
+}
+
+.nxs-ugp__status {
+  margin: 0.5rem 0;
+  font: var(--mat-sys-body-medium);
+}
+
+.nxs-ugp__status--error,
+.nxs-ugp__error {
+  color: var(--mat-sys-error);
+}
+
+.nxs-ugp__empty {
+  margin: 1rem 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}

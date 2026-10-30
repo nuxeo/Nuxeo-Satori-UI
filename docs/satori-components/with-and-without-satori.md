@@ -764,6 +764,111 @@ One document in a folder's card view, rendered by `nxs.primitives.card` as brows
 
 What a click does is the same in both: the heading opens the item, so does a click anywhere on the card that is not on another control, and the checkbox and any button passed for the corner or the footer do not. A provider that registers its own card under the ID replaces every card in browse's and search's card views. The page passes the card its open and selection handlers and the templates for its thumbnail and actions, so a replacement gets them too.
 
+### Users and groups page
+
+| Field           | Value                                 |
+| --------------- | ------------------------------------- |
+| Component       | `NxsAdminUsersGroupsPageComponent`    |
+| Registered ID   | `nxs.components.adminUsersGroupsPage` |
+| With Satori     | Same component; theme only            |
+| Storybook story | `pages-users-and-groups--populated`   |
+
+![Users and groups page: without Satori on the left, with Satori on the right](admin-users-groups-page-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The administration screen for accounts, rendered by `nxs.components.adminUsersGroupsPage` in the administration route: one search across users and groups, the recently created accounts, and the create, edit and delete actions for each kind. Both sides show the same search form, tables, pagers and status line. The theme sets the type, the table chrome and the button styles.
+
+The page does not navigate itself. Choosing a user or group calls its callback with the name, and the host routes to the details page. Each action reports on a status line that stays on screen until the next action, so a refusal is still visible after its dialog closes.
+
+### User details page
+
+| Field           | Value                                 |
+| --------------- | ------------------------------------- |
+| Component       | `NxsAdminUserDetailsPageComponent`    |
+| Registered ID   | `nxs.components.adminUserDetailsPage` |
+| With Satori     | Same component; theme only            |
+| Storybook story | `pages-user-details--profile`         |
+
+![User details page: without Satori on the left, with Satori on the right](admin-user-details-page-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+One account on one page, rendered by `nxs.components.adminUserDetailsPage`: its profile, the groups it belongs to, and the permissions it holds directly and through each group. Both sides show the same sections and tables. The theme sets the type and the table and button styles.
+
+Each permission table pages on its own. Deleting the account asks first, and the page calls `deleted` so the host can return to the list.
+
+### Group details page
+
+| Field           | Value                                  |
+| --------------- | -------------------------------------- |
+| Component       | `NxsAdminGroupDetailsPageComponent`    |
+| Registered ID   | `nxs.components.adminGroupDetailsPage` |
+| With Satori     | Same component; theme only             |
+| Storybook story | `pages-group-details--profile`         |
+
+![Group details page: without Satori on the left, with Satori on the right](admin-group-details-page-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+One group on one page, rendered by `nxs.components.adminGroupDetailsPage`: its label, its members, the groups nested in it, and the permissions it holds. Both sides show the same sections and tables. The theme sets the type and the table and button styles.
+
+Each member and nested group has its own remove action, named with the member it removes. Deleting the group asks first, and the page calls `deleted` so the host can return to the list.
+
+### Change password dialog
+
+| Field           | Value                               |
+| --------------- | ----------------------------------- |
+| Component       | `NxsChangePasswordDialogComponent`  |
+| Registered ID   | —                                   |
+| With Satori     | Same component; theme only          |
+| Storybook story | `dialogs-change-password--matching` |
+
+![Change password dialog: without Satori on the left, with Satori on the right](change-password-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The dialog an administrator opens from a user's details page to set that user's password. The same two fields, labels and Set password button in both. The theme sets the type, the field outlines and the button style.
+
+It saves nothing itself: it closes with the new password and the caller sends it to the server, which decides whether the administrator may make the change.
+
+### Confirm dialog
+
+| Field           | Value                       |
+| --------------- | --------------------------- |
+| Component       | `NxsConfirmDialogComponent` |
+| Registered ID   | —                           |
+| With Satori     | Same component; theme only  |
+| Storybook story | `dialogs-confirm--asking`   |
+
+![Confirm dialog: without Satori on the left, with Satori on the right](confirm-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The generic confirmation for an action that cannot be undone, such as deleting a user or a group. The same title, message and Cancel and confirm buttons in both. The theme sets the type and the button styles.
+
+The caller passes the words, already translated, and acts on `afterClosed()`; the dialog never calls a service itself. Cancel is the first button, so focus does not land on the destructive action by default.
+
+### User form dialog
+
+| Field           | Value                         |
+| --------------- | ----------------------------- |
+| Component       | `NxsUserFormDialogComponent`  |
+| Registered ID   | —                             |
+| With Satori     | Same component; theme only    |
+| Storybook story | `dialogs-user-form--creating` |
+
+![User form dialog: without Satori on the left, with Satori on the right](user-form-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The form an administrator uses to create a user or edit one. The same fields, group chips and buttons in both. The theme sets the type, the field outlines, the chip and button styles, and the colour of the refusal message.
+
+In create mode the dialog writes the account itself, and a refusal (the username is taken, the server needs a password, or a generic failure) keeps it open and names the reason. In edit mode it closes with the values and the caller saves them.
+
+### Group form dialog
+
+| Field           | Value                          |
+| --------------- | ------------------------------ |
+| Component       | `NxsGroupFormDialogComponent`  |
+| Registered ID   | —                              |
+| With Satori     | Same component; theme only     |
+| Storybook story | `dialogs-group-form--creating` |
+
+![Group form dialog: without Satori on the left, with Satori on the right](group-form-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The form an administrator uses to create a group or edit one, and to set its members. The same fields, member chips and buttons in both. The theme sets the type, the field outlines and the chip and button styles.
+
+The dialog saves nothing itself: it closes with the values and the caller creates or updates the group. The group name is fixed once the group exists; the label and members can change.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -813,58 +918,65 @@ The components in the library today:
 
 <!-- satori:comparison:summary -->
 
-| Component                       | Registered ID (if any)                                                                                                  | Differs with Satori?         |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Avatar                          | `nxs.primitives.avatar`                                                                                                 | Yes — Satori's own component |
-| Tag                             | `nxs.primitives.tag`                                                                                                    | Yes — Satori's own component |
-| Status tag                      | `nxs.primitives.statusTag`                                                                                              | Yes — Satori's own component |
-| Breadcrumbs                     | `nxs.primitives.breadcrumbs`                                                                                            | Yes — Satori's own component |
-| Rich tooltip                    | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
-| Icon                            | —                                                                                                                       | Same component; theme only   |
-| Document type icon              | —                                                                                                                       | Same component; theme only   |
-| Thumbnail                       | —                                                                                                                       | Same component; theme only   |
-| Folder header                   | —                                                                                                                       | Same component; theme only   |
-| Domain hint                     | —                                                                                                                       | Same component; theme only   |
-| Empty state                     | `nxs.primitives.emptyState`                                                                                             | Yes — Satori's own component |
-| Error state                     | `nxs.primitives.errorState`                                                                                             | Yes — Satori's own component |
-| Chip set                        | `nxs.primitives.chipSet`                                                                                                | Same component; theme only   |
-| Banner                          | `nxs.primitives.banner`                                                                                                 | Same component; theme only   |
-| Spinner                         | —                                                                                                                       | Same component; theme only   |
-| Toast                           | —                                                                                                                       | Same component; theme only   |
-| Column picker                   | —                                                                                                                       | Same component; theme only   |
-| Permissions panel               | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
-| Nuxeo Drive dialog              | —                                                                                                                       | Same component; theme only   |
-| Favorite toggle                 | —                                                                                                                       | Same component; theme only   |
-| Action menu                     | —                                                                                                                       | Same component; theme only   |
-| User and group picker           | —                                                                                                                       | Same component; theme only   |
-| Vocabulary select               | —                                                                                                                       | Same component; theme only   |
-| Tag input                       | —                                                                                                                       | Same component; theme only   |
-| Document reference input        | —                                                                                                                       | Same component; theme only   |
-| Date input                      | —                                                                                                                       | Same component; theme only   |
-| Pager                           | —                                                                                                                       | Same component; theme only   |
-| Document list                   | —                                                                                                                       | Same component; theme only   |
-| Document tree                   | —                                                                                                                       | Same component; theme only   |
-| Rename dialog                   | —                                                                                                                       | Same component; theme only   |
-| Folder picker                   | —                                                                                                                       | Same component; theme only   |
-| Dropzone                        | `nxs.primitives.upload`                                                                                                 | Yes — Satori's own component |
-| Upload queue                    | —                                                                                                                       | Same component; theme only   |
-| Search filters                  | —                                                                                                                       | Same component; theme only   |
-| Saved search select             | —                                                                                                                       | Same component; theme only   |
-| Saved search actions            | —                                                                                                                       | Same component; theme only   |
-| Document toolbar                | `nxs.primitives.actionBar`                                                                                              | Yes — Satori's own component |
-| Tabs                            | `nxs.primitives.tabs`                                                                                                   | Yes — Satori's own component |
-| Details panel                   | —                                                                                                                       | Same component; theme only   |
-| Properties panel                | —                                                                                                                       | Same component; theme only   |
-| Metadata editor                 | —                                                                                                                       | Same component; theme only   |
-| Comments                        | —                                                                                                                       | Same component; theme only   |
-| Tag editor                      | —                                                                                                                       | Same component; theme only   |
-| Delete permission dialog        | —                                                                                                                       | Same component; theme only   |
-| Share with external user dialog | —                                                                                                                       | Same component; theme only   |
-| Update permission dialog        | —                                                                                                                       | Same component; theme only   |
-| Manage versions                 | —                                                                                                                       | Same component; theme only   |
-| Create version dialog           | —                                                                                                                       | Same component; theme only   |
-| Document history                | —                                                                                                                       | Same component; theme only   |
-| Card                            | `nxs.primitives.card`                                                                                                   | Yes — Satori's own component |
+| Component                       | Registered ID (if any)                                                                                                       | Differs with Satori?         |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Avatar                          | `nxs.primitives.avatar`                                                                                                      | Yes — Satori's own component |
+| Tag                             | `nxs.primitives.tag`                                                                                                         | Yes — Satori's own component |
+| Status tag                      | `nxs.primitives.statusTag`                                                                                                   | Yes — Satori's own component |
+| Breadcrumbs                     | `nxs.primitives.breadcrumbs`                                                                                                 | Yes — Satori's own component |
+| Rich tooltip                    | `nxs.primitives.richTooltip`                                                                                                 | Yes — Satori's own component |
+| Icon                            | —                                                                                                                            | Same component; theme only   |
+| Document type icon              | —                                                                                                                            | Same component; theme only   |
+| Thumbnail                       | —                                                                                                                            | Same component; theme only   |
+| Folder header                   | —                                                                                                                            | Same component; theme only   |
+| Domain hint                     | —                                                                                                                            | Same component; theme only   |
+| Empty state                     | `nxs.primitives.emptyState`                                                                                                  | Yes — Satori's own component |
+| Error state                     | `nxs.primitives.errorState`                                                                                                  | Yes — Satori's own component |
+| Chip set                        | `nxs.primitives.chipSet`                                                                                                     | Same component; theme only   |
+| Banner                          | `nxs.primitives.banner`                                                                                                      | Same component; theme only   |
+| Spinner                         | —                                                                                                                            | Same component; theme only   |
+| Toast                           | —                                                                                                                            | Same component; theme only   |
+| Column picker                   | —                                                                                                                            | Same component; theme only   |
+| Permissions panel               | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not)      | Same component; theme only   |
+| Nuxeo Drive dialog              | —                                                                                                                            | Same component; theme only   |
+| Favorite toggle                 | —                                                                                                                            | Same component; theme only   |
+| Action menu                     | —                                                                                                                            | Same component; theme only   |
+| User and group picker           | —                                                                                                                            | Same component; theme only   |
+| Vocabulary select               | —                                                                                                                            | Same component; theme only   |
+| Tag input                       | —                                                                                                                            | Same component; theme only   |
+| Document reference input        | —                                                                                                                            | Same component; theme only   |
+| Date input                      | —                                                                                                                            | Same component; theme only   |
+| Pager                           | —                                                                                                                            | Same component; theme only   |
+| Document list                   | —                                                                                                                            | Same component; theme only   |
+| Document tree                   | —                                                                                                                            | Same component; theme only   |
+| Rename dialog                   | —                                                                                                                            | Same component; theme only   |
+| Folder picker                   | —                                                                                                                            | Same component; theme only   |
+| Dropzone                        | `nxs.primitives.upload`                                                                                                      | Yes — Satori's own component |
+| Upload queue                    | —                                                                                                                            | Same component; theme only   |
+| Search filters                  | —                                                                                                                            | Same component; theme only   |
+| Saved search select             | —                                                                                                                            | Same component; theme only   |
+| Saved search actions            | —                                                                                                                            | Same component; theme only   |
+| Document toolbar                | `nxs.primitives.actionBar`                                                                                                   | Yes — Satori's own component |
+| Tabs                            | `nxs.primitives.tabs`                                                                                                        | Yes — Satori's own component |
+| Details panel                   | —                                                                                                                            | Same component; theme only   |
+| Properties panel                | —                                                                                                                            | Same component; theme only   |
+| Metadata editor                 | —                                                                                                                            | Same component; theme only   |
+| Comments                        | —                                                                                                                            | Same component; theme only   |
+| Tag editor                      | —                                                                                                                            | Same component; theme only   |
+| Delete permission dialog        | —                                                                                                                            | Same component; theme only   |
+| Share with external user dialog | —                                                                                                                            | Same component; theme only   |
+| Update permission dialog        | —                                                                                                                            | Same component; theme only   |
+| Manage versions                 | —                                                                                                                            | Same component; theme only   |
+| Create version dialog           | —                                                                                                                            | Same component; theme only   |
+| Document history                | —                                                                                                                            | Same component; theme only   |
+| Card                            | `nxs.primitives.card`                                                                                                        | Yes — Satori's own component |
+| Users and groups page           | `nxs.components.adminUsersGroupsPage` (the library defines the ID; our app registers it, `provideNxsComponents()` does not)  | Same component; theme only   |
+| User details page               | `nxs.components.adminUserDetailsPage` (the library defines the ID; our app registers it, `provideNxsComponents()` does not)  | Same component; theme only   |
+| Group details page              | `nxs.components.adminGroupDetailsPage` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
+| Change password dialog          | —                                                                                                                            | Same component; theme only   |
+| Confirm dialog                  | —                                                                                                                            | Same component; theme only   |
+| User form dialog                | —                                                                                                                            | Same component; theme only   |
+| Group form dialog               | —                                                                                                                            | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

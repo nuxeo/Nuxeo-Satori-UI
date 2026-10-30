@@ -1,0 +1,106 @@
+<h2 mat-dialog-title class="nxs-group-form-dialog__title">
+  {{
+    data.mode === 'create'
+      ? ('satori-components.group-form-dialog.create-group' | translate)
+      : ('satori-components.group-form-dialog.edit-group' | translate)
+  }}
+</h2>
+<mat-dialog-content class="nxs-group-form-dialog__form">
+  <mat-form-field appearance="outline" class="nxs-group-form-dialog__field">
+    <mat-label>{{ 'satori-components.group-form-dialog.group-name' | translate }}</mat-label>
+    @if (data.mode === 'create') {
+      <input
+        matInput
+        name="groupname"
+        required
+        cdkFocusInitial
+        [ngModel]="groupname()"
+        (ngModelChange)="groupname.set($event)"
+      />
+    } @else {
+      <input
+        matInput
+        name="groupname"
+        required
+        disabled
+        [ngModel]="groupname()"
+        (ngModelChange)="groupname.set($event)"
+      />
+    }
+  </mat-form-field>
+  <mat-form-field appearance="outline" class="nxs-group-form-dialog__field">
+    <mat-label>{{ 'satori-components.group-form-dialog.label' | translate }}</mat-label>
+    <input
+      matInput
+      name="grouplabel"
+      [ngModel]="grouplabel()"
+      (ngModelChange)="grouplabel.set($event)"
+    />
+  </mat-form-field>
+  <mat-form-field appearance="outline" class="nxs-group-form-dialog__field">
+    <mat-label>{{ 'satori-components.group-form-dialog.member-usernames' | translate }}</mat-label>
+    <mat-chip-grid #chipGrid>
+      @for (id of members(); track id) {
+        <mat-chip-row (removed)="removeMember(id)">
+          {{ id }}
+          <button
+            type="button"
+            matChipRemove
+            [attr.aria-label]="
+              'satori-components.group-form-dialog.remove-member' | translate: { name: id }
+            "
+          >
+            <mat-icon svgIcon="circle_x" />
+          </button>
+        </mat-chip-row>
+      }
+      <input
+        name="memberSearch"
+        [placeholder]="
+          members().length ? '' : ('satori-components.group-form-dialog.search-users' | translate)
+        "
+        [matChipInputFor]="chipGrid"
+        [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
+        [matAutocomplete]="userAuto"
+        [ngModel]="memberQuery()"
+        (ngModelChange)="onMemberSearch($event)"
+        (keydown)="onMemberInputKeydown($event)"
+        (matChipInputTokenEnd)="addMemberFromInput($event)"
+      />
+    </mat-chip-grid>
+    <mat-hint>{{ 'satori-components.group-form-dialog.pick-member' | translate }}</mat-hint>
+  </mat-form-field>
+  <mat-autocomplete
+    #userAuto="matAutocomplete"
+    autoActiveFirstOption
+    (optionSelected)="onMemberSelected($event)"
+  >
+    @for (user of memberOptions(); track user.id) {
+      <mat-option [value]="user">
+        <span class="nxs-group-form-dialog__option">
+          <span class="nxs-group-form-dialog__option-id">{{ user.id }}</span>
+          @if (userDisplayLine(user)) {
+            <span class="nxs-group-form-dialog__option-meta">{{ userDisplayLine(user) }}</span>
+          }
+        </span>
+      </mat-option>
+    }
+  </mat-autocomplete>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button type="button" mat-button (click)="cancel()">
+    {{ 'satori-components.group-form-dialog.cancel' | translate }}
+  </button>
+  @if (data.mode === 'create') {
+    <button type="button" mat-flat-button (click)="submit(true)" [disabled]="!canSave()">
+      {{ 'satori-components.group-form-dialog.create-another' | translate }}
+    </button>
+  }
+  <button type="button" mat-flat-button (click)="submit(false)" [disabled]="!canSave()">
+    {{
+      data.mode === 'create'
+        ? ('satori-components.group-form-dialog.create' | translate)
+        : ('satori-components.group-form-dialog.save' | translate)
+    }}
+  </button>
+</mat-dialog-actions>
