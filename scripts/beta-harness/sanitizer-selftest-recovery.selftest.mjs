@@ -89,15 +89,18 @@ function crashMidPerturbation(
 ) {
   const original = read(subject);
   const script = `
-    import { writeFileSync, readFileSync } from 'node:fs';
-    import { writeMarker } from ${JSON.stringify(STATE_MODULE)};
+    import { readFileSync } from 'node:fs';
+    import { writeFileAtomic, writeMarker } from ${JSON.stringify(STATE_MODULE)};
     const mutate = ${mutate.toString()};
     const abs = ${JSON.stringify(join(ROOT, subject))};
     const original = readFileSync(abs, 'utf8');
     const written = mutate(original);
     if (written === original) throw new Error('the perturbation changed nothing');
-    writeFileSync(abs, written, 'utf8');
+    // Write-ahead and atomic, the same protocol as edit(). The first version of this crasher
+    // wrote the file first - the opposite of the code it is meant to exercise - so a kill of this
+    // gate could recreate the very defect it tests for (review of PR 521).
     writeMarker(${JSON.stringify(ROOT)}, new Map([[${JSON.stringify(subject)}, { original, written }]]));
+    writeFileAtomic(abs, written);
     process.kill(process.pid, 'SIGKILL');
   `;
   const r = spawnSync('node', ['--input-type=module', '-e', script], {
@@ -297,7 +300,22 @@ console.log('sanitizer-selftest recovery controls\n');
     );
     check('and says so on stderr', /NOT restored/i.test(recovered.stderr ?? ''));
     check('and exits non-zero, because a human has to decide', recovered.status !== 0);
-    check('and still drops the marker, so later runs do not repeat it', !existsSync(markerAbs));
+    // Reversed deliberately in review of PR 521. This asserted the marker was dropped after a
+    // refusal, on the reasoning that keeping it would make every later run repeat a warning about
+    // a file nobody would repair from it. That was true about restoring and wrong about keeping:
+    // the marker holds the only copy of that file's `original`, and when the run began on a file
+    // the developer had edited without committing, it is the only copy anywhere — git has the
+    // committed content, not theirs. Repeating the warning is the correct outcome; a refused path
+    // needs a human, and the run exits non-zero until one arrives.
+    check(
+      'keeps the marker for a refused path, so its saved original is not destroyed',
+      existsSync(markerAbs),
+    );
+    const held = readMarker(ROOT);
+    check(
+      'and that record still holds the original bytes',
+      Boolean(held && 'paths' in held && held.paths[SUBJECT]?.original === original),
+    );
   } finally {
     write(SUBJECT, original);
   }

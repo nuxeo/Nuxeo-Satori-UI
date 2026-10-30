@@ -30,6 +30,7 @@ import {
   SELFTEST_ENV_FLAG,
   recoverPerturbations,
   removeMarker,
+  writeFileAtomic,
   writeMarker,
 } from './sanitizer-selftest-state.mjs';
 
@@ -137,7 +138,10 @@ function edit(relPath, transform) {
   // "restore" a file nobody touched — which was wrong, because the marker names both states and
   // recovery recognises an unapplied write as already-clean (review of PR 521).
   writeMarker(ROOT, backups);
-  writeFileSync(abs, next, 'utf8');
+  // Atomic, like the marker: `writeFileSync` truncates in place, so a kill mid-write would leave
+  // bytes matching neither recorded state — the one outcome recovery can only refuse (review of
+  // PR 521).
+  writeFileAtomic(abs, next);
 }
 function restoreAll() {
   const clobbered = [];
@@ -157,7 +161,7 @@ function restoreAll() {
       clobbered.push(relPath);
       continue;
     }
-    writeFileSync(abs, original, 'utf8');
+    writeFileAtomic(abs, original);
   }
   backups.clear();
   // Dropped last, once nothing is left to undo. A path under `clobbered` no longer holds this

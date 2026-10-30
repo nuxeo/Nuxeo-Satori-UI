@@ -78,6 +78,30 @@ export const SELFTEST_ENV_FLAG = 'SANITIZER_SELFTEST_RUNNING';
 export const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
 
 /**
+ * Replace a file's contents without ever leaving it half written.
+ *
+ * `writeFileSync` truncates in place, so a kill during the write leaves bytes that match neither
+ * the original nor the perturbation — and recovery can then only refuse the file, which is the one
+ * outcome that needs a human. Used for the tracked files as well as the marker: temp file, flush,
+ * rename, so the file is either entirely the old content or entirely the new one (review of PR 521).
+ */
+export function writeFileAtomic(abs, text) {
+  const tmp = `${abs}.${process.pid}.selftest-tmp`;
+  const fd = openSync(tmp, 'w');
+  try {
+    writeFileSync(fd, text, 'utf8');
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  renameSync(tmp, abs);
+}
+
+/** Every perturbed state recorded for a path, tolerating the single-string form of an old marker. */
+const writtenHashes = (entry) =>
+  Array.isArray(entry.writtenSha256) ? entry.writtenSha256 : [entry.writtenSha256];
+
+/**
  * Record the perturbations in force, so a process that dies without running its handlers leaves
  * behind enough to undo them.
  *
@@ -107,30 +131,32 @@ export function writeMarker(root, backups) {
   const inherited = existing && 'paths' in existing ? existing.paths : {};
   const paths = { ...inherited };
   for (const [relPath, { original, written }] of backups) {
-    paths[relPath] = { original, originalSha256: sha256(original), writtenSha256: sha256(written) };
+    // **Every** perturbed state this path has held is kept, not just the pending one. A control
+    // may perturb the same file twice (`edit(KD_CITATION, …)` is called twice in a row), and
+    // replacing the hash meant a kill between those two writes left bytes matching neither
+    // recorded state — so recovery refused the selftest's own perturbation and asked a human to
+    // sort out a file it had itself written (review of PR 521).
+    const known = new Set(inherited[relPath] ? writtenHashes(inherited[relPath]) : []);
+    known.add(sha256(written));
+    paths[relPath] = {
+      original: inherited[relPath]?.original ?? original,
+      originalSha256: sha256(inherited[relPath]?.original ?? original),
+      writtenSha256: [...known].filter(Boolean),
+    };
   }
   if (Object.keys(paths).length === 0) {
     removeMarker(root);
     return;
   }
 
-  const abs = join(root, MARKER);
-  const tmp = `${abs}.${process.pid}.tmp`;
-  const body = `${JSON.stringify(
-    { pid: process.pid, startedAt: existing?.startedAt ?? new Date().toISOString(), paths },
-    null,
-    2,
-  )}\n`;
-  // Flushed before the rename, or the rename can be durable while the bytes it points at are not —
-  // which is the power-loss case this file claims to cover, so it has to actually hold.
-  const fd = openSync(tmp, 'w');
-  try {
-    writeFileSync(fd, body, 'utf8');
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  renameSync(tmp, abs);
+  writeFileAtomic(
+    join(root, MARKER),
+    `${JSON.stringify(
+      { pid: process.pid, startedAt: existing?.startedAt ?? new Date().toISOString(), paths },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 /** Drop the marker. Safe to call when there is none. */
@@ -217,8 +243,8 @@ export function recoverPerturbations(root) {
       continue;
     }
     const digest = sha256(onDisk);
-    if (digest === entry.writtenSha256) {
-      writeFileSync(abs, entry.original, 'utf8');
+    if (writtenHashes(entry).includes(digest)) {
+      writeFileAtomic(abs, entry.original);
       restored.push(relPath);
       continue;
     }
@@ -232,7 +258,22 @@ export function recoverPerturbations(root) {
     }
     refused.push(relPath);
   }
-  removeMarker(root);
+
+  // **A refused path keeps its record.** The marker holds the only copy of that file's `original`,
+  // and when the run began on a file the developer had already edited without committing, that
+  // copy is the only copy anywhere — git has the committed content, not theirs. Deleting the
+  // marker on the way past therefore destroyed exactly what a refusal exists to protect. My first
+  // reasoning for deleting it — "a refused path no longer holds our bytes, so no later run could
+  // act on it" — was true about restoring and wrong about keeping (review of PR 521).
+  if (refused.length === 0) {
+    removeMarker(root);
+  } else {
+    const kept = Object.fromEntries(refused.filter((p) => marker.paths[p]).map((p) => [p, marker.paths[p]]));
+    writeFileAtomic(
+      join(root, MARKER),
+      `${JSON.stringify({ ...marker, paths: kept, refusedAt: new Date().toISOString() }, null, 2)}\n`,
+    );
+  }
   return { found: true, restored, refused, alreadyClean, startedAt: marker.startedAt ?? null };
 }
 
