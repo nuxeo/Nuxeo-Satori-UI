@@ -35,6 +35,8 @@ import {
   SELFTEST_ENV_FLAG,
   isLeftover,
   readMarker,
+  removeMarker,
+  removeMarkerIfSettled,
   writeFileAtomic,
 } from './sanitizer-selftest-state.mjs';
 
@@ -102,11 +104,20 @@ function restoreIfOurs(rel, original, ours) {
     writeFileAtomic(abs, original);
     return;
   }
+  // Stops the suite rather than only recording a failure. A later control's cleanup would mutate
+  // the marker again and drop the record this refusal is protecting, so continuing would undo the
+  // protection a few lines after applying it (review of PR 521).
   check(
     `cleanup: ${rel} holds an edit this suite did not write — left in place`,
     false,
-    'inspect with git diff; the marker, if any, has been kept',
+    'inspect with git diff; the marker has been kept, and the suite stops here',
   );
+  console.error(
+    `\nsanitizer-selftest-recovery: stopping — ${rel} holds contents this suite did not write.\n` +
+      `  Its recovery record has been kept. Inspect with 'git diff', then resolve it or run\n` +
+      `  'node scripts/beta-harness/sanitizer-audit.selftest.mjs --recover-only'.`,
+  );
+  process.exit(1);
 }
 
 
@@ -228,7 +239,10 @@ console.log('sanitizer-selftest recovery controls\n');
     );
   } finally {
     restoreIfOurs(SUBJECT, original, [onDisk]);
-    rmSync(markerAbs, { force: true });
+    // Guarded, not `rmSync`. Round 6: a cleanup that refused a foreign edit still returned to a
+    // caller that deleted the marker, losing the saved original while carefully preserving the
+    // file. Dropping the marker is now only ever done by the function that checks first.
+    removeMarkerIfSettled(ROOT);
   }
 }
 
@@ -324,10 +338,9 @@ console.log('sanitizer-selftest recovery controls\n');
     check('and exits non-zero', recovered.status !== 0);
     check('and is left in place as evidence', existsSync(markerAbs));
   } finally {
-    writeFileSync(markerAbs, '', 'utf8');
-    spawnSync('node', ['-e', `require('fs').rmSync(${JSON.stringify(markerAbs)},{force:true})`], {
-      cwd: ROOT,
-    });
+    // Unconditional on purpose: this marker is deliberately malformed, so the guarded removal
+    // cannot check it and would (correctly) keep it forever.
+    removeMarker(ROOT);
   }
 }
 

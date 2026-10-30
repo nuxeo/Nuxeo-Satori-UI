@@ -147,6 +147,11 @@ function edit(relPath, transform) {
   writeFileAtomic(abs, next);
 }
 function restoreAll() {
+  // A no-op when this process perturbed nothing. The `uncaughtException` handler calls this, and a
+  // throw during *startup recovery* reached it with `backups` empty — which then handed an empty
+  // map to the marker writer and dropped an inherited marker while files were still perturbed
+  // (review of PR 521). Nothing of ours to undo means nothing of ours to say about the marker.
+  if (backups.size === 0) return;
   const clobbered = [];
   for (const [relPath, { original, written }] of backups) {
     const abs = join(ROOT, relPath);

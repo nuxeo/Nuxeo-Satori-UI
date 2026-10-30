@@ -163,7 +163,7 @@ export function writeMarker(root, backups) {
     };
   }
   if (Object.keys(paths).length === 0) {
-    removeMarker(root);
+    removeMarkerIfSettled(root);
     return;
   }
 
@@ -190,7 +190,7 @@ export function writeMarker(root, backups) {
  */
 export function retainMarker(root, entries) {
   if (entries.size === 0) {
-    removeMarker(root);
+    removeMarkerIfSettled(root);
     return;
   }
   const paths = {};
@@ -211,7 +211,67 @@ export function retainMarker(root, entries) {
   );
 }
 
-/** Drop the marker. Safe to call when there is none. */
+/**
+ * Remove the marker **only** where everything it records is settled, narrowing it to what is not.
+ *
+ * This exists because reviews of PR 521 found four different routes to the same failure — the
+ * marker destroyed while a file it described was still perturbed. In `recoverPerturbations` on a
+ * refusal; in `restoreAll` on a clobbered file; in `restoreAll` again when an exception reached it
+ * with no backups of its own; and in the recovery suite's own cleanup. Each was fixed where it was
+ * found, and the next round found the next one.
+ *
+ * Four instances of one invariant is not four bugs, it is a missing function. So the invariant
+ * lives here now and every site goes through it: **a marker may only be dropped by code that has
+ * checked there is nothing left to recover.** A path is settled when the file holds its recorded
+ * original; anything else — perturbed, foreign, unreadable — keeps its record, because that record
+ * is the only copy of what was there before the run.
+ *
+ * @returns {{ removed: boolean, kept: string[] }}
+ */
+export function removeMarkerIfSettled(root) {
+  const marker = readMarker(root);
+  if (!marker) return { removed: true, kept: [] };
+  // An unreadable marker is never deleted: it cannot be checked, and it is the signature of a kill
+  // mid-write, so it is the last thing to throw away.
+  if ('unreadable' in marker) return { removed: false, kept: ['<unreadable marker>'] };
+
+  const kept = [];
+  for (const [relPath, entry] of Object.entries(marker.paths)) {
+    let onDisk;
+    try {
+      onDisk = readFileSync(join(root, relPath), 'utf8');
+    } catch {
+      kept.push(relPath);
+      continue;
+    }
+    if (sha256(onDisk) !== (entry.originalSha256 ?? sha256(entry.original))) kept.push(relPath);
+  }
+  if (kept.length === 0) {
+    removeMarker(root);
+    return { removed: true, kept: [] };
+  }
+  writeFileAtomic(
+    join(root, MARKER),
+    `${JSON.stringify(
+      {
+        ...marker,
+        paths: Object.fromEntries(kept.map((p) => [p, marker.paths[p]])),
+        narrowedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return { removed: false, kept };
+}
+
+/**
+ * Drop the marker unconditionally.
+ *
+ * Internal to this module on purpose — every caller outside it wants
+ * {@link removeMarkerIfSettled}. Exported only because the recovery controls need to plant and
+ * clear a deliberately malformed marker, which by definition cannot be checked.
+ */
 export function removeMarker(root) {
   rmSync(join(root, MARKER), { force: true });
 }
@@ -311,21 +371,11 @@ export function recoverPerturbations(root) {
     refused.push(relPath);
   }
 
-  // **A refused path keeps its record.** The marker holds the only copy of that file's `original`,
-  // and when the run began on a file the developer had already edited without committing, that
-  // copy is the only copy anywhere — git has the committed content, not theirs. Deleting the
-  // marker on the way past therefore destroyed exactly what a refusal exists to protect. My first
-  // reasoning for deleting it — "a refused path no longer holds our bytes, so no later run could
-  // act on it" — was true about restoring and wrong about keeping (review of PR 521).
-  if (refused.length === 0) {
-    removeMarker(root);
-  } else {
-    const kept = Object.fromEntries(refused.filter((p) => marker.paths[p]).map((p) => [p, marker.paths[p]]));
-    writeFileAtomic(
-      join(root, MARKER),
-      `${JSON.stringify({ ...marker, paths: kept, refusedAt: new Date().toISOString() }, null, 2)}\n`,
-    );
-  }
+  // **A refused path keeps its record**, through the one function that enforces it. The marker
+  // holds the only copy of that file's `original`, and when the run began on a file the developer
+  // had already edited without committing, it is the only copy anywhere — git has the committed
+  // content, not theirs. Deleting it on the way past destroyed exactly what a refusal protects.
+  removeMarkerIfSettled(root);
   return { found: true, restored, refused, alreadyClean, startedAt: marker.startedAt ?? null };
 }
 
