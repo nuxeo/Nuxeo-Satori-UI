@@ -4751,19 +4751,35 @@ function checkUpstreamCatalogueLanguages() {
       continue;
     }
 
-    /** Input directory → the globs that copy out of it, across every asset array. */
-    const globsByInput = new Map();
-    for (const [, rules] of rulesByArray) {
+    /**
+     * One asset array at a time, and within it one input directory at a time.
+     *
+     * Not pooled across arrays, for the same reason the arrays are checked separately above and
+     * one level sharper: a union of globs is satisfied by whichever array is most permissive. A
+     * `development` rule with a match-everything glob would mask an `options` rule narrowed to
+     * `en.json`, so the production build would serve one catalogue while this gate reported all
+     * of them present. Each configuration is a build of its own and is judged as one.
+     */
+    const perArray = rulesByArray.flatMap(([arrayName, rules]) => {
+      const byInput = new Map();
       for (const rule of rules) {
         const inputDir = rule.input.replace(/^\/+|\/+$/g, '');
         const glob = typeof rule.glob === 'string' ? rule.glob : '**/*';
-        if (!globsByInput.has(inputDir)) globsByInput.set(inputDir, new Set());
-        globsByInput.get(inputDir).add(glob);
+        if (!byInput.has(inputDir)) byInput.set(inputDir, new Set());
+        byInput.get(inputDir).add(glob);
       }
-    }
+      return [...byInput.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([inputDir, globs]) => ({ arrayName, inputDir, globs: [...globs].sort() }));
+    });
 
-    for (const inputDir of [...globsByInput.keys()].sort()) {
-      const globs = [...globsByInput.get(inputDir)].sort();
+    // The same (array, input, globs) triple can appear in several configurations; report it once.
+    const seen = new Set();
+    for (const { arrayName, inputDir, globs } of perArray) {
+      const fingerprint = `${inputDir}\u0000${globs.join('\u0000')}`;
+      if (seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
+      const where = `\`${arrayName}\``;
       const absolute = join(repoRoot, inputDir);
       if (!existsSync(absolute)) {
         // `node_modules` is not checked in, so a tree that has not been installed cannot answer
@@ -4779,7 +4795,7 @@ function checkUpstreamCatalogueLanguages() {
       const unreadable = globs.filter((glob) => globCopies(glob, 'en.json') === null);
       if (unreadable.length > 0) {
         fail(
-          `the asset rule copying ${inputDir} to "${served}" uses glob ` +
+          `the ${where} asset rule copying ${inputDir} to "${served}" uses glob ` +
             `${unreadable.map((glob) => `\`${glob}\``).join(', ')}, which ` +
             '`checkUpstreamCatalogueLanguages` cannot interpret — so it cannot tell which ' +
             'catalogues actually reach the bundle. Teach the gate that glob rather than leaving ' +
@@ -4806,9 +4822,9 @@ function checkUpstreamCatalogueLanguages() {
       // "the bundle has it", and only the second is something the loader can fetch.
       if (uncopied.length > 0) {
         warn(
-          `${inputDir} contains ${uncopied.join(', ')}, which glob ` +
+          `${inputDir} contains ${uncopied.join(', ')}, which the ${where} glob ` +
             `${globs.map((glob) => `\`${glob}\``).join(', ')} does not copy to "${served}". ` +
-            'Those are not servable, so they are judged absent here.',
+            'Those are not servable from that build, so they are judged absent here.',
         );
       }
 
@@ -4817,18 +4833,18 @@ function checkUpstreamCatalogueLanguages() {
 
       if (missing.length > 0) {
         fail(
-          `${inputDir} ships a catalogue for ${missing.join(', ')} and the build copies it to ` +
-            `"${served}", but "${folderPath}" does not list it in \`languages\` in ${LOADER}. An ` +
-            'unlisted language is never requested, so its shared strings stay in the fallback ' +
-            'language with nothing reporting it.',
+          `${inputDir} ships a catalogue for ${missing.join(', ')} and the ${where} build copies ` +
+            `it to "${served}", but "${folderPath}" does not list it in \`languages\` in ` +
+            `${LOADER}. An unlisted language is never requested, so its shared strings stay in ` +
+            'the fallback language with nothing reporting it.',
         );
       }
       if (stale.length > 0) {
         fail(
-          `"${folderPath}" lists ${stale.join(', ')} in \`languages\` in ${LOADER}, but ` +
-            `"${served}" is served no catalogue for it from ${inputDir}. A listed language the ` +
-            'served folder does not have is a request that cannot succeed: a 404 and a console ' +
-            'error on every page load, which is NXSAT-732.',
+          `"${folderPath}" lists ${stale.join(', ')} in \`languages\` in ${LOADER}, but the ` +
+            `${where} build serves "${served}" no catalogue for it from ${inputDir}. A listed ` +
+            'language the served folder does not have is a request that cannot succeed: a 404 ' +
+            'and a console error on every page load, which is NXSAT-732.',
         );
       }
     }

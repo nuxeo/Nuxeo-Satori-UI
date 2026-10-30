@@ -11363,7 +11363,7 @@ expectRed(
     [LOADER_PATH]: loaderWith(['de', 'en', 'fr', 'ja']),
   },
   null,
-  /lists ja in `languages`[\s\S]*is served no catalogue for it/,
+  /lists ja in `languages`[\s\S]*build serves[\s\S]*no catalogue for it/,
 );
 
 expectRed(
@@ -11375,7 +11375,7 @@ expectRed(
     [LOADER_PATH]: loaderWith(['de', 'en']),
   },
   null,
-  /ships a catalogue for fr and the build copies it[\s\S]*does not list it in `languages`/,
+  /ships a catalogue for fr and the `options` build copies it[\s\S]*does not list it in `languages`/,
 );
 
 // The pre-fix shape: a folder with no language list at all, which is what made every language
@@ -11438,7 +11438,26 @@ expectRed(
     [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
   },
   null,
-  /is served no catalogue for it from node_modules/,
+  /build serves "assets\/satori-ui\/i18n" no catalogue for it/,
+);
+
+// Round 2 of the review: pooling the globs across configurations means the union is satisfied
+// by whichever array is most permissive, so a `development` rule with `**/*` masks an `options`
+// rule narrowed to `en.json` — the production build serves one catalogue while the gate reports
+// all three. Each configuration is a build of its own and is judged as one.
+expectRed(
+  'a permissive development glob masking a narrow glob in the base array',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson(
+      [{ glob: 'en.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' }],
+      { development: { assets: [SATORI_RULE] } },
+    ),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+  },
+  null,
+  /`options` build serves[\s\S]*no catalogue for it/,
 );
 
 // And a glob the gate cannot interpret must say so rather than assume it matches everything.
