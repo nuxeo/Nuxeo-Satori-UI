@@ -1531,16 +1531,16 @@ within 10 s (`CONFIG_LOAD_TIMEOUT_MS`) leaves the compiled defaults in force and
 
 ## 29. Per-Type Layouts — Layout Files and Document Type Schemas (NXSAT-311)
 
-| Field           | Value                                                                                                                                                                  |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Service**     | `DocumentLayoutService` (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)                                                                            |
-| **Method**      | `layoutFor(type, mode, documentSchemas)`, per document shown; `vocabularyLabel(directory, id)`, per vocabulary value shown; each read below is cached for the session  |
-| **HTTP Method** | `GET`                                                                                                                                                                  |
-| **Endpoints**   | `/nuxeo/agentic-ui-config/layouts.json` and `/nuxeo/agentic-ui-config/layouts/<type>/<mode>.layout.json` — without interceptors, no `Authorization` header             |
-|                 | `/nuxeo/api/v1/config/types/<type>` with header `fetch-schema: fields` — authenticated, through `NuxeoApiBase`                                                         |
-|                 | `/nuxeo/api/v1/config/schemas/<schema>` with header `fetch-schema: fields`, for a schema a dynamic facet added to the document — authenticated, through `NuxeoApiBase` |
-|                 | `/nuxeo/api/v1/directory/<directory>/<id>` with headers `translate-directoryEntry: label` and `Accept-Language: en` — authenticated, through `NuxeoApiBase`            |
-| **Server side** | `AgenticUiConfigServlet` (from `<layout>` contributions to `org.nuxeo.agentic.ui.config`); Nuxeo's type registry and directories                                       |
+| Field           | Value                                                                                                                                                                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `DocumentLayoutService` (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)                                                                                                                                                                                                                                            |
+| **Method**      | `layoutFor(type, mode, documentSchemas)`, per document shown; `vocabularyLabel(directory, id)`, per vocabulary value shown; each read below is cached for the session                                                                                                                                                                  |
+| **HTTP Method** | `GET`                                                                                                                                                                                                                                                                                                                                  |
+| **Endpoints**   | `/nuxeo/agentic-ui-config/layouts.json` and `/nuxeo/agentic-ui-config/layouts/<type>/<mode>.layout.json` — without interceptors, no `Authorization` header                                                                                                                                                                             |
+|                 | `/nuxeo/api/v1/config/types/<type>` with header `fetch-schema: fields` — authenticated, through `NuxeoApiBase`                                                                                                                                                                                                                         |
+|                 | `/nuxeo/api/v1/config/schemas/<schema>` with header `fetch-schema: fields`, for a schema a dynamic facet added to the document — authenticated, through `NuxeoApiBase`                                                                                                                                                                 |
+|                 | `/nuxeo/api/v1/directory/<directory>/<entry id>` with headers `translate-directoryEntry: label` and `Accept-Language: en` — authenticated, through `NuxeoApiBase`. For an `l10n…` value the entry id is the **last segment** of the stored path, not the path: `art/architecture` is read as `architecture`, then `art` for its parent |
+| **Server side** | `AgenticUiConfigServlet` (from `<layout>` contributions to `org.nuxeo.agentic.ui.config`); Nuxeo's type registry and directories                                                                                                                                                                                                       |
 
 The layout URLs sit beside `bootstrap.json` (from `APP_BOOTSTRAP_CONFIG_URL`), so under `nx serve`
 they are `/agentic-ui-config/layouts.json` and `/agentic-ui-config/layouts/…`, written by
@@ -1580,8 +1580,16 @@ document shows, plus one for its parent in an `l10n…` vocabulary, which is lab
 term, which the pickers use, returns every entry, and a customer vocabulary can be of any size.
 `translate-directoryEntry: label` makes the server translate a label that is a message key, as
 `SuggestEntries` with `localize` does, and `Accept-Language: en` keeps it in English, as the
-panel's own vocabulary rows are. An entry that cannot be read shows the stored id, and is asked
-for again by the next document that shows it.
+panel's own vocabulary rows are. An entry that cannot be read shows the stored id, says so in
+the console, and is asked for again by the next document that shows it.
+
+A hierarchical `l10n…` field (`dc:subjects`, `dc:coverage`) stores the **path** through the
+vocabulary, `art/architecture`, while the entry carries only the leaf as its id —
+`architecture`, whose `parent` is `art`. So the read is by that leaf, and the path is never a
+path segment: Tomcat refuses the encoded slash with HTTP 400, and the unencoded form is a
+different resource that answers 404 (NXSAT-726). The label is still composed from the stored
+path, which is what names the parent. Both the formatter and the stock vocabularies are two
+levels deep; a deeper path labels as the stored id.
 
 **Usage:** the Properties panel on document detail (`metadata` mode).
 
