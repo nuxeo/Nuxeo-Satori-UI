@@ -94,6 +94,34 @@ export const DATE_ADAPTER_LANGUAGES: readonly string[] = Object.keys(DATE_FNS_LO
   (id) => !id.includes('-'),
 );
 
+/** Exact tag, then bare language. `undefined` means this build has no data for the locale at all. */
+function dateFnsLocaleOrNone(localeId: string): Locale | undefined {
+  const tag = (localeId ?? '').toLowerCase().replaceAll('_', '-');
+  return DATE_FNS_LOCALES[tag] ?? DATE_FNS_LOCALES[tag.split('-')[0]];
+}
+
+/**
+ * Whether this build can parse dates in a locale, rather than silently reading them as English.
+ *
+ * This is a **packaged capability**, which is what makes it worth exporting: it depends on which
+ * date-fns locales are compiled into the bundle, and nothing a deployment writes in Layer 0 can
+ * change it. `availableLanguages` cannot answer the question, because a customer edits that file
+ * — a config with `defaultLanguage: 'es'` and `availableLanguages: ['en', 'es']` is perfectly
+ * valid and parses fine, and `es` still has no entry above.
+ *
+ * That gap is the second half of the #522 review. The first fix tied `LOCALE_ID` to
+ * `availableLanguages`, which closed it for the packaged config — `checkAdvertisedLocalesShip`
+ * governs that one — and left it open for every customer override. Angular formats dates from
+ * registered locale data and Material parses them from this map; when a locale reaches one and
+ * not the other, a date copied out of a list and typed into a field changes day.
+ *
+ * Callers that select a formatting locale must intersect their intent with this. Returns true for
+ * a regional tag whose base language is present, because that is what the adapter will use.
+ */
+export function canFormatDatesIn(localeId: string): boolean {
+  return dateFnsLocaleOrNone(localeId) !== undefined;
+}
+
 /**
  * The date-fns locale for an Angular locale id.
  *
@@ -111,7 +139,9 @@ export function dateFnsLocaleFor(localeId: string): Locale {
   if (exact) return exact;
 
   const language = tag.split('-')[0];
-  const base = DATE_FNS_LOCALES[language];
+  // Same lookup `canFormatDatesIn` reports on, so the predicate and the resolution cannot
+  // disagree about whether this build has data for a locale.
+  const base = dateFnsLocaleOrNone(tag);
 
   // Warned only on a regional miss until #522, so a BARE language with no entry fell through to
   // `enUS` in silence — which is how `defaultLanguage: 'es'` came to display day-first Spanish

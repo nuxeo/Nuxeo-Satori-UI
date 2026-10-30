@@ -183,7 +183,10 @@ describe('the configured language at startup', () => {
  * the defect was that nothing connected it to DI.
  */
 describe('LOCALE_ID provider', () => {
-  function injectLocaleFor(defaultLanguage: string): string {
+  function injectLocaleFor(
+    defaultLanguage: string,
+    availableLanguages: readonly string[] = DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages,
+  ): string {
     const localeProvider = provideAppConfig().find(
       (provider): provider is FactoryProvider =>
         typeof provider === 'object' && 'provide' in provider && provider.provide === LOCALE_ID,
@@ -197,7 +200,13 @@ describe('LOCALE_ID provider', () => {
       providers: [
         {
           provide: AppConfigService,
-          useValue: { bootstrap: signal({ ...DEFAULT_APP_BOOTSTRAP_CONFIG, defaultLanguage }) },
+          useValue: {
+            bootstrap: signal({
+              ...DEFAULT_APP_BOOTSTRAP_CONFIG,
+              defaultLanguage,
+              availableLanguages,
+            }),
+          },
         },
         localeProvider as FactoryProvider,
       ],
@@ -266,6 +275,38 @@ describe('LOCALE_ID provider', () => {
     for (const language of DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages) {
       expect(injectLocaleFor(language)).toBe(language === 'en' ? 'en' : language);
     }
+  });
+
+  /**
+   * The second half of the #522 review, and the case `availableLanguages` alone cannot catch.
+   *
+   * Layer 0 is customer-editable, so a deployment can advertise a language this build cannot
+   * parse dates in. `{ defaultLanguage: 'es', availableLanguages: ['en', 'es'] }` is valid
+   * configuration, passes `mergeBootstrapConfig`, and `checkAdvertisedLocalesShip` never sees it
+   * — that gate reads the packaged config, not a customer's. Clamping to the config alone
+   * therefore honoured the override and handed `es` straight to `LOCALE_ID`.
+   *
+   * Both keys are overridden here together, which is the shape the review asked for: overriding
+   * `defaultLanguage` by itself cannot reach this path, because the packaged
+   * `availableLanguages` would reject it for the right reason and the test would pass without
+   * exercising the capability check at all.
+   */
+  it('refuses a customer override advertising a language this build cannot parse dates in', () => {
+    expect(injectLocaleFor('es', ['en', 'es'])).toBe('en');
+  });
+
+  it('refuses such an override for every language registered ahead of its catalogue', () => {
+    for (const language of REGISTERED_BUT_NOT_SHIPPED) {
+      expect(injectLocaleFor(language, ['en', language]))
+        .withContext(`a Layer 0 override must not admit "${language}" either`)
+        .toBe('en');
+    }
+  });
+
+  it('still honours a customer override for a language this build does ship', () => {
+    // The mirror of the two above: the capability check must not refuse everything a customer
+    // configures, only what this build cannot honour. `fr` narrows the list and must survive.
+    expect(injectLocaleFor('fr', ['en', 'fr'])).toBe('fr');
   });
 
   /**

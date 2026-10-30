@@ -13,6 +13,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { TranslateService } from '@ngx-translate/core';
 
+import { canFormatDatesIn } from '@nuxeo/satori-platform/ui';
+
 import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
 import { firstValueFrom } from 'rxjs';
 import { AI_BACKEND_URL } from '@agentic-ui/shared/ai-client';
@@ -116,19 +118,35 @@ export function initialiseAppConfigAndLanguage(
  * symptom on screen because the calendar overlay looks right. Caught in review on #522 rather
  * than by a test, which is why there is one now.
  *
- * So a locale is admitted only if it is **both** registered — or English, which Angular bundles
- * — and advertised in `availableLanguages`. The second condition is what ties the formatting
- * locale to the languages the application actually ships: `DATE_FNS_LOCALES`' bare ids are held
- * equal to `availableLanguages` by a test, so anything advertised can be parsed as well as
- * formatted, and a language registered ahead of its catalogue stays out until it lands.
+ * ## Why `availableLanguages` is not sufficient either
+ *
+ * The first fix for the above checked `availableLanguages`, which closed the hole for the
+ * **packaged** config — `checkAdvertisedLocalesShip` fails a packaged language with no catalogue
+ * — and left it open for every customer override, as the #522 review then pointed out. Layer 0
+ * is customer-editable: `{ "defaultLanguage": "es", "availableLanguages": ["en", "es"] }` is
+ * valid, parses cleanly, and still names a locale the bundled date-fns map has no entry for. The
+ * config cannot be the authority on a capability that is decided at build time.
+ *
+ * So admission is the intersection of three things, each answering a different question:
+ *
+ * | Check | Question | Authority |
+ * | --- | --- | --- |
+ * | `REGISTERED_LOCALES` | can Angular format it without `NG0701`? | this build |
+ * | `canFormatDatesIn` | can the date adapter parse it back? | this build |
+ * | `availableLanguages` | does this deployment offer it? | the customer |
+ *
+ * The two build-time checks are what a customer cannot edit their way past; the third is intent,
+ * and keeps a language registered ahead of its catalogue out until it ships. English is the
+ * fallback and needs none of them: Angular bundles its data and the date map names it.
  */
 export function resolveFormattingLocale(
   defaultLanguage: string,
   availableLanguages: readonly string[],
 ): string {
-  const canFormat = REGISTERED_LOCALES.includes(defaultLanguage);
-  const ships = availableLanguages.includes(defaultLanguage);
-  return canFormat && ships ? defaultLanguage : 'en';
+  const angularCanFormat = REGISTERED_LOCALES.includes(defaultLanguage);
+  const adapterCanParse = canFormatDatesIn(defaultLanguage);
+  const deploymentOffers = availableLanguages.includes(defaultLanguage);
+  return angularCanFormat && adapterCanParse && deploymentOffers ? defaultLanguage : 'en';
 }
 
 /**
