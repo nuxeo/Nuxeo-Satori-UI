@@ -4635,10 +4635,44 @@ function checkUpstreamCatalogueLanguages() {
     return;
   }
 
-  const stringsOf = (node) =>
-    ts.isArrayLiteralExpression(node)
-      ? node.elements.filter(ts.isStringLiteral).map((element) => element.text)
-      : null;
+  /**
+   * Every element of an array literal, or a description of the first one that is not a literal.
+   *
+   * Filtering to `ts.isStringLiteral` and dropping the rest is what this used to do, and it is a
+   * silent failure of the worst kind here: `languages: ['de', 'en', 'fr', extra]` would read as
+   * three languages and pass against a package shipping exactly those three, while the loader
+   * — which evaluates the real array — would go on requesting the fourth and 404ing. The gate
+   * would be green on the defect it exists to catch.
+   */
+  const stringsOf = (node) => {
+    if (!ts.isArrayLiteralExpression(node)) return { problem: 'not an array literal' };
+    const values = [];
+    for (const element of node.elements) {
+      if (!ts.isStringLiteral(element)) {
+        return { problem: `\`${element.getText()}\` is not a string literal` };
+      }
+      values.push(element.text);
+    }
+    return { values };
+  };
+
+  /**
+   * The installed package directory a `node_modules` path belongs to, or `null` for a repo path.
+   *
+   * Used to tell "this dependency is not installed" — which a clean checkout legitimately is —
+   * from "the dependency is installed and the directory this rule names is not there", which is
+   * a typo or a vendor that dropped the folder in a version bump. Only the second can be judged,
+   * and it has to be judged: it means the build copies nothing and the loader 404s for every
+   * language.
+   */
+  function installedPackageRoot(inputDir) {
+    const segments = inputDir.split('/');
+    const index = segments.lastIndexOf('node_modules');
+    if (index === -1) return null;
+    const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
+    const root = segments.slice(0, index + span).join('/');
+    return segments.length > index + span - 1 ? root : null;
+  }
 
   /**
    * The `assets` arrays of `nuxeo-ui`'s own build target — the base one and one per configuration.
@@ -4710,17 +4744,29 @@ function checkUpstreamCatalogueLanguages() {
     const languagesNode = read_('languages');
     if (!pathNode || !ts.isStringLiteral(pathNode)) continue;
     const folderPath = pathNode.text;
-    const declared = languagesNode ? stringsOf(languagesNode) : null;
     folders += 1;
 
-    if (!declared) {
+    if (!languagesNode) {
       fail(
-        `${LOADER} declares the upstream folder "${folderPath}" with no \`languages\` array of ` +
-          'string literals. Without one the loader cannot tell a language the folder ships from ' +
-          'one it does not, which is the 404 on every page load that NXSAT-732 reported.',
+        `${LOADER} declares the upstream folder "${folderPath}" with no \`languages\` array. ` +
+          'Without one the loader cannot tell a language the folder ships from one it does not, ' +
+          'which is the 404 on every page load that NXSAT-732 reported.',
       );
       continue;
     }
+
+    const languages = stringsOf(languagesNode);
+    if (languages.problem) {
+      fail(
+        `${LOADER} declares the upstream folder "${folderPath}" with a \`languages\` array this ` +
+          `gate cannot read: ${languages.problem}. Every element must be a string literal, ` +
+          'because a computed one is evaluated by the loader and not by this gate — it would be ' +
+          'dropped here, compared against a shorter list, and pass while the loader went on ' +
+          'requesting the language it names.',
+      );
+      continue;
+    }
+    const declared = languages.values;
 
     // The loader fetches `<path>/<TRANSLATION_DIRECTORY>/<lang>.json`, so the rule that has to
     // exist is the one whose `output` is that directory; its `input` is the package directory.
@@ -4782,13 +4828,37 @@ function checkUpstreamCatalogueLanguages() {
       const where = `\`${arrayName}\``;
       const absolute = join(repoRoot, inputDir);
       if (!existsSync(absolute)) {
-        // `node_modules` is not checked in, so a tree that has not been installed cannot answer
-        // this. A warning rather than a pass: a gate that goes quiet without saying so is how a
-        // check becomes no check at all. The `guardrails` gate runs after `npm ci`.
-        warn(
-          `${inputDir} is not present, so the languages "${folderPath}" claims to ship could not ` +
-            'be checked against it. Run `npm ci` and re-run the guardrails.',
-        );
+        // Two very different situations, and warning for both let the dangerous one pass.
+        //
+        // A dependency that is not installed cannot be judged: `node_modules` is not checked in,
+        // and a clean checkout is legitimately in that state. That warns — a gate that goes quiet
+        // without saying so is how a check becomes no check at all — and the `guardrails` gate
+        // runs after `npm ci` anyway.
+        //
+        // But a package that IS installed while the directory this rule names is absent is a
+        // typo, or a vendor that dropped the folder in a version bump. The build then copies
+        // nothing and the loader 404s for **every** language, which is worse than the defect
+        // NXSAT-732 reported, so it fails.
+        const packageRoot = installedPackageRoot(inputDir);
+        if (packageRoot === null) {
+          fail(
+            `the ${where} asset rule copies ${inputDir} to "${served}", but that directory does ` +
+              'not exist in the repository, so the build copies no upstream catalogue at all — a ' +
+              '404 for every language rather than only the unshipped ones.',
+          );
+        } else if (existsSync(join(repoRoot, packageRoot))) {
+          fail(
+            `${packageRoot} is installed but has no ${inputDir}, which the ${where} asset rule ` +
+              `copies to "${served}". Either the path is a typo or this version of the package ` +
+              'dropped the directory — either way the build serves no upstream catalogue and ' +
+              'the loader 404s for every language it asks for.',
+          );
+        } else {
+          warn(
+            `${packageRoot} is not installed, so the languages "${folderPath}" claims to ship ` +
+              'could not be checked against it. Run `npm ci` and re-run the guardrails.',
+          );
+        }
         continue;
       }
 

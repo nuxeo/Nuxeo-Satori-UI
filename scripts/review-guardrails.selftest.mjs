@@ -11331,9 +11331,16 @@ const UPSTREAM_ANGULAR_JSON = upstreamAngularJson([SATORI_RULE], {
   development: { assets: [SATORI_RULE] },
 });
 
-/** The loader, with whatever language list a control wants to put in it. */
+/**
+ * The loader, with whatever language list a control wants to put in it.
+ *
+ * `languages` is a list of raw source expressions, not of values, so a control can put an
+ * identifier or a spread in the array and assert the gate refuses it rather than dropping it.
+ */
 const loaderWith = (languages) =>
-  `export const TRANSLATION_DIRECTORY = 'i18n';
+  `const extra = 'ja';
+
+export const TRANSLATION_DIRECTORY = 'i18n';
 
 interface UpstreamCatalogueFolder {
   readonly path: string;
@@ -11343,9 +11350,12 @@ interface UpstreamCatalogueFolder {
 const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
   {
     path: 'assets/satori-ui',
-${languages === null ? '' : `    languages: [${languages.map((lang) => `'${lang}'`).join(', ')}],\n`}  },
+${languages === null ? '' : `    languages: [${languages.join(', ')}],\n`}  },
 ];
 `;
+
+/** Quote a list of plain language codes into source literals. */
+const literals = (codes) => codes.map((code) => `'${code}'`);
 
 /** A vendor folder shipping exactly `de`, `en` and `fr`. */
 const VENDOR_FILES = {
@@ -11360,7 +11370,7 @@ expectRed(
   {
     'angular.json': UPSTREAM_ANGULAR_JSON,
     ...VENDOR_FILES,
-    [LOADER_PATH]: loaderWith(['de', 'en', 'fr', 'ja']),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr', 'ja'])),
   },
   null,
   /lists ja in `languages`[\s\S]*build serves[\s\S]*no catalogue for it/,
@@ -11372,7 +11382,7 @@ expectRed(
   {
     'angular.json': UPSTREAM_ANGULAR_JSON,
     ...VENDOR_FILES,
-    [LOADER_PATH]: loaderWith(['de', 'en']),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
   },
   null,
   /ships a catalogue for fr and the `options` build copies it[\s\S]*does not list it in `languages`/,
@@ -11389,7 +11399,7 @@ expectRed(
     [LOADER_PATH]: loaderWith(null),
   },
   null,
-  /with no `languages` array of string literals/,
+  /with no `languages` array\./,
 );
 
 // A declared asset path nothing copies to would 404 for EVERY language, not only the unshipped
@@ -11402,7 +11412,7 @@ expectRed(
       { glob: '**/*', input: VENDOR_I18N, output: 'assets/somewhere-else/i18n' },
     ]),
     ...VENDOR_FILES,
-    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
   },
   null,
   /`options` asset array\(s\) in angular.json copy nothing to "assets\/satori-ui\/i18n"/,
@@ -11419,7 +11429,7 @@ expectRed(
       development: { assets: [{ glob: '**/*', input: 'apps/nuxeo-ui/public', output: '.' }] },
     }),
     ...VENDOR_FILES,
-    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
   },
   null,
   /`development` asset array\(s\)[\s\S]*replaces this array per configuration/,
@@ -11435,7 +11445,7 @@ expectRed(
       { glob: 'en.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' },
     ]),
     ...VENDOR_FILES,
-    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
   },
   null,
   /build serves "assets\/satori-ui\/i18n" no catalogue for it/,
@@ -11454,7 +11464,7 @@ expectRed(
       { development: { assets: [SATORI_RULE] } },
     ),
     ...VENDOR_FILES,
-    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
   },
   null,
   /`options` build serves[\s\S]*no catalogue for it/,
@@ -11469,7 +11479,7 @@ expectRed(
       { glob: '{de,en}.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' },
     ]),
     ...VENDOR_FILES,
-    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
   },
   null,
   /cannot interpret/,
@@ -11492,6 +11502,64 @@ const UPSTREAM_FOLDERS = buildFolders();
   /no longer declares `UPSTREAM_FOLDERS` as an array literal/,
 );
 
+// Round 3: a non-literal element was silently DROPPED, so `['de','en','fr', extra]` read as
+// three languages, matched a package shipping exactly those three, and passed — while the
+// loader, which evaluates the real array, went on requesting `ja` and 404ing.
+expectRed(
+  'an identifier among the declared languages',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith([...literals(['de', 'en', 'fr']), 'extra']),
+  },
+  null,
+  /`languages` array this gate cannot read: `extra` is not a string literal/,
+);
+
+expectRed(
+  'a spread among the declared languages',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(["...literals(['de'])", "'en'"]),
+  },
+  null,
+  /`languages` array this gate cannot read[\s\S]*is not a string literal/,
+);
+
+// Round 3, second finding: an input directory absent from an INSTALLED package is a typo or a
+// vendor that dropped the folder, so the build copies nothing and the loader 404s for every
+// language. That used to warn and pass. A package that is not installed at all still warns —
+// the control below proves the two are told apart.
+expectRed(
+  'an asset input absent from an installed package',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: 'node_modules/@hylandsoftware/satori-ui/translations', output: 'assets/satori-ui/i18n' },
+    ]),
+    'node_modules/@hylandsoftware/satori-ui/package.json': '{ "name": "@hylandsoftware/satori-ui" }\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /is installed but has no node_modules\/@hylandsoftware\/satori-ui\/translations/,
+);
+
+// The other half of that distinction: with the package absent entirely there is nothing to
+// judge, so the gate warns and stays green. Without this control, "fail on a missing input"
+// would have been free to fail every clean checkout too.
+falsePositiveControls += 1;
+expectGreen(
+  'an asset input whose package is not installed at all',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
 falsePositiveControls += 1;
 expectGreen(
   'a language list that matches the installed package exactly',
@@ -11499,7 +11567,7 @@ expectGreen(
   {
     'angular.json': UPSTREAM_ANGULAR_JSON,
     ...VENDOR_FILES,
-    [LOADER_PATH]: loaderWith(['de', 'en', 'fr']),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
   },
 );
 
