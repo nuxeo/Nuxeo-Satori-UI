@@ -50,6 +50,16 @@
     }
 
     <!--
+      Tracked by `$index`, not by `id`: an entry refused for having no usable `id` carries
+      `null`, and a refusal about a repeated id shares its id with the entry that kept it.
+    -->
+    @for (entry of refusedSlotEntries(); track $index) {
+      <p class="shell__warning" role="status">
+        Manifest slot {{ entry.slot }} in {{ entry.source }}: {{ entry.reason }}
+      </p>
+    }
+
+    <!--
       No route guard, deliberately. Guarding is a fork's decision, and gating the
       whole outlet here means no page has to handle "signed out" itself.
     -->

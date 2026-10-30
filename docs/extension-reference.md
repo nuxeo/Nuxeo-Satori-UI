@@ -235,7 +235,7 @@ slot the library has never heard of and showing the existing ones unchanged.
 
 | Field      | Meaning                                                                                                                                                                             |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`       | Required. The address. An entry without one is dropped.                                                                                                                             |
+| `id`       | Required. The address. An entry without one is dropped and reported — see §2a.                                                                                                      |
 | `order`    | Ascending. Absent sorts as `Number.MAX_SAFE_INTEGER` — after any ordinary number, tied with that value, before `Infinity`. `null` sorts as `0`. Packaged entries are spaced by ten. |
 | `disabled` | `true` removes the entry. ACA's semantics: any truthy value does, the string `"false"` too.                                                                                         |
 | `rule`     | A rule ID, or a nested rule reference — see section 4.                                                                                                                              |
@@ -296,6 +296,51 @@ Find an entry's `labelKey` in `PACKAGED_NAV_ITEMS`; they follow `nav.item.<slug>
   }
 }
 ```
+
+---
+
+## 2a. What is refused, and how you hear about it
+
+The manifest is read **tolerantly**: something malformed costs you that slot or that entry, never
+the application. What it must not cost you is the explanation. Every refusal below names the slot,
+the reason and the contribution it came from, in two places:
+
+- **`AppExtensionsService.refusedSlotEntries()`** — a signal, alongside `missingLayers()` and
+  `invalidRoutes()`. The template application renders all three; a fork should too.
+- **the browser console**, prefixed `[agentic-ui-extensions]`, **once per load**. This is where
+  support looks, because the product application has no diagnostics page.
+
+| What you wrote                                   | What happens                  | Reported as                                       |
+| ------------------------------------------------ | ----------------------------- | ------------------------------------------------- |
+| `"documentView": { … }` instead of `[ … ]`       | the **whole slot** is dropped | `a slot must be a list of entries, not an object` |
+| a slot named `__proto__`                         | the **whole slot** is dropped | `a slot may not be named "__proto__"`             |
+| an entry that is not an object                   | that entry is dropped         | `entry 2 must be an object, not a string`         |
+| an entry with no `id`, or a non-string one       | that entry is dropped         | `entry 2 has no string "id"`                      |
+| an entry whose `id` is blank or whitespace       | that entry is dropped         | `entry 2 has a blank "id"`                        |
+| the same `id` twice **in one slot of one layer** | the two merge into one        | `entry 2 repeats the id "…"`                      |
+
+The contribution is named by its `$name` when it declares one, by the `$layers` entry it sits in
+when that is where it was written, and by its position in contribution order otherwise
+(`contribution 2`). Writing `$name` on your layer is what makes the message say which file to
+open, which is most of why `$name` exists.
+
+### A repeated `id` across layers is **not** reported, and that is deliberate
+
+Reusing an `id` is the override mechanism, not a mistake:
+
+- a `$references` layer patching an entry an earlier layer declared (§12);
+- a `slots` entry reusing a **packaged** `id`, which patches the packaged descriptor — minus its
+  `action`, per §1;
+- your own extension library re-registering an `id` through `provideSatoriExtensions` (§14).
+
+A diagnostic on any of those would fire on every correctly layered manifest, so none of them says
+anything. **The one case that is reported is two entries with the same `id` inside a single slot of
+a single layer** — there is no override to express there, because you would have edited the row, so
+it is a copy-paste duplicate. The pair is still merged exactly as before; the report tells you the
+later one won.
+
+Entries dropped for an unreachable `path` are reported the same way, on
+`invalidRoutes()` — see §11.
 
 ---
 
@@ -1534,6 +1579,11 @@ from the `null` and `__proto__` items below, where ACA's merge threw or rewrote 
 - `$ignoreReferenceList` drops a layer even when it is referenced.
 - A layer that cannot be resolved is reported on `AppExtensionsService.missingLayers()`, not silently
   dropped, and the rest of the stack still applies.
+- A malformed slot or slot entry **inside** a layer is reported on
+  `AppExtensionsService.refusedSlotEntries()` and in the console — including in a layer you listed
+  in `$ignoreReferenceList`, which is read even though it does not apply, so the message names the
+  layer rather than implying it took effect. Patching an entry by `id` from a later layer is the
+  point of layering and is never reported. §2a has the whole list.
 
 ```json
 {

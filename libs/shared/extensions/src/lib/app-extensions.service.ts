@@ -1,11 +1,12 @@
-import { Injectable, computed, inject } from '@angular/core';
+import { Injectable, computed, effect, inject } from '@angular/core';
 
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import {
   resolveExtensionLayers,
   type ExtensionConfig,
-  type ResolvedExtensionConfig,
+  type RefusedExtensionEntry,
+  type ResolvedExtensionLayers,
 } from './extension-config';
 import { DOCUMENT_RULE_EVALUATORS } from './document-rules';
 import type { ExtensionRouteDescriptor } from './extension-actions';
@@ -46,7 +47,7 @@ export class AppExtensionsService {
   private readonly rules = inject(ExtensionRuleRegistry);
 
   /** The merged Layer 1 config, recomputed when the manifest signal changes. */
-  private readonly resolved = computed<ResolvedExtensionConfig>(() =>
+  private readonly resolved = computed<ResolvedExtensionLayers>(() =>
     resolveExtensionLayers(this.appConfig.manifest().extensionLayers),
   );
 
@@ -70,6 +71,35 @@ export class AppExtensionsService {
       ).rejected,
   );
 
+  /**
+   * Slot entries the manifest read refused, each naming the slot, the reason and the
+   * contribution that wrote it.
+   *
+   * The third signal on this channel, and for the reason {@link invalidRoutes} states: a
+   * malformed slot or entry changed what a customer saw and said nothing anywhere, so a
+   * manifest with a typo was debugged by bisection or not at all (NXSAT-755).
+   *
+   * What it reports is only what the **read** refused — a slot that is not a list, an entry
+   * that cannot be addressed, and a repeated `id` inside one contributed list. A same-`id`
+   * entry across contributions is the documented override mechanism and is deliberately
+   * absent; `readSlotEntries` in `extension-config.ts` argues that line in full.
+   */
+  readonly refusedSlotEntries = computed<readonly RefusedExtensionEntry[]>(
+    () => this.resolved().refused,
+  );
+
+  /**
+   * Refusals already written to the console, so a recomputation cannot repeat them.
+   *
+   * {@link refusedSlotEntries} is a `computed` over the manifest signal, which recomputes
+   * whenever that signal changes — a second load, a preset being selected. Logging from
+   * inside it would restate the same typo every time, which is the mistake
+   * `AppConfigService.noteRefusedLogos` carries a comment about. Keyed by the whole refusal
+   * rather than by id, because an entry refused for having no id has none, and two different
+   * complaints about one id are two things worth saying.
+   */
+  private readonly noted = new Set<string>();
+
   private readonly overrides = computed<ExtensionSlotOverrides>(() => {
     const config = this.config();
     return {
@@ -81,6 +111,13 @@ export class AppExtensionsService {
   constructor() {
     this.rules.registerRules(DOCUMENT_RULE_EVALUATORS);
     this.rules.registerRules(SURFACE_RULE_EVALUATORS);
+    // An `effect`, not a call here, for the reason `provideExtensionRoutes` gives: the manifest
+    // is fetched by an `APP_INITIALIZER` and nothing guarantees it has landed when this service
+    // is first injected, so a refusal read now would usually be a refusal read from an empty
+    // manifest. And it is needed at all because the product application has no page showing
+    // diagnostics — without it the console stays silent unless a host happens to render
+    // `refusedSlotEntries`, and `nuxeo-ui` does not.
+    effect(() => this.noteRefusedSlotEntries(this.refusedSlotEntries()));
   }
 
   /** Contribute packaged descriptors to a slot. See {@link ExtensionSlotRegistry.register}. */
@@ -113,6 +150,16 @@ export class AppExtensionsService {
     return this.rules.evaluate(rule, context);
   }
 
+  /** Write each refusal not written yet. See {@link noted} for why the set is needed. */
+  private noteRefusedSlotEntries(refused: readonly RefusedExtensionEntry[]): void {
+    for (const entry of refused) {
+      const key = JSON.stringify([entry.source, entry.slot, entry.id, entry.reason]);
+      if (this.noted.has(key)) continue;
+      this.noted.add(key);
+      warn(`slots.${entry.slot} in ${entry.source}: ${entry.reason}`);
+    }
+  }
+
   /** Every registered id, for the extension reference doc and diagnostics. */
   inventory(): Readonly<Record<string, readonly string[]>> {
     const inventory: Record<string, readonly string[]> = {
@@ -123,4 +170,17 @@ export class AppExtensionsService {
     }
     return inventory;
   }
+}
+
+/**
+ * The product app has no page showing diagnostics, so the console is where support finds them.
+ *
+ * Module-local, which is the convention the two libraries that already do this follow —
+ * `[agentic-ui-config]` in `app-config.service.ts` and `[agentic-ui-layouts]` in
+ * `document-layout.service.ts`. The prefix is `extension-outlet.component.ts`'s, so this
+ * library speaks with one voice; extracting a shared helper is a tidy-up worth doing when a
+ * third module in here needs it.
+ */
+function warn(message: string): void {
+  console.warn(`[agentic-ui-extensions] ${message}`);
 }
