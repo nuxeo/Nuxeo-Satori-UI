@@ -101,6 +101,25 @@ and `padding-inline`. The existing `:host-context([dir='rtl'])` rules were left 
 are `transform: scaleX(-1)` on a chevron or arrow, which is a mirrored **glyph** and has no
 logical-property equivalent.
 
+**`checkSatoriStylesheetsAreLogical` keeps it that way.** Both `nxs-` libraries are now free of
+physical inline-direction declarations, so the guardrail is an absolute rule over their `.scss`
+rather than a ratchet: `margin-left`, `left`, `text-align: left`, `float: right`, the physical
+corner radii, and a four-value `margin`/`padding` shorthand whose inline values differ. The one
+symmetric `left: 0; right: 0` pair was converted to `inset-inline: 0` rather than special-cased,
+because a symmetry heuristic is more code than the rule it guards. `// logical-properties-ok:
+<reason>` waives a line and **requires prose** — a bare marker suppresses nothing, which the
+selftest asserts. `libs/features/` and `apps/` are deliberately out of scope: they hold 155 and 48
+such declarations, so a gate covering them would have to be born suppressed. A green run here does
+not mean the application is right-to-left clean, only the shipped components.
+
+**What is still English in `ar` or `he`, and is meant to be.** Beyond the strings: dates too.
+`resolveFormattingLocale` admits a locale only if Angular has its data, the deployment advertises
+it, **and** `canFormatDatesIn` finds a bundled date-fns entry — and `ar`/`he` fail the third until
+their catalogues land. So `LOCALE_ID` clamps to `en` and dates render US-ordered under
+`lang="ar" dir="rtl"`. That looks wrong and is correct: `format` and `parse` then agree on `enUS`,
+which is what keeps the misparse class out. All three converge when `ar.json` and a date-fns `ar`
+entry arrive together.
+
 **Known limit, not worth code today.** `createOverlayRef` snapshots the direction as a string when
 an overlay is created, so an overlay already open when the language changes keeps the direction it
 opened with. There is no language picker (NXSAT-294), so nothing a user can do reaches that state.

@@ -9701,6 +9701,154 @@ function nativeDateAdapterUses(file) {
 }
 
 /**
+ * Physical inline-direction properties, which the `nxs-` libraries' stylesheets must not use.
+ *
+ * `margin-left`, `padding-right`, `left`, `right`, `text-align: left`, `float: right`,
+ * `border-left`, the corner radii, and a four-value `margin`/`padding` shorthand whose second
+ * and fourth values differ — each of those hardcodes a reading direction. The logical form is
+ * `margin-inline-start`, `padding-inline-end`, `inset-inline-start`, `text-align: start`,
+ * `padding-inline: <start> <end>`, and so on; it compiles to the identical result in
+ * left-to-right and mirrors itself in right-to-left.
+ *
+ * ## Why this gate exists
+ *
+ * NXSAT-752 found seven of these across six components, and every one of them was a real
+ * right-to-left defect: a clear button on the far side of the text it clears, a dropdown panel
+ * hanging off the opposite side of its own trigger, a select's chevron sitting over the text
+ * instead of over the gutter reserved for it. They had never been noticed because nothing set
+ * `dir`, so the mirrored layout had never rendered. Now that it does, the next
+ * `margin-left: 4px` is a bug the moment it is written, and nothing was watching for it — the
+ * repository has no stylelint configuration, and `lint` has nothing to say about CSS.
+ *
+ * ## Scope, and why it is this narrow
+ *
+ * The two `nxs-` libraries only. They are what customers consume, they are where the
+ * right-to-left contract lives — five components carry `:host-context([dir='rtl'])` rules — and,
+ * after NXSAT-752, they contain **no** physical inline-direction declaration at all, which is
+ * what lets this be an absolute rule rather than a ratchet over a baseline.
+ *
+ * `libs/features/` and `apps/` are deliberately **not** covered: they hold 155 and 48 such
+ * declarations respectively. Mirroring those is real work and a separate ticket; a gate that
+ * failed on all 203 today would have to be born suppressed, and a suppressed gate is the kind
+ * that is still suppressed two years later. Stated here so a green run is not read as "the
+ * application is right-to-left clean".
+ *
+ * ## The escape hatch, and why it demands a reason
+ *
+ * `// logical-properties-ok: <reason>` on the preceding line. Nothing uses it today. It exists
+ * because a physical property inside a `[dir='rtl']` block is unambiguous by construction, and
+ * forcing a rewrite there would be the gate making the code worse. Requiring prose after the
+ * colon is what stops it becoming a reflex: a bare marker does not suppress anything.
+ *
+ * Block structure is deliberately not parsed. A symmetric `left: 0; right: 0` pair *is*
+ * direction-neutral and this rule still refuses it, in favour of `inset-inline: 0` — the one such
+ * pair in the libraries was converted rather than special-cased, because a symmetry heuristic is
+ * more code than the rule it guards and would have to be right about nesting, `@media` and SCSS
+ * interpolation to be worth having.
+ */
+const LOGICAL_PROPERTY_ALTERNATIVES = new Map([
+  ['margin-left', 'margin-inline-start'],
+  ['margin-right', 'margin-inline-end'],
+  ['padding-left', 'padding-inline-start'],
+  ['padding-right', 'padding-inline-end'],
+  ['border-left', 'border-inline-start'],
+  ['border-right', 'border-inline-end'],
+  ['border-left-width', 'border-inline-start-width'],
+  ['border-right-width', 'border-inline-end-width'],
+  ['border-left-color', 'border-inline-start-color'],
+  ['border-right-color', 'border-inline-end-color'],
+  ['border-left-style', 'border-inline-start-style'],
+  ['border-right-style', 'border-inline-end-style'],
+  ['border-top-left-radius', 'border-start-start-radius'],
+  ['border-top-right-radius', 'border-start-end-radius'],
+  ['border-bottom-left-radius', 'border-end-start-radius'],
+  ['border-bottom-right-radius', 'border-end-end-radius'],
+  ['left', 'inset-inline-start'],
+  ['right', 'inset-inline-end'],
+]);
+
+/** `// logical-properties-ok: it overrides upstream inside a [dir='rtl'] block` — prose required. */
+const LOGICAL_PROPERTY_WAIVER = /^\s*(?:\/\/|\/\*)\s*logical-properties-ok:\s*\S/;
+
+function checkSatoriStylesheetsAreLogical() {
+  let scanned = 0;
+  for (const { root } of SATORI_LIBRARIES) {
+    for (const file of walk(`${root}/src`, (path) => path.endsWith('.scss'))) {
+      if (!fileExists(file)) continue;
+      scanned += 1;
+      const lines = read(file).split('\n');
+      lines.forEach((text, index) => {
+        const trimmed = text.trim();
+        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*')) return;
+        if (LOGICAL_PROPERTY_WAIVER.test(lines[index - 1] ?? '')) return;
+        const at = `${file}:${index + 1}`;
+
+        const declaration = /^([a-z-]+)\s*:\s*([^;]*);?/.exec(trimmed);
+        if (!declaration) return;
+        const [, property, rawValue] = declaration;
+        const value = rawValue.trim();
+
+        const logical = LOGICAL_PROPERTY_ALTERNATIVES.get(property);
+        if (logical) {
+          fail(
+            `${at} uses the physical property \`${property}\`, which hardcodes a reading ` +
+              `direction. Use \`${logical}\`.\n` +
+              '    Arabic and Hebrew mirror the layout (NXSAT-752), so a physical left/right is a ' +
+              'right-to-left defect.\n' +
+              '    If the direction is genuinely fixed, put `// logical-properties-ok: <reason>` ' +
+              'on the line above.',
+          );
+          return;
+        }
+
+        if (
+          (property === 'text-align' || property === 'float' || property === 'clear') &&
+          /^(left|right)$/.test(value)
+        ) {
+          const replacement =
+            property === 'text-align'
+              ? value === 'left'
+                ? 'start'
+                : 'end'
+              : value === 'left'
+                ? 'inline-start'
+                : 'inline-end';
+          fail(
+            `${at} sets \`${property}: ${value}\`, which hardcodes a reading direction. ` +
+              `Use \`${property}: ${replacement}\`.`,
+          );
+          return;
+        }
+
+        // A four-value shorthand is only a problem when its horizontal values differ: `0 8px 8px`
+        // and `8px 12px` are already symmetric. `padding: 12px 8px 12px 16px` is the shape that
+        // produced three of NXSAT-752's seven findings, and it reads as deliberate rather than as
+        // an oversight, which is why it needs naming explicitly.
+        if (property === 'margin' || property === 'padding') {
+          const parts = value.split(/\s+/).filter(Boolean);
+          if (parts.length === 4 && parts[1] !== parts[3]) {
+            fail(
+              `${at} sets \`${property}\` with a four-value shorthand whose inline values differ ` +
+                `(\`${parts[1]}\` then \`${parts[3]}\`), so it hardcodes a reading direction.\n` +
+                `    Split it: \`${property}: ${parts[0]} 0 ${parts[2]};\` plus ` +
+                `\`${property}-inline: ${parts[3]} ${parts[1]};\` — inline takes start then end.`,
+            );
+          }
+        }
+      });
+    }
+  }
+
+  if (scanned === 0) {
+    fail(
+      'No `nxs-` stylesheet was read, so the logical-property gate asserted nothing. Either the ' +
+        'library roots moved or `walk` is not seeing `.scss` — fix the gate rather than leaving ' +
+        'it passing empty.',
+    );
+  }
+}
+
+/**
  * No library in the family puts Material's native date adapter in an injector (NXSAT-649).
  *
  * A component that lists `provideNativeDateAdapter()` or `MatNativeDateModule` hides the adapter a
@@ -10197,7 +10345,10 @@ const ADOPTION_BASELINE = new Map([
   [
     '@hylandsoftware/satori-ui/avatar',
     new Map([
-      ['apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts', new Set(['SatAvatarCategory'])],
+      [
+        'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
+        new Set(['SatAvatarCategory']),
+      ],
       ['apps/nuxeo-ui/src/app/shell/app-shell.component.ts', new Set(['SatAvatarModule'])],
     ]),
   ],
@@ -10745,8 +10896,9 @@ function workflowLines(body) {
     // script body back into the YAML the parser reads. Indentation is still measured from the raw
     // lines, because comment blanking would erase the indentation the boundary depends on.
     const header = stripTrailingYamlComment(raw[i]);
-    const blockScalar =
-      /^(\s*)((?:-\s+)?)['"]?([A-Za-z_][\w.-]*)['"]?\s*:\s*[|>][-+]?\d*\s*$/.exec(header);
+    const blockScalar = /^(\s*)((?:-\s+)?)['"]?([A-Za-z_][\w.-]*)['"]?\s*:\s*[|>][-+]?\d*\s*$/.exec(
+      header,
+    );
     /* A mapping whose VALUE is opaque data rather than workflow structure. Its body is blanked for
      * the same reason a `run:` script is: the gate scan treats any `if:` under `jobs:` as a
      * condition, so a job declaring `env.if` — or a `with:` input named `if` — had that data read
@@ -10940,8 +11092,7 @@ const LONG_LIVED_BRANCHES = ['main', 'master', 'develop', 'gh-pages'];
 const isLongLivedBranch = (branch) => LONG_LIVED_BRANCHES.includes(branch.toLowerCase());
 
 /** A filter pattern that names exactly one branch, rather than a family of them. */
-const isLiteralBranchPattern = (pattern) =>
-  !/[*?+[\]]/.test(pattern) && !pattern.startsWith('!');
+const isLiteralBranchPattern = (pattern) => !/[*?+[\]]/.test(pattern) && !pattern.startsWith('!');
 
 /**
  * A GitHub branch-filter pattern as a `RegExp`, or `null` for syntax this does not model.
@@ -10999,7 +11150,7 @@ function githubBranchFilterToRegExp(pattern) {
  * Also caught on #494. A doubled quote — GitHub's escape inside an expression string — is part of
  * the literal and is unescaped below.
  */
-const EXPRESSION_STRING = "'((?:[^']|'')*)'|\"((?:[^\"]|\"\")*)\"";
+const EXPRESSION_STRING = '\'((?:[^\']|\'\')*)\'|"((?:[^"]|"")*)"';
 
 /**
  * The comparison matcher, parameterised by which `github.*` contexts to look for.
@@ -11192,7 +11343,9 @@ function comparisonIsNegated(expression, index) {
 
   return (
     introducedByBang(index) ||
-    enclosing.some(([start, end]) => introducedByBang(start) || invertedByBooleanCompare(start, end))
+    enclosing.some(
+      ([start, end]) => introducedByBang(start) || invertedByBooleanCompare(start, end),
+    )
   );
 }
 
@@ -11295,12 +11448,15 @@ function parseWorkflowTriggersAndGates(body) {
        * YAML implementation, and not being one is the whole constraint this parser works under. */
       if (/^\s*[&*]/.test(ownValue)) return null;
       let filter = inlineFilter(
-        ownValue.trim().startsWith('{') ? [ownValue, ...lines.slice(i + 1, eventEnd)].join(' ') : ownValue,
+        ownValue.trim().startsWith('{')
+          ? [ownValue, ...lines.slice(i + 1, eventEnd)].join(' ')
+          : ownValue,
       );
       if (filter === null) {
         filter = NO_FILTER;
         for (let j = i + 1; j < eventEnd; j += 1) {
-          if (/^\s*['"]?tags(?:-ignore)?['"]?\s*:/.test(lines[j])) filter = { ...filter, tags: true };
+          if (/^\s*['"]?tags(?:-ignore)?['"]?\s*:/.test(lines[j]))
+            filter = { ...filter, tags: true };
           const match = /^\s*['"]?(branches|branches-ignore)['"]?\s*:/.exec(lines[j]);
           if (!match) continue;
           const list = parseYamlStringList(lines, j, yamlIndent(lines[j]));
@@ -11578,7 +11734,10 @@ function checkWorkflowRefGates() {
      * false positive, reported on #494 in the round after it. */
     let tagsArePossible = false;
     for (const [event, filter] of events) {
-      if (event === 'push' && (filter.tags || (!filter.unparsed && filter.branches === null && !filter.ignore))) {
+      if (
+        event === 'push' &&
+        (filter.tags || (!filter.unparsed && filter.branches === null && !filter.ignore))
+      ) {
         tagsArePossible = true;
       }
       if (!BRANCH_FILTERED_EVENTS.includes(event)) {
@@ -11601,7 +11760,8 @@ function checkWorkflowRefGates() {
      * is the mistake. `pull_request_target` is excluded deliberately: that one does run with the
      * base branch as `github.ref`, so a branch gate there is legitimate. Found in review on
      * #494, where this shape passed the check completely. */
-    const pullRequestOnly = events.size > 0 && [...events.keys()].every((e) => e === 'pull_request');
+    const pullRequestOnly =
+      events.size > 0 && [...events.keys()].every((e) => e === 'pull_request');
 
     /* The trigger half. An allowlist of nothing but pinned work-in-progress branches stops matching
      * anything the day they merge, and then the workflow does not run at all — which is how the
@@ -11795,7 +11955,7 @@ function checkWorkflowRefGates() {
               `${workflow}:${gate.line} gates ${where} on \`github.ref_name == '${literal}'\`, ` +
                 'and a tag can start this workflow, so this guardrail cannot tell whether ' +
                 `\`${literal}\` is a branch or a tag and has judged neither.\n` +
-                "    Compare `github.ref` to `refs/heads/…` or `refs/tags/…` — that form says " +
+                '    Compare `github.ref` to `refs/heads/…` or `refs/tags/…` — that form says ' +
                 'which it is — or assert `github.ref_type` alongside this comparison.',
             );
           }
@@ -11830,7 +11990,7 @@ function checkWorkflowRefGates() {
           if (!allowed) {
             fail(
               `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, which none ` +
-                'of the workflow\'s own branch filters admit:\n' +
+                "of the workflow's own branch filters admit:\n" +
                 allowlists
                   .map(
                     ([event, patterns]) =>
@@ -11945,6 +12105,7 @@ const GUARDRAILS = [
   checkSatoriComponentsHaveStories,
   checkSatoriComponentsHaveOverviews,
   checkSatoriComponentsHaveSpecs,
+  checkSatoriStylesheetsAreLogical,
   checkSatoriLibrariesKeepHostDateAdapter,
   checkMdxCodeSamplesFormatted,
   checkPlatformEntryPointsListed,

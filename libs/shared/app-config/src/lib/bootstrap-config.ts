@@ -233,11 +233,17 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   //
   // So each of `ar`, `es`, `he`, `it`, `sv` joins this list — and `DATE_FNS_LOCALES`, which a
   // test holds equal to it — in the pull request that brings its catalogue. `es` needs one
-  // Crowdin string fixed first (`Seleccionado(s)`). `ar` and `he` need nothing further: RTL
-  // landed in NXSAT-752, so `syncDocumentDirection` sets `<html dir>` from the active language
-  // and either one mirrors the layout. Note that this list does not gate that — `defaultLanguage`
-  // is a free string and nothing validates it against this array, so a deployment can select `ar`
-  // today and get a right-to-left layout with English text.
+  // Crowdin string fixed first (`Seleccionado(s)`). `ar` and `he` need nothing further for
+  // layout: RTL landed in NXSAT-752, so `syncDocumentDirection` sets `<html dir>` from the
+  // active language and either one mirrors.
+  //
+  // Note that this list does not gate that. `defaultLanguage` is a free string and nothing
+  // validates it against this array, so a deployment can select `ar` today and get a
+  // right-to-left layout with **English strings and English-ordered dates** — the dates because
+  // `resolveFormattingLocale` also requires `canFormatDatesIn`, which `ar` fails until its
+  // date-fns entry lands, so `LOCALE_ID` clamps to `en`. `lang="ar"` over a US-ordered date looks
+  // wrong and is correct: `format` and `parse` then agree, which is what keeps the misparse class
+  // out. All three converge when the catalogue and the date-fns entry arrive together.
   //
   // Shipping a catalogue does NOT mean every key is translated: `setFallbackLang('en')` covers
   // gaps, and a Crowdin pull fills every unapproved string with its English source.
