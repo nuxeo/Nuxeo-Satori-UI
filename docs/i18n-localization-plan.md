@@ -451,9 +451,10 @@ clause we satisfy while deliberately declining an adjacent recommendation. Both 
 below and neither is a defect in the taxonomy — but the taxonomy said "three statuses" while the
 table used five and combined them, which was.
 
-**Five rows are owner actions**: seeding, revoking the setup token, the service-account commit
-identity, confirming the proof-reading workflow, and confirming the project-level export settings.
-They are listed rather than omitted so the pipeline is not read as finished.
+**Four rows are owner actions**: seeding, revoking the setup token, the service-account commit
+identity, and confirming the project-level export settings. Confirming the proof-reading workflow
+was the fifth and closed on 30 October (INTERN-1363). They are listed rather than omitted so the
+pipeline is not read as finished.
 
 | Requirement (quoted)                                                                                                                                                                                                                                                                                                                                           | Our implementation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -652,10 +653,11 @@ English while every progress figure says the work is done.
   never arrive — was already false when it was made. Enrico Stengert on
   [INTERN-1346](https://hyland.atlassian.net/browse/INTERN-1346), 28 September 2026: _"I can
   confirm all source strings for this project are synced and now visible in CrowdIn. Translations
-  can begin on our end."_ **That is readiness, not proof that a proof-reading step is configured**,
-  and the MUST is conditional on proof-reading being _"setup"_ — so this does not on its own make
-  the MUST binding. It does dispose of "approval can never arrive", which is what the case for
-  `'false'` rested on. Confirming the configured workflow is an open owner action in
+  can begin on our end."_ **That was readiness, not proof that a proof-reading step was
+  configured**, and the MUST is conditional on proof-reading being _"setup"_ — so it did not on its
+  own make the MUST binding. It did dispose of "approval can never arrive", which is what the case
+  for `'false'` rested on. The configured workflow was confirmed separately on 30 October
+  (INTERN-1363), so the MUST now binds directly. Recorded in
   `D8-standard`.
 - The stronger reason does not depend on that timing at all. The Guidelines' **Identified Security
   Risks** table carries _"Reputation Damage (insertion of controversial or profane content through
@@ -666,8 +668,9 @@ English while every progress figure says the work is done.
   setting that quietly invalidates an accepted risk rating is not a trade engineering gets to make
   on its own.
 
-**`'true'` is therefore right under either reading of the condition**, which is why the unverified
-proof-reading step does not leave this open. If proof-reading is set up, the MUST applies directly.
+**`'true'` is therefore right under either reading of the condition**, which is why the
+proof-reading step being unverified did not leave this open at the time. It is verified now
+(INTERN-1363, 30 October), so the first reading applies: the MUST binds directly.
 If it is not, the MUST is dormant — but the risk-table argument still holds, and the cost of being
 wrong in this direction is an empty export, which is visible, rather than unreviewed content in
 front of a customer, which is not.
@@ -924,8 +927,10 @@ in before it has translations. Of the five from D8e, they split cleanly:
 So all five are registered and absent from the last two. Only `es` is requested: `ar`, `he`, `it`
 and `sv` were taken out of `download_translations_args` on 30 October, because the pull delivers
 everything into one shared pull request and an unapproved language would have held Spanish and the
-four shipping languages red with it. Each `--language` goes back when its approvals exist, in the
-same pull request as its step 2 entries.
+four shipping languages red with it. Each `--language` goes back when its approvals exist — in a
+change of its own, which must reach `main` and then wait for a scheduled run, because the catalogue
+does not exist until that run produces it. The step 2 entries come after that, in a third change.
+One change cannot be both before and after the pull.
 Each joins them in the small pull request that brings its catalogue. The gate stays green
 throughout, which is the point: D8e's rule is not suspended, it is scoped.
 
