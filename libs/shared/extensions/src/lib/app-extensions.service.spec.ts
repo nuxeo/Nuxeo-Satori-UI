@@ -148,39 +148,61 @@ describe('AppExtensionsService refused slot entries', () => {
   });
 
   /**
-   * The duplicate message's claim, checked against what `resolve` actually does.
+   * Why the duplicate message predicts **nothing** about which fields survive.
    *
-   * It read "the later one wins" until review of PR 534: `resolve` patches with
-   * `withoutAction(entry)`, so the later entry's `action` is dropped and the **first** entry's
-   * survives. Asserting the message and the resolved entry in one test is what stops the two
-   * drifting apart again — a diagnostic that overstates what happened is the defect this
-   * ticket exists to remove, not a smaller version of it.
+   * Two review rounds on PR 534 went at this. It first said "the later one wins", then — once
+   * `resolve`'s `withoutAction` was pointed out — "except `action`, which stays as the first
+   * entry set it". Both were overstatements, because the outcome is not a property of the
+   * duplicate at all: it depends on **how many layers the stack has**.
+   *
+   * - One contributed layer: the pair reaches `resolve` intact, which patches the first with
+   *   `withoutAction(entry)` — later `label`, **first** `action`.
+   * - Two or more: `mergeObjects` merges arrays by `id` and has already collapsed the pair to
+   *   the later row before `resolve` sees it, so there is nothing to patch — later `action`.
+   *
+   * Both are asserted below, so the behaviour is pinned by test rather than predicted by prose,
+   * and the message is asserted to claim neither.
    */
-  it('describes the duplicate merge exactly as resolve performs it, action included', () => {
-    manifest.set({
-      extensionLayers: [
-        {
-          $name: 'acme',
-          slots: {
-            navbar: [
-              { id: 'acme.navbar.x', label: 'First', action: 'acme.actions.first' },
-              { id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.second' },
-            ],
-          },
-        },
+  const duplicateLayer = {
+    $name: 'acme',
+    slots: {
+      navbar: [
+        { id: 'acme.navbar.x', label: 'First', action: 'acme.actions.first' },
+        { id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.second' },
       ],
-    });
-    const service = boot();
-    const resolved = service.resolve<{ id: string; label: string; action: string }>(
-      EXTENSION_SLOTS.navbar,
-    );
+    },
+  };
+  const resolvedNavbar = (service: AppExtensionsService) =>
+    service.resolve<{ id: string; label: string; action: string }>(EXTENSION_SLOTS.navbar);
 
-    expect(resolved).toEqual([
+  it("keeps the first entry's action when one layer puts the duplicate pair into resolve", () => {
+    manifest.set({ extensionLayers: [duplicateLayer] });
+
+    expect(resolvedNavbar(boot())).toEqual([
       { id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.first' },
     ]);
-    expect(service.refusedSlotEntries()[0].reason).toContain(
-      'the later entry\'s fields win, except "action", which stays as the first entry set it',
-    );
+  });
+
+  it("keeps the later entry's action when a second layer collapses the pair before resolve", () => {
+    // `slots.navbar: []` is enough: a second layer makes `mergeObjects` merge the array by id.
+    manifest.set({
+      extensionLayers: [duplicateLayer, { $name: 'regional', slots: { navbar: [] } }],
+    });
+
+    expect(resolvedNavbar(boot())).toEqual([
+      { id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.second' },
+    ]);
+  });
+
+  it('reports the duplicate without predicting which fields survive', () => {
+    manifest.set({ extensionLayers: [duplicateLayer] });
+    const reason = boot().refusedSlotEntries()[0].reason;
+
+    expect(reason).toContain('repeats the id "acme.navbar.x"');
+    expect(reason).toContain('which fields survive depends on the other layers');
+    // The two claims the earlier wordings made, neither of which holds in both stacks above.
+    expect(reason).not.toContain('the later one wins');
+    expect(reason).not.toContain('action');
   });
 
   it('says nothing when there is no manifest at all', () => {

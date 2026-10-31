@@ -346,14 +346,18 @@ function readSlotEntries(
         slot,
         id: entry.id,
         source,
-        // Not "the later one wins", which was the first wording and was wrong: `resolve` patches
-        // the first entry with `withoutAction(entry)`, so the later entry's `action` is dropped
-        // and the first one's survives. Measured, and now pinned by a test — a message that
-        // overstates what happens is the thing this ticket exists to stop (review of PR 534).
+        // It predicts nothing about which entry's fields survive, because that is not a
+        // property of the duplicate — it depends on how many layers the stack has. With one
+        // contributed layer the pair reaches `resolve`, which patches the first with
+        // `withoutAction(entry)`, so the **first** entry's `action` survives; with two or more,
+        // `mergeObjects` has already merged the array by `id` and collapsed the pair to the
+        // later row, so the **later** `action` does. Two review rounds on PR 534 each caught a
+        // wording that stated one of those as though it were the rule. Both outcomes are pinned
+        // by tests in `app-extensions.service.spec.ts`; the message says what to do instead.
         reason:
           `${at} repeats the id "${entry.id}" already used in this slot, so the two are merged ` +
-          'into one — the later entry\'s fields win, except "action", which stays as the first ' +
-          'entry set it',
+          'into one and which fields survive depends on the other layers — give each entry its ' +
+          'own id',
       });
     }
     ids.add(entry.id);

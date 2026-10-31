@@ -338,11 +338,13 @@ anything. **The one case that is reported is two entries with the same `id` insi
 a single layer** — there is no override to express there, because you would have edited the row, so
 it is a copy-paste duplicate.
 
-The pair is still merged exactly as before, and the report says how: the later entry's fields win,
-**except `action`, which stays as the first entry set it**. That asymmetry is not about duplicates —
-it is the §1 rule that a manifest may not rebind an `action` onto an id that already has one,
-applied here too. So two rows at one address with different `action`s give you the second row's
-label and the first row's behaviour, which is worth being told.
+The pair is still merged exactly as before, and the report deliberately **does not say which of the
+two survives** — because that is not a property of the duplicate. With one contributed layer the
+pair reaches the registry intact and the §1 rule about rebinding an `action` applies, so you get the
+second row's `label` and the **first** row's `action`; with two or more layers the `$references`
+merge has already collapsed the pair by `id` before the registry sees it, so you get the second
+row's `action` too. Either way one row is gone, so the fix is the same: **give each entry its own
+`id`.**
 
 Entries dropped for an unreachable `path` are reported the same way, on
 `invalidRoutes()` — see §11.

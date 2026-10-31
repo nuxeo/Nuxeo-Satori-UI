@@ -321,10 +321,9 @@ describe('refused slot entries', () => {
     expect(refused[0].id).toBe('acme.nav.contracts');
     expect(refused[0].reason).toContain('entry 2 repeats the id "acme.nav.contracts"');
     expect(refused[0].reason).toContain('merged into one');
-    // The message's exact claim, which `app-extensions.service.spec.ts` pins against what
-    // `resolve` really does. It said "the later one wins" until review of PR 534 pointed out
-    // that `withoutAction` keeps the *first* entry's action.
-    expect(refused[0].reason).toContain('except "action", which stays as the first entry set it');
+    // It names no winner, because there isn't one to name: which fields survive depends on how
+    // many layers the stack has. `app-extensions.service.spec.ts` pins both outcomes.
+    expect(refused[0].reason).toContain('depends on the other layers');
     // Reported, not dropped. Both survive the read exactly as before; the merge collapses them.
     const navbar = (config.slots?.['navbar'] ?? []) as readonly LabelledEntry[];
     expect(navbar.map((entry) => entry.label)).toEqual(['Contracts', 'Agreements']);
