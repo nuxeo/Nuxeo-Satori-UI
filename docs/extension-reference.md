@@ -428,18 +428,24 @@ the same, and the difference is how much you lose:
 The two `$references` rows say nothing, because a name that was never read is a name nothing can go
 looking for.
 
-The two `$layers` rows surface on `missingLayers()` (§12), but **only for a name this
-contribution's own `$references` actually resolves**. So `"$layers": "x"` reports every name you
-reference and do not ignore, and one bad body reports just that one. Three cases stay silent, and
-all three are the same rule — nothing ever looked the name up:
+The two `$layers` rows are about **a name that will not resolve**, and they surface on
+`missingLayers()` (§12) — but only for a name this contribution's own `$references` actually
+resolves. So `"$layers": "x"` reports every name you reference and do not ignore, and one bad body
+reports just that one. Three lookups never happen, so three stay silent:
 
-- **a body you never reference.** A `$layers` entry is only read when something references it.
 - **a name you reference _and_ also list in `$ignoreReferenceList`.** Ignored names are dropped
-  before the lookup, so a malformed body behind one produces no diagnostic. That is consistent
-  with what `$ignoreReferenceList` is for — the layer is not meant to apply — but it does mean
-  ignoring a name hides a mistake in its body.
+  before the lookup.
 - **a name reached only by a _nested_ `$references`**, inside a layer you referenced. References
   resolve one level deep (§12), so the inner list is metadata and is skipped.
+- **a body nothing references at all.** There is no lookup to fail.
+
+**None of that means ignoring a layer silences it.** Resolving a layer _name_ and reading a
+layer's _configuration_ are different passes, and only the first depends on references. Every
+object-shaped `$layers` body is **read** whether or not it is referenced or ignored — so a
+malformed `slots` or `overrides` _inside_ one is reported exactly as the tables above describe,
+sourced `$layers.<name> of <parent>`. You hear about a typo in a layer you are not currently
+using, which is deliberate: §12 says the same, and the message names the layer rather than
+implying it took effect.
 
 These are about layer **resolution** rather than configuration, which is why `refusedSections()`
 covers only `slots` and `overrides`.
