@@ -165,22 +165,22 @@ describe('AppExtensionsService refused slot entries', () => {
   });
 
   /**
-   * The duplicate-`id` outcome, which NXSAT-760 made statable.
+   * The duplicate-`id` outcome, where **both rows set every field**.
    *
-   * Four review rounds on PR 534 went at describing this, each wording falsified by a case nobody
-   * had tested — "the later one wins"; "except `action`, which stays as the first entry set it";
-   * a rule keyed on the number of contributions; a rule keyed on whether any merge of the slot's
-   * array ran. The outcome was five-way and had to be documented as **unspecified**.
+   * Five review rounds have now falsified five wordings of this — "the later one wins"; "except
+   * `action`, which stays as the first entry set it"; a rule keyed on the number of
+   * contributions; one keyed on whether any merge of the slot's array ran; and, after NXSAT-760,
+   * "the later entry wins", which the partial-row cases below refute.
    *
-   * The cause was `withoutAction` firing on manifest-owned patches as well as packaged ones, so
-   * which row's `action` survived depended on whether that line happened to run. Narrowed to
-   * packaged ids, every stack below gives the **same** answer, and the contract is one sentence
-   * plus one carve-out: *the later entry's fields win; on a packaged `id` the packaged `action`
-   * is kept.*
+   * NXSAT-760 removed **one** of two sources of divergence: `withoutAction` used to fire on
+   * manifest-owned patches as well as packaged ones, so which row's `action` survived turned on
+   * whether that line happened to run. With it narrowed, the five stacks here agree — but only
+   * because every row sets every field. The second source remains, and the partial-row cases
+   * below are where it shows: `resolve` patches the surviving row while `mergeObjects` replaces
+   * it, so an omitted field is inherited by one path and lost by the other.
    *
-   * The four stacks are kept — not because the answer differs between them any more, but because
-   * that invariance is the claim. They were five separate behaviours; a regression would make
-   * them so again.
+   * So the stacks below are the **fully-specified** case, and their agreement is the claim. They
+   * were five separate behaviours before; a regression would make them so again.
    */
   const duplicateNavbar = {
     navbar: [
@@ -347,18 +347,87 @@ describe('AppExtensionsService refused slot entries', () => {
   });
 
   /**
-   * The message's claim, asserted against the entry `resolve` actually returns — in one test, so
-   * the two cannot drift apart. That coupling is the lesson of PR 534, where the message and the
-   * behaviour lived in different files and disagreed four times running.
+   * The **partial** duplicate, which is why the message still names no winner.
+   *
+   * Review of PR 537. NXSAT-760 removed one source of divergence, but there are two collapse
+   * paths and they disagree: `resolve` **patches** the surviving row, so a field the later entry
+   * omits is inherited; `mergeObjects` **replaces** a within-array duplicate wholesale, so it is
+   * not. Which runs depends on whether another layer also set this slot — and
+   * `extension-merge.ts` is a pinned reproduction of ACA's merge, not ours to align.
+   *
+   * Both halves asserted, because the divergence is the claim. A single assertion here would
+   * have let the next person believe one of them was the rule — which is the mistake this block
+   * has now recorded five times.
    */
-  it('reports the duplicate and says which row wins, matching what resolve returns', () => {
-    manifest.set({ extensionLayers: [duplicateLayer] });
-    const service = boot();
-    const reason = service.refusedSlotEntries()[0].reason;
+  const partialPair = {
+    navbar: [
+      { id: 'acme.navbar.x', label: 'A', action: 'acme.actions.first' },
+      // Sets no `action`. Whether the first row's survives is what differs.
+      { id: 'acme.navbar.x', label: 'B' },
+    ],
+  };
 
-    expect(reason).toContain('repeats the id "acme.navbar.x"');
-    expect(reason).toContain('the later entry wins');
-    expect(resolvedNavbar(service)).toEqual(laterRow);
+  it('inherits an omitted field when the registry is what collapses the pair', () => {
+    manifest.set({ extensionLayers: [{ $name: 'acme', slots: partialPair }] });
+
+    expect(resolvedNavbar(boot())).toEqual([
+      { id: 'acme.navbar.x', label: 'B', action: 'acme.actions.first' },
+    ]);
+  });
+
+  it('loses an omitted field when another layer touching the slot collapses it first', () => {
+    manifest.set({
+      extensionLayers: [
+        { $name: 'acme', slots: partialPair },
+        { $name: 'regional', slots: { navbar: [] } },
+      ],
+    });
+
+    // No `action` at all — the earlier row was replaced, not patched.
+    expect(resolvedNavbar(boot())).toEqual([{ id: 'acme.navbar.x', label: 'B' }]);
+  });
+
+  /**
+   * The message, asserted against the two cases that refute every winner-naming wording: a
+   * partial pair and a packaged id. Kept in one test with the resolved rows so the claim and the
+   * behaviour cannot drift apart — the lesson of PR 534, where they lived in different files and
+   * disagreed four times running.
+   */
+  it('reports the duplicate without naming a winner, in the cases that have none', () => {
+    const service = TestBed.inject(AppExtensionsService);
+    service.register(EXTENSION_SLOTS.navbar, [
+      { id: 'app.navbar.trash', label: 'Trash', action: 'app.actions.packaged' },
+    ]);
+    manifest.set({
+      extensionLayers: [
+        {
+          $name: 'acme',
+          slots: {
+            navbar: [
+              ...partialPair.navbar,
+              { id: 'app.navbar.trash', label: 'First', action: 'acme.first' },
+              { id: 'app.navbar.trash', label: 'Second', action: 'acme.second' },
+            ],
+          },
+        },
+      ],
+    });
+    TestBed.tick();
+
+    const reasons = service.refusedSlotEntries().map((entry) => entry.reason);
+    expect(reasons).toHaveLength(2);
+    for (const reason of reasons) {
+      expect(reason).toContain('only one of the two rows survives');
+      // Every wording the review loop falsified.
+      expect(reason).not.toContain('the later one wins');
+      expect(reason).not.toContain('the later entry wins');
+      expect(reason).not.toContain('action');
+    }
+    // And neither duplicate's `action` reached the packaged row, so "later wins" would be false.
+    expect(resolvedNavbar(service)).toEqual([
+      { id: 'app.navbar.trash', label: 'Second', action: 'app.actions.packaged' },
+      { id: 'acme.navbar.x', label: 'B', action: 'acme.actions.first' },
+    ]);
   });
 
   it('says nothing when there is no manifest at all', () => {

@@ -388,22 +388,25 @@ function readSlotEntries(
         slot,
         id: entry.id,
         source,
-        // It can say which row wins, since NXSAT-760. Four review rounds on PR 534 each
-        // falsified an attempt to state that — "the later one wins"; "except `action`, which
-        // stays as the first entry set it"; a rule keyed on the number of contributions; one
-        // keyed on whether any merge of the slot's array ran — and the outcome had to be
-        // documented as unspecified. All four were wrong for the same reason: `withoutAction`
-        // fired on manifest-owned patches as well as packaged ones, so which row's `action`
-        // survived turned on whether that line happened to run. Narrowed to packaged ids, every
-        // layer stack gives the same answer, pinned by the five stacks in
-        // `app-extensions.service.spec.ts`.
+        // It names **no** winner, and five review rounds have now established that it must not.
+        // The wordings tried and falsified: "the later one wins"; "except `action`, which stays
+        // as the first entry set it"; a rule keyed on the number of contributions; one keyed on
+        // whether any merge of the slot's array ran; and — after NXSAT-760 removed one source of
+        // divergence — "the later entry wins", which a *partial* duplicate refutes.
         //
-        // The packaged carve-out is deliberately not mentioned: a customer reading this wrote the
-        // duplicate under an id they own, and `docs/extension-reference.md` §2a covers the other
-        // case. The fix is the same either way.
+        // There are **two** collapse paths with different semantics, and only one of them was
+        // NXSAT-760's to change. `resolve` **patches** the surviving row, so a field the later
+        // entry does not set is inherited from the earlier one; `mergeObjects` **replaces** a
+        // within-array duplicate wholesale, so it is not. Which one runs depends on whether
+        // another layer also set this slot. `extension-merge.ts` is a pinned reproduction of
+        // ACA's merge and is not ours to align.
+        //
+        // So this states only what holds in every measured case — exactly one row survives — and
+        // what to do. `docs/extension-reference.md` §2a names both mechanisms for anyone who
+        // needs to reason about a specific stack.
         reason:
-          `${at} repeats the id "${entry.id}" already used in this slot, so the two are merged ` +
-          'into one and the later entry wins — give each entry its own id',
+          `${at} repeats the id "${entry.id}" already used in this slot, so only one of the two ` +
+          'rows survives — give each entry its own id',
       });
     }
     ids.add(entry.id);

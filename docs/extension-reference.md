@@ -364,25 +364,29 @@ anything. **The one case that is reported is two entries with the same `id` insi
 a single layer** — there is no override to express there, because you would have edited the row, so
 it is a copy-paste duplicate.
 
-The pair is still merged into one, and the report says which of the two rows wins:
+The pair is merged into one row, and **exactly one row survives**. Which of the two each field
+comes from is **not specified**, and a manifest should not depend on it. There are two collapse
+paths and they differ:
 
-> **The later entry's fields win. On a packaged `id` the packaged `action` is kept.**
+| what collapses the pair                                        | how                                                                                                |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| the registry, when no other layer set this slot                | **patches** the surviving row, so a field your later entry omits is inherited from the earlier one |
+| the `$references` merge, when another layer also set this slot | **replaces** the earlier row wholesale, so an omitted field is simply gone                         |
 
-That is the whole rule, and it holds whatever your layer stack looks like. The `action` carve-out is
-not about duplicates — it is the §1 rule that a manifest may not rebind a packaged action, which
-applies to any patch onto one of our descriptors. On an `id` you own, both rows are yours and the
-later one simply wins, `action` included.
+So two rows that each set every field give you the later row either way — but if your first row sets
+`action` and your second does not, whether that `action` survives depends on what the rest of your
+manifest happens to touch. On a **packaged** `id` the packaged `action` is kept regardless, per §1.
 
-The fix is the same either way, because one of your two rows is gone: **give each entry its own
+The fix is the same in every case, because one of your two rows is gone: **give each entry its own
 `id`.** If you meant to change an entry you already declared, edit that entry; to override one of
 ours, use `overrides` (§2) or declare an `id` of your own.
 
-> Until NXSAT-760 this was **unspecified**, and for a good reason: `action` was withheld from
-> _every_ patch, including one manifest row patching another, so which row won depended on whether
-> an earlier array merge had already collapsed the pair. The outcome differed across five layer
-> stacks and four attempts to write it down were each falsified. Narrowing the carve-out to packaged
-> `id`s — where its rationale actually lies — made all five agree. The five stacks are still pinned
-> in `app-extensions.service.spec.ts`, now asserting that they no longer differ.
+> Five review rounds across PRs #534 and #537 each falsified a different attempt to state this as a
+> rule. NXSAT-760 removed one source of divergence — `action` used to be withheld from manifest-owned
+> patches too, so which row won turned on whether that line ran — but the two collapse paths above
+> remain, and `extension-merge.ts` is a pinned reproduction of ACA's merge, not ours to align. The
+> stacks are pinned as tests in `app-extensions.service.spec.ts`, including the partial-row cases
+> that show where they still differ.
 
 Entries dropped for an unreachable `path` are reported the same way, on
 `invalidRoutes()` — see §11.
