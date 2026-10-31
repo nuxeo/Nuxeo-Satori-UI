@@ -67,6 +67,9 @@ export class App {
   /** Same, for a slot or slot entry the manifest read refused (NXSAT-755). */
   protected readonly refusedSlotEntries = this.extensions.refusedSlotEntries;
 
+  /** Same, for a per-id `overrides` entry the read refused (NXSAT-759). */
+  protected readonly refusedOverrides = this.extensions.refusedOverrides;
+
   /** Which half of the configuration came from where — worth seeing while demoing. */
   protected readonly manifestSource = computed(() => this.config.diagnostics().manifestSource);
 

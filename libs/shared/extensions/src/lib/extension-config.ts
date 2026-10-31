@@ -71,10 +71,60 @@ export interface RefusedExtensionEntry {
   readonly source: string;
 }
 
+/**
+ * A per-id `overrides` entry the read refused, and why.
+ *
+ * ## Why this is not a {@link RefusedExtensionEntry}
+ *
+ * The two refusals are the same kind of news and travel the same two channels, so reusing the
+ * type was the first thing tried. It does not fit, in both directions:
+ *
+ * - `RefusedExtensionEntry.slot` is **required**, and an override has no slot — `overrides` is
+ *   keyed by descriptor id precisely so that a slot invented after Beta ships needs no schema
+ *   change (`ExtensionOverride`). Widening it to `ExtensionSlotId | null` would put a field on
+ *   every slot refusal that is sometimes a lie, and make the template's "Manifest slot {{slot}}"
+ *   render `null`;
+ * - `id` is the mirror image. It is nullable there, because an entry refused for having no
+ *   usable `id` has none to report. Here it is the **object key**, so it is always known and
+ *   always the thing to point at.
+ *
+ * A type whose only two shared fields disagree on nullability is two types. Reporting this on a
+ * signal of its own also keeps `refusedSlotEntries()` exactly as published — §2a of
+ * `docs/extension-reference.md` is a customer contract — which makes the whole change additive
+ * (NXSAT-759).
+ */
+export interface RefusedExtensionOverride {
+  /** The descriptor id it was filed under, which is how an override is addressed at all. */
+  readonly id: string;
+  /** Human-readable cause, quoting what was found and what became of the override. */
+  readonly reason: string;
+  /** Which contribution wrote it, named as {@link RefusedExtensionEntry.source} explains. */
+  readonly source: string;
+}
+
 /** {@link resolveExtensionLayers}'s result: a {@link ResolvedExtensionConfig} that also reports. */
 export interface ResolvedExtensionLayers extends ResolvedExtensionConfig {
   /** Slot entries refused while reading the layers — see {@link RefusedExtensionEntry}. */
   readonly refused: readonly RefusedExtensionEntry[];
+  /** Per-id overrides refused while reading them — see {@link RefusedExtensionOverride}. */
+  readonly refusedOverrides: readonly RefusedExtensionOverride[];
+}
+
+/**
+ * The two refusal lists a read fills, carried together so the walk takes one parameter.
+ *
+ * Module-local on purpose: it is how the read accumulates, not something a caller holds.
+ * {@link ResolvedExtensionLayers} is the published shape, and the two differ — `entries` is
+ * `refused` there, named for what a consumer reads rather than for what fills it.
+ */
+interface ExtensionRefusals {
+  readonly entries: RefusedExtensionEntry[];
+  readonly overrides: RefusedExtensionOverride[];
+}
+
+/** A fresh pair of empty lists, so the two call sites cannot disagree on the shape. */
+function noRefusals(): ExtensionRefusals {
+  return { entries: [], overrides: [] };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -146,15 +196,16 @@ export function resolveExtensionConfig(
  * reach into another's named layers.
  */
 export function resolveExtensionLayers(layers: readonly unknown[]): ResolvedExtensionLayers {
-  const refused: RefusedExtensionEntry[] = [];
+  const refusals = noRefusals();
   const resolved = layers.map((layer, index) =>
-    resolveExtensionConfig(readConfig(layer, layerSource(layer, index), refused)),
+    resolveExtensionConfig(readConfig(layer, layerSource(layer, index), refusals)),
   );
   return {
     config: mergeExtensionConfigs(...resolved.map((entry) => entry.config)),
     applied: resolved.flatMap((entry) => entry.applied),
     missing: resolved.flatMap((entry) => entry.missing),
-    refused,
+    refused: refusals.entries,
+    refusedOverrides: refusals.overrides,
   };
 }
 
@@ -166,15 +217,16 @@ export function resolveExtensionLayers(layers: readonly unknown[]): ResolvedExte
  * screen. Slot entries without a string `id` are dropped, because an entry with
  * no id cannot be addressed, overridden or reasoned about.
  *
- * Tolerant, but no longer silent. Every drop is recorded as a
- * {@link RefusedExtensionEntry} and reaches the customer through
- * `AppExtensionsService.refusedSlotEntries()` and the console. This function discards those
- * records, keeping the signature callers that only want the configuration already have;
- * {@link resolveExtensionLayers} is the one that keeps them, because it alone knows a layer's
- * position in contribution order and so can say where a refused entry was written.
+ * Tolerant, but no longer silent. Every drop is recorded — as a {@link RefusedExtensionEntry}
+ * or a {@link RefusedExtensionOverride} — and reaches the customer through
+ * `AppExtensionsService.refusedSlotEntries()`, `refusedOverrides()` and the console. This
+ * function discards those records, keeping the signature callers that only want the
+ * configuration already have; {@link resolveExtensionLayers} is the one that keeps them,
+ * because it alone knows a layer's position in contribution order and so can say where a
+ * refused entry was written.
  */
 export function readExtensionConfig(raw: unknown): ExtensionConfig {
-  return readConfig(raw, layerSource(raw, 0), []);
+  return readConfig(raw, layerSource(raw, 0), noRefusals());
 }
 
 /**
@@ -225,11 +277,7 @@ function describeShape(value: unknown): string {
  * testing a proxy for the thing in its own name, and it goes quietly wrong the first time
  * this filter changes and it does not.
  */
-function readConfig(
-  raw: unknown,
-  source: string,
-  refused: RefusedExtensionEntry[],
-): ExtensionConfig {
+function readConfig(raw: unknown, source: string, refusals: ExtensionRefusals): ExtensionConfig {
   if (!isRecord(raw)) return {};
 
   const config: Record<string, unknown> = {};
@@ -242,17 +290,19 @@ function readConfig(
     if (raw[key] !== undefined) config[key] = readLayerNames(raw[key]);
   }
   if (raw['$layers'] !== undefined) {
-    config['$layers'] = readNamedLayers(raw['$layers'], source, refused);
+    config['$layers'] = readNamedLayers(raw['$layers'], source, refusals);
   }
 
+  // Each subtree is handed the one list it fills, not the pair: only `readConfig` and the walk
+  // into `$layers` need both, and a leaf that cannot reach the other list cannot file into it.
   const slots = raw['slots'];
   if (isRecord(slots)) {
-    config['slots'] = readSlots(slots, source, refused);
+    config['slots'] = readSlots(slots, source, refusals.entries);
   }
 
   const overrides = raw['overrides'];
   if (isRecord(overrides)) {
-    config['overrides'] = readOverrides(overrides);
+    config['overrides'] = readOverrides(overrides, source, refusals.overrides);
   }
 
   return config as ExtensionConfig;
@@ -269,7 +319,7 @@ function readLayerNames(names: unknown): string[] {
 function readNamedLayers(
   layers: unknown,
   source: string,
-  refused: RefusedExtensionEntry[],
+  refusals: ExtensionRefusals,
 ): Record<string, ExtensionConfig> {
   if (!isRecord(layers)) return {};
   return Object.fromEntries(
@@ -277,26 +327,70 @@ function readNamedLayers(
       .filter(([, layer]) => isRecord(layer))
       .map(([name, layer]) => [
         name,
-        readConfig(layer, sublayerSource(source, name, layer), refused),
+        readConfig(layer, sublayerSource(source, name, layer), refusals),
       ]),
   );
 }
 
 /**
- * Per-id overrides, dropping the ones that are not objects and the `__proto__` key.
+ * Per-id overrides, with a refusal recorded for each one dropped.
  *
- * Not reported, deliberately, and this is a gap rather than a decision: a refused override is as
- * silent as a refused slot entry was before NXSAT-755, but {@link RefusedExtensionEntry} is keyed
- * by slot and an override is keyed by id, so saying so needs a shape of its own. Noted on the
- * ticket as its own follow-up rather than half-done here.
+ * The filter is the one that was here before and both halves of it are load-bearing. A
+ * non-object cannot be an `ExtensionOverride`: `ExtensionSlotRegistry.applyOverride` reads
+ * `override.order`, `.label`, `.rule` and `.visible` off it, and `visible !== false` on a
+ * boolean `true` would silently mean "keep", so `{ "app.navbar.trash": true }` would read as a
+ * no-op override rather than as the mistake it is. `__proto__` is refused because assigning it
+ * would replace the prototype of the object being built — the thing `mergeObjects` refuses too.
+ * Neither is removed; they are made to speak (NXSAT-759).
+ *
+ * ## What is still silent here, and why that is one follow-up rather than this one
+ *
+ * Three adjacent cases keep an override that has no effect, and none of them is a *refusal*:
+ *
+ * - an `overrides` map that is not an object at all, which loses every override in the layer.
+ *   {@link RefusedExtensionOverride} has a non-null `id` by design and a whole-map refusal has
+ *   none to give it. `slots` has the identical unreported case, so the two keys stay
+ *   consistent and go together;
+ * - an unknown key inside an override (`{ "visibl": false }`);
+ * - an override for an id nothing ever registers (`"app.navbr.trash"`).
+ *
+ * The last two are deliberately **not** reported, on the §1 tolerance rule: overrides are read
+ * by an `APP_INITIALIZER` before any descriptor registers, and a customer may legitimately
+ * override an id a library registers later or a key a newer release adds, so a warning would
+ * fire on manifests that are correct for the build they were written against. §2a of
+ * `docs/extension-reference.md` states all three to the customer rather than leaving them to
+ * be discovered.
  */
-function readOverrides(overrides: Record<string, unknown>): Record<string, ExtensionOverride> {
+function readOverrides(
+  overrides: Record<string, unknown>,
+  source: string,
+  refused: RefusedExtensionOverride[],
+): Record<string, ExtensionOverride> {
   const read: Record<string, ExtensionOverride> = {};
+
   for (const [id, override] of Object.entries(overrides)) {
-    if (isRecord(override) && id !== '__proto__') {
-      read[id] = override as ExtensionOverride;
+    // Checked before the shape, so a `"__proto__": true` is reported as the key problem it is
+    // rather than as a malformed value that happens to be unusable anyway. Same order as
+    // {@link readSlots}, where a `__proto__` slot that is also not a list reads the same way.
+    if (id === '__proto__') {
+      refused.push({
+        id,
+        source,
+        reason: 'an override may not be keyed "__proto__", so it is dropped',
+      });
+      continue;
     }
+    if (!isRecord(override)) {
+      refused.push({
+        id,
+        source,
+        reason: `an override must be an object, not ${describeShape(override)}, so it is dropped`,
+      });
+      continue;
+    }
+    read[id] = override as ExtensionOverride;
   }
+
   return read;
 }
 

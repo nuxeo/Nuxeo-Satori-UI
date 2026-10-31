@@ -60,6 +60,16 @@
     }
 
     <!--
+      Also tracked by `$index`: two contributions can refuse the same descriptor id, so the id
+      is not unique across the list.
+    -->
+    @for (refusal of refusedOverrides(); track $index) {
+      <output class="shell__warning">
+        Manifest override {{ refusal.id }} in {{ refusal.source }}: {{ refusal.reason }}
+      </output>
+    }
+
+    <!--
       No route guard, deliberately. Guarding is a fork's decision, and gating the
       whole outlet here means no page has to handle "signed out" itself.
     -->

@@ -27,6 +27,7 @@ export {
   type ExtensionConfig,
   type ExtensionLayerResolver,
   type RefusedExtensionEntry,
+  type RefusedExtensionOverride,
   type ResolvedExtensionConfig,
 } from './lib/extension-config';
 export { DOCUMENT_RULE_EVALUATORS } from './lib/document-rules';

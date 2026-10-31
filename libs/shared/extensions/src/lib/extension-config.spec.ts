@@ -437,3 +437,189 @@ describe('refused slot entries', () => {
     expect(resolveExtensionLayers([null, 'a string', 7]).refused).toEqual([]);
   });
 });
+
+/**
+ * NXSAT-759. The same silence NXSAT-755 removed from `slots`, one key over.
+ *
+ * Reported on its own list rather than through `RefusedExtensionEntry`, because that type's
+ * `slot` is required and an override belongs to no slot — `readOverrides` in
+ * `extension-config.ts` argues that in full. So these assert `refusedOverrides`, and the
+ * `refused` list is asserted to stay empty, which is the half that proves the two channels did
+ * not get mixed.
+ */
+describe('refused overrides', () => {
+  it('reports an override whose value is not an object, naming the id and the shape', () => {
+    const { refusedOverrides, refused, config } = resolveExtensionLayers([
+      {
+        $name: 'acme',
+        overrides: { 'app.navbar.trash': true, 'app.navbar.tasks': { visible: false } },
+      },
+    ]);
+
+    expect(refusedOverrides).toEqual([
+      {
+        id: 'app.navbar.trash',
+        source: 'acme',
+        reason: 'an override must be an object, not a boolean, so it is dropped',
+      },
+    ]);
+    // Not a slot refusal, and nothing was invented on the other channel to carry it.
+    expect(refused).toEqual([]);
+    // The behaviour itself is unchanged: the bad override is still dropped, the good one kept.
+    expect(config.overrides?.['app.navbar.trash']).toBeUndefined();
+    expect(config.overrides?.['app.navbar.tasks']).toEqual({ visible: false });
+  });
+
+  it('names each shape a customer can actually write, so the message says what to look for', () => {
+    const { refusedOverrides } = resolveExtensionLayers([
+      {
+        $name: 'acme',
+        overrides: {
+          'app.navbar.a': 'hidden',
+          'app.navbar.b': 42,
+          'app.navbar.c': null,
+          'app.navbar.d': [{ visible: false }],
+        },
+      },
+    ]);
+
+    expect(refusedOverrides.map((entry) => entry.reason)).toEqual([
+      'an override must be an object, not a string, so it is dropped',
+      'an override must be an object, not a number, so it is dropped',
+      'an override must be an object, not null, so it is dropped',
+      'an override must be an object, not a list, so it is dropped',
+    ]);
+    expect(refusedOverrides.map((entry) => entry.id)).toEqual([
+      'app.navbar.a',
+      'app.navbar.b',
+      'app.navbar.c',
+      'app.navbar.d',
+    ]);
+  });
+
+  it('reports an override keyed __proto__ rather than dropping it in silence', () => {
+    const { refusedOverrides, config } = resolveExtensionLayers([
+      JSON.parse('{"$name": "acme", "overrides": {"__proto__": {"visible": false}}}'),
+    ]);
+
+    expect(refusedOverrides).toEqual([
+      {
+        id: '__proto__',
+        source: 'acme',
+        reason: 'an override may not be keyed "__proto__", so it is dropped',
+      },
+    ]);
+    // Unchanged: still dropped, and the object it built still has `Object.prototype`.
+    expect(Object.getPrototypeOf(config.overrides)).toBe(Object.prototype);
+    expect(config.overrides).toEqual({});
+  });
+
+  /**
+   * `__proto__` is checked first, so a `"__proto__": true` is reported as the key problem it is.
+   * Both guards refuse it either way — only the reason differs — which is the order `readSlots`
+   * already uses for a `__proto__` slot that is also not a list.
+   */
+  it('names __proto__ as the cause when the value is malformed too', () => {
+    const { refusedOverrides } = resolveExtensionLayers([
+      JSON.parse('{"$name": "acme", "overrides": {"__proto__": true}}'),
+    ]);
+
+    expect(refusedOverrides).toHaveLength(1);
+    expect(refusedOverrides[0].reason).toContain('__proto__');
+  });
+
+  it('names the contribution the way a slot refusal does — $name, $layers, then position', () => {
+    const { refusedOverrides } = resolveExtensionLayers([
+      { $name: 'acme-customisation', overrides: { 'app.navbar.a': true } },
+      { overrides: { 'app.navbar.b': true } },
+      {
+        $name: 'brand-stack',
+        $references: ['brand'],
+        $layers: { brand: { overrides: { 'app.navbar.c': true } } },
+      },
+    ]);
+
+    expect(refusedOverrides.map(({ id, source }) => ({ id, source }))).toEqual([
+      { id: 'app.navbar.a', source: 'acme-customisation' },
+      { id: 'app.navbar.b', source: 'contribution 2' },
+      { id: 'app.navbar.c', source: '$layers.brand of brand-stack' },
+    ]);
+  });
+
+  /**
+   * Pins what §12 of `docs/extension-reference.md` promises for this channel too. The read walks
+   * `$layers` before `$ignoreReferenceList` is consulted, so an ignored layer's bad override is
+   * still reported — fine only because the message names the layer rather than implying it
+   * applied.
+   */
+  it('still reports a refused override in a layer dropped by $ignoreReferenceList', () => {
+    const { refusedOverrides, applied, config } = resolveExtensionLayers([
+      {
+        $name: 'acme-customisation',
+        $references: ['brand'],
+        $ignoreReferenceList: ['brand'],
+        $layers: { brand: { overrides: { 'app.navbar.trash': true } } },
+      },
+    ]);
+
+    expect(applied).toEqual([]);
+    expect(refusedOverrides).toHaveLength(1);
+    expect(refusedOverrides[0].source).toBe('$layers.brand of acme-customisation');
+    // And the ignored layer really did not apply, so the message is about a layer with no effect.
+    expect(config.overrides).toBeUndefined();
+  });
+
+  /**
+   * The control. It asserts silence **after** exercising every override path that must stay
+   * silent, which is the ordering NXSAT-755's own control got wrong first time: a manifest that
+   * overrides a packaged id, two layers overriding the same id, and a layer whose `overrides` is
+   * an empty object. Verified by making `readOverrides` report every override and watching this
+   * go red.
+   */
+  it('refuses nothing for a valid manifest that overrides by id across layers', () => {
+    const { refusedOverrides, refused, config } = resolveExtensionLayers([
+      {
+        $name: 'acme-customisation',
+        $references: ['brand'],
+        $layers: { brand: { overrides: { 'app.navbar.trash': { label: 'Bin' } } } },
+        overrides: { 'app.navbar.trash': { visible: false }, 'app.navbar.tasks': { order: 5 } },
+      },
+      { $name: 'regional', overrides: { 'app.navbar.trash': { label: 'Corbeille' } } },
+      { $name: 'empty', overrides: {} },
+    ]);
+
+    expect(refusedOverrides).toEqual([]);
+    expect(refused).toEqual([]);
+    // And the layering it was asserting silence about really did happen.
+    expect(config.overrides?.['app.navbar.trash']).toEqual({
+      visible: false,
+      label: 'Corbeille',
+    });
+    expect(config.overrides?.['app.navbar.tasks']).toEqual({ order: 5 });
+  });
+
+  it('refuses nothing when no contribution carries an overrides map', () => {
+    expect(resolveExtensionLayers([]).refusedOverrides).toEqual([]);
+    expect(resolveExtensionLayers([null, 'a string', 7]).refusedOverrides).toEqual([]);
+  });
+
+  /**
+   * A **stated limitation**, pinned so it is a known gap rather than a surprise.
+   *
+   * An `overrides` that is not an object at all loses the whole map, and that is still silent.
+   * It is not reported here because `RefusedExtensionOverride.id` is non-null by design — it is
+   * the whole argument for a shape of its own — and a whole-map refusal has no id to give it.
+   * `slots` has the identical unreported case (`"slots": "x"` loses every slot), so reporting
+   * one key and not the other would make the two inconsistent; they belong to one follow-up.
+   * §2a of `docs/extension-reference.md` says so to the customer.
+   */
+  it('says nothing yet when the whole overrides map is the wrong shape', () => {
+    const { refusedOverrides, refused, config } = resolveExtensionLayers([
+      { $name: 'acme', overrides: [{ id: 'app.navbar.trash', visible: false }] },
+    ]);
+
+    expect(refusedOverrides).toEqual([]);
+    expect(refused).toEqual([]);
+    expect(config.overrides).toBeUndefined();
+  });
+});

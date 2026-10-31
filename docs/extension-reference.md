@@ -327,14 +327,21 @@ Find an entry's `labelKey` in `PACKAGED_NAV_ITEMS`; they follow `nav.item.<slug>
 
 ## 2a. What is refused, and how you hear about it
 
-The manifest is read **tolerantly**: something malformed costs you that slot or that entry, never
-the application. What it must not cost you is the explanation. Every refusal below names the slot,
-the reason and the contribution it came from, in two places:
+The manifest is read **tolerantly**: something malformed costs you that slot, that entry or that
+override, never the application. What it must not cost you is the explanation. Every refusal below
+names what was refused, the reason and the contribution it came from, in two places:
 
-- **`AppExtensionsService.refusedSlotEntries()`** — a signal, alongside `missingLayers()` and
-  `invalidRoutes()`. The template application renders all three; a fork should too.
+- **a signal on `AppExtensionsService`** — `refusedSlotEntries()` for a slot or slot entry,
+  `refusedOverrides()` for a per-ID override, alongside `missingLayers()` and `invalidRoutes()`.
+  The template application renders all four; a fork should too.
 - **the browser console**, prefixed `[agentic-ui-extensions]`, **once per load**. This is where
   support looks, because the product application has no diagnostics page.
+
+Two signals rather than one because the two are keyed differently: a slot refusal names the slot
+it belongs to, and an override belongs to no slot — `overrides` is keyed by descriptor ID
+precisely so a slot added after Beta needs no schema change (§2).
+
+### In `slots`
 
 | What you wrote                                   | What happens                  | Reported as                                       |
 | ------------------------------------------------ | ----------------------------- | ------------------------------------------------- |
@@ -345,10 +352,39 @@ the reason and the contribution it came from, in two places:
 | an entry whose `id` is blank or whitespace       | that entry is dropped         | `entry 2 has a blank "id"`                        |
 | the same `id` twice **in one slot of one layer** | the two merge into one        | `entry 2 repeats the id "…"`                      |
 
+### In `overrides`
+
+| What you wrote                                     | What happens       | Reported as                                    |
+| -------------------------------------------------- | ------------------ | ---------------------------------------------- |
+| `"app.navbar.trash": true` instead of `{ … }`      | that override goes | `an override must be an object, not a boolean` |
+| `"app.navbar.trash": [ … ]`, or `"x"`, `3`, `null` | that override goes | `an override must be an object, not a list`    |
+| an override keyed `__proto__`                      | that override goes | `an override may not be keyed "__proto__"`     |
+
+The one most worth knowing is the first. `{ "overrides": { "app.navbar.trash": true } }` looks
+like it should hide the entry; it is not an override at all, and before this was reported it cost
+you nothing but silence. What you want is `{ "app.navbar.trash": { "visible": false } }` — the
+keys are in §2.
+
 The contribution is named by its `$name` when it declares one, by the `$layers` entry it sits in
 when that is where it was written, and by its position in contribution order otherwise
 (`contribution 2`). Writing `$name` on your layer is what makes the message say which file to
 open, which is most of why `$name` exists.
+
+### What is still silent, and why
+
+Three things leave an override with no effect and say nothing. They are listed here rather than
+left to be discovered:
+
+- **an `overrides` that is not an object at all** — `"overrides": [ … ]` loses every override in
+  that layer. Not yet reported: the refusal has no ID to name, and `slots` has the identical
+  unreported case (`"slots": "x"` loses every slot), so the two are one piece of work.
+- **an unknown key inside an override** — `{ "visibl": false }` is kept and ignored.
+- **an override for an ID nothing registers** — `"app.navbr.trash"` is kept and never matches.
+
+The last two are deliberate, on the §1 tolerance rule. Overrides are read before any descriptor
+registers, and you may legitimately override an ID a library registers later, or a key a newer
+release adds — so a warning would fire on manifests that are correct for the build they were
+written against. Check an ID against the tables in §3 onward.
 
 ### A repeated `id` across layers is **not** reported, and that is deliberate
 
@@ -1619,11 +1655,12 @@ from the `null` and `__proto__` items below, where ACA's merge threw or rewrote 
 - `$ignoreReferenceList` drops a layer even when it is referenced.
 - A layer that cannot be resolved is reported on `AppExtensionsService.missingLayers()`, not silently
   dropped, and the rest of the stack still applies.
-- A malformed slot or slot entry **inside** a layer is reported on
-  `AppExtensionsService.refusedSlotEntries()` and in the console — including in a layer you listed
-  in `$ignoreReferenceList`, which is read even though it does not apply, so the message names the
-  layer rather than implying it took effect. Patching an entry by `id` from a later layer is the
-  point of layering and is never reported. §2a has the whole list.
+- A malformed slot, slot entry or override **inside** a layer is reported on
+  `AppExtensionsService.refusedSlotEntries()` or `refusedOverrides()` and in the console —
+  including in a layer you listed in `$ignoreReferenceList`, which is read even though it does not
+  apply, so the message names the layer rather than implying it took effect. Patching an entry or
+  an override by `id` from a later layer is the point of layering and is never reported. §2a has
+  the whole list.
 
 ```json
 {
