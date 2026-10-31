@@ -365,19 +365,19 @@ a single layer** — there is no override to express there, because you would ha
 it is a copy-paste duplicate.
 
 The pair is still merged exactly as before, and the report deliberately **does not say which of the
-two survives** — because that is not a property of the duplicate. It turns on whether anything
-merged that slot's array before the registry saw it:
+two rows survives** — nor does this document. That outcome is not a property of the duplicate: it
+falls out of where your layers sit in the stack, which of them set the same slot and in what order,
+and whether the `id` is one of ours. It is **not specified**, and a manifest should not depend on it.
 
-- **nothing did** — the pair reaches the registry intact, where the §1 rule about rebinding an
-  `action` applies, so you get the second row's `label` and the **first** row's `action`;
-- **something did** — the array merge has already collapsed the pair by `id`, so there is nothing
-  left to patch and you get the second row's `action` too.
+What is certain is that one of your two rows is gone, so the fix is the same in every case: **give
+each entry its own `id`.** If you meant to change an entry you already declared, edit that entry; to
+override one of ours, use `overrides` (§2) or declare an `id` of your own.
 
-Either can happen whatever your manifest looks like: a second contribution that sets only a
-_different_ slot leaves the pair intact, while a single contribution's own `$references` can
-collapse it. Counting contributions or layers does not tell you which you have. What is certain is
-that one of the two rows is gone, so the fix is the same in every case: **give each entry its own
-`id`.**
+> The behaviour is pinned by tests in `app-extensions.service.spec.ts` rather than described here,
+> after four review rounds each falsified a different attempt to state it as a rule — including
+> "the later entry wins", and keying it on whether an array merge ran. If you need to know what a
+> specific stack does, read those cases: a sentence short enough for this document has been wrong
+> every time.
 
 Entries dropped for an unreachable `path` are reported the same way, on
 `invalidRoutes()` — see §11.

@@ -167,22 +167,20 @@ describe('AppExtensionsService refused slot entries', () => {
   /**
    * Why the duplicate message predicts **nothing** about which fields survive.
    *
-   * Three review rounds on PR 534 went at this, each catching a wording that stated one outcome
-   * as though it were the rule: "the later one wins", then "except `action`, which stays as the
-   * first entry set it", then an explanation keyed on the **number of contributions**. All three
-   * were overstatements, and the third is the instructive one — the discriminator is not how
-   * many contributions or layers there are. It is **whether anything merged that slot's array
-   * before the registry saw it**:
+   * **Four** review rounds on PR 534 went at this, each catching a wording that stated some
+   * outcome as though it were the rule: "the later one wins"; then "except `action`, which stays
+   * as the first entry set it"; then an explanation keyed on the number of contributions; then
+   * one keyed on whether any merge of that slot's array ran. Every formulation was a proxy for
+   * the thing it was trying to name, and each was falsified by a case nobody had tested.
    *
-   * - nothing did: the pair reaches `resolve`, which patches the first with
-   *   `withoutAction(entry)` — later `label`, **first** `action`;
-   * - something did: `mergeObjects` merged the array by `id` and already collapsed the pair to
-   *   the later row, so there is nothing left to patch — **later** `action`.
+   * The conclusion is not a fifth formulation. It is that **this is not describable in a
+   * sentence a customer could use**, and the message must therefore say only what is certain —
+   * one of the two rows is gone — and what to do: give each entry its own `id`.
    *
-   * And either can happen at any contribution count: a second contribution touching only a
-   * *different* slot leaves the pair intact, while one contribution's own `$references` can
-   * collapse it. All four combinations are asserted below, so the behaviour is pinned by test
-   * rather than predicted by prose, and the message is asserted to claim none of it.
+   * What the cases below are for is the opposite job: pinning the behaviour so a future change
+   * to it is visible, without any prose claiming a rule. Six of them, including the two the
+   * fourth round pointed out — merge order matters, and a packaged `id` keeps its own `action`
+   * whatever the manifest does.
    */
   const duplicateNavbar = {
     navbar: [
@@ -234,6 +232,45 @@ describe('AppExtensionsService refused slot entries', () => {
     });
 
     expect(resolvedNavbar(boot())).toEqual(laterAction);
+  });
+
+  it("keeps the first entry's action when the empty layer comes first, merge or no merge", () => {
+    // Round 4's first qualification, and why "a merge ran" was the wrong thing to describe: the
+    // merge runs either way, but reversing the order leaves both rows intact, because the pair is
+    // then the *later* layer's new entries rather than a patch over an existing row.
+    manifest.set({
+      extensionLayers: [{ $name: 'regional', slots: { navbar: [] } }, duplicateLayer],
+    });
+
+    expect(resolvedNavbar(boot())).toEqual(firstAction);
+  });
+
+  it("keeps a packaged id's own action whichever duplicate the manifest writes last", () => {
+    // Round 4's second qualification. `withoutAction` is withholding `action` from a patch onto a
+    // registered descriptor, which is the confused-deputy control working exactly as intended —
+    // so for a packaged id neither duplicate's action reaches the resolved entry.
+    const service = TestBed.inject(AppExtensionsService);
+    service.register(EXTENSION_SLOTS.navbar, [
+      { id: 'app.navbar.trash', label: 'Trash', action: 'app.actions.packaged' },
+    ]);
+    manifest.set({
+      extensionLayers: [
+        {
+          $name: 'acme',
+          slots: {
+            navbar: [
+              { id: 'app.navbar.trash', label: 'First', action: 'acme.actions.first' },
+              { id: 'app.navbar.trash', label: 'Second', action: 'acme.actions.second' },
+            ],
+          },
+        },
+      ],
+    });
+    TestBed.tick();
+
+    expect(resolvedNavbar(service)).toEqual([
+      { id: 'app.navbar.trash', label: 'Second', action: 'app.actions.packaged' },
+    ]);
   });
 
   it('reports the duplicate without predicting which fields survive', () => {

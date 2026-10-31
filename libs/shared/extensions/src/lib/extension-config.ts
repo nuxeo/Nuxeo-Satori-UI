@@ -237,68 +237,110 @@ function readConfig(
     if (key.startsWith('$')) config[key] = value;
   }
   // Resolution iterates these, so a fragment that gets their shape wrong loses them rather than
-  // throwing for every package.
+  // throwing for every package. Assigned after the loop above, which copies them verbatim.
   for (const key of ['$references', '$ignoreReferenceList']) {
-    const names = raw[key];
-    if (names === undefined) continue;
-    config[key] = Array.isArray(names)
-      ? names.filter((name): name is string => typeof name === 'string')
-      : [];
+    if (raw[key] !== undefined) config[key] = readLayerNames(raw[key]);
   }
-  const layers = raw['$layers'];
-  if (layers !== undefined) {
-    config['$layers'] = isRecord(layers)
-      ? Object.fromEntries(
-          Object.entries(layers)
-            .filter(([, layer]) => isRecord(layer))
-            .map(([name, layer]) => [
-              name,
-              readConfig(layer, sublayerSource(source, name, layer), refused),
-            ]),
-        )
-      : {};
+  if (raw['$layers'] !== undefined) {
+    config['$layers'] = readNamedLayers(raw['$layers'], source, refused);
   }
 
   const slots = raw['slots'];
   if (isRecord(slots)) {
-    const readSlots: Record<string, ExtensionElement[]> = {};
-    for (const [slotId, entries] of Object.entries(slots)) {
-      // Assigning it would replace the object's prototype, the thing `mergeObjects` refuses too.
-      if (slotId === '__proto__') {
-        refused.push({
-          slot: slotId,
-          id: null,
-          source,
-          reason: 'a slot may not be named "__proto__", so the whole slot is dropped',
-        });
-        continue;
-      }
-      if (!Array.isArray(entries)) {
-        refused.push({
-          slot: slotId,
-          id: null,
-          source,
-          reason: `a slot must be a list of entries, not ${describeShape(entries)}, so the whole slot is dropped`,
-        });
-        continue;
-      }
-      readSlots[slotId] = readSlotEntries(slotId, entries, source, refused);
-    }
-    config['slots'] = readSlots;
+    config['slots'] = readSlots(slots, source, refused);
   }
 
   const overrides = raw['overrides'];
   if (isRecord(overrides)) {
-    const readOverrides: Record<string, ExtensionOverride> = {};
-    for (const [id, override] of Object.entries(overrides)) {
-      if (isRecord(override) && id !== '__proto__') {
-        readOverrides[id] = override as ExtensionOverride;
-      }
-    }
-    config['overrides'] = readOverrides;
+    config['overrides'] = readOverrides(overrides);
   }
 
   return config as ExtensionConfig;
+}
+
+/** The layer names a `$references`-shaped value lists, or none when it is the wrong shape. */
+function readLayerNames(names: unknown): string[] {
+  return Array.isArray(names)
+    ? names.filter((name): name is string => typeof name === 'string')
+    : [];
+}
+
+/** A layer's `$layers` map, each body read on its own so a refusal names the layer it is in. */
+function readNamedLayers(
+  layers: unknown,
+  source: string,
+  refused: RefusedExtensionEntry[],
+): Record<string, ExtensionConfig> {
+  if (!isRecord(layers)) return {};
+  return Object.fromEntries(
+    Object.entries(layers)
+      .filter(([, layer]) => isRecord(layer))
+      .map(([name, layer]) => [
+        name,
+        readConfig(layer, sublayerSource(source, name, layer), refused),
+      ]),
+  );
+}
+
+/**
+ * Per-id overrides, dropping the ones that are not objects and the `__proto__` key.
+ *
+ * Not reported, deliberately, and this is a gap rather than a decision: a refused override is as
+ * silent as a refused slot entry was before NXSAT-755, but {@link RefusedExtensionEntry} is keyed
+ * by slot and an override is keyed by id, so saying so needs a shape of its own. Noted on the
+ * ticket as its own follow-up rather than half-done here.
+ */
+function readOverrides(overrides: Record<string, unknown>): Record<string, ExtensionOverride> {
+  const read: Record<string, ExtensionOverride> = {};
+  for (const [id, override] of Object.entries(overrides)) {
+    if (isRecord(override) && id !== '__proto__') {
+      read[id] = override as ExtensionOverride;
+    }
+  }
+  return read;
+}
+
+/**
+ * Every slot a layer contributes, with a refusal recorded for each one it loses whole.
+ *
+ * Its own function rather than a block inside {@link readConfig}: reporting added two branches to
+ * a reader that already walked five subtrees, taking its cognitive complexity to 28 against a
+ * limit of 15 (SonarCloud, PR 534). The slots subtree is also the only one of the five with a
+ * nested loop, so it is the one worth naming.
+ */
+function readSlots(
+  slots: Record<string, unknown>,
+  source: string,
+  refused: RefusedExtensionEntry[],
+): Record<string, ExtensionElement[]> {
+  const read: Record<string, ExtensionElement[]> = {};
+
+  for (const [slot, entries] of Object.entries(slots)) {
+    // Assigning it would replace the object's prototype, the thing `mergeObjects` refuses too.
+    if (slot === '__proto__') {
+      refused.push({
+        slot,
+        id: null,
+        source,
+        reason: 'a slot may not be named "__proto__", so the whole slot is dropped',
+      });
+      continue;
+    }
+    if (!Array.isArray(entries)) {
+      refused.push({
+        slot,
+        id: null,
+        source,
+        reason:
+          `a slot must be a list of entries, not ${describeShape(entries)}, ` +
+          'so the whole slot is dropped',
+      });
+      continue;
+    }
+    read[slot] = readSlotEntries(slot, entries, source, refused);
+  }
+
+  return read;
 }
 
 /**
@@ -347,18 +389,18 @@ function readSlotEntries(
         id: entry.id,
         source,
         // It predicts nothing about which entry's fields survive, because that is not a property
-        // of the duplicate. It turns on whether anything merged this slot's array before the
-        // registry saw it: if nothing did, the pair reaches `resolve`, which patches the first
-        // with `withoutAction(entry)`, so the **first** entry's `action` survives; if something
-        // did, `mergeObjects` has already collapsed the pair by `id` and there is nothing left
-        // to patch, so the **later** one does. Either can happen at any contribution count — a
-        // second contribution setting only a different slot leaves the pair intact, and one
-        // contribution's own `$references` can collapse it.
+        // of the duplicate: it falls out of where the layers sit, which of them set the same slot
+        // and in what order, and whether the id is a packaged one.
         //
-        // Three review rounds on PR 534 each caught a wording that stated one outcome as the
-        // rule, the third of them an explanation keyed on the number of contributions. All four
-        // combinations are pinned by tests in `app-extensions.service.spec.ts`; this says only
-        // what is certain, and what to do about it.
+        // Four review rounds on PR 534 each falsified a different attempt to state that as a
+        // rule — "the later one wins"; "except `action`, which stays as the first entry set it";
+        // an explanation keyed on the number of contributions; and one keyed on whether any merge
+        // of the slot's array ran, which reversing the layer order refutes. Every one was a proxy
+        // for the thing it was naming. The conclusion is not a fifth attempt: it is that the
+        // outcome is **unspecified**, pinned by six cases in `app-extensions.service.spec.ts` so a
+        // change to it is visible, and stated nowhere as a rule a manifest could rely on.
+        //
+        // So this says only what is certain, and what to do about it.
         reason:
           `${at} repeats the id "${entry.id}" already used in this slot, so the two are merged ` +
           'into one and which fields survive depends on the other layers — give each entry its ' +
