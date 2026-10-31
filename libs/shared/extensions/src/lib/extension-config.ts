@@ -261,30 +261,7 @@ function readConfig(
 
   const slots = raw['slots'];
   if (isRecord(slots)) {
-    const readSlots: Record<string, ExtensionElement[]> = {};
-    for (const [slotId, entries] of Object.entries(slots)) {
-      // Assigning it would replace the object's prototype, the thing `mergeObjects` refuses too.
-      if (slotId === '__proto__') {
-        refused.push({
-          slot: slotId,
-          id: null,
-          source,
-          reason: 'a slot may not be named "__proto__", so the whole slot is dropped',
-        });
-        continue;
-      }
-      if (!Array.isArray(entries)) {
-        refused.push({
-          slot: slotId,
-          id: null,
-          source,
-          reason: `a slot must be a list of entries, not ${describeShape(entries)}, so the whole slot is dropped`,
-        });
-        continue;
-      }
-      readSlots[slotId] = readSlotEntries(slotId, entries, source, refused);
-    }
-    config['slots'] = readSlots;
+    config['slots'] = readSlots(slots, source, refused);
   }
 
   const overrides = raw['overrides'];
@@ -299,6 +276,49 @@ function readConfig(
   }
 
   return config as ExtensionConfig;
+}
+
+/**
+ * Every slot a layer contributes, with a refusal recorded for each one it loses whole.
+ *
+ * Its own function rather than a block inside {@link readConfig}: reporting added two branches to
+ * a reader that already walked five subtrees, taking its cognitive complexity to 28 against a
+ * limit of 15 (SonarCloud, PR 534). The slots subtree is also the only one of the five with a
+ * nested loop, so it is the one worth naming.
+ */
+function readSlots(
+  slots: Record<string, unknown>,
+  source: string,
+  refused: RefusedExtensionEntry[],
+): Record<string, ExtensionElement[]> {
+  const read: Record<string, ExtensionElement[]> = {};
+
+  for (const [slot, entries] of Object.entries(slots)) {
+    // Assigning it would replace the object's prototype, the thing `mergeObjects` refuses too.
+    if (slot === '__proto__') {
+      refused.push({
+        slot,
+        id: null,
+        source,
+        reason: 'a slot may not be named "__proto__", so the whole slot is dropped',
+      });
+      continue;
+    }
+    if (!Array.isArray(entries)) {
+      refused.push({
+        slot,
+        id: null,
+        source,
+        reason:
+          `a slot must be a list of entries, not ${describeShape(entries)}, ` +
+          'so the whole slot is dropped',
+      });
+      continue;
+    }
+    read[slot] = readSlotEntries(slot, entries, source, refused);
+  }
+
+  return read;
 }
 
 /**

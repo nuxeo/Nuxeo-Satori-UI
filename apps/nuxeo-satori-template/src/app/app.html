@@ -37,16 +37,16 @@
 
   <main class="shell__content">
     @if (missingLayers().length) {
-      <p class="shell__warning" role="status">
+      <output class="shell__warning">
         Manifest references {{ missingLayers().length }} extension layer(s) that did not resolve:
         {{ missingLayers().join(', ') }}
-      </p>
+      </output>
     }
 
     @for (route of invalidRoutes(); track route.id) {
-      <p class="shell__warning" role="status">
+      <output class="shell__warning">
         Manifest route {{ route.id }} was not registered: {{ route.reason }}
-      </p>
+      </output>
     }
 
     <!--
@@ -54,9 +54,9 @@
       `null`, and a refusal about a repeated id shares its id with the entry that kept it.
     -->
     @for (entry of refusedSlotEntries(); track $index) {
-      <p class="shell__warning" role="status">
+      <output class="shell__warning">
         Manifest slot {{ entry.slot }} in {{ entry.source }}: {{ entry.reason }}
-      </p>
+      </output>
     }
 
     <!--
