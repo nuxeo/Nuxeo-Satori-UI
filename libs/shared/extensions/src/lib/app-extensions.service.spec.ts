@@ -393,6 +393,28 @@ describe('AppExtensionsService refused overrides', () => {
   });
 
   /**
+   * Pins the tracking claim the constructor's comment makes, rather than leaving it as prose.
+   *
+   * The effect reads both signals as arguments, so both are read on every run and both stay
+   * tracked. An early `return` in the effect body — the obvious way to write "nothing to say" —
+   * would skip the second read, and Angular would stop tracking that signal: a refusal arriving
+   * on a later load would then never be written. This is the case that catches it, because the
+   * first run has nothing on either channel.
+   */
+  it('reports an override refusal that only the second load introduces', () => {
+    boot();
+    expect(reports()).toEqual([]);
+
+    manifest.set({
+      extensionLayers: [{ $name: 'acme', overrides: { 'app.navbar.trash': true } }],
+    });
+    TestBed.tick();
+
+    expect(reports()).toHaveLength(1);
+    expect(reports()[0]).toContain('overrides.app.navbar.trash');
+  });
+
+  /**
    * Why the two channels dedup on a key each rather than on one key over both lists.
    *
    * A manifest with a refusal on **both** channels is what separates them. One shared key is

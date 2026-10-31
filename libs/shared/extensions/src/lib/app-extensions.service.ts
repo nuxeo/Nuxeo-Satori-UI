@@ -149,8 +149,12 @@ export class AppExtensionsService {
     // is fetched by an `APP_INITIALIZER` and nothing guarantees it has landed when this service
     // is first injected, so a refusal read now would usually be a refusal read from an empty
     // manifest. And it is needed at all because the product application has no page showing
-    // diagnostics — without it the console stays silent unless a host happens to render
-    // `refusedSlotEntries`, and `nuxeo-ui` does not.
+    // diagnostics — without it the console stays silent unless a host happens to render the
+    // refusal signals, and `nuxeo-ui` does not.
+    //
+    // Both signals are read as arguments, so both are read on every run and the effect keeps
+    // tracking each of them. The early returns live in `noteRefusals`, deliberately: an early
+    // `return` in this body would skip the second read and silently stop tracking that signal.
     effect(() => {
       this.noteRefusals(
         'slots',
