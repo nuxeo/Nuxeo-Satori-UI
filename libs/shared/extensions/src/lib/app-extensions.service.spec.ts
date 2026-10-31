@@ -165,22 +165,21 @@ describe('AppExtensionsService refused slot entries', () => {
   });
 
   /**
-   * The duplicate-`id` outcome, where **both rows set every field**.
+   * The duplicate-`id` outcome, case by case, claiming **nothing** in general.
    *
-   * Five review rounds have now falsified five wordings of this — "the later one wins"; "except
-   * `action`, which stays as the first entry set it"; a rule keyed on the number of
-   * contributions; one keyed on whether any merge of the slot's array ran; and, after NXSAT-760,
-   * "the later entry wins", which the partial-row cases below refute.
+   * Seven review findings across PRs 534 and 537 refuted seven attempts to state this as a rule:
+   * "the later one wins"; a carve-out for `action`; conditions keyed on the number of
+   * contributions, on whether an array merge ran, and on whether another layer touched the slot;
+   * a guarantee for rows that set every field; and even "string-valued fields win". Each was a
+   * proxy for the thing it named, and each was falsified by a stack nobody had run.
    *
-   * NXSAT-760 removed **one** of two sources of divergence: `withoutAction` used to fire on
-   * manifest-owned patches as well as packaged ones, so which row's `action` survived turned on
-   * whether that line happened to run. With it narrowed, the five stacks here agree — but only
-   * because every row sets every field. The second source remains, and the partial-row cases
-   * below are where it shows: `resolve` patches the surviving row while `mergeObjects` replaces
-   * it, so an omitted field is inherited by one path and lost by the other.
+   * NXSAT-760 removed one real source of divergence — `action` was withheld from manifest-owned
+   * patches, so which row won turned on whether that line ran — and that is the whole of what
+   * this ticket claims. It did **not** make the outcome stack-independent; `extension-merge.ts`
+   * is a pinned reproduction of ACA's merge and the rest of the variance lives there.
    *
-   * So the stacks below are the **fully-specified** case, and their agreement is the claim. They
-   * were five separate behaviours before; a regression would make them so again.
+   * So these are individually measured cases, each asserting its own stack and generalising to
+   * nothing. The next person wanting a rule should read them rather than write a sentence.
    */
   const duplicateNavbar = {
     navbar: [
@@ -375,7 +374,7 @@ describe('AppExtensionsService refused slot entries', () => {
     ]);
   });
 
-  it('loses an omitted field when another layer touching the slot collapses it first', () => {
+  it("loses an omitted field when the duplicates are the array merge's earlier input", () => {
     manifest.set({
       extensionLayers: [
         { $name: 'acme', slots: partialPair },
@@ -383,8 +382,74 @@ describe('AppExtensionsService refused slot entries', () => {
       ],
     });
 
-    // No `action` at all — the earlier row was replaced, not patched.
+    // No `action` at all — the earlier row was replaced, not patched. Note this drops a **string**
+    // field, which is why "string-valued fields win" is not a usable guarantee either.
     expect(resolvedNavbar(boot())).toEqual([{ id: 'acme.navbar.x', label: 'B' }]);
+  });
+
+  /**
+   * Review of PR 537: "another layer touched the slot" is **not** the condition. Here one does,
+   * and the omitted field survives anyway, because the duplicates are the merge's *later* input
+   * and arrive as new rows rather than as a patch over an existing one.
+   */
+  it('keeps an omitted field when the duplicates are the later input instead', () => {
+    manifest.set({
+      extensionLayers: [
+        { $name: 'regional', slots: { navbar: [] } },
+        { $name: 'acme', slots: partialPair },
+      ],
+    });
+
+    expect(resolvedNavbar(boot())).toEqual([
+      { id: 'acme.navbar.x', label: 'B', action: 'acme.actions.first' },
+    ]);
+  });
+
+  /** And again when an earlier layer already declared the id, so the pair merges into it. */
+  it('keeps an omitted field when an earlier layer already declared that id', () => {
+    manifest.set({
+      extensionLayers: [
+        { $name: 'base', slots: { navbar: [{ id: 'acme.navbar.x', label: 'base' }] } },
+        { $name: 'acme', slots: partialPair },
+      ],
+    });
+
+    expect(resolvedNavbar(boot())).toEqual([
+      { id: 'acme.navbar.x', label: 'B', action: 'acme.actions.first' },
+    ]);
+  });
+
+  /**
+   * Review of PR 537, and the case that refutes "rows setting every field get the later row".
+   *
+   * Both duplicate rows set `label`, `action` **and** `rule`, but with an earlier layer holding an
+   * object-valued `rule` for the same id, §12's rule applies — a later string is **spread into**
+   * the earlier object rather than replacing it. So the resolved `rule` is neither row's.
+   */
+  it("gives neither row's rule when a later string spreads into an earlier object rule", () => {
+    manifest.set({
+      extensionLayers: [
+        { $name: 'base', slots: { navbar: [{ id: 'acme.navbar.x', rule: { type: 'a' } }] } },
+        {
+          $name: 'acme',
+          slots: {
+            navbar: [
+              { id: 'acme.navbar.x', label: 'A', action: 'acme.first', rule: { type: 'b' } },
+              { id: 'acme.navbar.x', label: 'B', action: 'acme.second', rule: 'c' },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(
+      TestBed.inject(AppExtensionsService).resolve<{ id: string; rule: unknown }>(
+        EXTENSION_SLOTS.navbar,
+      ),
+    ).toEqual([
+      // Not `'c'`, and not `{ type: 'b' }`.
+      { id: 'acme.navbar.x', label: 'B', action: 'acme.second', rule: { 0: 'c', type: 'b' } },
+    ]);
   });
 
   /**
