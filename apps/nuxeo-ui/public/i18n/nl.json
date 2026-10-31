@@ -10,6 +10,11 @@
     "context-menu-share": "Delen",
     "context-menu-subscribe": "Mij informeren",
     "context-menu-unsubscribe": "Uitschrijven",
+    "row-actions-copy-to": "Kopiëren naar…",
+    "row-actions-delete": "Verwijderen",
+    "row-actions-download": "Downloaden",
+    "row-actions-move-to": "Verplaatsen naar…",
+    "row-actions-rename": "Hernoemen",
     "toolbar-add-to-clipboard": "Toevoegen aan klembord",
     "toolbar-add-to-collection": "Toevoegen aan collectie",
     "toolbar-add-to-favorites": "Toevoegen aan favorieten",
@@ -478,6 +483,10 @@
       "retry": "Opnieuw proberen",
       "root": "Hoofdmap"
     },
+    "not-found": {
+      "go-to-dashboard": "Ga naar het dashboard",
+      "heading": "Deze pagina bestaat niet"
+    },
     "nuxeo-drive-page": {
       "application": "Toepassing",
       "created": "Gemaakt",
@@ -624,6 +633,7 @@
   "browse": {
     "block": "Blokkeren",
     "breadcrumb": {
+      "label": "Breadcrumbs",
       "root": "Hoofdmap"
     },
     "browse": {
@@ -636,11 +646,14 @@
       "card-view": "Kaartweergave",
       "category": "Categorie",
       "clear": "Wissen",
+      "clear-modified": "Wis het bereik van de wijzigingsdatum",
+      "clear-uploads": "Wissen",
       "close-column-picker": "Kolomkiezer sluiten",
       "close-panel": "Paneel sluiten",
       "collection-actions": "Collectieacties",
       "column-settings": "Kolominstellingen",
       "comment": "Opmerking",
+      "contents-of": "Inhoud van {{ name }}",
       "contributors": "Bijdragers",
       "create-folder-upload-files-or-import": "Map maken, bestanden uploaden of CSV importeren",
       "create-import": "Maken / Importeren",
@@ -649,9 +662,11 @@
       "delete": "Verwijderen",
       "done": "Klaar",
       "download-all": "Alle downloaden",
+      "drop-to-upload": "Sleep bestanden hierheen om ze te uploaden naar {{ name }}",
       "edit": "Bewerk",
       "export-csv": "CSV exporteren",
       "filter-by-title": "Filteren op titel...",
+      "filtering": "Filteren…",
       "from": "Van",
       "granted-by": "Verleend door",
       "if-you-want-to-explicitly-control": "Als u de toegang tot dit document expliciet wilt beheren, kunt u de overname van rechten blokkeren. Wijzigingen in het bovenliggende document hebben dan geen invloed op de toegangscondities van dit document. U en de beheerders worden toegevoegd aan de lokale rechten.",
@@ -695,6 +710,7 @@
       "trash-is-empty": "Prullenbak is leeg",
       "type": "Typ",
       "upload-with-nuxeo-drive": "Uploaden met Nuxeo Drive",
+      "uploads": "Uploads",
       "user": "Gebruiker",
       "user-group": "Gebruiker / groep",
       "username": "Gebruikersnaam"
@@ -719,7 +735,9 @@
       "reset": "Opnieuw instellen"
     },
     "create-import": {
-      "types-load-failed": "Kan de documenttypen die in deze map kunnen worden gemaakt niet laden."
+      "types-folder-missing": "Deze map bestaat niet meer. Ga terug en kies een andere locatie.",
+      "types-forbidden": "U hebt geen rechten om content toe te voegen aan deze map. Kies een andere locatie of vraag een beheerder om toegang.",
+      "types-load-failed": "Kan de documenttypen voor deze map niet laden. Controleer uw verbinding en probeer het opnieuw."
     },
     "create-import-dialog": {
       "add-more-files": "Meer bestanden toevoegen",
@@ -820,6 +838,7 @@
       "action-failed": "Actie mislukt",
       "collection-moved-to-trash": "Collectie verplaatst naar prullenbak",
       "collection-updated": "Collectie bijgewerkt",
+      "copied-to": "\"{{ name }}\" gekopieerd naar {{ folder }}",
       "could-not-load-folder-contents": "Kan mapinhoud niet laden.",
       "could-not-resolve-a-default-folder-open": "Kan geen standaardmap bepalen. Open eerst een map in Bladeren.",
       "could-not-resolve-this-path-try-another": "Kan dit pad niet bepalen. Probeer een andere map.",
@@ -834,12 +853,14 @@
       "domain-container-guidance": "Open Sections, Templates of Workspaces en maak vervolgens content in die mappen.",
       "download-failed": "Downloaden mislukt.",
       "failed-to-add-tag": "Kan tag niet toevoegen",
+      "failed-to-copy": "Het document kon niet worden gekopieerd.",
       "failed-to-delete": "Kan niet verwijderen",
       "failed-to-delete-collection": "Kan collectie niet verwijderen",
       "failed-to-load-collection": "Kan collectie niet laden",
       "failed-to-load-folder-contents": "Kan mapinhoud niet laden.",
       "failed-to-load-permissions": "Kan rechten niet laden",
       "failed-to-load-selected-documents-for-deletion": "Kan geselecteerde documenten voor verwijdering niet laden",
+      "failed-to-move": "Het document kon niet worden verplaatst.",
       "failed-to-remove-tag": "Kan tag niet verwijderen",
       "failed-to-restore-document": "Kan document niet herstellen.",
       "failed-to-send-notification": "Kan melding niet verzenden",
@@ -850,6 +871,7 @@
       "file-upload-failed": "Uploaden van bestand mislukt",
       "inheritance-blocked": "Overname geblokkeerd",
       "inheritance-unblocked": "Overname gedeblokkeerd",
+      "moved-to": "\"{{ name }}\" verplaatst naar {{ folder }}",
       "moved-to-trash": "Verplaatst naar prullenbak",
       "notification-email-sent": "E-mailmelding verzonden",
       "open-a-folder-to-create-or-import": "Open een map om content te maken of te importeren.",
@@ -859,6 +881,7 @@
       "please-select-a-csv-file": "Selecteer een .csv-bestand.",
       "please-wait-for-the-file-upload-to": "Wacht tot het uploaden van het bestand is voltooid.",
       "remove-all-collections-from-this-folder-before": "Verwijder alle collecties uit deze map voordat u deze verwijdert.",
+      "renamed": "Hernoemd naar \"{{ name }}\"",
       "restricted-import-location": "Selecteer een andere container om uw content te maken.",
       "search-failed": "Zoeken mislukt",
       "selected-path-is-not-a-folder-choose": "Het geselecteerde pad is geen map. Kies een map of ga één niveau omhoog.",
@@ -867,8 +890,15 @@
       "subscribed-to-notifications": "Geabonneerd op meldingen",
       "unsubscribed": "Uitgeschreven",
       "upload-failed": "Uploaden mislukt",
+      "upload-in-progress": "Wacht tot het uploaden van de bestanden is voltooid voordat u meer bestanden sleept.",
       "uploading": "Bezig met uploaden…",
       "uploading-file-of": "Bestand {{ index }} van {{ count }} wordt geüpload…"
+    },
+    "row-actions": {
+      "copy-heading": "\"{{ name }}\" kopiëren naar",
+      "copy-here": "Hier kopiëren",
+      "move-heading": "\"{{ name }}\" verplaatsen naar",
+      "move-here": "Hier verplaatsen"
     },
     "scope": {
       "create-import": "Maken / Importeren",
@@ -895,6 +925,7 @@
     "collection-detail": {
       "actions": "Acties",
       "back-to-collections": "Terug naar collecties",
+      "breadcrumbs": "Breadcrumbs",
       "category": "Categorie",
       "comment": "Opmerking",
       "date": "Datum",
@@ -910,6 +941,7 @@
       "if-you-want-to-explicitly-control": "Als u de toegang tot dit document expliciet wilt beheren, kunt u de overname van rechten blokkeren. Wijzigingen in het bovenliggende document hebben dan geen invloed op de toegangscondities van dit document. U en de beheerders worden toegevoegd aan de lokale rechten.",
       "last-contributor": "Laatste bijdrager",
       "loading": "Laden",
+      "members-of": "Leden van {{ name }}",
       "modified": "Aangepast",
       "more-actions": "Meer acties",
       "new": "Nieuw",
@@ -1030,10 +1062,10 @@
     "email-example": "naam@bedrijf.nl",
     "lock": {
       "already-locked": "Document is al vergrendeld door een andere gebruiker, vernieuw uw pagina.",
-      "lock-no-permission": "U hebt geen toestemming om dit document te vergrendelen.",
-      "locked-by": "Door {{ owner }} op {{ date }} vergrendeld",
-      "locked-by-another-user": "U kunt dit document niet ontgrendelen omdat het door een andere gebruiker is vergrendeld.",
-      "unlock-no-permission": "U hebt geen toestemming om dit document te ontgrendelen."
+      "lock-no-permission": "U hebt geen rechten om dit document te vergrendelen.",
+      "locked-by": "Vergrendeld door {{ owner }} op {{ date }}",
+      "locked-by-another-user": "U kunt dit document niet ontgrendelen omdat het is vergrendeld door een andere gebruiker.",
+      "unlock-no-permission": "U hebt geen rechten om dit document te ontgrendelen."
     },
     "ok": "OK",
     "page-number": "Pagina {{ page }}",
@@ -1145,6 +1177,7 @@
       "attachments": "Bijlagen",
       "augment-your-editorial-workflow-with-cognitive": "Versterk uw redactionele werkstroom met cognitieve verwerking. Genereer samenvattingen, classificeer complexe gegevens en ontdek verborgen verbanden.",
       "automatic-taxonomy-mapping-based-on-entity": "Automatische taxonomietoewijzing op basis van entiteitsextractie en sentimentanalyse van de huidige documenttekst.",
+      "breadcrumbs": "Breadcrumbs",
       "by": "Door",
       "cancel": "Annuleren",
       "categorize-content-into-predefined-editorial-verticals": "Categoriseer content in vooraf gedefinieerde redactionele categorieën en extraheer structurele metagegevens, waaronder auteur, publicatiedatum en geschatte leestijd.",
@@ -1230,6 +1263,7 @@
       "reply": "Beantwoorden",
       "reply-actions": "Acties voor antwoord",
       "republish": "Opnieuw publiceren",
+      "republish-confirm": "Weet u zeker dat u deze publicatie wilt vervangen door de meest recente versie van het document?",
       "restore": "Herstellen",
       "right": "Recht",
       "running": "Wordt uitgevoerd",
@@ -1262,6 +1296,8 @@
       "unclassified": "Niet geclassificeerd",
       "unpublish": "Publicatie ongedaan maken",
       "unpublish-all": "Alle publicaties ongedaan maken",
+      "unpublish-all-confirm": "Weet u zeker dat u deze documenten wilt depubliceren?",
+      "unpublish-confirm": "Weet u zeker dat u dit document wilt depubliceren?",
       "upload-attachment": "Bijlage uploaden",
       "user": "Gebruiker",
       "user-group": "Gebruiker / groep",
@@ -1290,7 +1326,11 @@
       "enter-a-valid-date": "Voer een geldige datum in",
       "expires": "Verloopt",
       "nature": "Aard",
+      "not-accepted": "Nuxeo heeft deze waarde niet geaccepteerd.",
       "save": "Opslaan",
+      "save-failed": "De wijzigingen konden niet worden opgeslagen. Probeer het opnieuw.",
+      "save-forbidden": "U hebt geen rechten om dit document te wijzigen.",
+      "saving": "Opslaan",
       "search": "Zoeken…",
       "search-coverage": "Dekking zoeken",
       "search-nature": "Aard zoeken",
@@ -1359,8 +1399,8 @@
       "publication-removed": "Publicatie verwijderd",
       "removed-from-favorites": "Verwijderd uit favorieten",
       "reply-deleted": "Antwoord verwijderd",
-      "restore-version-conflict": "Deze versie kan niet worden hersteld vanwege een conflict met de huidige staat van het document. Laad de pagina opnieuw en probeer het nog eens.",
-      "restore-version-forbidden": "U kunt deze versie niet herstellen: u hebt geen toestemming, of een andere gebruiker heeft het document vergrendeld.",
+      "restore-version-conflict": "Deze versie kan niet worden hersteld vanwege een conflict met de huidige status van het document. Laad de pagina opnieuw en probeer het nogmaals.",
+      "restore-version-forbidden": "U kunt deze versie niet herstellen: u hebt geen rechten, of iemand anders heeft het document vergrendeld.",
       "search-failed-try-again": "Zoeken mislukt. Probeer het opnieuw.",
       "section-not-found": "Sectie niet gevonden",
       "selected-documents-have-no-insertable-image-url": "Geselecteerde documenten hebben geen invoegbare afbeeldings-URL",
@@ -1412,6 +1452,7 @@
       "clear": "Wissen",
       "close": "Sluiten",
       "filters": "Filters",
+      "loading": "Afbeeldingen worden geladen",
       "no-pictures-found": "Geen afbeeldingen gevonden.",
       "picture-documents": "Afbeeldingsdocumenten",
       "quick-search": "Snel zoeken",
@@ -1454,20 +1495,22 @@
     "task-due-before": "vóór {{ due }}",
     "unblock": "Deblokkeren",
     "unknown": "Onbekend",
-    "version-go-to-latest": "Naar de nieuwste versie",
+    "version-go-to-latest": "Ga naar recentste versie",
     "version-latest": "{{ version }} Recente",
-    "version-latest-entry": "Nieuwste versie",
+    "version-latest-entry": "Recentste versie",
     "version-modified-by": "Aangepast {{ when }} door {{ who }}",
     "version-restore": "{{ version }} herstellen",
     "version-restore-confirm-title": "Weet u het zeker?",
+    "version-restore-replaces-content": "Het herstellen van versie {{ version }} vervangt de huidige inhoud van het document, inclusief alle wijzigingen die zijn aangebracht na versie {{ version }}.",
     "version-viewing": "U bekijkt versie {{ version }}.",
     "visual-editor": "Visuele editor",
     "workflow-started-on-document": "U hebt een werkstroom {{ workflow }} gestart voor dit document."
   },
   "document-layouts": {
-    "no": "No",
-    "sections": "Property sections",
-    "yes": "Yes"
+    "loading-form": "Het formulier wordt geladen",
+    "no": "Nee",
+    "sections": "Eigenschapssecties",
+    "yes": "Ja"
   },
   "drawer": {
     "administration-analytics": "Analyses",
@@ -1611,8 +1654,8 @@
   },
   "nav": {
     "clipboard": {
-      "aria-label-one": "{{ name }}, {{ count }} item",
       "aria-label-many": "{{ name }}, {{ count }} items",
+      "aria-label-one": "{{ name }}, {{ count }} item",
       "copy": "Kopiëren",
       "empty": "Klembord is leeg",
       "hint": "Gebruik \"Toevoegen aan klembord\" bij documenten of collecties om hier items toe te voegen.",
@@ -1663,6 +1706,7 @@
       "retry": "Opnieuw proberen"
     },
     "tree": {
+      "label": "Mappen",
       "retry": "Opnieuw proberen",
       "root": "Hoofdmap",
       "toggle": "{{ name }} in-/uitschakelen"
@@ -1729,14 +1773,32 @@
     },
     "right": {
       "AddChildren": "Onderliggende items toevoegen",
+      "CanAskForPublishing": "Kan om publicatie vragen",
       "Everything": "Alles beheren",
       "ManageWorkflows": "Werkstromen beheren",
       "Read": "Lezen",
       "ReadCanCollect": "Kan verzamelen",
       "ReadRemove": "Lezen en verwijderen",
+      "ReadVersion": "Versies lezen",
       "ReadWrite": "Bewerk",
       "Remove": "Verwijderen",
-      "Write": "Schrijven"
+      "RemoveChildren": "Onderliggende items verwijderen",
+      "SetRetention": "Bewaartermijn instellen",
+      "Unlock": "Ontgrendelen",
+      "UnsetRetention": "Bewaartermijn opheffen",
+      "Version": "Versies maken",
+      "Write": "Schrijven",
+      "WriteSecurity": "Rechten beheren",
+      "WriteVersion": "Versies bewerken",
+      "Browse": "Bladeren",
+      "ReadChildren": "Onderliggende items lezen",
+      "ReadLifeCycle": "Levenscyclus lezen",
+      "ReadProperties": "Eigenschappen lezen",
+      "ReadSecurity": "Beveiliging lezen",
+      "WriteLifeCycle": "Levenscyclus bewerken",
+      "WriteProperties": "Eigenschappen bewerken",
+      "ManageLegalHold": "Juridische bewaarplicht beheren",
+      "ManageRecord": "Record beheren"
     },
     "share-external-dialog": {
       "cancel": "Annuleren",
@@ -1791,6 +1853,716 @@
       "name-placeholder": "Voer een naam in voor uw opgeslagen zoekresultaten"
     }
   },
+  "satori-components": {
+    "action-menu": {
+      "more-actions": "Meer acties"
+    },
+    "breadcrumbs": {
+      "show-more": "Meer broodkruimels weergeven"
+    },
+    "column-picker": {
+      "close": "Kolomkiezer sluiten",
+      "done": "Klaar",
+      "reset": "Opnieuw instellen",
+      "title": "Kolominstellingen"
+    },
+    "comments": {
+      "cancel": "Annuleren",
+      "clear": "Wissen",
+      "comment-actions": "Acties voor de opmerking van {{author}}",
+      "comment-label": "Opmerking",
+      "delete": "Verwijderen",
+      "delete-comment-message": "Weet u zeker dat u deze opmerking wilt verwijderen?",
+      "delete-comment-title": "Opmerking verwijderen",
+      "delete-comment-with-replies": "Weet u zeker dat u deze opmerking wilt verwijderen? Alle antwoorden op deze opmerking worden ook verwijderd.",
+      "delete-reply-message": "Weet u zeker dat u dit antwoord wilt verwijderen?",
+      "delete-reply-title": "Antwoord verwijderen",
+      "edit": "Bewerk",
+      "edit-comment": "Opmerking bewerken",
+      "edit-reply": "Antwoord bewerken",
+      "edited": "{{time}} (bewerkt)",
+      "empty": "Nog geen opmerkingen",
+      "error": {
+        "add-comment": "De opmerking kon niet worden toegevoegd.",
+        "add-reply": "Het antwoord kon niet worden toegevoegd.",
+        "delete-comment": "De opmerking kon niet worden verwijderd.",
+        "delete-reply": "Het antwoord kon niet worden verwijderd.",
+        "edit-comment": "De opmerking kon niet worden opgeslagen.",
+        "edit-reply": "Het antwoord kon niet worden opgeslagen.",
+        "forbidden-add": "U hebt geen rechten om commentaar te geven op dit document.",
+        "forbidden-delete": "U hebt geen rechten om deze opmerking te verwijderen.",
+        "forbidden-edit": "U hebt geen rechten om deze opmerking te bewerken.",
+        "not-found-comment": "Deze opmerking is niet meer beschikbaar. De opmerkingen zijn opnieuw geladen.",
+        "not-found-reply": "Dit antwoord is niet meer beschikbaar. De opmerkingen zijn opnieuw geladen."
+      },
+      "last-reply": "Laatste antwoord {{time}}",
+      "list": "Opmerkingen",
+      "load-failed": "De opmerkingen konden niet worden geladen.",
+      "loading": "Opmerkingen worden geladen",
+      "replies-one": "1 antwoord",
+      "replies-other": "{{count}} antwoorden",
+      "reply": "Antwoord",
+      "reply-actions": "Acties voor het antwoord van {{author}}",
+      "reply-label": "Antwoord",
+      "reply-to": "Antwoorden aan {{author}}",
+      "retry": "Opnieuw proberen",
+      "save": "Opslaan",
+      "show-all": "Alles bekijken",
+      "submit-comment": "Opmerking toevoegen",
+      "submit-hint": "Ctrl + Enter om te verzenden",
+      "submit-reply": "Antwoord toevoegen",
+      "view-all-comments": "Alle {{count}} opmerkingen weergeven",
+      "view-all-replies": "Alle {{count}} antwoorden weergeven",
+      "write-comment": "Schrijf hier een opmerking",
+      "write-reply": "Schrijf hier een antwoord"
+    },
+    "create-version-dialog": {
+      "title": "Versie maken voor {{document}} - Versie {{version}}",
+      "kind": "Te maken versie",
+      "minor": "Subversie",
+      "major": "Hoofdversie",
+      "cancel": "Annuleren",
+      "create": "Versie maken",
+      "creating": "De versie wordt gemaakt",
+      "created": "Versie {{version}} gemaakt",
+      "forbidden": "U hebt geen rechten om een versie van dit document te maken.",
+      "failed": "De versie kon niet worden gemaakt."
+    },
+    "details-panel": {
+      "close": "Gegevens sluiten"
+    },
+    "document-history": {
+      "filters": "Geschiedenis filteren",
+      "user": "Gebruikersnaam",
+      "user-hint": "De exacte gebruikersnaam",
+      "from": "Van",
+      "to": "Met",
+      "action": "Uitgevoerde actie",
+      "category": "Categorie",
+      "any": "Elk",
+      "date": "Datum",
+      "comment": "Opmerking",
+      "state": "Status",
+      "caption": "Documentgeschiedenis",
+      "loading": "De geschiedenis wordt geladen",
+      "failed": "De geschiedenis kon niet worden geladen.",
+      "empty": "Nog geen geschiedenisitems",
+      "no-match": "Geen geschiedenisitems komen overeen met deze filters"
+    },
+    "document-toolbar": {
+      "label": "Documentacties",
+      "more-actions": "Meer acties"
+    },
+    "document-list": {
+      "actions": "Acties",
+      "drop": "Sleep bestanden hierheen om ze te uploaden",
+      "empty": "Hier is nog niets",
+      "keyboard-hint": "Met de pijltoetsen beweegt u tussen documenten. Spatie selecteert, Shift breidt de selectie uit, Enter opent.",
+      "keyboard-hint-no-selection": "Met de pijltoetsen beweegt u tussen documenten. Enter opent.",
+      "loading": "Documenten worden geladen",
+      "row-actions": "Acties voor {{ name }}",
+      "row-name-repeated": "{{ name }} ({{ index }} van {{ count }})",
+      "select": "{{ name }} selecteren",
+      "select-page": "Alles op deze pagina selecteren",
+      "selection": "Selectie",
+      "sort-by": "Sorteren op {{ column }}",
+      "sort-cleared": "Sortering gewist, standaardvolgorde wordt weergegeven",
+      "sorted-ascending": "Gesorteerd op {{ column }}, oplopend",
+      "sorted-descending": "Gesorteerd op {{ column }}, aflopend"
+    },
+    "document-tree": {
+      "children-failed": "De mappen in {{ name }} konden niet worden geladen",
+      "children-failed-row": "Kan de mappen niet laden. Opnieuw proberen",
+      "children-forbidden": "U hebt geen toegang tot de mappen in {{ name }}",
+      "children-forbidden-row": "U hebt geen toegang tot deze mappen",
+      "empty": "Geen mappen om weer te geven",
+      "load-failed": "De mappen konden niet worden geladen",
+      "loading": "Mappen worden geladen",
+      "root": "Hoofdmap"
+    },
+    "date-input": {
+      "invalid": "Voer een datum in zoals {{ example }}",
+      "too-early": "Voer {{ date }} of later in",
+      "too-late": "Voer {{ date }} of eerder in"
+    },
+    "drive-dialog": {
+      "checking": "Nuxeo Drive controleren...",
+      "close": "Sluiten",
+      "name": "Nuxeo Drive",
+      "package": "Te installeren pakket",
+      "platform": "Platform",
+      "title": "Nuxeo Drive-client downloaden"
+    },
+    "dropzone": {
+      "choose-file": "Bestand kiezen",
+      "choose-files": "Bestanden kiezen"
+    },
+    "error-state": {
+      "forbidden": {
+        "heading": "U hebt geen toegang",
+        "message": "U hebt geen rechten om dit te bekijken. Vraag de eigenaar of een beheerder om toegang."
+      },
+      "not-found": {
+        "heading": "Niet gevonden",
+        "message": "Het is mogelijk verplaatst of verwijderd, of de link is onjuist."
+      },
+      "retry": "Opnieuw proberen",
+      "server": {
+        "heading": "Er is iets misgegaan",
+        "message": "De server kon het verzoek niet voltooien. Probeer het later opnieuw."
+      },
+      "unauthorized": {
+        "heading": "Uw sessie is beëindigd",
+        "message": "Meld u opnieuw aan om door te gaan."
+      }
+    },
+    "favorite-toggle": {
+      "add": "Toevoegen aan favorieten",
+      "label": "Favoriet",
+      "remove": "Uit favorieten verwijderen"
+    },
+    "manage-versions": {
+      "version": "Versie",
+      "create": "Versie maken",
+      "unversioned": "Niet-geversioneerd",
+      "latest": "Recentste versie",
+      "modified": "Aangepast {{when}} door {{who}}",
+      "unknown-user": "Onbekend",
+      "loading": "Versies worden geladen",
+      "failed": "De versies konden niet worden geladen.",
+      "retry": "Opnieuw proberen",
+      "none": "Geen eerdere versies"
+    },
+    "metadata-editor": {
+      "add-item": "Toevoegen aan {{label}}",
+      "coverage": "Dekking",
+      "description": "Beschrijving",
+      "error": {
+        "date": "Voer een geldige datum in voor {{label}}.",
+        "integer": "{{label}} moet een geheel getal zijn.",
+        "invalid": "{{label}} is niet geldig.",
+        "item": "Een van de waarden van {{label}} is niet geldig.",
+        "max-length": "{{label}} mag maximaal {{count}} tekens bevatten.",
+        "maximum": "{{label}} moet {{bound}} of minder zijn.",
+        "maximum-exclusive": "{{label}} moet minder zijn dan {{bound}}.",
+        "min-length": "{{label}} moet minstens {{count}} tekens bevatten.",
+        "minimum": "{{label}} moet {{bound}} of meer zijn.",
+        "minimum-exclusive": "{{label}} moet meer zijn dan {{bound}}.",
+        "number": "{{label}} moet een getal zijn.",
+        "pattern": "{{label}} heeft niet de verwachte indeling.",
+        "required": "{{label}} is vereist."
+      },
+      "expires": "Verloopt",
+      "item": "{{label}} {{index}}",
+      "nature": "Aard",
+      "no-value": "Geen waarde",
+      "remove": "Verwijderen",
+      "remove-item": "{{label}} {{index}} verwijderen",
+      "remove-value": "{{name}} verwijderen",
+      "search": "Zoeken",
+      "search-in": "{{label}} zoeken",
+      "sections": "Metagegevenssecties",
+      "subjects": "Onderwerpen",
+      "summary-one": "1 veld moet worden gecorrigeerd voordat u kunt opslaan.",
+      "summary-other": "{{count}} velden moeten worden gecorrigeerd voordat u kunt opslaan.",
+      "title": "Titel"
+    },
+    "permission-dialogs": {
+      "cancel": "Annuleren",
+      "comment": "Meldings-e-mail",
+      "comment-placeholder": "Hallo, kunt u reageren op dit document en...",
+      "date-based": "Op basis van datum",
+      "delete": {
+        "delete": "Verwijderen",
+        "deleting": "Het recht wordt verwijderd",
+        "title": "Het volgende recht wordt verwijderd."
+      },
+      "end-before-begin": "De einddatum ligt voor de begindatum.",
+      "error": {
+        "delete": "Het recht kon niet worden verwijderd.",
+        "forbidden": "U hebt geen rechten om de rechten op dit document te wijzigen.",
+        "share": "Het document kon niet worden gedeeld.",
+        "update": "Het recht kon niet worden bijgewerkt."
+      },
+      "from": "Van",
+      "granted-by": "Verleend door",
+      "permanent": "Permanent",
+      "right": "Recht",
+      "share": {
+        "create": "Maken",
+        "create-another": "Maken en nog een toevoegen",
+        "email": "E-mail",
+        "email-invalid": "Voer een geldig e-mailadres in.",
+        "email-placeholder": "naam@bedrijf.nl",
+        "saving": "Het document wordt gedeeld",
+        "shared": "Gedeeld met {{email}}, die een link naar het document heeft ontvangen.",
+        "title": "Delen met externe gebruiker"
+      },
+      "time-frame": "Tijdsbestek",
+      "to": "Met",
+      "update": {
+        "for": "Voor {{principal}}",
+        "notify": "E-mail verzenden om gebruiker op de hoogte te stellen",
+        "saving": "Het recht wordt bijgewerkt",
+        "title": "Recht bijwerken",
+        "update": "Bijwerken",
+        "updated": "Recht bijgewerkt",
+        "updated-notified": "Rechten bijgewerkt en melding verzonden"
+      },
+      "user-group": "Gebruiker / groep"
+    },
+    "folder-picker": {
+      "already-here": "Het document bevindt zich al in deze map.",
+      "cancel": "Annuleren",
+      "empty": "Hier zijn geen mappen. U kunt deze map kiezen.",
+      "failed": "De map kon niet worden geladen.",
+      "folders": "Mappen",
+      "forbidden": "U hebt geen toegang tot deze map.",
+      "inside-itself": "Een map kan niet worden verplaatst naar zichzelf of naar een map die zich erin bevindt.",
+      "loading": "Mappen worden geladen",
+      "location": "Locatie",
+      "not-a-folder": "Dit is geen map. Ga omhoog en kies een map.",
+      "not-found": "Deze map bestaat niet meer.",
+      "retry": "Opnieuw proberen",
+      "up": "Eén niveau omhoog"
+    },
+    "pager": {
+      "label": "Pagina's",
+      "next": "Volgende pagina",
+      "past-end": "Geen items meer",
+      "previous": "Vorige pagina",
+      "range": "{{ first }}–{{ last }}",
+      "range-of": "{{ first }}–{{ last }} van {{ total }}"
+    },
+    "permissions-panel": {
+      "add": "Toevoegen",
+      "all-permissions": "Alle rechten",
+      "column": {
+        "acl": "Toegangslijst",
+        "actions": "Acties",
+        "granted-by": "Verleend door",
+        "permission": "Recht",
+        "principal": "Gebruiker of groep",
+        "time-frame": "Tijdsbestek"
+      },
+      "denied": "Geweigerd",
+      "discard": "Negeren",
+      "dismiss": "Ontsla",
+      "edit": "Bewerk",
+      "edit-entry": "Het recht voor {{ principal }} bewerken",
+      "editor": {
+        "add": "Toevoegen",
+        "add-heading": "Een recht toevoegen",
+        "apply": "Toepassen",
+        "cancel": "Annuleren",
+        "date-based": "Op basis van datum",
+        "edit-heading": "Het recht voor {{ principal }} bewerken",
+        "end-before-begin": "De einddatum ligt voor de begindatum.",
+        "from": "Van",
+        "no-principal": "Kies een gebruiker of groep uit de lijst.",
+        "permanent": "Permanent",
+        "permission": "Recht",
+        "principal": "Gebruiker of groep",
+        "to": "Met"
+      },
+      "failed": {
+        "denied": "U hebt geen rechten om de rechten op dit document te wijzigen.",
+        "heading": "{{ applied }} van {{ total }} wijzigingen opgeslagen. De server heeft de volgende geweigerd:",
+        "unknown": "De server heeft geen reden opgegeven."
+      },
+      "group": {
+        "other": "Overige rechten op deze server",
+        "standard": "Standaardrechten",
+        "suggested": "Voorgesteld voor dit documenttype"
+      },
+      "inherited": {
+        "block": "Overerving blokkeren",
+        "blocked": "Overerving is geblokkeerd, dus alleen de rechten die op dit document zijn ingesteld, zijn van toepassing.",
+        "empty": "Er worden geen rechten overgenomen.",
+        "heading": "Overgenomen van bovenliggende mappen",
+        "save-first": "Sla uw wijzigingen eerst op of negeer ze.",
+        "toggle-failed": "De overerving kon niet worden gewijzigd.",
+        "unblock": "Overerving deblokkeren"
+      },
+      "load-error": {
+        "denied": "U hebt geen toegang tot de rechten van dit document.",
+        "failed": "De rechten konden niet worden geladen.",
+        "not-found": "Dit document bestaat niet meer."
+      },
+      "loading": "Rechten worden geladen",
+      "local": {
+        "empty": "Er zijn geen rechten ingesteld op dit document zelf.",
+        "heading": "Ingesteld op dit document"
+      },
+      "locked": {
+        "deny": "Een weigeringsvermelding kan hier worden verwijderd, maar niet bewerkt.",
+        "no-id": "Kan hier niet worden gewijzigd: de server heeft geen identificatie voor deze vermelding verzonden."
+      },
+      "other": {
+        "heading": "Ingesteld door andere toegangslijsten"
+      },
+      "pending": {
+        "many": "{{ count }} niet-opgeslagen wijzigingen",
+        "one": "{{ count }} niet-opgeslagen wijziging"
+      },
+      "permission-for": "Recht voor {{ principal }}",
+      "refusal": {
+        "changed-on-server": "het is op de server gewijzigd nadat deze pagina was geladen. Laad opnieuw en voer de wijziging dan opnieuw uit.",
+        "deny-entry": "het weigert toegang, en dit paneel kan alleen verlenen: door het te bewerken, zou het een verlening worden.",
+        "invalid-time-frame": "de einddatum ligt voor de begindatum.",
+        "no-id": "de server heeft geen identificatie hiervoor verzonden, dus het kan niet worden gewijzigd zonder een andere vermelding te riskeren.",
+        "no-principal": "het noemt geen gebruiker of groep.",
+        "not-applied": "de server heeft de wijziging geaccepteerd, maar de rechten laten dit niet zien.",
+        "undefined-permission": "deze server definieert dat recht niet."
+      },
+      "refused": {
+        "heading": "Er is niets opgeslagen. Deze vermeldingen kunnen niet vanuit dit paneel worden opgeslagen:"
+      },
+      "reload": "Opnieuw laden",
+      "remove": "Verwijderen",
+      "remove-entry": "{{ permission }} verwijderen voor {{ principal }}",
+      "retry": "Opnieuw proberen",
+      "save": "Opslaan",
+      "saved": {
+        "many": "{{ count }} wijzigingen opgeslagen.",
+        "one": "{{ count }} wijziging opgeslagen."
+      },
+      "state": {
+        "added": "Nieuw",
+        "changed": "Gewijzigd",
+        "removed": "Te verwijderen"
+      },
+      "status": {
+        "archived": "Verlopen",
+        "pending": "Nog niet actief"
+      },
+      "title": "Rechten",
+      "unconfirmed": {
+        "heading": "De server heeft niet alle wijzigingen toegepast. Deze vermeldingen zijn niet zoals u ze hebt ingesteld:"
+      },
+      "undo": "Ongedaan maken",
+      "unnamed-principal": "(geen gebruiker of groep)",
+      "unread": {
+        "heading": "Er is niets opgeslagen. De rechten konden niet worden gelezen voordat ze werden opgeslagen, dus is er geen wijziging verzonden:"
+      },
+      "unverified": {
+        "heading": "De wijzigingen zijn verzonden, maar het opnieuw lezen van de rechten is mislukt, waardoor het paneel ze niet kan bevestigen. Laad opnieuw om te zien wat de server bevat."
+      }
+    },
+    "properties-panel": {
+      "by": "Door",
+      "collections": "Collecties",
+      "contributors": "Bijdragers",
+      "coverage": "Dekking",
+      "created": "Gemaakt",
+      "description": "Beschrijving",
+      "expires": "Verloopt",
+      "file-name": "Bestandsnaam",
+      "format": "Formaat",
+      "indexing-properties": "Indexeringseigenschappen",
+      "last-modified": "Laatst aangepast",
+      "nature": "Aard",
+      "process": "Verwerken",
+      "publications": "Publicaties",
+      "running": "Wordt uitgevoerd",
+      "state": "Status",
+      "subjects": "Onderwerpen",
+      "tags": "Tags",
+      "title": "Titel",
+      "version": "Versie"
+    },
+    "tag-editor": {
+      "add": "Tags toevoegen aan dit document",
+      "added": "De tag {{tag}} is toegevoegd aan het document.",
+      "adding": "Tag {{tag}} wordt toegevoegd",
+      "error": {
+        "add": "De tag {{tag}} kon niet worden toegevoegd.",
+        "forbidden": "U hebt geen rechten om de tags van dit document te wijzigen.",
+        "remove": "De tag {{tag}} kon niet worden verwijderd."
+      },
+      "new": "+ {{tag}}",
+      "new-label": "Nieuwe tag {{tag}}",
+      "none": "Geen tags",
+      "remove": "Tag {{tag}} verwijderen",
+      "removed": "De tag {{tag}} is verwijderd van het document.",
+      "tags": "Tags"
+    },
+    "change-password-dialog": {
+      "cancel": "Annuleren",
+      "mismatch": "De twee wachtwoorden komen niet overeen.",
+      "save": "Wachtwoord instellen",
+      "title": "Wachtwoord wijzigen",
+      "user": "Gebruiker:",
+      "new-password": "Nieuw wachtwoord",
+      "confirm-password": "Wachtwoord bevestigen"
+    },
+    "rename-dialog": {
+      "cancel": "Annuleren",
+      "failed": "De titel kon niet worden gewijzigd. Probeer het later opnieuw.",
+      "forbidden": "U hebt geen rechten om dit document te hernoemen.",
+      "label": "Titel",
+      "locked": "Dit document is vergrendeld door iemand anders en kan daarom nu niet worden hernoemd.",
+      "not-found": "Dit document bestaat niet meer.",
+      "required": "Voer een titel in",
+      "save": "Hernoemen",
+      "title": "Hernoemen"
+    },
+    "admin-group-details-page": {
+      "could-not-load": "Kan groepsgegevens niet laden.",
+      "could-not-remove-member": "Kan het lid niet verwijderen.",
+      "could-not-remove-permission": "Kan het recht niet verwijderen.",
+      "could-not-update-nested": "Kan de geneste groepen niet bijwerken.",
+      "delete": "Verwijderen",
+      "delete-failed": "Verwijderen mislukt",
+      "delete-group": "Groep verwijderen",
+      "delete-group-named": "Groep \"{{ name }}\" verwijderen?",
+      "edit": "Bewerken",
+      "granted-by": "Verleend door",
+      "group": "Groep",
+      "group-saved": "Groep opgeslagen",
+      "identifier": "Identificatie",
+      "loading": "Laden",
+      "member-removed": "Lid verwijderd",
+      "members": "Leden",
+      "nested-group-removed": "Geneste groep verwijderd",
+      "nested-groups": "Geneste groepen",
+      "no-members": "Geen leden.",
+      "no-nested": "Geen geneste groepen.",
+      "no-permissions": "Deze groep heeft geen rechten.",
+      "on": "Aan",
+      "permission-removed": "Recht verwijderd",
+      "permissions": "Rechten",
+      "remove-member": "{{ name }} verwijderen uit deze groep",
+      "remove-member-tooltip": "Lid verwijderen",
+      "remove-nested": "{{ name }} verwijderen uit deze groep",
+      "remove-nested-tooltip": "Geneste groep verwijderen",
+      "remove-permission": "Recht verwijderen",
+      "right": "Recht",
+      "time-frame": "Tijdsbestek",
+      "update-failed": "Kan de wijzigingen niet opslaan.",
+      "username": "Gebruikersnaam"
+    },
+    "admin-user-details-page": {
+      "change-password": "Wachtwoord wijzigen",
+      "company": "Bedrijf:",
+      "could-not-load": "Kan gebruikersgegevens niet laden.",
+      "could-not-remove-permission": "Kan het recht niet verwijderen.",
+      "could-not-update-groups": "Kan de groepen van de gebruiker niet bijwerken.",
+      "delete": "Verwijderen",
+      "delete-failed": "Verwijderen mislukt",
+      "delete-user": "Gebruiker verwijderen",
+      "delete-user-named": "Gebruiker \"{{ name }}\" verwijderen? Dit kan niet ongedaan worden gemaakt.",
+      "edit": "Bewerken",
+      "email": "E-mail:",
+      "granted-by": "Verleend door",
+      "group-permissions": "Rechten van {{ group }}",
+      "groups": "Groepen",
+      "identifier": "Identificatie",
+      "loading": "Laden",
+      "local-permissions": "Lokale rechten",
+      "name": "Naam",
+      "no-groups": "Geen groepen toegewezen.",
+      "no-local": "Geen lokale rechten.",
+      "no-permissions": "{{ name }} heeft geen rechten.",
+      "on": "Aan",
+      "password-update-failed": "Bijwerken van wachtwoord mislukt",
+      "password-updated": "Wachtwoord bijgewerkt",
+      "permission-removed": "Recht verwijderd",
+      "remove-from-group": "Verwijder {{ name }} van deze gebruiker",
+      "remove-group": "Groep verwijderen",
+      "remove-permission": "Recht verwijderen",
+      "removed-from-group": "Groep verwijderd van de gebruiker",
+      "right": "Recht",
+      "time-frame": "Tijdsbestek",
+      "update-failed": "Kan de wijzigingen niet opslaan.",
+      "user-updated": "Gebruiker opgeslagen"
+    },
+    "admin-users-groups-page": {
+      "could-not-load-groups": "Kan groepen niet laden.",
+      "could-not-load-users": "Kan gebruikers niet laden.",
+      "create-failed": "Kan de groep niet maken.",
+      "delete": "Verwijderen",
+      "delete-failed": "Verwijderen mislukt",
+      "delete-group": "Groep verwijderen",
+      "delete-group-aria": "Groep {{ name }} verwijderen",
+      "delete-group-named": "Groep \"{{ name }}\" verwijderen?",
+      "delete-user": "Gebruiker verwijderen",
+      "delete-user-aria": "Gebruiker {{ name }} verwijderen",
+      "delete-user-named": "Gebruiker \"{{ name }}\" verwijderen? Dit kan niet ongedaan worden gemaakt.",
+      "edit": "Bewerken",
+      "edit-group": "Groep {{ name }} bewerken",
+      "edit-user": "Gebruiker {{ name }} bewerken",
+      "email": "E-mail",
+      "group": "Groep",
+      "group-created": "Groep gemaakt",
+      "group-deleted": "Groep verwijderd",
+      "group-updated": "Groep opgeslagen",
+      "groups": "Groepen",
+      "groups-tab": "Groepen ({{ count }})",
+      "identifier": "Identificatie",
+      "invitation-sent": "Uitnodiging verzonden",
+      "label": "Label",
+      "loading": "Laden",
+      "members": "Leden",
+      "name": "Naam",
+      "new": "Nieuw",
+      "new-group": "Nieuwe groep",
+      "new-user": "Nieuwe gebruiker",
+      "no-groups": "Geen groepen gevonden voor deze zoekopdracht.",
+      "no-recent": "Geen recente gebruiker of groep.",
+      "no-users": "Geen gebruikers gevonden voor deze zoekopdracht.",
+      "recent": "Recent gemaakte gebruikers en groepen",
+      "run-search": "Zoekopdracht uitvoeren",
+      "search": "Zoeken naar gebruikers en groepen",
+      "title": "Gebruikers en groepen",
+      "update-failed": "Kan de wijzigingen niet opslaan.",
+      "user-created": "Gebruiker gemaakt",
+      "user-deleted": "Gebruiker verwijderd",
+      "user-updated": "Gebruiker opgeslagen",
+      "username": "Gebruikersnaam",
+      "users-tab": "Gebruikers ({{ count }})"
+    },
+    "confirm-dialog": {
+      "cancel": "Annuleren"
+    },
+    "group-form-dialog": {
+      "cancel": "Annuleren",
+      "create": "Maken",
+      "create-another": "Nog een maken",
+      "create-group": "Groep maken",
+      "edit-group": "Groep bewerken",
+      "group-name": "Groepsnaam",
+      "label": "Label",
+      "member-usernames": "Gebruikersnamen van leden",
+      "pick-member": "Kies uit de zoekresultaten of voer een gebruikersnaam in en druk op Enter",
+      "remove-member": "{{ name }} verwijderen",
+      "save": "Opslaan",
+      "search-users": "Zoek gebruikers of typ een gebruikersnaam…"
+    },
+    "user-form-dialog": {
+      "cancel": "Annuleren",
+      "company": "Bedrijf",
+      "create": "Maken",
+      "create-another": "Nog een maken",
+      "create-failed": "Maken mislukt",
+      "create-user": "Gebruiker maken",
+      "edit-user": "Gebruiker bewerken",
+      "email": "E-mail",
+      "first-name": "Voornaam",
+      "groups": "Groepen",
+      "invitation-failed": "Uitnodiging mislukt",
+      "last-name": "Achternaam",
+      "loading": "Laden",
+      "loading-groups": "Groepen worden geladen...",
+      "password": "Wachtwoord",
+      "passwords-do-not-match": "Wachtwoorden komen niet overeen",
+      "pick-group": "Kies uit de zoekresultaten of voer een groepsnaam in en druk op Enter",
+      "remove-group": "Groep {{ name }} verwijderen",
+      "save": "Opslaan",
+      "search-groups": "Zoek groepen of typ een groepsnaam…",
+      "set-password": "Gebruikerswachtwoord instellen",
+      "username": "Gebruikersnaam",
+      "verify-password": "Wachtwoord verifiëren"
+    },
+    "pickers": {
+      "choose-from-list": "Kies een item uit de lijst",
+      "clear": "Wissen",
+      "failed": "Zoeken mislukt. Probeer het opnieuw.",
+      "loading": "Wordt geladen…",
+      "min-chars-many": "Typ minstens {{ count }} tekens",
+      "min-chars-one": "Typ minstens {{ count }} teken",
+      "no-results": "Geen resultaten",
+      "remove": "{{ name }} verwijderen",
+      "required": "Vereist",
+      "results-many": "{{ count }} resultaten",
+      "results-one": "{{ count }} resultaat",
+      "searching": "Bezig met zoeken…"
+    },
+    "tag-input": {
+      "add": "“{{ tag }}” toevoegen"
+    },
+    "toast": {
+      "dismiss": "Ontsla",
+      "retry": "Opnieuw proberen"
+    },
+    "search-filters": {
+      "fulltext": "Volledige tekst",
+      "fulltext-placeholder": "Zoeken naar iets...",
+      "clear-fulltext": "Volledige tekst wissen",
+      "modified": {
+        "title": "Aanpassingsdatum",
+        "last24h": "Afgelopen 24 uur",
+        "last-week": "Afgelopen week",
+        "last-month": "Afgelopen maand",
+        "last-year": "Afgelopen jaar",
+        "prior-to-last-year": "Meer dan een jaar geleden"
+      },
+      "authors": "Auteurs",
+      "authors-placeholder": "Zoeken naar auteurs...",
+      "collections": "Collecties",
+      "collections-placeholder": "Selecteer een waarde.",
+      "loading-collections": "Collecties worden geladen...",
+      "collections-failed": "Kan uw collecties niet laden.",
+      "tags": "Tags",
+      "tags-placeholder": "bijv. evenementen, amsterdam",
+      "tags-hint": "Voer 1 of meer tekens in",
+      "no-results": "Geen resultaten gevonden",
+      "no-results-for": "Geen resultaten voor {{ term }}",
+      "nature": "Aard",
+      "subjects": "Onderwerpen",
+      "coverage": "Dekking",
+      "size": {
+        "title": "Grootte",
+        "tiny": "Minder dan 100 kB",
+        "small": "Tussen 100 kB en 1 MB",
+        "medium": "Tussen 1 MB en 10 MB",
+        "big": "Tussen 10 MB en 100 MB",
+        "huge": "Meer dan 100 MB"
+      },
+      "no-available-results": "Geen beschikbare resultaten",
+      "reset": "Opnieuw instellen",
+      "save-as": "Opslaan als",
+      "remove": "{{ value }} verwijderen",
+      "chosen-authors": "Gekozen auteurs",
+      "chosen-collections": "Gekozen collecties",
+      "chosen-tags": "Gekozen tags"
+    },
+    "saved-search-select": {
+      "label": "Opgeslagen zoekresultaten",
+      "placeholder": "Zoekfilters",
+      "loading": "Opgeslagen zoekresultaten worden geladen...",
+      "none": "Geen opgeslagen zoekresultaten",
+      "no-match": "Geen overeenkomende opgeslagen zoekresultaten"
+    },
+    "saved-search-actions": {
+      "save-as": "Opslaan als",
+      "save": "Opslaan",
+      "more": "Acties voor opgeslagen zoekopdracht",
+      "rename": "Hernoemen",
+      "share": "Delen",
+      "delete": "Verwijderen"
+    },
+    "upload-queue": {
+      "done": "Geüpload",
+      "failed": "Kon niet worden geüpload",
+      "forbidden": "U hebt geen rechten om hier documenten toe te voegen",
+      "not-found": "De map bestaat niet meer",
+      "progress": "Uploaden {{ name }}",
+      "remove": "{{ name }} verwijderen",
+      "retry": "{{ name }} opnieuw proberen",
+      "summary": "{{ done }} van {{ total }} geüpload",
+      "summary-failed": "{{ count }} kon niet worden geüpload",
+      "uploading": "Uploaden, {{ percent }}%",
+      "waiting": "Wachten"
+    },
+    "user-group-picker": {
+      "group": "Groep",
+      "user": "Gebruiker"
+    },
+    "vocabulary-select": {
+      "failed": "Kan de lijst niet laden. Open deze opnieuw om het nog eens te proberen."
+    }
+  },
   "search": {
     "ai-search": "AI-zoeken",
     "ai-search-active": "AI-zoeken actief",
@@ -1832,7 +2604,9 @@
       "failed-to-download-document": "Kan document niet downloaden.",
       "failed-to-load-search-results": "Kan zoekresultaten niet laden.",
       "failed-to-update-favorites": "Kan favorieten niet bijwerken.",
-      "nxql-query-execution-failed-the-generated-query": "Uitvoering van NXQL-query is mislukt. De gegenereerde query is mogelijk ongeldig."
+      "nxql-query-execution-failed-the-generated-query": "Uitvoering van NXQL-query is mislukt. De gegenereerde query is mogelijk ongeldig.",
+      "failed-to-open-saved-search": "Kan de opgeslagen zoekopdracht niet openen.",
+      "failed-to-delete-saved-search": "Kan de opgeslagen zoekopdracht niet verwijderen."
     },
     "no-results-for": "Geen resultaten voor {{ term }}",
     "quick-filter": {
@@ -1992,6 +2766,7 @@
     "document-viewer": {
       "additional-formats": "Aanvullende indelingen",
       "annotations-are-not-available-for-this": "Annotaties zijn niet beschikbaar voor dit document.",
+      "annotations-frame": "Annotaties voor {{ name }}",
       "audio-codec": "Audiocodec",
       "bit-depth-per-channel": "Bitdiepte per kanaal",
       "color-profile": "Kleurprofiel",
@@ -2014,9 +2789,12 @@
       "iptc-rights": "Rechten",
       "iptc-source": "Bron",
       "loading": "Laden",
+      "note-frame": "Notitie-inhoud voor {{ name }}",
       "open-with-nuxeo-drive": "Openen met Nuxeo Drive",
+      "pdf-frame": "PDF-voorvertoning van {{ name }}",
       "picture-info": "Afbeeldingsinfo",
       "preview": "Voorbeeld",
+      "preview-frame": "Voorvertoning van {{ name }}",
       "preview-not-available": "Preview niet beschikbaar",
       "remove": "Verwijderen",
       "remove-main-file": "Hoofdbestand verwijderen",
@@ -2061,7 +2839,8 @@
     },
     "saved-search-dialog": {
       "cancel": "Annuleren",
-      "save": "Opslaan"
+      "save": "Opslaan",
+      "no-slash": "U kunt het teken '/' niet gebruiken in de naam"
     },
     "selection-topbar": {
       "clear": "Wissen",
@@ -2204,6 +2983,7 @@
     "tabs-view": "Weergeven"
   },
   "tasks": {
+    "breadcrumbs": "Breadcrumbs",
     "document": "Document",
     "due-on": "Vervalt {{ date }}",
     "message": {

@@ -10,6 +10,11 @@
     "context-menu-share": "Partager",
     "context-menu-subscribe": "M'avertir",
     "context-menu-unsubscribe": "Se désabonner",
+    "row-actions-copy-to": "Copier vers…",
+    "row-actions-delete": "Supprimer",
+    "row-actions-download": "Télécharger",
+    "row-actions-move-to": "Déplacer vers…",
+    "row-actions-rename": "Renommer",
     "toolbar-add-to-clipboard": "Ajouter au Presse-papiers",
     "toolbar-add-to-collection": "Ajouter à la collection",
     "toolbar-add-to-favorites": "Ajouter aux favoris",
@@ -478,6 +483,10 @@
       "retry": "Réessayer",
       "root": "Racine"
     },
+    "not-found": {
+      "go-to-dashboard": "Aller au tableau de bord",
+      "heading": "Cette page n'existe pas"
+    },
     "nuxeo-drive-page": {
       "application": "Application",
       "created": "Créé",
@@ -508,7 +517,7 @@
       "coming-soon": "Prochainement disponible"
     },
     "preset": {
-      "badge": "Preset: {{ label }}"
+      "badge": "Préréglage : {{ label }}"
     },
     "profile-page": {
       "change-password": "Changer le mot de passe",
@@ -624,6 +633,7 @@
   "browse": {
     "block": "Bloquer",
     "breadcrumb": {
+      "label": "Fil d’Ariane",
       "root": "Racine"
     },
     "browse": {
@@ -636,11 +646,14 @@
       "card-view": "Vue en cartes",
       "category": "Catégorie",
       "clear": "Effacer",
+      "clear-modified": "Effacer la plage de dates de modification",
+      "clear-uploads": "Effacer",
       "close-column-picker": "Fermer le sélecteur de colonnes",
       "close-panel": "Fermer le panneau",
       "collection-actions": "Actions de la collection",
       "column-settings": "Paramètres des colonnes",
       "comment": "Commentaire",
+      "contents-of": "Contenu de {{ name }}",
       "contributors": "Contributeurs",
       "create-folder-upload-files-or-import": "Créer un dossier, importer des fichiers ou importer un CSV",
       "create-import": "Créer / Importer",
@@ -649,9 +662,11 @@
       "delete": "Supprimer",
       "done": "Terminé",
       "download-all": "Tout télécharger",
+      "drop-to-upload": "Déposez des fichiers pour les importer dans {{ name }}",
       "edit": "Modifier",
       "export-csv": "Exporter CSV",
       "filter-by-title": "Filtrer par titre...",
+      "filtering": "Filtrage…",
       "from": "De",
       "granted-by": "Accordé par",
       "if-you-want-to-explicitly-control": "Si vous souhaitez contrôler explicitement l'accès à ce document, vous pouvez bloquer l'héritage des autorisations. Toute modification apportée au document parent n'affectera pas les conditions d'accès à ce document. Vous et les administrateurs serez ajoutés aux autorisations locales.",
@@ -695,6 +710,7 @@
       "trash-is-empty": "La corbeille est vide",
       "type": "Type",
       "upload-with-nuxeo-drive": "Importer avec Nuxeo Drive",
+      "uploads": "Importations",
       "user": "Utilisateur",
       "user-group": "Utilisateur / Groupe",
       "username": "Nom d'utilisateur"
@@ -719,7 +735,9 @@
       "reset": "Réinitialiser"
     },
     "create-import": {
-      "types-load-failed": "Impossible de charger les types de documents pouvant être créés dans ce dossier."
+      "types-folder-missing": "Ce dossier n'existe plus. Revenez en arrière et choisissez un autre emplacement.",
+      "types-forbidden": "Vous n'êtes pas autorisé(e) à ajouter du contenu à ce dossier. Choisissez un autre emplacement ou demandez l'accès à un administrateur.",
+      "types-load-failed": "Impossible de charger les types de documents pour ce dossier. Vérifiez votre connexion et réessayez."
     },
     "create-import-dialog": {
       "add-more-files": "Ajouter d'autres fichiers",
@@ -820,6 +838,7 @@
       "action-failed": "Échec de l'action",
       "collection-moved-to-trash": "Collection déplacée dans la corbeille",
       "collection-updated": "Collection mise à jour",
+      "copied-to": "« {{ name }} » copié dans {{ folder }}",
       "could-not-load-folder-contents": "Impossible de charger le contenu du dossier.",
       "could-not-resolve-a-default-folder-open": "Impossible de déterminer un dossier par défaut. Ouvrez d'abord un dossier dans Parcourir.",
       "could-not-resolve-this-path-try-another": "Impossible de résoudre ce chemin. Essayez un autre dossier.",
@@ -834,12 +853,14 @@
       "domain-container-guidance": "Ouvrez Sections, Modèles ou Espaces de travail, puis créez du contenu dans ces dossiers.",
       "download-failed": "Échec du téléchargement.",
       "failed-to-add-tag": "Échec de l'ajout de la balise",
+      "failed-to-copy": "Le document n'a pas pu être copié.",
       "failed-to-delete": "Échec de la suppression",
       "failed-to-delete-collection": "Échec de la suppression de la collection",
       "failed-to-load-collection": "Échec du chargement de la collection",
       "failed-to-load-folder-contents": "Échec du chargement du contenu du dossier.",
       "failed-to-load-permissions": "Échec du chargement des autorisations",
       "failed-to-load-selected-documents-for-deletion": "Échec du chargement des documents sélectionnés pour la suppression",
+      "failed-to-move": "Le document n'a pas pu être déplacé.",
       "failed-to-remove-tag": "Échec de la suppression de la balise",
       "failed-to-restore-document": "Échec de la restauration du document.",
       "failed-to-send-notification": "Échec de l'envoi de la notification",
@@ -850,6 +871,7 @@
       "file-upload-failed": "Échec de l'importation du fichier",
       "inheritance-blocked": "Héritage verrouillé",
       "inheritance-unblocked": "Héritage déverrouillé",
+      "moved-to": "« {{ name }} » déplacé dans {{ folder }}",
       "moved-to-trash": "Déplacé dans la corbeille",
       "notification-email-sent": "E-mail de notification envoyé",
       "open-a-folder-to-create-or-import": "Ouvrez un dossier pour créer ou importer du contenu.",
@@ -859,6 +881,7 @@
       "please-select-a-csv-file": "Veuillez sélectionner un fichier .csv.",
       "please-wait-for-the-file-upload-to": "Veuillez attendre la fin de l'importation du fichier.",
       "remove-all-collections-from-this-folder-before": "Supprimez toutes les collections de ce dossier avant de le supprimer.",
+      "renamed": "Renommé en « {{ name }} »",
       "restricted-import-location": "Sélectionnez un autre conteneur pour créer votre contenu.",
       "search-failed": "Échec de la recherche",
       "selected-path-is-not-a-folder-choose": "Le chemin sélectionné n'est pas un dossier. Choisissez un dossier ou remontez d'un niveau.",
@@ -867,8 +890,15 @@
       "subscribed-to-notifications": "Abonné aux notifications",
       "unsubscribed": "Désabonné",
       "upload-failed": "Échec de l'importation",
+      "upload-in-progress": "Attendez la fin de l'importation des fichiers en cours avant d'en déposer d'autres.",
       "uploading": "Importation…",
       "uploading-file-of": "Importation du fichier {{ index }} sur {{ count }}…"
+    },
+    "row-actions": {
+      "copy-heading": "Copier « {{ name }} » dans",
+      "copy-here": "Copier ici",
+      "move-heading": "Déplacer « {{ name }} » dans",
+      "move-here": "Déplacer ici"
     },
     "scope": {
       "create-import": "Créer / Importer",
@@ -895,6 +925,7 @@
     "collection-detail": {
       "actions": "Actions",
       "back-to-collections": "Retour aux collections",
+      "breadcrumbs": "Fil d’Ariane",
       "category": "Catégorie",
       "comment": "Commentaire",
       "date": "Date",
@@ -910,6 +941,7 @@
       "if-you-want-to-explicitly-control": "Si vous souhaitez contrôler explicitement l'accès à ce document, vous pouvez bloquer l'héritage des autorisations. Toute modification apportée au document parent n'affectera pas les conditions d'accès à ce document. Vous et les administrateurs serez ajoutés aux autorisations locales.",
       "last-contributor": "Dernier contributeur",
       "loading": "Chargement",
+      "members-of": "Membres de {{ name }}",
       "modified": "Modifié",
       "more-actions": "Plus d'actions",
       "new": "Nouveau",
@@ -1029,11 +1061,11 @@
     "dismiss": "Abandonner",
     "email-example": "nom@entreprise.com",
     "lock": {
-      "already-locked": "Document déjà verrouillé par un autre utilisateur, veuillez rafraîchir votre page.",
-      "lock-no-permission": "Vous n'avez pas l'autorisation de verrouiller ce document.",
+      "already-locked": "Document déjà verrouillé par un autre utilisateur, veuillez actualiser votre page.",
+      "lock-no-permission": "Vous n'êtes pas autorisé(e) à verrouiller ce document.",
       "locked-by": "Verrouillé par {{ owner }} le {{ date }}",
-      "locked-by-another-user": "Vous ne pouvez pas déverrouiller ce document car il est verrouillé par un autre utilisateur.",
-      "unlock-no-permission": "Vous n'avez pas l'autorisation de déverrouiller ce document."
+      "locked-by-another-user": "Vous ne pouvez pas déverrouiller ce document, car il est verrouillé par un autre utilisateur.",
+      "unlock-no-permission": "Vous n’êtes pas autorisé(e) à déverrouiller ce document."
     },
     "ok": "OK",
     "page-number": "Page {{ page }}",
@@ -1145,6 +1177,7 @@
       "attachments": "Pièces jointes",
       "augment-your-editorial-workflow-with-cognitive": "Enrichissez votre flux de travail éditorial grâce au traitement cognitif. Générez des résumés, classez des données complexes et découvrez des relations cachées.",
       "automatic-taxonomy-mapping-based-on-entity": "Mappage automatique de la taxonomie basé sur l'extraction d'entités et l'analyse des sentiments du texte du document actuel.",
+      "breadcrumbs": "Fil d’Ariane",
       "by": "Par",
       "cancel": "Annuler",
       "categorize-content-into-predefined-editorial-verticals": "Classez le contenu dans des verticales éditoriales prédéfinies et extrayez les métadonnées structurelles, notamment l'auteur, la date de publication et l'estimation du temps de lecture.",
@@ -1230,6 +1263,7 @@
       "reply": "Répondre",
       "reply-actions": "Actions sur la réponse",
       "republish": "Republier",
+      "republish-confirm": "Voulez-vous vraiment remplacer cette publication par la version la plus récente du document\\u00a0?",
       "restore": "Restaurer",
       "right": "Droite",
       "running": "En cours",
@@ -1262,6 +1296,8 @@
       "unclassified": "Non classé",
       "unpublish": "Dépublier",
       "unpublish-all": "Tout dépublier",
+      "unpublish-all-confirm": "Voulez-vous vraiment annuler la publication de ces documents\\u00a0?",
+      "unpublish-confirm": "Voulez-vous vraiment annuler la publication de ce document\\u00a0?",
       "upload-attachment": "Importer la pièce jointe",
       "user": "Utilisateur",
       "user-group": "Utilisateur / Groupe",
@@ -1290,7 +1326,11 @@
       "enter-a-valid-date": "Saisissez une date valide",
       "expires": "Date d'expiration",
       "nature": "Nature",
+      "not-accepted": "Nuxeo n'a pas accepté cette valeur.",
       "save": "Enregistrer",
+      "save-failed": "Les modifications n'ont pas pu être enregistrées. Réessayez.",
+      "save-forbidden": "Vous n'êtes pas autorisé(e) à modifier ce document.",
+      "saving": "Enregistrement",
       "search": "Rechercher…",
       "search-coverage": "Rechercher une couverture",
       "search-nature": "Rechercher une nature",
@@ -1360,7 +1400,7 @@
       "removed-from-favorites": "Supprimé des favoris",
       "reply-deleted": "Réponse supprimée",
       "restore-version-conflict": "Cette version ne peut pas être restaurée en raison d'un conflit avec l'état actuel du document. Rechargez la page et réessayez.",
-      "restore-version-forbidden": "Vous ne pouvez pas restaurer cette version : vous n'avez pas l'autorisation, ou un autre utilisateur a verrouillé le document.",
+      "restore-version-forbidden": "Vous ne pouvez pas restaurer cette version : vous n'avez pas l'autorisation nécessaire, ou quelqu'un d'autre a verrouillé le document.",
       "search-failed-try-again": "Échec de la recherche. Réessayez.",
       "section-not-found": "Section introuvable",
       "selected-documents-have-no-insertable-image-url": "Les documents sélectionnés n'ont pas d'URL d'image insérable",
@@ -1412,6 +1452,7 @@
       "clear": "Effacer",
       "close": "Fermer",
       "filters": "Filtres",
+      "loading": "Chargement des images",
       "no-pictures-found": "Aucune image trouvée.",
       "picture-documents": "Documents image",
       "quick-search": "Recherche rapide",
@@ -1454,20 +1495,22 @@
     "task-due-before": "avant le {{ due }}",
     "unblock": "Débloquer",
     "unknown": "Inconnu",
-    "version-go-to-latest": "Aller à la dernière version",
+    "version-go-to-latest": "Accéder à la dernière version",
     "version-latest": "{{ version }} récente",
     "version-latest-entry": "Dernière version",
     "version-modified-by": "Modifié {{ when }} par {{ who }}",
     "version-restore": "Restaurer {{ version }}",
-    "version-restore-confirm-title": "Êtes-vous sûr ?",
+    "version-restore-confirm-title": "Vous êtes sûr ?",
+    "version-restore-replaces-content": "La restauration de la version {{ version }} remplace le contenu actuel du document, y compris toutes les modifications effectuées après la version {{ version }}.",
     "version-viewing": "Vous consultez la version {{ version }}.",
     "visual-editor": "Editeur visuel",
     "workflow-started-on-document": "Vous avez démarré un flux de travail {{ workflow }} sur ce document."
   },
   "document-layouts": {
-    "no": "No",
-    "sections": "Property sections",
-    "yes": "Yes"
+    "loading-form": "Chargement du formulaire",
+    "no": "Non",
+    "sections": "Sections de propriétés",
+    "yes": "Oui"
   },
   "drawer": {
     "administration-analytics": "Analyse",
@@ -1611,8 +1654,8 @@
   },
   "nav": {
     "clipboard": {
-      "aria-label-one": "{{ name }}, {{ count }} élément",
       "aria-label-many": "{{ name }}, {{ count }} éléments",
+      "aria-label-one": "{{ name }}, {{ count }} élément",
       "copy": "Copier",
       "empty": "Le presse-papiers est vide",
       "hint": "Utilisez « Ajouter au presse-papiers » sur des documents ou des collections pour ajouter des éléments ici.",
@@ -1663,6 +1706,7 @@
       "retry": "Réessayer"
     },
     "tree": {
+      "label": "Dossiers",
       "retry": "Réessayer",
       "root": "Racine",
       "toggle": "Activer/désactiver {{ name }}"
@@ -1729,14 +1773,32 @@
     },
     "right": {
       "AddChildren": "Ajouter des enfants",
+      "CanAskForPublishing": "Peut demander la publication",
       "Everything": "Tout gérer",
       "ManageWorkflows": "Gérer les flux de travail",
       "Read": "Lire",
       "ReadCanCollect": "Peut collecter",
       "ReadRemove": "Lire et supprimer",
+      "ReadVersion": "Lire les versions",
       "ReadWrite": "Modifier",
       "Remove": "Supprimer",
-      "Write": "Écrire"
+      "RemoveChildren": "Supprimer les éléments enfants",
+      "SetRetention": "Définir la conservation",
+      "Unlock": "Déverrouiller",
+      "UnsetRetention": "Annuler la conservation",
+      "Version": "Créer des versions",
+      "Write": "Écrire",
+      "WriteSecurity": "Gérer les autorisations",
+      "WriteVersion": "Modifier les versions",
+      "Browse": "Parcourir",
+      "ReadChildren": "Lire les éléments enfants",
+      "ReadLifeCycle": "Lire le cycle de vie",
+      "ReadProperties": "Lire les propriétés",
+      "ReadSecurity": "Lire la sécurité",
+      "WriteLifeCycle": "Modifier le cycle de vie",
+      "WriteProperties": "Modifier les propriétés",
+      "ManageLegalHold": "Gérer la conservation légale",
+      "ManageRecord": "Gérer l'enregistrement"
     },
     "share-external-dialog": {
       "cancel": "Annuler",
@@ -1791,6 +1853,716 @@
       "name-placeholder": "Saisissez un nom pour votre recherche enregistrée"
     }
   },
+  "satori-components": {
+    "action-menu": {
+      "more-actions": "Plus d'actions"
+    },
+    "breadcrumbs": {
+      "show-more": "Afficher plus de fil d'Ariane"
+    },
+    "column-picker": {
+      "close": "Fermer le sélecteur de colonnes",
+      "done": "Terminé",
+      "reset": "Réinitialiser",
+      "title": "Paramètres des colonnes"
+    },
+    "comments": {
+      "cancel": "Annuler",
+      "clear": "Effacer",
+      "comment-actions": "Actions pour le commentaire de {{author}}",
+      "comment-label": "Commentaire",
+      "delete": "Supprimer",
+      "delete-comment-message": "Voulez-vous vraiment supprimer ce commentaire\\u00a0?",
+      "delete-comment-title": "Supprimer le commentaire",
+      "delete-comment-with-replies": "Voulez-vous vraiment supprimer ce commentaire\\u00a0? Toutes les réponses à ce commentaire seront également supprimées.",
+      "delete-reply-message": "Voulez-vous vraiment supprimer cette réponse\\u00a0?",
+      "delete-reply-title": "Supprimer la réponse",
+      "edit": "Modifier",
+      "edit-comment": "Modifier le commentaire",
+      "edit-reply": "Modifier la réponse",
+      "edited": "{{time}} (modifié)",
+      "empty": "Pas de commentaire pour l'instant",
+      "error": {
+        "add-comment": "Le commentaire n'a pas pu être ajouté.",
+        "add-reply": "La réponse n'a pas pu être ajoutée.",
+        "delete-comment": "Le commentaire n'a pas pu être supprimé.",
+        "delete-reply": "La réponse n'a pas pu être supprimée.",
+        "edit-comment": "Le commentaire n'a pas pu être enregistré.",
+        "edit-reply": "La réponse n'a pas pu être enregistrée.",
+        "forbidden-add": "Vous n'êtes pas autorisé(e) à commenter ce document.",
+        "forbidden-delete": "Vous n'êtes pas autorisé(e) à supprimer ce commentaire.",
+        "forbidden-edit": "Vous n'êtes pas autorisé(e) à modifier ce commentaire.",
+        "not-found-comment": "Ce commentaire n'est plus disponible. Les commentaires ont été rechargés.",
+        "not-found-reply": "Cette réponse n'est plus disponible. Les commentaires ont été rechargés."
+      },
+      "last-reply": "Dernière réponse {{time}}",
+      "list": "Commentaires",
+      "load-failed": "Les commentaires n'ont pas pu être chargés.",
+      "loading": "Chargement des commentaires",
+      "replies-one": "1 réponse",
+      "replies-other": "{{count}} réponses",
+      "reply": "Répondre",
+      "reply-actions": "Actions pour la réponse de {{author}}",
+      "reply-label": "Répondre",
+      "reply-to": "Répondre à {{author}}",
+      "retry": "Réessayer",
+      "save": "Enregistrer",
+      "show-all": "Afficher tout",
+      "submit-comment": "Ajouter un commentaire",
+      "submit-hint": "Ctrl + Entrée pour envoyer",
+      "submit-reply": "Ajouter une réponse",
+      "view-all-comments": "Afficher les {{count}} commentaires",
+      "view-all-replies": "Afficher les {{count}} réponses",
+      "write-comment": "Écrivez un commentaire ici",
+      "write-reply": "Écrivez une réponse ici"
+    },
+    "create-version-dialog": {
+      "title": "Créer une version pour {{document}} - Version {{version}}",
+      "kind": "Version à créer",
+      "minor": "Version mineure",
+      "major": "Version majeure",
+      "cancel": "Annuler",
+      "create": "Créer une version",
+      "creating": "Création de la version",
+      "created": "Version {{version}} créée",
+      "forbidden": "Vous n'êtes pas autorisé(e) à créer une version de ce document.",
+      "failed": "La version n'a pas pu être créée."
+    },
+    "details-panel": {
+      "close": "Fermer les détails"
+    },
+    "document-history": {
+      "filters": "Filtrer l'historique",
+      "user": "Nom d'utilisateur",
+      "user-hint": "Le nom d'utilisateur exact",
+      "from": "De",
+      "to": "A",
+      "action": "Action effectuée",
+      "category": "Catégorie",
+      "any": "N'importe lequel",
+      "date": "Date",
+      "comment": "Commentaire",
+      "state": "État",
+      "caption": "Historique du document",
+      "loading": "Chargement de l'historique",
+      "failed": "L'historique n'a pas pu être chargé.",
+      "empty": "Aucune entrée d'historique pour le moment",
+      "no-match": "Aucune entrée d'historique ne correspond à ces filtres"
+    },
+    "document-toolbar": {
+      "label": "Actions sur le document",
+      "more-actions": "Plus d'actions"
+    },
+    "document-list": {
+      "actions": "Actions",
+      "drop": "Déposez des fichiers pour les importer ici",
+      "empty": "Rien ici pour le moment",
+      "keyboard-hint": "Les touches fléchées permettent de se déplacer entre les documents. Espace sélectionne, Maj étend la sélection, Entrée ouvre.",
+      "keyboard-hint-no-selection": "Les touches fléchées permettent de se déplacer entre les documents. Entrée ouvre.",
+      "loading": "Chargement des documents",
+      "row-actions": "Actions pour {{ name }}",
+      "row-name-repeated": "{{ name }} ({{ index }} sur {{ count }})",
+      "select": "Sélectionner {{ name }}",
+      "select-page": "Tout sélectionner sur cette page",
+      "selection": "Sélection",
+      "sort-by": "Trier par {{ column }}",
+      "sort-cleared": "Tri effacé, affichage de l'ordre par défaut",
+      "sorted-ascending": "Trié par {{ column }}, ordre croissant",
+      "sorted-descending": "Trié par {{ column }}, ordre décroissant"
+    },
+    "document-tree": {
+      "children-failed": "Les dossiers dans {{ name }} n'ont pas pu être chargés",
+      "children-failed-row": "Impossible de charger les dossiers. Réessayer",
+      "children-forbidden": "Vous n'avez pas accès aux dossiers dans {{ name }}",
+      "children-forbidden-row": "Vous n'avez pas accès à ces dossiers",
+      "empty": "Aucun dossier à afficher",
+      "load-failed": "Les dossiers n'ont pas pu être chargés",
+      "loading": "Chargement des dossiers",
+      "root": "Racine"
+    },
+    "date-input": {
+      "invalid": "Saisissez une date comme {{ example }}",
+      "too-early": "Saisissez {{ date }} ou une date ultérieure",
+      "too-late": "Saisissez {{ date }} ou une date antérieure"
+    },
+    "drive-dialog": {
+      "checking": "Vérification de Nuxeo Drive...",
+      "close": "Fermer",
+      "name": "Nuxeo Drive",
+      "package": "Package à installer",
+      "platform": "Plateforme",
+      "title": "Télécharger le client Nuxeo Drive"
+    },
+    "dropzone": {
+      "choose-file": "Choisir un fichier",
+      "choose-files": "Choisir des fichiers"
+    },
+    "error-state": {
+      "forbidden": {
+        "heading": "Vous n'avez pas accès",
+        "message": "Vous n'êtes pas autorisé(e) à voir ce contenu. Demandez l'accès à son propriétaire ou à un administrateur."
+      },
+      "not-found": {
+        "heading": "Introuvable",
+        "message": "Il a peut-être été déplacé ou supprimé, ou le lien est peut-être incorrect."
+      },
+      "retry": "Réessayer",
+      "server": {
+        "heading": "Une erreur s’est produite",
+        "message": "Le serveur n'a pas pu traiter la demande. Réessayez dans un instant."
+      },
+      "unauthorized": {
+        "heading": "Votre session a expiré",
+        "message": "Connectez-vous à nouveau pour continuer."
+      }
+    },
+    "favorite-toggle": {
+      "add": "Ajouter aux favoris",
+      "label": "Favori",
+      "remove": "Supprimer des favoris"
+    },
+    "manage-versions": {
+      "version": "Version",
+      "create": "Créer une version",
+      "unversioned": "Sans version",
+      "latest": "Dernière version",
+      "modified": "Modifié {{when}} par {{who}}",
+      "unknown-user": "Inconnu",
+      "loading": "Chargement des versions",
+      "failed": "Les versions n'ont pas pu être chargées.",
+      "retry": "Réessayer",
+      "none": "Aucune version précédente"
+    },
+    "metadata-editor": {
+      "add-item": "Ajouter à {{label}}",
+      "coverage": "Couverture",
+      "description": "Description",
+      "error": {
+        "date": "Saisissez une date valide pour {{label}}.",
+        "integer": "{{label}} doit être un nombre entier.",
+        "invalid": "{{label}} n'est pas valide.",
+        "item": "Une des valeurs de {{label}} n'est pas valide.",
+        "max-length": "{{label}} doit comporter au plus {{count}} caractères.",
+        "maximum": "{{label}} doit être {{bound}} ou moins.",
+        "maximum-exclusive": "{{label}} doit être inférieur à {{bound}}.",
+        "min-length": "{{label}} doit comporter au moins {{count}} caractères.",
+        "minimum": "{{label}} doit être {{bound}} ou plus.",
+        "minimum-exclusive": "{{label}} doit être supérieur à {{bound}}.",
+        "number": "{{label}} doit être un nombre.",
+        "pattern": "{{label}} n'est pas au format attendu.",
+        "required": "{{label}} est obligatoire."
+      },
+      "expires": "Date d’expiration",
+      "item": "{{label}} {{index}}",
+      "nature": "Nature",
+      "no-value": "Aucune valeur",
+      "remove": "Supprimer",
+      "remove-item": "Supprimer {{label}} {{index}}",
+      "remove-value": "Supprimer {{name}}",
+      "search": "Rechercher",
+      "search-in": "Rechercher {{label}}",
+      "sections": "Sections de métadonnées",
+      "subjects": "Objets",
+      "summary-one": "1 champ doit être corrigé avant d'enregistrer.",
+      "summary-other": "{{count}} champs doivent être corrigés avant d'enregistrer.",
+      "title": "Titre"
+    },
+    "permission-dialogs": {
+      "cancel": "Annuler",
+      "comment": "E-mail de notification",
+      "comment-placeholder": "Bonjour ! Pourriez-vous commenter ce document et...",
+      "date-based": "Basée sur des dates",
+      "delete": {
+        "delete": "Supprimer",
+        "deleting": "Suppression de l'autorisation",
+        "title": "L'autorisation suivante va être supprimée."
+      },
+      "end-before-begin": "La date de fin est antérieure à la date de début.",
+      "error": {
+        "delete": "L'autorisation n'a pas pu être supprimée.",
+        "forbidden": "Vous n'êtes pas autorisé(e) à modifier les autorisations de ce document.",
+        "share": "Le document n'a pas pu être partagé.",
+        "update": "L'autorisation n'a pas pu être mise à jour."
+      },
+      "from": "De",
+      "granted-by": "Accordée par",
+      "permanent": "Permanente",
+      "right": "Droit",
+      "share": {
+        "create": "Créer",
+        "create-another": "Créer et en ajouter un autre",
+        "email": "E-mail",
+        "email-invalid": "Saisissez une adresse e-mail valide.",
+        "email-placeholder": "nom@entreprise.com",
+        "saving": "Partage du document",
+        "shared": "Partagé avec {{email}}, qui a reçu un lien vers le document.",
+        "title": "Partager avec un utilisateur externe"
+      },
+      "time-frame": "Période",
+      "to": "A",
+      "update": {
+        "for": "Pour {{principal}}",
+        "notify": "Envoyer un e-mail pour avertir l'utilisateur",
+        "saving": "Mise à jour de l'autorisation",
+        "title": "Mettre à jour l'autorisation",
+        "update": "Mettre à jour",
+        "updated": "Autorisation mise à jour",
+        "updated-notified": "Autorisation mise à jour et notification envoyée"
+      },
+      "user-group": "Utilisateur / Groupe"
+    },
+    "folder-picker": {
+      "already-here": "Le document se trouve déjà dans ce dossier.",
+      "cancel": "Annuler",
+      "empty": "Aucun dossier ici. Vous pouvez choisir ce dossier.",
+      "failed": "Le dossier n'a pas pu être chargé.",
+      "folders": "Dossiers",
+      "forbidden": "Vous n'avez pas accès à ce dossier.",
+      "inside-itself": "Un dossier ne peut pas être déplacé dans lui-même ni dans un dossier qu'il contient.",
+      "loading": "Chargement des dossiers",
+      "location": "Emplacement",
+      "not-a-folder": "Ceci n'est pas un dossier. Remontez et choisissez un dossier.",
+      "not-found": "Ce dossier n'existe plus.",
+      "retry": "Réessayer",
+      "up": "Remonter d'un niveau"
+    },
+    "pager": {
+      "label": "Pages",
+      "next": "Page suivante",
+      "past-end": "Aucun autre élément",
+      "previous": "Page précédente",
+      "range": "{{ first }}–{{ last }}",
+      "range-of": "{{ first }}–{{ last }} sur {{ total }}"
+    },
+    "permissions-panel": {
+      "add": "Ajouter",
+      "all-permissions": "Toutes les autorisations",
+      "column": {
+        "acl": "Liste d'accès",
+        "actions": "Actions",
+        "granted-by": "Accordée par",
+        "permission": "Autorisation",
+        "principal": "Utilisateur ou groupe",
+        "time-frame": "Période"
+      },
+      "denied": "Refusé",
+      "discard": "Ignorer",
+      "dismiss": "Abandonner",
+      "edit": "Modifier",
+      "edit-entry": "Modifier l'autorisation de {{ principal }}",
+      "editor": {
+        "add": "Ajouter",
+        "add-heading": "Ajouter une autorisation",
+        "apply": "Appliquer",
+        "cancel": "Annuler",
+        "date-based": "Basée sur des dates",
+        "edit-heading": "Modifier l'autorisation de {{ principal }}",
+        "end-before-begin": "La date de fin est antérieure à la date de début.",
+        "from": "De",
+        "no-principal": "Choisissez un utilisateur ou un groupe dans la liste.",
+        "permanent": "Permanente",
+        "permission": "Autorisation",
+        "principal": "Utilisateur ou groupe",
+        "to": "A"
+      },
+      "failed": {
+        "denied": "Vous n'êtes pas autorisé(e) à modifier les autorisations de ce document.",
+        "heading": "{{ applied }} modification(s) sur {{ total }} enregistrée(s). Le serveur a refusé la suivante\\u00a0:",
+        "unknown": "Le serveur n'a indiqué aucun motif."
+      },
+      "group": {
+        "other": "Autres autorisations sur ce serveur",
+        "standard": "Autorisations standards",
+        "suggested": "Suggérées pour ce type de document"
+      },
+      "inherited": {
+        "block": "Bloquer l'héritage",
+        "blocked": "L'héritage est bloqué, seules les autorisations définies sur ce document s'appliquent.",
+        "empty": "Aucune autorisation n'est héritée.",
+        "heading": "Hérité des dossiers parents",
+        "save-first": "Enregistrez ou annulez d'abord vos modifications.",
+        "toggle-failed": "L'héritage n'a pas pu être modifié.",
+        "unblock": "Débloquer l'héritage"
+      },
+      "load-error": {
+        "denied": "Vous n'avez pas accès aux autorisations de ce document.",
+        "failed": "Les autorisations n'ont pas pu être chargées.",
+        "not-found": "Ce document n'existe plus."
+      },
+      "loading": "Chargement des autorisations",
+      "local": {
+        "empty": "Aucune autorisation n'est définie sur ce document.",
+        "heading": "Défini sur ce document"
+      },
+      "locked": {
+        "deny": "Une entrée de refus peut être supprimée ici, mais pas modifiée.",
+        "no-id": "Ne peut pas être modifié ici\\u00a0: le serveur n'a envoyé aucun identifiant pour cette entrée."
+      },
+      "other": {
+        "heading": "Défini par d'autres listes d'accès"
+      },
+      "pending": {
+        "many": "{{ count }} modifications non enregistrées",
+        "one": "{{ count }} modification non enregistrée"
+      },
+      "permission-for": "Autorisation pour {{ principal }}",
+      "refusal": {
+        "changed-on-server": "elle a changé sur le serveur après le chargement de cette page. Rechargez, puis effectuez à nouveau la modification.",
+        "deny-entry": "elle refuse l'accès, et ce panneau ne peut qu'accorder l'accès\\u00a0: la modifier la transformerait en autorisation.",
+        "invalid-time-frame": "sa date de fin est antérieure à sa date de début.",
+        "no-id": "le serveur n'a envoyé aucun identifiant pour elle, elle ne peut donc pas être modifiée sans risquer d'affecter une autre entrée.",
+        "no-principal": "elle ne désigne aucun utilisateur ni groupe.",
+        "not-applied": "le serveur a accepté la modification, mais ses autorisations ne le montrent pas.",
+        "undefined-permission": "ce serveur ne définit pas cette autorisation."
+      },
+      "refused": {
+        "heading": "Rien n'a été enregistré. Ces entrées ne peuvent pas être enregistrées depuis ce panneau\\u00a0:"
+      },
+      "reload": "Recharger",
+      "remove": "Supprimer",
+      "remove-entry": "Supprimer {{ permission }} pour {{ principal }}",
+      "retry": "Réessayer",
+      "save": "Enregistrer",
+      "saved": {
+        "many": "{{ count }} modifications enregistrées.",
+        "one": "{{ count }} modification enregistrée."
+      },
+      "state": {
+        "added": "Nouveau",
+        "changed": "Modifié",
+        "removed": "À supprimer"
+      },
+      "status": {
+        "archived": "Expiré",
+        "pending": "Pas encore actif"
+      },
+      "title": "Autorisations",
+      "unconfirmed": {
+        "heading": "Le serveur n'a pas appliqué toutes les modifications. Ces entrées ne correspondent pas à ce que vous avez défini\\u00a0:"
+      },
+      "undo": "Annuler",
+      "unnamed-principal": "(aucun utilisateur ou groupe)",
+      "unread": {
+        "heading": "Rien n'a été enregistré. Les autorisations n'ont pas pu être lues avant l'enregistrement, aucune modification n'a donc été envoyée\\u00a0:"
+      },
+      "unverified": {
+        "heading": "Les modifications ont été envoyées, mais la relecture des autorisations a échoué, le panneau ne peut donc pas les confirmer. Rechargez pour voir ce que le serveur contient."
+      }
+    },
+    "properties-panel": {
+      "by": "Par",
+      "collections": "Collections",
+      "contributors": "Contributeurs",
+      "coverage": "Couverture",
+      "created": "Créé",
+      "description": "Description",
+      "expires": "Date d’expiration",
+      "file-name": "Nom de fichier",
+      "format": "Format",
+      "indexing-properties": "Propriétés d'indexation",
+      "last-modified": "Dernière modification",
+      "nature": "Nature",
+      "process": "Processus",
+      "publications": "Publications",
+      "running": "En cours",
+      "state": "État",
+      "subjects": "Objets",
+      "tags": "Balises",
+      "title": "Titre",
+      "version": "Version"
+    },
+    "tag-editor": {
+      "add": "Ajouter des balises à ce document",
+      "added": "La balise {{tag}} a été ajoutée au document.",
+      "adding": "Ajout de la balise {{tag}}",
+      "error": {
+        "add": "La balise {{tag}} n'a pas pu être ajoutée.",
+        "forbidden": "Vous n'êtes pas autorisé(e) à modifier les balises de ce document.",
+        "remove": "La balise {{tag}} n'a pas pu être supprimée."
+      },
+      "new": "+ {{tag}}",
+      "new-label": "Nouvelle balise {{tag}}",
+      "none": "Aucune balise",
+      "remove": "Supprimer la balise {{tag}}",
+      "removed": "La balise {{tag}} a été supprimée du document.",
+      "tags": "Balises"
+    },
+    "change-password-dialog": {
+      "cancel": "Annuler",
+      "mismatch": "Les deux mots de passe ne correspondent pas.",
+      "save": "Définir le mot de passe",
+      "title": "Changer le mot de passe",
+      "user": "Utilisateur :",
+      "new-password": "Nouveau mot de passe",
+      "confirm-password": "Confirmer le mot de passe"
+    },
+    "rename-dialog": {
+      "cancel": "Annuler",
+      "failed": "Le titre n'a pas pu être modifié. Réessayez dans un instant.",
+      "forbidden": "Vous n'êtes pas autorisé(e) à renommer ce document.",
+      "label": "Titre",
+      "locked": "Ce document est verrouillé par une autre personne, il ne peut donc pas être renommé pour le moment.",
+      "not-found": "Ce document n'existe plus.",
+      "required": "Saisissez un titre",
+      "save": "Renommer",
+      "title": "Renommer"
+    },
+    "admin-group-details-page": {
+      "could-not-load": "Impossible de charger les détails du groupe.",
+      "could-not-remove-member": "Impossible de retirer le membre.",
+      "could-not-remove-permission": "Impossible de supprimer l'autorisation.",
+      "could-not-update-nested": "Impossible de mettre à jour les groupes imbriqués.",
+      "delete": "Supprimer",
+      "delete-failed": "Échec de la suppression",
+      "delete-group": "Supprimer le groupe",
+      "delete-group-named": "Supprimer le groupe « {{ name }} » ?",
+      "edit": "Modifier",
+      "granted-by": "Accordée par",
+      "group": "Groupe",
+      "group-saved": "Groupe enregistré",
+      "identifier": "Identifiant",
+      "loading": "Chargement",
+      "member-removed": "Membre supprimé",
+      "members": "Membres",
+      "nested-group-removed": "Groupe imbriqué supprimé",
+      "nested-groups": "Groupes imbriqués",
+      "no-members": "Aucun membre.",
+      "no-nested": "Aucun groupe imbriqué.",
+      "no-permissions": "Ce groupe ne dispose d'aucune autorisation.",
+      "on": "Activé",
+      "permission-removed": "Autorisation supprimée",
+      "permissions": "Autorisations",
+      "remove-member": "Retirer {{ name }} de ce groupe",
+      "remove-member-tooltip": "Supprimer le membre",
+      "remove-nested": "Retirer {{ name }} de ce groupe",
+      "remove-nested-tooltip": "Supprimer le groupe imbriqué",
+      "remove-permission": "Supprimer l'autorisation",
+      "right": "Droit",
+      "time-frame": "Période",
+      "update-failed": "Impossible d'enregistrer les modifications.",
+      "username": "Nom d'utilisateur"
+    },
+    "admin-user-details-page": {
+      "change-password": "Changer le mot de passe",
+      "company": "Société :",
+      "could-not-load": "Impossible de charger les détails de l'utilisateur.",
+      "could-not-remove-permission": "Impossible de supprimer l'autorisation.",
+      "could-not-update-groups": "Impossible de mettre à jour les groupes de l'utilisateur.",
+      "delete": "Supprimer",
+      "delete-failed": "Échec de la suppression",
+      "delete-user": "Supprimer l'utilisateur",
+      "delete-user-named": "Supprimer l'utilisateur « {{ name }} » ? Cela ne peut pas être annulé.",
+      "edit": "Modifier",
+      "email": "E-mail :",
+      "granted-by": "Accordée par",
+      "group-permissions": "Autorisations de {{ group }}",
+      "groups": "Groupes",
+      "identifier": "Identifiant",
+      "loading": "Chargement",
+      "local-permissions": "Autorisations locales",
+      "name": "Nom",
+      "no-groups": "Aucun groupe assigné.",
+      "no-local": "Aucune autorisation locale.",
+      "no-permissions": "{{ name }} ne dispose d'aucune autorisation.",
+      "on": "Activé",
+      "password-update-failed": "Échec de la mise à jour du mot de passe",
+      "password-updated": "Mot de passe mis à jour",
+      "permission-removed": "Autorisation supprimée",
+      "remove-from-group": "Retirer {{ name }} de cet utilisateur",
+      "remove-group": "Supprimer le groupe",
+      "remove-permission": "Supprimer l'autorisation",
+      "removed-from-group": "Groupe retiré de l'utilisateur",
+      "right": "Droit",
+      "time-frame": "Période",
+      "update-failed": "Impossible d'enregistrer les modifications.",
+      "user-updated": "Utilisateur enregistré"
+    },
+    "admin-users-groups-page": {
+      "could-not-load-groups": "Impossible de charger les groupes.",
+      "could-not-load-users": "Impossible de charger les utilisateurs.",
+      "create-failed": "Impossible de créer le groupe.",
+      "delete": "Supprimer",
+      "delete-failed": "Échec de la suppression",
+      "delete-group": "Supprimer le groupe",
+      "delete-group-aria": "Supprimer le groupe {{ name }}",
+      "delete-group-named": "Supprimer le groupe « {{ name }} » ?",
+      "delete-user": "Supprimer l'utilisateur",
+      "delete-user-aria": "Supprimer l'utilisateur {{ name }}",
+      "delete-user-named": "Supprimer l'utilisateur « {{ name }} » ? Cela ne peut pas être annulé.",
+      "edit": "Modifier",
+      "edit-group": "Modifier le groupe {{ name }}",
+      "edit-user": "Modifier l'utilisateur {{ name }}",
+      "email": "E-mail",
+      "group": "Groupe",
+      "group-created": "Groupe créé",
+      "group-deleted": "Groupe supprimé",
+      "group-updated": "Groupe enregistré",
+      "groups": "Groupes",
+      "groups-tab": "Groupes ({{ count }})",
+      "identifier": "Identifiant",
+      "invitation-sent": "Invitation envoyée",
+      "label": "Étiquette",
+      "loading": "Chargement",
+      "members": "Membres",
+      "name": "Nom",
+      "new": "Nouveau",
+      "new-group": "Nouveau groupe",
+      "new-user": "Nouvel utilisateur",
+      "no-groups": "Aucun groupe ne correspond à cette recherche.",
+      "no-recent": "Aucun utilisateur ou groupe récent.",
+      "no-users": "Aucun utilisateur ne correspond à cette recherche.",
+      "recent": "Utilisateurs et groupes récemment créés",
+      "run-search": "Lancer la recherche",
+      "search": "Rechercher des utilisateurs et des groupes",
+      "title": "Utilisateurs et groupes",
+      "update-failed": "Impossible d'enregistrer les modifications.",
+      "user-created": "Utilisateur créé",
+      "user-deleted": "Utilisateur supprimé",
+      "user-updated": "Utilisateur enregistré",
+      "username": "Nom d'utilisateur",
+      "users-tab": "Utilisateurs ({{ count }})"
+    },
+    "confirm-dialog": {
+      "cancel": "Annuler"
+    },
+    "group-form-dialog": {
+      "cancel": "Annuler",
+      "create": "Créer",
+      "create-another": "Créer un autre",
+      "create-group": "Créer un groupe",
+      "edit-group": "Modifier le groupe",
+      "group-name": "Nom du groupe",
+      "label": "Étiquette",
+      "member-usernames": "Noms d'utilisateur des membres",
+      "pick-member": "Choisissez dans la recherche ou saisissez un nom d'utilisateur et appuyez sur Entrée",
+      "remove-member": "Supprimer {{ name }}",
+      "save": "Enregistrer",
+      "search-users": "Rechercher des utilisateurs ou saisir un nom d'utilisateur…"
+    },
+    "user-form-dialog": {
+      "cancel": "Annuler",
+      "company": "Société",
+      "create": "Créer",
+      "create-another": "Créer un autre",
+      "create-failed": "Échec de la création",
+      "create-user": "Créer un utilisateur",
+      "edit-user": "Modifier l'utilisateur",
+      "email": "E-mail",
+      "first-name": "Prénom",
+      "groups": "Groupes",
+      "invitation-failed": "Échec de l'invitation",
+      "last-name": "Nom",
+      "loading": "Chargement",
+      "loading-groups": "Chargement des groupes...",
+      "password": "Mot de passe",
+      "passwords-do-not-match": "Les mots de passe ne correspondent pas",
+      "pick-group": "Choisissez dans la recherche ou saisissez un nom de groupe et appuyez sur Entrée",
+      "remove-group": "Supprimer le groupe {{ name }}",
+      "save": "Enregistrer",
+      "search-groups": "Rechercher des groupes ou saisir un nom de groupe…",
+      "set-password": "Définir le mot de passe de l'utilisateur",
+      "username": "Nom d'utilisateur",
+      "verify-password": "Vérifier le mot de passe"
+    },
+    "pickers": {
+      "choose-from-list": "Choisissez une entrée dans la liste",
+      "clear": "Effacer",
+      "failed": "Échec de la recherche. Réessayez.",
+      "loading": "Chargement…",
+      "min-chars-many": "Saisissez au moins {{ count }} caractères",
+      "min-chars-one": "Saisissez au moins {{ count }} caractère",
+      "no-results": "Aucun résultat",
+      "remove": "Supprimer {{ name }}",
+      "required": "Requis",
+      "results-many": "{{ count }} résultats",
+      "results-one": "{{ count }} résultat",
+      "searching": "Recherche en cours…"
+    },
+    "tag-input": {
+      "add": "Ajouter « {{ tag }} »"
+    },
+    "toast": {
+      "dismiss": "Abandonner",
+      "retry": "Réessayer"
+    },
+    "search-filters": {
+      "fulltext": "Texte intégral",
+      "fulltext-placeholder": "Rechercher quelque chose...",
+      "clear-fulltext": "Effacer le texte intégral",
+      "modified": {
+        "title": "Date de modification",
+        "last24h": "Dernières 24 h",
+        "last-week": "Dernière semaine",
+        "last-month": "Dernier mois",
+        "last-year": "Dernière année",
+        "prior-to-last-year": "Il y a plus d'un an"
+      },
+      "authors": "Auteurs",
+      "authors-placeholder": "Rechercher des auteurs...",
+      "collections": "Collections",
+      "collections-placeholder": "Sélectionnez une valeur.",
+      "loading-collections": "Chargement des collections...",
+      "collections-failed": "Impossible de charger vos collections.",
+      "tags": "Balises",
+      "tags-placeholder": "p. ex. événements, paris",
+      "tags-hint": "Veuillez saisir au moins 1 caractère",
+      "no-results": "Aucun résultat trouvé",
+      "no-results-for": "Aucun résultat pour {{ term }}",
+      "nature": "Nature",
+      "subjects": "Objets",
+      "coverage": "Couverture",
+      "size": {
+        "title": "Taille",
+        "tiny": "Inférieur à 100 Ko",
+        "small": "Entre 100 Ko et 1 Mo",
+        "medium": "Entre 1 Mo et 10 Mo",
+        "big": "Entre 10 Mo et 100 Mo",
+        "huge": "Plus de 100 Mo"
+      },
+      "no-available-results": "Aucun résultat disponible",
+      "reset": "Réinitialiser",
+      "save-as": "Enregistrer sous",
+      "remove": "Supprimer {{ value }}",
+      "chosen-authors": "Auteurs choisis",
+      "chosen-collections": "Collections choisies",
+      "chosen-tags": "Balises choisies"
+    },
+    "saved-search-select": {
+      "label": "Recherches enregistrées",
+      "placeholder": "Filtres de recherche",
+      "loading": "Chargement des recherches enregistrées...",
+      "none": "Aucune recherche enregistrée",
+      "no-match": "Aucune recherche enregistrée correspondante"
+    },
+    "saved-search-actions": {
+      "save-as": "Enregistrer sous",
+      "save": "Enregistrer",
+      "more": "Actions de la recherche enregistrée",
+      "rename": "Renommer",
+      "share": "Partager",
+      "delete": "Supprimer"
+    },
+    "upload-queue": {
+      "done": "Importé",
+      "failed": "N'a pas pu être importé",
+      "forbidden": "Vous n'êtes pas autorisé(e) à ajouter des documents ici",
+      "not-found": "Le dossier n'existe plus",
+      "progress": "Importation de {{ name }}",
+      "remove": "Supprimer {{ name }}",
+      "retry": "Réessayer {{ name }}",
+      "summary": "{{ done }} sur {{ total }} importé(s)",
+      "summary-failed": "{{ count }} n'a pas pu être importé(s)",
+      "uploading": "Importation, {{ percent }} %",
+      "waiting": "En attente"
+    },
+    "user-group-picker": {
+      "group": "Groupe",
+      "user": "Utilisateur"
+    },
+    "vocabulary-select": {
+      "failed": "Impossible de charger la liste. Rouvrez-la pour réessayer."
+    }
+  },
   "search": {
     "ai-search": "Recherche IA",
     "ai-search-active": "Recherche IA active",
@@ -1832,7 +2604,9 @@
       "failed-to-download-document": "Échec du téléchargement du document.",
       "failed-to-load-search-results": "Échec du chargement des résultats de la recherche.",
       "failed-to-update-favorites": "Échec de la mise à jour des favoris.",
-      "nxql-query-execution-failed-the-generated-query": "Échec de l'exécution de la requête NXQL. La requête générée n'est peut-être pas valide."
+      "nxql-query-execution-failed-the-generated-query": "Échec de l'exécution de la requête NXQL. La requête générée n'est peut-être pas valide.",
+      "failed-to-open-saved-search": "Impossible d'ouvrir la recherche enregistrée.",
+      "failed-to-delete-saved-search": "Impossible de supprimer la recherche enregistrée."
     },
     "no-results-for": "Aucun résultat pour {{ term }}",
     "quick-filter": {
@@ -1992,6 +2766,7 @@
     "document-viewer": {
       "additional-formats": "Formats supplémentaires",
       "annotations-are-not-available-for-this": "Les annotations ne sont pas disponibles pour ce document.",
+      "annotations-frame": "Annotations pour {{ name }}",
       "audio-codec": "Codec audio",
       "bit-depth-per-channel": "Profondeur de bits par canal",
       "color-profile": "Profil de couleur",
@@ -2014,9 +2789,12 @@
       "iptc-rights": "Droits",
       "iptc-source": "Source",
       "loading": "Chargement",
+      "note-frame": "Contenu de la note pour {{ name }}",
       "open-with-nuxeo-drive": "Ouvrir avec Nuxeo Drive",
+      "pdf-frame": "Aperçu PDF de {{ name }}",
       "picture-info": "Informations sur l'image",
       "preview": "Aperçu",
+      "preview-frame": "Aperçu de {{ name }}",
       "preview-not-available": "Aperçu non disponible",
       "remove": "Supprimer",
       "remove-main-file": "Supprimer le fichier principal",
@@ -2061,7 +2839,8 @@
     },
     "saved-search-dialog": {
       "cancel": "Annuler",
-      "save": "Enregistrer"
+      "save": "Enregistrer",
+      "no-slash": "Vous ne pouvez pas utiliser le caractère « / » dans le nom"
     },
     "selection-topbar": {
       "clear": "Effacer",
@@ -2204,6 +2983,7 @@
     "tabs-view": "Afficher"
   },
   "tasks": {
+    "breadcrumbs": "Fil d’Ariane",
     "document": "Document",
     "due-on": "Echéance : {{ date }}",
     "message": {
