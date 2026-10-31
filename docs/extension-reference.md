@@ -426,9 +426,20 @@ the same, and the difference is how much you lose:
 `$ignoreReferenceList` reads exactly as `$references` does, in both of the first two rows.
 
 The two `$references` rows say nothing, because a name that was never read is a name nothing can go
-looking for. The two `$layers` rows **do** surface, on `missingLayers()` (§12), as soon as you
-reference the layer — which you always do, since a `$layers` body only applies when referenced. So
-`"$layers": "x"` reports every name in your `$references`, and one bad body reports just that one.
+looking for.
+
+The two `$layers` rows surface on `missingLayers()` (§12), but **only for a name this
+contribution's own `$references` actually resolves**. So `"$layers": "x"` reports every name you
+reference and do not ignore, and one bad body reports just that one. Three cases stay silent, and
+all three are the same rule — nothing ever looked the name up:
+
+- **a body you never reference.** A `$layers` entry is only read when something references it.
+- **a name you reference _and_ also list in `$ignoreReferenceList`.** Ignored names are dropped
+  before the lookup, so a malformed body behind one produces no diagnostic. That is consistent
+  with what `$ignoreReferenceList` is for — the layer is not meant to apply — but it does mean
+  ignoring a name hides a mistake in its body.
+- **a name reached only by a _nested_ `$references`**, inside a layer you referenced. References
+  resolve one level deep (§12), so the inner list is metadata and is skipped.
 
 These are about layer **resolution** rather than configuration, which is why `refusedSections()`
 covers only `slots` and `overrides`.
