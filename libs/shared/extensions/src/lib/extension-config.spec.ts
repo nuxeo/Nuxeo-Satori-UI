@@ -5,6 +5,10 @@ import {
   resolveExtensionLayers,
   type ExtensionConfig,
 } from './extension-config';
+import type { ExtensionElement } from './extension-slots';
+
+/** `label` is a descriptor field, not an `ExtensionElement` one, so reading it needs saying. */
+type LabelledEntry = ExtensionElement & { readonly label?: string };
 
 describe('mergeExtensionConfigs', () => {
   it('lets a later layer win on a scalar', () => {
@@ -236,5 +240,200 @@ describe('readExtensionConfig', () => {
     expect(readExtensionConfig({ slots: 'not an object' })).toEqual({});
     expect(readExtensionConfig({ slots: { navbar: 'not an array' } }).slots).toEqual({});
     expect(readExtensionConfig({ overrides: { 'app.a': 'not an object' } }).overrides).toEqual({});
+  });
+});
+
+/**
+ * NXSAT-755. Each of these shapes changed what a customer saw and said nothing anywhere.
+ *
+ * The refusals are collected where the drop happens, which is why they are asserted through
+ * `resolveExtensionLayers` — the one caller that knows a layer's position in contribution
+ * order, and so the only place that can name where an entry was written.
+ */
+describe('refused slot entries', () => {
+  /** Only the fields a reader has to act on, so a message reflow does not fail the suite. */
+  const shapeOf = (layers: readonly unknown[]) =>
+    resolveExtensionLayers(layers).refused.map(({ slot, id, source }) => ({ slot, id, source }));
+
+  it('reports a slot whose value is not a list, and says the whole slot went', () => {
+    const { refused, config } = resolveExtensionLayers([
+      { $name: 'acme', slots: { documentView: { id: 'acme.view' }, navbar: [{ id: 'acme.nav' }] } },
+    ]);
+
+    expect(refused).toHaveLength(1);
+    expect(refused[0].slot).toBe('documentView');
+    expect(refused[0].id).toBeNull();
+    expect(refused[0].source).toBe('acme');
+    expect(refused[0].reason).toContain('list of entries');
+    expect(refused[0].reason).toContain('not an object');
+    expect(refused[0].reason).toContain('whole slot');
+    // The behaviour itself is unchanged: the bad slot is still dropped and the good one kept.
+    expect(config.slots?.['documentView']).toBeUndefined();
+    expect(config.slots?.['navbar']).toHaveLength(1);
+  });
+
+  it('reports a slot named __proto__ rather than dropping it in silence', () => {
+    const { refused } = resolveExtensionLayers([
+      JSON.parse('{"$name": "acme", "slots": {"__proto__": [{"id": "acme.x"}]}}'),
+    ]);
+
+    expect(refused).toHaveLength(1);
+    expect(refused[0].slot).toBe('__proto__');
+    expect(refused[0].reason).toContain('__proto__');
+  });
+
+  it('reports each entry shape the per-entry filter refuses, naming the position', () => {
+    const { refused, config } = resolveExtensionLayers([
+      {
+        $name: 'acme',
+        slots: {
+          navbar: ['a string', { label: 'no id' }, { id: 42 }, { id: '   ' }, { id: 'acme.ok' }],
+        },
+      },
+    ]);
+
+    expect(refused.map((entry) => entry.reason)).toEqual([
+      'entry 1 must be an object, not a string',
+      'entry 2 has no string "id", so nothing could address it',
+      'entry 3 has no string "id", so nothing could address it',
+      'entry 4 has a blank "id", so nothing could address it',
+    ]);
+    expect(refused.every((entry) => entry.slot === 'navbar' && entry.id === null)).toBe(true);
+    // Unchanged: the four are still dropped, the fifth still registers.
+    expect(config.slots?.['navbar'].map((entry) => entry.id)).toEqual(['acme.ok']);
+  });
+
+  it('reports a duplicate id inside one contribution, which is a typo and never an override', () => {
+    const { refused, config } = resolveExtensionLayers([
+      {
+        $name: 'acme',
+        slots: {
+          navbar: [
+            { id: 'acme.nav.contracts', label: 'Contracts' },
+            { id: 'acme.nav.contracts', label: 'Agreements' },
+          ],
+        },
+      },
+    ]);
+
+    expect(refused).toHaveLength(1);
+    expect(refused[0].slot).toBe('navbar');
+    expect(refused[0].id).toBe('acme.nav.contracts');
+    expect(refused[0].reason).toContain('entry 2 repeats the id "acme.nav.contracts"');
+    expect(refused[0].reason).toContain('merged into one');
+    // It names no winner, because there isn't one to name: which fields survive depends on how
+    // many layers the stack has. `app-extensions.service.spec.ts` pins both outcomes.
+    expect(refused[0].reason).toContain('depends on the other layers');
+    // Reported, not dropped. Both survive the read exactly as before; the merge collapses them.
+    const navbar = (config.slots?.['navbar'] ?? []) as readonly LabelledEntry[];
+    expect(navbar.map((entry) => entry.label)).toEqual(['Contracts', 'Agreements']);
+  });
+
+  it('names the contribution by $name, and by its position when it declares none', () => {
+    expect(
+      shapeOf([
+        { $name: 'acme-customisation', slots: { navbar: 'not a list' } },
+        { slots: { navbar: 'not a list' } },
+      ]),
+    ).toEqual([
+      { slot: 'navbar', id: null, source: 'acme-customisation' },
+      { slot: 'navbar', id: null, source: 'contribution 2' },
+    ]);
+  });
+
+  it('names the $layers entry a refusal sits in, so a referenced layer is findable', () => {
+    expect(
+      shapeOf([
+        {
+          $name: 'acme-customisation',
+          $references: ['brand'],
+          $layers: { brand: { slots: { navbar: 'not a list' } } },
+        },
+      ]),
+    ).toEqual([{ slot: 'navbar', id: null, source: '$layers.brand of acme-customisation' }]);
+  });
+
+  /**
+   * Pins what §12 of `docs/extension-reference.md` promises. The read walks `$layers` before
+   * `$ignoreReferenceList` is consulted, so an ignored layer's typo is still reported — which is
+   * fine only because the message names the layer rather than implying it took effect.
+   */
+  it('still reports a refusal in a layer dropped by $ignoreReferenceList, naming that layer', () => {
+    const { refused, applied } = resolveExtensionLayers([
+      {
+        $name: 'acme-customisation',
+        $references: ['brand'],
+        $ignoreReferenceList: ['brand'],
+        $layers: { brand: { slots: { navbar: 'not a list' } } },
+      },
+    ]);
+
+    expect(applied).toEqual([]);
+    expect(refused).toHaveLength(1);
+    expect(refused[0].source).toBe('$layers.brand of acme-customisation');
+  });
+
+  /**
+   * Review of PR 534. The fallback label used to be derived first and detected by
+   * `startsWith('contribution ')`, so a layer that *declared* this name had it thrown away and
+   * replaced by the `$layers` form — a discriminator sniffing a string the customer owns.
+   */
+  it('keeps a declared $name that happens to look like the generated fallback', () => {
+    expect(
+      shapeOf([
+        {
+          $name: 'acme-customisation',
+          $references: ['brand'],
+          $layers: { brand: { $name: 'contribution 5', slots: { navbar: 'not a list' } } },
+        },
+      ]),
+    ).toEqual([{ slot: 'navbar', id: null, source: 'contribution 5' }]);
+  });
+
+  it("prefers a $layers entry's own $name over the name it is filed under", () => {
+    expect(
+      shapeOf([
+        {
+          $name: 'acme-customisation',
+          $references: ['brand'],
+          $layers: { brand: { $name: 'acme-brand', slots: { navbar: 'not a list' } } },
+        },
+      ]),
+    ).toEqual([{ slot: 'navbar', id: null, source: 'acme-brand' }]);
+  });
+
+  /**
+   * The control, and the reason this ticket was not simply "add a warning".
+   *
+   * Every same-`id` reuse below is the documented override mechanism — a `$layers` entry
+   * patching an earlier one, and a second contribution patching the first — so a diagnostic
+   * here would fire on every correctly layered manifest and be worse than silence.
+   */
+  it('refuses nothing in a valid, correctly layered manifest', () => {
+    const { refused, config } = resolveExtensionLayers([
+      {
+        $name: 'acme-customisation',
+        $references: ['baseline', 'brand'],
+        $layers: {
+          baseline: {
+            slots: { navbar: [{ id: 'acme.nav.contracts', label: 'Contracts', order: 20 }] },
+          },
+          brand: { slots: { navbar: [{ id: 'acme.nav.contracts', order: 5 }] } },
+        },
+        overrides: { 'app.navbar.trash': { visible: false } },
+      },
+      { $name: 'regional', slots: { navbar: [{ id: 'acme.nav.contracts', label: 'Contrats' }] } },
+    ]);
+
+    expect(refused).toEqual([]);
+    // And the layering it was asserting silence about really did happen.
+    expect(config.slots?.['navbar']).toEqual([
+      { id: 'acme.nav.contracts', label: 'Contrats', order: 5 },
+    ]);
+  });
+
+  it('refuses nothing when no contribution carries an extensions layer', () => {
+    expect(resolveExtensionLayers([]).refused).toEqual([]);
+    expect(resolveExtensionLayers([null, 'a string', 7]).refused).toEqual([]);
   });
 });

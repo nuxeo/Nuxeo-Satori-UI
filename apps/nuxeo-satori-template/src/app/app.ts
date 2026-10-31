@@ -64,6 +64,9 @@ export class App {
   /** Same, for a `routes` entry whose path the router would never have matched. */
   protected readonly invalidRoutes = this.extensions.invalidRoutes;
 
+  /** Same, for a slot or slot entry the manifest read refused (NXSAT-755). */
+  protected readonly refusedSlotEntries = this.extensions.refusedSlotEntries;
+
   /** Which half of the configuration came from where — worth seeing while demoing. */
   protected readonly manifestSource = computed(() => this.config.diagnostics().manifestSource);
 
