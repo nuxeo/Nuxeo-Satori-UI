@@ -175,11 +175,24 @@ describe('AppExtensionsService refused slot entries', () => {
    *
    * NXSAT-760 removed one real source of divergence — `action` was withheld from manifest-owned
    * patches, so which row won turned on whether that line ran — and that is the whole of what
-   * this ticket claims. It did **not** make the outcome stack-independent; `extension-merge.ts`
-   * is a pinned reproduction of ACA's merge and the rest of the variance lives there.
+   * this ticket claims. It did **not** make the outcome stack-independent.
    *
-   * So these are individually measured cases, each asserting its own stack and generalising to
-   * nothing. The next person wanting a rule should read them rather than write a sentence.
+   * **Where the remaining variance is, since the cases below split cleanly in two.** Review of
+   * PR 537 pointed out that this comment read as denying any regularity while the five tests
+   * directly beneath it all assert the *same* row, which is a comment arguing with its own tests.
+   * It is not: they are the two halves of the question.
+   *
+   * - A **whole** duplicate pair — both rows setting every field — came out as the later row in
+   *   all five stacks measured here. Those five tests are the evidence, and each still asserts
+   *   its own stack rather than a rule, because `extension-merge.ts` is a pinned reproduction of
+   *   ACA's merge and nobody has enumerated it.
+   * - A **partial** pair — a row omitting a field its twin sets — does not. The omitted field is
+   *   inherited, lost, or kept depending on which input of the array merge the duplicates are:
+   *   see `inherits an omitted field …`, `loses an omitted field …` and `keeps an omitted field …`
+   *   below, which disagree with each other on purpose.
+   *
+   * So: measured cases, each asserting its own stack. The next person wanting a rule should read
+   * them rather than write a sentence — seven attempts at one are what produced this comment.
    */
   const duplicateNavbar = {
     navbar: [
