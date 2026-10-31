@@ -155,7 +155,7 @@
     "@nx/vite": "23.3.0",
     "@nx/vitest": "23.3.0",
     "@nx/web": "23.3.0",
-    "@nx/workspace": "23.3.0",
+    "@nx/workspace": "24.0.0",
     "@oxc-project/runtime": "^0.115.0",
     "@schematics/angular": "~22.2.0",
     "@storybook/addon-a11y": "10.6.3",
