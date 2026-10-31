@@ -89,16 +89,26 @@ export class AppExtensionsService {
   );
 
   /**
-   * Refusals already written to the console, so a recomputation cannot repeat them.
+   * The refusal list last written to the console, so a recomputation cannot repeat it.
    *
    * {@link refusedSlotEntries} is a `computed` over the manifest signal, which recomputes
-   * whenever that signal changes — a second load, a preset being selected. Logging from
-   * inside it would restate the same typo every time, which is the mistake
-   * `AppConfigService.noteRefusedLogos` carries a comment about. Keyed by the whole refusal
-   * rather than by id, because an entry refused for having no id has none, and two different
-   * complaints about one id are two things worth saying.
+   * whenever that signal changes — a preset being selected, a second load. Logging from inside
+   * it would restate the same typo every time, which is the mistake
+   * `AppConfigService.noteRefusedLogos` carries a comment about.
+   *
+   * The whole **list**, not a set of individual refusals. Two contributions may declare the same
+   * `$name`, so two identical typos in them produce refusals equal in every field, and a set
+   * keyed on those fields silently collapsed them into one line — the console under-reporting
+   * how many problems there were while the signal held both (review of PR 534). Suppressing a
+   * distinct refusal is the silence this ticket exists to remove, so it is the worse of the two
+   * errors.
+   *
+   * The trade this makes: a manifest value whose refusals are not identical to the last one
+   * re-states all of them, not only the new ones. That is "once per load" as the ticket asked
+   * for it, and in this application it never arises — `AppConfigService.load()` memoises, so
+   * there is one manifest value per page.
    */
-  private readonly noted = new Set<string>();
+  private lastNotedRefusals = '';
 
   private readonly overrides = computed<ExtensionSlotOverrides>(() => {
     const config = this.config();
@@ -150,12 +160,13 @@ export class AppExtensionsService {
     return this.rules.evaluate(rule, context);
   }
 
-  /** Write each refusal not written yet. See {@link noted} for why the set is needed. */
+  /** Write the refusals unless this exact list has been written. See {@link lastNotedRefusals}. */
   private noteRefusedSlotEntries(refused: readonly RefusedExtensionEntry[]): void {
+    if (refused.length === 0) return;
+    const key = JSON.stringify(refused);
+    if (key === this.lastNotedRefusals) return;
+    this.lastNotedRefusals = key;
     for (const entry of refused) {
-      const key = JSON.stringify([entry.source, entry.slot, entry.id, entry.reason]);
-      if (this.noted.has(key)) continue;
-      this.noted.add(key);
       warn(`slots.${entry.slot} in ${entry.source}: ${entry.reason}`);
     }
   }

@@ -91,6 +91,23 @@ describe('AppExtensionsService refused slot entries', () => {
     expect(reports()).toHaveLength(1);
   });
 
+  /**
+   * Review round 4. Two contributions may declare the same `$name` — `extension-config.spec.ts`
+   * has a case for it — and two identical typos in them produce refusals equal in every field.
+   * A dedup keyed on those fields collapsed them into one line, so the console under-reported
+   * the number of problems while the signal held both. Suppressing a distinct refusal is the
+   * silence this whole ticket is about, which makes it worse than the repetition the dedup
+   * exists to prevent.
+   */
+  it('reports both refusals when two contributions share a $name and a typo', () => {
+    const layer = { $name: 'acme', slots: { navbar: 'not a list' } };
+    manifest.set({ extensionLayers: [layer, { ...layer }] });
+    const service = boot();
+
+    expect(service.refusedSlotEntries()).toHaveLength(2);
+    expect(reports()).toHaveLength(2);
+  });
+
   it('reports a refusal that only the second load introduces', () => {
     boot();
     expect(reports()).toEqual([]);
