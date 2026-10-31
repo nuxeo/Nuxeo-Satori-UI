@@ -150,48 +150,73 @@ describe('AppExtensionsService refused slot entries', () => {
   /**
    * Why the duplicate message predicts **nothing** about which fields survive.
    *
-   * Two review rounds on PR 534 went at this. It first said "the later one wins", then — once
-   * `resolve`'s `withoutAction` was pointed out — "except `action`, which stays as the first
-   * entry set it". Both were overstatements, because the outcome is not a property of the
-   * duplicate at all: it depends on **how many layers the stack has**.
+   * Three review rounds on PR 534 went at this, each catching a wording that stated one outcome
+   * as though it were the rule: "the later one wins", then "except `action`, which stays as the
+   * first entry set it", then an explanation keyed on the **number of contributions**. All three
+   * were overstatements, and the third is the instructive one — the discriminator is not how
+   * many contributions or layers there are. It is **whether anything merged that slot's array
+   * before the registry saw it**:
    *
-   * - One contributed layer: the pair reaches `resolve` intact, which patches the first with
-   *   `withoutAction(entry)` — later `label`, **first** `action`.
-   * - Two or more: `mergeObjects` merges arrays by `id` and has already collapsed the pair to
-   *   the later row before `resolve` sees it, so there is nothing to patch — later `action`.
+   * - nothing did: the pair reaches `resolve`, which patches the first with
+   *   `withoutAction(entry)` — later `label`, **first** `action`;
+   * - something did: `mergeObjects` merged the array by `id` and already collapsed the pair to
+   *   the later row, so there is nothing left to patch — **later** `action`.
    *
-   * Both are asserted below, so the behaviour is pinned by test rather than predicted by prose,
-   * and the message is asserted to claim neither.
+   * And either can happen at any contribution count: a second contribution touching only a
+   * *different* slot leaves the pair intact, while one contribution's own `$references` can
+   * collapse it. All four combinations are asserted below, so the behaviour is pinned by test
+   * rather than predicted by prose, and the message is asserted to claim none of it.
    */
-  const duplicateLayer = {
-    $name: 'acme',
-    slots: {
-      navbar: [
-        { id: 'acme.navbar.x', label: 'First', action: 'acme.actions.first' },
-        { id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.second' },
-      ],
-    },
+  const duplicateNavbar = {
+    navbar: [
+      { id: 'acme.navbar.x', label: 'First', action: 'acme.actions.first' },
+      { id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.second' },
+    ],
   };
+  const duplicateLayer = { $name: 'acme', slots: duplicateNavbar };
   const resolvedNavbar = (service: AppExtensionsService) =>
     service.resolve<{ id: string; label: string; action: string }>(EXTENSION_SLOTS.navbar);
+  const firstAction = [{ id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.first' }];
+  const laterAction = [{ id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.second' }];
 
-  it("keeps the first entry's action when one layer puts the duplicate pair into resolve", () => {
+  it("keeps the first entry's action while nothing has merged that slot's array", () => {
     manifest.set({ extensionLayers: [duplicateLayer] });
 
-    expect(resolvedNavbar(boot())).toEqual([
-      { id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.first' },
-    ]);
+    expect(resolvedNavbar(boot())).toEqual(firstAction);
   });
 
-  it("keeps the later entry's action when a second layer collapses the pair before resolve", () => {
-    // `slots.navbar: []` is enough: a second layer makes `mergeObjects` merge the array by id.
+  it("keeps the first entry's action when another contribution sets only a different slot", () => {
+    // The case review round 3 named: two contributions, but `slots.navbar` is set by only one, so
+    // it is taken whole and the pair is still intact when `resolve` sees it.
+    manifest.set({
+      extensionLayers: [duplicateLayer, { $name: 'regional', slots: { toolbar: [] } }],
+    });
+
+    expect(resolvedNavbar(boot())).toEqual(firstAction);
+  });
+
+  it("keeps the later entry's action once another contribution merges the same slot", () => {
     manifest.set({
       extensionLayers: [duplicateLayer, { $name: 'regional', slots: { navbar: [] } }],
     });
 
-    expect(resolvedNavbar(boot())).toEqual([
-      { id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.second' },
-    ]);
+    expect(resolvedNavbar(boot())).toEqual(laterAction);
+  });
+
+  it("keeps the later entry's action when one contribution's own $references merge that slot", () => {
+    // The other case round 3 named: a single contribution is no guarantee either.
+    manifest.set({
+      extensionLayers: [
+        {
+          $name: 'acme',
+          slots: duplicateNavbar,
+          $references: ['brand'],
+          $layers: { brand: { slots: { navbar: [] } } },
+        },
+      ],
+    });
+
+    expect(resolvedNavbar(boot())).toEqual(laterAction);
   });
 
   it('reports the duplicate without predicting which fields survive', () => {

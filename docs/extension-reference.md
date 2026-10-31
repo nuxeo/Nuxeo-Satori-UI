@@ -339,11 +339,18 @@ a single layer** — there is no override to express there, because you would ha
 it is a copy-paste duplicate.
 
 The pair is still merged exactly as before, and the report deliberately **does not say which of the
-two survives** — because that is not a property of the duplicate. With one contributed layer the
-pair reaches the registry intact and the §1 rule about rebinding an `action` applies, so you get the
-second row's `label` and the **first** row's `action`; with two or more layers the `$references`
-merge has already collapsed the pair by `id` before the registry sees it, so you get the second
-row's `action` too. Either way one row is gone, so the fix is the same: **give each entry its own
+two survives** — because that is not a property of the duplicate. It turns on whether anything
+merged that slot's array before the registry saw it:
+
+- **nothing did** — the pair reaches the registry intact, where the §1 rule about rebinding an
+  `action` applies, so you get the second row's `label` and the **first** row's `action`;
+- **something did** — the array merge has already collapsed the pair by `id`, so there is nothing
+  left to patch and you get the second row's `action` too.
+
+Either can happen whatever your manifest looks like: a second contribution that sets only a
+_different_ slot leaves the pair intact, while a single contribution's own `$references` can
+collapse it. Counting contributions or layers does not tell you which you have. What is certain is
+that one of the two rows is gone, so the fix is the same in every case: **give each entry its own
 `id`.**
 
 Entries dropped for an unreachable `path` are reported the same way, on

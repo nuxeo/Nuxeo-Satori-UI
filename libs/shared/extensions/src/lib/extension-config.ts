@@ -346,14 +346,19 @@ function readSlotEntries(
         slot,
         id: entry.id,
         source,
-        // It predicts nothing about which entry's fields survive, because that is not a
-        // property of the duplicate — it depends on how many layers the stack has. With one
-        // contributed layer the pair reaches `resolve`, which patches the first with
-        // `withoutAction(entry)`, so the **first** entry's `action` survives; with two or more,
-        // `mergeObjects` has already merged the array by `id` and collapsed the pair to the
-        // later row, so the **later** `action` does. Two review rounds on PR 534 each caught a
-        // wording that stated one of those as though it were the rule. Both outcomes are pinned
-        // by tests in `app-extensions.service.spec.ts`; the message says what to do instead.
+        // It predicts nothing about which entry's fields survive, because that is not a property
+        // of the duplicate. It turns on whether anything merged this slot's array before the
+        // registry saw it: if nothing did, the pair reaches `resolve`, which patches the first
+        // with `withoutAction(entry)`, so the **first** entry's `action` survives; if something
+        // did, `mergeObjects` has already collapsed the pair by `id` and there is nothing left
+        // to patch, so the **later** one does. Either can happen at any contribution count — a
+        // second contribution setting only a different slot leaves the pair intact, and one
+        // contribution's own `$references` can collapse it.
+        //
+        // Three review rounds on PR 534 each caught a wording that stated one outcome as the
+        // rule, the third of them an explanation keyed on the number of contributions. All four
+        // combinations are pinned by tests in `app-extensions.service.spec.ts`; this says only
+        // what is certain, and what to do about it.
         reason:
           `${at} repeats the id "${entry.id}" already used in this slot, so the two are merged ` +
           'into one and which fields survive depends on the other layers — give each entry its ' +
