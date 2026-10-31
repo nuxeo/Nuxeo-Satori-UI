@@ -388,23 +388,22 @@ function readSlotEntries(
         slot,
         id: entry.id,
         source,
-        // It predicts nothing about which entry's fields survive, because that is not a property
-        // of the duplicate: it falls out of where the layers sit, which of them set the same slot
-        // and in what order, and whether the id is a packaged one.
+        // It can say which row wins, since NXSAT-760. Four review rounds on PR 534 each
+        // falsified an attempt to state that — "the later one wins"; "except `action`, which
+        // stays as the first entry set it"; a rule keyed on the number of contributions; one
+        // keyed on whether any merge of the slot's array ran — and the outcome had to be
+        // documented as unspecified. All four were wrong for the same reason: `withoutAction`
+        // fired on manifest-owned patches as well as packaged ones, so which row's `action`
+        // survived turned on whether that line happened to run. Narrowed to packaged ids, every
+        // layer stack gives the same answer, pinned by the five stacks in
+        // `app-extensions.service.spec.ts`.
         //
-        // Four review rounds on PR 534 each falsified a different attempt to state that as a
-        // rule — "the later one wins"; "except `action`, which stays as the first entry set it";
-        // an explanation keyed on the number of contributions; and one keyed on whether any merge
-        // of the slot's array ran, which reversing the layer order refutes. Every one was a proxy
-        // for the thing it was naming. The conclusion is not a fifth attempt: it is that the
-        // outcome is **unspecified**, pinned by six cases in `app-extensions.service.spec.ts` so a
-        // change to it is visible, and stated nowhere as a rule a manifest could rely on.
-        //
-        // So this says only what is certain, and what to do about it.
+        // The packaged carve-out is deliberately not mentioned: a customer reading this wrote the
+        // duplicate under an id they own, and `docs/extension-reference.md` §2a covers the other
+        // case. The fix is the same either way.
         reason:
           `${at} repeats the id "${entry.id}" already used in this slot, so the two are merged ` +
-          'into one and which fields survive depends on the other layers — give each entry its ' +
-          'own id',
+          'into one and the later entry wins — give each entry its own id',
       });
     }
     ids.add(entry.id);

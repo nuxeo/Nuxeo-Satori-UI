@@ -364,20 +364,25 @@ anything. **The one case that is reported is two entries with the same `id` insi
 a single layer** — there is no override to express there, because you would have edited the row, so
 it is a copy-paste duplicate.
 
-The pair is still merged exactly as before, and the report deliberately **does not say which of the
-two rows survives** — nor does this document. That outcome is not a property of the duplicate: it
-falls out of where your layers sit in the stack, which of them set the same slot and in what order,
-and whether the `id` is one of ours. It is **not specified**, and a manifest should not depend on it.
+The pair is still merged into one, and the report says which of the two rows wins:
 
-What is certain is that one of your two rows is gone, so the fix is the same in every case: **give
-each entry its own `id`.** If you meant to change an entry you already declared, edit that entry; to
-override one of ours, use `overrides` (§2) or declare an `id` of your own.
+> **The later entry's fields win. On a packaged `id` the packaged `action` is kept.**
 
-> The behaviour is pinned by tests in `app-extensions.service.spec.ts` rather than described here,
-> after four review rounds each falsified a different attempt to state it as a rule — including
-> "the later entry wins", and keying it on whether an array merge ran. If you need to know what a
-> specific stack does, read those cases: a sentence short enough for this document has been wrong
-> every time.
+That is the whole rule, and it holds whatever your layer stack looks like. The `action` carve-out is
+not about duplicates — it is the §1 rule that a manifest may not rebind a packaged action, which
+applies to any patch onto one of our descriptors. On an `id` you own, both rows are yours and the
+later one simply wins, `action` included.
+
+The fix is the same either way, because one of your two rows is gone: **give each entry its own
+`id`.** If you meant to change an entry you already declared, edit that entry; to override one of
+ours, use `overrides` (§2) or declare an `id` of your own.
+
+> Until NXSAT-760 this was **unspecified**, and for a good reason: `action` was withheld from
+> _every_ patch, including one manifest row patching another, so which row won depended on whether
+> an earlier array merge had already collapsed the pair. The outcome differed across five layer
+> stacks and four attempts to write it down were each falsified. Narrowing the carve-out to packaged
+> `id`s — where its rationale actually lies — made all five agree. The five stacks are still pinned
+> in `app-extensions.service.spec.ts`, now asserting that they no longer differ.
 
 Entries dropped for an unreachable `path` are reported the same way, on
 `invalidRoutes()` — see §11.

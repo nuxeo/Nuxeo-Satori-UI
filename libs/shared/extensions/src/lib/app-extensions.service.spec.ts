@@ -165,22 +165,22 @@ describe('AppExtensionsService refused slot entries', () => {
   });
 
   /**
-   * Why the duplicate message predicts **nothing** about which fields survive.
+   * The duplicate-`id` outcome, which NXSAT-760 made statable.
    *
-   * **Four** review rounds on PR 534 went at this, each catching a wording that stated some
-   * outcome as though it were the rule: "the later one wins"; then "except `action`, which stays
-   * as the first entry set it"; then an explanation keyed on the number of contributions; then
-   * one keyed on whether any merge of that slot's array ran. Every formulation was a proxy for
-   * the thing it was trying to name, and each was falsified by a case nobody had tested.
+   * Four review rounds on PR 534 went at describing this, each wording falsified by a case nobody
+   * had tested — "the later one wins"; "except `action`, which stays as the first entry set it";
+   * a rule keyed on the number of contributions; a rule keyed on whether any merge of the slot's
+   * array ran. The outcome was five-way and had to be documented as **unspecified**.
    *
-   * The conclusion is not a fifth formulation. It is that **this is not describable in a
-   * sentence a customer could use**, and the message must therefore say only what is certain —
-   * one of the two rows is gone — and what to do: give each entry its own `id`.
+   * The cause was `withoutAction` firing on manifest-owned patches as well as packaged ones, so
+   * which row's `action` survived depended on whether that line happened to run. Narrowed to
+   * packaged ids, every stack below gives the **same** answer, and the contract is one sentence
+   * plus one carve-out: *the later entry's fields win; on a packaged `id` the packaged `action`
+   * is kept.*
    *
-   * What the cases below are for is the opposite job: pinning the behaviour so a future change
-   * to it is visible, without any prose claiming a rule. Six of them, including the two the
-   * fourth round pointed out — merge order matters, and a packaged `id` keeps its own `action`
-   * whatever the manifest does.
+   * The four stacks are kept — not because the answer differs between them any more, but because
+   * that invariance is the claim. They were five separate behaviours; a regression would make
+   * them so again.
    */
   const duplicateNavbar = {
     navbar: [
@@ -191,35 +191,35 @@ describe('AppExtensionsService refused slot entries', () => {
   const duplicateLayer = { $name: 'acme', slots: duplicateNavbar };
   const resolvedNavbar = (service: AppExtensionsService) =>
     service.resolve<{ id: string; label: string; action: string }>(EXTENSION_SLOTS.navbar);
-  const firstAction = [{ id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.first' }];
-  const laterAction = [{ id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.second' }];
+  /** The later row, whole — `label` and `action` both. */
+  const laterRow = [{ id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.second' }];
 
-  it("keeps the first entry's action while nothing has merged that slot's array", () => {
+  it("gives the later row when nothing has merged that slot's array", () => {
     manifest.set({ extensionLayers: [duplicateLayer] });
 
-    expect(resolvedNavbar(boot())).toEqual(firstAction);
+    expect(resolvedNavbar(boot())).toEqual(laterRow);
   });
 
-  it("keeps the first entry's action when another contribution sets only a different slot", () => {
-    // The case review round 3 named: two contributions, but `slots.navbar` is set by only one, so
-    // it is taken whole and the pair is still intact when `resolve` sees it.
+  it('gives the later row when another contribution sets only a different slot', () => {
+    // Round 3's case: two contributions, but `slots.navbar` is set by only one, so it is taken
+    // whole and the pair is still intact when `resolve` sees it. Used to give the first action.
     manifest.set({
       extensionLayers: [duplicateLayer, { $name: 'regional', slots: { toolbar: [] } }],
     });
 
-    expect(resolvedNavbar(boot())).toEqual(firstAction);
+    expect(resolvedNavbar(boot())).toEqual(laterRow);
   });
 
-  it("keeps the later entry's action once another contribution merges the same slot", () => {
+  it('gives the later row once another contribution merges the same slot', () => {
     manifest.set({
       extensionLayers: [duplicateLayer, { $name: 'regional', slots: { navbar: [] } }],
     });
 
-    expect(resolvedNavbar(boot())).toEqual(laterAction);
+    expect(resolvedNavbar(boot())).toEqual(laterRow);
   });
 
-  it("keeps the later entry's action when one contribution's own $references merge that slot", () => {
-    // The other case round 3 named: a single contribution is no guarantee either.
+  it("gives the later row when one contribution's own $references merge that slot", () => {
+    // Round 3's other case: a single contribution is no guarantee of either outcome.
     manifest.set({
       extensionLayers: [
         {
@@ -231,24 +231,34 @@ describe('AppExtensionsService refused slot entries', () => {
       ],
     });
 
-    expect(resolvedNavbar(boot())).toEqual(laterAction);
+    expect(resolvedNavbar(boot())).toEqual(laterRow);
   });
 
-  it("keeps the first entry's action when the empty layer comes first, merge or no merge", () => {
+  it('gives the later row when the empty layer comes first', () => {
     // Round 4's first qualification, and why "a merge ran" was the wrong thing to describe: the
     // merge runs either way, but reversing the order leaves both rows intact, because the pair is
-    // then the *later* layer's new entries rather than a patch over an existing row.
+    // then the *later* layer's new entries rather than a patch over an existing row. Used to give
+    // the first action; now indistinguishable from the others, which is the point.
     manifest.set({
       extensionLayers: [{ $name: 'regional', slots: { navbar: [] } }, duplicateLayer],
     });
 
-    expect(resolvedNavbar(boot())).toEqual(firstAction);
+    expect(resolvedNavbar(boot())).toEqual(laterRow);
   });
 
-  it("keeps a packaged id's own action whichever duplicate the manifest writes last", () => {
-    // Round 4's second qualification. `withoutAction` is withholding `action` from a patch onto a
-    // registered descriptor, which is the confused-deputy control working exactly as intended —
-    // so for a packaged id neither duplicate's action reaches the resolved entry.
+  /**
+   * **This is a security control, not a behavioural detail.** It is the confused-deputy case
+   * `docs/extension-reference.md` §1 promises against: a manifest keeping our label and icon
+   * while pointing the click at something else, which the server authorises because it really is
+   * that user asking. Hiding an action is the customer's call; rebinding one is not.
+   *
+   * It is asserted with a **duplicate pair** on the packaged id on purpose — one entry would pass
+   * on the narrower claim that a single patch is refused, and the pair also covers the path
+   * NXSAT-760 changed, where the second patch lands on a row the first already touched.
+   *
+   * Verified able to fail: inverting `isPackaged` in `resolve` turns this red.
+   */
+  it('refuses to let a manifest rebind the action of a packaged id', () => {
     const service = TestBed.inject(AppExtensionsService);
     service.register(EXTENSION_SLOTS.navbar, [
       { id: 'app.navbar.trash', label: 'Trash', action: 'app.actions.packaged' },
@@ -268,20 +278,87 @@ describe('AppExtensionsService refused slot entries', () => {
     });
     TestBed.tick();
 
+    // Label relabelled — that is Layer 1 working. Action untouched — that is the control.
     expect(resolvedNavbar(service)).toEqual([
       { id: 'app.navbar.trash', label: 'Second', action: 'app.actions.packaged' },
     ]);
   });
 
-  it('reports the duplicate without predicting which fields survive', () => {
+  /**
+   * The boundary itself, which is the one thing NXSAT-760 could have got wrong.
+   *
+   * `resolve` tells a packaged row from a manifest-owned one by `index < packaged.length`. A call
+   * carrying **both** kinds of patch is what makes that a row-by-row decision rather than a
+   * per-call one, so it is the case that would catch an off-by-one or a condition applied to the
+   * whole batch.
+   */
+  it('protects the packaged row and not the manifest-owned one in the same resolve call', () => {
+    const service = TestBed.inject(AppExtensionsService);
+    service.register(EXTENSION_SLOTS.navbar, [
+      { id: 'app.navbar.trash', label: 'Trash', action: 'app.actions.packaged' },
+      { id: 'app.navbar.collections', label: 'Collections', action: 'app.actions.collections' },
+    ]);
+    manifest.set({
+      extensionLayers: [
+        {
+          $name: 'acme',
+          slots: {
+            navbar: [
+              // A patch onto ours, and a pair of the customer's own, interleaved.
+              { id: 'acme.navbar.x', label: 'Theirs', action: 'acme.actions.first' },
+              { id: 'app.navbar.trash', label: 'Relabelled', action: 'acme.actions.hijack' },
+              { id: 'acme.navbar.x', label: 'Theirs again', action: 'acme.actions.second' },
+            ],
+          },
+        },
+      ],
+    });
+    TestBed.tick();
+
+    expect(resolvedNavbar(service)).toEqual([
+      // Ours: relabelled, action held.
+      { id: 'app.navbar.trash', label: 'Relabelled', action: 'app.actions.packaged' },
+      { id: 'app.navbar.collections', label: 'Collections', action: 'app.actions.collections' },
+      // Theirs: the later row, whole.
+      { id: 'acme.navbar.x', label: 'Theirs again', action: 'acme.actions.second' },
+    ]);
+  });
+
+  /**
+   * What the narrowing does **not** change, and the reason it grants nothing new: a manifest can
+   * bind any action to an id it owns in a **single** entry, and §1 instructs customers to do
+   * exactly that. Withholding it from the second of two of their own rows protected nothing.
+   */
+  it('lets a manifest bind any action to an id it owns, as it always could', () => {
+    manifest.set({
+      extensionLayers: [
+        {
+          $name: 'acme',
+          slots: {
+            navbar: [{ id: 'acme.navbar.y', label: 'Archive', action: 'app.toolbar.delete' }],
+          },
+        },
+      ],
+    });
+
+    expect(resolvedNavbar(boot())).toEqual([
+      { id: 'acme.navbar.y', label: 'Archive', action: 'app.toolbar.delete' },
+    ]);
+  });
+
+  /**
+   * The message's claim, asserted against the entry `resolve` actually returns — in one test, so
+   * the two cannot drift apart. That coupling is the lesson of PR 534, where the message and the
+   * behaviour lived in different files and disagreed four times running.
+   */
+  it('reports the duplicate and says which row wins, matching what resolve returns', () => {
     manifest.set({ extensionLayers: [duplicateLayer] });
-    const reason = boot().refusedSlotEntries()[0].reason;
+    const service = boot();
+    const reason = service.refusedSlotEntries()[0].reason;
 
     expect(reason).toContain('repeats the id "acme.navbar.x"');
-    expect(reason).toContain('which fields survive depends on the other layers');
-    // The two claims the earlier wordings made, neither of which holds in both stacks above.
-    expect(reason).not.toContain('the later one wins');
-    expect(reason).not.toContain('action');
+    expect(reason).toContain('the later entry wins');
+    expect(resolvedNavbar(service)).toEqual(laterRow);
   });
 
   it('says nothing when there is no manifest at all', () => {

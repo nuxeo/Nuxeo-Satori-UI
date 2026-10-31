@@ -99,13 +99,14 @@ export class ExtensionSlotRegistry {
     const merged: T[] = [...packaged];
     for (const entry of added) {
       const index = merged.findIndex((candidate) => candidate.id === entry.id);
-      // A manifest entry that reuses a packaged id patches it rather than
-      // appending a second row with the same id.
+      // A manifest entry that reuses an existing id patches it rather than appending a second row
+      // with the same id.
       //
-      // `action` is withheld from that patch. Everything else here is presentation — label, icon,
-      // order — but `action` names the handler `ExtensionActionRegistry.execute` will run, so
-      // allowing a manifest to set it on a **packaged** id lets one keep our label and icon while
-      // pointing the click somewhere else entirely:
+      // `action` is withheld from that patch **when the row being patched is one of ours**.
+      // Everything else here is presentation — label, icon, order — but `action` names the handler
+      // `ExtensionActionRegistry.execute` will run, so allowing a manifest to set it on a
+      // **packaged** id lets one keep our label and icon while pointing the click somewhere else
+      // entirely:
       //
       //   { "id": "app.toolbar.addToFavorites", "action": "app.toolbar.delete" }
       //
@@ -114,8 +115,23 @@ export class ExtensionSlotRegistry {
       // the one thing a manifest could do that "hiding an action is not a security control" does
       // not cover — this is not hiding, it is rebinding. A manifest can still add a *new* id with
       // its own action, which is the supported way to introduce behaviour.
-      if (index >= 0) merged[index] = { ...merged[index], ...withoutAction(entry) };
-      else merged.push(entry);
+      //
+      // `merged` starts as `packaged` and the only way it grows is the `push` below, so every row
+      // beneath `packaged.length` came from the registry and every row at or above it was
+      // contributed by this manifest earlier in this same loop. `packaged` is captured before the
+      // loop and `register` cannot run inside it, so the boundary cannot move; `register` is
+      // idempotent per id, so `packaged` holds no duplicate ids.
+      //
+      // Withholding `action` above that boundary protected nothing (NXSAT-760): a manifest may
+      // already bind any action to an id it owns, in a single entry, and §1 of
+      // `docs/extension-reference.md` tells customers to do exactly that. All it did was discard
+      // the *second* of two of the customer's own rows — which left which-row-wins depending on
+      // whether this line happened to fire, and that is why the duplicate contract could not be
+      // written down for four attempts on PR 534.
+      if (index >= 0) {
+        const isPackaged = index < packaged.length;
+        merged[index] = { ...merged[index], ...(isPackaged ? withoutAction(entry) : entry) };
+      } else merged.push(entry);
     }
 
     return merged
@@ -162,10 +178,14 @@ export class ExtensionSlotRegistry {
 }
 
 /**
- * The manifest entry without its `action`, for patching a packaged descriptor.
+ * The manifest entry without its `action`, for patching a **packaged** descriptor.
+ *
+ * Called only on that path since NXSAT-760; before it, every patch went through here, including a
+ * manifest entry patching another manifest entry, where there is no packaged handler to rebind.
  *
  * Returned as a copy rather than deleting in place: the entry belongs to the resolved manifest,
- * which is shared, and mutating it would strip the action from a manifest-owned id too.
+ * which is shared, and mutating it would strip the action from a manifest-owned id too — which is
+ * now the one thing this must not do.
  */
 function withoutAction(entry: ExtensionElement): ExtensionElement {
   if (!('action' in entry)) return entry;

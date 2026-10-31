@@ -321,9 +321,9 @@ describe('refused slot entries', () => {
     expect(refused[0].id).toBe('acme.nav.contracts');
     expect(refused[0].reason).toContain('entry 2 repeats the id "acme.nav.contracts"');
     expect(refused[0].reason).toContain('merged into one');
-    // It names no winner, because there isn't one to name: which fields survive depends on how
-    // many layers the stack has. `app-extensions.service.spec.ts` pins both outcomes.
-    expect(refused[0].reason).toContain('depends on the other layers');
+    // It names the winner, which it could not do until NXSAT-760 made the outcome the same in
+    // every layer stack. `app-extensions.service.spec.ts` pins that against what `resolve` does.
+    expect(refused[0].reason).toContain('the later entry wins');
     // Reported, not dropped. Both survive the read exactly as before; the merge collapses them.
     const navbar = (config.slots?.['navbar'] ?? []) as readonly LabelledEntry[];
     expect(navbar.map((entry) => entry.label)).toEqual(['Contracts', 'Agreements']);
