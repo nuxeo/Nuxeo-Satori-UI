@@ -237,26 +237,12 @@ function readConfig(
     if (key.startsWith('$')) config[key] = value;
   }
   // Resolution iterates these, so a fragment that gets their shape wrong loses them rather than
-  // throwing for every package.
+  // throwing for every package. Assigned after the loop above, which copies them verbatim.
   for (const key of ['$references', '$ignoreReferenceList']) {
-    const names = raw[key];
-    if (names === undefined) continue;
-    config[key] = Array.isArray(names)
-      ? names.filter((name): name is string => typeof name === 'string')
-      : [];
+    if (raw[key] !== undefined) config[key] = readLayerNames(raw[key]);
   }
-  const layers = raw['$layers'];
-  if (layers !== undefined) {
-    config['$layers'] = isRecord(layers)
-      ? Object.fromEntries(
-          Object.entries(layers)
-            .filter(([, layer]) => isRecord(layer))
-            .map(([name, layer]) => [
-              name,
-              readConfig(layer, sublayerSource(source, name, layer), refused),
-            ]),
-        )
-      : {};
+  if (raw['$layers'] !== undefined) {
+    config['$layers'] = readNamedLayers(raw['$layers'], source, refused);
   }
 
   const slots = raw['slots'];
@@ -266,16 +252,52 @@ function readConfig(
 
   const overrides = raw['overrides'];
   if (isRecord(overrides)) {
-    const readOverrides: Record<string, ExtensionOverride> = {};
-    for (const [id, override] of Object.entries(overrides)) {
-      if (isRecord(override) && id !== '__proto__') {
-        readOverrides[id] = override as ExtensionOverride;
-      }
-    }
-    config['overrides'] = readOverrides;
+    config['overrides'] = readOverrides(overrides);
   }
 
   return config as ExtensionConfig;
+}
+
+/** The layer names a `$references`-shaped value lists, or none when it is the wrong shape. */
+function readLayerNames(names: unknown): string[] {
+  return Array.isArray(names)
+    ? names.filter((name): name is string => typeof name === 'string')
+    : [];
+}
+
+/** A layer's `$layers` map, each body read on its own so a refusal names the layer it is in. */
+function readNamedLayers(
+  layers: unknown,
+  source: string,
+  refused: RefusedExtensionEntry[],
+): Record<string, ExtensionConfig> {
+  if (!isRecord(layers)) return {};
+  return Object.fromEntries(
+    Object.entries(layers)
+      .filter(([, layer]) => isRecord(layer))
+      .map(([name, layer]) => [
+        name,
+        readConfig(layer, sublayerSource(source, name, layer), refused),
+      ]),
+  );
+}
+
+/**
+ * Per-id overrides, dropping the ones that are not objects and the `__proto__` key.
+ *
+ * Not reported, deliberately, and this is a gap rather than a decision: a refused override is as
+ * silent as a refused slot entry was before NXSAT-755, but {@link RefusedExtensionEntry} is keyed
+ * by slot and an override is keyed by id, so saying so needs a shape of its own. Noted on the
+ * ticket as its own follow-up rather than half-done here.
+ */
+function readOverrides(overrides: Record<string, unknown>): Record<string, ExtensionOverride> {
+  const read: Record<string, ExtensionOverride> = {};
+  for (const [id, override] of Object.entries(overrides)) {
+    if (isRecord(override) && id !== '__proto__') {
+      read[id] = override as ExtensionOverride;
+    }
+  }
+  return read;
 }
 
 /**
