@@ -400,11 +400,11 @@ open, which is most of why `$name` exists.
 
 ### What is still silent, and why
 
-Four things have no effect and say nothing. They are listed here rather than left to be
+Some things have no effect and say nothing. They are listed here rather than left to be
 discovered.
 
-Two of them leave an override in place that never does anything, and are **deliberate**, on the
-§1 tolerance rule:
+**Two leave an override in place that never does anything**, and are deliberate, on the §1
+tolerance rule:
 
 - **an unknown key inside an override** — `{ "visibl": false }` is kept and ignored.
 - **an override for an ID nothing registers** — `"app.navbr.trash"` is kept and never matches.
@@ -413,18 +413,23 @@ Overrides are read before any descriptor registers, and you may legitimately ove
 library registers later, or a key a newer release adds — so a warning would fire on manifests that
 are correct for the build they were written against. Check an ID against the tables in §3 onward.
 
-The other two are the `$`-prefixed metadata keys, where a wrong shape is read as if the key were
-absent:
+**Three lose a layer _name_** — not a map, and not the same as each other:
 
-- **`$references` or `$ignoreReferenceList` that is not a list of strings** — the whole list reads
-  as empty, so no layer is referenced and none is ignored. A layer that is referenced but does not
-  resolve _is_ reported, on `missingLayers()` (§12); a `$references` you wrote as an object is
-  not, because there is then nothing it names.
-- **a `$layers` that is not an object, or one of its bodies that is not an object** — that layer
-  is skipped. Referencing it then shows up on `missingLayers()`, which is the signal for it.
+| What you wrote                                    | What happens                                                           |
+| ------------------------------------------------- | ---------------------------------------------------------------------- |
+| `"$references": { … }`, or a bare string          | reads as an **empty** list — no layer referenced, none ignored         |
+| `"$references": ["brand", 42, "acme"]`            | only the `42` is lost; `brand` and `acme` still apply. **Not** emptied |
+| `"$layers": "x"`, or a body that is not an object | that layer is skipped                                                  |
 
-These two are about layer **resolution** rather than configuration, which is why
-`refusedSections()` covers only `slots` and `overrides`.
+`$ignoreReferenceList` reads exactly as `$references` does, in both of the first two rows.
+
+None of the three is reported, because a name that was never read is a name nothing can go looking
+for. A layer that **is** referenced and does not resolve is a different thing and **is** reported,
+on `missingLayers()` (§12) — which is where a skipped `$layers` body shows up, once you reference
+it.
+
+These are about layer **resolution** rather than configuration, which is why `refusedSections()`
+covers only `slots` and `overrides`.
 
 ### A repeated `id` across layers is **not** reported, and that is deliberate
 
