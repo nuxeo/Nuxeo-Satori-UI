@@ -10,6 +10,11 @@
     "context-menu-share": "共有",
     "context-menu-subscribe": "通知を受け取る",
     "context-menu-unsubscribe": "購読を解除",
+    "row-actions-copy-to": "コピー先…",
+    "row-actions-delete": "削除",
+    "row-actions-download": "ダウンロード",
+    "row-actions-move-to": "移動先…",
+    "row-actions-rename": "名前の変更",
     "toolbar-add-to-clipboard": "クリップボードに追加",
     "toolbar-add-to-collection": "コレクションに追加",
     "toolbar-add-to-favorites": "お気に入りに追加",
@@ -478,6 +483,10 @@
       "retry": "再試行",
       "root": "ルート"
     },
+    "not-found": {
+      "go-to-dashboard": "ダッシュボードに移動",
+      "heading": "そのページは存在しません"
+    },
     "nuxeo-drive-page": {
       "application": "アプリケーション",
       "created": "作成日",
@@ -508,7 +517,7 @@
       "coming-soon": "近日公開"
     },
     "preset": {
-      "badge": "Preset: {{ label }}"
+      "badge": "プリセット: {{ label }}"
     },
     "profile-page": {
       "change-password": "パスワードの変更",
@@ -624,6 +633,7 @@
   "browse": {
     "block": "ブロック",
     "breadcrumb": {
+      "label": "パンくずリスト",
       "root": "ルート"
     },
     "browse": {
@@ -636,11 +646,14 @@
       "card-view": "カード表示",
       "category": "カテゴリ",
       "clear": "クリア",
+      "clear-modified": "変更日の日付範囲を消去",
+      "clear-uploads": "クリア",
       "close-column-picker": "列の選択を閉じる",
       "close-panel": "パネルを閉じる",
       "collection-actions": "コレクションのアクション",
       "column-settings": "列の設定",
       "comment": "コメント",
+      "contents-of": "{{ name }} のコンテンツ",
       "contributors": "投稿者",
       "create-folder-upload-files-or-import": "フォルダの作成、ファイルのアップロード、または CSV のインポート",
       "create-import": "作成 / インポート",
@@ -649,9 +662,11 @@
       "delete": "削除",
       "done": "完了",
       "download-all": "すべてダウンロード",
+      "drop-to-upload": "ファイルをドロップして {{ name }} にアップロード",
       "edit": "編集",
       "export-csv": "CSV をエクスポート",
       "filter-by-title": "タイトルでフィルタ...",
+      "filtering": "フィルタリング中…",
       "from": "開始",
       "granted-by": "付与者",
       "if-you-want-to-explicitly-control": "この文書へのアクセスを明示的に制御する場合は、権限の継承をブロックできます。親文書に加えられた変更は、この文書へのアクセス条件に影響しなくなります。あなたと管理者がローカル権限に追加されます。",
@@ -695,6 +710,7 @@
       "trash-is-empty": "ごみ箱は空です",
       "type": "タイプ",
       "upload-with-nuxeo-drive": "Nuxeo Drive でアップロード",
+      "uploads": "アップロード",
       "user": "ユーザー",
       "user-group": "ユーザー / グループ",
       "username": "ユーザー名"
@@ -719,7 +735,9 @@
       "reset": "リセット"
     },
     "create-import": {
-      "types-load-failed": "このフォルダで作成可能な文書タイプを読み込めませんでした。"
+      "types-folder-missing": "このフォルダは既に存在しません。戻って別の場所を選択してください。",
+      "types-forbidden": "このフォルダにコンテンツを追加する権限がありません。別の場所を選択するか、管理者にアクセスを依頼してください。",
+      "types-load-failed": "このフォルダの文書タイプを読み込めませんでした。接続を確認して、もう一度お試しください。"
     },
     "create-import-dialog": {
       "add-more-files": "さらにファイルを追加",
@@ -820,6 +838,7 @@
       "action-failed": "アクションに失敗しました",
       "collection-moved-to-trash": "コレクションをごみ箱に移動しました",
       "collection-updated": "コレクションを更新しました",
+      "copied-to": "「{{ name }}」を {{ folder }} にコピーしました",
       "could-not-load-folder-contents": "フォルダのコンテンツを読み込めませんでした。",
       "could-not-resolve-a-default-folder-open": "デフォルトフォルダを特定できませんでした。先に [参照] でフォルダを開いてください。",
       "could-not-resolve-this-path-try-another": "このパスを解決できませんでした。別のフォルダを試してください。",
@@ -834,12 +853,14 @@
       "domain-container-guidance": "セクション、テンプレート、または Workspace を開くことで、それらのフォルダー内でコンテンツの作成を行います。",
       "download-failed": "ダウンロードに失敗しました。",
       "failed-to-add-tag": "タグの追加に失敗しました",
+      "failed-to-copy": "文書をコピーできませんでした。",
       "failed-to-delete": "削除に失敗しました",
       "failed-to-delete-collection": "コレクションの削除に失敗しました",
       "failed-to-load-collection": "コレクションの読み込みに失敗しました",
       "failed-to-load-folder-contents": "フォルダのコンテンツの読み込みに失敗しました。",
       "failed-to-load-permissions": "権限の読み込みに失敗しました",
       "failed-to-load-selected-documents-for-deletion": "削除対象として選択した文書の読み込みに失敗しました",
+      "failed-to-move": "文書を移動できませんでした。",
       "failed-to-remove-tag": "タグの削除に失敗しました",
       "failed-to-restore-document": "文書の復元に失敗しました。",
       "failed-to-send-notification": "通知を送信できませんでした",
@@ -850,6 +871,7 @@
       "file-upload-failed": "ファイルのアップロードに失敗しました",
       "inheritance-blocked": "継承をブロックしました",
       "inheritance-unblocked": "継承のブロックを解除しました",
+      "moved-to": "「{{ name }}」を {{ folder }} に移動しました",
       "moved-to-trash": "ごみ箱に移動しました",
       "notification-email-sent": "通知 E メールを送信しました",
       "open-a-folder-to-create-or-import": "コンテンツを作成またはインポートするには、フォルダを開いてください。",
@@ -859,6 +881,7 @@
       "please-select-a-csv-file": ".csv ファイルを選択してください。",
       "please-wait-for-the-file-upload-to": "ファイルのアップロードが完了するまでお待ちください。",
       "remove-all-collections-from-this-folder-before": "このフォルダを削除する前に、すべてのコレクションを削除してください。",
+      "renamed": "「{{ name }}」に名前を変更しました",
       "restricted-import-location": "コンテンツを作成する別のコンテナを選択してください。",
       "search-failed": "検索に失敗しました",
       "selected-path-is-not-a-folder-choose": "選択したパスはフォルダではありません。フォルダを選択するか、1 つ上の階層に移動してください。",
@@ -867,8 +890,15 @@
       "subscribed-to-notifications": "通知を購読しました",
       "unsubscribed": "購読を解除しました",
       "upload-failed": "アップロードに失敗しました",
+      "upload-in-progress": "アップロード中のファイルが完了するまで、これ以上ドロップしないでください。",
       "uploading": "アップロード中…",
       "uploading-file-of": "ファイルをアップロード中 ({{ index }} / {{ count }})…"
+    },
+    "row-actions": {
+      "copy-heading": "「{{ name }}」のコピー先",
+      "copy-here": "ここにコピー",
+      "move-heading": "「{{ name }}」の移動先",
+      "move-here": "ここに移動"
     },
     "scope": {
       "create-import": "作成 / インポート",
@@ -895,6 +925,7 @@
     "collection-detail": {
       "actions": "アクション",
       "back-to-collections": "コレクションに戻る",
+      "breadcrumbs": "パンくずリスト",
       "category": "カテゴリ",
       "comment": "コメント",
       "date": "日付",
@@ -910,6 +941,7 @@
       "if-you-want-to-explicitly-control": "この文書へのアクセスを明示的に制御する場合は、権限の継承をブロックできます。親文書に加えられた変更は、この文書へのアクセス条件に影響しなくなります。あなたと管理者がローカル権限に追加されます。",
       "last-contributor": "最終投稿者",
       "loading": "読み込んでいます",
+      "members-of": "{{ name }} のメンバー",
       "modified": "変更日",
       "more-actions": "その他の処理",
       "new": "新規",
@@ -1025,13 +1057,13 @@
       "trashed-document-many": "ごみ箱内の文書: {{ count }} 件",
       "trashed-document-one": "ごみ箱内の文書: {{ count }} 件"
     },
-    "date-mask": "yyyy/mm/dd",
+    "date-mask": "yyyy/MM/dd",
     "dismiss": "破棄",
     "email-example": "name@company.com",
     "lock": {
-      "already-locked": "文書は既に別のユーザーによってロックされています。ページを更新してください。",
+      "already-locked": "この文書は他のユーザーによってすでにロックされています。ページを更新してください。",
       "lock-no-permission": "この文書をロックする権限がありません。",
-      "locked-by": "{{ owner }} によって {{ date }} にロックされました",
+      "locked-by": "{{ owner }} が {{ date }} にロックしました",
       "locked-by-another-user": "この文書は別のユーザーによってロックされているため、ロックを解除できません。",
       "unlock-no-permission": "この文書のロックを解除する権限がありません。"
     },
@@ -1145,6 +1177,7 @@
       "attachments": "添付ファイル",
       "augment-your-editorial-workflow-with-cognitive": "認知処理で編集ワークフローを強化します。要約の生成、複雑なデータの分類、隠れた関係の発見を行えます。",
       "automatic-taxonomy-mapping-based-on-entity": "現在の文書テキストのエンティティ抽出と感情分析に基づく自動タクソノミーマッピング。",
+      "breadcrumbs": "パンくずリスト",
       "by": "実行者",
       "cancel": "キャンセル",
       "categorize-content-into-predefined-editorial-verticals": "コンテンツを事前定義された編集分野に分類し、作成者、公開日、読了時間の推定などの構造メタデータを抽出します。",
@@ -1230,6 +1263,7 @@
       "reply": "返信",
       "reply-actions": "返信のアクション",
       "republish": "再公開",
+      "republish-confirm": "この公開を文書の最新バージョンで消去してもよろしいですか？",
       "restore": "復元",
       "right": "権利",
       "running": "実行中",
@@ -1262,6 +1296,8 @@
       "unclassified": "未分類",
       "unpublish": "非公開にする",
       "unpublish-all": "すべて非公開にする",
+      "unpublish-all-confirm": "これらの文書の公開を取り消してもよろしいですか？",
+      "unpublish-confirm": "この文書の公開を取り消してもよろしいですか？",
       "upload-attachment": "添付ファイルをアップロード",
       "user": "ユーザー",
       "user-group": "ユーザー / グループ",
@@ -1290,7 +1326,11 @@
       "enter-a-valid-date": "有効な日付を入力してください",
       "expires": "有効期限",
       "nature": "種類",
+      "not-accepted": "Nuxeo はこの値を受け付けませんでした。",
       "save": "保存",
+      "save-failed": "変更を保存できませんでした。もう一度お試しください。",
+      "save-forbidden": "この文書を変更する権限がありません。",
+      "saving": "保存中",
       "search": "検索…",
       "search-coverage": "対象範囲を検索",
       "search-nature": "種類を検索",
@@ -1359,8 +1399,8 @@
       "publication-removed": "公開を削除しました",
       "removed-from-favorites": "お気に入りから削除されました",
       "reply-deleted": "返信を削除しました",
-      "restore-version-conflict": "文書の現在の状態と競合しているため、このバージョンを復元できません。ページを再読み込みして、もう一度お試しください。",
-      "restore-version-forbidden": "このバージョンを復元できません。権限がないか、別のユーザーが文書をロックしています。",
+      "restore-version-conflict": "文書の現在の状態との競合により、このバージョンは復元できません。ページを再読み込みしてから再試行してください。",
+      "restore-version-forbidden": "このバージョンを復元できません: 権限がないか、他のユーザーが文書をロックしています。",
       "search-failed-try-again": "検索に失敗しました。もう一度お試しください。",
       "section-not-found": "セクションが見つかりません",
       "selected-documents-have-no-insertable-image-url": "選択した文書には挿入可能な画像 URL がありません",
@@ -1412,6 +1452,7 @@
       "clear": "クリア",
       "close": "閉じる",
       "filters": "フィルタ",
+      "loading": "画像を読み込み中",
       "no-pictures-found": "画像が見つかりませんでした。",
       "picture-documents": "画像文書",
       "quick-search": "クイック検索",
@@ -1458,16 +1499,18 @@
     "version-latest": "{{ version }} 最新",
     "version-latest-entry": "最新バージョン",
     "version-modified-by": "{{ who }} が {{ when }} に変更",
-    "version-restore": "{{ version }} を復元",
-    "version-restore-confirm-title": "よろしいですか?",
-    "version-viewing": "バージョン {{ version }} を表示しています。",
+    "version-restore": "バージョン {{ version }} を復元",
+    "version-restore-confirm-title": "本当に実行しますか?",
+    "version-restore-replaces-content": "バージョン {{ version }} を復元すると、文書の現在のコンテンツ（バージョン {{ version }} より後に行われた変更を含む）が置き換えられます。",
+    "version-viewing": "{{ version }} バージョンを表示しています。",
     "visual-editor": "ビジュアルエディター",
     "workflow-started-on-document": "この文書で {{ workflow }} ワークフローを開始しました。"
   },
   "document-layouts": {
-    "no": "No",
-    "sections": "Property sections",
-    "yes": "Yes"
+    "loading-form": "フォームを読み込み中",
+    "no": "いいえ",
+    "sections": "プロパティセクション",
+    "yes": "はい"
   },
   "drawer": {
     "administration-analytics": "分析",
@@ -1611,8 +1654,8 @@
   },
   "nav": {
     "clipboard": {
-      "aria-label-one": "{{ name }}、{{ count }} 件のアイテム",
       "aria-label-many": "{{ name }}、{{ count }} 件のアイテム",
+      "aria-label-one": "{{ name }}、{{ count }} 件のアイテム",
       "copy": "コピー",
       "empty": "クリップボードは空です",
       "hint": "文書またはコレクションで「クリップボードに追加」を使用すると、ここにアイテムが追加されます。",
@@ -1663,6 +1706,7 @@
       "retry": "再試行"
     },
     "tree": {
+      "label": "フォルダ",
       "retry": "再試行",
       "root": "ルート",
       "toggle": "{{ name }} を切り替えます"
@@ -1729,14 +1773,32 @@
     },
     "right": {
       "AddChildren": "子文書の追加",
+      "CanAskForPublishing": "公開を依頼できる",
       "Everything": "すべてを管理",
       "ManageWorkflows": "ワークフローの管理",
       "Read": "読み取り",
       "ReadCanCollect": "収集可能",
       "ReadRemove": "読み取りと削除",
+      "ReadVersion": "バージョンを読み取る",
       "ReadWrite": "編集",
       "Remove": "削除",
-      "Write": "書き込み"
+      "RemoveChildren": "子を削除する",
+      "SetRetention": "保持を設定する",
+      "Unlock": "ロック解除",
+      "UnsetRetention": "保持を解除する",
+      "Version": "バージョンを作成する",
+      "Write": "書き込み",
+      "WriteSecurity": "権限を管理する",
+      "WriteVersion": "バージョンを書き込む",
+      "Browse": "参照",
+      "ReadChildren": "子を読み取る",
+      "ReadLifeCycle": "ライフサイクルを読み取る",
+      "ReadProperties": "プロパティを読み取る",
+      "ReadSecurity": "セキュリティを読み取る",
+      "WriteLifeCycle": "ライフサイクルを編集する",
+      "WriteProperties": "プロパティを編集",
+      "ManageLegalHold": "リーガルホールドを管理する",
+      "ManageRecord": "レコードを管理する"
     },
     "share-external-dialog": {
       "cancel": "キャンセル",
@@ -1791,6 +1853,716 @@
       "name-placeholder": "保存した検索の名前を入力"
     }
   },
+  "satori-components": {
+    "action-menu": {
+      "more-actions": "その他の処理"
+    },
+    "breadcrumbs": {
+      "show-more": "パンくずリストをさらに表示"
+    },
+    "column-picker": {
+      "close": "列の選択を閉じる",
+      "done": "完了",
+      "reset": "リセット",
+      "title": "列の設定"
+    },
+    "comments": {
+      "cancel": "キャンセル",
+      "clear": "クリア",
+      "comment-actions": "{{author}} によるコメントのアクション",
+      "comment-label": "コメント",
+      "delete": "削除",
+      "delete-comment-message": "このコメントを削除してもよろしいですか？",
+      "delete-comment-title": "コメントを削除",
+      "delete-comment-with-replies": "このコメントを削除してもよろしいですか？このコメントへのすべての返信も削除されます。",
+      "delete-reply-message": "この返信を削除してもよろしいですか？",
+      "delete-reply-title": "返信を削除",
+      "edit": "編集",
+      "edit-comment": "コメントを編集",
+      "edit-reply": "返信を編集",
+      "edited": "{{time}} (編集済み)",
+      "empty": "コメントはまだありません",
+      "error": {
+        "add-comment": "コメントを追加できませんでした。",
+        "add-reply": "返信を追加できませんでした。",
+        "delete-comment": "コメントを削除できませんでした。",
+        "delete-reply": "返信を削除できませんでした。",
+        "edit-comment": "コメントを保存できませんでした。",
+        "edit-reply": "返信を保存できませんでした。",
+        "forbidden-add": "この文書にコメントする権限がありません。",
+        "forbidden-delete": "このコメントを削除する権限がありません。",
+        "forbidden-edit": "このコメントを編集する権限がありません。",
+        "not-found-comment": "このコメントは利用できなくなりました。コメントが再読み込みされました。",
+        "not-found-reply": "この返信は利用できなくなりました。コメントが再読み込みされました。"
+      },
+      "last-reply": "最新の返信 {{time}}",
+      "list": "コメント",
+      "load-failed": "コメントを読み込めませんでした。",
+      "loading": "コメントを読み込み中",
+      "replies-one": "返信1件",
+      "replies-other": "返信{{count}}件",
+      "reply": "返信",
+      "reply-actions": "{{author}} による返信のアクション",
+      "reply-label": "返信",
+      "reply-to": "{{author}} に返信",
+      "retry": "再試行",
+      "save": "保存",
+      "show-all": "すべて表示",
+      "submit-comment": "コメントを追加",
+      "submit-hint": "Ctrl + Enter で送信",
+      "submit-reply": "返信を追加",
+      "view-all-comments": "{{count}}件のコメントをすべて表示",
+      "view-all-replies": "{{count}}件の返信をすべて表示",
+      "write-comment": "ここにコメントを入力",
+      "write-reply": "ここに返信を入力"
+    },
+    "create-version-dialog": {
+      "title": "{{document}} のバージョンを作成 - バージョン {{version}}",
+      "kind": "作成するバージョン",
+      "minor": "マイナーバージョン",
+      "major": "メジャーバージョン",
+      "cancel": "キャンセル",
+      "create": "バージョンを作成",
+      "creating": "バージョンを作成中",
+      "created": "バージョン {{version}} を作成しました",
+      "forbidden": "この文書のバージョンを作成する権限がありません。",
+      "failed": "バージョンを作成できませんでした。"
+    },
+    "details-panel": {
+      "close": "詳細を閉じる"
+    },
+    "document-history": {
+      "filters": "履歴をフィルタ",
+      "user": "ユーザー名",
+      "user-hint": "完全一致のユーザー名",
+      "from": "開始",
+      "to": "から",
+      "action": "実行されたアクション",
+      "category": "カテゴリ",
+      "any": "任意",
+      "date": "日付",
+      "comment": "コメント",
+      "state": "状態",
+      "caption": "文書の履歴",
+      "loading": "履歴を読み込み中",
+      "failed": "履歴を読み込めませんでした。",
+      "empty": "履歴エントリはまだありません",
+      "no-match": "これらのフィルタに一致する履歴エントリはありません"
+    },
+    "document-toolbar": {
+      "label": "文書のアクション",
+      "more-actions": "その他の処理"
+    },
+    "document-list": {
+      "actions": "アクション",
+      "drop": "ファイルをドロップしてここにアップロード",
+      "empty": "まだここには何もありません",
+      "keyboard-hint": "矢印キーで文書間を移動します。スペースで選択、Shift で選択を拡張、Enter で開きます。",
+      "keyboard-hint-no-selection": "矢印キーで文書間を移動します。Enter で開きます。",
+      "loading": "文書を読み込み中",
+      "row-actions": "{{ name }} のアクション",
+      "row-name-repeated": "{{ name }} ({{ index }} / {{ count }})",
+      "select": "{{ name }} を選択",
+      "select-page": "このページのすべてを選択",
+      "selection": "選択",
+      "sort-by": "{{ column }} で並べ替え",
+      "sort-cleared": "並べ替えが解除され、デフォルトの順序が表示されています",
+      "sorted-ascending": "{{ column }} で昇順に並べ替えられました",
+      "sorted-descending": "{{ column }} で降順に並べ替えられました"
+    },
+    "document-tree": {
+      "children-failed": "{{ name }} 内のフォルダを読み込めませんでした",
+      "children-failed-row": "フォルダを読み込めませんでした。再試行",
+      "children-forbidden": "{{ name }} 内のフォルダへのアクセス権がありません",
+      "children-forbidden-row": "これらのフォルダへのアクセス権がありません",
+      "empty": "表示するフォルダがありません",
+      "load-failed": "フォルダを読み込めませんでした",
+      "loading": "フォルダを読み込み中",
+      "root": "ルート"
+    },
+    "date-input": {
+      "invalid": "{{ example }} のような日付を入力してください",
+      "too-early": "{{ date }} 以降の日付を入力してください",
+      "too-late": "{{ date }} 以前の日付を入力してください"
+    },
+    "drive-dialog": {
+      "checking": "Nuxeo Drive を確認中...",
+      "close": "閉じる",
+      "name": "Nuxeo Drive",
+      "package": "インストールするパッケージ",
+      "platform": "プラットフォーム",
+      "title": "Nuxeo Drive クライアントをダウンロード"
+    },
+    "dropzone": {
+      "choose-file": "ファイルを選択",
+      "choose-files": "ファイルを選択"
+    },
+    "error-state": {
+      "forbidden": {
+        "heading": "アクセス権がありません",
+        "message": "これを見る権限がありません。所有者または管理者にアクセスを依頼してください。"
+      },
+      "not-found": {
+        "heading": "見つかりません",
+        "message": "移動または削除された可能性があります。リンクが間違っている可能性もあります。"
+      },
+      "retry": "再試行",
+      "server": {
+        "heading": "問題が発生しました",
+        "message": "サーバーが要求を完了できませんでした。しばらくしてから再試行してください。"
+      },
+      "unauthorized": {
+        "heading": "セッションが終了しました",
+        "message": "続けるにはサインインしてください。"
+      }
+    },
+    "favorite-toggle": {
+      "add": "お気に入りに追加",
+      "label": "お気に入り",
+      "remove": "お気に入りから削除"
+    },
+    "manage-versions": {
+      "version": "バージョン",
+      "create": "バージョンを作成",
+      "unversioned": "バージョンなし",
+      "latest": "最新バージョン",
+      "modified": "{{who}} が {{when}} に変更",
+      "unknown-user": "不明",
+      "loading": "バージョンを読み込み中",
+      "failed": "バージョンを読み込めませんでした。",
+      "retry": "再試行",
+      "none": "以前のバージョンはありません"
+    },
+    "metadata-editor": {
+      "add-item": "{{label}} に追加",
+      "coverage": "対象範囲",
+      "description": "説明",
+      "error": {
+        "date": "{{label}} に有効な日付を入力してください。",
+        "integer": "{{label}} は整数にする必要があります。",
+        "invalid": "{{label}} は無効です。",
+        "item": "{{label}} の値の1つが無効です。",
+        "max-length": "{{label}} は{{count}}文字以下にする必要があります。",
+        "maximum": "{{label}} は{{bound}}以下にする必要があります。",
+        "maximum-exclusive": "{{label}} は{{bound}}より小さくする必要があります。",
+        "min-length": "{{label}} は{{count}}文字以上にする必要があります。",
+        "minimum": "{{label}} は{{bound}}以上にする必要があります。",
+        "minimum-exclusive": "{{label}} は{{bound}}より大きくする必要があります。",
+        "number": "{{label}} は数値にする必要があります。",
+        "pattern": "{{label}} は期待される形式ではありません。",
+        "required": "{{label}}は必須です。"
+      },
+      "expires": "有効期限",
+      "item": "{{label}} {{index}}",
+      "nature": "種類",
+      "no-value": "値なし",
+      "remove": "削除",
+      "remove-item": "{{label}} {{index}} を削除",
+      "remove-value": "{{name}} を削除",
+      "search": "検索",
+      "search-in": "{{label}} を検索",
+      "sections": "メタデータセクション",
+      "subjects": "主題",
+      "summary-one": "保存する前に1件のフィールドを修正する必要があります。",
+      "summary-other": "保存する前に{{count}}件のフィールドを修正する必要があります。",
+      "title": "タイトル"
+    },
+    "permission-dialogs": {
+      "cancel": "キャンセル",
+      "comment": "通知 E メール",
+      "comment-placeholder": "こんにちは。この文書にコメントして...",
+      "date-based": "日付ベース",
+      "delete": {
+        "delete": "削除",
+        "deleting": "権限を削除中",
+        "title": "次の権限が削除されます。"
+      },
+      "end-before-begin": "終了日が開始日より前です。",
+      "error": {
+        "delete": "権限を削除できませんでした。",
+        "forbidden": "この文書の権限を変更する権限がありません。",
+        "share": "文書を共有できませんでした。",
+        "update": "権限を更新できませんでした。"
+      },
+      "from": "開始",
+      "granted-by": "付与者",
+      "permanent": "無期限",
+      "right": "アクセス権",
+      "share": {
+        "create": "作成",
+        "create-another": "作成してさらに追加",
+        "email": "E メール",
+        "email-invalid": "有効なメールアドレスを入力してください。",
+        "email-placeholder": "name@company.com",
+        "saving": "文書を共有中",
+        "shared": "{{email}} と共有しました。文書へのリンクが送信されました。",
+        "title": "外部ユーザーと共有"
+      },
+      "time-frame": "期間",
+      "to": "から",
+      "update": {
+        "for": "{{principal}} 向け",
+        "notify": "ユーザーに通知する E メールを送信",
+        "saving": "権限を更新中",
+        "title": "権限を更新",
+        "update": "更新",
+        "updated": "権限を更新しました",
+        "updated-notified": "権限を更新し、通知を送信しました"
+      },
+      "user-group": "ユーザー / グループ"
+    },
+    "folder-picker": {
+      "already-here": "この文書はすでにこのフォルダ内にあります。",
+      "cancel": "キャンセル",
+      "empty": "ここにはフォルダがありません。このフォルダを選択できます。",
+      "failed": "フォルダを読み込めませんでした。",
+      "folders": "フォルダ",
+      "forbidden": "このフォルダへのアクセス権がありません。",
+      "inside-itself": "フォルダをそれ自体またはその内部のフォルダに移動することはできません。",
+      "loading": "フォルダを読み込み中",
+      "location": "場所",
+      "not-a-folder": "これはフォルダではありません。上に移動してフォルダを選択してください。",
+      "not-found": "このフォルダは存在しなくなりました。",
+      "retry": "再試行",
+      "up": "1 つ上の階層へ"
+    },
+    "pager": {
+      "label": "ページ",
+      "next": "次のページ",
+      "past-end": "これ以上の項目はありません",
+      "previous": "前のページ",
+      "range": "{{ first }}–{{ last }}",
+      "range-of": "{{ first }}–{{ last }} / {{ total }}"
+    },
+    "permissions-panel": {
+      "add": "追加",
+      "all-permissions": "すべての権限",
+      "column": {
+        "acl": "アクセスリスト",
+        "actions": "アクション",
+        "granted-by": "付与者",
+        "permission": "権限",
+        "principal": "ユーザーまたはグループ",
+        "time-frame": "期間"
+      },
+      "denied": "拒否",
+      "discard": "破棄",
+      "dismiss": "破棄",
+      "edit": "編集",
+      "edit-entry": "{{ principal }} の権限を編集",
+      "editor": {
+        "add": "追加",
+        "add-heading": "権限を追加",
+        "apply": "適用",
+        "cancel": "キャンセル",
+        "date-based": "日付ベース",
+        "edit-heading": "{{ principal }} の権限を編集",
+        "end-before-begin": "終了日が開始日より前です。",
+        "from": "開始",
+        "no-principal": "リストからユーザーまたはグループを選択してください。",
+        "permanent": "無期限",
+        "permission": "権限",
+        "principal": "ユーザーまたはグループ",
+        "to": "から"
+      },
+      "failed": {
+        "denied": "この文書の権限を変更する権限がありません。",
+        "heading": "{{ total }} 件中 {{ applied }} 件の変更を保存しました。次の変更はサーバーによって拒否されました:",
+        "unknown": "サーバーから理由が示されませんでした。"
+      },
+      "group": {
+        "other": "このサーバー上の他の権限",
+        "standard": "標準の権限",
+        "suggested": "この文書タイプに推奨される権限"
+      },
+      "inherited": {
+        "block": "継承をブロック",
+        "blocked": "継承がブロックされているため、この文書に設定された権限のみが適用されます。",
+        "empty": "継承された権限はありません。",
+        "heading": "親フォルダから継承",
+        "save-first": "まず変更を保存または破棄してください。",
+        "toggle-failed": "継承を変更できませんでした。",
+        "unblock": "継承のブロックを解除"
+      },
+      "load-error": {
+        "denied": "この文書の権限へのアクセス権がありません。",
+        "failed": "権限を読み込めませんでした。",
+        "not-found": "この文書は存在しなくなりました。"
+      },
+      "loading": "権限を読み込み中",
+      "local": {
+        "empty": "この文書自体には権限が設定されていません。",
+        "heading": "この文書に設定済み"
+      },
+      "locked": {
+        "deny": "拒否エントリはここで削除できますが、編集はできません。",
+        "no-id": "このエントリには識別子がサーバーから送信されなかったため、ここで変更することはできません。"
+      },
+      "other": {
+        "heading": "他のアクセスリストによって設定済み"
+      },
+      "pending": {
+        "many": "未保存の変更 {{ count }} 件",
+        "one": "未保存の変更 {{ count }} 件"
+      },
+      "permission-for": "{{ principal }} の権限",
+      "refusal": {
+        "changed-on-server": "このページが読み込まれた後にサーバー上で変更されました。再読み込みしてから、もう一度変更してください。",
+        "deny-entry": "これはアクセスを拒否するものであり、このパネルは許可のみを行えます。編集すると許可に変わってしまいます。",
+        "invalid-time-frame": "終了日が開始日より前になっています。",
+        "no-id": "サーバーからこのエントリの識別子が送信されなかったため、他のエントリに影響するリスクを避けて変更できません。",
+        "no-principal": "ユーザーまたはグループが指定されていません。",
+        "not-applied": "サーバーは変更を受け付けましたが、その権限には反映されていません。",
+        "undefined-permission": "このサーバーはその権限を定義していません。"
+      },
+      "refused": {
+        "heading": "何も保存されませんでした。次のエントリはこのパネルから保存できません:"
+      },
+      "reload": "再読み込み",
+      "remove": "削除",
+      "remove-entry": "{{ principal }} の {{ permission }} を削除",
+      "retry": "再試行",
+      "save": "保存",
+      "saved": {
+        "many": "{{ count }} 件の変更を保存しました。",
+        "one": "{{ count }} 件の変更を保存しました。"
+      },
+      "state": {
+        "added": "新規",
+        "changed": "変更済み",
+        "removed": "削除予定"
+      },
+      "status": {
+        "archived": "期限切れ",
+        "pending": "まだ有効ではありません"
+      },
+      "title": "権限",
+      "unconfirmed": {
+        "heading": "サーバーはすべての変更を適用しませんでした。次のエントリは設定どおりになっていません:"
+      },
+      "undo": "元に戻す",
+      "unnamed-principal": "(ユーザーまたはグループなし)",
+      "unread": {
+        "heading": "何も保存されませんでした。保存前に権限を読み取れなかったため、変更は送信されませんでした:"
+      },
+      "unverified": {
+        "heading": "変更は送信されましたが、権限の読み取りに失敗したため、パネルで確認できません。サーバーの内容を確認するには再読み込みしてください。"
+      }
+    },
+    "properties-panel": {
+      "by": "変更者",
+      "collections": "コレクション",
+      "contributors": "投稿者",
+      "coverage": "対象範囲",
+      "created": "作成日",
+      "description": "説明",
+      "expires": "有効期限",
+      "file-name": "ファイル名",
+      "format": "形式",
+      "indexing-properties": "インデックスのプロパティ",
+      "last-modified": "最終変更日",
+      "nature": "種類",
+      "process": "処理",
+      "publications": "公開",
+      "running": "実行中",
+      "state": "状態",
+      "subjects": "主題",
+      "tags": "タグ",
+      "title": "タイトル",
+      "version": "バージョン"
+    },
+    "tag-editor": {
+      "add": "この文書にタグを追加",
+      "added": "タグ {{tag}} が文書に追加されました。",
+      "adding": "タグ {{tag}} を追加中",
+      "error": {
+        "add": "タグ {{tag}} を追加できませんでした。",
+        "forbidden": "この文書のタグを変更する権限がありません。",
+        "remove": "タグ {{tag}} を削除できませんでした。"
+      },
+      "new": "+ {{tag}}",
+      "new-label": "新しいタグ {{tag}}",
+      "none": "タグなし",
+      "remove": "タグ {{tag}} を削除",
+      "removed": "タグ {{tag}} が文書から削除されました。",
+      "tags": "タグ"
+    },
+    "change-password-dialog": {
+      "cancel": "キャンセル",
+      "mismatch": "2つのパスワードが一致しません。",
+      "save": "パスワードを設定",
+      "title": "パスワードの変更",
+      "user": "ユーザー:",
+      "new-password": "新規パスワード",
+      "confirm-password": "パスワードの確認"
+    },
+    "rename-dialog": {
+      "cancel": "キャンセル",
+      "failed": "タイトルを変更できませんでした。しばらくしてから再試行してください。",
+      "forbidden": "この文書の名前を変更する権限がありません。",
+      "label": "タイトル",
+      "locked": "この文書は他の人によってロックされているため、現在は名前を変更できません。",
+      "not-found": "この文書は存在しなくなりました。",
+      "required": "タイトルを入力してください",
+      "save": "名前の変更",
+      "title": "名前の変更"
+    },
+    "admin-group-details-page": {
+      "could-not-load": "グループの詳細を読み込めませんでした。",
+      "could-not-remove-member": "メンバーを削除できませんでした。",
+      "could-not-remove-permission": "権限を削除できませんでした。",
+      "could-not-update-nested": "ネストされたグループを更新できませんでした。",
+      "delete": "削除",
+      "delete-failed": "削除に失敗しました",
+      "delete-group": "グループの削除",
+      "delete-group-named": "グループ「{{ name }}」を削除しますか？",
+      "edit": "編集",
+      "granted-by": "付与者",
+      "group": "グループ",
+      "group-saved": "グループを保存しました",
+      "identifier": "識別子",
+      "loading": "読み込み中",
+      "member-removed": "メンバーを削除しました",
+      "members": "メンバー",
+      "nested-group-removed": "ネストされたグループを削除しました",
+      "nested-groups": "ネストされたグループ",
+      "no-members": "メンバーがいません。",
+      "no-nested": "ネストされたグループはありません。",
+      "no-permissions": "このグループには権限がありません。",
+      "on": "オン",
+      "permission-removed": "権限を削除しました",
+      "permissions": "権限",
+      "remove-member": "{{ name }} をこのグループから削除",
+      "remove-member-tooltip": "メンバーを削除",
+      "remove-nested": "{{ name }} をこのグループから削除",
+      "remove-nested-tooltip": "ネストされたグループを削除",
+      "remove-permission": "権限を削除",
+      "right": "アクセス権",
+      "time-frame": "期間",
+      "update-failed": "変更を保存できませんでした。",
+      "username": "ユーザー名"
+    },
+    "admin-user-details-page": {
+      "change-password": "パスワードの変更",
+      "company": "会社:",
+      "could-not-load": "ユーザーの詳細を読み込めませんでした。",
+      "could-not-remove-permission": "権限を削除できませんでした。",
+      "could-not-update-groups": "ユーザーのグループを更新できませんでした。",
+      "delete": "削除",
+      "delete-failed": "削除に失敗しました",
+      "delete-user": "ユーザーを削除",
+      "delete-user-named": "ユーザー「{{ name }}」を削除しますか？この操作は元に戻せません。",
+      "edit": "編集",
+      "email": "E メール:",
+      "granted-by": "付与者",
+      "group-permissions": "{{ group }} の権限",
+      "groups": "グループ",
+      "identifier": "識別子",
+      "loading": "読み込み中",
+      "local-permissions": "ローカル権限",
+      "name": "名前",
+      "no-groups": "割り当てられたグループはありません。",
+      "no-local": "ローカル権限はありません。",
+      "no-permissions": "{{ name }} には権限がありません。",
+      "on": "オン",
+      "password-update-failed": "パスワードの更新に失敗しました",
+      "password-updated": "パスワードを更新しました",
+      "permission-removed": "権限を削除しました",
+      "remove-from-group": "{{ name }} をこのユーザーから削除",
+      "remove-group": "グループを削除",
+      "remove-permission": "権限を削除",
+      "removed-from-group": "ユーザーからグループを削除しました",
+      "right": "アクセス権",
+      "time-frame": "期間",
+      "update-failed": "変更を保存できませんでした。",
+      "user-updated": "ユーザーを保存しました"
+    },
+    "admin-users-groups-page": {
+      "could-not-load-groups": "グループを読み込めませんでした。",
+      "could-not-load-users": "ユーザーを読み込めませんでした。",
+      "create-failed": "グループを作成できませんでした。",
+      "delete": "削除",
+      "delete-failed": "削除に失敗しました",
+      "delete-group": "グループの削除",
+      "delete-group-aria": "グループ {{ name }} を削除",
+      "delete-group-named": "グループ「{{ name }}」を削除しますか？",
+      "delete-user": "ユーザーを削除",
+      "delete-user-aria": "ユーザー {{ name }} を削除",
+      "delete-user-named": "ユーザー「{{ name }}」を削除しますか？この操作は元に戻せません。",
+      "edit": "編集",
+      "edit-group": "グループ {{ name }} を編集",
+      "edit-user": "ユーザー {{ name }} を編集",
+      "email": "E メール",
+      "group": "グループ",
+      "group-created": "グループを作成しました",
+      "group-deleted": "グループを削除しました",
+      "group-updated": "グループを保存しました",
+      "groups": "グループ",
+      "groups-tab": "グループ ({{ count }})",
+      "identifier": "識別子",
+      "invitation-sent": "招待を送信しました",
+      "label": "ラベル",
+      "loading": "読み込み中",
+      "members": "メンバー",
+      "name": "名前",
+      "new": "新規",
+      "new-group": "新規グループ",
+      "new-user": "新規ユーザー",
+      "no-groups": "この検索に一致するグループはありません。",
+      "no-recent": "最近のユーザーまたはグループはありません。",
+      "no-users": "この検索に一致するユーザーはありません。",
+      "recent": "最近作成されたユーザーとグループ",
+      "run-search": "検索を実行",
+      "search": "ユーザーとグループを検索",
+      "title": "ユーザーとグループ",
+      "update-failed": "変更を保存できませんでした。",
+      "user-created": "ユーザーを作成しました",
+      "user-deleted": "ユーザーを削除しました",
+      "user-updated": "ユーザーを保存しました",
+      "username": "ユーザー名",
+      "users-tab": "ユーザー ({{ count }})"
+    },
+    "confirm-dialog": {
+      "cancel": "キャンセル"
+    },
+    "group-form-dialog": {
+      "cancel": "キャンセル",
+      "create": "作成",
+      "create-another": "続けて作成",
+      "create-group": "グループを作成",
+      "edit-group": "グループを編集",
+      "group-name": "グループ名",
+      "label": "ラベル",
+      "member-usernames": "メンバーのユーザー名",
+      "pick-member": "検索結果から選択するか、ユーザー名を入力して Enter キーを押してください",
+      "remove-member": "{{ name }} を削除",
+      "save": "保存",
+      "search-users": "ユーザーを検索するか、ユーザー名を入力…"
+    },
+    "user-form-dialog": {
+      "cancel": "キャンセル",
+      "company": "会社",
+      "create": "作成",
+      "create-another": "続けて作成",
+      "create-failed": "作成に失敗しました",
+      "create-user": "ユーザーを作成",
+      "edit-user": "ユーザーの編集",
+      "email": "E メール",
+      "first-name": "名",
+      "groups": "グループ",
+      "invitation-failed": "招待に失敗しました",
+      "last-name": "姓",
+      "loading": "読み込み中",
+      "loading-groups": "グループを読み込み中...",
+      "password": "パスワード",
+      "passwords-do-not-match": "パスワードが一致しません",
+      "pick-group": "検索結果から選択するか、グループ名を入力して Enter キーを押してください",
+      "remove-group": "グループ {{ name }} を削除",
+      "save": "保存",
+      "search-groups": "グループを検索するか、グループ名を入力…",
+      "set-password": "ユーザーパスワードを設定",
+      "username": "ユーザー名",
+      "verify-password": "パスワードの確認"
+    },
+    "pickers": {
+      "choose-from-list": "リストからエントリを選択してください",
+      "clear": "クリア",
+      "failed": "検索に失敗しました。もう一度お試しください。",
+      "loading": "読み込み中…",
+      "min-chars-many": "{{ count }} 文字以上入力してください",
+      "min-chars-one": "{{ count }} 文字以上入力してください",
+      "no-results": "結果なし",
+      "remove": "{{ name }} を削除",
+      "required": "必須",
+      "results-many": "{{ count }} 件の結果",
+      "results-one": "{{ count }} 件の結果",
+      "searching": "検索中…"
+    },
+    "tag-input": {
+      "add": "「{{ tag }}」を追加"
+    },
+    "toast": {
+      "dismiss": "破棄",
+      "retry": "再試行"
+    },
+    "search-filters": {
+      "fulltext": "全文",
+      "fulltext-placeholder": "検索キーワードを入力...",
+      "clear-fulltext": "フルテキストをクリア",
+      "modified": {
+        "title": "変更日",
+        "last24h": "過去 24 時間",
+        "last-week": "過去 1 週間",
+        "last-month": "過去 1 か月",
+        "last-year": "過去 1 年",
+        "prior-to-last-year": "1 年以上前"
+      },
+      "authors": "作成者",
+      "authors-placeholder": "作成者を検索...",
+      "collections": "コレクション",
+      "collections-placeholder": "値を選択してください。",
+      "loading-collections": "コレクションを読み込み中...",
+      "collections-failed": "コレクションを読み込めませんでした。",
+      "tags": "タグ",
+      "tags-placeholder": "例: イベント、東京",
+      "tags-hint": "1 文字以上入力してください",
+      "no-results": "一致するアイテムはありません",
+      "no-results-for": "{{ term }} に一致する結果はありません",
+      "nature": "種類",
+      "subjects": "主題",
+      "coverage": "対象範囲",
+      "size": {
+        "title": "サイズ",
+        "tiny": "100 KB 未満",
+        "small": "100 KB～1 MB",
+        "medium": "1 MB～10 MB",
+        "big": "10 MB～100 MB",
+        "huge": "100 MB 超"
+      },
+      "no-available-results": "利用可能な結果はありません",
+      "reset": "リセット",
+      "save-as": "名前を付けて保存",
+      "remove": "{{ value }} を削除",
+      "chosen-authors": "選択済みの作成者",
+      "chosen-collections": "選択済みのコレクション",
+      "chosen-tags": "選択済みのタグ"
+    },
+    "saved-search-select": {
+      "label": "保存した検索",
+      "placeholder": "検索フィルタ",
+      "loading": "保存した検索を読み込み中...",
+      "none": "保存した検索はありません",
+      "no-match": "一致する保存した検索はありません"
+    },
+    "saved-search-actions": {
+      "save-as": "名前を付けて保存",
+      "save": "保存",
+      "more": "保存した検索のアクション",
+      "rename": "名前の変更",
+      "share": "共有",
+      "delete": "削除"
+    },
+    "upload-queue": {
+      "done": "アップロード済み",
+      "failed": "アップロードできませんでした",
+      "forbidden": "ここに文書を追加する権限がありません",
+      "not-found": "フォルダは存在しなくなりました",
+      "progress": "アップロード中 {{ name }}",
+      "remove": "{{ name }} を削除",
+      "retry": "{{ name }} を再試行",
+      "summary": "{{ total }} 件中 {{ done }} 件アップロード済み",
+      "summary-failed": "{{ count }} 件をアップロードできませんでした",
+      "uploading": "アップロード中、{{ percent }}%",
+      "waiting": "待機中"
+    },
+    "user-group-picker": {
+      "group": "グループ",
+      "user": "ユーザー"
+    },
+    "vocabulary-select": {
+      "failed": "リストを読み込めませんでした。もう一度開いて再試行してください。"
+    }
+  },
   "search": {
     "ai-search": "AI 検索",
     "ai-search-active": "AI 検索が有効",
@@ -1832,7 +2604,9 @@
       "failed-to-download-document": "文書をダウンロードできませんでした。",
       "failed-to-load-search-results": "検索結果を読み込めませんでした。",
       "failed-to-update-favorites": "お気に入りを更新できませんでした。",
-      "nxql-query-execution-failed-the-generated-query": "NXQL クエリの実行に失敗しました。生成されたクエリが無効な可能性があります。"
+      "nxql-query-execution-failed-the-generated-query": "NXQL クエリの実行に失敗しました。生成されたクエリが無効な可能性があります。",
+      "failed-to-open-saved-search": "保存した検索を開けませんでした。",
+      "failed-to-delete-saved-search": "保存した検索を削除できませんでした。"
     },
     "no-results-for": "{{ term }} に一致する結果はありません",
     "quick-filter": {
@@ -1992,6 +2766,7 @@
     "document-viewer": {
       "additional-formats": "その他の形式",
       "annotations-are-not-available-for-this": "この文書では注釈を使用できません。",
+      "annotations-frame": "{{ name }}の注釈",
       "audio-codec": "オーディオコーデック",
       "bit-depth-per-channel": "チャネルあたりのビット深度",
       "color-profile": "カラープロファイル",
@@ -2014,9 +2789,12 @@
       "iptc-rights": "権利",
       "iptc-source": "提供元",
       "loading": "読み込んでいます",
+      "note-frame": "{{ name }} のノートコンテンツ",
       "open-with-nuxeo-drive": "Nuxeo Drive で開く",
+      "pdf-frame": "{{ name }} の PDF プレビュー",
       "picture-info": "画像情報",
       "preview": "プレビュー",
+      "preview-frame": "{{ name }} のプレビュー",
       "preview-not-available": "プレビューは使用できません",
       "remove": "削除",
       "remove-main-file": "メインファイルを削除",
@@ -2061,7 +2839,8 @@
     },
     "saved-search-dialog": {
       "cancel": "キャンセル",
-      "save": "保存"
+      "save": "保存",
+      "no-slash": "名前に文字「/」を使用することはできません"
     },
     "selection-topbar": {
       "clear": "クリア",
@@ -2204,6 +2983,7 @@
     "tabs-view": "表示"
   },
   "tasks": {
+    "breadcrumbs": "パンくずリスト",
     "document": "ドキュメント",
     "due-on": "期限 {{ date }}",
     "message": {

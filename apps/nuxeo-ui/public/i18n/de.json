@@ -10,6 +10,11 @@
     "context-menu-share": "Teilen",
     "context-menu-subscribe": "Benachrichtigen",
     "context-menu-unsubscribe": "Abbestellen",
+    "row-actions-copy-to": "Kopieren nach…",
+    "row-actions-delete": "Löschen",
+    "row-actions-download": "Herunterladen",
+    "row-actions-move-to": "Verschieben nach…",
+    "row-actions-rename": "Umbenennen",
     "toolbar-add-to-clipboard": "Zur Zwischenablage hinzufügen",
     "toolbar-add-to-collection": "Zur Sammlung hinzufügen",
     "toolbar-add-to-favorites": "Zu Favoriten hinzufügen",
@@ -478,6 +483,10 @@
       "retry": "Wiederholen",
       "root": "Stammverzeichnis"
     },
+    "not-found": {
+      "go-to-dashboard": "Zum Dashboard wechseln",
+      "heading": "Diese Seite existiert nicht"
+    },
     "nuxeo-drive-page": {
       "application": "Anwendung",
       "created": "Erstellt",
@@ -508,7 +517,7 @@
       "coming-soon": "Demnächst verfügbar"
     },
     "preset": {
-      "badge": "Preset: {{ label }}"
+      "badge": "Voreinstellung: {{ label }}"
     },
     "profile-page": {
       "change-password": "Passwort ändern",
@@ -624,6 +633,7 @@
   "browse": {
     "block": "Sperren",
     "breadcrumb": {
+      "label": "Breadcrumbs",
       "root": "Stammverzeichnis"
     },
     "browse": {
@@ -636,11 +646,14 @@
       "card-view": "Kartenansicht",
       "category": "Kategorie",
       "clear": "Löschen",
+      "clear-modified": "Datumsbereich „Bearbeitet“ geändert",
+      "clear-uploads": "Löschen",
       "close-column-picker": "Spaltenauswahl schließen",
       "close-panel": "Bereich schließen",
       "collection-actions": "Sammlungsaktionen",
       "column-settings": "Spalteneinstellungen",
       "comment": "Kommentar",
+      "contents-of": "Inhalt von {{ name }}",
       "contributors": "Mitwirkende",
       "create-folder-upload-files-or-import": "Ordner erstellen, Dateien hochladen oder CSV importieren",
       "create-import": "Erstellen / Importieren",
@@ -649,9 +662,11 @@
       "delete": "Löschen",
       "done": "Fertig",
       "download-all": "Alle herunterladen",
+      "drop-to-upload": "Dateien zum Hochladen nach {{ name }} ablegen",
       "edit": "Bearbeiten",
       "export-csv": "CSV exportieren ",
       "filter-by-title": "Nach Titel filtern...",
+      "filtering": "Filtern …",
       "from": "Von",
       "granted-by": "Gewährt von",
       "if-you-want-to-explicitly-control": "Wenn Sie den Zugriff auf dieses Dokument explizit steuern möchten, können Sie die Vererbung von Berechtigungen sperren. Änderungen am übergeordneten Dokument wirken sich dann nicht auf die Zugriffsbedingungen für dieses Dokument aus. Sie und die Administratoren werden zu den lokalen Berechtigungen hinzugefügt.",
@@ -695,6 +710,7 @@
       "trash-is-empty": "Papierkorb ist leer",
       "type": "Typ",
       "upload-with-nuxeo-drive": "Mit Nuxeo Drive hochladen",
+      "uploads": "Uploads",
       "user": "Benutzer",
       "user-group": "Benutzer / Gruppe",
       "username": "Benutzername"
@@ -719,7 +735,9 @@
       "reset": "Zurücksetzen"
     },
     "create-import": {
-      "types-load-failed": "Für diesen Ordner konnten keine erstellbaren Dokumenttypen geladen werden."
+      "types-folder-missing": "Dieser Ordner ist nicht mehr vorhanden. Gehen Sie zurück und wählen Sie einen anderen Speicherort.",
+      "types-forbidden": "Sie haben keine Berechtigung, Inhalte zu diesem Ordner hinzuzufügen. Wählen Sie einen anderen Speicherort oder bitten Sie einen Administrator um Zugriff.",
+      "types-load-failed": "Die Dokumenttypen für diesen Ordner konnten nicht geladen werden. Überprüfen Sie Ihre Verbindung und versuchen Sie es erneut."
     },
     "create-import-dialog": {
       "add-more-files": "Weitere Dateien hinzufügen",
@@ -820,6 +838,7 @@
       "action-failed": "Aktion fehlgeschlagen",
       "collection-moved-to-trash": "Sammlung in den Papierkorb verschoben",
       "collection-updated": "Sammlung aktualisiert",
+      "copied-to": "„{{ name }}“ nach {{ folder }} kopiert",
       "could-not-load-folder-contents": "Ordnerinhalt konnte nicht geladen werden.",
       "could-not-resolve-a-default-folder-open": "Es konnte kein Standardordner ermittelt werden. Öffnen Sie zuerst einen Ordner unter „Durchsuchen“.",
       "could-not-resolve-this-path-try-another": "Dieser Pfad konnte nicht aufgelöst werden. Versuchen Sie es mit einem anderen Ordner.",
@@ -834,12 +853,14 @@
       "domain-container-guidance": "Öffnen Sie Sektionen, Vorlagen oder Workspaces und erstellen Sie dann Inhalte in diesen Ordnern.",
       "download-failed": "Download fehlgeschlagen.",
       "failed-to-add-tag": "Tag konnte nicht hinzugefügt werden",
+      "failed-to-copy": "Das Dokument konnte nicht kopiert werden.",
       "failed-to-delete": "Löschen fehlgeschlagen",
       "failed-to-delete-collection": "Sammlung konnte nicht gelöscht werden",
       "failed-to-load-collection": "Sammlung konnte nicht geladen werden",
       "failed-to-load-folder-contents": "Ordnerinhalt konnte nicht geladen werden.",
       "failed-to-load-permissions": "Berechtigungen konnten nicht geladen werden",
       "failed-to-load-selected-documents-for-deletion": "Ausgewählte Dokumente konnten nicht zum Löschen geladen werden",
+      "failed-to-move": "Das Dokument konnte nicht verschoben werden.",
       "failed-to-remove-tag": "Tag konnte nicht entfernt werden",
       "failed-to-restore-document": "Dokument konnte nicht wiederhergestellt werden.",
       "failed-to-send-notification": "Fehler beim Absenden der Benachrichtigung",
@@ -850,6 +871,7 @@
       "file-upload-failed": "Dateiupload fehlgeschlagen",
       "inheritance-blocked": "Vererbung gesperrt",
       "inheritance-unblocked": "Vererbung entsperrt",
+      "moved-to": "„{{ name }}“ nach {{ folder }} verschoben",
       "moved-to-trash": "In den Papierkorb verschoben",
       "notification-email-sent": "Benachrichtigungs-E-Mail gesendet",
       "open-a-folder-to-create-or-import": "Öffnen Sie einen Ordner, um Inhalte zu erstellen oder zu importieren.",
@@ -859,6 +881,7 @@
       "please-select-a-csv-file": "Wählen Sie eine .csv-Datei aus.",
       "please-wait-for-the-file-upload-to": "Warten Sie, bis der Dateiupload abgeschlossen ist.",
       "remove-all-collections-from-this-folder-before": "Entfernen Sie alle Sammlungen aus diesem Ordner, bevor Sie ihn löschen.",
+      "renamed": "Umbenannt in „{{ name }}“",
       "restricted-import-location": "Wählen Sie einen anderen Container aus, um Ihre Inhalte zu erstellen.",
       "search-failed": "Suche fehlgeschlagen",
       "selected-path-is-not-a-folder-choose": "Der ausgewählte Pfad ist kein Ordner. Wählen Sie einen Ordner aus oder wechseln Sie eine Ebene nach oben.",
@@ -867,8 +890,15 @@
       "subscribed-to-notifications": "Benachrichtigungen abonniert",
       "unsubscribed": "Abbestellt",
       "upload-failed": "Upload fehlgeschlagen",
+      "upload-in-progress": "Warten Sie, bis die hochgeladenen Dateien fertig sind, bevor Sie weitere ablegen.",
       "uploading": "Wird hochgeladen…",
       "uploading-file-of": "Datei {{ index }} von {{ count }} wird hochgeladen…"
+    },
+    "row-actions": {
+      "copy-heading": "„{{ name }}“ kopieren nach",
+      "copy-here": "Hier kopieren",
+      "move-heading": "„{{ name }}“ verschieben nach",
+      "move-here": "Hier verschieben"
     },
     "scope": {
       "create-import": "Erstellen / Importieren",
@@ -895,6 +925,7 @@
     "collection-detail": {
       "actions": "Aktionen",
       "back-to-collections": "Zurück zu Sammlungen",
+      "breadcrumbs": "Breadcrumbs",
       "category": "Kategorie",
       "comment": "Kommentar",
       "date": "Datum",
@@ -910,6 +941,7 @@
       "if-you-want-to-explicitly-control": "Wenn Sie den Zugriff auf dieses Dokument explizit steuern möchten, können Sie die Vererbung von Berechtigungen sperren. Änderungen am übergeordneten Dokument wirken sich dann nicht auf die Zugriffsbedingungen für dieses Dokument aus. Sie und die Administratoren werden zu den lokalen Berechtigungen hinzugefügt.",
       "last-contributor": "Letzter Mitwirkende",
       "loading": "Wird geladen",
+      "members-of": "Mitglieder von {{ name }}",
       "modified": "Bearbeitet",
       "more-actions": "Weitere Aktionen",
       "new": "Neu",
@@ -1029,11 +1061,11 @@
     "dismiss": "Verwerfen",
     "email-example": "name@firma.de",
     "lock": {
-      "already-locked": "Dokument bereits von einem anderen Benutzer gesperrt, bitte aktualisieren Sie Ihre Seite.",
-      "lock-no-permission": "Sie haben keine Berechtigung, dieses Dokument zu sperren.",
+      "already-locked": "Dokument bereits von einem anderen Benutzer gesperrt, bitte aktualisieren Sie die Seite.",
+      "lock-no-permission": "Sie haben keine Autorisierung, dieses Dokument zu sperren.",
       "locked-by": "Gesperrt von {{ owner }} am {{ date }}",
-      "locked-by-another-user": "Sie können dieses Dokument nicht entsperren, weil es von einem anderen Benutzer gesperrt ist.",
-      "unlock-no-permission": "Sie haben keine Berechtigung, dieses Dokument zu entsperren."
+      "locked-by-another-user": "Sie können dieses Dokument nicht entsperren, da es von einem anderen Benutzer gesperrt ist.",
+      "unlock-no-permission": "Sie haben keine Autorisierung, dieses Dokument zu entsperren."
     },
     "ok": "OK",
     "page-number": "Seite {{ page }}",
@@ -1145,6 +1177,7 @@
       "attachments": "Anhänge",
       "augment-your-editorial-workflow-with-cognitive": "Erweitern Sie Ihren redaktionellen Workflow durch kognitive Verarbeitung. Erstellen Sie Zusammenfassungen, klassifizieren Sie komplexe Daten und entdecken Sie verborgene Zusammenhänge.",
       "automatic-taxonomy-mapping-based-on-entity": "Automatische Taxonomiezuordnung auf Basis von Entitätsextraktion und Stimmungsanalyse des aktuellen Dokumenttexts.",
+      "breadcrumbs": "Breadcrumbs",
       "by": "Von",
       "cancel": "Abbrechen",
       "categorize-content-into-predefined-editorial-verticals": "Kategorisieren Sie Inhalte in vordefinierte redaktionelle Bereiche und extrahieren Sie strukturelle Metadaten wie Autor, Veröffentlichungsdatum und geschätzte Lesezeit.",
@@ -1230,6 +1263,7 @@
       "reply": "Antworten",
       "reply-actions": "Antwortaktionen",
       "republish": "Erneut veröffentlichen",
+      "republish-confirm": "Möchten Sie diese Veröffentlichung wirklich mit der neuesten Version des Dokuments ersetzen?",
       "restore": "Wiederherstellen",
       "right": "Rechts",
       "running": "Wird ausgeführt",
@@ -1262,6 +1296,8 @@
       "unclassified": "Nicht klassifiziert",
       "unpublish": "Veröffentlichung aufheben",
       "unpublish-all": "Alle Veröffentlichungen aufheben",
+      "unpublish-all-confirm": "Möchten Sie die Veröffentlichung dieser Dokumente wirklich aufheben?",
+      "unpublish-confirm": "Möchten Sie die Veröffentlichung dieses Dokuments wirklich aufheben?",
       "upload-attachment": "Anhang hochladen",
       "user": "Benutzer",
       "user-group": "Benutzer / Gruppe",
@@ -1290,7 +1326,11 @@
       "enter-a-valid-date": "Geben Sie ein gültiges Datum ein",
       "expires": "Läuft ab",
       "nature": "Art",
+      "not-accepted": "Nuxeo hat diesen Wert nicht akzeptiert.",
       "save": "Speichern",
+      "save-failed": "Die Änderungen konnten nicht gespeichert werden. Versuchen Sie es erneut.",
+      "save-forbidden": "Sie haben keine Autorisierung, dieses Dokument zu ändern.",
+      "saving": "Wird gespeichert",
       "search": "Suchen…",
       "search-coverage": "Abdeckung suchen",
       "search-nature": "Art suchen",
@@ -1359,8 +1399,8 @@
       "publication-removed": "Veröffentlichung entfernt",
       "removed-from-favorites": "Aus Favoriten entfernt",
       "reply-deleted": "Antwort gelöscht",
-      "restore-version-conflict": "Diese Version kann wegen eines Konflikts mit dem aktuellen Zustand des Dokuments nicht wiederhergestellt werden. Laden Sie die Seite neu und versuchen Sie es erneut.",
-      "restore-version-forbidden": "Sie können diese Version nicht wiederherstellen: Ihnen fehlt die Berechtigung, oder ein anderer Benutzer hat das Dokument gesperrt.",
+      "restore-version-conflict": "Diese Version kann aufgrund eines Konflikts mit dem aktuellen Status des Dokuments nicht wiederhergestellt werden. Laden Sie die Seite neu und versuchen Sie es erneut.",
+      "restore-version-forbidden": "Sie können diese Version nicht wiederherstellen: Sie haben keine Autorisierung, oder jemand anderes hat das Dokument gesperrt.",
       "search-failed-try-again": "Suche fehlgeschlagen. Versuchen Sie es erneut.",
       "section-not-found": "Abschnitt nicht gefunden",
       "selected-documents-have-no-insertable-image-url": "Die ausgewählten Dokumente haben keine einfügbare Bild-URL",
@@ -1412,6 +1452,7 @@
       "clear": "Löschen",
       "close": "Schließen",
       "filters": "Filter",
+      "loading": "Bilder werden geladen",
       "no-pictures-found": "Keine Bilder gefunden.",
       "picture-documents": "Bilddokumente",
       "quick-search": "Schnellsuche",
@@ -1454,20 +1495,22 @@
     "task-due-before": "bis {{ due }}",
     "unblock": "Entsperren",
     "unknown": "Unbekannt",
-    "version-go-to-latest": "Zur neuesten Version",
+    "version-go-to-latest": "Zur neuesten Version wechseln",
     "version-latest": "{{ version }} Neueste",
     "version-latest-entry": "Neueste Version",
     "version-modified-by": "Bearbeitet {{ when }} von {{ who }}",
     "version-restore": "{{ version }} wiederherstellen",
     "version-restore-confirm-title": "Sind Sie sicher?",
-    "version-viewing": "Sie sehen die Version {{ version }}.",
+    "version-restore-replaces-content": "Das Wiederherstellen von Release {{ version }} ersetzt den aktuellen Inhalt des Dokuments, einschließlich aller Änderungen, die nach Release {{ version }} vorgenommen wurden.",
+    "version-viewing": "Sie zeigen den Release {{ version }} an.",
     "visual-editor": "Visueller Editor",
     "workflow-started-on-document": "Sie haben für dieses Dokument einen Workflow „{{ workflow }}“ gestartet."
   },
   "document-layouts": {
-    "no": "No",
-    "sections": "Property sections",
-    "yes": "Yes"
+    "loading-form": "Formular wird geladen",
+    "no": "Nein",
+    "sections": "Eigenschaftsabschnitte",
+    "yes": "Ja"
   },
   "drawer": {
     "administration-analytics": "Analysen",
@@ -1611,8 +1654,8 @@
   },
   "nav": {
     "clipboard": {
-      "aria-label-one": "{{ name }}, {{ count }} Element",
       "aria-label-many": "{{ name }}, {{ count }} Elemente",
+      "aria-label-one": "{{ name }}, {{ count }} Element",
       "copy": "Kopieren",
       "empty": "Zwischenablage ist leer",
       "hint": "Verwenden Sie „Zur Zwischenablage hinzufügen“ für Dokumente oder Sammlungen, um hier Elemente hinzuzufügen.",
@@ -1663,6 +1706,7 @@
       "retry": "Wiederholen"
     },
     "tree": {
+      "label": "Ordner",
       "retry": "Wiederholen",
       "root": "Stammverzeichnis",
       "toggle": "{{ name }} umschalten"
@@ -1729,14 +1773,32 @@
     },
     "right": {
       "AddChildren": "Untergeordnete Elemente hinzufügen",
+      "CanAskForPublishing": "Kann um Veröffentlichung bitten",
       "Everything": "Alles verwalten",
       "ManageWorkflows": "Workflows verwalten",
       "Read": "Lesen",
       "ReadCanCollect": "Kann sammeln",
       "ReadRemove": "Lesen und Entfernen",
+      "ReadVersion": "Versionen lesen",
       "ReadWrite": "Bearbeiten",
       "Remove": "Entfernen",
-      "Write": "Schreiben"
+      "RemoveChildren": "Untergeordnete Elemente entfernen",
+      "SetRetention": "Aufbewahrung festlegen",
+      "Unlock": "Entsperren",
+      "UnsetRetention": "Aufbewahrung aufheben",
+      "Version": "Versionen erstellen",
+      "Write": "Schreiben",
+      "WriteSecurity": "Berechtigungen verwalten",
+      "WriteVersion": "Versionen schreiben",
+      "Browse": "Durchsuchen",
+      "ReadChildren": "Untergeordnete Elemente lesen",
+      "ReadLifeCycle": "Lebenszyklus lesen",
+      "ReadProperties": "Eigenschaften lesen",
+      "ReadSecurity": "Sicherheit lesen",
+      "WriteLifeCycle": "Lebenszyklus bearbeiten",
+      "WriteProperties": "Eigenschaften bearbeiten",
+      "ManageLegalHold": "Rechtliche Aufbewahrung verwalten",
+      "ManageRecord": "Datensatz verwalten"
     },
     "share-external-dialog": {
       "cancel": "Abbrechen",
@@ -1791,6 +1853,716 @@
       "name-placeholder": "Geben Sie einen Namen für Ihre gespeicherte Suche ein"
     }
   },
+  "satori-components": {
+    "action-menu": {
+      "more-actions": "Weitere Aktionen"
+    },
+    "breadcrumbs": {
+      "show-more": "Alle Breadcrumbs anzeigen"
+    },
+    "column-picker": {
+      "close": "Spaltenauswahl schließen",
+      "done": "Fertig",
+      "reset": "Zurücksetzen",
+      "title": "Spalteneinstellungen"
+    },
+    "comments": {
+      "cancel": "Abbrechen",
+      "clear": "Löschen",
+      "comment-actions": "Aktionen für den Kommentar von {{author}}",
+      "comment-label": "Kommentar",
+      "delete": "Löschen",
+      "delete-comment-message": "Sind Sie sicher, dass Sie diesen Kommentar löschen möchten?",
+      "delete-comment-title": "Kommentar entfernen",
+      "delete-comment-with-replies": "Sind Sie sicher, dass Sie diesen Kommentar löschen möchten? Alle Antworten auf diesen Kommentar werden ebenfalls gelöscht.",
+      "delete-reply-message": "Sind Sie sicher, dass Sie diese Antwort löschen möchten?",
+      "delete-reply-title": "Antwort entfernen",
+      "edit": "Bearbeiten",
+      "edit-comment": "Kommentar bearbeiten",
+      "edit-reply": "Antwort bearbeiten",
+      "edited": "{{time}} (bearbeitet)",
+      "empty": "Noch keine Kommentare",
+      "error": {
+        "add-comment": "Der Kommentar konnte nicht hinzugefügt werden.",
+        "add-reply": "Die Antwort konnte nicht hinzugefügt werden.",
+        "delete-comment": "Der Kommentar konnte nicht gelöscht werden.",
+        "delete-reply": "Die Antwort konnte nicht gelöscht werden.",
+        "edit-comment": "Der Kommentar konnte nicht gespeichert werden.",
+        "edit-reply": "Die Antwort konnte nicht gespeichert werden.",
+        "forbidden-add": "Sie haben keine Autorisierung, dieses Dokument zu kommentieren.",
+        "forbidden-delete": "Sie haben keine Autorisierung, diesen Kommentar zu löschen.",
+        "forbidden-edit": "Sie haben keine Autorisierung, diesen Kommentar zu bearbeiten.",
+        "not-found-comment": "Dieser Kommentar ist nicht mehr verfügbar. Die Kommentare wurden neu geladen.",
+        "not-found-reply": "Diese Antwort ist nicht mehr verfügbar. Die Kommentare wurden neu geladen."
+      },
+      "last-reply": "Letzte Antwort {{time}}",
+      "list": "Kommentare",
+      "load-failed": "Die Kommentare konnten nicht geladen werden.",
+      "loading": "Kommentare werden geladen",
+      "replies-one": "1 Antwort",
+      "replies-other": "{{count}} Antworten",
+      "reply": "Antwort",
+      "reply-actions": "Aktionen für die Antwort von {{author}}",
+      "reply-label": "Antwort",
+      "reply-to": "Antworten an {{author}}",
+      "retry": "Wiederholen",
+      "save": "Speichern",
+      "show-all": "Alle anzeigen",
+      "submit-comment": "Kommentar hinzufügen",
+      "submit-hint": "Strg + Eingabe zum Absenden",
+      "submit-reply": "Antwort hinzufügen",
+      "view-all-comments": "Alle {{count}} Kommentare anzeigen",
+      "view-all-replies": "Alle {{count}} Antworten anzeigen",
+      "write-comment": "Kommentar hier eingeben",
+      "write-reply": "Antwort hier eingeben"
+    },
+    "create-version-dialog": {
+      "title": "Version für {{document}} erstellen - Version {{version}}",
+      "kind": "Zu erstellende Version",
+      "minor": "Nebenversion",
+      "major": "Hauptversion",
+      "cancel": "Abbrechen",
+      "create": "Version erstellen",
+      "creating": "Version wird erstellt",
+      "created": "Version {{version}} erstellt",
+      "forbidden": "Sie haben keine Autorisierung, eine Version dieses Dokuments zu erstellen.",
+      "failed": "Die Version konnte nicht erstellt werden."
+    },
+    "details-panel": {
+      "close": "Details schließen"
+    },
+    "document-history": {
+      "filters": "Verlauf filtern",
+      "user": "Benutzername",
+      "user-hint": "Der exakte Benutzername",
+      "from": "Von",
+      "to": "Bis",
+      "action": "Ausgeführte Aktion",
+      "category": "Kategorie",
+      "any": "Alle",
+      "date": "Datum",
+      "comment": "Kommentar",
+      "state": "Status",
+      "caption": "Dokumentverlauf",
+      "loading": "Verlauf wird geladen",
+      "failed": "Der Verlauf konnte nicht geladen werden.",
+      "empty": "Noch keine Verlaufseinträge",
+      "no-match": "Keine Verlaufseinträge entsprechen diesen Filtern"
+    },
+    "document-toolbar": {
+      "label": "Dokumentaktionen",
+      "more-actions": "Weitere Aktionen"
+    },
+    "document-list": {
+      "actions": "Aktionen",
+      "drop": "Dateien zum Hochladen hier ablegen",
+      "empty": "Hier ist noch nichts",
+      "keyboard-hint": "Pfeiltasten bewegen zwischen Dokumenten. Leertaste wählt aus, Umschalt erweitert die Auswahl, Eingabe öffnet.",
+      "keyboard-hint-no-selection": "Pfeiltasten bewegen zwischen Dokumenten. Eingabe öffnet.",
+      "loading": "Dokumente werden geladen",
+      "row-actions": "Aktionen für {{ name }}",
+      "row-name-repeated": "{{ name }} ({{ index }} von {{ count }})",
+      "select": "{{ name }} auswählen",
+      "select-page": "Alle auf dieser Seite auswählen",
+      "selection": "Auswahl",
+      "sort-by": "Sortieren nach {{ column }}",
+      "sort-cleared": "Sortierung gelöscht, Standardreihenfolge wird angezeigt",
+      "sorted-ascending": "Sortiert nach {{ column }}, aufsteigend",
+      "sorted-descending": "Sortiert nach {{ column }}, absteigend"
+    },
+    "document-tree": {
+      "children-failed": "Die Ordner in {{ name }} konnten nicht geladen werden",
+      "children-failed-row": "Ordner konnten nicht geladen werden. Wiederholen",
+      "children-forbidden": "Sie haben keinen Zugriff auf die Ordner in {{ name }}",
+      "children-forbidden-row": "Sie haben keinen Zugriff auf diese Ordner",
+      "empty": "Keine Ordner vorhanden",
+      "load-failed": "Die Ordner konnten nicht geladen werden",
+      "loading": "Ordner werden geladen",
+      "root": "Stammverzeichnis"
+    },
+    "date-input": {
+      "invalid": "Geben Sie ein Datum wie {{ example }} ein",
+      "too-early": "Geben Sie {{ date }} oder später ein",
+      "too-late": "Geben Sie {{ date }} oder früher ein"
+    },
+    "drive-dialog": {
+      "checking": "Nuxeo Drive wird überprüft...",
+      "close": "Schließen",
+      "name": "Nuxeo Drive",
+      "package": "Zu installierendes Paket",
+      "platform": "Plattform",
+      "title": "Nuxeo Drive-Client herunterladen"
+    },
+    "dropzone": {
+      "choose-file": "Datei auswählen",
+      "choose-files": "Dateien auswählen"
+    },
+    "error-state": {
+      "forbidden": {
+        "heading": "Sie haben keinen Zugriff",
+        "message": "Sie haben keine Autorisierung, dies anzuzeigen. Bitten Sie den Besitzer oder einen Administrator um Zugriff."
+      },
+      "not-found": {
+        "heading": "Nicht gefunden",
+        "message": "Es wurde möglicherweise verschoben oder gelöscht, oder der Link ist falsch."
+      },
+      "retry": "Wiederholen",
+      "server": {
+        "heading": "Ein Fehler ist aufgetreten",
+        "message": "Der Server konnte die Anfrage nicht abschließen. Versuchen Sie es in Kürze erneut."
+      },
+      "unauthorized": {
+        "heading": "Ihre Sitzung ist beendet",
+        "message": "Melden Sie sich erneut an, um fortzufahren."
+      }
+    },
+    "favorite-toggle": {
+      "add": "Zu Favoriten hinzufügen",
+      "label": "Favorit",
+      "remove": "Aus Favoriten entfernen"
+    },
+    "manage-versions": {
+      "version": "Version",
+      "create": "Version erstellen",
+      "unversioned": "Nicht versioniert",
+      "latest": "Neueste Version",
+      "modified": "Bearbeitet {{when}} von {{who}}",
+      "unknown-user": "Unbekannt",
+      "loading": "Versionen werden geladen",
+      "failed": "Die Versionen konnten nicht geladen werden.",
+      "retry": "Wiederholen",
+      "none": "Keine früheren Versionen"
+    },
+    "metadata-editor": {
+      "add-item": "Zu {{label}} hinzufügen",
+      "coverage": "Abdeckung",
+      "description": "Beschreibung",
+      "error": {
+        "date": "Geben Sie ein gültiges Datum für {{label}} ein.",
+        "integer": "{{label}} muss eine ganze Zahl sein.",
+        "invalid": "{{label}} ist nicht gültig.",
+        "item": "Einer der Werte von {{label}} ist nicht gültig.",
+        "max-length": "{{label}} darf höchstens {{count}} Zeichen lang sein.",
+        "maximum": "{{label}} muss {{bound}} oder weniger sein.",
+        "maximum-exclusive": "{{label}} muss kleiner als {{bound}} sein.",
+        "min-length": "{{label}} muss mindestens {{count}} Zeichen lang sein.",
+        "minimum": "{{label}} muss {{bound}} oder mehr sein.",
+        "minimum-exclusive": "{{label}} muss mehr als {{bound}} sein.",
+        "number": "{{label}} muss eine Zahl sein.",
+        "pattern": "{{label}} hat nicht das erwartete Format.",
+        "required": "{{label}} ist erforderlich."
+      },
+      "expires": "Läuft ab",
+      "item": "{{label}} {{index}}",
+      "nature": "Art",
+      "no-value": "Kein Wert",
+      "remove": "Entfernen",
+      "remove-item": "{{label}} {{index}} entfernen",
+      "remove-value": "{{name}} entfernen",
+      "search": "Suche",
+      "search-in": "{{label}} suchen",
+      "sections": "Metadatenabschnitte",
+      "subjects": "Objekte",
+      "summary-one": "1 Feld muss korrigiert werden, bevor Sie speichern können.",
+      "summary-other": "{{count}} Felder müssen korrigiert werden, bevor Sie speichern können.",
+      "title": "Titel"
+    },
+    "permission-dialogs": {
+      "cancel": "Abbrechen",
+      "comment": "Benachrichtigungs-E-Mail",
+      "comment-placeholder": "Hallo, könnten Sie dieses Dokument kommentieren und...",
+      "date-based": "Datumsbasiert",
+      "delete": {
+        "delete": "Löschen",
+        "deleting": "Autorisierung wird gelöscht",
+        "title": "Die folgende Berechtigung wird gelöscht."
+      },
+      "end-before-begin": "Das Enddatum liegt vor dem Startdatum.",
+      "error": {
+        "delete": "Die Autorisierung konnte nicht gelöscht werden.",
+        "forbidden": "Sie haben keine Autorisierung, Berechtigungen für dieses Dokument zu ändern.",
+        "share": "Das Dokument konnte nicht freigegeben werden.",
+        "update": "Die Autorisierung konnte nicht aktualisiert werden."
+      },
+      "from": "Von",
+      "granted-by": "Gewährt von",
+      "permanent": "Dauerhaft",
+      "right": "Rechts",
+      "share": {
+        "create": "Erstellen",
+        "create-another": "Erstellen und weiteres hinzufügen",
+        "email": "E-Mail",
+        "email-invalid": "Geben Sie eine gültige E-Mail-Adresse ein.",
+        "email-placeholder": "name@firma.de",
+        "saving": "Dokument wird freigegeben",
+        "shared": "Freigegeben für {{email}}, an die ein Link zum Dokument gesendet wurde.",
+        "title": "Für externen Benutzer freigeben"
+      },
+      "time-frame": "Zeitraum",
+      "to": "Bis",
+      "update": {
+        "for": "Für {{principal}}",
+        "notify": "E-Mail zur Benachrichtigung des Benutzers senden",
+        "saving": "Autorisierung wird aktualisiert",
+        "title": "Autorisierung aktualisieren",
+        "update": "Aktualisieren",
+        "updated": "Berechtigung aktualisiert",
+        "updated-notified": "Autorisierung aktualisiert und Benachrichtigung abgesendet"
+      },
+      "user-group": "Benutzer / Gruppe"
+    },
+    "folder-picker": {
+      "already-here": "Das Dokument befindet sich bereits in diesem Ordner.",
+      "cancel": "Abbrechen",
+      "empty": "Hier gibt es keine Ordner. Sie können diesen Ordner auswählen.",
+      "failed": "Der Ordner konnte nicht geladen werden.",
+      "folders": "Ordner",
+      "forbidden": "Sie haben keinen Zugriff auf diesen Ordner.",
+      "inside-itself": "Ein Ordner kann nicht in sich selbst oder in einen darin enthaltenen Ordner verschoben werden.",
+      "loading": "Ordner werden geladen",
+      "location": "Speicherort",
+      "not-a-folder": "Dies ist kein Ordner. Gehen Sie nach oben und wählen Sie einen Ordner aus.",
+      "not-found": "Dieser Ordner ist nicht mehr vorhanden.",
+      "retry": "Wiederholen",
+      "up": "Eine Ebene nach oben"
+    },
+    "pager": {
+      "label": "Seiten",
+      "next": "Nächste Seite",
+      "past-end": "Keine weiteren Elemente",
+      "previous": "Vorherige Seite",
+      "range": "{{ first }}–{{ last }}",
+      "range-of": "{{ first }}–{{ last }} von {{ total }}"
+    },
+    "permissions-panel": {
+      "add": "Hinzufügen",
+      "all-permissions": "Alle Berechtigungen",
+      "column": {
+        "acl": "Zugriffsliste",
+        "actions": "Aktionen",
+        "granted-by": "Gewährt von",
+        "permission": "Berechtigung",
+        "principal": "Benutzer oder Gruppe",
+        "time-frame": "Zeitraum"
+      },
+      "denied": "Verweigert",
+      "discard": "Verwerfen",
+      "dismiss": "Verwerfen",
+      "edit": "Bearbeiten",
+      "edit-entry": "Autorisierung für {{ principal }} bearbeiten",
+      "editor": {
+        "add": "Hinzufügen",
+        "add-heading": "Autorisierung hinzufügen",
+        "apply": "Anwenden",
+        "cancel": "Abbrechen",
+        "date-based": "Datumsbasiert",
+        "edit-heading": "Autorisierung für {{ principal }} bearbeiten",
+        "end-before-begin": "Das Enddatum liegt vor dem Startdatum.",
+        "from": "Von",
+        "no-principal": "Wählen Sie einen Benutzer oder eine Gruppe aus der Liste aus.",
+        "permanent": "Dauerhaft",
+        "permission": "Berechtigung",
+        "principal": "Benutzer oder Gruppe",
+        "to": "Bis"
+      },
+      "failed": {
+        "denied": "Sie haben keine Autorisierung, Berechtigungen für dieses Dokument zu ändern.",
+        "heading": "{{ applied }} von {{ total }} Änderungen gespeichert. Der Server hat die nächste abgelehnt:",
+        "unknown": "Der Server hat keinen Grund angegeben."
+      },
+      "group": {
+        "other": "Weitere Berechtigungen auf diesem Server",
+        "standard": "Standardberechtigungen",
+        "suggested": "Empfohlen für diesen Dokumenttyp"
+      },
+      "inherited": {
+        "block": "Vererbung sperren",
+        "blocked": "Die Vererbung ist gesperrt, daher gelten nur die für dieses Dokument festgelegten Berechtigungen.",
+        "empty": "Es werden keine Berechtigungen vererbt.",
+        "heading": "Geerbt von übergeordneten Ordnern",
+        "save-first": "Speichern oder verwerfen Sie zuerst Ihre Änderungen.",
+        "toggle-failed": "Die Vererbung konnte nicht geändert werden.",
+        "unblock": "Vererbung entsperren"
+      },
+      "load-error": {
+        "denied": "Sie haben keinen Zugriff auf die Berechtigungen dieses Dokuments.",
+        "failed": "Die Berechtigungen konnten nicht geladen werden.",
+        "not-found": "Dieses Dokument ist nicht mehr vorhanden."
+      },
+      "loading": "Berechtigungen werden geladen",
+      "local": {
+        "empty": "Für dieses Dokument selbst sind keine Berechtigungen festgelegt.",
+        "heading": "Für dieses Dokument festgelegt"
+      },
+      "locked": {
+        "deny": "Ein Verweigerungseintrag kann hier entfernt, aber nicht bearbeitet werden.",
+        "no-id": "Kann hier nicht geändert werden: Der Server hat keine Kennung für diesen Eintrag gesendet."
+      },
+      "other": {
+        "heading": "Durch andere Zugriffslisten festgelegt"
+      },
+      "pending": {
+        "many": "{{ count }} nicht gespeicherte Änderungen",
+        "one": "{{ count }} nicht gespeicherte Änderung"
+      },
+      "permission-for": "Autorisierung für {{ principal }}",
+      "refusal": {
+        "changed-on-server": "wurde auf dem Server geändert, nachdem diese Seite geladen wurde. Laden Sie neu und nehmen Sie die Änderung erneut vor.",
+        "deny-entry": "verweigert den Zugriff, und dieses Panel kann nur gewähren: Eine Bearbeitung würde sie in eine Gewährung umwandeln.",
+        "invalid-time-frame": "das Enddatum liegt vor ihrem Startdatum.",
+        "no-id": "der Server hat keine Kennung dafür gesendet, daher kann sie nicht geändert werden, ohne einen anderen Eintrag zu riskieren.",
+        "no-principal": "nennt keinen Benutzer oder keine Gruppe.",
+        "not-applied": "der Server hat die Änderung akzeptiert, aber seine Berechtigungen zeigen sie nicht.",
+        "undefined-permission": "dieser Server definiert diese Berechtigung nicht."
+      },
+      "refused": {
+        "heading": "Es wurde nichts gespeichert. Diese Einträge können nicht über dieses Panel gespeichert werden:"
+      },
+      "reload": "Neu laden",
+      "remove": "Entfernen",
+      "remove-entry": "{{ permission }} für {{ principal }} entfernen",
+      "retry": "Wiederholen",
+      "save": "Speichern",
+      "saved": {
+        "many": "{{ count }} Änderungen gespeichert.",
+        "one": "{{ count }} Änderung gespeichert."
+      },
+      "state": {
+        "added": "Neu",
+        "changed": "Geändert",
+        "removed": "Zu entfernen"
+      },
+      "status": {
+        "archived": "Abgelaufen",
+        "pending": "Noch nicht aktiv"
+      },
+      "title": "Berechtigungen",
+      "unconfirmed": {
+        "heading": "Der Server hat nicht jede Änderung übernommen. Diese Einträge entsprechen nicht Ihren Einstellungen:"
+      },
+      "undo": "Rückgängig machen",
+      "unnamed-principal": "(kein Benutzer oder keine Gruppe)",
+      "unread": {
+        "heading": "Es wurde nichts gespeichert. Die Berechtigungen konnten vor dem Speichern nicht gelesen werden, daher wurde keine Änderung gesendet:"
+      },
+      "unverified": {
+        "heading": "Die Änderungen wurden gesendet, aber das erneute Lesen der Berechtigungen ist fehlgeschlagen, daher kann das Panel sie nicht bestätigen. Laden Sie neu, um zu sehen, was der Server gespeichert hat."
+      }
+    },
+    "properties-panel": {
+      "by": "Von",
+      "collections": "Sammlungen",
+      "contributors": "Mitwirkende",
+      "coverage": "Abdeckung",
+      "created": "Erstellt",
+      "description": "Beschreibung",
+      "expires": "Läuft ab",
+      "file-name": "Dateiname",
+      "format": "Format",
+      "indexing-properties": "Indizierungseigenschaften",
+      "last-modified": "Zuletzt geändert",
+      "nature": "Art",
+      "process": "Prozess",
+      "publications": "Veröffentlichungen",
+      "running": "Wird ausgeführt",
+      "state": "Status",
+      "subjects": "Objekte",
+      "tags": "Tags",
+      "title": "Titel",
+      "version": "Version"
+    },
+    "tag-editor": {
+      "add": "Tags zu diesem Dokument hinzufügen",
+      "added": "Das Tag {{tag}} wurde zum Dokument hinzugefügt.",
+      "adding": "Tag {{tag}} wird hinzugefügt",
+      "error": {
+        "add": "Das Tag {{tag}} konnte nicht hinzugefügt werden.",
+        "forbidden": "Sie haben keine Autorisierung, die Tags dieses Dokuments zu ändern.",
+        "remove": "Das Tag {{tag}} konnte nicht entfernt werden."
+      },
+      "new": "+ {{tag}}",
+      "new-label": "Neues Tag {{tag}}",
+      "none": "Keine Tags",
+      "remove": "Tag {{tag}} entfernen",
+      "removed": "Das Tag {{tag}} wurde vom Dokument entfernt.",
+      "tags": "Tags"
+    },
+    "change-password-dialog": {
+      "cancel": "Abbrechen",
+      "mismatch": "Die Passwörter stimmen nicht überein.",
+      "save": "Passwort festlegen",
+      "title": "Passwort ändern",
+      "user": "Benutzer:",
+      "new-password": "Neues Passwort",
+      "confirm-password": "Passwort bestätigen"
+    },
+    "rename-dialog": {
+      "cancel": "Abbrechen",
+      "failed": "Der Titel konnte nicht geändert werden. Versuchen Sie es in Kürze erneut.",
+      "forbidden": "Sie haben keine Autorisierung, dieses Dokument umzubenennen.",
+      "label": "Titel",
+      "locked": "Dieses Dokument ist von einer anderen Person gesperrt und kann derzeit nicht umbenannt werden.",
+      "not-found": "Dieses Dokument ist nicht mehr vorhanden.",
+      "required": "Geben Sie einen Titel ein",
+      "save": "Umbenennen",
+      "title": "Umbenennen"
+    },
+    "admin-group-details-page": {
+      "could-not-load": "Gruppendetails konnten nicht geladen werden.",
+      "could-not-remove-member": "Mitglied konnte nicht entfernt werden.",
+      "could-not-remove-permission": "Berechtigung konnte nicht entfernt werden.",
+      "could-not-update-nested": "Verschachtelte Gruppen konnten nicht aktualisiert werden.",
+      "delete": "Löschen",
+      "delete-failed": "Löschen fehlgeschlagen",
+      "delete-group": "Gruppe löschen",
+      "delete-group-named": "Gruppe „{{ name }}“ löschen?",
+      "edit": "Bearbeiten",
+      "granted-by": "Gewährt von",
+      "group": "Gruppe",
+      "group-saved": "Gruppe gespeichert",
+      "identifier": "Kennung",
+      "loading": "Wird geladen",
+      "member-removed": "Mitglied entfernt",
+      "members": "Mitglieder",
+      "nested-group-removed": "Verschachtelte Gruppe entfernt",
+      "nested-groups": "Verschachtelte Gruppen",
+      "no-members": "Keine Mitglieder.",
+      "no-nested": "Keine verschachtelten Gruppen.",
+      "no-permissions": "Diese Gruppe hat keine Berechtigungen.",
+      "on": "An",
+      "permission-removed": "Berechtigung entfernt",
+      "permissions": "Berechtigungen",
+      "remove-member": "{{ name }} aus dieser Gruppe entfernen",
+      "remove-member-tooltip": "Mitglied entfernen",
+      "remove-nested": "{{ name }} aus dieser Gruppe entfernen",
+      "remove-nested-tooltip": "Verschachtelte Gruppe entfernen",
+      "remove-permission": "Berechtigung entfernen",
+      "right": "Berechtigungsstufe",
+      "time-frame": "Zeitraum",
+      "update-failed": "Die Änderungen konnten nicht gespeichert werden.",
+      "username": "Benutzername"
+    },
+    "admin-user-details-page": {
+      "change-password": "Passwort ändern",
+      "company": "Unternehmen:",
+      "could-not-load": "Benutzerdetails konnten nicht geladen werden.",
+      "could-not-remove-permission": "Berechtigung konnte nicht entfernt werden.",
+      "could-not-update-groups": "Die Gruppen des Benutzers konnten nicht aktualisiert werden.",
+      "delete": "Löschen",
+      "delete-failed": "Löschen fehlgeschlagen",
+      "delete-user": "Benutzer löschen",
+      "delete-user-named": "Benutzer „{{ name }}“ löschen? Dies kann nicht rückgängig gemacht werden.",
+      "edit": "Bearbeiten",
+      "email": "E-Mail:",
+      "granted-by": "Gewährt von",
+      "group-permissions": "Berechtigungen von {{ group }}",
+      "groups": "Gruppen",
+      "identifier": "Kennung",
+      "loading": "Wird geladen",
+      "local-permissions": "Lokale Berechtigungen",
+      "name": "Name",
+      "no-groups": "Keine Gruppen zugewiesen.",
+      "no-local": "Keine lokalen Berechtigungen.",
+      "no-permissions": "{{ name }} hat keine Berechtigungen.",
+      "on": "An",
+      "password-update-failed": "Passwortaktualisierung fehlgeschlagen",
+      "password-updated": "Passwort aktualisiert",
+      "permission-removed": "Berechtigung entfernt",
+      "remove-from-group": "{{ name }} von diesem Benutzer entfernen",
+      "remove-group": "Gruppe entfernen",
+      "remove-permission": "Berechtigung entfernen",
+      "removed-from-group": "Gruppe vom Benutzer entfernt",
+      "right": "Berechtigungsstufe",
+      "time-frame": "Zeitraum",
+      "update-failed": "Die Änderungen konnten nicht gespeichert werden.",
+      "user-updated": "Benutzer gespeichert"
+    },
+    "admin-users-groups-page": {
+      "could-not-load-groups": "Gruppen konnten nicht geladen werden.",
+      "could-not-load-users": "Benutzer konnten nicht geladen werden.",
+      "create-failed": "Die Gruppe konnte nicht erstellt werden.",
+      "delete": "Löschen",
+      "delete-failed": "Löschen fehlgeschlagen",
+      "delete-group": "Gruppe löschen",
+      "delete-group-aria": "Gruppe {{ name }} löschen",
+      "delete-group-named": "Gruppe „{{ name }}“ löschen?",
+      "delete-user": "Benutzer löschen",
+      "delete-user-aria": "Benutzer {{ name }} löschen",
+      "delete-user-named": "Benutzer „{{ name }}“ löschen? Dies kann nicht rückgängig gemacht werden.",
+      "edit": "Bearbeiten",
+      "edit-group": "Gruppe {{ name }} bearbeiten",
+      "edit-user": "Benutzer {{ name }} bearbeiten",
+      "email": "E-Mail",
+      "group": "Gruppe",
+      "group-created": "Gruppe erstellt",
+      "group-deleted": "Gruppe gelöscht",
+      "group-updated": "Gruppe gespeichert",
+      "groups": "Gruppen",
+      "groups-tab": "Gruppen ({{ count }})",
+      "identifier": "Kennung",
+      "invitation-sent": "Einladung gesendet",
+      "label": "Beschriftung",
+      "loading": "Wird geladen",
+      "members": "Mitglieder",
+      "name": "Name",
+      "new": "Neu",
+      "new-group": "Neue Gruppe",
+      "new-user": "Neuer Benutzer",
+      "no-groups": "Keine Gruppen entsprechen dieser Suche.",
+      "no-recent": "Keine kürzlich erstellten Benutzer oder Gruppen.",
+      "no-users": "Keine Benutzer entsprechen dieser Suche.",
+      "recent": "Kürzlich erstellte Benutzer und Gruppen",
+      "run-search": "Suche ausführen",
+      "search": "Nach Benutzern und Gruppen suchen",
+      "title": "Benutzer & Gruppen",
+      "update-failed": "Die Änderungen konnten nicht gespeichert werden.",
+      "user-created": "Benutzer erstellt",
+      "user-deleted": "Benutzer gelöscht",
+      "user-updated": "Benutzer gespeichert",
+      "username": "Benutzername",
+      "users-tab": "Benutzer ({{ count }})"
+    },
+    "confirm-dialog": {
+      "cancel": "Abbrechen"
+    },
+    "group-form-dialog": {
+      "cancel": "Abbrechen",
+      "create": "Erstellen",
+      "create-another": "Weitere erstellen",
+      "create-group": "Gruppe erstellen",
+      "edit-group": "Gruppe bearbeiten",
+      "group-name": "Gruppenname",
+      "label": "Beschriftung",
+      "member-usernames": "Benutzernamen der Mitglieder",
+      "pick-member": "Wählen Sie aus der Suche aus oder geben Sie einen Benutzernamen ein und drücken Sie die Eingabetaste",
+      "remove-member": "{{ name }} entfernen",
+      "save": "Speichern",
+      "search-users": "Benutzer suchen oder Benutzernamen eingeben…"
+    },
+    "user-form-dialog": {
+      "cancel": "Abbrechen",
+      "company": "Unternehmen",
+      "create": "Erstellen",
+      "create-another": "Weitere erstellen",
+      "create-failed": "Erstellen fehlgeschlagen",
+      "create-user": "Benutzer erstellen",
+      "edit-user": "Benutzer bearbeiten",
+      "email": "E-Mail",
+      "first-name": "Vorname",
+      "groups": "Gruppen",
+      "invitation-failed": "Einladung fehlgeschlagen",
+      "last-name": "Nachname",
+      "loading": "Wird geladen",
+      "loading-groups": "Gruppen werden geladen...",
+      "password": "Passwort",
+      "passwords-do-not-match": "Die Passwörter stimmen nicht überein",
+      "pick-group": "Wählen Sie aus der Suche aus oder geben Sie einen Gruppennamen ein und drücken Sie die Eingabetaste",
+      "remove-group": "Gruppe {{ name }} entfernen",
+      "save": "Speichern",
+      "search-groups": "Gruppen suchen oder Gruppennamen eingeben…",
+      "set-password": "Benutzerpasswort festlegen",
+      "username": "Benutzername",
+      "verify-password": "Passwort bestätigen"
+    },
+    "pickers": {
+      "choose-from-list": "Wählen Sie einen Eintrag aus der Liste aus",
+      "clear": "Löschen",
+      "failed": "Suche fehlgeschlagen. Versuchen Sie es erneut.",
+      "loading": "Wird geladen…",
+      "min-chars-many": "Geben Sie mindestens {{ count }} Zeichen ein",
+      "min-chars-one": "Geben Sie mindestens {{ count }} Zeichen ein",
+      "no-results": "Keine Ergebnisse",
+      "remove": "{{ name }} entfernen",
+      "required": "Erforderlich",
+      "results-many": "{{ count }} Ergebnisse",
+      "results-one": "{{ count }} Ergebnis",
+      "searching": "Suche läuft…"
+    },
+    "tag-input": {
+      "add": "„{{ tag }}“ hinzufügen"
+    },
+    "toast": {
+      "dismiss": "Verwerfen",
+      "retry": "Wiederholen"
+    },
+    "search-filters": {
+      "fulltext": "Volltext",
+      "fulltext-placeholder": "Nach etwas suchen...",
+      "clear-fulltext": "Volltext löschen",
+      "modified": {
+        "title": "Änderungsdatum",
+        "last24h": "Letzte 24 Std.",
+        "last-week": "Letzte Woche",
+        "last-month": "Letzten Monat",
+        "last-year": "Letztes Jahr",
+        "prior-to-last-year": "Vor mehr als einem Jahr"
+      },
+      "authors": "Autoren",
+      "authors-placeholder": "Nach Autoren suchen...",
+      "collections": "Sammlungen",
+      "collections-placeholder": "Wert auswählen.",
+      "loading-collections": "Sammlungen werden geladen...",
+      "collections-failed": "Ihre Sammlungen konnten nicht geladen werden.",
+      "tags": "Tags",
+      "tags-placeholder": "z.B. Ereignisse, Berlin",
+      "tags-hint": "Geben Sie mindestens 1 Zeichen ein",
+      "no-results": "Keine Ergebnisse gefunden",
+      "no-results-for": "Keine Ergebnisse für {{ term }}",
+      "nature": "Art",
+      "subjects": "Objekte",
+      "coverage": "Abdeckung",
+      "size": {
+        "title": "Größe",
+        "tiny": "Kleiner als 100 KB",
+        "small": "Zwischen 100 KB und 1 MB",
+        "medium": "Zwischen 1 MB und 10 MB",
+        "big": "Zwischen 10 MB und 100 MB",
+        "huge": "Mehr als 100 MB"
+      },
+      "no-available-results": "Keine verfügbaren Ergebnisse",
+      "reset": "Zurücksetzen",
+      "save-as": "Speichern unter",
+      "remove": "{{ value }} entfernen",
+      "chosen-authors": "Ausgewählte Autoren",
+      "chosen-collections": "Ausgewählte Sammlungen",
+      "chosen-tags": "Ausgewählte Tags"
+    },
+    "saved-search-select": {
+      "label": "Gespeicherte Suchen",
+      "placeholder": "Suchfilter",
+      "loading": "Gespeicherte Suchen werden geladen...",
+      "none": "Keine gespeicherten Suchen",
+      "no-match": "Keine passenden gespeicherten Suchen"
+    },
+    "saved-search-actions": {
+      "save-as": "Speichern unter",
+      "save": "Speichern",
+      "more": "Aktionen für gespeicherte Suche",
+      "rename": "Umbenennen",
+      "share": "Teilen",
+      "delete": "Löschen"
+    },
+    "upload-queue": {
+      "done": "Hochgeladen",
+      "failed": "Konnte nicht hochgeladen werden",
+      "forbidden": "Sie haben keine Autorisierung, hier Dokumente hinzuzufügen",
+      "not-found": "Der Ordner ist nicht mehr vorhanden",
+      "progress": "{{ name }} wird hochgeladen",
+      "remove": "{{ name }} entfernen",
+      "retry": "{{ name }} wiederholen",
+      "summary": "{{ done }} von {{ total }} hochgeladen",
+      "summary-failed": "{{ count }} konnten nicht hochgeladen werden",
+      "uploading": "Wird hochgeladen, {{ percent }} %",
+      "waiting": "Wartet"
+    },
+    "user-group-picker": {
+      "group": "Gruppe",
+      "user": "Benutzer"
+    },
+    "vocabulary-select": {
+      "failed": "Liste konnte nicht geladen werden. Öffnen Sie sie erneut, um es noch einmal zu versuchen."
+    }
+  },
   "search": {
     "ai-search": "KI-Suche",
     "ai-search-active": "KI-Suche aktiv",
@@ -1832,7 +2604,9 @@
       "failed-to-download-document": "Fehler beim Herunterladen des Dokuments.",
       "failed-to-load-search-results": "Fehler beim Laden der Suchergebnisse.",
       "failed-to-update-favorites": "Fehler beim Aktualisieren der Favoriten.",
-      "nxql-query-execution-failed-the-generated-query": "Ausführung der NXQL-Abfrage fehlgeschlagen. Die generierte Abfrage ist möglicherweise ungültig."
+      "nxql-query-execution-failed-the-generated-query": "Ausführung der NXQL-Abfrage fehlgeschlagen. Die generierte Abfrage ist möglicherweise ungültig.",
+      "failed-to-open-saved-search": "Die gespeicherte Suche konnte nicht geöffnet werden.",
+      "failed-to-delete-saved-search": "Die gespeicherte Suche konnte nicht gelöscht werden."
     },
     "no-results-for": "Keine Ergebnisse für {{ term }}",
     "quick-filter": {
@@ -1992,6 +2766,7 @@
     "document-viewer": {
       "additional-formats": "Zusätzliche Formate",
       "annotations-are-not-available-for-this": "Für dieses Dokument sind keine Anmerkungen verfügbar.",
+      "annotations-frame": "Anmerkungen für {{ name }}",
       "audio-codec": "Audio-Codec",
       "bit-depth-per-channel": "Bittiefe pro Kanal",
       "color-profile": "Farbprofil",
@@ -2014,9 +2789,12 @@
       "iptc-rights": "Rechte",
       "iptc-source": "Quelle",
       "loading": "Wird geladen",
+      "note-frame": "Notizinhalt für {{ name }}",
       "open-with-nuxeo-drive": "Mit Nuxeo Drive öffnen",
+      "pdf-frame": "PDF-Vorschau von {{ name }}",
       "picture-info": "Bildinfo",
       "preview": "Vorschau",
+      "preview-frame": "Vorschau von {{ name }}",
       "preview-not-available": "Vorschau nicht verfügbar",
       "remove": "Entfernen",
       "remove-main-file": "Hauptdatei entfernen",
@@ -2061,7 +2839,8 @@
     },
     "saved-search-dialog": {
       "cancel": "Abbrechen",
-      "save": "Speichern"
+      "save": "Speichern",
+      "no-slash": "Sie können das Zeichen '/' nicht im Namen verwenden"
     },
     "selection-topbar": {
       "clear": "Löschen",
@@ -2204,6 +2983,7 @@
     "tabs-view": "Anzeigen"
   },
   "tasks": {
+    "breadcrumbs": "Breadcrumbs",
     "document": "Dokument",
     "due-on": "Fällig {{ date }}",
     "message": {
