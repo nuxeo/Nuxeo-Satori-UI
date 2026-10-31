@@ -284,6 +284,48 @@ describe('AppExtensionsService refused slot entries', () => {
   });
 
   /**
+   * The same protection on a **customer-owned** id, which is what makes §1's wording true.
+   *
+   * The guard is `index < packaged.length`, and `packaged` is whatever reached `register()` — the
+   * Layer 2 entry point a customer's own library uses. So the test is provenance, not the shape of
+   * the id, and `acme.*` registered from a customer library is protected exactly as `app.*` is.
+   *
+   * Asserted because §1 now says so out loud. It was already true, and nothing exercised it: every
+   * existing case here registers an `app.*` id, so a future change keying the guard on the id
+   * prefix instead of the index would have left all of them green while making the sentence false.
+   * Added in review of PR 537, where the security summary asked whether Layer 2 registrations are
+   * covered — they are, and this is the test that keeps them so.
+   */
+  it('refuses to let a manifest rebind an action a customer’s own library registered', () => {
+    const service = TestBed.inject(AppExtensionsService);
+    service.register(EXTENSION_SLOTS.navbar, [
+      { id: 'acme.navbar.contracts', label: 'Contracts', action: 'acme.actions.fromLibrary' },
+    ]);
+    manifest.set({
+      extensionLayers: [
+        {
+          $name: 'acme',
+          slots: {
+            navbar: [
+              {
+                id: 'acme.navbar.contracts',
+                label: 'Relabelled',
+                action: 'acme.actions.fromManifest',
+              },
+            ],
+          },
+        },
+      ],
+    });
+    TestBed.tick();
+
+    expect(resolvedNavbar(service)).toEqual([
+      // Relabelled, as Layer 1 should. The library's own action kept, which is the claim.
+      { id: 'acme.navbar.contracts', label: 'Relabelled', action: 'acme.actions.fromLibrary' },
+    ]);
+  });
+
+  /**
    * The boundary itself, which is the one thing NXSAT-760 could have got wrong.
    *
    * `resolve` tells a packaged row from a manifest-owned one by `index < packaged.length`. A call

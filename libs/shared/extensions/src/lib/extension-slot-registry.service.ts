@@ -102,7 +102,13 @@ export class ExtensionSlotRegistry {
       // A manifest entry that reuses an existing id patches it rather than appending a second row
       // with the same id.
       //
-      // `action` is withheld from that patch **when the row being patched is one of ours**.
+      // `action` is withheld from that patch **when the row being patched was registered in
+      // code** — by us, or by a customer's own Layer 2 library, which reaches the same `register`.
+      // The test is provenance, not the shape of the id: `acme.navbar.contracts` registered from a
+      // customer library is protected exactly as `app.navbar.trash` is, because the thing a JSON
+      // fragment must not be able to re-point is reviewed, versioned code, whoever wrote it. The
+      // local below is named for that and not for "packaged", which reads as ours alone.
+      //
       // Everything else here is presentation — label, icon, order — but `action` names the handler
       // `ExtensionActionRegistry.execute` will run, so allowing a manifest to set it on a
       // **packaged** id lets one keep our label and icon while pointing the click somewhere else
@@ -129,8 +135,11 @@ export class ExtensionSlotRegistry {
       // whether this line happened to fire, and that is why the duplicate contract could not be
       // written down for four attempts on PR 534.
       if (index >= 0) {
-        const isPackaged = index < packaged.length;
-        merged[index] = { ...merged[index], ...(isPackaged ? withoutAction(entry) : entry) };
+        const wasRegisteredInCode = index < packaged.length;
+        merged[index] = {
+          ...merged[index],
+          ...(wasRegisteredInCode ? withoutAction(entry) : entry),
+        };
       } else merged.push(entry);
     }
 

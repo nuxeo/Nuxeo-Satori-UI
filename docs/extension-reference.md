@@ -34,11 +34,11 @@ the real permission server-side on every operation, so:
 
 Use Nuxeo ACLs for authorisation. Use the manifest for what the interface presents.
 
-### A manifest cannot rebind a packaged action
+### A manifest cannot rebind an action that was registered in code
 
-Hiding is yours to decide; **rebinding is not**. When a manifest entry reuses a packaged ID it
-patches that descriptor — `label`, `icon`, `order`, `rule` and the rest all apply — but an `action`
-it supplies is **ignored**:
+Hiding is yours to decide; **rebinding is not**. When a manifest entry reuses the ID of a
+descriptor that was **registered in code**, it patches that descriptor — `label`, `icon`, `order`,
+`rule` and the rest all apply — but an `action` it supplies is **ignored**:
 
 ```json
 { "id": "app.toolbar.addToFavorites", "action": "app.toolbar.delete" }
@@ -50,16 +50,24 @@ The rule in the section above — that the server still checks permissions — i
 safe, and it is exactly what does **not** make this safe: the user has `Remove`, so the deletion
 succeeds. Presentation and behaviour have to stay attached to each other.
 
-To introduce behaviour, add a descriptor under **your own** ID, where the label and the action are
-both yours:
+To introduce behaviour, add a descriptor under an ID **the manifest alone declares**, where the
+label and the action are both yours:
 
 ```json
 { "id": "acme.toolbar.archive", "label": "Archive", "action": "acme.actions.archive" }
 ```
 
-Replacing what a packaged ID _does_ is a Layer 2 operation: register a handler under that ID from
-your own library (section 14), where the change is in reviewed, versioned code rather than in a
-JSON fragment.
+"Registered in code" means ours **or your own**. The check is on how the descriptor reached the
+registry, not on the shape of its ID, so a descriptor your Layer 2 library registered is protected
+exactly as one of ours is — `acme.toolbar.archive` registered from your library keeps its `action`
+against a manifest entry that patches it, for the same reason `app.toolbar.addToFavorites` does.
+That is deliberate: your reviewed, versioned code is the thing a JSON fragment should not be able
+to re-point either. An ID that only ever appears in the manifest has nothing registered behind it,
+so there its `action` is simply yours to set.
+
+Replacing what an already-registered ID _does_ is a Layer 2 operation: register a handler under
+that ID from your own library (section 14), where the change is in reviewed, versioned code rather
+than in a JSON fragment.
 
 ### Where the manifest lives, and how it survives upgrade
 
@@ -371,9 +379,10 @@ whether an earlier layer already declared that `id`, and whether the field holds
 structure. A later `"<slot>.$replace"` can leave **no** row at all. A manifest must not depend on
 any of it.
 
-One thing is guaranteed, and it is the one that matters: on a **packaged** `id` the packaged
-`action` is never rebindable, whatever you write, because that is a check in the registry rather
-than a property of the merge (§1).
+One thing is guaranteed, and it is the one that matters: on an `id` whose descriptor was
+**registered in code** — ours, or your own Layer 2 library's — that registered `action` is never
+rebindable, whatever you write, because that is a check in the registry rather than a property of
+the merge (§1).
 
 The remedy is the same whatever happens, which is why the diagnostic gives only the remedy: **give
 each entry its own `id`.** If you meant to change an entry you already declared, edit that entry; to
@@ -1737,9 +1746,10 @@ late registration means a gated entry is briefly visible.
 Re-registering one of our IDs replaces it — that is the supported way to override a packaged rule or
 component without forking.
 
-### Replacing what a packaged action does
+### Replacing what a registered action does
 
-Section 1 explains why a manifest cannot rebind a packaged action. Here is where you can:
+Section 1 explains why a manifest cannot rebind an action that was registered in code — ours or
+your own library's. Here is where you can:
 
 ```ts
 import { ExtensionActionRegistry } from '@nuxeo/satori-platform/extensions';
