@@ -34,11 +34,11 @@ the real permission server-side on every operation, so:
 
 Use Nuxeo ACLs for authorisation. Use the manifest for what the interface presents.
 
-### A manifest cannot rebind a packaged action
+### A manifest cannot rebind an action that was registered in code
 
-Hiding is yours to decide; **rebinding is not**. When a manifest entry reuses a packaged ID it
-patches that descriptor — `label`, `icon`, `order`, `rule` and the rest all apply — but an `action`
-it supplies is **ignored**:
+Hiding is yours to decide; **rebinding is not**. When a manifest entry reuses the ID of a
+descriptor that was **registered in code**, it patches that descriptor — `label`, `icon`, `order`,
+`rule` and the rest all apply — but an `action` it supplies is **ignored**:
 
 ```json
 { "id": "app.toolbar.addToFavorites", "action": "app.toolbar.delete" }
@@ -50,16 +50,28 @@ The rule in the section above — that the server still checks permissions — i
 safe, and it is exactly what does **not** make this safe: the user has `Remove`, so the deletion
 succeeds. Presentation and behaviour have to stay attached to each other.
 
-To introduce behaviour, add a descriptor under **your own** ID, where the label and the action are
-both yours:
+To introduce behaviour, add a descriptor under an ID **the manifest alone declares**, where the
+label and the action are both yours:
 
 ```json
 { "id": "acme.toolbar.archive", "label": "Archive", "action": "acme.actions.archive" }
 ```
 
-Replacing what a packaged ID _does_ is a Layer 2 operation: register a handler under that ID from
+"Registered in code" means ours **or your own**. The check is on how the descriptor reached the
+registry, not on the shape of its ID, so a descriptor your Layer 2 library registered is protected
+exactly as one of ours is — `acme.toolbar.archive` registered from your library keeps its `action`
+against a manifest entry that patches it, for the same reason `app.toolbar.addToFavorites` does.
+That is deliberate: your reviewed, versioned code is the thing a JSON fragment should not be able
+to re-point either. An ID that only ever appears in the manifest has nothing registered behind it,
+so there its `action` is simply yours to set.
+
+Replacing what an already-registered ID _does_ is a Layer 2 operation: register a handler from
 your own library (section 14), where the change is in reviewed, versioned code rather than in a
-JSON fragment.
+JSON fragment. Register it under the **`action` the descriptor names**, falling back to its `id`
+only where the descriptor sets no `action` — which is what every packaged descriptor does, so for
+one of ours the ID is the key. `ExtensionActionRegistry.execute` resolves
+`descriptor.action ?? descriptor.id`, so registering under the `id` of a descriptor that _does_
+name an `action` leaves the original handler running and changes nothing.
 
 ### Where the manifest lives, and how it survives upgrade
 
@@ -400,20 +412,29 @@ anything. **The one case that is reported is two entries with the same `id` insi
 a single layer** — there is no override to express there, because you would have edited the row, so
 it is a copy-paste duplicate.
 
-The pair is still merged exactly as before, and the report deliberately **does not say which of the
-two rows survives** — nor does this document. That outcome is not a property of the duplicate: it
-falls out of where your layers sit in the stack, which of them set the same slot and in what order,
-and whether the `id` is one of ours. It is **not specified**, and a manifest should not depend on it.
+**At most one of your two rows reaches the slot, and which fields it carries is not specified** —
+not in this document, not in the diagnostic, and nowhere you can rely on. It varies with where your
+layers sit, which of them set the same slot, which side of the merge the duplicates land on,
+whether an earlier layer already declared that `id`, and whether the field holds a string or a
+structure. A later `"<slot>.$replace"` can leave **no** row at all. A manifest must not depend on
+any of it.
 
-What is certain is that one of your two rows is gone, so the fix is the same in every case: **give
+One thing is guaranteed, and it is the one that matters: on an `id` whose descriptor was
+**registered in code** — ours, or your own Layer 2 library's — that registered `action` is never
+rebindable, whatever you write, because that is a check in the registry rather than a property of
+the merge (§1).
+
+The remedy is the same whatever happens, which is why the diagnostic gives only the remedy: **give
 each entry its own `id`.** If you meant to change an entry you already declared, edit that entry; to
 override one of ours, use `overrides` (§2) or declare an `id` of your own.
 
-> The behaviour is pinned by tests in `app-extensions.service.spec.ts` rather than described here,
-> after four review rounds each falsified a different attempt to state it as a rule — including
-> "the later entry wins", and keying it on whether an array merge ran. If you need to know what a
-> specific stack does, read those cases: a sentence short enough for this document has been wrong
-> every time.
+> **Eight** review findings across PRs #534 and #537 went into that paragraph, each refuting a
+> different attempt to state the outcome as a rule — including "the later entry wins", a carve-out
+> for `action`, four different conditions on the layer stack, a guarantee for rows that set every
+> field, and finally "exactly one row survives". The outcome is a property of ACA's merge semantics
+> meeting the registry's across a whole stack, not of the duplicate, and `extension-merge.ts` is a
+> pinned reproduction of that merge. Measured stacks are in `app-extensions.service.spec.ts`;
+> nothing short enough for this document has survived contact with the next stack anyone tried.
 
 Entries dropped for an unreachable `path` are reported the same way, on
 `invalidRoutes()` — see §11.
@@ -1766,9 +1787,10 @@ late registration means a gated entry is briefly visible.
 Re-registering one of our IDs replaces it — that is the supported way to override a packaged rule or
 component without forking.
 
-### Replacing what a packaged action does
+### Replacing what a registered action does
 
-Section 1 explains why a manifest cannot rebind a packaged action. Here is where you can:
+Section 1 explains why a manifest cannot rebind an action that was registered in code — ours or
+your own library's. Here is where you can:
 
 ```ts
 import { ExtensionActionRegistry } from '@nuxeo/satori-platform/extensions';
@@ -1779,6 +1801,20 @@ const registration = actions.register({
   'app.toolbar.delete': { execute: (context) => myArchiveFlow(context.document) },
 });
 ```
+
+**The key is the handler ID, which is not always the descriptor ID.** `execute` resolves
+`descriptor.action ?? descriptor.id`, so register under whatever the descriptor's `action` says
+and fall back to its `id` only when it names none. Every packaged descriptor omits `action`, which
+is why `app.toolbar.delete` above is both — but a descriptor that sets one, as a customer's own
+usually does, is overridden by registering under **that** value:
+
+```ts
+// { id: 'acme.toolbar.archive', label: 'Archive', action: 'acme.actions.archive' }
+actions.register({ 'acme.actions.archive': { execute: (context) => myNewFlow(context.document) } });
+```
+
+Registering under `acme.toolbar.archive` instead would leave the original handler running and
+change nothing.
 
 `register` puts your handler in the **customer tier**, which always answers ahead of ours — timing
 does not matter. That guarantee is deliberate: you register from an `APP_INITIALIZER`, while a

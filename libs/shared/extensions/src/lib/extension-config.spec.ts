@@ -320,10 +320,12 @@ describe('refused slot entries', () => {
     expect(refused[0].slot).toBe('navbar');
     expect(refused[0].id).toBe('acme.nav.contracts');
     expect(refused[0].reason).toContain('entry 2 repeats the id "acme.nav.contracts"');
-    expect(refused[0].reason).toContain('merged into one');
-    // It names no winner, because there isn't one to name: which fields survive depends on how
-    // many layers the stack has. `app-extensions.service.spec.ts` pins both outcomes.
-    expect(refused[0].reason).toContain('depends on the other layers');
+    // It names no winner: there are two collapse paths and they disagree on a field the later
+    // row omits. `app-extensions.service.spec.ts` pins both, and the cases that refute every
+    // winner-naming wording the review loop tried.
+    expect(refused[0].reason).toContain('give each entry its own id');
+    expect(refused[0].reason).not.toContain('the later entry wins');
+    expect(refused[0].reason).not.toContain('survives');
     // Reported, not dropped. Both survive the read exactly as before; the merge collapses them.
     const navbar = (config.slots?.['navbar'] ?? []) as readonly LabelledEntry[];
     expect(navbar.map((entry) => entry.label)).toEqual(['Contracts', 'Agreements']);

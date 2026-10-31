@@ -482,22 +482,22 @@ function readSlotEntries(
         slot,
         id: entry.id,
         source,
-        // It predicts nothing about which entry's fields survive, because that is not a property
-        // of the duplicate: it falls out of where the layers sit, which of them set the same slot
-        // and in what order, and whether the id is a packaged one.
+        // It reports the duplicate and the remedy, and claims **nothing** about the outcome.
         //
-        // Four review rounds on PR 534 each falsified a different attempt to state that as a
-        // rule — "the later one wins"; "except `action`, which stays as the first entry set it";
-        // an explanation keyed on the number of contributions; and one keyed on whether any merge
-        // of the slot's array ran, which reversing the layer order refutes. Every one was a proxy
-        // for the thing it was naming. The conclusion is not a fifth attempt: it is that the
-        // outcome is **unspecified**, pinned by six cases in `app-extensions.service.spec.ts` so a
-        // change to it is visible, and stated nowhere as a rule a manifest could rely on.
+        // Eight review findings across PRs 534 and 537 refuted eight attempts to say more: "the
+        // later one wins"; a carve-out for `action`; conditions keyed on the number of
+        // contributions, on whether an array merge ran, on which side of the merge the duplicates
+        // landed, and on whether another layer touched the slot; a guarantee for rows that set
+        // every field, which an earlier object-valued `rule` refutes by spreading a later string
+        // into it; and finally "exactly one row survives", which `"navbar.$replace": []` in a
+        // later layer refutes by leaving none.
         //
-        // So this says only what is certain, and what to do about it.
+        // The outcome is a property of ACA's merge semantics meeting the registry's, across the
+        // whole layer stack — not of the duplicate. `docs/extension-reference.md` §2a says what
+        // little is guaranteed; the measured stacks are in `app-extensions.service.spec.ts`. The
+        // remedy is the same whatever happens, so the remedy is all this says.
         reason:
-          `${at} repeats the id "${entry.id}" already used in this slot, so the two are merged ` +
-          'into one and which fields survive depends on the other layers — give each entry its ' +
+          `${at} repeats the id "${entry.id}" already used in this slot — give each entry its ` +
           'own id',
       });
     }
