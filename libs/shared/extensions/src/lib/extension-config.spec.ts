@@ -321,6 +321,10 @@ describe('refused slot entries', () => {
     expect(refused[0].id).toBe('acme.nav.contracts');
     expect(refused[0].reason).toContain('entry 2 repeats the id "acme.nav.contracts"');
     expect(refused[0].reason).toContain('merged into one');
+    // The message's exact claim, which `app-extensions.service.spec.ts` pins against what
+    // `resolve` really does. It said "the later one wins" until review of PR 534 pointed out
+    // that `withoutAction` keeps the *first* entry's action.
+    expect(refused[0].reason).toContain('except "action", which stays as the first entry set it');
     // Reported, not dropped. Both survive the read exactly as before; the merge collapses them.
     const navbar = (config.slots?.['navbar'] ?? []) as readonly LabelledEntry[];
     expect(navbar.map((entry) => entry.label)).toEqual(['Contracts', 'Agreements']);
@@ -368,6 +372,23 @@ describe('refused slot entries', () => {
     expect(applied).toEqual([]);
     expect(refused).toHaveLength(1);
     expect(refused[0].source).toBe('$layers.brand of acme-customisation');
+  });
+
+  /**
+   * Review of PR 534. The fallback label used to be derived first and detected by
+   * `startsWith('contribution ')`, so a layer that *declared* this name had it thrown away and
+   * replaced by the `$layers` form — a discriminator sniffing a string the customer owns.
+   */
+  it('keeps a declared $name that happens to look like the generated fallback', () => {
+    expect(
+      shapeOf([
+        {
+          $name: 'acme-customisation',
+          $references: ['brand'],
+          $layers: { brand: { $name: 'contribution 5', slots: { navbar: 'not a list' } } },
+        },
+      ]),
+    ).toEqual([{ slot: 'navbar', id: null, source: 'contribution 5' }]);
   });
 
   it("prefers a $layers entry's own $name over the name it is filed under", () => {

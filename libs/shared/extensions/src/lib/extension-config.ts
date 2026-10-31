@@ -186,15 +186,27 @@ export function readExtensionConfig(raw: unknown): ExtensionConfig {
  * contribution order and nothing else.
  */
 function layerSource(raw: unknown, index: number): string {
-  const declared = isRecord(raw) ? raw['$name'] : undefined;
-  const name = typeof declared === 'string' ? declared.trim() : '';
-  return name === '' ? `contribution ${index + 1}` : name;
+  return declaredName(raw) ?? `contribution ${index + 1}`;
 }
 
 /** Same, for a named `$layers` body, which is findable by the name it is filed under. */
 function sublayerSource(parent: string, name: string, raw: unknown): string {
-  const own = layerSource(raw, 0);
-  return own.startsWith('contribution ') ? `$layers.${name} of ${parent}` : own;
+  return declaredName(raw) ?? `$layers.${name} of ${parent}`;
+}
+
+/**
+ * The layer's declared `$name`, trimmed, or `null` when it declares none.
+ *
+ * Returned as `null` rather than as the fallback label so each caller supplies its own, which
+ * is what keeps the two apart. Deriving the fallback here and having `sublayerSource` detect it
+ * by `startsWith('contribution ')` read a customer's `$name: "contribution 5"` as one of our
+ * generated labels and replaced it (review of PR 534) — a discriminator that works by sniffing
+ * a string it does not own.
+ */
+function declaredName(raw: unknown): string | null {
+  const declared = isRecord(raw) ? raw['$name'] : undefined;
+  const name = typeof declared === 'string' ? declared.trim() : '';
+  return name === '' ? null : name;
 }
 
 /** What a malformed value is, so the message says what to look for rather than what to expect. */
@@ -334,9 +346,14 @@ function readSlotEntries(
         slot,
         id: entry.id,
         source,
+        // Not "the later one wins", which was the first wording and was wrong: `resolve` patches
+        // the first entry with `withoutAction(entry)`, so the later entry's `action` is dropped
+        // and the first one's survives. Measured, and now pinned by a test — a message that
+        // overstates what happens is the thing this ticket exists to stop (review of PR 534).
         reason:
-          `${at} repeats the id "${entry.id}" already used in this slot, ` +
-          'so the two are merged into one and the later one wins',
+          `${at} repeats the id "${entry.id}" already used in this slot, so the two are merged ` +
+          'into one — the later entry\'s fields win, except "action", which stays as the first ' +
+          'entry set it',
       });
     }
     ids.add(entry.id);

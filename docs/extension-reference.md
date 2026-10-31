@@ -336,8 +336,13 @@ Reusing an `id` is the override mechanism, not a mistake:
 A diagnostic on any of those would fire on every correctly layered manifest, so none of them says
 anything. **The one case that is reported is two entries with the same `id` inside a single slot of
 a single layer** — there is no override to express there, because you would have edited the row, so
-it is a copy-paste duplicate. The pair is still merged exactly as before; the report tells you the
-later one won.
+it is a copy-paste duplicate.
+
+The pair is still merged exactly as before, and the report says how: the later entry's fields win,
+**except `action`, which stays as the first entry set it**. That asymmetry is not about duplicates —
+it is the §1 rule that a manifest may not rebind an `action` onto an id that already has one,
+applied here too. So two rows at one address with different `action`s give you the second row's
+label and the first row's behaviour, which is worth being told.
 
 Entries dropped for an unreachable `path` are reported the same way, on
 `invalidRoutes()` — see §11.

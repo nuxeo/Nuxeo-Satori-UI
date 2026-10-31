@@ -147,6 +147,42 @@ describe('AppExtensionsService refused slot entries', () => {
     expect(reports()).toEqual([]);
   });
 
+  /**
+   * The duplicate message's claim, checked against what `resolve` actually does.
+   *
+   * It read "the later one wins" until review of PR 534: `resolve` patches with
+   * `withoutAction(entry)`, so the later entry's `action` is dropped and the **first** entry's
+   * survives. Asserting the message and the resolved entry in one test is what stops the two
+   * drifting apart again — a diagnostic that overstates what happened is the defect this
+   * ticket exists to remove, not a smaller version of it.
+   */
+  it('describes the duplicate merge exactly as resolve performs it, action included', () => {
+    manifest.set({
+      extensionLayers: [
+        {
+          $name: 'acme',
+          slots: {
+            navbar: [
+              { id: 'acme.navbar.x', label: 'First', action: 'acme.actions.first' },
+              { id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.second' },
+            ],
+          },
+        },
+      ],
+    });
+    const service = boot();
+    const resolved = service.resolve<{ id: string; label: string; action: string }>(
+      EXTENSION_SLOTS.navbar,
+    );
+
+    expect(resolved).toEqual([
+      { id: 'acme.navbar.x', label: 'Second', action: 'acme.actions.first' },
+    ]);
+    expect(service.refusedSlotEntries()[0].reason).toContain(
+      'the later entry\'s fields win, except "action", which stays as the first entry set it',
+    );
+  });
+
   it('says nothing when there is no manifest at all', () => {
     const service = boot();
 
