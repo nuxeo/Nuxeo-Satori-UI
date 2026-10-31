@@ -781,3 +781,246 @@ describe('AppExtensionsService refused overrides', () => {
     expect(reports()).toEqual([]);
   });
 });
+
+/**
+ * NXSAT-761 — the reporting half of the refused-**section** diagnostics.
+ *
+ * A fifth signal rather than rows on either per-entry list: a whole `slots` or `overrides` map
+ * of the wrong shape has neither a slot nor an id, and those are the fields
+ * `RefusedExtensionEntry` and `RefusedExtensionOverride` each require. `RefusedExtensionSection`
+ * in `extension-config.ts` argues it in full.
+ *
+ * Same harness and deliberately the same assertions as the two blocks above, because the claim
+ * is that the three channels behave alike — a signal, and one console line per refusal per load.
+ */
+describe('AppExtensionsService refused sections', () => {
+  let manifest: WritableSignal<{ extensionLayers: readonly unknown[] }>;
+  // `MockInstance<typeof console.warn>`, not `ReturnType<typeof vi.spyOn>`, for the reason the
+  // first block gives: the latter's `mock.calls` is `any[]`, which `spec-types` catches and a
+  // green test run does not (NXSAT-746).
+  let warn: MockInstance<typeof console.warn>;
+
+  beforeEach(() => {
+    manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    TestBed.configureTestingModule({
+      providers: [{ provide: AppConfigService, useValue: { manifest } }],
+    });
+  });
+
+  afterEach(() => warn.mockRestore());
+
+  const reports = () =>
+    warn.mock.calls
+      .map(([message]) => String(message))
+      .filter((message) => message.includes('[agentic-ui-extensions]'));
+
+  const boot = (): AppExtensionsService => {
+    const service = TestBed.inject(AppExtensionsService);
+    TestBed.tick();
+    return service;
+  };
+
+  it('surfaces a refused section on its own signal, naming the key, reason and source', () => {
+    manifest.set({
+      extensionLayers: [{ $name: 'acme', overrides: [{ id: 'app.navbar.trash' }] }],
+    });
+
+    const service = boot();
+
+    expect(service.refusedSections()).toEqual([
+      {
+        key: 'overrides',
+        source: 'acme',
+        reason:
+          '"overrides" must be an object keyed by descriptor id, not a list, ' +
+          'so every override in this contribution is dropped',
+      },
+    ]);
+    // It did not arrive on either per-entry channel, neither of which has an honest value for
+    // the field its type requires.
+    expect(service.refusedSlotEntries()).toEqual([]);
+    expect(service.refusedOverrides()).toEqual([]);
+  });
+
+  it('writes one console line per refused section, prefixed and naming the key', () => {
+    manifest.set({
+      extensionLayers: [{ $name: 'acme', slots: 'x', overrides: [] }],
+    });
+    boot();
+
+    expect(reports()).toHaveLength(2);
+    expect(reports()[0]).toBe(
+      '[agentic-ui-extensions] slots in acme: "slots" must be an object keyed by slot id, ' +
+        'not a string, so every slot in this contribution is dropped',
+    );
+    expect(reports()[1]).toContain('overrides in acme:');
+  });
+
+  /**
+   * The case review round 4 of PR 534 found on the slot channel, pinned on this one too.
+   *
+   * Two contributions may declare the **same `$name`**, so the same mistake in both produces
+   * refusals equal in every field — here identical `key`, `source` and `reason`. A dedup keyed on
+   * a refusal's fields rather than on the whole list collapses them into one line, and the console
+   * then under-reports how many problems there are while the signal holds both. Suppressing a
+   * distinct refusal is the silence these tickets exist to remove, so it is the worse of the two
+   * errors; `lastNoted` is keyed on `JSON.stringify(refused)` for exactly this reason.
+   *
+   * Both other channels have this test. This one did not until an unpublished Copilot finding on
+   * PR 538 pointed at the gap in warning-reproduction coverage.
+   */
+  it('reports both when two contributions share a $name and the same bad key', () => {
+    manifest.set({
+      extensionLayers: [
+        { $name: 'acme', overrides: [] },
+        { $name: 'acme', overrides: [] },
+      ],
+    });
+
+    const service = boot();
+
+    // Equal in every field — which is what makes a field-keyed dedup collapse them.
+    expect(service.refusedSections()).toHaveLength(2);
+    expect(service.refusedSections()[0]).toEqual(service.refusedSections()[1]);
+    expect(reports()).toHaveLength(2);
+  });
+
+  /**
+   * Pins the tracking claim the constructor's comment makes, for the third channel too. The
+   * effect reads all three signals as arguments, so all three stay tracked; an early `return` in
+   * the body would skip the reads after it and Angular would stop tracking those signals.
+   */
+  it('reports a section refusal that only the second load introduces', () => {
+    boot();
+    expect(reports()).toEqual([]);
+
+    manifest.set({ extensionLayers: [{ $name: 'acme', slots: 'x' }] });
+    TestBed.tick();
+
+    expect(reports()).toHaveLength(1);
+    expect(reports()[0]).toContain('slots in acme:');
+  });
+
+  /**
+   * The test §5 of the ticket asks for: **every channel live at once**, then a recomputation.
+   *
+   * One `lastNoted` key over several lists is overwritten by whichever list wrote last, so on
+   * the next recomputation each list compares against another list's key, differs, and is
+   * written again — they ping-pong the key and restate everything for ever.
+   *
+   * **What this test is not.** It is not what makes that bug visible: two non-empty lists in one
+   * pass are enough, and NXSAT-759's two-channel test already covers it. Measured under a
+   * deliberately shared key, two live channels go from one line each to two on a second load —
+   * and with three live, **all three** repeat, not two of them.
+   *
+   * What it is for is the case that test cannot see: a key shared by the **third** channel alone.
+   * Give `sections` the `'overrides'` key and the slots/overrides pair still passes while those
+   * two ping-pong, which is why this asserts a count on each of the three rather than a total.
+   *
+   * NXSAT-759's own first attempt at its test did pass under the bug, for a reason worth not
+   * repeating: it put one refusal on the first load, added the second channel's on the next, and
+   * stopped there. Both lists *were* non-empty by then, but the ping-pong only restates anything
+   * on the **recomputation after** that — measured under the shared key, the three loads give
+   * `{slots: 1, overrides: 0}`, then `{1, 1}`, then `{2, 2}`. It is the third that fails, and the
+   * test never got there. So the arrangement that matters is a recomputation while the lists are
+   * already live, which is what the `{ ...layer }` second `set` below is.
+   *
+   * Verified red by making all three `noteRefusals` calls key on `'slots'`, which turns this and
+   * NXSAT-759's two-channel test red together — itself the evidence that two channels suffice.
+   */
+  it('restates no channel when a manifest refusing on all three recomputes', () => {
+    const layer = {
+      $name: 'acme',
+      // A slot-entry refusal, a per-id override refusal and a whole-section refusal at once.
+      // `slots` must stay a record for the first of these to be reachable, so the section
+      // refusal is the `overrides` one, written as the list a customer plausibly writes.
+      slots: { navbar: 'not a list' },
+      overrides: [{ id: 'app.navbar.trash', visible: false }],
+      $references: ['brand'],
+      $layers: { brand: { overrides: { 'app.navbar.tasks': true } } },
+    };
+    manifest.set({ extensionLayers: [layer] });
+    const service = boot();
+
+    // Each channel really is live — asserted on the signals, so a channel that silently
+    // reported nothing could not make the console counts below pass by being empty.
+    expect(service.refusedSlotEntries()).toHaveLength(1);
+    expect(service.refusedOverrides()).toHaveLength(1);
+    expect(service.refusedSections()).toHaveLength(1);
+
+    const counts = () => ({
+      slots: reports().filter((line) => line.startsWith('[agentic-ui-extensions] slots.')).length,
+      overrides: reports().filter((line) => line.startsWith('[agentic-ui-extensions] overrides.'))
+        .length,
+      sections: reports().filter((line) => line.startsWith('[agentic-ui-extensions] overrides in'))
+        .length,
+    });
+
+    expect(counts()).toEqual({ slots: 1, overrides: 1, sections: 1 });
+
+    // A preset being selected, or a second load: a new manifest value holding the same refusals.
+    manifest.set({ extensionLayers: [{ ...layer }] });
+    TestBed.tick();
+
+    expect(counts()).toEqual({ slots: 1, overrides: 1, sections: 1 });
+  });
+
+  /**
+   * The control, and the test that has to be able to fail.
+   *
+   * It **exercises every legitimate path before asserting silence**, in that order, which is the
+   * mistake NXSAT-755's control made (review of PR 534): it asserted `reports()` and only then
+   * called `resolve()`, so a warning raised inside `resolve` slipped through unnoticed. The
+   * paths walked here are the ones a reporter keyed on the two configuration keys could get
+   * wrong: a layer with neither key, a layer with both keys valid, an **empty** map of each, a
+   * `$layers` body carrying valid keys, and a packaged id actually being overridden.
+   *
+   * It asserts silence on all four refusal signals and on the console, which is what "no
+   * diagnostic on any channel" means.
+   *
+   * Verified red three ways, each turning this test alone red: having `readSection` report when
+   * the key is absent, having it report an empty map, and having it report on success.
+   */
+  it('says nothing on any channel about a valid manifest', () => {
+    const service = TestBed.inject(AppExtensionsService);
+    service.register(EXTENSION_SLOTS.navbar, [
+      { id: 'app.navbar.trash', label: 'Trash' },
+      { id: 'app.navbar.collections', label: 'Collections' },
+    ]);
+
+    manifest.set({
+      extensionLayers: [
+        { $name: 'no-keys', $version: '1.0.0' },
+        {
+          $name: 'acme-customisation',
+          $references: ['brand'],
+          $layers: { brand: { slots: { navbar: [{ id: 'acme.navbar.contracts' }] } } },
+          overrides: { 'app.navbar.trash': { label: 'Bin it' } },
+        },
+        { $name: 'empty-maps', slots: {}, overrides: {} },
+      ],
+    });
+    TestBed.tick();
+
+    // The contributions the silence is about really did take effect, read before the assertions
+    // so a report raised anywhere along that path is caught by them.
+    const labels = service
+      .resolve<{ id: string; label: string }>(EXTENSION_SLOTS.navbar)
+      .map((entry) => entry.label);
+
+    expect(labels).toContain('Bin it');
+    expect(labels).toHaveLength(3);
+
+    expect(service.refusedSections()).toEqual([]);
+    expect(service.refusedSlotEntries()).toEqual([]);
+    expect(service.refusedOverrides()).toEqual([]);
+    expect(service.missingLayers()).toEqual([]);
+    expect(reports()).toEqual([]);
+  });
+
+  it('says nothing when there is no manifest at all', () => {
+    expect(boot().refusedSections()).toEqual([]);
+    expect(reports()).toEqual([]);
+  });
+});
