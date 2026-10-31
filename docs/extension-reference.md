@@ -65,9 +65,13 @@ That is deliberate: your reviewed, versioned code is the thing a JSON fragment s
 to re-point either. An ID that only ever appears in the manifest has nothing registered behind it,
 so there its `action` is simply yours to set.
 
-Replacing what an already-registered ID _does_ is a Layer 2 operation: register a handler under
-that ID from your own library (section 14), where the change is in reviewed, versioned code rather
-than in a JSON fragment.
+Replacing what an already-registered ID _does_ is a Layer 2 operation: register a handler from
+your own library (section 14), where the change is in reviewed, versioned code rather than in a
+JSON fragment. Register it under the **`action` the descriptor names**, falling back to its `id`
+only where the descriptor sets no `action` — which is what every packaged descriptor does, so for
+one of ours the ID is the key. `ExtensionActionRegistry.execute` resolves
+`descriptor.action ?? descriptor.id`, so registering under the `id` of a descriptor that _does_
+name an `action` leaves the original handler running and changes nothing.
 
 ### Where the manifest lives, and how it survives upgrade
 
@@ -1760,6 +1764,20 @@ const registration = actions.register({
   'app.toolbar.delete': { execute: (context) => myArchiveFlow(context.document) },
 });
 ```
+
+**The key is the handler ID, which is not always the descriptor ID.** `execute` resolves
+`descriptor.action ?? descriptor.id`, so register under whatever the descriptor's `action` says
+and fall back to its `id` only when it names none. Every packaged descriptor omits `action`, which
+is why `app.toolbar.delete` above is both — but a descriptor that sets one, as a customer's own
+usually does, is overridden by registering under **that** value:
+
+```ts
+// { id: 'acme.toolbar.archive', label: 'Archive', action: 'acme.actions.archive' }
+actions.register({ 'acme.actions.archive': { execute: (context) => myNewFlow(context.document) } });
+```
+
+Registering under `acme.toolbar.archive` instead would leave the original handler running and
+change nothing.
 
 `register` puts your handler in the **customer tier**, which always answers ahead of ours — timing
 does not matter. That guarantee is deliberate: you register from an `APP_INITIALIZER`, while a
