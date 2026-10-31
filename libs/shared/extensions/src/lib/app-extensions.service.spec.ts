@@ -574,6 +574,35 @@ describe('AppExtensionsService refused sections', () => {
   });
 
   /**
+   * The case review round 4 of PR 534 found on the slot channel, pinned on this one too.
+   *
+   * Two contributions may declare the **same `$name`**, so the same mistake in both produces
+   * refusals equal in every field — here identical `key`, `source` and `reason`. A dedup keyed on
+   * a refusal's fields rather than on the whole list collapses them into one line, and the console
+   * then under-reports how many problems there are while the signal holds both. Suppressing a
+   * distinct refusal is the silence these tickets exist to remove, so it is the worse of the two
+   * errors; `lastNoted` is keyed on `JSON.stringify(refused)` for exactly this reason.
+   *
+   * Both other channels have this test. This one did not until an unpublished Copilot finding on
+   * PR 538 pointed at the gap in warning-reproduction coverage.
+   */
+  it('reports both when two contributions share a $name and the same bad key', () => {
+    manifest.set({
+      extensionLayers: [
+        { $name: 'acme', overrides: [] },
+        { $name: 'acme', overrides: [] },
+      ],
+    });
+
+    const service = boot();
+
+    // Equal in every field — which is what makes a field-keyed dedup collapse them.
+    expect(service.refusedSections()).toHaveLength(2);
+    expect(service.refusedSections()[0]).toEqual(service.refusedSections()[1]);
+    expect(reports()).toHaveLength(2);
+  });
+
+  /**
    * Pins the tracking claim the constructor's comment makes, for the third channel too. The
    * effect reads all three signals as arguments, so all three stay tracked; an early `return` in
    * the body would skip the reads after it and Angular would stop tracking those signals.

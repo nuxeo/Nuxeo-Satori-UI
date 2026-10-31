@@ -413,20 +413,22 @@ Overrides are read before any descriptor registers, and you may legitimately ove
 library registers later, or a key a newer release adds — so a warning would fire on manifests that
 are correct for the build they were written against. Check an ID against the tables in §3 onward.
 
-**Three lose a layer _name_** — not a map, and not the same as each other:
+**Four are about layer _names_ and _bodies_** rather than about configuration. No two of them are
+the same, and the difference is how much you lose:
 
-| What you wrote                                    | What happens                                                           |
-| ------------------------------------------------- | ---------------------------------------------------------------------- |
-| `"$references": { … }`, or a bare string          | reads as an **empty** list — no layer referenced, none ignored         |
-| `"$references": ["brand", 42, "acme"]`            | only the `42` is lost; `brand` and `acme` still apply. **Not** emptied |
-| `"$layers": "x"`, or a body that is not an object | that layer is skipped                                                  |
+| What you wrote                           | What happens                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------ |
+| `"$references": { … }`, or a bare string | reads as an **empty** list — no layer referenced, none ignored           |
+| `"$references": ["brand", 42, "acme"]`   | only the `42` is lost; `brand` and `acme` still apply. **Not** emptied   |
+| `"$layers": "x"`                         | **every** named layer is gone, so every name you reference is unresolved |
+| `"$layers": { "brand": "x" }`            | only `brand` is skipped; your other layers resolve and apply as written  |
 
 `$ignoreReferenceList` reads exactly as `$references` does, in both of the first two rows.
 
-None of the three is reported, because a name that was never read is a name nothing can go looking
-for. A layer that **is** referenced and does not resolve is a different thing and **is** reported,
-on `missingLayers()` (§12) — which is where a skipped `$layers` body shows up, once you reference
-it.
+The two `$references` rows say nothing, because a name that was never read is a name nothing can go
+looking for. The two `$layers` rows **do** surface, on `missingLayers()` (§12), as soon as you
+reference the layer — which you always do, since a `$layers` body only applies when referenced. So
+`"$layers": "x"` reports every name in your `$references`, and one bad body reports just that one.
 
 These are about layer **resolution** rather than configuration, which is why `refusedSections()`
 covers only `slots` and `overrides`.
