@@ -623,16 +623,27 @@ describe('AppExtensionsService refused sections', () => {
    *
    * One `lastNoted` key over several lists is overwritten by whichever list wrote last, so on
    * the next recomputation each list compares against another list's key, differs, and is
-   * written again — they ping-pong the key and restate everything for ever. NXSAT-759's version
-   * of this proved it for two channels; a third key makes the same mistake available again, and
-   * with three lists a shared key is worse, because two of them are rewritten on every pass.
+   * written again — they ping-pong the key and restate everything for ever.
    *
-   * All three channels have to be live for it to show at all. With fewer in play a shared key
-   * behaves identically to a per-channel one — which is why NXSAT-759's first attempt at this
-   * test passed under the very bug it was written for, and why this one asserts a count on each
-   * of the three before and after.
+   * **What this test is not.** It is not what makes that bug visible: two non-empty lists in one
+   * pass are enough, and NXSAT-759's two-channel test already covers it. Measured under a
+   * deliberately shared key, two live channels go from one line each to two on a second load —
+   * and with three live, **all three** repeat, not two of them.
    *
-   * Verified red by making all three `noteRefusals` calls key on `'slots'`.
+   * What it is for is the case that test cannot see: a key shared by the **third** channel alone.
+   * Give `sections` the `'overrides'` key and the slots/overrides pair still passes while those
+   * two ping-pong, which is why this asserts a count on each of the three rather than a total.
+   *
+   * NXSAT-759's own first attempt at its test did pass under the bug, for a reason worth not
+   * repeating: it put one refusal on the first load, added the second channel's on the next, and
+   * stopped there. Both lists *were* non-empty by then, but the ping-pong only restates anything
+   * on the **recomputation after** that — measured under the shared key, the three loads give
+   * `{slots: 1, overrides: 0}`, then `{1, 1}`, then `{2, 2}`. It is the third that fails, and the
+   * test never got there. So the arrangement that matters is a recomputation while the lists are
+   * already live, which is what the `{ ...layer }` second `set` below is.
+   *
+   * Verified red by making all three `noteRefusals` calls key on `'slots'`, which turns this and
+   * NXSAT-759's two-channel test red together — itself the evidence that two channels suffice.
    */
   it('restates no channel when a manifest refusing on all three recomputes', () => {
     const layer = {

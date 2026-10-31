@@ -149,10 +149,19 @@ export class AppExtensionsService {
    *
    * Per channel, not one key over several lists: a single key is overwritten by whichever list
    * wrote last, so on the next recomputation each list compares against another's key, differs,
-   * and is written again — they ping-pong the key and restate everything for ever. With three
-   * channels a shared key is worse than with two, because two of the three are rewritten on
-   * every pass. `app-extensions.service.spec.ts` pins it with all three live at once, which is
-   * the only arrangement in which it shows.
+   * and is written again — they ping-pong the key and restate everything for ever.
+   *
+   * **Two** non-empty lists in the same pass are enough, and when all three are live all three
+   * repeat — not two of them. Measured under a deliberately shared key: two channels go from one
+   * line each to two on a second load, and three channels go from one each to two each. (Two
+   * non-empty lists are always different, because the three row shapes differ — `slot` is only
+   * on the first, and the other two are keyed `id` against `key` — so there is no case where a
+   * shared key happens to match.)
+   *
+   * So the three-channel test in `app-extensions.service.spec.ts` is **not** what makes this
+   * visible; NXSAT-759's two-channel one already does. It is there for what that one cannot see:
+   * a key shared by the *third* channel alone. Give `sections` the `'overrides'` key and the
+   * slots/overrides pair still passes while those two ping-pong.
    *
    * The trade this makes: a manifest value whose refusals are not identical to the last one
    * re-states all of them, not only the new ones. That is "once per load" as the ticket asked
