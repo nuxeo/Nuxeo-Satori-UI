@@ -323,8 +323,9 @@ describe('refused slot entries', () => {
     // It names no winner: there are two collapse paths and they disagree on a field the later
     // row omits. `app-extensions.service.spec.ts` pins both, and the cases that refute every
     // winner-naming wording the review loop tried.
-    expect(refused[0].reason).toContain('only one of the two rows survives');
+    expect(refused[0].reason).toContain('give each entry its own id');
     expect(refused[0].reason).not.toContain('the later entry wins');
+    expect(refused[0].reason).not.toContain('survives');
     // Reported, not dropped. Both survive the read exactly as before; the merge collapses them.
     const navbar = (config.slots?.['navbar'] ?? []) as readonly LabelledEntry[];
     expect(navbar.map((entry) => entry.label)).toEqual(['Contracts', 'Agreements']);

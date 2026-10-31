@@ -482,10 +482,12 @@ describe('AppExtensionsService refused slot entries', () => {
     const reasons = service.refusedSlotEntries().map((entry) => entry.reason);
     expect(reasons).toHaveLength(2);
     for (const reason of reasons) {
-      expect(reason).toContain('only one of the two rows survives');
-      // Every wording the review loop falsified.
+      expect(reason).toContain('give each entry its own id');
+      // Every outcome wording the review loop falsified, including the last one — "exactly one
+      // row survives" — which a later `$replace` refutes by leaving none.
       expect(reason).not.toContain('the later one wins');
       expect(reason).not.toContain('the later entry wins');
+      expect(reason).not.toContain('survives');
       expect(reason).not.toContain('action');
     }
     // And neither duplicate's `action` reached the packaged row, so "later wins" would be false.
@@ -493,6 +495,22 @@ describe('AppExtensionsService refused slot entries', () => {
       { id: 'app.navbar.trash', label: 'Second', action: 'app.actions.packaged' },
       { id: 'acme.navbar.x', label: 'B', action: 'acme.actions.first' },
     ]);
+  });
+
+  /**
+   * Review of PR 537, and the eighth refutation: a later `"<slot>.$replace"` drops the whole
+   * array, so **no** row survives while the duplicate is still reported. That is what finally
+   * reduced the message to the remedy alone — any outcome it named was false in some stack.
+   */
+  it('still reports the duplicate when a later $replace leaves no row at all', () => {
+    manifest.set({
+      extensionLayers: [duplicateLayer, { $name: 'regional', slots: { 'navbar.$replace': [] } }],
+    });
+    const service = boot();
+
+    expect(resolvedNavbar(service)).toEqual([]);
+    expect(service.refusedSlotEntries()).toHaveLength(1);
+    expect(service.refusedSlotEntries()[0].reason).toContain('give each entry its own id');
   });
 
   it('says nothing when there is no manifest at all', () => {

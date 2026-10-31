@@ -388,25 +388,23 @@ function readSlotEntries(
         slot,
         id: entry.id,
         source,
-        // It names **no** winner, and five review rounds have now established that it must not.
-        // The wordings tried and falsified: "the later one wins"; "except `action`, which stays
-        // as the first entry set it"; a rule keyed on the number of contributions; one keyed on
-        // whether any merge of the slot's array ran; and — after NXSAT-760 removed one source of
-        // divergence — "the later entry wins", which a *partial* duplicate refutes.
+        // It reports the duplicate and the remedy, and claims **nothing** about the outcome.
         //
-        // There are **two** collapse paths with different semantics, and only one of them was
-        // NXSAT-760's to change. `resolve` **patches** the surviving row, so a field the later
-        // entry does not set is inherited from the earlier one; `mergeObjects` **replaces** a
-        // within-array duplicate wholesale, so it is not. Which one runs depends on whether
-        // another layer also set this slot. `extension-merge.ts` is a pinned reproduction of
-        // ACA's merge and is not ours to align.
+        // Eight review findings across PRs 534 and 537 refuted eight attempts to say more: "the
+        // later one wins"; a carve-out for `action`; conditions keyed on the number of
+        // contributions, on whether an array merge ran, on which side of the merge the duplicates
+        // landed, and on whether another layer touched the slot; a guarantee for rows that set
+        // every field, which an earlier object-valued `rule` refutes by spreading a later string
+        // into it; and finally "exactly one row survives", which `"navbar.$replace": []` in a
+        // later layer refutes by leaving none.
         //
-        // So this states only what holds in every measured case — exactly one row survives — and
-        // what to do. `docs/extension-reference.md` §2a names both mechanisms for anyone who
-        // needs to reason about a specific stack.
+        // The outcome is a property of ACA's merge semantics meeting the registry's, across the
+        // whole layer stack — not of the duplicate. `docs/extension-reference.md` §2a says what
+        // little is guaranteed; the measured stacks are in `app-extensions.service.spec.ts`. The
+        // remedy is the same whatever happens, so the remedy is all this says.
         reason:
-          `${at} repeats the id "${entry.id}" already used in this slot, so only one of the two ` +
-          'rows survives — give each entry its own id',
+          `${at} repeats the id "${entry.id}" already used in this slot — give each entry its ` +
+          'own id',
       });
     }
     ids.add(entry.id);
