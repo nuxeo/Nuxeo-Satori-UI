@@ -7,6 +7,7 @@ import {
   type ExtensionConfig,
   type RefusedExtensionEntry,
   type RefusedExtensionOverride,
+  type RefusedExtensionSection,
   type ResolvedExtensionLayers,
 } from './extension-config';
 import { DOCUMENT_RULE_EVALUATORS } from './document-rules';
@@ -110,6 +111,28 @@ export class AppExtensionsService {
   );
 
   /**
+   * Whole `slots` or `overrides` maps the manifest read refused, each naming the key, the reason
+   * and the contribution that wrote it.
+   *
+   * The fifth signal on this channel, and the level above the other two: these report what was
+   * refused *inside* a map, and this reports a map lost whole. `"overrides": [ … ]` — the
+   * overrides map written as a list, which a `slots` entry being a list invites — cost a customer
+   * every override in that layer and said nothing anywhere (NXSAT-761).
+   *
+   * A list of its own because a whole-map refusal has neither a slot nor an id, which are the
+   * fields {@link refusedSlotEntries}'s and {@link refusedOverrides}'s types each require;
+   * {@link RefusedExtensionSection} argues it in full. One list over both keys rather than one
+   * per key, so the two cannot drift apart into reporting different things.
+   *
+   * What it reports is only a key that is **present** and not an object. An absent key is not a
+   * refusal, and nor is an empty map — `{}` is a contribution that overrides nothing, which a
+   * generated manifest legitimately writes.
+   */
+  readonly refusedSections = computed<readonly RefusedExtensionSection[]>(
+    () => this.resolved().refusedSections,
+  );
+
+  /**
    * The refusal list last written on each channel, so a recomputation cannot repeat it.
    *
    * {@link refusedSlotEntries} and {@link refusedOverrides} are `computed` over the manifest
@@ -124,15 +147,23 @@ export class AppExtensionsService {
    * distinct refusal is the silence these tickets exist to remove, so it is the worse of the two
    * errors.
    *
-   * Per channel, not one key over both lists: a single key would restate every slot refusal the
-   * moment an override refusal appeared, and the other way round.
+   * Per channel, not one key over several lists: a single key is overwritten by whichever list
+   * wrote last, so on the next recomputation each list compares against another's key, differs,
+   * and is written again — they ping-pong the key and restate everything for ever. With three
+   * channels a shared key is worse than with two, because two of the three are rewritten on
+   * every pass. `app-extensions.service.spec.ts` pins it with all three live at once, which is
+   * the only arrangement in which it shows.
    *
    * The trade this makes: a manifest value whose refusals are not identical to the last one
    * re-states all of them, not only the new ones. That is "once per load" as the ticket asked
    * for it, and in this application it never arises — `AppConfigService.load()` memoises, so
    * there is one manifest value per page.
    */
-  private readonly lastNoted: Record<RefusalChannel, string> = { slots: '', overrides: '' };
+  private readonly lastNoted: Record<RefusalChannel, string> = {
+    slots: '',
+    overrides: '',
+    sections: '',
+  };
 
   private readonly overrides = computed<ExtensionSlotOverrides>(() => {
     const config = this.config();
@@ -152,9 +183,10 @@ export class AppExtensionsService {
     // diagnostics — without it the console stays silent unless a host happens to render the
     // refusal signals, and `nuxeo-ui` does not.
     //
-    // Both signals are read as arguments, so both are read on every run and the effect keeps
-    // tracking each of them. The early returns live in `noteRefusals`, deliberately: an early
-    // `return` in this body would skip the second read and silently stop tracking that signal.
+    // All three signals are read as arguments, so all three are read on every run and the effect
+    // keeps tracking each of them. The early returns live in `noteRefusals`, deliberately: an
+    // early `return` in this body would skip the reads after it and silently stop tracking those
+    // signals.
     effect(() => {
       this.noteRefusals(
         'slots',
@@ -165,6 +197,14 @@ export class AppExtensionsService {
         'overrides',
         this.refusedOverrides(),
         (entry) => `overrides.${entry.id} in ${entry.source}: ${entry.reason}`,
+      );
+      // Addressed by the key alone, because a map lost whole has nothing smaller to name — which
+      // is also what distinguishes these lines from the two above at a glance: `overrides.<id>`
+      // against a bare `overrides`.
+      this.noteRefusals(
+        'sections',
+        this.refusedSections(),
+        (section) => `${section.key} in ${section.source}: ${section.reason}`,
       );
     });
   }
@@ -203,9 +243,10 @@ export class AppExtensionsService {
    * Write one line per refusal, unless this exact list has already been written on this
    * channel. See {@link lastNoted}.
    *
-   * Generic over the refusal, with the line supplied by the caller, because the two lists are
-   * the same job and differ only in how a row is named — `slots.<slot>` against
-   * `overrides.<id>`. One body, so the dedup cannot come to mean two different things.
+   * Generic over the refusal, with the line supplied by the caller, because the three lists are
+   * the same job and differ only in how a row is named — `slots.<slot>`, `overrides.<id>`, and a
+   * bare `<key>` for a map lost whole. One body, so the dedup cannot come to mean three
+   * different things.
    */
   private noteRefusals<T>(
     channel: RefusalChannel,
@@ -234,10 +275,15 @@ export class AppExtensionsService {
 /**
  * Which refusal list a console line came from, and the key its dedup is filed under.
  *
- * Module-local: it names the two halves of `lastNoted` and the prefix each line carries, which
+ * Module-local: it names the three keys of `lastNoted` and the prefix each line carries, which
  * is an implementation detail of the logging, not something a consumer of the signals needs.
+ *
+ * `'sections'` deliberately does not reuse `ExtensionSectionKey`, whose members are also
+ * `'slots'` and `'overrides'`: those name the manifest key a refusal is *about*, and these name
+ * the list it arrived on. Collapsing them would file a refused `overrides` map under the
+ * `'overrides'` dedup key and reintroduce the shared-key ping-pong the two share a comment about.
  */
-type RefusalChannel = 'slots' | 'overrides';
+type RefusalChannel = 'slots' | 'overrides' | 'sections';
 
 /**
  * The product app has no page showing diagnostics, so the console is where support finds them.

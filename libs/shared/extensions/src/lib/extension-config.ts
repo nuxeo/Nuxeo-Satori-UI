@@ -102,16 +102,65 @@ export interface RefusedExtensionOverride {
   readonly source: string;
 }
 
+/**
+ * The configuration keys of a layer a {@link RefusedExtensionSection} can name.
+ *
+ * Closed, and deliberately only these two. The `$`-prefixed keys have silences of their own — a
+ * `$references` that is not a list reads as `[]`, a `$layers` body that is not an object is
+ * skipped — but those are about layer *resolution*, which `ResolvedExtensionConfig.missing`
+ * already reports on. Widening this union before anything fills the new member would ship a
+ * value no read can produce; §2a of `docs/extension-reference.md` states them as still silent
+ * instead of claiming coverage that is not here.
+ */
+export type ExtensionSectionKey = 'slots' | 'overrides';
+
+/**
+ * A whole `slots` or `overrides` map the read refused, and why.
+ *
+ * ## Why this is neither of the two types above
+ *
+ * A map of the wrong shape loses **every** entry in that contribution, and the refusal has
+ * nothing smaller than the key to point at. That is what rules out both existing types, in the
+ * one way each of them cannot bend:
+ *
+ * - `RefusedExtensionEntry.slot` is required and `ExtensionSlotId`-typed. An `overrides` map has
+ *   no slot in any sense, and a refused `slots` map is not *about* a slot either — it is about
+ *   the key. Widening it to `ExtensionSlotId | null` would also narrow the field for every
+ *   existing reader of a **published** signal (§2a is a customer contract) to carry rows that
+ *   are not slot entries, and the template's `Manifest slot {{ entry.slot }}` would render
+ *   `Manifest slot null`;
+ * - `RefusedExtensionOverride.id` is non-null by design — that is the whole argument for it
+ *   existing separately — and a whole-map refusal has no id to give it. Making it nullable would
+ *   also reach only half the problem, leaving `slots` unreported and the two keys inconsistent,
+ *   which is the trade NXSAT-759 declined to make.
+ *
+ * One list over both keys rather than one per key: it is a single fact — this contribution's
+ * `<key>` was not an object, so all of it is gone — distinguished by a field, not two facts. Two
+ * signals would double the console channels, the `lastNoted` keys and the §2a tables for no
+ * extra information, and leave the consistency between the keys as a convention rather than a
+ * property of the shape (NXSAT-761).
+ */
+export interface RefusedExtensionSection {
+  /** Which key of the layer went. Always the literal key that was read, never a placeholder. */
+  readonly key: ExtensionSectionKey;
+  /** Human-readable cause, quoting the key, the shape found and what became of the map. */
+  readonly reason: string;
+  /** Which contribution wrote it, named as {@link RefusedExtensionEntry.source} explains. */
+  readonly source: string;
+}
+
 /** {@link resolveExtensionLayers}'s result: a {@link ResolvedExtensionConfig} that also reports. */
 export interface ResolvedExtensionLayers extends ResolvedExtensionConfig {
   /** Slot entries refused while reading the layers — see {@link RefusedExtensionEntry}. */
   readonly refused: readonly RefusedExtensionEntry[];
   /** Per-id overrides refused while reading them — see {@link RefusedExtensionOverride}. */
   readonly refusedOverrides: readonly RefusedExtensionOverride[];
+  /** Whole `slots` or `overrides` maps refused — see {@link RefusedExtensionSection}. */
+  readonly refusedSections: readonly RefusedExtensionSection[];
 }
 
 /**
- * The two refusal lists a read fills, carried together so the walk takes one parameter.
+ * The three refusal lists a read fills, carried together so the walk takes one parameter.
  *
  * Module-local on purpose: it is how the read accumulates, not something a caller holds.
  * {@link ResolvedExtensionLayers} is the published shape, and the two differ — `entries` is
@@ -120,11 +169,12 @@ export interface ResolvedExtensionLayers extends ResolvedExtensionConfig {
 interface ExtensionRefusals {
   readonly entries: RefusedExtensionEntry[];
   readonly overrides: RefusedExtensionOverride[];
+  readonly sections: RefusedExtensionSection[];
 }
 
-/** A fresh pair of empty lists, so the two call sites cannot disagree on the shape. */
+/** A fresh set of empty lists, so the two call sites cannot disagree on the shape. */
 function noRefusals(): ExtensionRefusals {
-  return { entries: [], overrides: [] };
+  return { entries: [], overrides: [], sections: [] };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -206,6 +256,7 @@ export function resolveExtensionLayers(layers: readonly unknown[]): ResolvedExte
     missing: resolved.flatMap((entry) => entry.missing),
     refused: refusals.entries,
     refusedOverrides: refusals.overrides,
+    refusedSections: refusals.sections,
   };
 }
 
@@ -217,13 +268,13 @@ export function resolveExtensionLayers(layers: readonly unknown[]): ResolvedExte
  * screen. Slot entries without a string `id` are dropped, because an entry with
  * no id cannot be addressed, overridden or reasoned about.
  *
- * Tolerant, but no longer silent. Every drop is recorded — as a {@link RefusedExtensionEntry}
- * or a {@link RefusedExtensionOverride} — and reaches the customer through
- * `AppExtensionsService.refusedSlotEntries()`, `refusedOverrides()` and the console. This
- * function discards those records, keeping the signature callers that only want the
- * configuration already have; {@link resolveExtensionLayers} is the one that keeps them,
- * because it alone knows a layer's position in contribution order and so can say where a
- * refused entry was written.
+ * Tolerant, but no longer silent. Every drop is recorded — as a {@link RefusedExtensionEntry},
+ * a {@link RefusedExtensionOverride} or a {@link RefusedExtensionSection} — and reaches the
+ * customer through `AppExtensionsService.refusedSlotEntries()`, `refusedOverrides()`,
+ * `refusedSections()` and the console. This function discards those records, keeping the
+ * signature callers that only want the configuration already have; {@link resolveExtensionLayers}
+ * is the one that keeps them, because it alone knows a layer's position in contribution order
+ * and so can say where a refused entry was written.
  */
 export function readExtensionConfig(raw: unknown): ExtensionConfig {
   return readConfig(raw, layerSource(raw, 0), noRefusals());
@@ -293,19 +344,86 @@ function readConfig(raw: unknown, source: string, refusals: ExtensionRefusals): 
     config['$layers'] = readNamedLayers(raw['$layers'], source, refusals);
   }
 
-  // Each subtree is handed the one list it fills, not the pair: only `readConfig` and the walk
-  // into `$layers` need both, and a leaf that cannot reach the other list cannot file into it.
-  const slots = raw['slots'];
-  if (isRecord(slots)) {
-    config['slots'] = readSlots(slots, source, refusals.entries);
-  }
-
-  const overrides = raw['overrides'];
-  if (isRecord(overrides)) {
-    config['overrides'] = readOverrides(overrides, source, refusals.overrides);
-  }
+  // Each subtree is handed the one list it fills, not the whole set: only `readConfig` and the
+  // walk into `$layers` need all three, and a leaf that cannot reach another list cannot file
+  // into it. `readSection` gets `sections` because the refusal it records is its own; the reader
+  // it calls closes over the list that reader fills.
+  Object.assign(
+    config,
+    readSection(raw, 'slots', source, refusals.sections, (slots) =>
+      readSlots(slots, source, refusals.entries),
+    ),
+    readSection(raw, 'overrides', source, refusals.sections, (overrides) =>
+      readOverrides(overrides, source, refusals.overrides),
+    ),
+  );
 
   return config as ExtensionConfig;
+}
+
+/**
+ * One configuration key: read when it is an object, reported when it is present and is not.
+ *
+ * Returns a **patch** — `{ [key]: … }` or `{}` — rather than assigning, which is what lets
+ * {@link readConfig} spread both keys in one `Object.assign` and keep no branch of its own for
+ * either. That matters beyond tidiness: reporting these two refusals as a pair of `if`s in
+ * `readConfig` would have taken its cognitive complexity from 10 to 12 against SonarCloud's
+ * limit of 15, on the reader the per-subtree functions were extracted from when it stood at 28
+ * (PR 534). Routing both through here **replaced** those two `if`s rather than adding to them,
+ * so it went down instead, to 8 — measured with `eslint-plugin-sonarjs` locally rather than read
+ * off a SonarCloud PR summary, which attributes an issue to changed lines and so never shows one
+ * whose primary location you did not touch (NXSAT-761).
+ *
+ * An **absent** key is not a refusal, and neither is an empty map. `{}` is a record and reads as
+ * a contribution that overrides nothing, which is a thing a generated manifest legitimately
+ * writes; refusing it would fire on a correct file. `null` is a refusal, because a customer who
+ * wrote `"slots": null` did write the key and did lose every slot under it.
+ */
+function readSection<T>(
+  raw: Record<string, unknown>,
+  key: ExtensionSectionKey,
+  source: string,
+  refused: RefusedExtensionSection[],
+  read: (section: Record<string, unknown>) => T,
+): Record<string, T> {
+  const section = raw[key];
+  if (isRecord(section)) return { [key]: read(section) };
+  if (section !== undefined) refused.push({ key, source, reason: whySectionRefused(key, section) });
+  return {};
+}
+
+/**
+ * What each configuration key is keyed by and what it holds, so one message serves both.
+ *
+ * The nouns are the ones §2 of `docs/extension-reference.md` uses, because the message's job is
+ * to send a reader to the right table in it.
+ */
+const EXTENSION_SECTIONS: Readonly<
+  Record<ExtensionSectionKey, { readonly keyedBy: string; readonly holds: string }>
+> = {
+  slots: { keyedBy: 'slot id', holds: 'slot' },
+  overrides: { keyedBy: 'descriptor id', holds: 'override' },
+};
+
+/**
+ * Why a whole map was refused, in the words a customer needs to fix it.
+ *
+ * It names what the key should have been keyed by, not only that it should have been an object,
+ * because the mistake this exists for is writing `overrides` as a **list** — plausible precisely
+ * because a `slots` entry is a list — and "must be an object" alone does not say what the keys
+ * of that object are.
+ *
+ * It quotes the key even though the console line is already addressed by it, so one repetition
+ * reaches the console. The alternative is a `reason` that cannot be read on its own, and a
+ * reason pasted into a support ticket without its row is the form these messages actually
+ * arrive in.
+ */
+function whySectionRefused(key: ExtensionSectionKey, section: unknown): string {
+  const { keyedBy, holds } = EXTENSION_SECTIONS[key];
+  return (
+    `"${key}" must be an object keyed by ${keyedBy}, not ${describeShape(section)}, ` +
+    `so every ${holds} in this contribution is dropped`
+  );
 }
 
 /** The layer names a `$references`-shaped value lists, or none when it is the wrong shape. */
@@ -343,23 +461,25 @@ function readNamedLayers(
  * would replace the prototype of the object being built — the thing `mergeObjects` refuses too.
  * Neither is removed; they are made to speak (NXSAT-759).
  *
- * ## What is still silent here, and why that is one follow-up rather than this one
+ * ## What is still silent here, and why that is a decision rather than a gap
  *
- * Three adjacent cases keep an override that has no effect, and none of them is a *refusal*:
+ * Two adjacent cases keep an override that has no effect, and neither is a *refusal*:
  *
- * - an `overrides` map that is not an object at all, which loses every override in the layer.
- *   {@link RefusedExtensionOverride} has a non-null `id` by design and a whole-map refusal has
- *   none to give it. `slots` has the identical unreported case, so the two keys stay
- *   consistent and go together;
  * - an unknown key inside an override (`{ "visibl": false }`);
  * - an override for an id nothing ever registers (`"app.navbr.trash"`).
  *
- * The last two are deliberately **not** reported, on the §1 tolerance rule: overrides are read
- * by an `APP_INITIALIZER` before any descriptor registers, and a customer may legitimately
- * override an id a library registers later or a key a newer release adds, so a warning would
- * fire on manifests that are correct for the build they were written against. §2a of
- * `docs/extension-reference.md` states all three to the customer rather than leaving them to
- * be discovered.
+ * Both are deliberately **not** reported, on the §1 tolerance rule: overrides are read by an
+ * `APP_INITIALIZER` before any descriptor registers, and a customer may legitimately override an
+ * id a library registers later or a key a newer release adds, so a warning would fire on
+ * manifests that are correct for the build they were written against. §2a of
+ * `docs/extension-reference.md` states both to the customer rather than leaving them to be
+ * discovered.
+ *
+ * A third case used to sit here: an `overrides` map that is not an object at all, which loses
+ * every override in the layer. That one *was* a gap, and it is now reported as a
+ * {@link RefusedExtensionSection} — the refusal has no id to give this type, which is why it
+ * needed a shape of its own (NXSAT-761). It is refused one level up, in {@link readSection},
+ * because by the time control reaches here the map is known to be a record.
  */
 function readOverrides(
   overrides: Record<string, unknown>,

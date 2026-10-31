@@ -70,6 +70,9 @@ export class App {
   /** Same, for a per-id `overrides` entry the read refused (NXSAT-759). */
   protected readonly refusedOverrides = this.extensions.refusedOverrides;
 
+  /** Same, for a whole `slots` or `overrides` map lost for not being an object (NXSAT-761). */
+  protected readonly refusedSections = this.extensions.refusedSections;
+
   /** Which half of the configuration came from where — worth seeing while demoing. */
   protected readonly manifestSource = computed(() => this.config.diagnostics().manifestSource);
 

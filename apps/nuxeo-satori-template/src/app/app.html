@@ -70,6 +70,17 @@
     }
 
     <!--
+      A whole `slots` or `overrides` map lost because it was not an object. Addressed by the key
+      alone — there is nothing smaller to name — and tracked by `$index` for the same reason as
+      the two above: two contributions can get the same key wrong.
+    -->
+    @for (refusal of refusedSections(); track $index) {
+      <output class="shell__warning">
+        Manifest {{ refusal.key }} in {{ refusal.source }}: {{ refusal.reason }}
+      </output>
+    }
+
+    <!--
       No route guard, deliberately. Guarding is a fork's decision, and gating the
       whole outlet here means no page has to handle "signed out" itself.
     -->

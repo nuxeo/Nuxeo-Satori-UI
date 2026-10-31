@@ -327,19 +327,23 @@ Find an entry's `labelKey` in `PACKAGED_NAV_ITEMS`; they follow `nav.item.<slug>
 
 ## 2a. What is refused, and how you hear about it
 
-The manifest is read **tolerantly**: something malformed costs you that slot, that entry or that
-override, never the application. What it must not cost you is the explanation. Every refusal below
-names what was refused, the reason and the contribution it came from, in two places:
+The manifest is read **tolerantly**: something malformed costs you that slot, that entry, that
+override or that one key, never the application. What it must not cost you is the explanation.
+Every refusal below names what was refused, the reason and the contribution it came from, in two
+places:
 
 - **a signal on `AppExtensionsService`** — `refusedSlotEntries()` for a slot or slot entry,
-  `refusedOverrides()` for a per-ID override, alongside `missingLayers()` and `invalidRoutes()`.
-  The template application renders all four; a fork should too.
+  `refusedOverrides()` for a per-ID override, `refusedSections()` for a whole `slots` or
+  `overrides` map, alongside `missingLayers()` and `invalidRoutes()`. The template application
+  renders all five; a fork should too.
 - **the browser console**, prefixed `[agentic-ui-extensions]`, **once per load**. This is where
   support looks, because the product application has no diagnostics page.
 
-Two signals rather than one because the two are keyed differently: a slot refusal names the slot
-it belongs to, and an override belongs to no slot — `overrides` is keyed by descriptor ID
-precisely so a slot added after Beta needs no schema change (§2).
+Three signals rather than one because the three are addressed differently, and a field left empty
+on one of them would be worse than a list of its own. A slot refusal names the slot it belongs to.
+An override belongs to no slot — `overrides` is keyed by descriptor ID precisely so a slot added
+after Beta needs no schema change (§2). A map lost whole has neither a slot nor an ID, because
+what went wrong is the key itself.
 
 ### In `slots`
 
@@ -365,6 +369,30 @@ like it should hide the entry; it is not an override at all, and before this was
 you nothing but silence. What you want is `{ "app.navbar.trash": { "visible": false } }` — the
 keys are in §2.
 
+### A whole `slots` or `overrides` map of the wrong shape
+
+Both keys are objects — `slots` keyed by slot ID, `overrides` keyed by descriptor ID. When either
+is something else, **every entry under it in that contribution is gone**, and that is reported on
+`refusedSections()`:
+
+| What you wrote                                     | What happens                             | Reported as                                                        |
+| -------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| `"overrides": [ { "id": "…", "visible": false } ]` | **every override** in that layer is gone | `"overrides" must be an object keyed by descriptor id, not a list` |
+| `"slots": "x"`, or `3`, `true`, `null`             | **every slot** in that layer is gone     | `"slots" must be an object keyed by slot id, not a string`         |
+
+The first is the one worth knowing, and it is an easy mistake to make: a `slots` **entry** is a
+list, so writing the `overrides` **map** as a list looks consistent. It is not — the map is keyed
+by ID, and the ID is the key:
+
+```json
+{ "overrides": { "app.navbar.trash": { "visible": false } } }
+```
+
+The other keys of that contribution still apply, and so do your other contributions. Only the one
+key is lost. An **absent** key is not a refusal, and nor is an empty one: `"overrides": {}` is a
+contribution that overrides nothing, which is a perfectly good thing for a generated manifest to
+write.
+
 The contribution is named by its `$name` when it declares one, by the `$layers` entry it sits in
 when that is where it was written, and by its position in contribution order otherwise
 (`contribution 2`). Writing `$name` on your layer is what makes the message say which file to
@@ -372,19 +400,31 @@ open, which is most of why `$name` exists.
 
 ### What is still silent, and why
 
-Three things leave an override with no effect and say nothing. They are listed here rather than
-left to be discovered:
+Four things have no effect and say nothing. They are listed here rather than left to be
+discovered.
 
-- **an `overrides` that is not an object at all** — `"overrides": [ … ]` loses every override in
-  that layer. Not yet reported: the refusal has no ID to name, and `slots` has the identical
-  unreported case (`"slots": "x"` loses every slot), so the two are one piece of work.
+Two of them leave an override in place that never does anything, and are **deliberate**, on the
+§1 tolerance rule:
+
 - **an unknown key inside an override** — `{ "visibl": false }` is kept and ignored.
 - **an override for an ID nothing registers** — `"app.navbr.trash"` is kept and never matches.
 
-The last two are deliberate, on the §1 tolerance rule. Overrides are read before any descriptor
-registers, and you may legitimately override an ID a library registers later, or a key a newer
-release adds — so a warning would fire on manifests that are correct for the build they were
-written against. Check an ID against the tables in §3 onward.
+Overrides are read before any descriptor registers, and you may legitimately override an ID a
+library registers later, or a key a newer release adds — so a warning would fire on manifests that
+are correct for the build they were written against. Check an ID against the tables in §3 onward.
+
+The other two are the `$`-prefixed metadata keys, where a wrong shape is read as if the key were
+absent:
+
+- **`$references` or `$ignoreReferenceList` that is not a list of strings** — the whole list reads
+  as empty, so no layer is referenced and none is ignored. A layer that is referenced but does not
+  resolve _is_ reported, on `missingLayers()` (§12); a `$references` you wrote as an object is
+  not, because there is then nothing it names.
+- **a `$layers` that is not an object, or one of its bodies that is not an object** — that layer
+  is skipped. Referencing it then shows up on `missingLayers()`, which is the signal for it.
+
+These two are about layer **resolution** rather than configuration, which is why
+`refusedSections()` covers only `slots` and `overrides`.
 
 ### A repeated `id` across layers is **not** reported, and that is deliberate
 
@@ -1661,6 +1701,10 @@ from the `null` and `__proto__` items below, where ACA's merge threw or rewrote 
   apply, so the message names the layer rather than implying it took effect. Patching an entry or
   an override by `id` from a later layer is the point of layering and is never reported. §2a has
   the whole list.
+- A layer whose **whole `slots` or `overrides` key** is not an object loses every entry under that
+  key, and is reported on `refusedSections()` and in the console, per layer. The layer's other
+  keys still apply, and so do the other layers in the stack. A `$layers` body that is not an
+  object is skipped instead, and referencing it shows up on `missingLayers()` above.
 
 ```json
 {

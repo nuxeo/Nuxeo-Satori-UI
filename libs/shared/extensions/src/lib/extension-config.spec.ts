@@ -241,6 +241,27 @@ describe('readExtensionConfig', () => {
     expect(readExtensionConfig({ slots: { navbar: 'not an array' } }).slots).toEqual({});
     expect(readExtensionConfig({ overrides: { 'app.a': 'not an object' } }).overrides).toEqual({});
   });
+
+  /**
+   * `{ slots: 'not an object' }` returning `{}` used to be the pin on a stated limitation: the
+   * whole map went and nothing said so anywhere. It is now the pin on a **contract**, and the
+   * difference is the second half of this test.
+   *
+   * This function discards refusals by design — it keeps the signature callers that only want
+   * configuration already have — so the silence here is the signature, not the gap.
+   * `resolveExtensionLayers` is the caller that keeps them, because it alone knows a layer's
+   * position in contribution order. Asserting both halves side by side is what stops the next
+   * reader taking the `toEqual({})` above for the defect NXSAT-761 fixed.
+   */
+  it('discards a section refusal, which resolveExtensionLayers is the one to report', () => {
+    expect(readExtensionConfig({ slots: 'not an object' })).toEqual({});
+
+    const { refusedSections } = resolveExtensionLayers([{ slots: 'not an object' }]);
+
+    expect(refusedSections).toHaveLength(1);
+    expect(refusedSections[0].key).toBe('slots');
+    expect(refusedSections[0].source).toBe('contribution 1');
+  });
 });
 
 /**
@@ -604,22 +625,173 @@ describe('refused overrides', () => {
   });
 
   /**
-   * A **stated limitation**, pinned so it is a known gap rather than a surprise.
+   * Was the pin on NXSAT-759's one stated limitation; now it pins where that refusal goes.
    *
-   * An `overrides` that is not an object at all loses the whole map, and that is still silent.
-   * It is not reported here because `RefusedExtensionOverride.id` is non-null by design — it is
-   * the whole argument for a shape of its own — and a whole-map refusal has no id to give it.
-   * `slots` has the identical unreported case (`"slots": "x"` loses every slot), so reporting
-   * one key and not the other would make the two inconsistent; they belong to one follow-up.
-   * §2a of `docs/extension-reference.md` says so to the customer.
+   * A whole-map refusal has no id, which is why it could not join this list —
+   * `RefusedExtensionOverride.id` is non-null by design and that is the whole argument for the
+   * type existing separately. It reaches `refusedSections` instead (NXSAT-761), and the half
+   * worth keeping from the old test is this one: it is **not** on either per-entry list, so the
+   * three channels did not get mixed to make the reporting fit.
    */
-  it('says nothing yet when the whole overrides map is the wrong shape', () => {
-    const { refusedOverrides, refused, config } = resolveExtensionLayers([
+  it('reports a whole overrides map on the section channel, not on this one', () => {
+    const { refusedOverrides, refused, refusedSections } = resolveExtensionLayers([
       { $name: 'acme', overrides: [{ id: 'app.navbar.trash', visible: false }] },
     ]);
 
     expect(refusedOverrides).toEqual([]);
     expect(refused).toEqual([]);
+    expect(refusedSections.map(({ key, source }) => ({ key, source }))).toEqual([
+      { key: 'overrides', source: 'acme' },
+    ]);
+  });
+});
+
+/**
+ * NXSAT-761. The silence NXSAT-755 and NXSAT-759 removed from inside the two maps, one level up:
+ * a `slots` or `overrides` map that is the wrong shape **as a whole** lost every entry in that
+ * contribution and said nothing anywhere.
+ *
+ * Reported on a third list rather than on either per-entry one, because a whole-map refusal has
+ * neither a slot nor an id — the two fields those types require. `RefusedExtensionSection`
+ * argues it in full. So each case here asserts the section list **and** that both per-entry
+ * lists stayed empty, which is the half that proves nothing was invented on a channel that had
+ * no honest value to put in its key field.
+ */
+describe('refused configuration sections', () => {
+  /** Only the fields a reader acts on, so a message reflow does not fail the suite. */
+  const shapeOf = (layers: readonly unknown[]) =>
+    resolveExtensionLayers(layers).refusedSections.map(({ key, source }) => ({ key, source }));
+
+  it('reports a slots map that is not an object, and says every slot went', () => {
+    const { refusedSections, refused, refusedOverrides, config } = resolveExtensionLayers([
+      { $name: 'acme', slots: 'x', overrides: { 'app.navbar.trash': { visible: false } } },
+    ]);
+
+    expect(refusedSections).toHaveLength(1);
+    expect(refusedSections[0].key).toBe('slots');
+    expect(refusedSections[0].source).toBe('acme');
+    expect(refusedSections[0].reason).toContain('"slots"');
+    expect(refusedSections[0].reason).toContain('keyed by slot id');
+    expect(refusedSections[0].reason).toContain('not a string');
+    expect(refusedSections[0].reason).toContain('every slot in this contribution is dropped');
+    // Not a slot-entry refusal: there is no slot to name, which is why this list exists.
+    expect(refused).toEqual([]);
+    expect(refusedOverrides).toEqual([]);
+    // The behaviour itself is unchanged: the bad key is still dropped and the good one applies.
+    expect(config.slots).toBeUndefined();
+    expect(config.overrides?.['app.navbar.trash']).toEqual({ visible: false });
+  });
+
+  /**
+   * The case worth having a ticket for. Writing `overrides` as a list is a plausible mistake
+   * precisely because a `slots` entry **is** a list, and it silently cost a customer every
+   * override in the layer.
+   */
+  it('reports an overrides map written as a list, the mistake slots entries invite', () => {
+    const { refusedSections, refused, refusedOverrides, config } = resolveExtensionLayers([
+      {
+        $name: 'acme',
+        overrides: [{ id: 'app.navbar.trash', visible: false }],
+        slots: { navbar: [{ id: 'acme.navbar.contracts' }] },
+      },
+    ]);
+
+    expect(refusedSections).toHaveLength(1);
+    expect(refusedSections[0].key).toBe('overrides');
+    expect(refusedSections[0].source).toBe('acme');
+    expect(refusedSections[0].reason).toContain('"overrides"');
+    expect(refusedSections[0].reason).toContain('keyed by descriptor id');
+    expect(refusedSections[0].reason).toContain('not a list');
+    expect(refusedSections[0].reason).toContain('every override in this contribution is dropped');
+    expect(refused).toEqual([]);
+    expect(refusedOverrides).toEqual([]);
     expect(config.overrides).toBeUndefined();
+    expect(config.slots?.['navbar']).toHaveLength(1);
+  });
+
+  it('names each shape a customer can actually write, so the message says what to look for', () => {
+    const { refusedSections } = resolveExtensionLayers([
+      { $name: 'a', slots: null },
+      { $name: 'b', slots: 7 },
+      { $name: 'c', overrides: 'hidden' },
+      { $name: 'd', overrides: true },
+    ]);
+
+    expect(refusedSections.map((section) => section.reason)).toEqual([
+      '"slots" must be an object keyed by slot id, not null, ' +
+        'so every slot in this contribution is dropped',
+      '"slots" must be an object keyed by slot id, not a number, ' +
+        'so every slot in this contribution is dropped',
+      '"overrides" must be an object keyed by descriptor id, not a string, ' +
+        'so every override in this contribution is dropped',
+      '"overrides" must be an object keyed by descriptor id, not a boolean, ' +
+        'so every override in this contribution is dropped',
+    ]);
+  });
+
+  /**
+   * Three contributions can each get the same key wrong, and "which file do I open" is the
+   * question the report exists to answer — so the three must be distinguishable. `source` is
+   * what does it, by the same three rules the other two channels use.
+   */
+  it('names the contribution three ways, so three layers with the same mistake are told apart', () => {
+    expect(
+      shapeOf([
+        { $name: 'acme', overrides: [] },
+        { $name: 'parent', $layers: { brand: { overrides: [] } }, $references: ['brand'] },
+        { overrides: [] },
+      ]),
+    ).toEqual([
+      { key: 'overrides', source: 'acme' },
+      { key: 'overrides', source: '$layers.brand of parent' },
+      { key: 'overrides', source: 'contribution 3' },
+    ]);
+  });
+
+  it('reports both keys of one contribution when both are wrong', () => {
+    expect(shapeOf([{ $name: 'acme', slots: [], overrides: [] }])).toEqual([
+      { key: 'slots', source: 'acme' },
+      { key: 'overrides', source: 'acme' },
+    ]);
+  });
+
+  /**
+   * The control, and the test that has to be able to fail.
+   *
+   * It exercises every shape that must stay silent **before** asserting silence, which is the
+   * ordering NXSAT-755's control got wrong first time (review of PR 534) — it asserted silence
+   * and only then called the code that would have broken it. Here the order does not save a
+   * reader on its own, so the list is what carries the weight: a layer with neither key, a layer
+   * with both keys valid, an **empty** map of each (`{}` is a record, so it must not refuse), a
+   * `$layers` body with valid keys, and the non-object layers `resolveExtensionLayers` tolerates
+   * at the top — all of which a reporter keyed on "is this key missing or unusable" could get
+   * wrong in a different way.
+   *
+   * Verified red by having `readSection` report whenever the key was absent, and again by having
+   * it report an empty map; each turned the relevant row of this test red on its own.
+   */
+  it('refuses nothing for a valid manifest, nor for an absent or empty map', () => {
+    const { refusedSections, refused, refusedOverrides, config } = resolveExtensionLayers([
+      { $name: 'no-keys', $version: '1.0.0' },
+      {
+        $name: 'acme',
+        $references: ['brand'],
+        $layers: { brand: { slots: { navbar: [{ id: 'acme.navbar.contracts' }] } } },
+        overrides: { 'app.navbar.trash': { visible: false } },
+      },
+      { $name: 'empty-maps', slots: {}, overrides: {} },
+      null,
+      'a string',
+      7,
+      [1, 2, 3],
+    ]);
+
+    // The contributions the silence is about really did take effect, asserted before it.
+    expect(config.slots?.['navbar']).toEqual([{ id: 'acme.navbar.contracts' }]);
+    expect(config.overrides?.['app.navbar.trash']).toEqual({ visible: false });
+
+    expect(refusedSections).toEqual([]);
+    expect(refused).toEqual([]);
+    expect(refusedOverrides).toEqual([]);
   });
 });

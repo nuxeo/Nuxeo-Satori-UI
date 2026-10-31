@@ -3119,7 +3119,7 @@ function provideNxsSatoriComponents(): EnvironmentProviders;
 
 ## @nuxeo/satori-platform/extensions
 
-63 exported symbol(s).
+65 exported symbol(s).
 
 ```ts
 const APP_NAV_ITEMS: InjectionToken<Signal<readonly NavItemDescriptor[]>>;
@@ -3129,6 +3129,7 @@ class AppExtensionsService {
     readonly invalidRoutes: import("@angular/core").Signal<readonly RejectedExtensionRoute[]>;
     readonly refusedSlotEntries: import("@angular/core").Signal<readonly RefusedExtensionEntry[]>;
     readonly refusedOverrides: import("@angular/core").Signal<readonly RefusedExtensionOverride[]>;
+    readonly refusedSections: import("@angular/core").Signal<readonly RefusedExtensionSection[]>;
     constructor();
     register<T extends ExtensionElement>(slot: ExtensionSlotId, entries: readonly T[]): void;
     registerRules(evaluators: Readonly<Record<string, ExtensionRuleEvaluator>>): void;
@@ -3334,6 +3335,7 @@ class ExtensionRuleRegistry {
     }
 }
 type ExtensionRuleResolver = (rule: ExtensionRule) => boolean;
+type ExtensionSectionKey = 'overrides' | 'slots';
 type ExtensionSlotId = string;
 interface ExtensionSlotOverrides {
     readonly byId: Readonly<Record<string, ExtensionOverride>>;
@@ -3393,6 +3395,12 @@ interface RefusedExtensionEntry {
 }
 interface RefusedExtensionOverride {
     readonly id: string;
+    readonly reason: string;
+    readonly source: string;
+    }
+}
+interface RefusedExtensionSection {
+    readonly key: ExtensionSectionKey;
     readonly reason: string;
     readonly source: string;
     }
