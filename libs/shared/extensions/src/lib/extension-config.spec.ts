@@ -350,6 +350,26 @@ describe('refused slot entries', () => {
     ).toEqual([{ slot: 'navbar', id: null, source: '$layers.brand of acme-customisation' }]);
   });
 
+  /**
+   * Pins what §12 of `docs/extension-reference.md` promises. The read walks `$layers` before
+   * `$ignoreReferenceList` is consulted, so an ignored layer's typo is still reported — which is
+   * fine only because the message names the layer rather than implying it took effect.
+   */
+  it('still reports a refusal in a layer dropped by $ignoreReferenceList, naming that layer', () => {
+    const { refused, applied } = resolveExtensionLayers([
+      {
+        $name: 'acme-customisation',
+        $references: ['brand'],
+        $ignoreReferenceList: ['brand'],
+        $layers: { brand: { slots: { navbar: 'not a list' } } },
+      },
+    ]);
+
+    expect(applied).toEqual([]);
+    expect(refused).toHaveLength(1);
+    expect(refused[0].source).toBe('$layers.brand of acme-customisation');
+  });
+
   it("prefers a $layers entry's own $name over the name it is filed under", () => {
     expect(
       shapeOf([

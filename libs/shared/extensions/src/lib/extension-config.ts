@@ -165,6 +165,13 @@ export function resolveExtensionLayers(layers: readonly unknown[]): ResolvedExte
  * something malformed must get the packaged application back, not a blank
  * screen. Slot entries without a string `id` are dropped, because an entry with
  * no id cannot be addressed, overridden or reasoned about.
+ *
+ * Tolerant, but no longer silent. Every drop is recorded as a
+ * {@link RefusedExtensionEntry} and reaches the customer through
+ * `AppExtensionsService.refusedSlotEntries()` and the console. This function discards those
+ * records, keeping the signature callers that only want the configuration already have;
+ * {@link resolveExtensionLayers} is the one that keeps them, because it alone knows a layer's
+ * position in contribution order and so can say where a refused entry was written.
  */
 export function readExtensionConfig(raw: unknown): ExtensionConfig {
   return readConfig(raw, layerSource(raw, 0), []);

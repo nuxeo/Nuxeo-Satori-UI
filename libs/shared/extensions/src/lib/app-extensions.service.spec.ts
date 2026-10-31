@@ -105,12 +105,25 @@ describe('AppExtensionsService refused slot entries', () => {
    * The control that matters most here, because the same-`id` path is legitimate.
    *
    * A manifest entry reusing a **packaged** id patches it — that is what `resolve`'s
-   * `withoutAction` carve-out exists for — and a second contribution patching the first
-   * is what `$references` layering is. Reporting either would fire on every correctly
-   * layered manifest, so both must stay silent, and the fix must not be able to pass by
-   * warning about everything.
+   * `withoutAction` carve-out exists for — a second contribution patching the first is what
+   * `$references` layering is, and re-registering an id is `register` being idempotent per id.
+   * Reporting any of the three would fire on every correctly layered manifest, so all three
+   * must stay silent, and the fix must not be able to pass by warning about everything.
+   *
+   * **Every same-`id` path is walked before silence is asserted**, which is the whole value of
+   * this test. It first asserted `reports()` and only then called `resolve()`, so the one
+   * implementation it exists to reject — a warning inside `resolve` — slipped through it
+   * unnoticed. Verified by putting that warning in on purpose and watching this go red.
    */
   it('says nothing about a correctly layered manifest that overrides by id', () => {
+    const service = TestBed.inject(AppExtensionsService);
+    // Packaged first, in two calls, as the product and then a customer library would.
+    service.register(EXTENSION_SLOTS.navbar, [
+      { id: 'app.navbar.trash', label: 'Trash', action: 'app.navbar.trash' },
+      { id: 'app.navbar.collections', label: 'Collections' },
+    ]);
+    service.register(EXTENSION_SLOTS.navbar, [{ id: 'app.navbar.trash', label: 'Bin' }]);
+
     manifest.set({
       extensionLayers: [
         {
@@ -121,20 +134,17 @@ describe('AppExtensionsService refused slot entries', () => {
         { $name: 'regional', slots: { navbar: [{ id: 'app.navbar.trash', label: 'Corbeille' }] } },
       ],
     });
-    const service = boot();
-    service.register(EXTENSION_SLOTS.navbar, [
-      { id: 'app.navbar.trash', label: 'Trash', action: 'app.navbar.trash' },
-      { id: 'app.navbar.collections', label: 'Collections' },
-    ]);
+    TestBed.tick();
 
+    // The override the silence is about really did take effect, on the packaged id — and this
+    // runs *before* the assertions, so a warning raised anywhere along that path is caught.
+    const labels = service
+      .resolve<{ id: string; label: string }>(EXTENSION_SLOTS.navbar)
+      .map((entry) => entry.label);
+
+    expect(labels).toEqual(['Corbeille']);
     expect(service.refusedSlotEntries()).toEqual([]);
     expect(reports()).toEqual([]);
-    // The override the silence is about really did take effect, on the packaged id.
-    expect(
-      service
-        .resolve<{ id: string; label: string }>(EXTENSION_SLOTS.navbar)
-        .map((entry) => entry.label),
-    ).toEqual(['Corbeille']);
   });
 
   it('says nothing when there is no manifest at all', () => {
