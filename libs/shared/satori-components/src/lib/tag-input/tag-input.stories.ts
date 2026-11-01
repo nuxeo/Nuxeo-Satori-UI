@@ -62,11 +62,24 @@ export const KeyboardContract: Story = {
   play: async ({ canvasElement }) => {
     const field = within(canvasElement).getByRole('combobox', { name: 'Tags' });
     field.focus();
-    await userEvent.type(field, 'renewal', { skipClick: true });
-    await within(canvasElement.ownerDocument.body).findByRole('option', { name: 'Add “renewal”' });
+    await userEvent.type(field, 'con', { skipClick: true });
+    const body = within(canvasElement.ownerDocument.body);
+    const suggestion = await body.findByRole('option', { name: 'contract' });
+    const typed = body.getByRole('option', { name: 'Add “con”' });
+    // CDK resets its active item after the async suggestion list has rendered.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    await expect(field).not.toHaveAttribute('aria-activedescendant');
     fireEvent.keyDown(field, { key: 'ArrowDown', keyCode: 40 });
+    await waitFor(() => expect(field).toHaveAttribute('aria-activedescendant', typed.id));
+    fireEvent.keyDown(field, { key: 'ArrowDown', keyCode: 40 });
+    await waitFor(() => expect(field).toHaveAttribute('aria-activedescendant', suggestion.id));
     fireEvent.keyDown(field, { key: 'Enter', keyCode: 13 });
-    await waitFor(() => expect(canvasElement.querySelector('output')).toHaveTextContent('renewal'));
+    // Free-text Enter would add "con", which must not satisfy the selection contract.
+    await waitFor(() =>
+      expect(canvasElement.querySelector('output')).toHaveTextContent(/^contract$/),
+    );
     await expect(field).toHaveValue('');
     await expect(field).toHaveFocus();
   },

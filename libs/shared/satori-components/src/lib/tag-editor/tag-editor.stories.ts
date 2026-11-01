@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { defer, delay, of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -121,16 +121,35 @@ type Story = StoryObj<NxsTagEditorComponent>;
 
 /** Two tags, each removable. Type "con" for suggestions; "Q3 Report" is stored as `q3report`. */
 export const Editable: Story = {
+  args: { tagsChange: fn() },
   decorators: [withTags(TAGGED)],
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByRole('button', { name: 'Remove tag contract' })).toBeVisible();
     const box = await canvas.findByRole('combobox', { name: 'Add tags to this document' });
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.type(box, 'con');
+    const suggestion = await body.findByRole('option', { name: 'contoso' });
+    const typed = body.getByRole('option', { name: 'New tag con' });
+    // Wait for CDK's deferred reset after the async suggestions arrive.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    await waitFor(() => expect(box).toHaveAttribute('aria-activedescendant', typed.id));
+    fireEvent.keyDown(box, { key: 'ArrowDown', keyCode: 40 });
+    await waitFor(() => expect(box).toHaveAttribute('aria-activedescendant', suggestion.id));
+    fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 });
+    await waitFor(() =>
+      expect(args.tagsChange).toHaveBeenLastCalledWith(['contract', 'invoice', 'contoso']),
+    );
+    await expect(await canvas.findByRole('button', { name: 'Remove tag contoso' })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'Remove tag con' })).not.toBeInTheDocument();
+    await expect(box).toHaveValue('');
     await userEvent.type(box, 'Q3 Report');
-    await within(canvasElement.ownerDocument.body).findByRole('option', {
+    const newTag = await body.findByRole('option', {
       name: 'New tag q3 report',
     });
-    fireEvent.keyDown(box, { key: 'ArrowDown', keyCode: 40 });
+    await waitFor(() => expect(box).toHaveAttribute('aria-activedescendant', newTag.id));
     fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 });
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: 'Remove tag q3report' })).toBeVisible(),

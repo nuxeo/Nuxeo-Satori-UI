@@ -196,7 +196,12 @@ test.describe('accessibility: interaction states', () => {
     // The scanner may dismiss overlays while walking. Reopen before testing the exit contract.
     if (!(await dialog.isVisible())) {
       await page.getByRole('button', { name: 'Manage columns' }).press('Enter');
+    } else {
+      // The scanner can leave focus elsewhere even when the dialog remains open.
+      await dialog.focus();
     }
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('button', { name: 'Manage columns' })).toBeFocused();
