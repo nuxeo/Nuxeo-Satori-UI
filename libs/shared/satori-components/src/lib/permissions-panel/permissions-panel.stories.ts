@@ -294,7 +294,8 @@ export const ReadFailed: Story = {
     const alert = await canvas.findByRole('alert');
     await waitFor(() => expect(alert).toHaveTextContent('The permissions could not be loaded.'));
     await expect(canvas.queryByRole('table')).toBeNull();
-    await userEvent.click(canvas.getByRole('button', { name: 'Retry' }));
+    canvas.getByRole('button', { name: 'Retry' }).focus();
+    await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(canvas.getAllByRole('table')).toHaveLength(2));
     await expect(canvas.queryByRole('alert')).toBeNull();
   },

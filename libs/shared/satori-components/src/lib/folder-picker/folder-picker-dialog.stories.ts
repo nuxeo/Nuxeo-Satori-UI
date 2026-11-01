@@ -3,7 +3,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { BrowseService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -13,6 +13,8 @@ import {
   NxsFolderPickerDialogComponent,
   type NxsFolderPickerDialogData,
 } from './folder-picker-dialog.component';
+
+const closeDialog = fn(action('dialogRef.close'));
 
 function folder(path: string, title: string): NuxeoDocument {
   return {
@@ -51,7 +53,7 @@ const withRepository = (
       : of({ entries: TREE[path] ?? [] });
   const providers: Provider[] = [
     { provide: MAT_DIALOG_DATA, useValue: data },
-    { provide: MatDialogRef, useValue: { close: action('dialogRef.close') } },
+    { provide: MatDialogRef, useValue: { close: closeDialog } },
     {
       provide: BrowseService,
       useValue: {
@@ -113,4 +115,16 @@ export const AlreadyHere: Story = {
 /** A folder the user may not open: it says so, and offers Up. */
 export const NoAccess: Story = {
   decorators: [withRepository(MOVE, { path: '/default-domain/workspaces', status: 403 })],
+};
+
+/** The preview stays mounted; this asserts the dialog's close request. */
+export const KeyboardCancellation: Story = {
+  ...ChoosingAFolder,
+  play: async ({ canvasElement }) => {
+    closeDialog.mockClear();
+    const cancel = await within(canvasElement).findByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(closeDialog).toHaveBeenCalledTimes(1);
+  },
 };

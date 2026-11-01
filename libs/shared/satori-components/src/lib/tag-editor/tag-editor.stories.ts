@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { defer, delay, of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 
 import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -127,12 +127,11 @@ export const Editable: Story = {
     await expect(await canvas.findByRole('button', { name: 'Remove tag contract' })).toBeVisible();
     const box = await canvas.findByRole('combobox', { name: 'Add tags to this document' });
     await userEvent.type(box, 'Q3 Report');
-    // Chosen with the pointer: Material reads `keyCode`, which the synthetic Enter lacks.
-    await userEvent.click(
-      await within(canvasElement.ownerDocument.body).findByRole('option', {
-        name: 'New tag q3 report',
-      }),
-    );
+    await within(canvasElement.ownerDocument.body).findByRole('option', {
+      name: 'New tag q3 report',
+    });
+    fireEvent.keyDown(box, { key: 'ArrowDown', keyCode: 40 });
+    fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 });
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: 'Remove tag q3report' })).toBeVisible(),
     );

@@ -669,9 +669,9 @@ class NuxeoApiTraffic extends Set {
     // networkComplete means requestfinished fired (network done), but finished: false means headers
     // not yet read. Only scan the active window (since onwards) to preserve bootstrap/config exemptions.
     // These can pass through identity checks because strayRequests skips !finished records.
-    const unreadRequests = this.sent.slice(this.since).filter(
-      (r) => r.networkComplete && !r.finished && !r.failed && !r.headerError,
-    );
+    const unreadRequests = this.sent
+      .slice(this.since)
+      .filter((r) => r.networkComplete && !r.finished && !r.failed && !r.headerError);
     return { completed, timedOut, unreadRequests };
   }
 }
@@ -771,11 +771,11 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
         // treating this as a network-failed request. An unhandled rejection would terminate the runner.
         record.headerError = String(err);
         record.finished = false;
-      } finally {
-        traffic.pendingHeaders.delete(headerPromise);
       }
     })();
     traffic.pendingHeaders.add(headerPromise);
+    // Register cleanup after initialization, including when allHeaders throws synchronously.
+    void headerPromise.then(() => traffic.pendingHeaders.delete(headerPromise));
   });
   // Aborted, or a network error: the only other event this request will emit. It is recorded so
   // `pendingRequests` does not report it as still in flight — a navigation aborts whatever was
@@ -843,6 +843,7 @@ export function pendingAcrossSignIn(traffic, upTo, { verifiedAuth, verifiedCooki
   const discarded = sent.slice(since, upTo).filter((r) => !anonymousByDesign(r));
   // Recognize sign-in by matching the VERIFIED credential, not just any auth/cookie (P2).
   // Without verified context, fall back to any non-null credential for compatibility.
+  /** @param {SentRequest} r */
   const matches = (r) => {
     // Skip null Authorization so cookie sessions reach their branch (P2). The caller passes
     // verifiedAuth: null for cookie sessions, so checking verifiedAuth !== undefined would always
@@ -882,7 +883,11 @@ export function pendingAcrossSignIn(traffic, upTo, { verifiedAuth, verifiedCooki
  * @param {{ signingIn?: boolean, expectedCookie?: string | null }} [options]
  * @returns {SentRequest[]}
  */
-export function strayRequests(traffic, stored, { signingIn = false, expectedCookie = undefined } = {}) {
+export function strayRequests(
+  traffic,
+  stored,
+  { signingIn = false, expectedCookie = undefined } = {},
+) {
   // By shape, not `instanceof`: a second copy of this module, as a loader can make, would
   // otherwise switch the check off without a word.
   const { sent, since } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
@@ -1012,7 +1017,10 @@ export async function checkPageIdentity(
     // Reject if any completed requests have unread headers at deadline (P1). These would be skipped
     // by strayRequests (which only judges finished: true records), letting unjudged traffic pass.
     if (unreadRequests.length > 0) {
-      const listed = unreadRequests.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+      const listed = unreadRequests
+        .slice(0, 3)
+        .map((r) => `${r.method} ${r.path}`)
+        .join(', ');
       const suffix = unreadRequests.length > 3 ? `, and ${unreadRequests.length - 3} more` : '';
       return judgeApp(
         {
@@ -1026,7 +1034,12 @@ export async function checkPageIdentity(
     }
   }
 
-  const { stored, answers, verifiedCookie } = await askThroughPage(page, appOrigin, fetchImpl, timeoutMs);
+  const { stored, answers, verifiedCookie } = await askThroughPage(
+    page,
+    appOrigin,
+    fetchImpl,
+    timeoutMs,
+  );
   const signingIn = !normalisePolicy(policy).required;
 
   // Use the verified cookie snapshot from askThroughPage (P1). Reading cookies fresh here can
@@ -1233,28 +1246,28 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
           // can finish, then pendingAcrossSignIn misses them (now finished) and restart(mark) removes
           // them from all future windows. Read the stored session without probes, drain headers, and
           // check newly-completed traffic before restarting.
-          const session = await page.evaluate(
-            (sources) => {
-              for (const s of sources) {
-                const raw = (s.storage === 'localStorage' ? localStorage : sessionStorage).getItem(s.key);
-                if (raw !== null) {
-                  try {
-                    const parsed = JSON.parse(raw);
-                    return {
-                      key: s.key,
-                      storage: s.storage,
-                      authorization: parsed.basic ? `Basic ${parsed.basic}` : null,
-                      kind: parsed.kind || (parsed.basic ? 'basic' : 'cookie'),
-                    };
-                  } catch {
-                    return null;
-                  }
+          const session = await page.evaluate((sources) => {
+            for (const s of sources) {
+              const raw = (s.storage === 'localStorage' ? localStorage : sessionStorage).getItem(
+                s.key,
+              );
+              if (raw !== null) {
+                try {
+                  const parsed = JSON.parse(raw);
+                  return {
+                    key: s.key,
+                    storage: s.storage,
+                    username: typeof parsed.username === 'string' ? parsed.username : null,
+                    authorization: parsed.basic ? `Basic ${parsed.basic}` : null,
+                    kind: parsed.kind || (parsed.basic ? 'basic' : 'cookie'),
+                  };
+                } catch {
+                  return null;
                 }
               }
-              return null;
-            },
-            APP_SESSION_SOURCES,
-          );
+            }
+            return null;
+          }, APP_SESSION_SOURCES);
           if (!session) {
             /** @type {ChannelReport} */
             const refusal = {
@@ -1281,8 +1294,12 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
             if (traffic.drainPendingHeaders) {
               const { unreadRequests } = await traffic.drainPendingHeaders();
               if (unreadRequests.length > 0) {
-                const listed = unreadRequests.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
-                const suffix = unreadRequests.length > 3 ? `, and ${unreadRequests.length - 3} more` : '';
+                const listed = unreadRequests
+                  .slice(0, 3)
+                  .map((r) => `${r.method} ${r.path}`)
+                  .join(', ');
+                const suffix =
+                  unreadRequests.length > 3 ? `, and ${unreadRequests.length - 3} more` : '';
                 /** @type {ChannelReport} */
                 const refusal = {
                   channel: 'step',
@@ -1314,9 +1331,15 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
                 // Preserve the signed-out bootstrap exemption (signingIn: true before first authed request).
                 const expectedCookie = verifiedCookie;
                 const signingIn = true; // The form sign-in case: signed-out bootstrap is still exempt
-                const stray = strayRequests(foreignApiOrigins, session, { signingIn, expectedCookie });
+                const stray = strayRequests(foreignApiOrigins, session, {
+                  signingIn,
+                  expectedCookie,
+                });
                 if (stray.length) {
-                  const listed = stray.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+                  const listed = stray
+                    .slice(0, 3)
+                    .map((r) => `${r.method} ${r.path}`)
+                    .join(', ');
                   const suffix = stray.length > 3 ? `, and ${stray.length - 3} more` : '';
                   /** @type {ChannelReport} */
                   const refusal = {
@@ -1336,7 +1359,10 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
             }
             if (promotionAllowed) {
               const verifiedAuth = session.authorization;
-              const stranded = pendingAcrossSignIn(foreignApiOrigins, mark, { verifiedAuth, verifiedCookie });
+              const stranded = pendingAcrossSignIn(foreignApiOrigins, mark, {
+                verifiedAuth,
+                verifiedCookie,
+              });
               if (stranded.length) {
                 const named = stranded.map((r) => `${r.method} ${r.path}`).join(', ');
                 /** @type {ChannelReport} */

@@ -411,7 +411,8 @@ function fakePage({
       cookies: async () => state.cookies,
     }),
     waitForResponse: (pred) => new Promise((resolve) => state.waiters.push({ pred, resolve })),
-    waitForRequest: (pred) => new Promise((resolve) => state.requestWaiters.push({ pred, resolve })),
+    waitForRequest: (pred) =>
+      new Promise((resolve) => state.requestWaiters.push({ pred, resolve })),
     on: (event, fn) => {
       (state.listeners[event] ??= []).push(fn);
     },
@@ -768,6 +769,26 @@ function watchedPage(options) {
   });
   return { page, traffic: watchNuxeoApiOrigins(page, APP) };
 }
+for (const synchronous of [true, false]) {
+  const { page, traffic } = watchedPage();
+  page.on('request', (request) => {
+    request.allHeaders = () => {
+      const error = new Error('headers unavailable');
+      if (synchronous) throw error;
+      return Promise.reject(error);
+    };
+  });
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+  await traffic.drainPendingHeaders();
+  control(
+    'negative',
+    `${synchronous ? 'synchronous' : 'asynchronous'} header failure is retained and drained without a dangling promise`,
+    traffic.pendingHeaders.size === 0 &&
+      traffic.sent[0].finished === false &&
+      traffic.sent[0].headerError?.includes('headers unavailable'),
+    traffic.sent,
+  );
+}
 {
   const { page, traffic } = watchedPage();
   page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
@@ -949,7 +970,10 @@ function watchedPage(options) {
   page.state.cookies = [{ name: 'JSESSIONID', value: 'admin-cookie' }];
   page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: 'admin-cookie' });
   // Request with wrong user's Authorization header - should be refused when expectedCookie is null
-  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: WRONG_USER_AUTH, cookie: null });
+  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, {
+    authorization: WRONG_USER_AUTH,
+    cookie: null,
+  });
   // Drain pending headers before checking (P1)
   await traffic.drainPendingHeaders();
   const stored = {
@@ -964,8 +988,15 @@ function watchedPage(options) {
     'negative',
     'a cookie session with null expectedCookie reports wrong-user Authorization header as stray (Gap 1, P2)',
     stray.length === 2 &&
-      stray.some((r) => r.path === '/nuxeo/api/v1/search/lang/NXQL/execute' && r.authorization === WRONG_USER_AUTH),
-    { strayCount: stray.length, stray: stray.map((r) => ({ path: r.path, auth: r.authorization })) },
+      stray.some(
+        (r) =>
+          r.path === '/nuxeo/api/v1/search/lang/NXQL/execute' &&
+          r.authorization === WRONG_USER_AUTH,
+      ),
+    {
+      strayCount: stray.length,
+      stray: stray.map((r) => ({ path: r.path, auth: r.authorization })),
+    },
   );
 }
 
@@ -2129,7 +2160,11 @@ await silently(async () => {
     // When h.login() is replacing a session for a DIFFERENT user, expectApp() restarts the window,
     // putting requests from the clearCookies/storage interval behind `since` where no boundary sees them.
     // This control simulates a cross-user re-login (after h.signedInAs) with a request during that interval.
-    const saved = { NUXEO_USER: process.env['NUXEO_USER'], NUXEO_PASS: process.env['NUXEO_PASS'], APP_URL: process.env['APP_URL'] };
+    const saved = {
+      NUXEO_USER: process.env['NUXEO_USER'],
+      NUXEO_PASS: process.env['NUXEO_PASS'],
+      APP_URL: process.env['APP_URL'],
+    };
     process.env['NUXEO_USER'] = 'Administrator';
     process.env['NUXEO_PASS'] = 'adminpw';
     process.env['APP_URL'] = APP;
@@ -2150,13 +2185,18 @@ await silently(async () => {
       await h.step('one');
       // Sign in as alternate user, then switch back to Administrator (cross-user re-login)
       await h.signedInAs(ALT_USER, 'altpw', 'switch to alternate user');
-      page.state.storage = { 'sessionStorage:agentic_ui_nuxeo_session': basicSession(ALT_USER, b64(`${ALT_USER}:altpw`)) };
+      page.state.storage = {
+        'sessionStorage:agentic_ui_nuxeo_session': basicSession(ALT_USER, b64(`${ALT_USER}:altpw`)),
+      };
       page.send(`${APP}/nuxeo/api/v1/me`, { authorization: ALT_AUTH });
       // The boot navigation happens while the AlternateUser session is still active, so it uses ALT_AUTH
       page.state.bootRequests = [{ url: `${APP}/nuxeo/api/v1/me`, authorization: ALT_AUTH }];
       // During clearCookies, send a headerless request that should be caught but currently escapes (Gap 2)
       page.state.duringClear = () =>
-        page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null, cookie: null });
+        page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, {
+          authorization: null,
+          cookie: null,
+        });
       const thrown = await thrownBy(async () => {
         await h.login(); // Cross-user: from AlternateUser back to Administrator
         page.state.duringClear = undefined;
@@ -2168,7 +2208,8 @@ await silently(async () => {
         'a cross-user re-login: a request during the post-verification interval is refused (Gap 2 - re-login interval)',
         thrown instanceof PreconditionError &&
           /identity guard/.test(thrown.message) &&
-          (/without the .* session's credential/.test(thrown.message) || /in flight/.test(thrown.message)) &&
+          (/without the .* session's credential/.test(thrown.message) ||
+            /in flight/.test(thrown.message)) &&
           /search\/lang\/NXQL\/execute/.test(thrown.message) &&
           identity.checks.some((c) => !c.ok && c.at.includes('cross-user re-login')),
         { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },

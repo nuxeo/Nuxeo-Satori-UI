@@ -1,7 +1,7 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of } from 'rxjs';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 
 import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -57,6 +57,20 @@ type Story = StoryObj<NxsTagInputComponent>;
 
 /** Type `con`: contract and confidential are suggested, and the typed text can be added. */
 export const Default: Story = {};
+
+export const KeyboardContract: Story = {
+  play: async ({ canvasElement }) => {
+    const field = within(canvasElement).getByRole('combobox', { name: 'Tags' });
+    field.focus();
+    await userEvent.type(field, 'renewal', { skipClick: true });
+    await within(canvasElement.ownerDocument.body).findByRole('option', { name: 'Add “renewal”' });
+    fireEvent.keyDown(field, { key: 'ArrowDown', keyCode: 40 });
+    fireEvent.keyDown(field, { key: 'Enter', keyCode: 13 });
+    await waitFor(() => expect(canvasElement.querySelector('output')).toHaveTextContent('renewal'));
+    await expect(field).toHaveValue('');
+    await expect(field).toHaveFocus();
+  },
+};
 
 /**
  * A suggestion chosen, then a new tag typed and added from its "Add" entry. Enter and a comma add
