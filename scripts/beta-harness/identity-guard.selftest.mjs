@@ -788,6 +788,74 @@ for (const synchronous of [true, false]) {
       traffic.sent[0].headerError?.includes('headers unavailable'),
     traffic.sent,
   );
+  const report = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'negative',
+    `${synchronous ? 'synchronous' : 'asynchronous'} header failure rejects identity after its pending promise is gone`,
+    !report.ok && /headers remain unread/.test(report.problem ?? ''),
+    report,
+  );
+}
+for (const synchronous of [true, false]) {
+  for (const policy of ['Administrator', { unsigned: 'Administrator' }]) {
+    const { page, traffic } = watchedPage();
+    page.on('request', (request) => {
+      if (!request.url().endsWith('/id/unread')) return;
+      request.allHeaders = () => {
+        const error = new Error('headers unavailable');
+        if (synchronous) throw error;
+        return Promise.reject(error);
+      };
+    });
+    let sent = false;
+    page.state.meFor = (auth) => {
+      if (!sent) {
+        sent = true;
+        page.send(`${APP}/nuxeo/api/v1/id/unread`, { authorization: H });
+      }
+      return auth === H ? ADMIN : GUEST;
+    };
+    const report = await checkPageIdentity(page, policy, APP, {
+      fetchImpl: page.fetch,
+      foreignApiOrigins: traffic,
+    });
+    control(
+      'negative',
+      `${synchronous ? 'synchronous' : 'asynchronous'} header failure during a probe rejects ${typeof policy === 'string' ? 'an established identity' : 'sign-in recognition'}`,
+      !report.ok &&
+        /headers remain unread/.test(report.problem ?? '') &&
+        /id\/unread/.test(report.problem ?? ''),
+      report,
+    );
+  }
+}
+for (const exemption of ['anonymous-config', 'previous-session']) {
+  const { page, traffic } = watchedPage();
+  const path =
+    exemption === 'anonymous-config'
+      ? '/nuxeo/agentic-ui-config/app.json'
+      : '/nuxeo/api/v1/id/previous-session';
+  page.on('request', (request) => {
+    if (request.url() === `${APP}${path}`) {
+      request.allHeaders = () => Promise.reject(new Error('headers unavailable'));
+    }
+  });
+  page.send(`${APP}${path}`);
+  await traffic.drainPendingHeaders();
+  if (exemption === 'previous-session') traffic.restart();
+  const report = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'positive',
+    `${exemption} header failure is outside the identity verdict`,
+    report.ok,
+    report,
+  );
 }
 {
   const { page, traffic } = watchedPage();

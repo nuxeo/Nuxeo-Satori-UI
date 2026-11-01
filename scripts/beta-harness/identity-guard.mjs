@@ -640,7 +640,6 @@ class NuxeoApiTraffic extends Set {
    * @returns {Promise<{ completed: number, timedOut: number, unreadRequests: SentRequest[] }>}
    */
   async drainPendingHeaders(timeoutMs = 2000) {
-    if (this.pendingHeaders.size === 0) return { completed: 0, timedOut: 0, unreadRequests: [] };
     const pending = Array.from(this.pendingHeaders);
     const deadline = Date.now() + timeoutMs;
     let completed = 0;
@@ -668,10 +667,11 @@ class NuxeoApiTraffic extends Set {
     // Check for requests that completed network-wise but whose headers remain unread (P1/P2).
     // networkComplete means requestfinished fired (network done), but finished: false means headers
     // not yet read. Only scan the active window (since onwards) to preserve bootstrap/config exemptions.
+    // Settled failures still have unread credentials even after their promise is removed.
     // These can pass through identity checks because strayRequests skips !finished records.
     const unreadRequests = this.sent
       .slice(this.since)
-      .filter((r) => r.networkComplete && !r.finished && !r.failed && !r.headerError);
+      .filter((r) => r.networkComplete && !r.finished && !r.failed && !anonymousByDesign(r));
     return { completed, timedOut, unreadRequests };
   }
 }
@@ -1012,9 +1012,10 @@ export async function checkPageIdentity(
   // async requestfinished handler, so completed requests can have unread headers.
   // Narrow to Partial<NuxeoApiTraffic> to access optional drainPendingHeaders method (P1 typecheck).
   const traffic = /** @type {Partial<NuxeoApiTraffic>} */ (foreignApiOrigins ?? {});
-  if (traffic.drainPendingHeaders) {
+  const unreadHeaderReport = async () => {
+    if (!traffic.drainPendingHeaders) return null;
     const { unreadRequests } = await traffic.drainPendingHeaders();
-    // Reject if any completed requests have unread headers at deadline (P1). These would be skipped
+    // Reject completed requests with failed or timed-out header reads. These would be skipped
     // by strayRequests (which only judges finished: true records), letting unjudged traffic pass.
     if (unreadRequests.length > 0) {
       const listed = unreadRequests
@@ -1026,13 +1027,16 @@ export async function checkPageIdentity(
         {
           problem:
             `${unreadRequests.length} request(s) completed but their headers remain unread at the ` +
-            `identity check deadline (${listed}${suffix}). Cannot determine who they ran as.`,
+            `identity check (${listed}${suffix}). Cannot determine who they ran as.`,
         },
         { inPage: null, replayed: null },
         policy,
       );
     }
-  }
+    return null;
+  };
+  const unreadBeforeProbe = await unreadHeaderReport();
+  if (unreadBeforeProbe) return unreadBeforeProbe;
 
   const { stored, answers, verifiedCookie } = await askThroughPage(
     page,
@@ -1040,6 +1044,9 @@ export async function checkPageIdentity(
     fetchImpl,
     timeoutMs,
   );
+  // A data request can finish while the identity probes run, including at the final boundary.
+  const unreadDuringProbe = await unreadHeaderReport();
+  if (unreadDuringProbe) return unreadDuringProbe;
   const signingIn = !normalisePolicy(policy).required;
 
   // Use the verified cookie snapshot from askThroughPage (P1). Reading cookies fresh here can
