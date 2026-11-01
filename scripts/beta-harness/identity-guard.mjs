@@ -1047,6 +1047,16 @@ export async function checkPageIdentity(
   // A data request can finish while the identity probes run, including at the final boundary.
   const unreadDuringProbe = await unreadHeaderReport();
   if (unreadDuringProbe) return unreadDuringProbe;
+  // Header collection can outlive the probes: their answers are stale if the page left the app.
+  if (originOf(safeUrl(page)) !== originOf(appOrigin)) {
+    return judgeApp(
+      {
+        problem: `the page left ${originOf(appOrigin)} during the identity check (now ${safeUrl(page)})`,
+      },
+      { inPage: null, replayed: null },
+      policy,
+    );
+  }
   const signingIn = !normalisePolicy(policy).required;
 
   // Use the verified cookie snapshot from askThroughPage (P1). Reading cookies fresh here can

@@ -769,6 +769,52 @@ function watchedPage(options) {
   });
   return { page, traffic: watchNuxeoApiOrigins(page, APP) };
 }
+for (const destination of ['https://other.test/', 'about:blank', `${APP}/browse`]) {
+  for (const policy of ['Administrator', { unsigned: 'Administrator' }]) {
+    const { page, traffic } = watchedPage();
+    let releaseHeaders;
+    page.on('request', (request) => {
+      if (request.url().endsWith('/id/delayed')) {
+        request.allHeaders = () =>
+          new Promise((resolve) => {
+            releaseHeaders = resolve;
+          });
+      }
+    });
+    let sent = false;
+    page.state.meFor = (auth) => {
+      if (!sent) {
+        sent = true;
+        page.send(`${APP}/nuxeo/api/v1/id/delayed`, { authorization: H });
+      }
+      return auth === H ? ADMIN : GUEST;
+    };
+    const drain = traffic.drainPendingHeaders.bind(traffic);
+    let drains = 0;
+    traffic.drainPendingHeaders = (...args) => {
+      const pending = drain(...args);
+      if (++drains === 2) {
+        // Navigate only after the post-probe drain starts waiting for real request headers.
+        queueMicrotask(() => {
+          page.state.url = destination;
+          releaseHeaders({ authorization: H });
+        });
+      }
+      return pending;
+    };
+    const report = await checkPageIdentity(page, policy, APP, {
+      fetchImpl: page.fetch,
+      foreignApiOrigins: traffic,
+    });
+    const staysOnApp = destination.startsWith(APP);
+    control(
+      staysOnApp ? 'positive' : 'negative',
+      `navigation to ${destination} during the post-probe header drain ${staysOnApp ? 'preserves' : 'rejects'} ${typeof policy === 'string' ? 'an established identity' : 'sign-in recognition'}`,
+      staysOnApp ? report.ok : !report.ok && /page left/.test(report.problem ?? ''),
+      report,
+    );
+  }
+}
 for (const synchronous of [true, false]) {
   const { page, traffic } = watchedPage();
   page.on('request', (request) => {
