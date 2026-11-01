@@ -769,7 +769,12 @@ function watchedPage(options) {
   });
   return { page, traffic: watchNuxeoApiOrigins(page, APP) };
 }
-for (const destination of ['https://other.test/', 'about:blank', `${APP}/browse`]) {
+for (const destination of [
+  'https://other.test/',
+  'http://app.test.example.com/',
+  'about:blank',
+  `${APP}/browse`,
+]) {
   for (const policy of ['Administrator', { unsigned: 'Administrator' }]) {
     const { page, traffic } = watchedPage();
     let releaseHeaders;
@@ -806,7 +811,7 @@ for (const destination of ['https://other.test/', 'about:blank', `${APP}/browse`
       fetchImpl: page.fetch,
       foreignApiOrigins: traffic,
     });
-    const staysOnApp = destination.startsWith(APP);
+    const staysOnApp = new URL(destination).origin === new URL(APP).origin;
     control(
       staysOnApp ? 'positive' : 'negative',
       `navigation to ${destination} during the post-probe header drain ${staysOnApp ? 'preserves' : 'rejects'} ${typeof policy === 'string' ? 'an established identity' : 'sign-in recognition'}`,
