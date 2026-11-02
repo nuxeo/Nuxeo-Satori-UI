@@ -855,12 +855,14 @@
       "open-a-folder-to-create-or-import": "Öffnen Sie einen Ordner, um Inhalte zu erstellen oder zu importieren.",
       "permission-added": "Berechtigung hinzugefügt",
       "permission-deleted": "Berechtigung gelöscht",
+      "permission-updated": "Berechtigung aktualisiert",
       "please-select-a-csv-file": "Wählen Sie eine .csv-Datei aus.",
       "please-wait-for-the-file-upload-to": "Warten Sie, bis der Dateiupload abgeschlossen ist.",
       "remove-all-collections-from-this-folder-before": "Entfernen Sie alle Sammlungen aus diesem Ordner, bevor Sie ihn löschen.",
       "restricted-import-location": "Wählen Sie einen anderen Container aus, um Ihre Inhalte zu erstellen.",
       "search-failed": "Suche fehlgeschlagen",
       "selected-path-is-not-a-folder-choose": "Der ausgewählte Pfad ist kein Ordner. Wählen Sie einen Ordner aus oder wechseln Sie eine Ebene nach oben.",
+      "shared-with-external-user": "Für externen Benutzer freigegeben",
       "starting-csv-export": "CSV-Export wird gestartet...",
       "subscribed-to-notifications": "Benachrichtigungen abonniert",
       "unsubscribed": "Abbestellt",
@@ -1686,9 +1688,19 @@
     "delete-permission-dialog": {
       "delete": "Löschen"
     },
+    "share-external-dialog": {
+      "create": "Erstellen",
+      "create-and-add-another": "Erstellen und weiteres hinzufügen"
+    },
+    "update-permission-dialog": {
+      "update": "Aktualisieren"
+    },
     "message": {
       "could-not-add-permission": "Autorisierung konnte nicht hinzugefügt werden",
-      "permission-added-notification-sent": "Autorisierung hinzugefügt und Benachrichtigung abgesendet"
+      "could-not-share-external": "Freigabe für externen Benutzer fehlgeschlagen",
+      "could-not-update-permission": "Autorisierung konnte nicht aktualisiert werden",
+      "permission-added-notification-sent": "Autorisierung hinzugefügt und Benachrichtigung abgesendet",
+      "permission-updated-notification-sent": "Autorisierung aktualisiert und Benachrichtigung abgesendet"
     }
   },
   "permissions": {
@@ -1726,11 +1738,34 @@
       "Remove": "Entfernen",
       "Write": "Schreiben"
     },
+    "share-external-dialog": {
+      "cancel": "Abbrechen",
+      "email": "E-Mail",
+      "from": "Von",
+      "hi-could-you-comment-on-this": "Hallo, könnten Sie dieses Dokument kommentieren und...",
+      "notification-email": "Benachrichtigungs-E-Mail",
+      "right": "Rechts",
+      "share-with-external-user": "Für externen Benutzer freigeben",
+      "to": "Bis"
+    },
     "time-frame": {
       "from": "Von {{ begin }}",
       "permanent": "Dauerhaft",
       "range": "{{ begin }} - {{ end }}",
       "until": "Bis {{ end }}"
+    },
+    "update-permission-dialog": {
+      "cancel": "Abbrechen",
+      "date-based": "Datumsbasiert",
+      "from": "Von",
+      "hi-could-you-comment-on-this": "Hallo, könnten Sie dieses Dokument kommentieren und...",
+      "notification-email": "Benachrichtigungs-E-Mail",
+      "permanent": "Dauerhaft",
+      "right": "Rechts",
+      "send-an-email-to-notify-user": "E-Mail zur Benachrichtigung des Benutzers absenden",
+      "time-frame": "Zeitraum",
+      "to": "Bis",
+      "update-permission": "Autorisierung aktualisieren"
     },
     "notification": {
       "ace-not-found-add": "Die Autorisierung wurde hinzugefügt, aber die Benachrichtigungs-E-Mail konnte nicht abgesendet werden, da der neue Autorisierungseintrag nicht gefunden wurde. Aktualisieren Sie die Seite und versuchen Sie, die E-Mail auf der Registerkarte „Berechtigungen“ erneut abzusenden.",

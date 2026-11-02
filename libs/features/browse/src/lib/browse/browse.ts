@@ -24,6 +24,7 @@ import {
   NxsUpdatePermissionDialogComponent,
   NxsUploadQueue,
   NxsUploadQueueComponent,
+  nxsAceTimeFrame,
   nxsErrorStatus,
   provideNxsThumbnailCache,
   type NxsBreadcrumbItem,
@@ -132,7 +133,6 @@ import {
   postTrashBrowseRouterUrl,
   isCollectionDocument,
   formatRelativeTime,
-  formatAceDateRange,
   permissionRightLabel,
   DocTypeLabelPipe,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -368,11 +368,22 @@ export class BrowseComponent {
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadPermissions();
+  /**
+   * The document's own pending and effective external shares, as document detail and collections
+   * list them. An inherited share is the parent's to edit, and an archived one has expired.
+   */
   readonly externalAces = computed<NuxeoAce[]>(() => {
-    const doc = this.currentDoc();
-    const acls = doc?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
+    const acls = this.currentDoc()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
     if (!acls) return [];
-    return acls.flatMap((a) => a.aces).filter((ace) => ace.externalUser && ace.granted);
+    return acls
+      .filter((acl) => acl.name !== 'inherited')
+      .flatMap((acl) => acl.aces)
+      .filter(
+        (ace) =>
+          ace.externalUser &&
+          ace.granted &&
+          (ace.status === 'pending' || ace.status === 'effective'),
+      );
   });
   readonly canWriteCurrentDoc = computed(() => canWriteDocument(this.currentDoc()));
   readonly canCreateContentHere = computed(() => {
@@ -405,10 +416,16 @@ export class BrowseComponent {
   readonly canManageCurrentPermissions = computed(() =>
     canManageDocumentPermissions(this.currentDoc()),
   );
-  /** The type's `userVisiblePermissions`, the rights the external-share dialogs offer. */
-  private readonly visiblePermissions = computed(
-    () => this.currentDoc()?.contextParameters?.['userVisiblePermissions'] as string[] | undefined,
-  );
+  /**
+   * The type's `userVisiblePermissions` from the permissions read, the rights the external-share
+   * dialogs offer. Held apart from `currentDoc`, which every listing refresh replaces with a read
+   * that does not ask for them.
+   */
+  private readonly typeRights = signal<{ uid: string; permissions: string[] } | null>(null);
+  private readonly visiblePermissions = computed(() => {
+    const rights = this.typeRights();
+    return rights && rights.uid === this.currentDoc()?.uid ? rights.permissions : undefined;
+  });
   readonly actionInProgress = signal<string | null>(null);
 
   // History tab
@@ -2540,13 +2557,9 @@ export class BrowseComponent {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
 
+  /** The calendar days the share's writer picked, as the update dialog reads them. */
   aceTimeFrame(ace: NuxeoAce): string {
-    return formatAceDateRange(
-      ace.begin,
-      ace.end,
-      (key, params) => this.translate.instant(key, params),
-      this.locale,
-    );
+    return nxsAceTimeFrame(ace, (key, params) => this.translate.instant(key, params), this.locale);
   }
 
   displayUsername(ace: NuxeoAce): string {
@@ -2563,17 +2576,25 @@ export class BrowseComponent {
     if (!doc || this.permissionsLoading()) return;
     if (this.permissionsLoaded() && !force) return;
 
+    const requestedFor = doc.uid;
+    const requestedPath = this.currentNuxeoPath;
+    // Navigating away resets the tab at once, while `currentDoc` keeps the old folder until the
+    // new listing arrives, so an answer is the previous folder's if either has moved on.
+    const superseded = () =>
+      this.currentNuxeoPath !== requestedPath || this.currentDoc()?.uid !== requestedFor;
     this.permissionsLoading.set(true);
     this.detailService
-      .getDocumentPermissions(doc.uid)
+      .getDocumentPermissions(requestedFor)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (updated) => {
+          if (superseded()) return;
           this.applyPermissionsDoc(updated);
           this.permissionsLoaded.set(true);
           this.permissionsLoading.set(false);
         },
         error: () => {
+          if (superseded()) return;
           this.permissionsLoading.set(false);
           this.toast.error(this.translate.instant('browse.message.failed-to-load-permissions'));
         },
@@ -2581,6 +2602,10 @@ export class BrowseComponent {
   }
 
   private applyPermissionsDoc(updated: NuxeoDocument): void {
+    const visible = updated.contextParameters?.['userVisiblePermissions'];
+    this.typeRights.set(
+      Array.isArray(visible) ? { uid: updated.uid, permissions: visible as string[] } : null,
+    );
     const existing = this.currentDoc();
     if (!existing) {
       this.currentDoc.set(updated);

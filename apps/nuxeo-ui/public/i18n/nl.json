@@ -855,12 +855,14 @@
       "open-a-folder-to-create-or-import": "Open een map om content te maken of te importeren.",
       "permission-added": "Recht toegevoegd",
       "permission-deleted": "Recht verwijderd",
+      "permission-updated": "Recht bijgewerkt",
       "please-select-a-csv-file": "Selecteer een .csv-bestand.",
       "please-wait-for-the-file-upload-to": "Wacht tot het uploaden van het bestand is voltooid.",
       "remove-all-collections-from-this-folder-before": "Verwijder alle collecties uit deze map voordat u deze verwijdert.",
       "restricted-import-location": "Selecteer een andere container om uw content te maken.",
       "search-failed": "Zoeken mislukt",
       "selected-path-is-not-a-folder-choose": "Het geselecteerde pad is geen map. Kies een map of ga één niveau omhoog.",
+      "shared-with-external-user": "Gedeeld met externe gebruiker",
       "starting-csv-export": "CSV-export wordt gestart...",
       "subscribed-to-notifications": "Geabonneerd op meldingen",
       "unsubscribed": "Uitgeschreven",
@@ -1686,9 +1688,19 @@
     "delete-permission-dialog": {
       "delete": "Verwijderen"
     },
+    "share-external-dialog": {
+      "create": "Maken",
+      "create-and-add-another": "Maken en nog een toevoegen"
+    },
+    "update-permission-dialog": {
+      "update": "Bijwerken"
+    },
     "message": {
       "could-not-add-permission": "Kan rechten niet toevoegen",
-      "permission-added-notification-sent": "Rechten toegevoegd en melding verzonden"
+      "could-not-share-external": "Kan niet delen met externe gebruiker",
+      "could-not-update-permission": "Kan rechten niet bijwerken",
+      "permission-added-notification-sent": "Rechten toegevoegd en melding verzonden",
+      "permission-updated-notification-sent": "Rechten bijgewerkt en melding verzonden"
     }
   },
   "permissions": {
@@ -1726,11 +1738,34 @@
       "Remove": "Verwijderen",
       "Write": "Schrijven"
     },
+    "share-external-dialog": {
+      "cancel": "Annuleren",
+      "email": "E-mail",
+      "from": "Van",
+      "hi-could-you-comment-on-this": "Hallo, kunt u reageren op dit document en...",
+      "notification-email": "Meldings-e-mail",
+      "right": "Recht",
+      "share-with-external-user": "Delen met externe gebruiker",
+      "to": "Met"
+    },
     "time-frame": {
       "from": "Vanaf {{ begin }}",
       "permanent": "Permanent",
       "range": "{{ begin }} - {{ end }}",
       "until": "Tot {{ end }}"
+    },
+    "update-permission-dialog": {
+      "cancel": "Annuleren",
+      "date-based": "Op basis van datum",
+      "from": "Van",
+      "hi-could-you-comment-on-this": "Hallo, kunt u reageren op dit document en...",
+      "notification-email": "Meldings-e-mail",
+      "permanent": "Permanent",
+      "right": "Recht",
+      "send-an-email-to-notify-user": "E-mail verzenden om gebruiker op de hoogte te stellen",
+      "time-frame": "Tijdsbestek",
+      "to": "Met",
+      "update-permission": "Recht bijwerken"
     },
     "notification": {
       "ace-not-found-add": "De rechten zijn toegevoegd, maar de e-mailmelding kan niet worden verzonden omdat de nieuwe rechtenvermelding niet kan worden gevonden. Vernieuw de pagina en probeer opnieuw te verzenden vanaf het tabblad Rechten.",

@@ -855,12 +855,14 @@
       "open-a-folder-to-create-or-import": "コンテンツを作成またはインポートするには、フォルダを開いてください。",
       "permission-added": "権限を追加しました",
       "permission-deleted": "権限を削除しました",
+      "permission-updated": "権限を更新しました",
       "please-select-a-csv-file": ".csv ファイルを選択してください。",
       "please-wait-for-the-file-upload-to": "ファイルのアップロードが完了するまでお待ちください。",
       "remove-all-collections-from-this-folder-before": "このフォルダを削除する前に、すべてのコレクションを削除してください。",
       "restricted-import-location": "コンテンツを作成する別のコンテナを選択してください。",
       "search-failed": "検索に失敗しました",
       "selected-path-is-not-a-folder-choose": "選択したパスはフォルダではありません。フォルダを選択するか、1 つ上の階層に移動してください。",
+      "shared-with-external-user": "外部ユーザーと共有しました",
       "starting-csv-export": "CSV のエクスポートを開始しています...",
       "subscribed-to-notifications": "通知を購読しました",
       "unsubscribed": "購読を解除しました",
@@ -1686,9 +1688,19 @@
     "delete-permission-dialog": {
       "delete": "削除"
     },
+    "share-external-dialog": {
+      "create": "作成",
+      "create-and-add-another": "作成してさらに追加"
+    },
+    "update-permission-dialog": {
+      "update": "更新"
+    },
     "message": {
       "could-not-add-permission": "権限を追加できませんでした",
-      "permission-added-notification-sent": "権限を追加し、通知を送信しました"
+      "could-not-share-external": "外部ユーザーと共有できませんでした",
+      "could-not-update-permission": "権限を更新できませんでした",
+      "permission-added-notification-sent": "権限を追加し、通知を送信しました",
+      "permission-updated-notification-sent": "権限を更新し、通知を送信しました"
     }
   },
   "permissions": {
@@ -1726,11 +1738,34 @@
       "Remove": "削除",
       "Write": "書き込み"
     },
+    "share-external-dialog": {
+      "cancel": "キャンセル",
+      "email": "E メール",
+      "from": "開始",
+      "hi-could-you-comment-on-this": "こんにちは。この文書にコメントして...",
+      "notification-email": "通知 E メール",
+      "right": "アクセス権",
+      "share-with-external-user": "外部ユーザーと共有",
+      "to": "から"
+    },
     "time-frame": {
       "from": "{{ begin }} から",
       "permanent": "無期限",
       "range": "{{ begin }} ～ {{ end }}",
       "until": "{{ end }} まで"
+    },
+    "update-permission-dialog": {
+      "cancel": "キャンセル",
+      "date-based": "日付ベース",
+      "from": "開始",
+      "hi-could-you-comment-on-this": "こんにちは。この文書にコメントして...",
+      "notification-email": "通知 E メール",
+      "permanent": "無期限",
+      "right": "アクセス権",
+      "send-an-email-to-notify-user": "ユーザーに通知する E メールを送信",
+      "time-frame": "期間",
+      "to": "から",
+      "update-permission": "権限の更新"
     },
     "notification": {
       "ace-not-found-add": "権限は追加されましたが、新しい権限エントリが見つからなかったため、通知 E メールを送信できませんでした。ページを更新し、[権限] タブから再送信してください。",

@@ -825,19 +825,15 @@ describe('BrowseComponent', () => {
       granted: true,
       creator: 'Administrator',
       begin: '2026-07-01T00:00:00.000Z',
-      end: '2026-12-31T23:59:59.000Z',
+      end: '2026-12-31T00:00:00.000Z',
       status: 'effective',
     };
 
-    expect(component.aceTimeFrame(ace)).not.toBe('Permanent');
     // Both dates present resolves `permissions.time-frame.range`, which separates them rather
-    // than joining them with English connectives.
-    //
-    // The years are pinned to 2026 deliberately. An earlier version left them open, reasoning that
-    // `23:59:59Z` lands in the next year east of UTC -- true before `formatAceDateRange` formatted
-    // in UTC, and false after. Leaving them open would let the UTC round-trip regress without this
-    // test noticing, which is the whole thing that guard exists to prevent.
-    expect(component.aceTimeFrame(ace)).toMatch(/^\w{3} \d{2}, 2026 - \w{3} \d{2}, 2026$/);
+    // than joining them with English connectives. The days are the ones a day-only write names —
+    // Nuxeo anchors those at the server's midnight, which the suite's UTC+5:30 reads as 05:30 —
+    // and the ones the update dialog edits, not the local dates of the instants.
+    expect(component.aceTimeFrame(ace)).toBe('Jul 01, 2026 - Dec 31, 2026');
   });
 
   it('canManageCurrentPermissions is false for read-only users (NXSAT-162)', () => {

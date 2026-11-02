@@ -284,10 +284,19 @@ describe('BrowseComponent — permissions tab', () => {
   // not ReadCanCollect.
   const SECTION_RIGHTS = ['Read', 'ReadWrite', 'Everything', 'CanAskForPublishing'];
 
-  it("shareWithExternal opens the nxs dialog with the type's userVisiblePermissions", () => {
-    component.currentDoc.set(
-      doc({ uid: 'ws-1', contextParameters: { userVisiblePermissions: SECTION_RIGHTS } }),
+  /** Opens the Permissions tab on `ws-1`, whose permissions read reports `rights`. */
+  function openPermissionsWith(rights?: string[]): void {
+    component.currentDoc.set(doc({ uid: 'ws-1' }));
+    const context: Record<string, unknown> = { acls: [], permissions: ['Everything'] };
+    if (rights) context['userVisiblePermissions'] = rights;
+    detail.getDocumentPermissions.mockReturnValue(
+      of(doc({ uid: 'ws-1', contextParameters: context })),
     );
+    component.onTabChange(1);
+  }
+
+  it("shareWithExternal opens the nxs dialog with the type's userVisiblePermissions", () => {
+    openPermissionsWith(SECTION_RIGHTS);
 
     component.shareWithExternal();
 
@@ -298,9 +307,7 @@ describe('BrowseComponent — permissions tab', () => {
   });
 
   it("editExternalPermission opens the nxs dialog with the type's userVisiblePermissions", () => {
-    component.currentDoc.set(
-      doc({ uid: 'ws-1', contextParameters: { userVisiblePermissions: SECTION_RIGHTS } }),
-    );
+    openPermissionsWith(SECTION_RIGHTS);
     const share = ace({ id: 'x-1', externalUser: true });
 
     component.editExternalPermission(share);
@@ -311,14 +318,105 @@ describe('BrowseComponent — permissions tab', () => {
     });
   });
 
-  it('hands both dialogs no list when the document was read without the enricher', () => {
-    component.currentDoc.set(doc({ uid: 'ws-1', contextParameters: {} }));
+  it('hands both dialogs no list when the permissions read did not report one', () => {
+    openPermissionsWith(undefined);
 
     component.shareWithExternal();
     component.editExternalPermission(ace({ id: 'x-1', externalUser: true }));
 
     expect(dialogData<{ permissions?: unknown }>(0).permissions).toBeUndefined();
     expect(dialogData<{ permissions?: unknown }>(1).permissions).toBeUndefined();
+  });
+
+  it("keeps the type's rights when a listing refresh replaces the folder with a read that lacks them", () => {
+    openPermissionsWith(SECTION_RIGHTS);
+    // What sorting or paging the same folder does: `getByPath` asks for acls, not the rights.
+    component.currentDoc.set(withAcls([{ name: 'local', aces: [] }]));
+
+    component.shareWithExternal();
+
+    expect(dialogData<{ permissions?: unknown }>().permissions).toEqual(SECTION_RIGHTS);
+  });
+
+  it("does not offer one folder's rights on another", () => {
+    openPermissionsWith(SECTION_RIGHTS);
+    component.currentDoc.set(doc({ uid: 'ws-2' }));
+
+    component.shareWithExternal();
+
+    expect(dialogData<{ documentUid: string; permissions?: unknown }>()).toEqual({
+      documentUid: 'ws-2',
+      permissions: undefined,
+    });
+  });
+
+  it("ignores the previous folder's permissions answer once the folder has changed", () => {
+    component.currentDoc.set(doc({ uid: 'ws-1' }));
+    const answer = new Subject<NuxeoDocument>();
+    detail.getDocumentPermissions.mockReturnValue(answer);
+    component.onTabChange(1);
+    component.currentDoc.set(doc({ uid: 'ws-2' }));
+
+    answer.next(
+      doc({
+        uid: 'ws-1',
+        contextParameters: {
+          acls: [{ name: 'local', aces: [ace({ id: 'a-1', externalUser: true })] }],
+        },
+      }),
+    );
+
+    expect(component.externalAces()).toEqual([]);
+    expect(component.permissionsLoaded()).toBe(false);
+  });
+
+  describe('an answer that lands after navigation, before the new folder has loaded', () => {
+    // Navigation moves the path at once; `currentDoc` still holds ws-1 until the listing arrives.
+    function navigateAwayWhileLoading(): Subject<NuxeoDocument> {
+      component.currentDoc.set(doc({ uid: 'ws-1' }));
+      const answer = new Subject<NuxeoDocument>();
+      detail.getDocumentPermissions.mockReturnValue(answer);
+      component.onTabChange(1);
+      component['currentNuxeoPath'] = '/default-domain/workspaces/other';
+      return answer;
+    }
+
+    it('is not applied, so the next folder still loads its own', () => {
+      navigateAwayWhileLoading().next(withAcls([{ name: 'local', aces: [] }]));
+
+      expect(component.permissionsLoaded()).toBe(false);
+    });
+
+    it('reports no failure for the folder the user has left', () => {
+      navigateAwayWhileLoading().error({ status: 500 });
+
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
+  it('lists only the document’s own pending and effective external shares', () => {
+    component.currentDoc.set(
+      withAcls([
+        {
+          name: 'local',
+          aces: [
+            ace({ id: 'own', externalUser: true, status: 'effective' }),
+            ace({ id: 'pending', externalUser: true, status: 'pending' }),
+            ace({ id: 'expired', externalUser: true, status: 'archived' }),
+          ],
+        },
+        { name: 'inherited', aces: [ace({ id: 'parent', externalUser: true })] },
+      ]),
+    );
+
+    expect(component.externalAces().map((a) => a.id)).toEqual(['own', 'pending']);
+  });
+
+  it('shows a share’s end as the day its writer picked, as the update dialog reads it', () => {
+    // Midnight on 15 July in UTC+12, which the suite's zone (UTC+5:30) reads as 14 July locally.
+    const share = ace({ id: 'x-1', externalUser: true, end: '2030-07-14T12:00:00.000Z' });
+
+    expect(component.aceTimeFrame(share)).toBe('Until Jul 15, 2030');
   });
 
   it('shareWithExternal reloads the ACLs only when a share was created', () => {

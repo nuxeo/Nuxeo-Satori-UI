@@ -877,6 +877,7 @@
       "open-a-folder-to-create-or-import": "Open a folder to create or import content.",
       "permission-added": "Permission added",
       "permission-deleted": "Permission deleted",
+      "permission-updated": "Permission updated",
       "please-select-a-csv-file": "Please select a .csv file.",
       "please-wait-for-the-file-upload-to": "Please wait for the file upload to finish.",
       "remove-all-collections-from-this-folder-before": "Remove all collections from this folder before deleting it.",
@@ -884,6 +885,7 @@
       "restricted-import-location": "Select a different container to create your content.",
       "search-failed": "Search failed",
       "selected-path-is-not-a-folder-choose": "Selected path is not a folder. Choose a folder or go up one level.",
+      "shared-with-external-user": "Shared with external user",
       "starting-csv-export": "Starting CSV export...",
       "subscribed-to-notifications": "Subscribed to notifications",
       "unsubscribed": "Unsubscribed",
@@ -1730,9 +1732,19 @@
     "delete-permission-dialog": {
       "delete": "Delete"
     },
+    "share-external-dialog": {
+      "create": "Create",
+      "create-and-add-another": "Create And Add Another"
+    },
+    "update-permission-dialog": {
+      "update": "Update"
+    },
     "message": {
       "could-not-add-permission": "Could not add permission",
-      "permission-added-notification-sent": "Permission added and notification sent"
+      "could-not-share-external": "Could not share with external user",
+      "could-not-update-permission": "Could not update permission",
+      "permission-added-notification-sent": "Permission added and notification sent",
+      "permission-updated-notification-sent": "Permission updated and notification sent"
     }
   },
   "permissions": {
@@ -1788,11 +1800,34 @@
       "ManageLegalHold": "Manage legal hold",
       "ManageRecord": "Manage record"
     },
+    "share-external-dialog": {
+      "cancel": "Cancel",
+      "email": "Email",
+      "from": "From",
+      "hi-could-you-comment-on-this": "Hi! Could you comment on this document and...",
+      "notification-email": "Notification email",
+      "right": "Right",
+      "share-with-external-user": "Share With External User",
+      "to": "To"
+    },
     "time-frame": {
       "from": "From {{ begin }}",
       "permanent": "Permanent",
       "range": "{{ begin }} - {{ end }}",
       "until": "Until {{ end }}"
+    },
+    "update-permission-dialog": {
+      "cancel": "Cancel",
+      "date-based": "Date-based",
+      "from": "From",
+      "hi-could-you-comment-on-this": "Hi! Could you comment on this document and...",
+      "notification-email": "Notification email",
+      "permanent": "Permanent",
+      "right": "Right",
+      "send-an-email-to-notify-user": "Send an email to notify user",
+      "time-frame": "Time Frame",
+      "to": "To",
+      "update-permission": "Update Permission"
     },
     "notification": {
       "ace-not-found-add": "Permission was added, but the notification email could not be sent because the new permission entry could not be located. Refresh the page and try resending from the Permissions tab.",
