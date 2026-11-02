@@ -205,8 +205,31 @@ later fragment's `presetSwitching` wins, so a customer package can switch it off
 is up to 64 letters, digits, `.`, `_` and `-`, starting with a letter or digit; a preset whose
 name breaks that rule is skipped, and an unknown name is reported and forgotten.
 
-Presets are package content, served anonymously like every fragment. Switching chooses among them
-for one browser; it grants nothing and changes nothing on the server.
+Two worked prospects already ship, in `config-packages/presales-demo`, so this needs no new
+package to try:
+
+```
+https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance
+https://<server>/nuxeo/agentic-ui/?preset=logistics    # Globex Logistics
+https://<server>/nuxeo/agentic-ui/?preset=             # clear it
+```
+
+A preset carries a whole `bootstrap` and `manifest` patch, so it reaches everything either layer
+can: application title, document title, logo, favicon, the entire theme token map,
+`defaultThemeId`, languages, and every Layer 1 capability.
+
+**Presets are package content, and that is what keeps this consistent with
+configuration-as-code.** The two halves are separate and only one of them is runtime: a preset's
+_content_ is a JSON fragment in a reviewed, versioned, built-from-source Marketplace package,
+reaching the server by the same install path as every other fragment, while the _selection_ is per
+browser, held in `localStorage`, invisible to everyone else, and backed by no server-side state.
+Switching chooses among them for one browser; it grants nothing and changes nothing on the server.
+
+**Adding a new prospect still costs a rebuild today.** Because presets are package content, a
+prospect you met this morning means editing `bootstrap.json`, raising the version, rebuilding,
+reinstalling and restarting — two to four minutes. The development override directory removes
+that: with `nuxeo.agentic.ui.config.dev=true` a new preset is one file copy and a reload. See
+"The fast loop while you are tuning a value" in `config-packages/presales-demo/README.md`.
 
 ### Feature toggles
 

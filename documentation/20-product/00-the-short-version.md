@@ -94,6 +94,7 @@ files.
 | Change the product name and the browser-tab title                                                                              | settings fragment, `branding`                                    | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                                                    |
 | Change the colours, or add your own colour theme and make it the default                                                       | settings fragment, `themes`, `defaultThemeId`                    | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                                                    |
 | Put your logo in the header and on the sign-in page                                                                            | settings fragment, `branding.logo`                               | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                                                    |
+| Put your own icon in the browser tab                                                                                           | settings fragment, `branding.favicon`                            | [The extensibility contract, `branding.favicon`](../30-engineering/07-extensibility-contract.md#brandingfavicon)                       |
 | Choose the default language                                                                                                    | settings fragment, `defaultLanguage`                             | [Our default settings](../../nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json)                          |
 | Change on-screen wording — the same text in every language                                                                     | manifest fragment, `labels`                                      | [Runbook, beat 4](../../docs/beta-demo-runbook.md#beat-4--relabel-the-product-2-min)                                                   |
 | Hide, reorder or rename a menu entry, toolbar button, tab, list column or bulk action                                          | manifest fragment, `extensions.overrides`                        | [Extension reference, overrides](../../docs/extension-reference.md#per-id-overrides)                                                   |
@@ -102,11 +103,37 @@ files.
 | Choose which list columns are offered, and which start switched on                                                             | manifest fragment, `extensions.slots`                            | [Runbook, beat 6](../../docs/beta-demo-runbook.md#beat-6--columns-3-min)                                                               |
 | Show a tab or toolbar action only on some document types, or only on documents with a facet                                    | manifest fragment, `app.rules.isType` or `app.rules.hasFacet`    | [Extension reference, document rules](../../docs/extension-reference.md#document-rules)                                                |
 | Choose which of a document type's own fields the Properties panel shows, in which order (read-only)                            | a layout file in the package, named by a `<layout>` contribution | [Extension reference, per-type layouts](../../docs/extension-reference.md#9b-per-type-layouts--which-properties-a-document-type-shows) |
-| Keep several demo configurations on one server and switch between them per browser                                             | settings fragment, `presales`                                    | [Extension reference, presales presets](../../docs/extension-reference.md#presales-presets)                                            |
+| Show one demo server to several prospects, each branded for them, from a link                                                  | settings fragment, `presales`                                    | [Extension reference, presales presets](../../docs/extension-reference.md#presales-presets)                                            |
 
 The conditions are a fixed list that ships with the product; adding your own is code. Every name
 that configuration can address is listed in the
 [extension reference](../../docs/extension-reference.md).
+
+### Showing one demo server to two prospects
+
+The last row is the one people most often assume needs a fork, so it is worth spelling out. A demo
+package can carry named presets, and a link chooses one for that browser:
+
+```
+https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance
+https://<server>/nuxeo/agentic-ui/?preset=logistics    # Globex Logistics
+https://<server>/nuxeo/agentic-ui/?preset=             # clear it
+```
+
+Those two prospects are real and already in the repository, in `config-packages/presales-demo`. A
+preset replaces the product name, the tab title, the logo, the tab icon, the whole colour palette
+and any wording, and a badge in the header says which one is in force. Nothing changes on the
+server and nothing changes for anyone else.
+
+It is **inert unless a package sets `presales.presetSwitching: true`**, so a customer's production
+server ignores `?preset=` entirely and says in the console that it did.
+
+This is not a way around configuration-as-code. The preset's _content_ is versioned package
+content like every other fragment; only the _selection_ is runtime, per browser, with no
+server-side state. What does still cost a package rebuild and a restart today is adding a
+**new** prospect — around two to four minutes — and the development override directory removes
+that for a demo server: see "The fast loop while you are tuning a value" in
+`config-packages/presales-demo/README.md`.
 
 For example, this manifest fragment hides Trash, renames Collections to "Repository", and
 shows Administration to administrators only:
