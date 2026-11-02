@@ -365,6 +365,12 @@ export class BrowseComponent {
   // Permissions tab
   readonly permissionsLoaded = signal(false);
   readonly permissionsLoading = signal(false);
+  /**
+   * Bumped by every permissions read and by every change of folder, so an answer is applied only
+   * by the read that is still current. Comparing paths or uids cannot tell a first visit to a
+   * folder from a return to it.
+   */
+  private permissionsRequest = 0;
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadPermissions();
@@ -1063,8 +1069,12 @@ export class BrowseComponent {
           void this.router.navigateByUrl(`/browse${redirectTo}`, { replaceUrl: true });
           return;
         }
+        // A Permissions tab opened before this listing arrived read the folder the user had left.
+        const folderChanged = this.currentDoc()?.uid !== folder.uid;
+        if (folderChanged) this.invalidatePermissions();
         this.currentDoc.set(folder);
         this.openedPath = payload.nuxeoPath;
+        if (folderChanged && this.activeTabIndex() === 1) this.loadPermissions();
         this.unopenedPath.set(null);
         this.browseContext.setFromNuxeoPath(folder.path);
         this.entries.set(entries);
@@ -1218,8 +1228,7 @@ export class BrowseComponent {
   private resetBrowseTabState(): void {
     this.historyLoaded = false;
     this.trashLoaded = false;
-    this.permissionsLoaded.set(false);
-    this.permissionsLoading.set(false);
+    this.invalidatePermissions();
     this.activeTabIndex.set(0);
     this.pendingPasteEntries.clear();
     this.syncPendingPasteList();
@@ -2576,25 +2585,20 @@ export class BrowseComponent {
     if (!doc || this.permissionsLoading()) return;
     if (this.permissionsLoaded() && !force) return;
 
-    const requestedFor = doc.uid;
-    const requestedPath = this.currentNuxeoPath;
-    // Navigating away resets the tab at once, while `currentDoc` keeps the old folder until the
-    // new listing arrives, so an answer is the previous folder's if either has moved on.
-    const superseded = () =>
-      this.currentNuxeoPath !== requestedPath || this.currentDoc()?.uid !== requestedFor;
+    const request = ++this.permissionsRequest;
     this.permissionsLoading.set(true);
     this.detailService
-      .getDocumentPermissions(requestedFor)
+      .getDocumentPermissions(doc.uid)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (updated) => {
-          if (superseded()) return;
+          if (request !== this.permissionsRequest) return;
           this.applyPermissionsDoc(updated);
           this.permissionsLoaded.set(true);
           this.permissionsLoading.set(false);
         },
         error: () => {
-          if (superseded()) return;
+          if (request !== this.permissionsRequest) return;
           this.permissionsLoading.set(false);
           this.toast.error(this.translate.instant('browse.message.failed-to-load-permissions'));
         },
@@ -2616,6 +2620,13 @@ export class BrowseComponent {
 
   private reloadPermissions(): void {
     this.loadPermissions(true);
+  }
+
+  /** Forgets this tab's permissions read, and discards any answer still on its way. */
+  private invalidatePermissions(): void {
+    this.permissionsRequest++;
+    this.permissionsLoaded.set(false);
+    this.permissionsLoading.set(false);
   }
 
   deletePermission(ace: NuxeoAce): void {

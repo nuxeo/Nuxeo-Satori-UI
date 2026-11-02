@@ -350,47 +350,88 @@ describe('BrowseComponent — permissions tab', () => {
     });
   });
 
-  it("ignores the previous folder's permissions answer once the folder has changed", () => {
-    component.currentDoc.set(doc({ uid: 'ws-1' }));
-    const answer = new Subject<NuxeoDocument>();
-    detail.getDocumentPermissions.mockReturnValue(answer);
-    component.onTabChange(1);
-    component.currentDoc.set(doc({ uid: 'ws-2' }));
-
-    answer.next(
+  describe('a permissions answer for a folder the user has moved on from', () => {
+    const sharedWith = (uid: string, id: string): NuxeoDocument =>
       doc({
-        uid: 'ws-1',
+        uid,
         contextParameters: {
-          acls: [{ name: 'local', aces: [ace({ id: 'a-1', externalUser: true })] }],
+          acls: [{ name: 'local', aces: [ace({ id, externalUser: true })] }],
+          permissions: ['Everything'],
+          userVisiblePermissions: SECTION_RIGHTS,
         },
-      }),
-    );
-
-    expect(component.externalAces()).toEqual([]);
-    expect(component.permissionsLoaded()).toBe(false);
-  });
-
-  describe('an answer that lands after navigation, before the new folder has loaded', () => {
-    // Navigation moves the path at once; `currentDoc` still holds ws-1 until the listing arrives.
-    function navigateAwayWhileLoading(): Subject<NuxeoDocument> {
-      component.currentDoc.set(doc({ uid: 'ws-1' }));
+      });
+    /** What the router does on a new browse URL: the tab resets before the listing arrives. */
+    const navigate = () => component['resetBrowseTabState']();
+    /** The new folder's listing arriving, as `getBrowseFolderContents` answers it. */
+    function listingArrives(uid: string): void {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder: doc({ uid }), entries: [], totalSize: 0 }),
+      );
+      component.loadContent();
+    }
+    function openTabOn(uid: string): Subject<NuxeoDocument> {
+      component.currentDoc.set(doc({ uid }));
       const answer = new Subject<NuxeoDocument>();
-      detail.getDocumentPermissions.mockReturnValue(answer);
+      detail.getDocumentPermissions.mockReturnValueOnce(answer);
       component.onTabChange(1);
-      component['currentNuxeoPath'] = '/default-domain/workspaces/other';
       return answer;
     }
 
-    it('is not applied, so the next folder still loads its own', () => {
-      navigateAwayWhileLoading().next(withAcls([{ name: 'local', aces: [] }]));
+    it('is not applied after navigation, so the next folder still loads its own', () => {
+      const stale = openTabOn('ws-1');
+      navigate();
+
+      stale.next(sharedWith('ws-1', 'stale'));
 
       expect(component.permissionsLoaded()).toBe(false);
+      expect(component.externalAces()).toEqual([]);
     });
 
     it('reports no failure for the folder the user has left', () => {
-      navigateAwayWhileLoading().error({ status: 500 });
+      const stale = openTabOn('ws-1');
+      navigate();
+
+      stale.error({ status: 500 });
 
       expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('cannot overwrite a newer read of the same folder after a return to it', () => {
+      const first = openTabOn('ws-1');
+      navigate(); // to another folder…
+      navigate(); // …and back
+      detail.getDocumentPermissions.mockReturnValueOnce(of(sharedWith('ws-1', 'fresh')));
+      component.onTabChange(1);
+
+      first.next(sharedWith('ws-1', 'stale'));
+
+      expect(component.externalAces().map((a) => a.id)).toEqual(['fresh']);
+    });
+
+    it('is discarded when the new listing lands first, and the new folder is read instead', () => {
+      navigate();
+      // The tab opened before the listing arrived, so `currentDoc` is still the old folder.
+      const stale = openTabOn('ws-1');
+      detail.getDocumentPermissions.mockReturnValue(of(sharedWith('ws-2', 'own')));
+
+      listingArrives('ws-2');
+      stale.next(sharedWith('ws-1', 'stale'));
+
+      expect(detail.getDocumentPermissions).toHaveBeenLastCalledWith('ws-2');
+      expect(component.permissionsLoading()).toBe(false);
+      expect(component.externalAces().map((a) => a.id)).toEqual(['own']);
+    });
+
+    it('does not stand in for the new folder when it lands before the new listing', () => {
+      navigate();
+      const early = openTabOn('ws-1');
+      early.next(sharedWith('ws-1', 'old'));
+      detail.getDocumentPermissions.mockReturnValue(of(sharedWith('ws-2', 'own')));
+
+      listingArrives('ws-2');
+
+      expect(detail.getDocumentPermissions).toHaveBeenLastCalledWith('ws-2');
+      expect(component.externalAces().map((a) => a.id)).toEqual(['own']);
     });
   });
 
