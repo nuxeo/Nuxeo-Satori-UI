@@ -1342,8 +1342,9 @@ modes:
   properties the user changed.
 - **`create`** — the same form for a new document of the type, in the Create tab of the Create /
   Import dialog once a type is chosen — opened from Browse and from the dashboard's Add Content.
-  It opens empty; a field left empty takes the type's server default (`@emptyWithDefault`) when
-  the document is created. The dialog keeps what is not a property field: the location, the main file of
+  It opens empty, and Create sends only the fields the user filled in, as an edit sends only what
+  changed: every field left untouched — an unticked checkbox included — takes the type's server
+  default (`@emptyWithDefault`) when the document is created. The dialog keeps what is not a property field: the location, the main file of
   a File, Picture, Audio or Video, and a Note's format. The import wizard's properties step is not
   this form.
 
@@ -1543,11 +1544,12 @@ Nuxeo's message on its field. The differences:
 - **Nuxeo 2025's own refusal.** This server answers a constraint violation with HTTP 422 and an
   `exception` naming the property, which Web UI reports as a generic failure; here its message goes
   on the field it names, as for a `validation_report`.
-- **Server defaults.** Web UI's form opens on the type's `@emptyWithDefault` values, and a default
-  the user clears is saved cleared. Here the form opens empty, and a field left empty takes its
-  server default when the document is created — so a default cannot be cleared at creation, only
-  by editing afterwards. Honouring a clear would need `DocumentImportService` to send explicit
-  nulls, which its published create methods deliberately do not.
+- **Server defaults.** Web UI's form opens on the type's `@emptyWithDefault` values and saves what
+  it shows, a cleared default included. Here the form opens empty and sends only what the user
+  filled in, so an untouched field takes its server default without showing it, and a default
+  cannot be cleared at creation, only by editing afterwards. Showing the defaults would need the
+  create to honour a cleared one, which needs `DocumentImportService` to send explicit nulls — its
+  published create methods drop empty values on purpose.
 - **Dates.** A picked day is written at UTC midnight, where Web UI writes local midnight — see
   "A `date` field edits a calendar day" above.
 
