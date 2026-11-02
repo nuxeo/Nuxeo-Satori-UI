@@ -299,6 +299,24 @@ describe('NxsUpdatePermissionDialogComponent', () => {
       expect(update().disabled).toBe(true);
     });
 
+    it('blocks a malformed start date in the button and the direct write, then accepts a date', async () => {
+      await open(external());
+      const write = () => ref.componentInstance['update']();
+      const start = dateBoxes()[0];
+
+      await type(start, 'not-a-date');
+      start.dispatchEvent(new Event('blur'));
+      await settle();
+      expect(update().disabled).toBe(true);
+      write();
+      expect(replace).not.toHaveBeenCalled();
+
+      await type(start, '1/2/2030');
+      expect(update().disabled).toBe(false);
+      write();
+      expect(replace).toHaveBeenCalledTimes(1);
+    });
+
     it('is replaced in place, with a notification, its unchanged end kept', async () => {
       const end = localMidnight(2031, 2, 1);
       await open(external({ end }));

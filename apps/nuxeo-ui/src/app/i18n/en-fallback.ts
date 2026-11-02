@@ -343,10 +343,6 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
     'Hi! Could you comment on this document and...',
   'permissions.add-permission-dialog.search-for-users-and-groups': 'Search for users and groups',
   'permissions.add-permission-dialog.user-group': 'User / Group',
-  'permissions.share-external-dialog.hi-could-you-comment-on-this':
-    'Hi! Could you comment on this document and...',
-  'permissions.update-permission-dialog.hi-could-you-comment-on-this':
-    'Hi! Could you comment on this document and...',
   'sat.platform-nav.collapse': 'Collapse navigation',
   'sat.platform-nav.expand': 'Expand navigation',
   'satori-components.favorite-toggle.add': 'Add to favorites',
@@ -508,10 +504,6 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'collections.collection-detail.to': 'To',
   'permissions.add-permission-dialog.from': 'From',
   'permissions.add-permission-dialog.to': 'To',
-  'permissions.share-external-dialog.from': 'From',
-  'permissions.share-external-dialog.to': 'To',
-  'permissions.update-permission-dialog.from': 'From',
-  'permissions.update-permission-dialog.to': 'To',
   'satori-components.document-history.from': 'From',
   'satori-components.document-history.to': 'To',
   'satori-components.permissions-panel.editor.from': 'From',

@@ -855,14 +855,12 @@
       "open-a-folder-to-create-or-import": "Ouvrez un dossier pour créer ou importer du contenu.",
       "permission-added": "Autorisation ajoutée",
       "permission-deleted": "Autorisation supprimée",
-      "permission-updated": "Autorisation mise à jour",
       "please-select-a-csv-file": "Veuillez sélectionner un fichier .csv.",
       "please-wait-for-the-file-upload-to": "Veuillez attendre la fin de l'importation du fichier.",
       "remove-all-collections-from-this-folder-before": "Supprimez toutes les collections de ce dossier avant de le supprimer.",
       "restricted-import-location": "Sélectionnez un autre conteneur pour créer votre contenu.",
       "search-failed": "Échec de la recherche",
       "selected-path-is-not-a-folder-choose": "Le chemin sélectionné n'est pas un dossier. Choisissez un dossier ou remontez d'un niveau.",
-      "shared-with-external-user": "Partagé avec un utilisateur externe",
       "starting-csv-export": "Démarrage de l'exportation CSV...",
       "subscribed-to-notifications": "Abonné aux notifications",
       "unsubscribed": "Désabonné",
@@ -1688,19 +1686,9 @@
     "delete-permission-dialog": {
       "delete": "Supprimer"
     },
-    "share-external-dialog": {
-      "create": "Créer",
-      "create-and-add-another": "Créer et en ajouter un autre"
-    },
-    "update-permission-dialog": {
-      "update": "Mettre à jour"
-    },
     "message": {
       "could-not-add-permission": "Impossible d'ajouter l'autorisation",
-      "could-not-share-external": "Impossible de partager avec l'utilisateur externe",
-      "could-not-update-permission": "Impossible de mettre à jour l'autorisation",
-      "permission-added-notification-sent": "Autorisation ajoutée et notification envoyée",
-      "permission-updated-notification-sent": "Autorisation mise à jour et notification envoyée"
+      "permission-added-notification-sent": "Autorisation ajoutée et notification envoyée"
     }
   },
   "permissions": {
@@ -1738,34 +1726,11 @@
       "Remove": "Supprimer",
       "Write": "Écrire"
     },
-    "share-external-dialog": {
-      "cancel": "Annuler",
-      "email": "E-mail",
-      "from": "De",
-      "hi-could-you-comment-on-this": "Bonjour ! Pourriez-vous commenter ce document et...",
-      "notification-email": "E-mail de notification",
-      "right": "Droit",
-      "share-with-external-user": "Partager avec un utilisateur externe",
-      "to": "A"
-    },
     "time-frame": {
       "from": "Du {{ begin }}",
       "permanent": "Permanente",
       "range": "{{ begin }} - {{ end }}",
       "until": "Jusqu’au {{ end }}"
-    },
-    "update-permission-dialog": {
-      "cancel": "Annuler",
-      "date-based": "Basée sur des dates",
-      "from": "De",
-      "hi-could-you-comment-on-this": "Bonjour ! Pourriez-vous commenter ce document et...",
-      "notification-email": "E-mail de notification",
-      "permanent": "Permanente",
-      "right": "Droit",
-      "send-an-email-to-notify-user": "Envoyer un e-mail pour avertir l'utilisateur",
-      "time-frame": "Période",
-      "to": "A",
-      "update-permission": "Mettre à jour l'autorisation"
     },
     "notification": {
       "ace-not-found-add": "L'autorisation a été ajoutée, mais l'e-mail de notification n'a pas pu être envoyé, car la nouvelle entrée d'autorisation est introuvable. Actualisez la page et réessayez l'envoi depuis l'onglet Autorisations.",

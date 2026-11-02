@@ -16,10 +16,12 @@ import {
   NxsFolderHeaderComponent,
   NxsPagerComponent,
   NxsPermissionsPanelComponent,
+  NxsShareExternalDialogComponent,
   NxsSpinnerComponent,
   NxsTagComponent,
   NxsTagEditorComponent,
   NxsThumbnailComponent,
+  NxsUpdatePermissionDialogComponent,
   NxsUploadQueue,
   NxsUploadQueueComponent,
   nxsErrorStatus,
@@ -35,6 +37,8 @@ import {
   type NxsRenameDialogData,
   type NxsMenuAction,
   type NxsPickableColumn,
+  type NxsShareExternalDialogData,
+  type NxsUpdatePermissionDialogData,
   NxsToastService,
   nxsVisibleText,
   provideNxsToast,
@@ -150,12 +154,8 @@ import {
 } from '@nuxeo/satori-platform/ui';
 
 import {
-  UpdatePermissionDialogComponent,
-  UpdatePermissionDialogData,
   DeletePermissionDialogComponent,
   DeletePermissionDialogData,
-  ShareExternalDialogComponent,
-  ShareExternalDialogData,
 } from '@agentic-ui/shared-permission-dialogs';
 
 import {
@@ -404,6 +404,10 @@ export class BrowseComponent {
   });
   readonly canManageCurrentPermissions = computed(() =>
     canManageDocumentPermissions(this.currentDoc()),
+  );
+  /** The type's `userVisiblePermissions`, the rights the external-share dialogs offer. */
+  private readonly visiblePermissions = computed(
+    () => this.currentDoc()?.contextParameters?.['userVisiblePermissions'] as string[] | undefined,
   );
   readonly actionInProgress = signal<string | null>(null);
 
@@ -2615,36 +2619,37 @@ export class BrowseComponent {
   shareWithExternal(): void {
     const doc = this.currentDoc();
     if (!doc) return;
-    const dialogRef = this.dialog.open(ShareExternalDialogComponent, {
-      data: { documentUid: doc.uid } satisfies ShareExternalDialogData,
-      width: '520px',
-    });
-    dialogRef
+    this.dialog
+      .open(NxsShareExternalDialogComponent, {
+        maxWidth: '95vw',
+        data: {
+          documentUid: doc.uid,
+          permissions: this.visiblePermissions(),
+        } satisfies NxsShareExternalDialogData,
+      })
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((created: boolean | undefined) => {
-        if (created) {
-          this.reloadPermissions();
-          this.toast.show(this.translate.instant('browse.message.shared-with-external-user'));
-        }
+      .subscribe((shared: boolean | undefined) => {
+        if (shared) this.reloadPermissions();
       });
   }
 
   editExternalPermission(ace: NuxeoAce): void {
     const doc = this.currentDoc();
     if (!doc) return;
-    const dialogRef = this.dialog.open(UpdatePermissionDialogComponent, {
-      data: { documentUid: doc.uid, ace, isExternal: true } satisfies UpdatePermissionDialogData,
-      width: '520px',
-    });
-    dialogRef
+    this.dialog
+      .open(NxsUpdatePermissionDialogComponent, {
+        maxWidth: '95vw',
+        data: {
+          documentUid: doc.uid,
+          ace,
+          permissions: this.visiblePermissions(),
+        } satisfies NxsUpdatePermissionDialogData,
+      })
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((updated: boolean | undefined) => {
-        if (updated) {
-          this.reloadPermissions();
-          this.toast.show(this.translate.instant('browse.message.permission-updated'));
-        }
+        if (updated) this.reloadPermissions();
       });
   }
 

@@ -22,7 +22,11 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { BrowseComponent } from './browse';
-import { NxsToastService } from '@nuxeo/satori-platform/components';
+import {
+  NxsShareExternalDialogComponent,
+  NxsToastService,
+  NxsUpdatePermissionDialogComponent,
+} from '@nuxeo/satori-platform/components';
 
 function doc(overrides: Partial<NuxeoDocument> & Pick<NuxeoDocument, 'uid'>): NuxeoDocument {
   return {
@@ -276,6 +280,47 @@ describe('BrowseComponent — permissions tab', () => {
     expect([...toast.show.mock.calls, ...toast.error.mock.calls]).toEqual([]);
   });
 
+  // A section root's list, so a fixed table could not pass: it holds CanAskForPublishing and
+  // not ReadCanCollect.
+  const SECTION_RIGHTS = ['Read', 'ReadWrite', 'Everything', 'CanAskForPublishing'];
+
+  it("shareWithExternal opens the nxs dialog with the type's userVisiblePermissions", () => {
+    component.currentDoc.set(
+      doc({ uid: 'ws-1', contextParameters: { userVisiblePermissions: SECTION_RIGHTS } }),
+    );
+
+    component.shareWithExternal();
+
+    expect(dialogOpen).toHaveBeenCalledWith(NxsShareExternalDialogComponent, {
+      maxWidth: '95vw',
+      data: { documentUid: 'ws-1', permissions: SECTION_RIGHTS },
+    });
+  });
+
+  it("editExternalPermission opens the nxs dialog with the type's userVisiblePermissions", () => {
+    component.currentDoc.set(
+      doc({ uid: 'ws-1', contextParameters: { userVisiblePermissions: SECTION_RIGHTS } }),
+    );
+    const share = ace({ id: 'x-1', externalUser: true });
+
+    component.editExternalPermission(share);
+
+    expect(dialogOpen).toHaveBeenCalledWith(NxsUpdatePermissionDialogComponent, {
+      maxWidth: '95vw',
+      data: { documentUid: 'ws-1', ace: share, permissions: SECTION_RIGHTS },
+    });
+  });
+
+  it('hands both dialogs no list when the document was read without the enricher', () => {
+    component.currentDoc.set(doc({ uid: 'ws-1', contextParameters: {} }));
+
+    component.shareWithExternal();
+    component.editExternalPermission(ace({ id: 'x-1', externalUser: true }));
+
+    expect(dialogData<{ permissions?: unknown }>(0).permissions).toBeUndefined();
+    expect(dialogData<{ permissions?: unknown }>(1).permissions).toBeUndefined();
+  });
+
   it('shareWithExternal reloads the ACLs only when a share was created', () => {
     component.currentDoc.set(doc({ uid: 'ws-1' }));
     detail.getDocumentPermissions.mockReturnValue(of(withAcls([{ name: 'local', aces: [] }])));
@@ -286,18 +331,23 @@ describe('BrowseComponent — permissions tab', () => {
 
     dialogOpen.mockReturnValue({ afterClosed: () => of(true) });
     component.shareWithExternal();
-    expect(toast.show).toHaveBeenCalledWith('Shared with external user');
+    expect(detail.getDocumentPermissions).toHaveBeenCalledWith('ws-1');
+    // The dialog announces the share itself; a second toast from the page would repeat it.
+    expect(toast.show).not.toHaveBeenCalled();
   });
 
-  it('editExternalPermission marks the dialog as external', () => {
+  it('editExternalPermission reloads the ACLs only when the share was updated', () => {
     component.currentDoc.set(doc({ uid: 'ws-1' }));
     detail.getDocumentPermissions.mockReturnValue(of(withAcls([{ name: 'local', aces: [] }])));
-    dialogOpen.mockReturnValue({ afterClosed: () => of(true) });
 
+    dialogOpen.mockReturnValue({ afterClosed: () => of(false) });
     component.editExternalPermission(ace({ id: 'x-1', externalUser: true }));
+    expect(detail.getDocumentPermissions).not.toHaveBeenCalled();
 
-    expect(dialogData<{ isExternal: boolean }>().isExternal).toBe(true);
+    dialogOpen.mockReturnValue({ afterClosed: () => of(true) });
+    component.editExternalPermission(ace({ id: 'x-1', externalUser: true }));
     expect(detail.getDocumentPermissions).toHaveBeenCalledWith('ws-1');
+    expect(toast.show).not.toHaveBeenCalled();
   });
 
   it('opens no permission dialog at all without a browsed document', () => {
