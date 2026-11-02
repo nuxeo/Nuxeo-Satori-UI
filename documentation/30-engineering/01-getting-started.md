@@ -223,8 +223,14 @@ npm run beta:gate -- --phase my-change
 
 **Do not quote a gate count from this page.** It was "17 gates" here for long enough to be wrong;
 the gate prints its own total on every run (`3 of 35` in a partial run, for instance), and that
-number is the only one worth repeating. `beta:state` goes red when a phase cites a run with fewer
-gates than the pipeline now has, which is how the stale count surfaces.
+number is the only one worth repeating.
+
+`beta:state` surfaces the same drift for phases, but **read its output rather than its exit code**:
+a phase signed off over fewer gates than exist now is a `warn`, not a `fail`, and
+`state-check.mjs:303` exits non-zero only on a `fail`. That is deliberate — it was a `fail` once and
+"accused six phases of citing bad evidence the moment `spec-types` was added", so a green exit from
+`beta:state` is **not** proof that every phase has been through the current gate set
+(`state-check.mjs:236-259`). It fails only when a phase cites a re-gate that does not hold.
 
 Order is cheapest-first and it **stops at the first failure**, because a lint error usually
 explains the test failure that would follow. See

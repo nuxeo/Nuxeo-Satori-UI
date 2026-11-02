@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnTool } from '../../scripts/beta-harness/package-command.mjs';
+import { forwardPageConsole } from './page-console.mjs';
 
 /**
  * Record one Beta screencast.
@@ -167,6 +168,9 @@ async function record(sceneName) {
     reducedMotion: 'reduce',
   });
   const page = await context.newPage();
+  // Before the scene navigates: a renderer warning about an unrenderable block is emitted
+  // on load, and a listener attached afterwards would never see it.
+  forwardPageConsole(page);
 
   const teardown = [];
   let failure = null;

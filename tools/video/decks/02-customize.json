@@ -87,14 +87,14 @@
               "sub": "Contribute here and it takes effect; there is just nothing to override — 6 of 13, with one exception below",
               "items": [
                 "`sidebar`, `routes`, `documentView` — a component of yours, placed",
-                "`documentMetadata`, `documentEdit` — your fields, or your component, in the Properties panel and the Edit dialog",
+                "`documentMetadata`, `documentEdit` — **a component of yours** in place of the Properties panel or the Edit dialog form",
                 "**`documentCreate` is the exception** — it resolves, but no product screen opens the create form yet, so a contribution has no visible effect today"
               ]
             }
           ]
         }
       ],
-      "footnote": "`docs/extension-reference.md` marks each slot _populated_, _resolves_ or _reserved and inert_, and those are three different promises. **No slot is reserved-and-inert today** — an earlier cut of this slide said five of them were, and that was still being shown after they went live. But _resolves_ is not the same as _usable_: `documentCreate` resolves into a create form no screen opens (`extension-reference.md:245`), so it is the one slot where contributing changes nothing a user sees. Read the reference rather than this slide if the two disagree."
+      "footnote": "`docs/extension-reference.md` marks each slot _populated_, _resolves_ or _reserved and inert_, and those are three different promises. **No slot is reserved-and-inert today** — an earlier cut of this slide said five of them were, and that was still being shown after they went live. But _resolves_ is not the same as _usable_: `documentCreate` resolves into a create form no screen opens (`extension-reference.md:245`), so it is the one slot where contributing changes nothing a user sees. **And note what these three slots take: a component, not a list of fields.** Choosing which *fields* a type shows is a per-type **layout file**, which is not a slot and has no id (§9b); these slots put a component of yours where that layout would have rendered, for when a list of fields cannot express what the type needs (§9c). Read the reference rather than this slide if the two disagree."
     },
     {
       "eyebrow": "Layer 2 — your own code",

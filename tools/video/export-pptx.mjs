@@ -41,6 +41,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { packageCommand, spawnTool } from '../../scripts/beta-harness/package-command.mjs';
+import { forwardPageConsole } from './page-console.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -335,6 +336,9 @@ const context = await browser.newContext({
   reducedMotion: 'reduce',
 });
 const page = await context.newPage();
+// Before any `goto()`: the renderer warns about an unrenderable block as the deck loads,
+// and Playwright only delivers console events to listeners that already exist.
+const pageProblems = forwardPageConsole(page);
 
 const captured = [];
 let failure = null;
@@ -342,9 +346,21 @@ try {
   for (const name of wanted) {
     const deck = await readDeck(name);
     console.log(`\n  ${name} — "${deck.title}"`);
+    const before = { ...pageProblems };
     const frames = await shootDeck(page, server.url, name, deck, frameDir);
     const withNotes = frames.filter((f) => f.notes).length;
     console.log(`    captured ${frames.length} slides, ${withNotes} with speaker notes`);
+    // Said per deck as well as inline, because the inline lines scroll past and the
+    // interesting case is a deck that exported "successfully" with empty slide bodies.
+    const warned = pageProblems.warnings - before.warnings;
+    const errored = pageProblems.errors - before.errors;
+    if (warned + errored > 0) {
+      console.warn(
+        `    NOTE: the page reported ${warned} warning(s) and ${errored} error(s) while ` +
+          `rendering this deck. The .pptx is still written — read those lines before ` +
+          `trusting the slides they came from.`,
+      );
+    }
     captured.push({ name, title: deck.title, frames });
   }
 } catch (error) {
