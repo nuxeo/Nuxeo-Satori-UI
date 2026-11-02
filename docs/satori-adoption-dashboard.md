@@ -86,9 +86,9 @@ sdsc check all --json  →  adoption-data/<product>/        → Dashboard reads
 
 | Package                                        | Version         | Purpose                       |
 | ---------------------------------------------- | --------------- | ----------------------------- |
-| `@hylandsoftware/satori-design-system-checker` | 1.0.0-alpha.171 | CLI adoption scoring (`sdsc`) |
-| `@hylandsoftware/satori-lint`                  | 1.0.0-alpha.171 | ESLint + Stylelint rules      |
-| `@hylandsoftware/satori-migrations`            | 1.0.0-alpha.171 | Angular/Nx schematics         |
+| `@hylandsoftware/satori-design-system-checker` | 1.0.0-alpha.175 | CLI adoption scoring (`sdsc`) |
+| `@hylandsoftware/satori-lint`                  | 1.0.0-alpha.175 | ESLint + Stylelint rules      |
+| `@hylandsoftware/satori-migrations`            | 1.0.0-alpha.175 | Angular/Nx schematics         |
 
 ### npm Scripts
 
