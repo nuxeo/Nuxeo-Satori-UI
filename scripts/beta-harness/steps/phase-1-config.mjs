@@ -87,10 +87,6 @@ const ENVIRONMENTAL_ERRORS = [
   '/nuxeo/logout',
   '/agentic-ui-config/bootstrap.json',
   '/agentic-ui-config/manifest.json',
-  // The absent- and malformed-configuration steps remove the two files on purpose. The runner
-  // labels their 404s with the base-href path rather than the configuration path, so the exact
-  // label is matched here and nothing broader.
-  /HTTP 404 \/nuxeo\/agentic-ui\/$/,
 ];
 
 const BOOTSTRAP_ROUTE = '**/agentic-ui-config/bootstrap.json';

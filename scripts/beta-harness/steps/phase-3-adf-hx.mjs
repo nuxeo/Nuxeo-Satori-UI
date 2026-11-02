@@ -222,14 +222,19 @@ export default async function run(page, h) {
   // The list was already in title order before the click, so "differs from before" cannot be the
   // test. The result must be in title order, in one direction or the other; the wire check below
   // is the one that proves the server did the ordering.
+  // The order must match the direction the click asked for, read from the request it made. An
+  // ignored or inverted direction then fails, where a loose either-way check would pass.
   const ascending = [...sortedPage].sort((x, y) => x.localeCompare(y));
   const descending = [...ascending].reverse();
+  const lastSortRequest = childrenRequests.slice(requestsBeforeSort).filter((u) => u.includes('sortBy=')).at(-1) ?? '';
+  const sortParams = new URL(lastSortRequest || 'http://unused.invalid/').searchParams;
+  const askedOrder = sortParams.get('sortOrder');
   h.check(
-    'clicking a column header leaves the list in title order',
+    'the list is in the order the request asked for, on the title field',
     sortedPage.length > 1 &&
-      (JSON.stringify(sortedPage) === JSON.stringify(ascending) ||
-        JSON.stringify(sortedPage) === JSON.stringify(descending)),
-    `before ${JSON.stringify(firstPage.slice(0, 3))} after ${JSON.stringify(sortedPage.slice(0, 3))}`,
+      sortParams.get('sortBy') === 'dc:title' &&
+      JSON.stringify(sortedPage) === JSON.stringify(askedOrder === 'desc' ? descending : ascending),
+    `sortBy ${sortParams.get('sortBy')} sortOrder ${askedOrder}; before ${JSON.stringify(firstPage.slice(0, 3))} after ${JSON.stringify(sortedPage.slice(0, 3))}`,
   );
   // A reordered list alone does not prove the server was asked — adf-core-style tables also sort
   // the loaded page. A `sortBy` in a `@children` request does.
@@ -307,6 +312,7 @@ export default async function run(page, h) {
   await h.step('Card view renders with the list toggled');
   const cardToggle = page.locator('button[aria-label="Card view"]').first();
   h.check('a card-view toggle exists', (await cardToggle.count()) > 0);
+  const listRows = await page.locator('nxs-document-list tr.nxs-document-list__row').count();
   await cardToggle.click().catch(() => {});
   await page.waitForTimeout(1500);
   // The card grid replaces the list (the list sits under `@if (viewMode() === 'list')`), so the
@@ -317,6 +323,13 @@ export default async function run(page, h) {
     'card view renders a grid and replaces the list',
     cardGrid >= 1 && listWhileCards === 0,
     `card grids ${cardGrid}, lists ${listWhileCards}`,
+  );
+  // One card outlet per document, so the grid itself is not the evidence: the cards are.
+  const cardCount = await page.locator('.card-grid .card-outlet').count();
+  h.check(
+    'card view renders one card per listed document',
+    cardCount > 0 && cardCount === listRows,
+    `cards ${cardCount}, list rows ${listRows}`,
   );
   await h.screenshot('card-view');
   await page.locator('button[aria-label="List view"]').first().click().catch(() => {});

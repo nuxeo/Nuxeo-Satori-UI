@@ -105,8 +105,9 @@ export default async function run(page, h) {
     null,
     { timeout: 120000 },
   ).catch(() => {});
-  const drawerWidth = await page.locator('app-nav-drawer').first().evaluate((el) => el.getBoundingClientRect().width);
-  h.check('the nav drawer is open when entered via the nav', drawerWidth > 0, `width ${drawerWidth}`);
+  // Visibility of a node, not the width of the drawer: a closed Material sidenav keeps its width.
+  const firstNode = page.locator('nxs-document-tree [role="treeitem"], nxs-document-tree mat-tree-node').first();
+  h.check('the nav drawer is open: its first tree node is visible', await firstNode.isVisible().catch(() => false));
   const treeNodes = await page.$$eval(
     'nxs-document-tree [role="treeitem"], nxs-document-tree mat-tree-node',
     (nodes) => nodes.map((n) => (n.textContent ?? '').trim()).filter(Boolean),
