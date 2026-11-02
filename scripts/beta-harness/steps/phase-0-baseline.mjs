@@ -68,10 +68,19 @@ export default async function run(page, h) {
   await h.step('A folder lists its children with real contributors');
   await h.goTo('/#/browse/default-domain/workspaces');
   await h.expectVisible('document list rendered', 'nxs-document-list');
-  // An empty folder is a precondition, not a regression: the baseline needs children to read.
-  const folderRows = await page.waitForSelector('nxs-document-list tr.nxs-document-list__row', { timeout: 120000 }).then(() => true, () => false);
-  h.requirePrecondition('the Workspaces folder has children to list', folderRows, 'it is empty on this instance, so the contributor check below has nothing to read');
-  const headers = await page.$$eval('nxs-document-list thead th', (cells) =>
+  // Whether the folder is empty comes from Nuxeo, not from the page. Rows that never render are
+  // then a failure to list, not a missing precondition.
+  const children = await page.request.get(`${h.baseUrl}/nuxeo/api/v1/path/default-domain/workspaces/@children?pageSize=1`, { failOnStatusCode: false });
+  const serverCount = children.ok() ? (await children.json()).resultsCount : -1;
+  h.requirePrecondition(
+    'the Workspaces folder has children on the server',
+    serverCount !== 0,
+    'the server reports no children, so there is nothing to list and the contributor check cannot run',
+  );
+  const folderRows = await page
+    .waitForSelector('nxs-document-list tr.nxs-document-list__row', { timeout: 120000 })
+    .then(() => true, () => false);
+  h.check('the folder lists the children Nuxeo reports', folderRows, `server reports ${serverCount} child(ren)`);  const headers = await page.$$eval('nxs-document-list thead th', (cells) =>
     cells.map((c) => (c.textContent ?? '').trim()).filter(Boolean),
   );
   h.check(
