@@ -87,6 +87,18 @@
               "properties": { "src": { "type": "string" }, "alt": { "type": "string" } }
             }
           ]
+        },
+        "favicon": {
+          "description": "The browser tab icon; null keeps the one the application ships. Same forms and the same checks as logo. alt is accepted and not used: a tab icon has no accessible name, the tab title is its label.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["src"],
+              "properties": { "src": { "type": "string" }, "alt": { "type": "string" } }
+            }
+          ]
         }
       }
     },

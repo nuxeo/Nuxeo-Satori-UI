@@ -7,6 +7,7 @@ import {
   provideAppConfig,
   resolveStringLanguage,
   syncDocumentDirection,
+  syncDocumentFavicon,
   syncDocumentLanguage,
   syncDocumentTitle,
 } from './provide-app-config';
@@ -897,5 +898,88 @@ describe('syncDocumentTitle', () => {
     TestBed.tick();
 
     expect(doc.title).toBe('Acme Portal');
+  });
+});
+
+/**
+ * NXSAT-313, plan item F1. The tab title has followed the configuration since NXSAT-722 and the
+ * icon beside it did not, so a demo branded for a prospect showed their name next to the Nuxeo
+ * mark.
+ *
+ * The fallback is the half worth asserting hardest: a refused or cleared value must put the
+ * packaged icon back, and the href it puts back has to be the one `index.html` shipped rather
+ * than whatever the previous run wrote.
+ */
+describe('syncDocumentFavicon', () => {
+  const PACKAGED = 'favicon.ico';
+
+  function harness(
+    initial: string | null,
+    link = `<link rel="icon" type="image/x-icon" href="${PACKAGED}">`,
+  ) {
+    const brandingFavicon = signal(initial);
+    const doc = document.implementation.createHTMLDocument('icon');
+    doc.head.innerHTML = link;
+    TestBed.runInInjectionContext(() =>
+      syncDocumentFavicon({ brandingFavicon }, doc, TestBed.inject(Injector)),
+    );
+    const icon = () => doc.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    return { brandingFavicon, icon };
+  }
+
+  it('leaves the packaged icon in place when nothing is configured', () => {
+    const { icon } = harness(null);
+    const packagedHref = icon()?.href;
+    TestBed.tick();
+
+    expect(icon()?.href).toBe(packagedHref);
+    expect(icon()?.getAttribute('type')).toBe('image/x-icon');
+  });
+
+  it('writes the configured icon once the asynchronous load lands', () => {
+    const { brandingFavicon, icon } = harness(null);
+    TestBed.tick();
+
+    brandingFavicon.set('https://cdn.example.com/acme.png');
+    TestBed.tick();
+
+    expect(icon()?.href).toBe('https://cdn.example.com/acme.png');
+  });
+
+  /**
+   * `index.html` declares `type="image/x-icon"`, which is false of the `.png` or `.svg` a
+   * customer is most likely to contribute, and a browser may use the hint to skip a format it
+   * thinks it cannot render. Removed rather than recomputed: the server already sends the right
+   * `Content-Type` with the bytes.
+   */
+  it('drops the packaged type hint, which is wrong for a contributed png or svg', () => {
+    const { icon } = harness('https://cdn.example.com/acme.png');
+    TestBed.tick();
+
+    expect(icon()?.hasAttribute('type')).toBe(false);
+  });
+
+  it('restores the packaged icon and its type when the configured one is cleared', () => {
+    const { brandingFavicon, icon } = harness(null);
+    TestBed.tick();
+    const packagedHref = icon()?.href;
+
+    brandingFavicon.set('https://cdn.example.com/acme.png');
+    TestBed.tick();
+    // A later package, or a preset being cleared, can take the key away again. Re-reading
+    // `link.href` inside the effect would read back the CDN URL and leave it in place.
+    brandingFavicon.set(null);
+    TestBed.tick();
+
+    expect(icon()?.href).toBe(packagedHref);
+    expect(icon()?.getAttribute('type')).toBe('image/x-icon');
+  });
+
+  it('does nothing when the document ships no icon link', () => {
+    const { brandingFavicon, icon } = harness(null, '');
+
+    brandingFavicon.set('https://cdn.example.com/acme.png');
+    expect(() => TestBed.tick()).not.toThrow();
+    expect(icon()).toBeNull();
   });
 });
