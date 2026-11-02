@@ -197,9 +197,11 @@ export default async function run(page, h) {
   await h.screenshot('document-list');
 
   await h.step('Column sort reaches the server, and the list pages');
+  // The title cell alone. The whole row also carries Modified and Last Contributor, and a truncated
+  // row compares duplicate titles by their dates.
   const listRowTitles = () =>
-    page.$$eval('nxs-document-list tr.nxs-document-list__row', (rows) =>
-      rows.map((r) => (r.textContent ?? '').trim().slice(0, 24)).filter(Boolean),
+    page.$$eval('nxs-document-list tr.nxs-document-list__row .nxs-document-list__title', (titles) =>
+      titles.map((t) => (t.textContent ?? '').trim()).filter(Boolean),
     );
 
   const pagerRange = () =>
