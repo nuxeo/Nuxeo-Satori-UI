@@ -388,6 +388,114 @@ expectRed(
   /has no <fragment>, <layout> or <asset>/,
 );
 
+// ---- third review round (PR #542): attributes read whole, and contributions counted where the
+// server would actually read them ----
+
+expectGreen('a src naming its file through a character reference', {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({ srcs: ['agentic-ui-config/bootstr&#97;p.json'] }),
+  }),
+});
+
+expectGreen('a src padded with spaces, which is the same path', {
+  jar: jarFiles({ [COMPONENT]: componentXml({ srcs: ['  agentic-ui-config/bootstrap.json  '] }) }),
+});
+
+expectGreen('an attribute whose name merely ends with one being looked for', {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({
+      srcs: [],
+      body:
+        '    <fragment name="acme-config" layer="bootstrap" data-src="gone.json" ' +
+        'src="agentic-ui-config/bootstrap.json" />\n',
+    }),
+  }),
+});
+
+// Single quotes inside a double-quoted value are ordinary characters, so this is one attribute
+// whose value happens to read like another. An unanchored search finds the inner one first.
+expectGreen("another attribute's value that literally contains src='…'", {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({
+      srcs: [],
+      body:
+        '    <fragment name="see src=\'gone.json\' here" layer="bootstrap" ' +
+        'src="agentic-ui-config/bootstrap.json" />\n',
+    }),
+  }),
+});
+
+expectGreen('a dependency written with whitespace before the closing bracket', {
+  pkg:
+    '<package type="addon" name="acme-config" version="1.0.0">\n' +
+    '  <dependencies>\n    <package >nuxeo-agentic-ui:2026.0.2</package>\n  </dependencies>\n' +
+    '</package>\n',
+});
+
+// `enabled="tr&#117;e"` is enabled. Read literally it is a disabled entry, and a disabled entry's
+// `src` is never resolved — so this was a silent miss, not a visible failure.
+expectRed(
+  'an enabled attribute written with a character reference, over a src the jar does not hold',
+  {
+    jar: jarFiles({
+      [COMPONENT]: componentXml({
+        srcs: [],
+        body:
+          '    <fragment name="acme-config" layer="bootstrap" enabled="tr&#117;e" ' +
+          'src="gone.json" />\n',
+      }),
+    }),
+  },
+  /names <fragment src="gone\.json">, which the jar does not hold/,
+);
+
+// The count decides whether the package configures anything, so it has to be taken where the
+// server would read it. A fragment under a mistyped target or point registers nothing.
+const underExtension = (attrs, inner) =>
+  '<?xml version="1.0"?>\n<component name="acme.config.acme-config" version="1.0">\n' +
+  DEFAULTS_REQUIRE +
+  `  <extension ${attrs}>\n${inner}  </extension>\n</component>\n`;
+
+const FRAGMENT =
+  '    <fragment name="acme-config" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />\n';
+
+expectRed(
+  'a fragment under an extension targeting something else',
+  {
+    jar: jarFiles({
+      [COMPONENT]: underExtension('target="org.nuxeo.ecm.other" point="configuration"', FRAGMENT),
+    }),
+  },
+  /has no <fragment>, <layout> or <asset>/,
+);
+
+expectRed(
+  'a fragment under the right target but a point that does not exist',
+  {
+    jar: jarFiles({
+      [COMPONENT]: underExtension(
+        'target="org.nuxeo.agentic.ui.config" point="configurations"',
+        FRAGMENT,
+      ),
+    }),
+  },
+  /has no <fragment>, <layout> or <asset>/,
+);
+
+expectGreen('a fragment under the Satori configuration extension, beside an unrelated one', {
+  jar: jarFiles({
+    [COMPONENT]:
+      '<?xml version="1.0"?>\n<component name="acme.config.acme-config" version="1.0">\n' +
+      DEFAULTS_REQUIRE +
+      '  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">\n' +
+      '    <listener name="acme" class="com.acme.Listener" />\n' +
+      '  </extension>\n' +
+      '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+      FRAGMENT +
+      '  </extension>\n</component>\n',
+  }),
+});
+
 // The generated component ships exactly this: a commented-out `<asset>` showing how to add one.
 // Read as live, it fails every correct package — which is how this control came to exist.
 expectGreen('a commented-out asset, which the generator writes as the example', {

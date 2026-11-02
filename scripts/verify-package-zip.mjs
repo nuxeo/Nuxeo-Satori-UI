@@ -144,22 +144,52 @@ function withoutCommentsOrInstructions(xml) {
 const withoutCdata = (xml) =>
   xml.replace(/<!\[CDATA\[[\s\S]*?(?:\]\]>|$)/g, (section) => ' '.repeat(section.length));
 
+const ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
+
+/** XML character data with its character and predefined entity references resolved. */
+function decode(text) {
+  return text.replace(
+    /&(?:#x([0-9A-Fa-f]+)|#([0-9]+)|(lt|gt|amp|quot|apos));/g,
+    (reference, hex, decimal, named) => {
+      if (named) return ENTITIES[named];
+      const codePoint = hex ? parseInt(hex, 16) : Number(decimal);
+      return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : reference;
+    },
+  );
+}
+
 /**
- * One attribute of a start tag's body, in either quote style.
+ * Every attribute of a start tag's body, by name, decoded and trimmed — `build.mjs`'s
+ * `attributes()`, ported rather than approximated.
  *
- * XML gives `"` and `'` equal standing and `build.mjs` reads both. Reading only double quotes
- * fails in both directions at once: `src='missing.json'` looks like a contribution with no `src`
- * and its file is never resolved, while `enabled='false'` looks enabled and its `src` is demanded.
+ * Tokenising the whole tag is what makes this correct, and three things go wrong without it:
+ *
+ * - **Searching for a name matches inside another one.** `\bsrc=` matches the `src=` in
+ *   `data-src="…"`, and an unanchored search also finds `src='…'` sitting inside some other
+ *   attribute's quoted value. Keying by the full name parsed from the tag cannot.
+ * - **References have to be resolved.** `src="bootstr&#97;p.json"` names `bootstrap.json`, and
+ *   `enabled="tr&#117;e"` is enabled — read literally the first is a file the jar does not hold
+ *   and the second is a disabled entry whose `src` is never checked, which is a silent miss.
+ * - **Values have to be trimmed,** because a space-padded path is the same path.
+ *
+ * XML gives `"` and `'` equal standing, so both are read. Reading only double quotes failed in
+ * both directions at once: `src='missing.json'` looked like a contribution with no `src` and its
+ * file was never resolved, while `enabled='false'` looked enabled and its `src` was demanded.
  */
-function attributeOf(tag, name) {
-  const match = new RegExp(`\\b${name}${S}=${S}(?:"([^"]*)"|'([^']*)')`).exec(tag);
-  return match ? (match[1] ?? match[2]) : null;
+function attributesOf(tag) {
+  const found = {};
+  for (const [, name, , double, single] of tag.matchAll(
+    /([\w:.-]+)[ \t\r\n]*=[ \t\r\n]*("([^"]*)"|'([^']*)')/g,
+  )) {
+    found[name] = decode(double ?? single).trim();
+  }
+  return found;
 }
 
 /** An attribute of the first element with this tag name. */
 function attribute(xml, name, attributeName) {
   const tag = new RegExp(`<${name}${TAG}`).exec(xml);
-  return tag ? attributeOf(tag[1], attributeName) : null;
+  return tag ? (attributesOf(tag[1])[attributeName] ?? null) : null;
 }
 
 /**
@@ -222,7 +252,9 @@ export function verifyPackageZip(archive) {
       `package.xml declares type="${type ?? '(none)'}"; a configuration package is an addon.`,
     );
   }
-  if (!/<package>\s*nuxeo-agentic-ui:/.test(packageXml)) {
+  // `<package >nuxeo-agentic-ui:…</package>` is a well-formed start tag and the builder accepts it,
+  // so the whitespace is allowed here too — the same correction the `<require>` check already had.
+  if (!new RegExp(`<package${S}>${S}nuxeo-agentic-ui:`).test(packageXml)) {
     problem(
       'package.xml does not depend on nuxeo-agentic-ui. Without it the server has no ' +
         'org.nuxeo.agentic.ui.config.defaults to register after, and the bundle fails to start.',
@@ -244,10 +276,10 @@ export function verifyPackageZip(archive) {
   //    naming a path the zip does not hold, and deploying the bundle somewhere Nuxeo does not
   //    scan. Both leave `nuxeoctl mp-install` reporting success over a package that contributes
   //    no configuration, which is the whole class of failure this script exists for.
-  const updates = [...installXml.matchAll(new RegExp(`<update${TAG}`, 'g'))].map(([, tag]) => ({
-    file: attributeOf(tag, 'file'),
-    todir: attributeOf(tag, 'todir')?.trim() ?? null,
-  }));
+  const updates = [...installXml.matchAll(new RegExp(`<update${TAG}`, 'g'))].map(([, tag]) => {
+    const { file = null, todir = null } = attributesOf(tag);
+    return { file, todir };
+  });
   if (updates.length === 0) {
     problem('install.xml has no <update file="…">, so installing the package copies nothing.');
   }
@@ -339,7 +371,8 @@ export function verifyPackageZip(archive) {
       `<require${S}>${S}${DEFAULTS_COMPONENT.replaceAll('.', '\\.')}${S}</require${S}>`,
     );
     const CONTRIBUTION = new RegExp(`<(fragment|layout|asset)${TAG}`, 'g');
-    const EXTENSION = new RegExp(`<extension${TAG}`, 'g');
+    // Extensions do not nest, so the body runs to the first `</extension>`.
+    const EXTENSION = new RegExp(`<extension${TAG}([\\s\\S]*?)</extension${S}>`, 'g');
     let contributionCount = 0;
 
     for (const componentPath of componentPaths) {
@@ -353,9 +386,15 @@ export function verifyPackageZip(archive) {
         ),
       );
 
-      const contributes = [...componentXml.matchAll(EXTENSION)].some(
-        ([, tag]) => attributeOf(tag, 'target') === 'org.nuxeo.agentic.ui.config',
-      );
+      // Only an extension on Satori's configuration point registers anything. `point` is checked
+      // as well as `target`: `org.nuxeo.agentic.ui.config` declares exactly one extension point,
+      // `configuration` (agentic-ui-config-service.xml), so an extension naming that target with
+      // any other point contributes nothing and the server reports an unknown point.
+      const satoriExtensions = [...componentXml.matchAll(EXTENSION)].filter(([, tag]) => {
+        const { target, point } = attributesOf(tag);
+        return target === 'org.nuxeo.agentic.ui.config' && point === 'configuration';
+      });
+      const contributes = satoriExtensions.length > 0;
       // Matched as XML rather than as a string. `<require >…</require >` and an element whose
       // text sits on its own indented line are well-formed, the server reads them, and
       // `build.mjs` accepts them — its own test is
@@ -373,10 +412,20 @@ export function verifyPackageZip(archive) {
       // Counting `src` attributes instead would reject a package whose fragments carry their JSON
       // inline — `<fragment …><json>…</json></fragment>` — which `build.mjs` accepts and which
       // the server reads exactly like a `src` one. `src` is resolved only where one exists.
+      //
+      // **Counted only inside a Satori configuration extension**, because the count decides
+      // whether the package contributes anything, and an entry anywhere else does not reach
+      // `ContributionRegistry`. Counting across the component let a `<fragment>` under a mistyped
+      // `target` satisfy the check while the package configured nothing.
+      for (const [, , body] of satoriExtensions) {
+        contributionCount += [...body.matchAll(CONTRIBUTION)].length;
+      }
+      // Resolved across the whole component, which is deliberately wider than the count above and
+      // is what `build.mjs` does — it scans the component, not the extension. Keeping the same
+      // scope keeps the two from disagreeing about which packages are valid, and a `src` naming a
+      // file the jar does not hold is worth reporting wherever it sits.
       for (const [, element, tag] of componentXml.matchAll(CONTRIBUTION)) {
-        contributionCount += 1;
-        const src = attributeOf(tag, 'src');
-        const enabled = attributeOf(tag, 'enabled');
+        const { src = null, enabled = null } = attributesOf(tag);
         // A disabled entry removes an earlier contribution and carries no body, so the server
         // never resolves its `src`; `build.mjs` skips it for the same reason. Requiring the file
         // here would fail a package whose only job is to switch one of ours off.
