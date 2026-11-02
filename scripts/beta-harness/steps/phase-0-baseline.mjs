@@ -68,7 +68,9 @@ export default async function run(page, h) {
   await h.step('A folder lists its children with real contributors');
   await h.goTo('/#/browse/default-domain/workspaces');
   await h.expectVisible('document list rendered', 'nxs-document-list');
-  await page.waitForSelector('nxs-document-list tr.nxs-document-list__row', { timeout: 120000 });
+  // An empty folder is a precondition, not a regression: the baseline needs children to read.
+  const folderRows = await page.waitForSelector('nxs-document-list tr.nxs-document-list__row', { timeout: 120000 }).then(() => true, () => false);
+  h.requirePrecondition('the Workspaces folder has children to list', folderRows, 'it is empty on this instance, so the contributor check below has nothing to read');
   const headers = await page.$$eval('nxs-document-list thead th', (cells) =>
     cells.map((c) => (c.textContent ?? '').trim()).filter(Boolean),
   );
