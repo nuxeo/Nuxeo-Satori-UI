@@ -4102,7 +4102,7 @@ expectGreen('an ampersand stored as itself', 'checkCatalogueValuesAreRenderable'
 // The undecoded-escape arm. Twelve French values arrived double-escaped in the 2 November 2026
 // Crowdin pull, so the catalogue held the characters `\u00a0` where a non-breaking space belonged.
 //
-// These four fixtures are built with `JSON.stringify` rather than written as raw JSON text, unlike
+// These fixtures are built with `JSON.stringify` rather than written as raw JSON text, unlike
 // their neighbours above. The arm tests the PARSED value, and the difference between a passing and
 // a failing fixture here is one backslash inside a JSON string inside a JS string literal — three
 // levels of escaping where a miscount silently produces the other case and the control still goes
@@ -4119,31 +4119,44 @@ expectRed(
   /literal characters `\\u00a0` rather than a non-breaking space/,
 );
 
-// `\u` was the only shape the real pull produced, so the other branches would otherwise be
-// asserted by nothing. A named escape is the same defect in a different notation.
+// `\u{1,6}` hex digits reach U+FFFFFF, above Unicode's U+10FFFF, and `String.fromCodePoint` throws
+// `RangeError` past it — from inside the diagnostic, so one such value aborted the runner before it
+// printed the failures already collected. A reporting path that destroys the report. Found by
+// review of #549. The control asserts the ordinary failure, which is what proves it no longer
+// throws: a `RangeError` kills the process and `expectRed` never sees its message.
 expectRed(
-  'a literal \\n in a catalogue value',
+  'a Unicode escape above the maximum code point',
   'checkCatalogueValuesAreRenderable',
   APP,
-  (write) => write('apps/nuxeo-ui/public/i18n/en.json', catalogue('Ligne un\\nLigne deux')),
-  /literal characters `\\n` rather than a newline/,
+  (write) => write('apps/nuxeo-ui/public/i18n/en.json', catalogue('cassé \\u{110000} ici')),
+  /above Unicode's maximum/,
 );
 
-// The rule rejects escapes that DENOTE a character, not the backslash itself. A UNC path and a
-// Windows path are legitimate user-facing text, and banning them is how this arm would become a
-// rule authors route around. Measured when it was written: no shipped catalogue contained any
-// literal escape except `\u`, so this control guards headroom rather than current behaviour.
+// Windows and UNC paths, which the first version of this arm rejected. `\t` in `C:\temp` and `\n`
+// in `\\nas\files` are path separators followed by an ordinary letter, not escapes, and the
+// diagnostic told the author to "store the character" — that is, to corrupt the path.
+//
+// These exact strings are the point. The original controls were `C:\Users` and `\\server\share`,
+// which passed only because `U` and `s` are not escape letters: two examples chosen by the author,
+// generalised from, and green for a reason unrelated to the rule being right. Review of #549 found
+// it. Every escape letter that can begin a real path segment belongs here.
 falsePositiveControls += 1;
-expectGreen(
-  'a UNC path and a drive letter in a catalogue value',
-  'checkCatalogueValuesAreRenderable',
-  {
-    ...APP,
-    'apps/nuxeo-ui/public/i18n/en.json': catalogue(
-      'Open \\\\server\\share or C:\\Users to continue',
-    ),
-  },
-);
+expectGreen('Windows and UNC paths in a catalogue value', 'checkCatalogueValuesAreRenderable', {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json': catalogue(
+    'Copy from C:\\temp, C:\\new, C:\\var, C:\\bin, C:\\files or \\\\nas\\x64\\reports',
+  ),
+});
+
+// The gap the retreat leaves, asserted on purpose rather than left to be discovered. A
+// double-escaped `\n` passes this gate: it is indistinguishable from `C:\new` by any test over the
+// value, so covering it would mean rejecting valid paths. If someone later makes this control go
+// red, that is the trade being reversed and the docstring is where the reasoning lives.
+falsePositiveControls += 1;
+expectGreen('a literal \\n, which this arm knowingly allows', 'checkCatalogueValuesAreRenderable', {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json': catalogue('Ligne un\\nLigne deux'),
+});
 
 // The same string the red control uses, holding the character instead of its escape: this is what
 // proves the arm reads the escape rather than the surrounding words.

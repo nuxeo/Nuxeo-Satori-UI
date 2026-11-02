@@ -7598,41 +7598,73 @@ function proseStringConstants(sources) {
  * this arm exists rather than being folded into the entity arm: nothing was looking for it, so
  * the strings were gate-green and would have shipped visibly broken.
  *
- * The rejected set is **escapes that denote a character**, not every backslash. A lone `\` is
- * legitimate in user-facing text — a UNC path, `C:\Users` — whereas `\u00a0`, `\x41`, `\n` and
- * `\t` are notation that something failed to decode. Measured before the rule was written: across
- * every shipped catalogue the only literal escape of any kind was `\u`, all of them French and all
- * from the one pull. So the narrow rule costs nothing today and the broad one would have banned a
- * character no catalogue misuses. (No count here on purpose — the number of catalogues changes with
- * every language that lands, so a figure written into this docstring would be wrong within a week.)
+ * ## The rejected set is the `\u` forms only, and that is a deliberate retreat
+ *
+ * This arm first rejected every escape that denotes a character: `\xNN` and the single-letter
+ * `\n`, `\t`, `\r`, `\b`, `\f`, `\v`, `\0` as well. Review of #549 killed those, correctly. A
+ * Windows or UNC path begins a segment with an escape letter often enough to be ordinary —
+ * `C:\temp`, `C:\new`, `C:\var`, `\\nas\files`, `\\host\x64\bin` — and a catalogue value is
+ * allowed to contain a path, so the rule was flagging legitimate text and its diagnostic told the
+ * author to corrupt it.
+ *
+ * No regex over the value can separate the two: `"Ligne un\nLigne deux"` and `"C:\new"` are the
+ * same string shape, and the difference is intent. A heuristic guessing at it would be a rule
+ * whose real behaviour nobody could predict — the objection this file already makes to
+ * `common.date-mask` below.
+ *
+ * `\uXXXX` and `\u{…}` survive because the collision is not real for them: a path segment would
+ * have to begin with four hex digits after the `u`. `C:\users` does not match (`sers` is not
+ * hex), and the shapes that would are not directory names anyone writes.
+ *
+ * **What that leaves uncovered, stated rather than implied:** a double-escaped `\n` or `\t` in a
+ * catalogue value now passes this gate. It is a real defect and nothing here catches it. The
+ * trade is deliberate — no catalogue has ever carried one, every observed instance of this class
+ * was `\uXXXX`, and a gate that corrupts valid paths to cover a hypothetical is the worse of the
+ * two failures.
+ *
+ * Which is also why the positive controls name `C:\temp` and `\\nas\files` specifically. The
+ * first pair were `C:\Users` and `\\server\share`, which passed only because `U` and `s` are not
+ * escape letters — two examples chosen by the author, generalised from, and green for a reason
+ * that had nothing to do with the rule being right.
+ *
+ * (No catalogue count in this docstring on purpose — it changes with every language that lands,
+ * so a figure written here would be wrong within a week.)
  */
 function checkCatalogueValuesAreRenderable() {
   const ENTITY = /&(?:[a-zA-Z]+|#\d+);/;
   const PLURAL_SUFFIX = /\(s\)/;
-  // An escape sequence that denotes a character, left undecoded. Not `\\` or `\` + any other
-  // letter: those are a real backslash in real text (a UNC path), which is a user-facing string.
-  const UNDECODED_ESCAPE = /\\(?:u\{[0-9a-fA-F]{1,6}\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[nrtbfv0])/;
+  // A `\u` escape left undecoded. Only the `\u` forms, for a reason worth keeping: `\n`, `\t`,
+  // `\v`, `\f`, `\b`, `\0` and `\xNN` are indistinguishable from an ordinary Windows or UNC path
+  // segment — `C:\temp`, `C:\new`, `C:\var`, `\\nas\files`, `\\host\x64\bin` all begin a segment
+  // with an escape letter — and no regex over the value alone can tell `"Ligne un\nLigne deux"`
+  // from `"C:\new"`, because they are the same string shape. So those arms are out; see the
+  // docstring for what that leaves uncovered.
+  const UNDECODED_ESCAPE = /\\u(?:\{[0-9a-fA-F]{1,6}\}|[0-9a-fA-F]{4})/;
 
-  /** What the escape was meant to be, so the message says what to store instead. */
-  const NAMED_ESCAPES = {
-    '\\n': 'a newline',
-    '\\r': 'a carriage return',
-    '\\t': 'a tab',
-    '\\b': 'a backspace',
-    '\\f': 'a form feed',
-    '\\v': 'a vertical tab',
-    '\\0': 'a NUL',
-  };
+  const MAX_CODE_POINT = 0x10ffff;
   const NOTABLE_CODE_POINTS = {
     0x00a0: 'a non-breaking space (U+00A0)',
     0x202f: 'a narrow no-break space (U+202F)',
     0x2009: 'a thin space (U+2009)',
   };
+
+  /**
+   * What the escape was meant to be, so the message says what to store instead.
+   *
+   * The range check is not defensive padding: `\u{1,6}` hex digits reach `U+FFFFFF`, far above
+   * Unicode's `U+10FFFF`, and `String.fromCodePoint` throws `RangeError` beyond it. That threw
+   * from inside the diagnostic, so one catalogue holding `\u{110000}` aborted the whole runner
+   * before it printed the failures it had already collected or ran the remaining checks — a
+   * reporting path that destroys the report. Out of range is still an undecoded escape and still
+   * fails; it just says so instead of crashing.
+   */
   const decodeEscape = (escape) => {
-    if (NAMED_ESCAPES[escape]) return NAMED_ESCAPES[escape];
-    const hex = /^\\(?:u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2}))$/.exec(escape);
+    const hex = /^\\u\{?([0-9a-fA-F]+)\}?$/.exec(escape);
     if (!hex) return 'a character';
-    const code = parseInt(hex[1] ?? hex[2] ?? hex[3], 16);
+    const code = parseInt(hex[1], 16);
+    if (code > MAX_CODE_POINT) {
+      return `a code point above Unicode's maximum (U+${code.toString(16).toUpperCase()}, max U+10FFFF), so it denotes nothing at all`;
+    }
     return (
       NOTABLE_CODE_POINTS[code] ??
       `U+${code.toString(16).toUpperCase().padStart(4, '0')} ("${String.fromCodePoint(code)}")`
