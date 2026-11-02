@@ -30,12 +30,12 @@
  * on first use. Nothing here writes to the repo's `node_modules` or lockfile.
  *
  * Usage:
- *   node tools/video/export-pptx.mjs                 # all three decks + combined
- *   node tools/video/export-pptx.mjs 01-provenance    # one deck (no combined file)
+ *   node tools/video/export-pptx.mjs                 # every deck in DECKS + combined
+ *   node tools/video/export-pptx.mjs 02-customize    # one deck (no combined file)
  */
 
 import { execFile } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -62,7 +62,31 @@ const PORT = 4412;
 /** Let the slide settle before the shutter. Transitions in deck.css are sub-300ms. */
 const SETTLE_MS = 400;
 
-const DECKS = ['01-provenance', '02-customize', '03-mock-customer'];
+/**
+ * The decks exported when no name is given, and the ones the combined file is built from.
+ *
+ * Deck numbers are identifiers, not ordinals, so this list has gaps on purpose.
+ * `01-provenance` was deleted with adf-hx (NXSAT-308) — a deck contrasting what came from
+ * adf-hx with what was ours has nothing left to contrast. Surviving decks keep their
+ * numbers rather than being renumbered: the number appears in the output filename and in
+ * links already shared, so renumbering would break more than the gap costs.
+ *
+ * `04-walkthrough` is deliberately **not** here. It is the customer walkthrough rather than
+ * a Beta overview deck, and `docs/demo-deck-plan.md` exports it on its own. It is still
+ * exportable by name — see `exportable()`.
+ */
+const DECKS = ['02-customize', '03-mock-customer'];
+
+/**
+ * A deck is exportable if its JSON is on disk, not if it is in {@link DECKS}.
+ *
+ * Those are different questions and conflating them was a real bug: `DECKS` has never
+ * contained `04-walkthrough`, so `node tools/video/export-pptx.mjs 04-walkthrough` — the
+ * command `docs/demo-deck-speaker-notes.md` and `docs/demo-deck-plan.md` both tell you to
+ * run — failed with "Unknown deck". Checking the directory also means adding or removing a
+ * deck needs no edit here beyond the default set.
+ */
+const exportable = (name) => existsSync(join(VIDEO_DIR, 'decks', `${name}.json`));
 const COMBINED = 'nuxeo-satori-beta';
 
 /** A .pptx of full-bleed 2x images cannot plausibly be smaller than this. */
@@ -277,7 +301,12 @@ async function verify(file, expectedSlides) {
 const args = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const wanted = args.length > 0 ? args : DECKS;
 for (const name of wanted) {
-  if (!DECKS.includes(name)) fail(`Unknown deck "${name}". Known: ${DECKS.join(', ')}`);
+  if (!exportable(name)) {
+    const known = readdirSync(join(VIDEO_DIR, 'decks'))
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.replace(/\.json$/, ''));
+    fail(`Unknown deck "${name}". Known: ${known.join(', ')}`);
+  }
 }
 
 let chromium;
@@ -348,7 +377,12 @@ try {
     const file = join(OUT_DIR, `${COMBINED}.pptx`);
     rmSync(file, { force: true });
     const sections = captured.map((d, i) => ({ title: `${i + 1}. ${d.title}`, frames: d.frames }));
-    const n = await writePptx(PptxGenJS, file, 'Nuxeo Satori Beta — three decks', sections);
+    const n = await writePptx(
+      PptxGenJS,
+      file,
+      `Nuxeo Satori Beta — ${sections.length} decks`,
+      sections,
+    );
     console.log(`\n  wrote ${file} — ${n} slides in ${sections.length} sections`);
     // Expected count comes from the captured frames, not from writePptx's own
     // return value — checking a writer against what it reports proves nothing.

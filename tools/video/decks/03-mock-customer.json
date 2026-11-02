@@ -3,7 +3,7 @@
   "slides": [
     {
       "kind": "title",
-      "eyebrow": "Nuxeo Satori Beta · 3 of 3",
+      "eyebrow": "Nuxeo Satori Beta · 2 of 2",
       "rule": true,
       "title": "A mock customer: Acme Corp",
       "lede": "A rebrand, a rule-gated navigation entry, and a custom panel — with zero edits to our libraries. Everything after this slide is running code."

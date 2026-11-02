@@ -3,7 +3,7 @@
   "slides": [
     {
       "kind": "title",
-      "eyebrow": "Nuxeo Satori Beta · 2 of 3",
+      "eyebrow": "Nuxeo Satori Beta · 1 of 2",
       "rule": true,
       "title": "How a customer customises it",
       "lede": "Four layers, ordered by what they cost you. The rule is: never fork to change something a layer already addresses."
@@ -137,14 +137,13 @@
             {
               "value": "1",
               "label": "package to upgrade",
-              "sub": "`@nuxeo/satori-platform` — one version, one changelog, five entry points",
+              "sub": "`@nuxeo/satori-platform` — one version, one changelog, seven entry points",
               "series": "adfhx"
             },
             {
-              "value": "2026",
-              "unit": "lines",
-              "label": "of API surface, pinned",
-              "sub": "A gate fails if any published signature changes without a decision",
+              "value": "643",
+              "label": "exported declarations, pinned",
+              "sub": "Snapshotted in `docs/api/platform.api.md` (5,508 lines). The `api-surface` gate fails if any published signature changes without a decision",
               "series": "ours"
             }
           ]

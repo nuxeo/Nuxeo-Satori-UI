@@ -19,7 +19,6 @@ import { spawnTool } from '../../scripts/beta-harness/package-command.mjs';
  * or to the repo.
  *
  * Usage:
- *   node tools/video/record.mjs 01-provenance
  *   node tools/video/record.mjs 02-customize
  *   node tools/video/record.mjs 03-mock-customer
  *   node tools/video/record.mjs all
@@ -46,7 +45,18 @@ export const VIEWPORT = { width: 1920, height: 1080 };
 export const DECK_PORT = 4410;
 export const TEMPLATE_PORT = 4411;
 
-const SCENES = ['01-provenance', '02-customize', '03-mock-customer'];
+/**
+ * Deck numbers are identifiers, not ordinals, so this list has gaps and that is fine.
+ *
+ * `01-provenance` was deleted with adf-hx (NXSAT-308): a deck explaining what came from
+ * adf-hx and what was ours has nothing left to explain. `04-walkthrough` has never had a
+ * scene — it is a slide deck exported by `export-pptx.mjs`, not a screencast.
+ *
+ * The numbers are not renumbered when one goes, because they appear in `deck.html?deck=<name>`
+ * URLs, in the output filenames under `$AGENTIC_UI_EVIDENCE_DIR/beta/video`, and in links
+ * already shared. Nothing globs `decks/`, so a gap costs nothing.
+ */
+const SCENES = ['02-customize', '03-mock-customer'];
 
 function fail(message) {
   console.error(`\nrecord: FAIL\n\n${message}\n`);
