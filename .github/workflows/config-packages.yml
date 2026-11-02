@@ -1,0 +1,167 @@
+name: Configuration packages
+
+# The customer path, checked the way a customer runs it: Node and nothing else.
+#
+# Until this workflow existed, the only CI check on `config-packages/*` was `ci.yml`'s
+# `nx affected -t build` — every package under `config-packages/` declares an Nx `build` target, so
+# a change to one was built there. `publish-config-package.yml` says so in its own header, and
+# gives it as the reason it has no `pull_request` trigger. But `ci.yml` runs `npm ci` with
+# `NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}` first, and without that token there is
+# no `node_modules` and no `nx`. So the one path we tell customers needs no credentials was checked
+# only by a job that cannot start without them: the zero-credential claim was asserted, never
+# tested, and could have regressed — a `require()` of a third-party module added to `build.mjs`
+# would have stayed green in `ci.yml` forever, because `ci.yml` installs the whole tree.
+#
+# Nothing here calls `npm ci`, `npm install` or `nx`, and `setup-node` is deliberately used WITHOUT
+# `registry-url`, so no `.npmrc` with an auth line is written and no `NODE_AUTH_TOKEN` is in scope.
+# The first step of the build job asserts that rather than trusting the paragraph above, because a
+# future edit that adds an install would otherwise make this workflow quietly meaningless while
+# still reporting green.
+#
+# What this proves and what it does not: it proves the scripts run with no credentials and that
+# what they write is a well-formed Nuxeo Package — `scripts/verify-package-zip.mjs` lists its
+# assertions, and its limits, in its own header. It does NOT stand up a Nuxeo server and install
+# the zip. That needs a Nuxeo image from a private registry and a Marketplace account to resolve
+# the `nuxeo-agentic-ui` dependency, which are the very credentials this lane exists without. A
+# real install is exercised by a person, against a real server, in `docs/beta-demo-runbook.md`.
+#
+# The `paths` lists below are duplicated rather than shared: GitHub Actions does not resolve YAML
+# anchors in a workflow file, so an alias here would be read as a literal string and the filter
+# would match nothing.
+
+on:
+  pull_request:
+    paths:
+      - 'config-packages/**'
+      - 'tools/satori-generators/src/config-package/**'
+      - 'scripts/check-build-mjs-copies.mjs'
+      - 'scripts/check-build-mjs-copies.selftest.mjs'
+      - 'scripts/verify-package-zip.mjs'
+      - 'scripts/verify-package-zip.selftest.mjs'
+      - '.github/workflows/config-packages.yml'
+  # Also on `main`, so a change that reaches it another way — a merge commit, an edit through the
+  # web UI, a revert — is still checked rather than only checked on the way in.
+  push:
+    branches: [main]
+    paths:
+      - 'config-packages/**'
+      - 'tools/satori-generators/src/config-package/**'
+      - 'scripts/check-build-mjs-copies.mjs'
+      - 'scripts/check-build-mjs-copies.selftest.mjs'
+      - 'scripts/verify-package-zip.mjs'
+      - 'scripts/verify-package-zip.selftest.mjs'
+      - '.github/workflows/config-packages.yml'
+
+concurrency:
+  group: config-packages-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # I3 — build every configuration package, and one freshly scaffolded, with no install, no
+  # registry configuration and no token.
+  credential-free-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # No `registry-url:`. Passing one writes an `.npmrc` whose auth line reads $NODE_AUTH_TOKEN,
+      # which is exactly the coupling this job exists to be free of.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # The claim under test, asserted rather than described. Each of these would make a green run
+      # here meaningless in a different way, and none of them is visible in a build log.
+      - name: Check this job really has no credentials and no install
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          if [ -d node_modules ]; then
+            fail "node_modules exists: something installed the tree, so this job no longer tests the no-install path"
+          fi
+          for var in NODE_AUTH_TOKEN NPM_TOKEN SATORI_GH_READONLY_TOKEN NPM_PACKAGES_TOKEN GITHUB_PACKAGES_TOKEN; do
+            if [ -n "${!var:-}" ]; then
+              fail "$var is set in this job; the credential-free path must not have one in scope"
+            fi
+          done
+          # setup-node writes ~/.npmrc only when given a registry-url. An auth line in either
+          # .npmrc would let a dependency resolve here that cannot resolve for a customer.
+          for rc in "$HOME/.npmrc" .npmrc; do
+            if [ -f "$rc" ] && grep -qiE '_auth|_authToken|_password' "$rc"; then
+              fail "$rc carries an auth line; this job would resolve packages a customer cannot"
+            fi
+          done
+          echo "No node_modules, no registry token, no auth line. Node $(node --version)."
+
+      # The committed packages. A customer edits fragments in a package shaped exactly like these,
+      # so a break here is a break in what they were handed.
+      - name: Build every configuration package with Node alone
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          built=0
+          for dir in config-packages/*/; do
+            if [ ! -f "${dir}build.mjs" ]; then continue; fi
+            name=$(basename "$dir")
+            echo "::group::$name"
+            node "${dir}build.mjs" --out "dist/config-packages/$name"
+            zips=("dist/config-packages/$name"/*.zip)
+            if [ ${#zips[@]} -ne 1 ]; then
+              echo "::error::$name produced ${#zips[@]} zip(s), expected exactly 1"
+              exit 1
+            fi
+            node scripts/verify-package-zip.mjs "${zips[0]}"
+            echo "::endgroup::"
+            built=$((built + 1))
+          done
+          # A loop over an empty glob succeeds silently, and a step that checked nothing reports
+          # the same green as one that checked everything.
+          if [ "$built" -eq 0 ]; then
+            echo "::error::no config-packages/*/build.mjs was built; this step checked nothing"
+            exit 1
+          fi
+          echo "$built configuration package(s) built and verified with no install and no token."
+
+      # The generator's own output, not only the two packages committed here — those could drift
+      # into working while what a customer scaffolds today does not. Scaffolded OUTSIDE the clone,
+      # which also catches a `create.mjs` that assumed the repository was the working directory.
+      - name: Scaffold a package with create.mjs and build that
+        run: |
+          set -euo pipefail
+          repo=$PWD
+          scratch=$(mktemp -d)
+          cd "$scratch"
+          node "$repo/tools/satori-generators/src/config-package/create.mjs" acme-config --owner=acme
+          node config-packages/acme-config/build.mjs
+          node "$repo/scripts/verify-package-zip.mjs" \
+            config-packages/acme-config/dist/acme-config-1.0.0.zip
+          cd "$repo"
+          rm -rf "$scratch"
+
+      # The verifier's negative controls: without them the two steps above prove only that the
+      # check can pass, never that it can fail.
+      - name: Controls for the package verifier
+        run: node scripts/verify-package-zip.selftest.mjs
+
+  # I4 — the three copies of build.mjs, which nothing compared until this job.
+  build-script-copies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Compare the copies of build.mjs
+        run: node scripts/check-build-mjs-copies.mjs
+
+      - name: Controls for the copy check
+        run: node scripts/check-build-mjs-copies.selftest.mjs
