@@ -235,7 +235,7 @@ export default async function run(page, h) {
     'the list is in the order the request asked for, on the title field',
     sortedPage.length > 1 &&
       sortParams.get('sortBy') === 'dc:title' &&
-      JSON.stringify(sortedPage) === JSON.stringify(askedOrder === 'desc' ? descending : ascending),
+      JSON.stringify(sortedPage) === JSON.stringify(askedOrder?.toUpperCase() === 'DESC' ? descending : ascending),
     `sortBy ${sortParams.get('sortBy')} sortOrder ${askedOrder}; before ${JSON.stringify(firstPage.slice(0, 3))} after ${JSON.stringify(sortedPage.slice(0, 3))}`,
   );
   // A reordered list alone does not prove the server was asked — adf-core-style tables also sort
@@ -326,8 +326,10 @@ export default async function run(page, h) {
     cardGrid >= 1 && listWhileCards === 0,
     `card grids ${cardGrid}, lists ${listWhileCards}`,
   );
-  // One card outlet per document, so the grid itself is not the evidence: the cards are.
-  const cardCount = await page.locator('.card-grid .card-outlet').count();
+  // The unconditional host is not the card: count the rendered card headings, and wait for the grid to
+  // fill first, so a loading grid is not read as an empty one.
+  await page.waitForFunction((n) => document.querySelectorAll('.card-grid nxs-satori-card').length >= n, listRows, { timeout: 120000 }).catch(() => {});
+  const cardCount = await page.locator('.card-grid nxs-satori-card').evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().height > 0).length);
   h.check(
     'card view renders one card per listed document',
     cardCount > 0 && cardCount === listRows,
