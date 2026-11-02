@@ -393,6 +393,54 @@ describe('NxsMetadataEditorComponent', () => {
     expect(host.editor().dirtyProperties()['dc:description']).toBe('Too long');
   });
 
+  it('keeps a repeated field of the type required when any listing says so, in every listing', async () => {
+    const contacts = (required: boolean) => ({
+      xpath: 'pol:contacts',
+      label: 'Contacts',
+      definition: {
+        type: 'complex[]',
+        ...(required ? { required } : {}),
+        fields: { name: { type: 'string' } },
+      },
+    });
+    host.sections.set([
+      { id: 'a', heading: 'A', fields: [contacts(true)] },
+      { id: 'b', heading: 'B', fields: [contacts(false)] },
+    ]);
+    host.values.set({ 'dc:title': 'Claim', 'pol:contacts': [] });
+    await settle();
+
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(element.querySelectorAll('[data-xpath="pol:contacts"]')).toHaveLength(2);
+    expect(errors().filter((error) => error === 'Contacts is required.')).toHaveLength(2);
+  });
+
+  it('keeps a half-typed date, and its error, when new sections change the field’s checks', async () => {
+    const expires = (required: boolean) => ({
+      id: 'dc',
+      heading: null,
+      fields: [
+        {
+          xpath: 'dc:expired',
+          label: 'Expires',
+          definition: { type: 'date', ...(required ? { required } : {}) },
+        },
+      ],
+    });
+    host.sections.set([POLICY, expires(true)]);
+    await settle();
+    await type('dc:expired', '12/');
+    expect(host.editor().validate()).toBe(false);
+
+    host.sections.set([POLICY, expires(false)]);
+    await settle();
+    expect(field('dc:expired').value).toBe('12/');
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(errors()).toContain(`Enter a date like 12/31/${new Date().getFullYear()}`);
+  });
+
   it('reports nothing changed until the user edits, then only what changed, trimmed', async () => {
     expect(host.editor().dirtyProperties()).toEqual({});
     await type('dc:title', '  New title  ');
