@@ -50,8 +50,13 @@ must carry the same two links as `index.html`.
 - an **advertised** URL that stops answering fails the gate — the class of failure behind the
   five-day Storybook blackout of 23–28 October, which was found only because a human opened the
   page;
-- a **known-dead** URL that starts answering also fails the gate, so this document cannot outlive
-  its own subject.
+- a **known-dead** URL that starts answering also fails the gate, so the ledger entry cannot
+  silently outlive its own subject.
+
+**What that does not cover.** The gate reads the two lists in `published-links.mjs`. It does not
+read this file. If someone deletes the `KNOWN_DEAD` entry and leaves this page in place, the gate
+goes green and this page is then wrong with nothing to say so — the entry's `fix:` field points
+here, but that is prose, not a mechanism. Delete the two together.
 
 It needs the network. `BETA_SKIP_PUBLISHED_LINKS=1` makes it report NOT RUN, which is never green:
 the run is then `pass-incomplete` rather than `pass`.

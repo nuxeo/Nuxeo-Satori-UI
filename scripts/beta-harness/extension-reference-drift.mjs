@@ -43,7 +43,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const REFERENCE = join(ROOT, 'docs', 'extension-reference.md');
@@ -294,16 +294,6 @@ const GENERATOR = join(
   'satori-component',
   'generator.ts',
 );
-const PROVIDER = join(
-  ROOT,
-  'libs',
-  'shared',
-  'satori-components',
-  'src',
-  'lib',
-  'provide-nxs-components.ts',
-);
-
 const generatorSource = stripComments(readFileSync(GENERATOR, 'utf8'));
 const slotNames = (
   generatorSource.match(/const SLOTS: readonly SatoriComponentSlot\[\] = \[([^\]]*)\]/)?.[1] ?? ''
@@ -318,18 +308,41 @@ if (slotNames.length === 0) {
   );
 }
 
-/** `nxs.<slot>.<name>` keys in `provideNxsComponents()`. The primitives key off a constant. */
-const providerSource = stripComments(readFileSync(PROVIDER, 'utf8'));
-const slotRegistered = new Map(
-  [
-    ...providerSource.matchAll(
-      new RegExp(
-        String.raw`'(nxs\.(?:${slotNames.map(reEscape).join('|')})\.[a-zA-Z0-9]+)'\s*:\s*(\w+)`,
-        'g',
-      ),
-    ),
-  ].map((m) => [m[1], m[2]]),
-);
+/**
+ * Every `nxs.<slot>.<name>` ID registered in non-spec source, with the class and the file.
+ *
+ * Scanned across **all** non-spec source, not only `provideNxsComponents()`.
+ *
+ * The first version read that one provider, because it is the file the generator writes into and
+ * the one this section's prose names. Two things were wrong with that, and only the second is
+ * what it looked like:
+ *
+ * 1. The verdict line claimed "no `nxs.<slot>.*` ID is registered" while having looked at one
+ *    file — a statement wider than its evidence, which is this gate's own defect class one level
+ *    up. Registration is not confined to that provider: the four `nxs.components.*` IDs live in
+ *    `apps/nuxeo-ui/src/app/extensions/provide-app-extensions.ts`.
+ * 2. **The consequence was a false positive, not a missed gap** — the opposite of what I assumed
+ *    when widening it. Driven both ways against a real tree: registering `nxs.tabs.claimSummary`
+ *    in `provide-app-extensions.ts` with no row made the narrow version go red anyway, through
+ *    the ID-level "registered but absent from the reference" check above. But registering it
+ *    there *and* adding its row made the narrow version fail a **correct** tree, reporting
+ *    "`provideNxsComponents()` registers no such ID" about an ID that is registered — telling
+ *    the author to add a registration that already existed. The widened scan is green on that
+ *    tree and red on the genuine gap.
+ *
+ * `slotNames` comes from the generator, so a fifth slot widens this with it.
+ */
+const slotIdPattern = String.raw`nxs\.(?:${slotNames.map(reEscape).join('|')})\.[a-zA-Z0-9]+`;
+/** @type {Map<string, { className: string, file: string }>} */
+const slotRegistered = new Map();
+for (const [file, text] of sources) {
+  // `'<id>': SomeComponent` — a registry entry. A bare mention of an ID is not a registration.
+  for (const match of text.matchAll(
+    new RegExp(String.raw`['"\`](${slotIdPattern})['"\`]\s*:\s*(\w+)`, 'g'),
+  )) {
+    slotRegistered.set(match[1], { className: match[2], file: relative(ROOT, file) });
+  }
+}
 
 const componentRows = tableAfter('satori:register:nxs-components').map((line) => {
   const cells = line
@@ -348,8 +361,8 @@ for (const row of componentRows) {
   }
   if (!slotRegistered.has(row.id)) {
     fail(
-      `Section 6b lists \`${row.id}\` as registered for a slot, but \`provideNxsComponents()\` ` +
-        'registers no such ID.\n' +
+      `Section 6b lists \`${row.id}\` as registered for a slot, but nothing outside specs ` +
+        'registers that ID to a component.\n' +
         '  A customer placing it in a manifest would place nothing.',
     );
   }
@@ -367,10 +380,11 @@ for (const row of componentRows) {
   }
 }
 
-for (const [id, className] of slotRegistered) {
+for (const [id, { className, file }] of slotRegistered) {
   if (!componentRows.some((row) => row.id === id)) {
     fail(
-      `\`${id}\` (${className}) is registered for a slot and has no row in section 6b.\n` +
+      `\`${id}\` (${className}, registered in ${file}) is registered for a slot and has no row ` +
+        'in section 6b.\n' +
         '  An addressable component a customer cannot discover is not addressable.',
     );
   }

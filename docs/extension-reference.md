@@ -982,11 +982,18 @@ places them: a manifest entry in that slot does, with `componentId` set to the I
 **Empty, and correctly so — not emptied.** Nothing has been generated for `sidebar`, `tabs`,
 `documentView` or `routes` yet. Every `nxs.` ID the product registers is either a
 `nxs.primitives.*` placed by a screen that resolves it (section 6a) or one of the four
-`nxs.components.*` panels and pages in section 6. The `reference-drift` gate asserts both
-directions of this table on every run: a row naming an ID `provideNxsComponents()` does not
-register fails it, and an `nxs.<slot>.<name>` registration with no row here fails it too. Until
-2026-11-02 neither could happen — the gate's row pattern could not match an ID containing dots, so
-no row in this table was ever read, and an empty table was indistinguishable from a correct one.
+`nxs.components.*` panels and pages in section 6.
+
+The `reference-drift` gate checks this table in both directions on every run: a row naming an ID
+that nothing outside specs registers to a component fails it, and an `nxs.<slot>.<name>`
+registration with no row here fails it too. Until 2026-11-02 neither could happen — the gate's row
+pattern could not match an ID containing dots, so no row in this table was ever read, and an empty
+table was indistinguishable from a correct one.
+
+What it checks is narrower than the sentence above it: it looks for a registry entry of the form
+`'<id>': SomeComponent` in non-spec TypeScript under `apps/` and `libs/`. A component registered
+by some other mechanism would not be found, and nothing here judges whether a row's _prose_ is
+accurate — only its ID, its element's selector and its slot name.
 
 ---
 

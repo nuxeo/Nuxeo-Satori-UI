@@ -45,7 +45,13 @@ import { readFileSync } from 'node:fs';
 
 import { NOT_RUN_EXIT_CODE } from './gate-summary.mjs';
 
-/** A URL the repository tells a reader to visit. Dead means the reader is sent nowhere. */
+/**
+ * A URL the repository tells a reader to visit. Dead means the reader is sent nowhere.
+ *
+ * Hand-maintained, and that is the gate's main limitation: it does not discover addresses by
+ * scanning the repository, so a URL advertised in a document and absent from this list is not
+ * checked. Do not read a pass as "every published link in the repository works".
+ */
 export const ADVERTISED = [
   {
     url: 'https://nuxeo.github.io/Nuxeo-Satori-UI/',
