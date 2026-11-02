@@ -102,6 +102,10 @@ worse than the restart it saves.
 Docker, which is what a local Nuxeo usually is:
 
 ```bash
+# Once, before the first copy. The server reports the directory as absent rather than creating
+# it, and `docker cp` of a single file into a parent that does not exist fails.
+docker exec nuxeo mkdir -p /var/lib/nuxeo/agentic-ui-config-dev
+
 docker cp bundle/agentic-ui-config/bootstrap.json \
   nuxeo:/var/lib/nuxeo/agentic-ui-config-dev/bootstrap.json
 ```

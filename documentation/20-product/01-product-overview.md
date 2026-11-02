@@ -87,12 +87,12 @@ product follows from it.
 
 ## The four layers — the core of the value proposition
 
-| Layer                      | Customer writes                 | App rebuild? | Example                                                                                                              |
-| -------------------------- | ------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------- |
-| **0 — Configuration**      | JSON + CSS variables            | **No**       | Rebrand: colours, product name, header and sign-in logo, default language — not the rail mark, rail title or favicon |
-| **1 — Declarative wiring** | JSON referencing registered IDs | **No**       | Hide the Reports nav entry; relabel Home to "Dashboard"; add a Contracts entry at position 35                        |
-| **2 — Customer code**      | TypeScript in **their** repo    | Yes, theirs  | A contract-approval action visible only to users who can write the document                                          |
-| **3 — Agent harness**      | Prompts                         | Yes, theirs  | The same request as a short agent session against a defined API                                                      |
+| Layer                      | Customer writes                 | App rebuild? | Example                                                                                                                       |
+| -------------------------- | ------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| **0 — Configuration**      | JSON + CSS variables            | **No**       | Rebrand: colours, product name, header and sign-in logo, browser tab icon, default language — not the rail mark or rail title |
+| **1 — Declarative wiring** | JSON referencing registered IDs | **No**       | Hide the Reports nav entry; relabel Home to "Dashboard"; add a Contracts entry at position 35                                 |
+| **2 — Customer code**      | TypeScript in **their** repo    | Yes, theirs  | A contract-approval action visible only to users who can write the document                                                   |
+| **3 — Agent harness**      | Prompts                         | Yes, theirs  | The same request as a short agent session against a defined API                                                               |
 
 For Layers 0 and 1 the only build is the customer's configuration package, zipped by a
 dependency-free script (`npx nx build <package>`) and installed; the application is not rebuilt.
