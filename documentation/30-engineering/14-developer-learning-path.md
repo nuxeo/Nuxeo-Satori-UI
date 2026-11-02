@@ -857,7 +857,7 @@ most of that surface; `app.config.ts` and the shell nav drawer also import it on
 - [ADF source](https://github.com/Alfresco/alfresco-ng2-components)
 - **In-repo, and the only accurate source for the bridge:** `libs/shared/adf-hx-bridge/ARCHITECTURE.md`
   (removed with the bridge; in git history),
-  `docs/adf-hx-upstream-findings.md`, `docs/adf-hx-workarounds.md`, `docs/adf-hx-beta-plan.md`
+  `docs/adf-hx-upstream-findings.md`, `docs/adf-hx-beta-plan.md`
 
 Estimated effort: **30 hours**.
 

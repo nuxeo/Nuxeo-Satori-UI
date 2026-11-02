@@ -1652,120 +1652,6 @@ function checkAngularDevAssets() {
 }
 
 /**
- * Every adf-hx marker in the codebase must have a row in `docs/adf-hx-workarounds.md`, and every
- * row naming a code site must have its marker there.
- *
- * The register exists so the cost of adopting adf-hx is countable. A markdown list with no gate
- * decays the moment someone adds a thirteenth workaround and forgets the row — the programme has
- * three gates that exist for exactly that reason, so this one does too.
- *
- * Checked in both directions, because they catch different decay:
- *
- * - **marker with no row** — a workaround was added and never registered. The common case.
- * - **row with no marker** — a workaround was removed, or the row points at the wrong file, so the
- *   register overstates what the code does. Rows whose site is a `.json` file are exempt: JSON
- *   cannot carry a comment, and `— (config)` in the row declares that.
- * - **marker kind disagreeing with its ID** — `MISSING(adf-hx): W3` is a mislabelled category, and
- *   the categories have different audiences, so the mislabel matters.
- */
-function checkAdfHxWorkaroundIds() {
-  const register = 'docs/adf-hx-workarounds.md';
-  if (!fileExists(register)) {
-    fail(`${register} does not exist, but the adf-hx marker gate depends on it.`);
-    return;
-  }
-
-  const KIND_BY_LETTER = {
-    W: 'WORKAROUND(adf-hx)',
-    M: 'MISSING(adf-hx)',
-    R: 'REFUSES',
-    D: 'DEGRADED(adf-hx)',
-  };
-  const MARKER =
-    /(WORKAROUND\(adf-hx\)|MISSING\(adf-hx\)|REFUSES|DEGRADED\(adf-hx\)):\s*([WMRD]\d+)/g;
-
-  // ---- the register's rows ----
-  /** @type {Map<string, { configOnly: boolean, line: number }>} */
-  const rows = new Map();
-  const registerLines = read(register).split('\n');
-  registerLines.forEach((text, index) => {
-    // A table row whose first cell is an id: `| W1  | … |`
-    const match = /^\|\s*([WMRD]\d+)\s*\|/.exec(text);
-    if (!match) return;
-    const id = match[1];
-    if (rows.has(id)) {
-      fail(`${register}:${index + 1} declares ${id} twice. An id must identify one row.`);
-      return;
-    }
-    // Two documented exemptions from the "must have a marker" rule:
-    //   `(config)` — the site is a `.json` file, which cannot hold a comment.
-    //   `(fixed`   — the workaround is gone. The register keeps the row on purpose, because the
-    //                history of what adf-hx cost is the point of the file, but there is no longer
-    //                a marker to find.
-    rows.set(id, {
-      configOnly: text.includes('(config)') || text.includes('(fixed'),
-      line: index + 1,
-    });
-  });
-
-  if (rows.size === 0) {
-    fail(`${register} has no id rows, so the marker gate cannot verify anything.`);
-    return;
-  }
-
-  // ---- the codebase's markers ----
-  /** @type {Map<string, string[]>} */
-  const markerSites = new Map();
-  // `--others --exclude-standard` as well as tracked, because a workaround introduced in a
-  // **new** file is invisible to `ls-files` alone. That gap surfaced the first time this gate ran
-  // against a new pager component: the row was flagged as having no marker while the marker was
-  // sitting in an untracked file. Gitignored files stay excluded — they are not the codebase.
-  const sources = git(['ls-files', '--cached', '--others', '--exclude-standard'])
-    .split('\n')
-    .filter(Boolean)
-    // The register and the findings document quote marker names as documentation, and the gate's
-    // own source contains the pattern. Scanning them would make the gate assert about itself.
-    .filter((file) => !file.startsWith('docs/') && file !== 'scripts/review-guardrails.mjs')
-    .filter((file) => /\.(ts|mts|mjs|js|html|scss)$/.test(file));
-
-  for (const file of sources) {
-    if (!fileExists(file)) continue;
-    const body = read(file);
-    for (const found of body.matchAll(MARKER)) {
-      const [, kind, id] = found;
-      const expected = KIND_BY_LETTER[id[0]];
-      if (kind !== expected) {
-        fail(
-          `${file} marks ${id} as \`${kind}:\` but its id belongs to category ${id[0]}, whose ` +
-            `marker is \`${expected}:\`. The categories have different audiences.`,
-        );
-      }
-      if (!markerSites.has(id)) markerSites.set(id, []);
-      markerSites.get(id).push(file);
-    }
-  }
-
-  // ---- forward: every marker has a row ----
-  for (const [id, sites] of markerSites) {
-    if (rows.has(id)) continue;
-    fail(
-      `${sites[0]} carries marker ${id}, which has no row in ${register}. Add the row, or use an ` +
-        'existing id if this is another site for the same workaround.',
-    );
-  }
-
-  // ---- reverse: every non-config row has a marker ----
-  for (const [id, row] of rows) {
-    if (row.configOnly || markerSites.has(id)) continue;
-    fail(
-      `${register}:${row.line} declares ${id} but no source file carries that marker. Either the ` +
-        'workaround is gone — strike the row through rather than deleting it — or the row names ' +
-        'the wrong site.',
-    );
-  }
-}
-
-/**
  * No `@alfresco/*` type may be reachable from a library's public barrel.
  *
  * `docs/adf-hx-beta-plan.md` sets this as a **hard rule** for Phase 3 — "adf-hx types must never
@@ -12455,7 +12341,6 @@ const GUARDRAILS = [
   checkHardcodedSecrets,
   checkNoNuxeoCredentialDefaults,
   checkAngularDevAssets,
-  checkAdfHxWorkaroundIds,
   checkNoAdfHxInPublicApi,
   checkNoHardcodedUiText,
   checkNoHardcodedDescriptorText,

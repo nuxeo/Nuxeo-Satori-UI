@@ -143,6 +143,7 @@ should not be read as current status:
 | [`docs/architecture.md`](../docs/architecture.md)                                     | 54 lines, thin; superseded by [Architecture](30-engineering/02-architecture.md)                                                                                           |
 | [`docs/adf-hx-poc-action-plan.md`](../docs/adf-hx-poc-action-plan.md)                 | Explicitly superseded by `docs/adf-hx-beta-plan.md` in its own header                                                                                                     |
 | [`docs/consolidated-agentic-ai-report.md`](../docs/consolidated-agentic-ai-report.md) | Retrospective with a cost-benefit section; cited by [Cost & TCO](10-leadership/03-cost-and-tco.md)                                                                        |
+| [`docs/adf-hx-upstream-findings.md`](../docs/adf-hx-upstream-findings.md)             | The defect report sent to the adf-hx team, against adf-hx 7.20.0-automate.292 and adf-core 9.0.0. A record, not current status: neither package is installed any more    |
 
 **Still authoritative and not superseded**, because they are maintained and gated:
 
@@ -154,9 +155,6 @@ should not be read as current status:
   gated by `npm run beta:api`
 - [`AGENTS/`](../AGENTS) and [`CLAUDE.md`](../CLAUDE.md) — the agent contract. Read by AI
   tools on every task; these pages describe it but do not replace it
-- [`docs/adf-hx-workarounds.md`](../docs/adf-hx-workarounds.md) and
-  [`docs/adf-hx-upstream-findings.md`](../docs/adf-hx-upstream-findings.md) — both gated
-  in `scripts/review-guardrails.mjs`
 
 ---
 
