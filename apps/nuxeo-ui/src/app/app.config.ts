@@ -7,7 +7,7 @@ import { TranslateLoader, provideTranslateService } from '@ngx-translate/core';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
 import { CURRENT_USERNAME, ADMIN_ACCESS_CHECKS } from '@nuxeo/satori-platform/nuxeo-client';
-import { provideNxsComponents } from '@nuxeo/satori-platform/components';
+import { provideNxsComponents, provideNxsTagWrites } from '@nuxeo/satori-platform/components';
 import { provideNxsSatoriComponents } from '@nuxeo/satori-platform/components-satori';
 import { nuxeoAuthInterceptor } from './auth/nuxeo-auth.interceptor';
 import { AuthService } from './auth/auth.service';
@@ -39,6 +39,8 @@ export const appConfig: ApplicationConfig = {
     // build without GitHub Packages access lists only the first.
     provideNxsComponents(),
     provideNxsSatoriComponents(),
+    // At the root, so a tag change outlives the Browse panel or document page that made it.
+    provideNxsTagWrites(),
     // Layer 1: registers the application's slot, rule and component IDs. Must
     // follow `provideAppConfig()`, which loads the manifest they are merged with.
     ...provideAppExtensions(),
@@ -57,6 +59,13 @@ export const appConfig: ApplicationConfig = {
       useValue: { color: 'primary' },
     },
     provideTranslateService({
+      // No `fallbackLang` here on purpose, and `initialiseAppConfigAndLanguage` calls
+      // `setFallbackLang('en')` instead. `TranslateService` applies a configured `fallbackLang`
+      // in its constructor — before `AppConfigService.load()` has been awaited — and
+      // ngx-translate never re-fetches a language already in its store, so the English
+      // catalogue would be cached without the manifest's `labels` and a customer's relabelling
+      // would be lost for the session. Measured on NXSAT-732; guarded by
+      // `shared-strings-at-startup.spec.ts`.
       loader: { provide: TranslateLoader, useClass: AppTranslateLoader },
     }),
     {

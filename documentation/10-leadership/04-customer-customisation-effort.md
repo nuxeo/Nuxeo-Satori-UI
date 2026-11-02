@@ -44,7 +44,7 @@ Because "hours vs days" needs a basis, here is the mechanical difference:
 | Band      | What the customer must do                                                                                                                                                                      |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Hours** | Edit one JSON fragment (Layer 0 or Layer 1) in their configuration package and install it. No application build, no test suite, no CI. Takes effect the next time the application is opened    |
-| **Days**  | Generate scaffolding, implement a handler or rule, run 5 guardrail checks, write a spec asserting registry state, build their library, add a provider line, wire a route, deploy their package |
+| **Days**  | Generate scaffolding, implement a handler or rule, run 6 guardrail checks, write a spec asserting registry state, build their library, add a provider line, wire a route, deploy their package |
 | **Weeks** | The above, several times, plus their own design system, their own tests at whatever bar they hold, and integration with their systems                                                          |
 
 The **step change is between Layer 1 and Layer 2**, and it is a step change in _kind_: from
@@ -59,7 +59,7 @@ Verified present, and shipped inside the package:
 | Accelerator                                          | Removes                                                                                                                                |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | 4 Nx generators                                      | Boilerplate, registration wiring, spec scaffolding, tsconfig/vite setup — the generated library registers **live**, not merely present |
-| Guardrail script — 5 checks                          | The 5 mistake classes actually made in this repository. An agent can verify itself before human review                                 |
+| Guardrail script — 6 checks                          | The 6 mistake classes actually made in this repository. An agent can verify itself before human review                                 |
 | `AGENTS.md` + extension reference, shipped as assets | The agent inferring the architecture and getting it wrong                                                                              |
 | The forkable template                                | Ships **no design system**, so the customer adds theirs instead of removing ours                                                       |
 | Upgrade rehearsal pattern                            | Uncertainty about whether their work survives — reproducible in their own CI                                                           |

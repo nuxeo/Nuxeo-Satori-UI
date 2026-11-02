@@ -163,7 +163,16 @@ function withFixture(files, mutate, run, options = {}) {
        * fixture is shallow with FULL branch coverage, so it isolates shallowness. */
       const clone = spawnSync(
         'git',
-        ['clone', '--quiet', '--depth', '1', '--no-single-branch', '--no-local', `file://${dir}`, runDir],
+        [
+          'clone',
+          '--quiet',
+          '--depth',
+          '1',
+          '--no-single-branch',
+          '--no-local',
+          `file://${dir}`,
+          runDir,
+        ],
         { encoding: 'utf8' },
       );
       if (clone.status !== 0) throw new Error(`shallow clone failed: ${clone.stderr}`);
@@ -189,8 +198,14 @@ function withFixture(files, mutate, run, options = {}) {
       const clone = spawnSync(
         'git',
         [
-          'clone', '--quiet', '--single-branch', '--branch', initialBranch,
-          '--no-local', `file://${dir}`, runDir,
+          'clone',
+          '--quiet',
+          '--single-branch',
+          '--branch',
+          initialBranch,
+          '--no-local',
+          `file://${dir}`,
+          runDir,
         ],
         { encoding: 'utf8' },
       );
@@ -267,19 +282,26 @@ function expectRed(label, guardrail, files, mutate, expected) {
 function expectWarn(label, guardrail, files, mutate, expected, options) {
   if (!selected(guardrail)) return;
   negative += 1;
-  withFixture(files, mutate, (runGuardrail) => {
-    const { code, out } = runGuardrail(guardrail);
-    if (code !== 0) {
-      failures.push(`${label}: ${guardrail} failed, but this should only warn.\n    ${out.trim()}`);
-      return;
-    }
-    if (!expected.test(out)) {
-      failures.push(
-        `${label}: ${guardrail} was green but did not warn about it.\n` +
-          `    expected /${expected.source}/\n    got: ${out.trim()}`,
-      );
-    }
-  }, options);
+  withFixture(
+    files,
+    mutate,
+    (runGuardrail) => {
+      const { code, out } = runGuardrail(guardrail);
+      if (code !== 0) {
+        failures.push(
+          `${label}: ${guardrail} failed, but this should only warn.\n    ${out.trim()}`,
+        );
+        return;
+      }
+      if (!expected.test(out)) {
+        failures.push(
+          `${label}: ${guardrail} was green but did not warn about it.\n` +
+            `    expected /${expected.source}/\n    got: ${out.trim()}`,
+        );
+      }
+    },
+    options,
+  );
 }
 
 /** Asserts a correct tree is green — the control that stops a guardrail failing on everything. */
@@ -4272,15 +4294,17 @@ expectGreen('short prose made of date-pattern characters', 'checkNoTranslatableD
     '  "k": "Off"\n}\n',
 });
 
-// Allowing non-ASCII literals through is the change most able to start flagging real prose,
-// so the CJK and Thai catalogues get their own control rather than being assumed safe.
+// Allowing non-ASCII literals through is the change most able to start flagging real prose, so
+// the non-Latin catalogues get their own control rather than being assumed safe. Arabic and
+// Hebrew replaced Chinese and Thai here when the language set was aligned to Web UI: both are
+// still non-Latin, and these are scripts the application now advertises.
 falsePositiveControls += 1;
 expectGreen('non-ASCII prose in a translated catalogue', 'checkNoTranslatableDatePatterns', {
   ...APP,
   'apps/nuxeo-ui/public/i18n/ja.json':
     '{\n  "a": "ダウンロード",\n  "b": "PDF をダウンロード"\n}\n',
-  'apps/nuxeo-ui/public/i18n/zh.json': '{\n  "a": "设置"\n}\n',
-  'apps/nuxeo-ui/public/i18n/th.json': '{\n  "a": "การตั้งค่า"\n}\n',
+  'apps/nuxeo-ui/public/i18n/ar.json': '{\n  "a": "الإعدادات"\n}\n',
+  'apps/nuxeo-ui/public/i18n/he.json': '{\n  "a": "הגדרות"\n}\n',
 });
 
 // A rendered date is not a pattern, and must not be read as one.
@@ -8344,6 +8368,371 @@ expectRed(
   /checkSatoriLibrariesKeepHostDateAdapter asserted nothing/,
 );
 
+// checkSatoriStylesheetsAreLogical (NXSAT-752)
+
+const NXS_STYLE = `${NXS_ROOT}/src/lib/pager/pager.component.scss`;
+/** A stylesheet body wrapped in a rule, which is where a declaration actually lives. */
+const style = (body) => `.nxs-pager__thing {\n${body}\n}\n`;
+
+expectGreen(
+  'a stylesheet written entirely in logical properties',
+  'checkSatoriStylesheetsAreLogical',
+  {
+    [NXS_STYLE]: style(
+      '  margin-inline-start: 4px;\n' +
+        '  padding-inline-end: 28px;\n' +
+        '  inset-inline-start: 0;\n' +
+        '  inset-inline: 0;\n' +
+        '  text-align: start;\n' +
+        '  border-start-start-radius: 2px;\n' +
+        '  float: inline-end;',
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'shorthands that are already symmetric across the inline axis',
+  'checkSatoriStylesheetsAreLogical',
+  {
+    // Two- and three-value shorthands cannot be asymmetric horizontally, and a four-value one
+    // whose 2nd and 4th match is symmetric. Flagging any of these would have made the gate fire
+    // on most of the library, and it would have been born suppressed.
+    [NXS_STYLE]: style(
+      '  padding: 6px 8px;\n' +
+        '  margin: 0 0 4px;\n' +
+        '  padding: 12px 16px 12px 16px;\n' +
+        '  inset: 0;',
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'the physical names appearing in comments, in a mirrored transform and in a gradient',
+  'checkSatoriStylesheetsAreLogical',
+  {
+    // `scaleX(-1)` on a chevron is the one RTL idiom that is NOT a logical property — a mirrored
+    // glyph has no logical equivalent — so the five real ones in the library must survive this
+    // gate. `to right` is a gradient axis, not a box edge.
+    [NXS_STYLE]:
+      '// margin-left was wrong here; see NXSAT-752\n' +
+      ":host-context([dir='rtl']) .nxs-pager__chevron {\n  transform: scaleX(-1);\n}\n" +
+      '.nxs-pager__fade {\n  background: linear-gradient(to right, #000, transparent);\n}\n',
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a physical property with a waiver that gives a reason',
+  'checkSatoriStylesheetsAreLogical',
+  {
+    [NXS_STYLE]: style(
+      '  // logical-properties-ok: overrides upstream inside its own dir block\n  left: 0;',
+    ),
+  },
+);
+
+expectRed(
+  '[logical properties] a physical margin',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  margin-left: 4px;') },
+  null,
+  /uses the physical property `margin-left`.*Use `margin-inline-start`/s,
+);
+
+expectRed(
+  '[logical properties] a physical positioning offset',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  position: absolute;\n  right: 4px;') },
+  null,
+  /uses the physical property `right`.*Use `inset-inline-end`/s,
+);
+
+expectRed(
+  '[logical properties] text-align: left',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  text-align: left;') },
+  null,
+  /sets `text-align: left`.*Use `text-align: start`/s,
+);
+
+expectRed(
+  '[logical properties] a four-value shorthand whose inline values differ',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  padding: 12px 8px 12px 16px;') },
+  null,
+  /four-value shorthand whose inline values differ \(`8px` then `16px`\)/,
+);
+
+expectRed(
+  '[logical properties] a physical corner radius',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  border-bottom-right-radius: 8px;') },
+  null,
+  /uses the physical property `border-bottom-right-radius`.*Use `border-end-end-radius`/s,
+);
+
+expectRed(
+  '[logical properties] the satori fallback library is covered too, not only the base one',
+  'checkSatoriStylesheetsAreLogical',
+  { [`${NXS_SAT_ROOT}/src/lib/tabs/tabs.component.scss`]: style('  padding-left: 12px;') },
+  null,
+  /satori-components-satori.*uses the physical property `padding-left`/s,
+);
+
+expectRed(
+  '[logical properties] a waiver with no reason after the colon suppresses nothing',
+  'checkSatoriStylesheetsAreLogical',
+  // The whole point of requiring prose: a bare marker would become a reflex, and then the gate
+  // is off wherever anyone found it inconvenient.
+  { [NXS_STYLE]: style('  // logical-properties-ok:\n  margin-right: 4px;') },
+  null,
+  /uses the physical property `margin-right`/,
+);
+
+expectRed(
+  '[logical properties] a tree with no nxs- stylesheets',
+  'checkSatoriStylesheetsAreLogical',
+  { 'README.md': '# fixture\n' },
+  null,
+  /No `nxs-` stylesheet was read, so the logical-property gate asserted nothing/,
+);
+
+/*
+ * Parsing controls — every one of these was a defect in the first version of this gate, and all
+ * four are the same mistake: reading a stylesheet as lines of `property: value` rather than as
+ * CSS. Three were found by review on #523, the fourth by probing for what review had not covered.
+ *
+ * They are kept as a block because the shape recurs. A gate that scans source with a
+ * line-anchored regex will mis-read a block comment, a `!important`, a `calc()` and a one-line
+ * rule, and each of those is either a false rejection on correct code or a defect waved through.
+ */
+
+falsePositiveControls += 1;
+expectGreen(
+  'a physical declaration inside a multiline block comment is inert',
+  'checkSatoriStylesheetsAreLogical',
+  {
+    // Was reported as live CSS: only the comment's OPENING line was skipped, so the second line
+    // read as a declaration and a stylesheet documenting what not to write failed the gate.
+    [NXS_STYLE]:
+      '/* NXSAT-752: this used to be\n   margin-left: 4px;\n   and text-align: left; */\n' +
+      style('  margin-inline-start: 4px;'),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a symmetric shorthand carrying !important',
+  'checkSatoriStylesheetsAreLogical',
+  // `!important` counted as a fourth edge value, so `0` vs `!important` "differed".
+  { [NXS_STYLE]: style('  margin: 0 0 4px !important;') },
+);
+
+expectRed(
+  '[logical properties] text-align: left is caught through !important',
+  'checkSatoriStylesheetsAreLogical',
+  // Missed, because the equality test saw the whole string `left !important`.
+  { [NXS_STYLE]: style('  text-align: left !important;') },
+  null,
+  /sets `text-align: left`.*Use `text-align: start`/s,
+);
+
+expectRed(
+  '[logical properties] an asymmetric shorthand is caught through !important',
+  'checkSatoriStylesheetsAreLogical',
+  // Missed: five parts rather than four, so the length test skipped it entirely.
+  { [NXS_STYLE]: style('  padding: 12px 8px 12px 16px !important;') },
+  null,
+  /four-value shorthand whose inline values differ \(`8px` then `16px`\)/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a symmetric shorthand whose values contain calc()',
+  'checkSatoriStylesheetsAreLogical',
+  // Splitting on all whitespace made this four parts — `calc(100%`, `-`, `8px)`, `0` — and
+  // rejected a two-value symmetric shorthand.
+  { [NXS_STYLE]: style('  padding: calc(100% - 8px) 0;') },
+);
+
+expectRed(
+  '[logical properties] an asymmetric shorthand is caught through calc()',
+  'checkSatoriStylesheetsAreLogical',
+  // Missed: six parts rather than four. The message must name the whole function as one value.
+  { [NXS_STYLE]: style('  padding: 0 calc(8px + 2px) 0 16px;') },
+  null,
+  /inline values differ \(`calc\(8px \+ 2px\)` then `16px`\)/,
+);
+
+expectRed(
+  '[logical properties] a whole rule written on one line',
+  'checkSatoriStylesheetsAreLogical',
+  // Not in the review; found by probing. The declaration regex was anchored to the start of a
+  // line, so `.thing { margin-left: 4px; }` — legal, and used in this repository — was invisible.
+  { [NXS_STYLE]: '.nxs-pager__thing { margin-left: 4px; }\n' },
+  null,
+  /uses the physical property `margin-left`/,
+);
+
+/*
+ * Round two of the same lesson, and the reason the matching is now a scanner rather than a regex:
+ * un-anchoring bought the one-line rule and sold the Sass variable and the quoted string, and the
+ * brace-free value class bought the selector and sold `#{}` interpolation. Each of these is a case
+ * a line-oriented pattern cannot hold at the same time as the others.
+ */
+
+falsePositiveControls += 1;
+expectGreen(
+  'a Sass variable whose name ends in a physical direction',
+  'checkSatoriStylesheetsAreLogical',
+  // `$left: 4px` was read as the physical property `left`, because the old regex matched a
+  // FRAGMENT of a line. Reading statement-wise is what fixes it: the property comes out as
+  // `$left`, whole, which is not a key in any map. (Not the identifier guard — mutation testing
+  // showed no control depends on that.)
+  {
+    [NXS_STYLE]: '$left: 4px;\n' + style('  padding-inline-start: $left;'),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a symmetric shorthand whose value is interpolated',
+  'checkSatoriStylesheetsAreLogical',
+  // `#{}` tracking was added to the statement scanner and NOT to the value splitter, so this
+  // split into four parts (`0`, `#{8px`, `+`, `2px}`) and was rejected. Two functions split on
+  // whitespace; only one had been taught.
+  { [NXS_STYLE]: style('  padding: 0 #{8px + 2px};') },
+);
+
+expectRed(
+  '[logical properties] an asymmetric shorthand is caught through interpolation',
+  'checkSatoriStylesheetsAreLogical',
+  // The other half: six parts, so the length test skipped a real defect. The message must name
+  // the whole interpolation as one value.
+  { [NXS_STYLE]: style('  padding: 0 #{8px + 2px} 0 16px;') },
+  null,
+  /inline values differ \(`#\{8px \+ 2px\}` then `16px`\)/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'interpolation nested inside a function',
+  'checkSatoriStylesheetsAreLogical',
+  // Both counters have to hold at once; this is the case that fails if either is dropped.
+  { [NXS_STYLE]: style('  padding: calc(#{$a} + 2px) 0;') },
+);
+
+expectRed(
+  '[logical properties] a physical property spelled in upper case',
+  'checkSatoriStylesheetsAreLogical',
+  // CSS property names are case-insensitive, so this is the same declaration as `margin-left`.
+  // Both the identifier guard and the map lookup were case-sensitive, so it went unreported.
+  // Found by probing the identifier guard rather than by review.
+  { [NXS_STYLE]: style('  MARGIN-LEFT: 4px;') },
+  null,
+  /uses the physical property `margin-left`/,
+);
+
+/*
+ * The case-insensitivity of keyword VALUES, which is the other half of the property-name fix
+ * above and was missed at the time — the third round of "one of the places that needed teaching
+ * got taught". Folding now happens once, where the declaration is parsed.
+ */
+
+expectRed(
+  '[logical properties] text-align: LEFT in upper case',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  text-align: LEFT;') },
+  null,
+  /sets `text-align: LEFT`.*Use `text-align: start`/s,
+);
+
+expectRed(
+  '[logical properties] float and clear in mixed case',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  float: RIGHT;\n  clear: Left;') },
+  null,
+  /sets `float: RIGHT`.*Use `float: inline-end`/s,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a logical keyword in upper case is still logical',
+  'checkSatoriStylesheetsAreLogical',
+  // The mirror: folding case must not start flagging values that were never physical.
+  { [NXS_STYLE]: style('  text-align: START;') },
+);
+
+/*
+ * The waiver's reason requirement, which had a hole specific to the block spelling: `\S` was
+ * satisfied by the asterisk of the closing delimiter, so a waiver with no reason at all disabled
+ * the check. The `//` spelling was never affected, and that asymmetry is why the fix strips the
+ * terminator rather than loosening the reason test — which would have opened the `//` form too.
+ */
+
+expectRed(
+  '[logical properties] an empty BLOCK waiver suppresses nothing',
+  'checkSatoriStylesheetsAreLogical',
+  { [NXS_STYLE]: style('  /* logical-properties-ok: */\n  margin-left: 4px;') },
+  null,
+  /uses the physical property `margin-left`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a block waiver that does give a reason still waives',
+  'checkSatoriStylesheetsAreLogical',
+  // The control that stops the fix above becoming "block waivers never work".
+  {
+    [NXS_STYLE]: style('  /* logical-properties-ok: fixed toolbar chrome */\n  margin-left: 4px;'),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a physical declaration inside a quoted value',
+  'checkSatoriStylesheetsAreLogical',
+  // The `;` inside the string used to terminate the statement, so `margin-left: 4px;` was read as
+  // live CSS. Quote state is tracked, so `content` is the only property here.
+  { [NXS_STYLE]: style('  content: "example; margin-left: 4px;";') },
+);
+
+expectRed(
+  '[logical properties] a physical property whose value is interpolated',
+  'checkSatoriStylesheetsAreLogical',
+  // Escaped entirely: the value class `[^;{}]+` could not cross `#{`, so the statement never
+  // matched. This is a real defect and the worst of the three, being silent.
+  { [NXS_STYLE]: style('  margin-left: #{$gutter};') },
+  null,
+  /uses the physical property `margin-left`.*Use `margin-inline-start`/s,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an at-rule prelude containing a colon is not a declaration',
+  'checkSatoriStylesheetsAreLogical',
+  // `@media (min-width: 600px)` ends in `{`, so it is discarded as a prelude — the same mechanism
+  // that keeps selectors out, rather than a special case for at-rules.
+  {
+    [NXS_STYLE]: '@media (min-width: 600px) {\n' + style('  margin-inline-start: 2px;') + '}\n',
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a selector is not read as a declaration',
+  'checkSatoriStylesheetsAreLogical',
+  // The other half of un-anchoring: `&:focus {` and `:host-context([dir='rtl'])` have a colon
+  // after a word too. The `;`/`}` terminator and the brace-free value are what separate them.
+  {
+    [NXS_STYLE]:
+      ":host-context([dir='rtl']) .nxs-pager__chevron {\n  transform: scaleX(-1);\n}\n" +
+      '.nxs-pager__thing {\n  &:focus {\n    outline: 2px solid red;\n  }\n}\n',
+  },
+);
+
 // checkPlatformEntryPointsListed (register item 23)
 
 expectGreen('every published entry point listed', 'checkPlatformEntryPointsListed', NXS_LIB());
@@ -9170,8 +9559,12 @@ const adoption = (extra = {}) => ({
 
 /** A feature that is NOT in `ADOPTION_BASELINE`, so it is held to the rule. */
 const NOT_BASELINED = 'libs/features/search/src/lib/search/search.ts';
-/** A feature that IS in `ADOPTION_BASELINE` for `@hylandsoftware/satori-ui/tag`. */
-const BASELINED = 'libs/features/trash/src/lib/trash/trash.component.ts';
+/**
+ * A feature that IS in `ADOPTION_BASELINE`, for `SatTagCategory` from `@hylandsoftware/satori-ui/tag`
+ * and nothing else. Not the dashboard, which is baselined for two entry points: a fixture holding
+ * only its `tag` import would also leave its `avatar` entry stale.
+ */
+const BASELINED = 'libs/features/document-detail/src/lib/document-detail/document-detail.ts';
 
 /** A direct import of an adopted entry point, which the scan must catch. */
 const BYPASS = "import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';\n";
@@ -9280,8 +9673,8 @@ expectGreen(
   'checkAdoptedPatternsNotBypassed',
   adoption({
     [BASELINED]:
-      "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class TrashComponent {}\n',
+      "import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class DocumentDetailComponent {}\n',
   }),
 );
 
@@ -9290,32 +9683,31 @@ expectRed(
   'checkAdoptedPatternsNotBypassed',
   adoption({
     [BASELINED]:
-      "import { SatTagModule, SatStatusTag } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class TrashComponent {}\n',
+      "import { SatTagCategory, SatStatusTag } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class DocumentDetailComponent {}\n',
   }),
   null,
-  /trash\.component\.ts:1 imports `SatStatusTag` from `@hylandsoftware\/satori-ui\/tag`, which `ADOPTION_BASELINE` does not exempt for this file/,
+  /document-detail\.ts:1 imports `SatStatusTag` from `@hylandsoftware\/satori-ui\/tag`, which `ADOPTION_BASELINE` does not exempt for this file/,
 );
 
 expectRed(
   'a baselined site that no longer imports the entry point leaves a stale exemption',
   'checkAdoptedPatternsNotBypassed',
-  adoption({ [BASELINED]: 'export class TrashComponent {}\n' }),
+  adoption({ [BASELINED]: 'export class DocumentDetailComponent {}\n' }),
   null,
-  /trash\.component\.ts no longer imports `@hylandsoftware\/satori-ui\/tag`[\s\S]*stale/,
+  /document-detail\.ts no longer imports `@hylandsoftware\/satori-ui\/tag`[\s\S]*stale[\s\S]*may\s+only shrink/,
 );
 
 expectRed(
   'a baselined symbol that is no longer imported leaves a stale exemption',
   'checkAdoptedPatternsNotBypassed',
   adoption({
-    'libs/features/document-detail/src/lib/document-detail/document-detail.ts':
+    'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts':
       "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n" +
-      "import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';\n" +
-      "import { SatBreadcrumbs, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';\n",
+      "import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';\n",
   }),
   null,
-  /document-detail\.ts no longer imports `SatTagCategory` from `@hylandsoftware\/satori-ui\/tag`, so that much of its `ADOPTION_BASELINE` entry is stale/,
+  /dashboard-page\.component\.ts no longer imports `SatAvatarCategory` from `@hylandsoftware\/satori-ui\/avatar`, so that much of its `ADOPTION_BASELINE` entry is stale/,
 );
 
 falsePositiveControls += 1;
@@ -9324,8 +9716,8 @@ expectGreen(
   'checkAdoptedPatternsNotBypassed',
   adoption({
     [BASELINED]:
-      "import { SatTagModule as Tags } from '@hylandsoftware/satori-ui/tag';\n" +
-      'export class TrashComponent {}\n',
+      "import { SatTagCategory as Category } from '@hylandsoftware/satori-ui/tag';\n" +
+      'export class DocumentDetailComponent {}\n',
   }),
 );
 
@@ -9336,7 +9728,7 @@ expectGreen(
   adoption({
     [BASELINED]:
       "// migrated away from '@hylandsoftware/satori-ui/avatar' already\n" +
-      "import { SatTagModule } from '@hylandsoftware/satori-ui/tag';\n",
+      "import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';\n",
   }),
 );
 
@@ -9714,7 +10106,7 @@ expectRed(
   'checkWorkflowRefGates',
   {
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob("github.ref == 'refs/heads/staging'"),
     ),
   },
@@ -9729,7 +10121,7 @@ expectRed(
     // The whole point of `githubBranchFilterToRegExp`. A substring test — the obvious way to write
     // this check — would read `main` as admitting `maintenance` and pass a job that can never run.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob("github.ref == 'refs/heads/maintenance'"),
     ),
   },
@@ -9755,7 +10147,7 @@ expectRed(
   'checkWorkflowRefGates',
   {
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob("github.ref == 'main'"),
     ),
   },
@@ -9768,7 +10160,7 @@ expectRed(
   'checkWorkflowRefGates',
   {
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob("github.ref_name == 'refs/heads/main'"),
     ),
   },
@@ -9784,7 +10176,7 @@ expectRed(
     // everywhere it was meant to be skipped. Pinned because only `==` is carried into the branch
     // rules below, so `!=` is handled here or nowhere.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob("github.ref != 'main'"),
     ),
   },
@@ -9872,7 +10264,7 @@ expectRed(
  * longevity rule passes and the existence rule is the only thing left that can speak. */
 const MISSING_BRANCH_WORKFLOW = {
   '.github/workflows/deploy.yml': workflow(
-    "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+    'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
     gatedJob("github.ref == 'refs/heads/develop'"),
   ),
 };
@@ -9935,7 +10327,7 @@ expectGreen(
     // `storybook-pages.yml` as NXSAT-649 left it. The guardrail has to be green on the fix, or it
     // is a check nobody can satisfy.
     '.github/workflows/storybook-pages.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob("github.ref == 'refs/heads/main'"),
     ),
   },
@@ -10055,16 +10447,12 @@ expectGreen(
 );
 
 falsePositiveControls += 1;
-expectGreen(
-  'a tag gate is not a branch gate',
-  'checkWorkflowRefGates',
-  {
-    '.github/workflows/release.yml': workflow(
-      "on:\n  push:\n    tags: ['v*']\n",
-      gatedJob("github.ref == 'refs/tags/v1.0.0'"),
-    ),
-  },
-);
+expectGreen('a tag gate is not a branch gate', 'checkWorkflowRefGates', {
+  '.github/workflows/release.yml': workflow(
+    "on:\n  push:\n    tags: ['v*']\n",
+    gatedJob("github.ref == 'refs/tags/v1.0.0'"),
+  ),
+});
 
 falsePositiveControls += 1;
 expectGreen(
@@ -10093,7 +10481,7 @@ expectGreen(
     // shape rule on a valid condition. The forward order never had the bug because the `==` that
     // must follow forces a backtrack — an asymmetry that made it easy to miss.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob("${{ 'main' == github.ref_name }}"),
     ),
   },
@@ -10106,7 +10494,9 @@ expectRed(
     // Only subsequent LINES were searched for `branches:`, so `push: { branches: [...] }` was read
     // as an event with no filter — silently exempting the exact shape this guardrail exists to
     // catch, with no gate needed to hide it.
-    '.github/workflows/deploy.yml': workflow("on:\n  push: { branches: ['integration/nxsat-308'] }\n"),
+    '.github/workflows/deploy.yml': workflow(
+      "on:\n  push: { branches: ['integration/nxsat-308'] }\n",
+    ),
   },
   null,
   /triggers on `push` only for `integration\/nxsat-308`/,
@@ -10179,18 +10569,14 @@ expectGreen(
 );
 
 falsePositiveControls += 1;
-expectGreen(
-  'one branch of an `||` is not a branch the job requires',
-  'checkWorkflowRefGates',
-  {
-    // Satisfiable on `main`, so the job is reachable; the isolated `staging` equality was being
-    // read as a required inclusion gate.
-    '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
-      gatedJob("github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'"),
-    ),
-  },
-);
+expectGreen('one branch of an `||` is not a branch the job requires', 'checkWorkflowRefGates', {
+  // Satisfiable on `main`, so the job is reachable; the isolated `staging` equality was being
+  // read as a required inclusion gate.
+  '.github/workflows/deploy.yml': workflow(
+    'on:\n  push:\n    branches: [main]\n',
+    gatedJob("github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'"),
+  ),
+});
 
 falsePositiveControls += 1;
 expectGreen(
@@ -10198,7 +10584,7 @@ expectGreen(
   'checkWorkflowRefGates',
   {
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob("!(github.ref == 'refs/heads/staging')"),
     ),
   },
@@ -10213,7 +10599,7 @@ expectRed(
     // commonest shapes in `.github/workflows`, and treating the whole expression as negated would
     // have re-opened NXSAT-649 itself.
     '.github/workflows/storybook-pages.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob("github.ref == 'refs/heads/integration/nxsat-308' && !cancelled()"),
     ),
   },
@@ -10330,7 +10716,7 @@ expectGreen(
     // backreference backtracked across two literals and read the branch name as `push' && 'main`,
     // which no filter admits — so a valid compound condition failed as unreachable.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob("github.event_name == 'push' && 'main' == github.ref_name"),
     ),
   },
@@ -10376,7 +10762,7 @@ expectGreen(
     // literals before looking for `||`, so it blanked the whole scalar and found none, while
     // `refComparisons` still pulled both comparisons out — and `staging` was called unreachable.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob(`"github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'"`),
     ),
   },
@@ -10392,14 +10778,14 @@ expectGreen(
     // case-sensitive, so the leniency belongs in the pattern match and the ref lookup — both of
     // which model what the workflow sees — and nowhere else.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob("github.ref == 'refs/heads/MAIN'"),
     ),
   },
 );
 
 expectRed(
-  "a sibling step key is not part of the condition above it",
+  'a sibling step key is not part of the condition above it',
   'checkWorkflowRefGates',
   {
     // Continuation lines are measured from the KEY's indent, not the line's. In a sequence item
@@ -10433,7 +10819,7 @@ expectRed(
   {
     // The other side of case-insensitivity: the leniency must not become a way round the rule.
     '.github/workflows/storybook-pages.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob("github.ref == 'refs/heads/Integration/NXSAT-308'"),
     ),
   },
@@ -10444,7 +10830,7 @@ expectRed(
 /* --- third review round on #494: the dash, quoted keys, ref case, and expression strings --- */
 
 expectRed(
-  'a block scalar as a step\'s FIRST key does not swallow the sibling `if:` below it',
+  "a block scalar as a step's FIRST key does not swallow the sibling `if:` below it",
   'checkWorkflowRefGates',
   {
     // `- run: |` puts the dash further left than the key, so measuring the body's extent from the
@@ -10523,7 +10909,7 @@ expectRed(
     // A fail-open, not a cosmetic slip: the literal was discarded as "not a branch ref", so a
     // pinned ticket branch written this way skipped every rule.
     '.github/workflows/storybook-pages.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob("github.ref == 'refs/HEADS/integration/nxsat-308'"),
     ),
   },
@@ -10539,7 +10925,7 @@ expectGreen(
     // The other direction of the same prefix test: read case-sensitively, this looked like a bare
     // branch name compared to `github.ref` and was reported as a constant-false gate.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob("github.ref == 'REFS/HEADS/main'"),
     ),
   },
@@ -10556,7 +10942,7 @@ expectRed(
     // keeps masking safe, and before this control nothing asserted the pair worked together: the
     // existing quoted-`||` control passes either way.
     '.github/workflows/storybook-pages.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob(`"github.ref == 'refs/heads/integration/nxsat-308'"`),
     ),
   },
@@ -10575,7 +10961,7 @@ expectGreen(
     // is also why `expressionHasAlternative` now blanks literals through the same mask rather than
     // with a regex of its own that does not know it.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob("contains(github.event.head_commit.message, 'github.ref == ''main''')"),
     ),
   },
@@ -10594,7 +10980,7 @@ expectGreen(
     // the group and the walk stopped at the `&`. `comparisonIsNegated` now tracks every enclosing
     // group and whether a `!` introduces it.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob("!(github.event_name == 'push' && github.ref == 'refs/heads/staging')"),
     ),
   },
@@ -10609,7 +10995,7 @@ expectRed(
     // job that can never run, and treating every enclosing paren as a negation would have turned
     // the whole reachability rule off wherever anyone added brackets for readability.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob("(github.ref == 'refs/heads/staging')"),
     ),
   },
@@ -10620,11 +11006,14 @@ expectRed(
 /* --- fifth review round on #494: alternative YAML spellings of the same thing --- */
 
 const TICKET_TRIGGER_FORMS = {
-  'a flow mapping that spans lines': "name: Fixture\n\non:\n  push: {\n    branches: ['integration/nxsat-308'] }\n\n",
-  'a quoted filter key': "name: Fixture\n\non:\n  push:\n    'branches': ['integration/nxsat-308']\n\n",
+  'a flow mapping that spans lines':
+    "name: Fixture\n\non:\n  push: {\n    branches: ['integration/nxsat-308'] }\n\n",
+  'a quoted filter key':
+    "name: Fixture\n\non:\n  push:\n    'branches': ['integration/nxsat-308']\n\n",
   'a quoted filter key inside a flow mapping':
     "name: Fixture\n\non:\n  push: { 'branches': ['integration/nxsat-308'] }\n\n",
-  'an indentless block sequence': 'name: Fixture\n\non:\n  push:\n    branches:\n    - integration/nxsat-308\n\n',
+  'an indentless block sequence':
+    'name: Fixture\n\non:\n  push:\n    branches:\n    - integration/nxsat-308\n\n',
 };
 
 // Four spellings of ONE trigger, each of which used to pass. Every one is valid YAML that GitHub
@@ -10693,7 +11082,7 @@ jobs:
 );
 
 expectRed(
-  'a quoted `\'if\':` key is still a condition',
+  "a quoted `'if':` key is still a condition",
   'checkWorkflowRefGates',
   {
     // Both the gate scan and the tripwire required the key unquoted, so this produced no gates and
@@ -10726,19 +11115,15 @@ jobs:
 );
 
 falsePositiveControls += 1;
-expectGreen(
-  'an astral character does not shift the string-literal mask',
-  'checkWorkflowRefGates',
-  {
-    // `stringLiteralMask` indexes code UNITS; blanking with `[...expression]` iterates code POINTS,
-    // so one emoji in a branch name shifted every index after it and erased a real `||` — which
-    // made a reachable job look unreachable. Both sides count code units now.
-    '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
-      gatedJob("github.ref=='refs/heads/\u{1F680}'||github.ref=='refs/heads/main'"),
-    ),
-  },
-);
+expectGreen('an astral character does not shift the string-literal mask', 'checkWorkflowRefGates', {
+  // `stringLiteralMask` indexes code UNITS; blanking with `[...expression]` iterates code POINTS,
+  // so one emoji in a branch name shifted every index after it and erased a real `||` — which
+  // made a reachable job look unreachable. Both sides count code units now.
+  '.github/workflows/deploy.yml': workflow(
+    'on:\n  push:\n    branches: [main]\n',
+    gatedJob("github.ref=='refs/heads/\u{1F680}'||github.ref=='refs/heads/main'"),
+  ),
+});
 
 falsePositiveControls += 1;
 expectGreen(
@@ -10826,7 +11211,7 @@ for (const branch of [
     'checkWorkflowRefGates',
     {
       '.github/workflows/deploy.yml': workflow(
-        "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+        'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
         gatedJob(`github.ref == 'refs/heads/${branch}'`),
       ),
     },
@@ -10839,20 +11224,16 @@ for (const branch of [
 }
 
 falsePositiveControls += 1;
-expectGreen(
-  'every long-lived branch on the allowlist is accepted',
-  'checkWorkflowRefGates',
-  {
-    // `develop` and `gh-pages` are on the list but absent from the fixture, so this also asserts
-    // the two rules are independent: being off the allowlist is what the longevity rule judges,
-    // and the existence rule speaks separately (here as a warning, since a gate under a dispatch
-    // on an absent long-lived branch is still worth saying out loud without failing).
-    '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
-      gatedJob("github.ref == 'refs/heads/main'"),
-    ),
-  },
-);
+expectGreen('every long-lived branch on the allowlist is accepted', 'checkWorkflowRefGates', {
+  // `develop` and `gh-pages` are on the list but absent from the fixture, so this also asserts
+  // the two rules are independent: being off the allowlist is what the longevity rule judges,
+  // and the existence rule speaks separately (here as a warning, since a gate under a dispatch
+  // on an absent long-lived branch is still worth saying out loud without failing).
+  '.github/workflows/deploy.yml': workflow(
+    'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
+    gatedJob("github.ref == 'refs/heads/main'"),
+  ),
+});
 
 expectRed(
   'a long-lived branch that is not declared says to declare it',
@@ -10863,7 +11244,7 @@ expectRed(
     // longevity is a one-line change to a list that moves about once a year; inferring it from a
     // prefix is what failed five rounds running.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob("github.ref == 'refs/heads/staging'"),
     ),
   },
@@ -10903,7 +11284,7 @@ jobs:
 
 falsePositiveControls += 1;
 expectGreen(
-  'a comment at the data key\'s own column does not end the opaque region',
+  "a comment at the data key's own column does not end the opaque region",
   'checkWorkflowRefGates',
   {
     // A comment sits wherever its author put it, and one written at the key's column ended the
@@ -10977,11 +11358,11 @@ const REFUSED_SHAPES = {
   'an anchor on an event value': `name: Fixture\n\non:\n  push: &publish_trigger\n    branches: ['integration/nxsat-308']\n\n${WORKFLOW_JOB}`,
   'an anchor on the root `on:` value': `name: Fixture\n\non: &triggers\n  push:\n    branches: ['integration/nxsat-308']\n\n${WORKFLOW_JOB}`,
   '`jobs:` as a flow mapping':
-    "name: Fixture\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\n" +
-    "jobs: { deploy: { runs-on: ubuntu-latest, if: \"github.ref == 'refs/heads/integration/nxsat-308'\" } }\n",
+    'name: Fixture\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\n' +
+    'jobs: { deploy: { runs-on: ubuntu-latest, if: "github.ref == \'refs/heads/integration/nxsat-308\'" } }\n',
   'a job body as a flow mapping':
-    "name: Fixture\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\njobs:\n" +
-    "  deploy: { runs-on: ubuntu-latest, if: \"github.ref == 'refs/heads/integration/nxsat-308'\" }\n",
+    'name: Fixture\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\njobs:\n' +
+    '  deploy: { runs-on: ubuntu-latest, if: "github.ref == \'refs/heads/integration/nxsat-308\'" }\n',
 };
 
 for (const [shape, body] of Object.entries(REFUSED_SHAPES)) {
@@ -11096,7 +11477,7 @@ jobs:
 );
 
 expectRed(
-  '`ref_type == \'branch\'` settles the ambiguity, so the branch rules apply in full',
+  "`ref_type == 'branch'` settles the ambiguity, so the branch rules apply in full",
   'checkWorkflowRefGates',
   {
     // Only `ref_type == 'tag'` was honoured, so a condition that says in as many words that the
@@ -11156,7 +11537,8 @@ jobs:
  * and a hand-rolled regex would not.
  */
 const REF_TYPE_FORMS = {
-  'an upper-case assertion': "github.ref_type == 'BRANCH' && github.ref_name == 'integration/nxsat-308'",
+  'an upper-case assertion':
+    "github.ref_type == 'BRANCH' && github.ref_name == 'integration/nxsat-308'",
   'the reversed operand order':
     "${{ 'branch' == github.ref_type && github.ref_name == 'integration/nxsat-308' }}",
   'reversed AND upper-case':
@@ -11250,7 +11632,7 @@ for (const [spelling, condition] of Object.entries({
     'checkWorkflowRefGates',
     {
       '.github/workflows/deploy.yml': workflow(
-        "on:\n  push:\n    branches: [main]\n",
+        'on:\n  push:\n    branches: [main]\n',
         gatedJob(condition),
       ),
     },
@@ -11264,7 +11646,7 @@ expectRed(
     // The polarity guard. `(github.ref == 'refs/heads/staging') == true` requires `staging` just
     // as the bare comparison does, and with `branches: [main]` the job can never run.
     '.github/workflows/deploy.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n",
+      'on:\n  push:\n    branches: [main]\n',
       gatedJob("${{ (github.ref == 'refs/heads/staging') == true }}"),
     ),
   },
@@ -11281,12 +11663,675 @@ expectRed(
     // the ref, and treating any `== false` in the expression as an inversion would have re-opened
     // NXSAT-649 for the fourth time.
     '.github/workflows/storybook-pages.yml': workflow(
-      "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n",
+      'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
       gatedJob("${{ github.ref == 'refs/heads/integration/nxsat-308' && cancelled() == false }}"),
     ),
   },
   null,
   /on the branch `integration\/nxsat-308`, which is not one of this repository's long-lived branches/,
+);
+
+/* ---------------- checkShippedCatalogueLanguages ---------------- */
+
+/**
+ * NXSAT-733 — `defaultLanguage` reached `translate.use()` unchecked, so a language with no
+ * catalogue announced itself on `<html lang>` over English text and 404'd for its catalogue.
+ *
+ * The guard that closes it reads a declared set, because the catalogue folder is served over HTTP
+ * and the only runtime test is the 404 being removed. A declared set rots in both directions, and
+ * neither is visible in a diff of either file alone — so both are controlled, and unlike
+ * `checkLocaleDataRegistered` both are failures: a language guard that is wrong either way is
+ * worse than none, because it is trusted.
+ */
+const SHIPPED_DECL = 'apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts';
+
+const asLiteral = (locales) => locales.map((locale) => `'${locale}'`).join(', ');
+
+const shippedDeclaration = (locales, audit = ['zz']) =>
+  `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = [${asLiteral(locales)}];\n` +
+  `export const GENERATED_AUDIT_LOCALES: readonly string[] = [${asLiteral(audit)}];\n`;
+
+/** A catalogue per locale, plus the declaration naming `declared`. */
+const shippedFixture = (onDisk, declared, audit) => ({
+  ...Object.fromEntries(
+    onDisk.map((locale) => [`apps/nuxeo-ui/public/i18n/${locale}.json`, '{"shell.title":"x"}\n']),
+  ),
+  [SHIPPED_DECL]: shippedDeclaration(declared, audit),
+});
+
+expectGreen(
+  'the declaration names exactly the catalogues on disk',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr', 'de'], ['de', 'en', 'fr']),
+);
+
+expectGreen(
+  'en.context.json is translator context, not a language',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    'apps/nuxeo-ui/public/i18n/en.context.json': '{"shell.title":"a title"}\n',
+  },
+);
+
+expectRed(
+  'a declared language with no catalogue — NXSAT-733 again, under a different code',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr'], ['en', 'es', 'fr']),
+  null,
+  /declares "es" but[\s\S]*ships no catalogue for it[\s\S]*announce/,
+);
+
+expectRed(
+  'a catalogue on disk that the declaration omits, so it would never be rendered',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr', 'de'], ['en', 'fr']),
+  null,
+  /ships de\.json but[\s\S]*does not declare "de"[\s\S]*never rendered/,
+);
+
+expectRed(
+  'the declaration file removed, leaving the string-language guard nothing to read',
+  'checkShippedCatalogueLanguages',
+  { 'apps/nuxeo-ui/public/i18n/en.json': '{"shell.title":"x"}\n' },
+  null,
+  /shipped-catalogues\.ts is missing[\s\S]*asserted nothing/,
+);
+
+expectRed(
+  'the literal reshaped into something the parser cannot read',
+  'checkShippedCatalogueLanguages',
+  {
+    'apps/nuxeo-ui/public/i18n/en.json': '{"shell.title":"x"}\n',
+    [SHIPPED_DECL]: 'export const SHIPPED_CATALOGUE_LANGUAGES = new Set(["en"]);\n',
+  },
+  null,
+  /no longer declares `SHIPPED_CATALOGUE_LANGUAGES` as an array of string literals[\s\S]*asserted nothing about which catalogues ship/,
+);
+
+expectRed(
+  'an empty declaration, which would refuse every configured language',
+  'checkShippedCatalogueLanguages',
+  {
+    'apps/nuxeo-ui/public/i18n/en.json': '{"shell.title":"x"}\n',
+    [SHIPPED_DECL]: shippedDeclaration([]),
+  },
+  null,
+  /declares no language, so every configured language would be refused/,
+);
+
+/**
+ * The pseudo-locale seam, which is where review of #531 found the first version of this guard
+ * breaking `npm run i18n:audit`: `zz` was refused, both audits booted in English, and
+ * `requireSentinel()` failed instead of finding hard-coded strings.
+ *
+ * The generated set is excluded from every other locale check in this script, and admitted on a
+ * dev server by `hasCatalogue`. Those are two readers of one fact, so they are pinned together.
+ */
+expectGreen(
+  'a generated audit locale on disk, excluded from the shipped list and declared as generated',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    'apps/nuxeo-ui/public/i18n/zz.json': '{"shell.title":"⟦x⟧"}\n',
+  },
+);
+
+expectRed(
+  'the generated set emptied, which would make the pseudo-locale audit boot in English',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr'], ['en', 'fr'], []),
+  null,
+  /GENERATED_AUDIT_LOCALES as \[\] but `GENERATED_LOCALES` in this script is \[zz\]/,
+);
+
+expectRed(
+  'a locale declared generated that this script does not treat as generated',
+  'checkShippedCatalogueLanguages',
+  shippedFixture(['en', 'fr'], ['en', 'fr'], ['zz', 'qq']),
+  null,
+  /GENERATED_AUDIT_LOCALES as \[qq, zz\] but `GENERATED_LOCALES` in this script is \[zz\]/,
+);
+
+expectRed(
+  'the generated literal reshaped so the seam goes unchecked',
+  'checkShippedCatalogueLanguages',
+  {
+    'apps/nuxeo-ui/public/i18n/en.json': '{"shell.title":"x"}\n',
+    [SHIPPED_DECL]:
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en'];\n` +
+      `export const GENERATED_AUDIT_LOCALES = new Set(['zz']);\n`,
+  },
+  null,
+  /no longer declares `GENERATED_AUDIT_LOCALES` as an array of string literals[\s\S]*pseudo-locale seam is unchecked/,
+);
+
+/**
+ * An element this gate cannot evaluate must be **refused**, not skipped — the failure review on
+ * #531 found twice, and both directions were green on the defect rather than noisy.
+ *
+ * The application evaluates the real array, so a list read as "the three quoted ones" passes
+ * against a build shipping exactly those three while a fourth element admits a language with no
+ * catalogue. And a commented-out entry leaves its quotes in the source, so a regex reports a
+ * locale the runtime array does not have.
+ */
+expectRed(
+  'an identifier element, whose value this gate cannot see but the application can',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `const extra = 'xx';\n` +
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en', 'fr', extra];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /`extra` is not a string literal[\s\S]*asserted nothing about which catalogues ship/,
+);
+
+expectRed(
+  'a spread element, which hides a whole list from this gate',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `const more = ['xx'];\n` +
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en', 'fr', ...more];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /`\.\.\.more` is not a string literal/,
+);
+
+expectRed(
+  'a template-literal element, which a quote-matching parser would also miss',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      'export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = [`en`, `fr`];\n' +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /is not a string literal/,
+);
+
+expectRed(
+  'the only generated entry commented out, so admission is off while the quotes remain',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en', 'fr'];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = [/* 'zz' */];\n`,
+  },
+  null,
+  /GENERATED_AUDIT_LOCALES as \[\] but `GENERATED_LOCALES` in this script is \[zz\]/,
+);
+
+expectRed(
+  'a shipped language commented out while its catalogue is still on disk',
+  'checkShippedCatalogueLanguages',
+  {
+    ...shippedFixture(['en', 'fr'], ['en', 'fr']),
+    [SHIPPED_DECL]:
+      `export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['en' /*, 'fr' */];\n` +
+      `export const GENERATED_AUDIT_LOCALES: readonly string[] = ['zz'];\n`,
+  },
+  null,
+  /ships fr\.json but[\s\S]*does not declare "fr"/,
+);
+
+/* ---------------- checkUpstreamCatalogueLanguages ---------------- */
+
+/**
+ * NXSAT-732 — the loader asked an upstream folder for a language it does not ship, so four of
+ * the seven advertised languages 404'd and logged a console error on every page load.
+ *
+ * The fix declares the shipped set per folder, and a declared set rots on a dependency bump in
+ * both directions: a language added upstream is never requested, one dropped upstream puts the
+ * 404 back. Both are controlled here, because neither is visible in a diff of `package.json`.
+ */
+const LOADER_PATH = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
+const VENDOR_I18N = 'node_modules/@hylandsoftware/satori-ui/i18n';
+
+/** `nuxeo-ui`'s build target, with the asset arrays a control wants to give it. */
+const upstreamAngularJson = (base, configurations = {}) =>
+  `${JSON.stringify(
+    {
+      projects: {
+        'nuxeo-ui': {
+          architect: {
+            build: {
+              options: { assets: base },
+              ...(Object.keys(configurations).length ? { configurations } : {}),
+            },
+          },
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+
+/** The asset rule as the repository actually declares it. */
+const SATORI_RULE = { glob: '**/*', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' };
+
+const UPSTREAM_ANGULAR_JSON = upstreamAngularJson([SATORI_RULE], {
+  development: { assets: [SATORI_RULE] },
+});
+
+/**
+ * The loader, with whatever language list a control wants to put in it.
+ *
+ * `languages` is a list of raw source expressions, not of values, so a control can put an
+ * identifier or a spread in the array and assert the gate refuses it rather than dropping it.
+ */
+const loaderWith = (languages) =>
+  `const extra = 'ja';
+
+export const TRANSLATION_DIRECTORY = 'i18n';
+
+interface UpstreamCatalogueFolder {
+  readonly path: string;
+  readonly languages: readonly string[];
+}
+
+const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
+  {
+    path: 'assets/satori-ui',
+${languages === null ? '' : `    languages: [${languages.join(', ')}],\n`}  },
+];
+`;
+
+/**
+ * The loader with raw `UPSTREAM_FOLDERS` entries, for controls about the ENTRY shape rather than
+ * about the language list. `loaderWith` can only vary the languages of one well-formed entry, so
+ * it could not express a non-object entry or a computed `path` — the defects round 4 found.
+ */
+const loaderWithEntries = (entries) =>
+  `const assetsRoot = 'assets';
+
+export const TRANSLATION_DIRECTORY = 'i18n';
+
+interface UpstreamCatalogueFolder {
+  readonly path: string;
+  readonly languages: readonly string[];
+}
+
+const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
+${entries.map((entry) => `  ${entry},`).join('\n')}
+];
+`;
+
+/** A well-formed entry, for use beside a malformed one. */
+const GOOD_ENTRY = "{ path: 'assets/satori-ui', languages: ['de', 'en', 'fr'] }";
+
+/** Quote a list of plain language codes into source literals. */
+const literals = (codes) => codes.map((code) => `'${code}'`);
+
+/** A vendor folder shipping exactly `de`, `en` and `fr`. */
+const VENDOR_FILES = {
+  [`${VENDOR_I18N}/de.json`]: '{}\n',
+  [`${VENDOR_I18N}/en.json`]: '{}\n',
+  [`${VENDOR_I18N}/fr.json`]: '{}\n',
+};
+
+expectRed(
+  'a language listed that the installed package does not ship — the NXSAT-732 404',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr', 'ja'])),
+  },
+  null,
+  /lists ja in `languages`[\s\S]*build serves[\s\S]*no catalogue for it/,
+);
+
+expectRed(
+  'a language the package ships that the loader never asks for',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+  null,
+  /`options` build copies a catalogue for fr[\s\S]*does not list it in `languages`/,
+);
+
+// The pre-fix shape: a folder with no language list at all, which is what made every language
+// a candidate for a doomed request.
+expectRed(
+  'an upstream folder declared with no languages list',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(null),
+  },
+  null,
+  /with no `languages` array\./,
+);
+
+// A declared asset path nothing copies to would 404 for EVERY language, not only the unshipped
+// ones — a worse version of the same defect, and invisible without reading the glob.
+expectRed(
+  'a folder path no assets glob writes to',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: VENDOR_I18N, output: 'assets/somewhere-else/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /`options` asset array\(s\) in angular.json copy nothing to "assets\/satori-ui\/i18n"/,
+);
+
+// Angular REPLACES `assets` per configuration rather than merging it, so a rule present in the
+// base array and absent from a configuration's produces a build that serves no upstream
+// catalogue at all. Pooling every entry in the file would have reported this as fine.
+expectRed(
+  'a configuration whose assets array omits the rule the base array has',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([SATORI_RULE], {
+      development: { assets: [{ glob: '**/*', input: 'apps/nuxeo-ui/public', output: '.' }] },
+    }),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /`development` asset array\(s\)[\s\S]*replaces this array per configuration/,
+);
+
+// The glob is part of what the rule copies. A narrower one serves a subset, and comparing the
+// declaration against the whole directory would be green while the bundle was missing files.
+expectRed(
+  'a glob that copies only some of the catalogues the package ships',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: 'en.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /build serves "assets\/satori-ui\/i18n" no catalogue for it/,
+);
+
+// Round 2 of the review: pooling the globs across configurations means the union is satisfied
+// by whichever array is most permissive, so a `development` rule with `**/*` masks an `options`
+// rule narrowed to `en.json` — the production build serves one catalogue while the gate reports
+// all three. Each configuration is a build of its own and is judged as one.
+expectRed(
+  'a permissive development glob masking a narrow glob in the base array',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson(
+      [{ glob: 'en.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' }],
+      { development: { assets: [SATORI_RULE] } },
+    ),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /`options` build serves[\s\S]*no catalogue for it/,
+);
+
+// And a glob the gate cannot interpret must say so rather than assume it matches everything.
+expectRed(
+  'a glob shape the gate cannot interpret',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '{de,en}.json', input: VENDOR_I18N, output: 'assets/satori-ui/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /cannot interpret/,
+);
+
+// Rewriting `UPSTREAM_FOLDERS` into a shape this gate cannot read must fail loudly rather than
+// pass silently — a gate that stops asserting without saying so is how a check becomes no check.
+expectRed(
+  'UPSTREAM_FOLDERS rewritten into a shape the gate cannot read',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: `export const TRANSLATION_DIRECTORY = 'i18n';
+
+const UPSTREAM_FOLDERS = buildFolders();
+`,
+  },
+  null,
+  /no longer declares `UPSTREAM_FOLDERS` as an array literal/,
+);
+
+// Round 3: a non-literal element was silently DROPPED, so `['de','en','fr', extra]` read as
+// three languages, matched a package shipping exactly those three, and passed — while the
+// loader, which evaluates the real array, went on requesting `ja` and 404ing.
+expectRed(
+  'an identifier among the declared languages',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith([...literals(['de', 'en', 'fr']), 'extra']),
+  },
+  null,
+  /`languages` array this gate cannot read: `extra` is not a string literal/,
+);
+
+expectRed(
+  'a spread among the declared languages',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(["...literals(['de'])", "'en'"]),
+  },
+  null,
+  /`languages` array this gate cannot read[\s\S]*is not a string literal/,
+);
+
+// Round 3, second finding: an input directory absent from an INSTALLED package is a typo or a
+// vendor that dropped the folder, so the build copies nothing and the loader 404s for every
+// language. That used to warn and pass. A package that is not installed at all still warns —
+// the control below proves the two are told apart.
+expectRed(
+  'an asset input absent from an installed package',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      {
+        glob: '**/*',
+        input: 'node_modules/@hylandsoftware/satori-ui/translations',
+        output: 'assets/satori-ui/i18n',
+      },
+    ]),
+    'node_modules/@hylandsoftware/satori-ui/package.json':
+      '{ "name": "@hylandsoftware/satori-ui" }\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /is installed but has no node_modules\/@hylandsoftware\/satori-ui\/translations/,
+);
+
+// The other half of that distinction: with the package absent entirely there is nothing to
+// judge, so the gate warns and stays green. Without this control, "fail on a missing input"
+// would have been free to fail every clean checkout too.
+falsePositiveControls += 1;
+expectGreen(
+  'an asset input whose package is not installed at all',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+// Round 4: a non-object entry, or one whose `path` is computed, was silently SKIPPED. The
+// loader iterates the real array and would request that folder, so its languages went unchecked
+// while the gate passed on the entries it could read. Each control pairs the malformed entry
+// with a well-formed one, which is what made the old `folders === 0` catch-all useless.
+expectRed(
+  'a non-object entry beside a well-formed one',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([GOOD_ENTRY, '...extraFolders']),
+  },
+  null,
+  /entry in `UPSTREAM_FOLDERS` that is not an object literal/,
+);
+
+expectRed(
+  'an entry whose path is computed, beside a well-formed one',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      GOOD_ENTRY,
+      "{ path: `${assetsRoot}/other`, languages: ['en'] }",
+    ]),
+  },
+  null,
+  /`path` is not a string literal/,
+);
+
+expectRed(
+  'an entry with no path at all, beside a well-formed one',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([GOOD_ENTRY, "{ languages: ['en'] }"]),
+  },
+  null,
+  /entry in `UPSTREAM_FOLDERS` with no `path`/,
+);
+
+// Round 5: a spread inside the entry can override `path` or `languages` AFTER this gate has
+// read them, so the values validated are not the ones the loader requests. Rounds 3, 4 and 5
+// were three instances of one class — the entry being only partly static — so the gate now
+// requires the whole entry to be statically legible and these controls pin each spelling.
+expectRed(
+  'a spread inside a folder entry',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      "{ path: 'assets/satori-ui', languages: ['de', 'en', 'fr'], ...override }",
+    ]),
+  },
+  null,
+  /member this gate cannot read statically/,
+);
+
+expectRed(
+  'a computed key inside a folder entry',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries([
+      "{ ['pa' + 'th']: 'assets/satori-ui', languages: ['de', 'en', 'fr'] }",
+    ]),
+  },
+  null,
+  /member this gate cannot read statically/,
+);
+
+expectRed(
+  'a shorthand property inside a folder entry',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWithEntries(["{ path, languages: ['de', 'en', 'fr'] }"]),
+  },
+  null,
+  /member this gate cannot read statically/,
+);
+
+// A string-literal key is static and must still be ACCEPTED — the legibility rule is about what
+// can be read, not about one spelling of it.
+falsePositiveControls += 1;
+expectGreen('a folder entry written with string-literal keys', 'checkUpstreamCatalogueLanguages', {
+  'angular.json': UPSTREAM_ANGULAR_JSON,
+  ...VENDOR_FILES,
+  [LOADER_PATH]: loaderWithEntries([
+    "{ 'path': 'assets/satori-ui', 'languages': ['de', 'en', 'fr'] }",
+  ]),
+});
+
+// Round 6: within ONE build the served folder is the union of its rules, so two packages
+// contributing complementary catalogues to the same output — which is what `UPSTREAM_FOLDERS`
+// being a list is for — must be accepted. Comparing each input against the whole declared list
+// reported each rule's languages as missing from the other and rejected a correct setup.
+falsePositiveControls += 1;
+expectGreen(
+  'two complementary asset inputs copying to one output',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      {
+        glob: '**/*',
+        input: 'node_modules/@hylandsoftware/satori-ui/i18n',
+        output: 'assets/satori-ui/i18n',
+      },
+      { glob: '**/*', input: 'node_modules/@acme/extra-i18n', output: 'assets/satori-ui/i18n' },
+    ]),
+    'node_modules/@hylandsoftware/satori-ui/i18n/de.json': '{}\n',
+    'node_modules/@hylandsoftware/satori-ui/i18n/en.json': '{}\n',
+    'node_modules/@acme/extra-i18n/fr.json': '{}\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+// And the union must not hide a gap: with the same two inputs, a language neither of them
+// serves is still a doomed request.
+expectRed(
+  'a language neither of two complementary inputs serves',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      {
+        glob: '**/*',
+        input: 'node_modules/@hylandsoftware/satori-ui/i18n',
+        output: 'assets/satori-ui/i18n',
+      },
+      { glob: '**/*', input: 'node_modules/@acme/extra-i18n', output: 'assets/satori-ui/i18n' },
+    ]),
+    'node_modules/@hylandsoftware/satori-ui/i18n/de.json': '{}\n',
+    'node_modules/@hylandsoftware/satori-ui/i18n/en.json': '{}\n',
+    'node_modules/@acme/extra-i18n/fr.json': '{}\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr', 'ja'])),
+  },
+  null,
+  /lists ja in `languages`[\s\S]*serves "assets\/satori-ui\/i18n" no catalogue for it/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a language list that matches the installed package exactly',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
 );
 
 /* ---------------- report ---------------- */

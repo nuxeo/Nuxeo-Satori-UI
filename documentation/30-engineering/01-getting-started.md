@@ -58,8 +58,8 @@ and exists precisely because this cost someone a day.
 ## 2. Clone and install
 
 ```bash
-git clone <repo-url> agentic-ui-poc
-cd agentic-ui-poc
+git clone <repo-url> Nuxeo-Satori-UI
+cd Nuxeo-Satori-UI
 export SATORI_GH_READONLY_TOKEN=<your-pat>   # needs read:packages on the Hyland org
 npm ci
 ```

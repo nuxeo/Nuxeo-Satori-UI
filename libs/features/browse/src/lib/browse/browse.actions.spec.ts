@@ -22,7 +22,6 @@ import {
   DocumentDetailService,
   DocumentImportService,
   PERMISSION_DENIED_KEY,
-  TagService,
   type AuditEntry,
   type DirectoryEntry,
   type NuxeoDocument,
@@ -93,7 +92,6 @@ const emptyAuditLog = {
 
 type BrowseReturn<K extends keyof BrowseService> = ReturnType<BrowseService[K]>;
 type DetailReturn<K extends keyof DocumentDetailService> = ReturnType<DocumentDetailService[K]>;
-type TagReturn<K extends keyof TagService> = ReturnType<TagService[K]>;
 type DirectoryReturn<K extends keyof DirectoryService> = ReturnType<DirectoryService[K]>;
 
 const browse = {
@@ -127,12 +125,6 @@ const detail = {
 const directory = {
   getEventTypes: vi.fn((): DirectoryReturn<'getEventTypes'> => of([])),
   getEventCategories: vi.fn((): DirectoryReturn<'getEventCategories'> => of([])),
-};
-
-const tag = {
-  searchTags: vi.fn((): TagReturn<'searchTags'> => of([])),
-  addTag: vi.fn((): TagReturn<'addTag'> => EMPTY),
-  removeTag: vi.fn((): TagReturn<'removeTag'> => EMPTY),
 };
 
 const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
@@ -178,11 +170,8 @@ describe('BrowseComponent — actions', () => {
     detail.subscribe.mockReturnValue(EMPTY);
     detail.unsubscribe.mockReturnValue(EMPTY);
     detail.getAuditLog.mockReturnValue(of(emptyAuditLog));
-    tag.addTag.mockReturnValue(EMPTY);
-    tag.removeTag.mockReturnValue(EMPTY);
     directory.getEventTypes.mockReturnValue(of([]));
     directory.getEventCategories.mockReturnValue(of([]));
-    tag.searchTags.mockReturnValue(of([]));
 
     anchorClicks = [];
     originalAnchorClick = HTMLAnchorElement.prototype.click;
@@ -206,7 +195,6 @@ describe('BrowseComponent — actions', () => {
         { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: detail },
         { provide: DirectoryService, useValue: directory },
-        { provide: TagService, useValue: tag },
         { provide: CURRENT_USERNAME, useValue: () => 'jdoe' },
         {
           provide: ADMIN_ACCESS_CHECKS,
@@ -705,120 +693,35 @@ describe('BrowseComponent — actions', () => {
 
   // ── Tags ──
 
-  it('selectTag adds the tag, refreshes the document and clears the input', () => {
+  it('applies the tag editor response without reloading the document', () => {
     component.currentDoc.set(folder);
-    component.tagInput = 'legal';
-    component.tagSearchResults.set(['legal']);
-    component.showCreateOption.set(true);
-    tag.addTag.mockReturnValue(of([]));
-    browse.getByPath.mockReturnValue(
-      of(doc({ ...folder, properties: { 'nxtag:tags': [{ label: 'legal' }] } })),
-    );
-
-    component.selectTag('legal');
-
-    expect(tag.addTag).toHaveBeenCalledWith('ws-1', 'legal');
-    expect(component.tags()).toEqual(['legal']);
-    expect(component.tagInput).toBe('');
-    expect(component.tagSearchResults()).toEqual([]);
-    expect(component.showCreateOption()).toBe(false);
-    expect(toast.show).toHaveBeenCalledWith('Tag "legal" added');
-  });
-
-  it('keeps the typed tag in the input when adding it fails', () => {
-    component.currentDoc.set(folder);
-    component.tagInput = 'legal';
-    tag.addTag.mockReturnValue(throwError(() => ({ status: 500 })));
-
-    component.selectTag('legal');
-
-    expect(component.tagInput).toBe('legal');
-    expect(browse.getByPath).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith('Failed to add tag');
-  });
-
-  it('createTag applies the trimmed input and ignores a blank one', () => {
-    component.currentDoc.set(folder);
-    tag.addTag.mockReturnValue(of([]));
-    browse.getByPath.mockReturnValue(of(folder));
-
-    component.tagInput = '   ';
-    component.createTag();
-    expect(tag.addTag).not.toHaveBeenCalled();
-
-    component.tagInput = '  urgent  ';
-    component.createTag();
-    expect(tag.addTag).toHaveBeenCalledWith('ws-1', 'urgent');
-  });
-
-  it('removeTag refreshes the document from the server', () => {
-    component.currentDoc.set(
-      doc({ ...folder, properties: { 'nxtag:tags': [{ label: 'legal' }, 'urgent'] } }),
-    );
+    component.onTagsChange(folder.uid, ['legal', 'urgent']);
     expect(component.tags()).toEqual(['legal', 'urgent']);
-    tag.removeTag.mockReturnValue(of([]));
-    browse.getByPath.mockReturnValue(
-      of(doc({ ...folder, properties: { 'nxtag:tags': ['urgent'] } })),
-    );
-
-    component.removeTag('legal');
-
-    expect(tag.removeTag).toHaveBeenCalledWith('ws-1', 'legal');
-    expect(component.tags()).toEqual(['urgent']);
-  });
-
-  it('keeps the tag visible when removing it fails', () => {
-    component.currentDoc.set(doc({ ...folder, properties: { 'nxtag:tags': ['legal'] } }));
-    tag.removeTag.mockReturnValue(throwError(() => ({ status: 403 })));
-
-    component.removeTag('legal');
-
-    expect(component.tags()).toEqual(['legal']);
+    expect(component.currentDoc()?.title).toBe(folder.title);
     expect(browse.getByPath).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith('Failed to remove tag');
   });
 
-  it('does not attempt to tag anything without a browsed document', () => {
-    component.selectTag('legal');
-    component.removeTag('legal');
-
-    expect(tag.addTag).not.toHaveBeenCalled();
-    expect(tag.removeTag).not.toHaveBeenCalled();
-  });
-
-  it('hides already-applied tags from the autocomplete and offers to create a new one', async () => {
-    component.currentDoc.set(doc({ ...folder, properties: { 'nxtag:tags': ['legal'] } }));
-    tag.searchTags.mockReturnValue(of(['legal', 'legacy']));
-    component.tagInput = 'leg';
-
-    component.onTagSearch('leg');
-    await new Promise((resolve) => setTimeout(resolve, 400));
-
-    expect(component.tagSearchResults()).toEqual(['legacy']);
-    expect(component.showCreateOption()).toBe(true);
-  });
-
-  it('offers no create option when the search returns an exact match', async () => {
+  it('ignores a tag editor response after navigating to another document', () => {
     component.currentDoc.set(folder);
-    tag.searchTags.mockReturnValue(of(['Legal']));
-    component.tagInput = 'legal';
-
-    component.onTagSearch('legal');
-    await new Promise((resolve) => setTimeout(resolve, 400));
-
-    expect(component.tagSearchResults()).toEqual(['Legal']);
-    expect(component.showCreateOption()).toBe(false);
+    component.onTagsChange('previous-folder', ['stale']);
+    expect(component.currentDoc()).toBe(folder);
+    expect(component.tags()).toEqual([]);
   });
 
-  it('yields no suggestions and swallows a failing tag search', async () => {
+  it('does not recreate a document when tags arrive after it was cleared', () => {
+    component.onTagsChange(folder.uid, ['stale']);
+    expect(component.currentDoc()).toBeNull();
+  });
+
+  it('allows tag editing only for writable documents that are not versions or proxies', () => {
     component.currentDoc.set(folder);
-    tag.searchTags.mockReturnValue(throwError(() => ({ status: 500 })));
-    component.tagInput = 'leg';
-
-    component.onTagSearch('leg');
-    await new Promise((resolve) => setTimeout(resolve, 400));
-
-    expect(component.tagSearchResults()).toEqual([]);
+    expect(component.canTag()).toBe(true);
+    component.currentDoc.set({ ...folder, isVersion: true });
+    expect(component.canTag()).toBe(false);
+    component.currentDoc.set({ ...folder, isProxy: true });
+    expect(component.canTag()).toBe(false);
+    component.currentDoc.set({ ...folder, contextParameters: { permissions: ['Read'] } });
+    expect(component.canTag()).toBe(false);
   });
 
   // ── Details side panel ──

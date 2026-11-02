@@ -1,11 +1,14 @@
-import { Injectable, computed, inject } from '@angular/core';
+import { Injectable, computed, effect, inject } from '@angular/core';
 
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import {
   resolveExtensionLayers,
   type ExtensionConfig,
-  type ResolvedExtensionConfig,
+  type RefusedExtensionEntry,
+  type RefusedExtensionOverride,
+  type RefusedExtensionSection,
+  type ResolvedExtensionLayers,
 } from './extension-config';
 import { DOCUMENT_RULE_EVALUATORS } from './document-rules';
 import type { ExtensionRouteDescriptor } from './extension-actions';
@@ -46,7 +49,7 @@ export class AppExtensionsService {
   private readonly rules = inject(ExtensionRuleRegistry);
 
   /** The merged Layer 1 config, recomputed when the manifest signal changes. */
-  private readonly resolved = computed<ResolvedExtensionConfig>(() =>
+  private readonly resolved = computed<ResolvedExtensionLayers>(() =>
     resolveExtensionLayers(this.appConfig.manifest().extensionLayers),
   );
 
@@ -70,6 +73,107 @@ export class AppExtensionsService {
       ).rejected,
   );
 
+  /**
+   * Slot entries the manifest read refused, each naming the slot, the reason and the
+   * contribution that wrote it.
+   *
+   * The third signal on this channel, and for the reason {@link invalidRoutes} states: a
+   * malformed slot or entry changed what a customer saw and said nothing anywhere, so a
+   * manifest with a typo was debugged by bisection or not at all (NXSAT-755).
+   *
+   * What it reports is only what the **read** refused — a slot that is not a list, an entry
+   * that cannot be addressed, and a repeated `id` inside one contributed list. A same-`id`
+   * entry across contributions is the documented override mechanism and is deliberately
+   * absent; `readSlotEntries` in `extension-config.ts` argues that line in full.
+   */
+  readonly refusedSlotEntries = computed<readonly RefusedExtensionEntry[]>(
+    () => this.resolved().refused,
+  );
+
+  /**
+   * Per-id `overrides` entries the manifest read refused, each naming the id, the reason and
+   * the contribution that wrote it.
+   *
+   * The fourth signal on this channel, and a signal of its own rather than more rows on
+   * {@link refusedSlotEntries}: an override is keyed by descriptor id and belongs to no slot, so
+   * it has no honest value for that type's required `slot` — {@link RefusedExtensionOverride}
+   * argues it in full. Keeping them apart also leaves `refusedSlotEntries()` exactly as
+   * published, so adding this breaks no consumer (NXSAT-759).
+   *
+   * What it reports is only what the **read** refused: an override whose value is not an object,
+   * and one keyed `__proto__`. An override that is well-formed but has no effect — an unknown
+   * key, or an id nothing registers — is deliberately absent, because overrides are read before
+   * any descriptor registers; `readOverrides` in `extension-config.ts` states that line and
+   * §2a of `docs/extension-reference.md` states it to the customer.
+   */
+  readonly refusedOverrides = computed<readonly RefusedExtensionOverride[]>(
+    () => this.resolved().refusedOverrides,
+  );
+
+  /**
+   * Whole `slots` or `overrides` maps the manifest read refused, each naming the key, the reason
+   * and the contribution that wrote it.
+   *
+   * The fifth signal on this channel, and the level above the other two: these report what was
+   * refused *inside* a map, and this reports a map lost whole. `"overrides": [ … ]` — the
+   * overrides map written as a list, which a `slots` entry being a list invites — cost a customer
+   * every override in that layer and said nothing anywhere (NXSAT-761).
+   *
+   * A list of its own because a whole-map refusal has neither a slot nor an id, which are the
+   * fields {@link refusedSlotEntries}'s and {@link refusedOverrides}'s types each require;
+   * {@link RefusedExtensionSection} argues it in full. One list over both keys rather than one
+   * per key, so the two cannot drift apart into reporting different things.
+   *
+   * What it reports is only a key that is **present** and not an object. An absent key is not a
+   * refusal, and nor is an empty map — `{}` is a contribution that overrides nothing, which a
+   * generated manifest legitimately writes.
+   */
+  readonly refusedSections = computed<readonly RefusedExtensionSection[]>(
+    () => this.resolved().refusedSections,
+  );
+
+  /**
+   * The refusal list last written on each channel, so a recomputation cannot repeat it.
+   *
+   * {@link refusedSlotEntries} and {@link refusedOverrides} are `computed` over the manifest
+   * signal, which recomputes whenever that signal changes — a preset being selected, a second
+   * load. Logging from inside one would restate the same typo every time, which is the mistake
+   * `AppConfigService.noteRefusedLogos` carries a comment about.
+   *
+   * The whole **list**, not a set of individual refusals. Two contributions may declare the same
+   * `$name`, so two identical typos in them produce refusals equal in every field, and a set
+   * keyed on those fields silently collapsed them into one line — the console under-reporting
+   * how many problems there were while the signal held both (review of PR 534). Suppressing a
+   * distinct refusal is the silence these tickets exist to remove, so it is the worse of the two
+   * errors.
+   *
+   * Per channel, not one key over several lists: a single key is overwritten by whichever list
+   * wrote last, so on the next recomputation each list compares against another's key, differs,
+   * and is written again — they ping-pong the key and restate everything for ever.
+   *
+   * **Two** non-empty lists in the same pass are enough, and when all three are live all three
+   * repeat — not two of them. Measured under a deliberately shared key: two channels go from one
+   * line each to two on a second load, and three channels go from one each to two each. (Two
+   * non-empty lists are always different, because the three row shapes differ — `slot` is only
+   * on the first, and the other two are keyed `id` against `key` — so there is no case where a
+   * shared key happens to match.)
+   *
+   * So the three-channel test in `app-extensions.service.spec.ts` is **not** what makes this
+   * visible; NXSAT-759's two-channel one already does. It is there for what that one cannot see:
+   * a key shared by the *third* channel alone. Give `sections` the `'overrides'` key and the
+   * slots/overrides pair still passes while those two ping-pong.
+   *
+   * The trade this makes: a manifest value whose refusals are not identical to the last one
+   * re-states all of them, not only the new ones. That is "once per load" as the ticket asked
+   * for it, and in this application it never arises — `AppConfigService.load()` memoises, so
+   * there is one manifest value per page.
+   */
+  private readonly lastNoted: Record<RefusalChannel, string> = {
+    slots: '',
+    overrides: '',
+    sections: '',
+  };
+
   private readonly overrides = computed<ExtensionSlotOverrides>(() => {
     const config = this.config();
     return {
@@ -81,6 +185,37 @@ export class AppExtensionsService {
   constructor() {
     this.rules.registerRules(DOCUMENT_RULE_EVALUATORS);
     this.rules.registerRules(SURFACE_RULE_EVALUATORS);
+    // An `effect`, not a call here, for the reason `provideExtensionRoutes` gives: the manifest
+    // is fetched by an `APP_INITIALIZER` and nothing guarantees it has landed when this service
+    // is first injected, so a refusal read now would usually be a refusal read from an empty
+    // manifest. And it is needed at all because the product application has no page showing
+    // diagnostics — without it the console stays silent unless a host happens to render the
+    // refusal signals, and `nuxeo-ui` does not.
+    //
+    // All three signals are read as arguments, so all three are read on every run and the effect
+    // keeps tracking each of them. The early returns live in `noteRefusals`, deliberately: an
+    // early `return` in this body would skip the reads after it and silently stop tracking those
+    // signals.
+    effect(() => {
+      this.noteRefusals(
+        'slots',
+        this.refusedSlotEntries(),
+        (entry) => `slots.${entry.slot} in ${entry.source}: ${entry.reason}`,
+      );
+      this.noteRefusals(
+        'overrides',
+        this.refusedOverrides(),
+        (entry) => `overrides.${entry.id} in ${entry.source}: ${entry.reason}`,
+      );
+      // Addressed by the key alone, because a map lost whole has nothing smaller to name — which
+      // is also what distinguishes these lines from the two above at a glance: `overrides.<id>`
+      // against a bare `overrides`.
+      this.noteRefusals(
+        'sections',
+        this.refusedSections(),
+        (section) => `${section.key} in ${section.source}: ${section.reason}`,
+      );
+    });
   }
 
   /** Contribute packaged descriptors to a slot. See {@link ExtensionSlotRegistry.register}. */
@@ -113,6 +248,27 @@ export class AppExtensionsService {
     return this.rules.evaluate(rule, context);
   }
 
+  /**
+   * Write one line per refusal, unless this exact list has already been written on this
+   * channel. See {@link lastNoted}.
+   *
+   * Generic over the refusal, with the line supplied by the caller, because the three lists are
+   * the same job and differ only in how a row is named — `slots.<slot>`, `overrides.<id>`, and a
+   * bare `<key>` for a map lost whole. One body, so the dedup cannot come to mean three
+   * different things.
+   */
+  private noteRefusals<T>(
+    channel: RefusalChannel,
+    refused: readonly T[],
+    line: (refusal: T) => string,
+  ): void {
+    if (refused.length === 0) return;
+    const key = JSON.stringify(refused);
+    if (key === this.lastNoted[channel]) return;
+    this.lastNoted[channel] = key;
+    for (const refusal of refused) warn(line(refusal));
+  }
+
   /** Every registered id, for the extension reference doc and diagnostics. */
   inventory(): Readonly<Record<string, readonly string[]>> {
     const inventory: Record<string, readonly string[]> = {
@@ -123,4 +279,30 @@ export class AppExtensionsService {
     }
     return inventory;
   }
+}
+
+/**
+ * Which refusal list a console line came from, and the key its dedup is filed under.
+ *
+ * Module-local: it names the three keys of `lastNoted` and the prefix each line carries, which
+ * is an implementation detail of the logging, not something a consumer of the signals needs.
+ *
+ * `'sections'` deliberately does not reuse `ExtensionSectionKey`, whose members are also
+ * `'slots'` and `'overrides'`: those name the manifest key a refusal is *about*, and these name
+ * the list it arrived on. Collapsing them would file a refused `overrides` map under the
+ * `'overrides'` dedup key and reintroduce the shared-key ping-pong the two share a comment about.
+ */
+type RefusalChannel = 'slots' | 'overrides' | 'sections';
+
+/**
+ * The product app has no page showing diagnostics, so the console is where support finds them.
+ *
+ * Module-local, which is the convention the two libraries that already do this follow —
+ * `[agentic-ui-config]` in `app-config.service.ts` and `[agentic-ui-layouts]` in
+ * `document-layout.service.ts`. The prefix is `extension-outlet.component.ts`'s, so this
+ * library speaks with one voice; extracting a shared helper is a tidy-up worth doing when a
+ * third module in here needs it.
+ */
+function warn(message: string): void {
+  console.warn(`[agentic-ui-extensions] ${message}`);
 }

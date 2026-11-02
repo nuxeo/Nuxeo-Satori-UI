@@ -19,8 +19,24 @@ const SATORI_LINT_ENTRY = `${SATORI_SCOPE}/satori-lint/eslint`;
 // `Failed to process project graph: Cannot find module '@hylandsoftware/satori-lint/eslint'`
 // and took the Storybook build down with it. It did exactly that, on the two pushes to `main` of
 // 2026-10-28. The require had landed on 2026-10-25, while the publishing workflow was pointed at
-// a deleted branch and so never ran; nothing else caught it, because ci.yml runs that build only
-// when `satori-components` is affected and a change to this file affects no project at all.
+// a deleted branch and so never ran.
+//
+// ci.yml did not catch it either, and the reason is worth getting right because the obvious one
+// is wrong: it is NOT that this file reaches no affected-based job. `nx show projects --affected
+// --files eslint.config.mjs` returns every project in the workspace, 32 of 32, so the storybook
+// job does build on a change here.
+//
+// It missed it for the same warm-graph reason the deploy later passed by accident. That job
+// resolved what it needed with `nx show projects --affected` while `@hylandsoftware` was still
+// installed, which caches the project graph; the build step then moved the scopes away and
+// `nx run` reused the cached graph without re-reading this file. A green storybook build
+// therefore proved nothing about the guard below.
+//
+// That is history, not the current shape: ci.yml's build step now computes its graph cold, after
+// the scopes are removed, so it does exercise this guard — see the step itself rather than
+// trusting this sentence. The fixtures in `scripts/eslint-config-satori-lint.selftest.mjs` are
+// still the direct proof, and remain the only one that does not depend on a workflow's step
+// order staying as it is.
 //
 // Absent is tolerated. Broken is not — silently dropping these rules on a half-installed package
 // would be worse than failing, because lint would pass wider than it should and say nothing.

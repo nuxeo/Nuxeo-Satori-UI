@@ -461,9 +461,11 @@ describe('applyLayoutFile', () => {
       version: 1,
       sections: [{ id: 'a', fields: ['externalEntity:origin'] }],
     });
-    expect(applyLayoutFile(claim(), 'metadata', contents).skipped).toEqual([
-      'externalEntity:origin',
-    ]);
+    const without = applyLayoutFile(claim(), 'metadata', contents);
+    expect(without.skipped).toEqual(['externalEntity:origin']);
+    // On a document without the facet the section has nothing left to show, so it is left out
+    // rather than left as a dangling heading — the case a layout shared with a facet hits.
+    expect(without.layout.sections).toEqual([]);
     const { layout, skipped } = applyLayoutFile(claim(), 'metadata', contents, [external]);
     expect(skipped).toEqual([]);
     expect(layout.sections[0]?.fields[0]).toMatchObject({
@@ -481,6 +483,67 @@ describe('applyLayoutFile', () => {
     );
     expect(skipped).toEqual([]);
     expect(layout.sections[0]?.fields[0]?.definition).toEqual({ type: 'blob' });
+  });
+
+  /**
+   * The three sections of the NXSAT-728 repro: one that resolves a field, one whose fields the
+   * type does not have, one that lists none. Only the first is a section to render, as the
+   * generated layout leaves out a schema with no fields.
+   */
+  it('leaves out a section with no fields and one whose every field is unknown, keeping the rest', () => {
+    const { layout, skipped } = applyLayoutFile(
+      claim(),
+      'metadata',
+      file({
+        version: 1,
+        sections: [
+          { id: 'details', label: 'Details', fields: ['dc:title'] },
+          { id: 'extra', label: 'Extra info', fields: ['qa:missing', 'qa:gone'] },
+          { id: 'nothing', label: 'Nothing here', fields: [] },
+        ],
+      }),
+    );
+    expect(
+      layout.sections.map((section) => [section.id, section.fields.map((field) => field.xpath)]),
+    ).toEqual([['details', ['dc:title']]]);
+    // The warning for a typo in a layout file is the only diagnostic its author gets, so
+    // dropping the section must not stop the fields under it being reported.
+    expect(skipped).toEqual(['qa:missing', 'qa:gone']);
+  });
+
+  it('resolves to no sections at all when no section of the file has a field to show', () => {
+    const { layout, skipped } = applyLayoutFile(
+      claim(),
+      'metadata',
+      file({
+        version: 1,
+        sections: [
+          { id: 'only', label: 'Nothing at all', fields: ['qa:missing'] },
+          { id: 'empty', label: 'Nothing here either', fields: [] },
+        ],
+      }),
+    );
+    expect(layout.sections).toEqual([]);
+    expect(skipped).toEqual(['qa:missing']);
+  });
+
+  // That no tab is then offered for it is asserted of the rendered tabs in
+  // `document-layout.spec.ts`; this one is about the sections the resolver answers with.
+  it('leaves out an empty section in tabs display too, keeping the display', () => {
+    const { layout } = applyLayoutFile(
+      claim(),
+      'metadata',
+      file({
+        version: 1,
+        display: 'tabs',
+        sections: [
+          { id: 'details', label: 'Details', fields: ['claim:number'] },
+          { id: 'extra', label: 'Extra info', fields: ['qa:missing'] },
+        ],
+      }),
+    );
+    expect(layout.display).toBe('tabs');
+    expect(layout.sections.map((section) => section.id)).toEqual(['details']);
   });
 });
 

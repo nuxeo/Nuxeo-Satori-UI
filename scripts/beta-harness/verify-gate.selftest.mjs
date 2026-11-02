@@ -11,7 +11,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -237,6 +237,162 @@ control('only a gate declared able to report it is not-run on the not-run exit c
   expect(classify({}, NOT_RUN_EXIT_CODE) === 'fail', 'undeclared gate, not-run code must fail');
   expect(classify({ mayNotRun: true }, 1) === 'fail', 'exit 1');
   expect(classify({ mayNotRun: true }, null) === 'fail', 'killed by a signal');
+});
+
+/* `platformSensitive` decides what a cross-platform run covers, so the declaration itself needs
+ * controls. Read out of the source rather than imported, because `verify-gate.mjs` is a script
+ * that runs gates on import — the same reason the controls above drive it as a subprocess. */
+const gateSource = readFileSync(join(here, 'verify-gate.mjs'), 'utf8');
+const gateBlock = gateSource.slice(
+  gateSource.indexOf('const ALL_GATES = ['),
+  gateSource.indexOf('\n];', gateSource.indexOf('const ALL_GATES = [')),
+);
+const declaredIds = [...gateBlock.matchAll(/\n\s+id: '([a-z0-9-]+)',/g)].map((m) => m[1]);
+const declarations = [...gateBlock.matchAll(/\n\s+platformSensitive: (true|false),/g)].map(
+  (m) => m[1],
+);
+
+control('every gate declares platformSensitive', () => {
+  expect(
+    declaredIds.length === declarations.length,
+    `${declaredIds.length} gates but ${declarations.length} declarations — a gate without one ` +
+      'would be included or excluded from the Windows run by accident',
+  );
+  expect(declaredIds.length > 0, 'found no gates, so this control asserted nothing');
+});
+
+control('a gate missing the declaration is refused, not defaulted', () => {
+  /* The anti-drift property, exercised rather than asserted: strip one declaration and the
+   * harness must refuse to run at all. Without this, a new gate silently inherits a default and
+   * the cross-platform run quietly stops covering it. */
+  const mutated = gateSource.replace(/\n(\s+)platformSensitive: (?:true|false),/, '');
+  /* Beside the original, not in a temp directory: this script imports `./gate-summary.mjs` and
+   * `../collect-evidence/evidence-path.mjs`, so a copy anywhere else dies on module resolution
+   * with exit 1 and the control would pass for the wrong reason. It did, on the first run. */
+  const copy = join(here, `verify-gate.platform-control-${process.pid}.mjs`);
+  try {
+    writeFileSync(copy, mutated);
+    const run = spawnSync(process.execPath, [copy, '--gates', 'node', '--phase', 'selftest'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      env,
+    });
+    expect(run.status === 2, `expected exit 2, got ${run.status}`);
+    expect(
+      /without a `platformSensitive` declaration/.test(`${run.stdout}${run.stderr}`),
+      `message did not name the problem: ${`${run.stdout}${run.stderr}`.trim().slice(0, 200)}`,
+    );
+  } finally {
+    rmSync(copy, { force: true });
+  }
+});
+
+control('--platform-sensitive selects exactly the declared set, nothing more or less', () => {
+  /* Compares the actual selection against the declarations, via `--list-gates`. The previous
+   * version of this control passed `--gates node` to stay cheap — which OVERRIDES the flag, so it
+   * exercised precedence only and would have passed with the platform filter inverted or ignored
+   * entirely. Review caught it, and it is the third hollow control of mine on this branch. */
+  const expected = declaredIds
+    .filter((id, i) => declarations[i] === 'true' || id === 'code-scanning')
+    .sort();
+  const run = spawnSync(
+    process.execPath,
+    [join(here, 'verify-gate.mjs'), '--platform-sensitive', '--list-gates'],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  expect(run.status === 0, `--list-gates exited ${run.status}: ${run.stderr.trim().slice(0, 160)}`);
+  const actual = run.stdout.trim().split('\n').filter(Boolean).sort();
+  expect(
+    actual.join(',') === expected.join(','),
+    `selection differs.\n      only selected: ${actual.filter((id) => !expected.includes(id))}` +
+      `\n      only expected: ${expected.filter((id) => !actual.includes(id))}`,
+  );
+  expect(
+    actual.length < declaredIds.length,
+    `selected all ${declaredIds.length} gates, so the flag narrowed nothing`,
+  );
+});
+
+control('an explicit --gates still overrides --platform-sensitive', () => {
+  const run = spawnSync(
+    process.execPath,
+    [join(here, 'verify-gate.mjs'), '--platform-sensitive', '--gates', 'node', '--list-gates'],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  expect(run.stdout.trim() === 'node', `selected ${JSON.stringify(run.stdout.trim())}`);
+});
+
+control('--require-scope-complete passes a scoped run that is all green', () => {
+  /* The bug this PR shipped before review caught it: the job used `--require-complete`, which a
+   * filtered run can never satisfy, so Windows would have failed on every commit with every
+   * selected gate green. */
+  const run = spawnSync(
+    process.execPath,
+    [
+      join(here, 'verify-gate.mjs'),
+      '--gates',
+      'node',
+      '--require-scope-complete',
+      '--phase',
+      'selftest',
+    ],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  expect(
+    run.status === 0,
+    `exit ${run.status}: ${`${run.stdout}${run.stderr}`.trim().split('\n').slice(-2).join(' | ')}`,
+  );
+});
+
+control('--require-scope-complete rejects a selected gate that did not run', () => {
+  /* The green-path control above would still exit 0 with the whole enforcement block deleted, so
+   * on its own it proves nothing. `BETA_SKIP_CODE_SCANNING` in this suite's env makes
+   * `code-scanning` report NOT RUN, which is the shortfall the flag exists to catch. */
+  const run = spawnSync(
+    process.execPath,
+    [
+      join(here, 'verify-gate.mjs'),
+      '--gates',
+      'code-scanning',
+      '--require-scope-complete',
+      '--phase',
+      'selftest',
+    ],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  const out = `${run.stdout}${run.stderr}`;
+  expect(run.status === 1, `expected exit 1 for a skipped selected gate, got ${run.status}`);
+  expect(
+    /--require-scope-complete: 1 selected gate\(s\) did not run green: code-scanning/.test(out),
+    `diagnostic did not name the shortfall: ${out.trim().split('\n').slice(-3).join(' | ')}`,
+  );
+});
+
+control('--require-complete stays strict about a scoped run', () => {
+  // Not loosened by this change: its strictness is the guard against claiming completeness.
+  const run = spawnSync(
+    process.execPath,
+    [join(here, 'verify-gate.mjs'), '--gates', 'node', '--require-complete', '--phase', 'selftest'],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  expect(run.status === 1, `expected exit 1 for a partial scope, got ${run.status}`);
+});
+
+control('the cross-platform selection keeps the gate that waits for CodeQL', () => {
+  /* `code-scanning` is not platform-sensitive and says so. It is still selected, because this is
+   * the only job that waits for CodeQL on the revision — dropping it would remove CI's only
+   * enforcement of alert severity and allowlist expiry rather than relocate it. */
+  const block = gateBlock.slice(gateBlock.indexOf("id: 'code-scanning'"));
+  const descriptor = block.slice(0, block.indexOf('\n  },'));
+  expect(/platformSensitive: false/.test(descriptor), 'code-scanning should declare false');
+  expect(
+    /requiresCodeqlWait: true/.test(descriptor),
+    'code-scanning must declare why it is still selected, or the selection silently drops it',
+  );
+  expect(
+    /g\.platformSensitive \|\| g\.requiresCodeqlWait/.test(gateSource),
+    'the selection must honour requiresCodeqlWait, not only platformSensitive',
+  );
 });
 
 rmSync(evidence, { recursive: true, force: true });

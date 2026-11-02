@@ -13,6 +13,7 @@
     "beta:coverage": "node scripts/beta-harness/coverage-gate.mjs",
     "beta:sanitizers": "node scripts/beta-harness/sanitizer-audit.mjs",
     "beta:sanitizers-selftest": "node scripts/beta-harness/sanitizer-audit.selftest.mjs",
+    "beta:sanitizers-recovery": "node scripts/beta-harness/sanitizer-selftest-recovery.selftest.mjs",
     "beta:e2e": "npx tsx scripts/beta-harness/e2e-preflight.mjs && npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts",
     "beta:e2e-preflight": "npx tsx scripts/beta-harness/e2e-preflight.mjs",
     "beta:e2e-negative-control": "node scripts/e2e-negative-control.mjs",

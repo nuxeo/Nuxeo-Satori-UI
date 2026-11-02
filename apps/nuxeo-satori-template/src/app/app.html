@@ -37,16 +37,47 @@
 
   <main class="shell__content">
     @if (missingLayers().length) {
-      <p class="shell__warning" role="status">
+      <output class="shell__warning">
         Manifest references {{ missingLayers().length }} extension layer(s) that did not resolve:
         {{ missingLayers().join(', ') }}
-      </p>
+      </output>
     }
 
     @for (route of invalidRoutes(); track route.id) {
-      <p class="shell__warning" role="status">
+      <output class="shell__warning">
         Manifest route {{ route.id }} was not registered: {{ route.reason }}
-      </p>
+      </output>
+    }
+
+    <!--
+      Tracked by `$index`, not by `id`: an entry refused for having no usable `id` carries
+      `null`, and a refusal about a repeated id shares its id with the entry that kept it.
+    -->
+    @for (entry of refusedSlotEntries(); track $index) {
+      <output class="shell__warning">
+        Manifest slot {{ entry.slot }} in {{ entry.source }}: {{ entry.reason }}
+      </output>
+    }
+
+    <!--
+      Also tracked by `$index`: two contributions can refuse the same descriptor id, so the id
+      is not unique across the list.
+    -->
+    @for (refusal of refusedOverrides(); track $index) {
+      <output class="shell__warning">
+        Manifest override {{ refusal.id }} in {{ refusal.source }}: {{ refusal.reason }}
+      </output>
+    }
+
+    <!--
+      A whole `slots` or `overrides` map lost because it was not an object. Addressed by the key
+      alone — there is nothing smaller to name — and tracked by `$index` for the same reason as
+      the two above: two contributions can get the same key wrong.
+    -->
+    @for (refusal of refusedSections(); track $index) {
+      <output class="shell__warning">
+        Manifest {{ refusal.key }} in {{ refusal.source }}: {{ refusal.reason }}
+      </output>
     }
 
     <!--

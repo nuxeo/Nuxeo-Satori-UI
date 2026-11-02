@@ -865,11 +865,13 @@ export class SearchService {
     }
 
     try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(value, 'text/html');
-      return doc.body.textContent ?? '';
+      // A template, not DOMParser: the parser drops whitespace before `<body>`, which took the
+      // space out of the text after a match ("<em>Board</em> minutes" became "Boardminutes").
+      const template = document.createElement('template');
+      template.innerHTML = value;
+      return template.content.textContent ?? '';
     } catch {
-      // Fallback to the original value if DOMParser is unavailable or parsing fails.
+      // Fallback to the original value if the template is unavailable or parsing fails.
       return value;
     }
   }

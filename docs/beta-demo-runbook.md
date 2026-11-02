@@ -230,8 +230,9 @@ Two independent artefacts, and a clean support boundary.
 four for Layer 2 libraries, one for configuration packages — and the guardrail script.
 
 **Say "publishable", not "published".** Nothing is on any registry — that is a deliberate later
-step. `private: true` remains in the built `package.json` as an intentional tripwire; the
-publishability check _fails_ if it is missing. Verified: `nx build platform` exit 0,
+step. The built `package.json` is public and names the Nuxeo registry in `publishConfig`
+(NXSAT-667); the publishability check _fails_ if `private: true` returns or the registry is
+missing. Verified: `nx build platform` exit 0,
 `npm publish --dry-run` succeeds, and the template app compiles against the built types.
 
 **On the name:** the package in the repo today is `@nuxeo/satori-platform`, and that is the form

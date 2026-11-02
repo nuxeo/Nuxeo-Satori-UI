@@ -55,11 +55,18 @@
 1. Go to: https://cla-assistant.io/
 2. Click **"Sign in with GitHub"**
 3. Select **"nuxeo"** organization
-4. Find **"agentic-ui-poc"** repository
+4. Find **"Nuxeo-Satori-UI"** repository
+
+**Repository rename (30 October 2026).** GitHub renamed `nuxeo/agentic-ui-poc` to
+`nuxeo/Nuxeo-Satori-UI`, and the URLs on this page name the new one. CLA Assistant resolves it to
+the same registration: its readme badge endpoint reports the same signature count for both names,
+where a repository it does not know reports zero. That check covers the badge endpoint, not the
+dashboard, which answers HTTP 200 for any path — so if the dashboard shows nothing under the new
+name, the registration needs re-pointing there.
 
 ### Step 2: Configure Allowlist
 
-1. In CLA Assistant dashboard, select `nuxeo/agentic-ui-poc`
+1. In CLA Assistant dashboard, select `nuxeo/Nuxeo-Satori-UI`
 2. Go to **"Settings"** or **"Allowlist"** section
 3. Add bot accounts (explicit names only):
 
@@ -201,7 +208,7 @@ CLAassistant commented:
 1. Go to: https://github.com/apps/cla-assistant
 2. Click **"Install"**
 3. Select **"nuxeo"** organization
-4. Choose repositories: **"agentic-ui-poc"**
+4. Choose repositories: **"Nuxeo-Satori-UI"**
 5. Click **"Install & Authorize"**
 
 ### Issue: Allowlist Not Working

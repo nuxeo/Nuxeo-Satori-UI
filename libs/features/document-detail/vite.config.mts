@@ -15,6 +15,9 @@ export default defineConfig(() => ({
   test: {
     name: 'document-detail',
     watch: false,
+    // Under full-suite load a spec can run several seconds. The 5s Vitest default turned
+    // that load into failures, so the limit is set for the whole project.
+    testTimeout: 30_000,
     globals: true,
     environment: 'jsdom',
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],

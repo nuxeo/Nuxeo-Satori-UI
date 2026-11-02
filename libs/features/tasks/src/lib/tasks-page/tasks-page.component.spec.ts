@@ -31,7 +31,7 @@ import {
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 /**
- * jsdom has no `ResizeObserver`, and `SatBreadcrumbs` inside this template constructs one. The stub
+ * jsdom has no `ResizeObserver`, which a component this template renders may construct. The stub
  * is intentionally inert: recording calls would imply this file asserts something about resizing.
  */
 class ResizeObserverStub {
@@ -876,9 +876,9 @@ describe('TasksPageComponent', () => {
       component.targetDoc.set(mockDocument);
 
       expect(component.breadcrumbItems()).toEqual([
-        { label: 'default-domain', href: '/browse/default-domain' },
-        { label: 'workspaces', href: '/browse/default-domain/workspaces' },
-        { label: 'test', href: '/browse/default-domain/workspaces/test' },
+        { label: 'default-domain', routerLink: ['/browse', 'default-domain'] },
+        { label: 'workspaces', routerLink: ['/browse', 'default-domain', 'workspaces'] },
+        { label: 'test', routerLink: ['/browse', 'default-domain', 'workspaces', 'test'] },
       ]);
     });
 
@@ -1293,29 +1293,6 @@ describe('TasksPageComponent', () => {
 
       expect(component.taskLoading()).toBe(false);
       expect(component.selectedTask()).toBeNull();
-    });
-  });
-
-  describe('Breadcrumb navigation', () => {
-    it('should navigate to the clicked breadcrumb href instead of following the link', () => {
-      const anchor = document.createElement('a');
-      anchor.setAttribute('href', '/browse/default-domain');
-      const event = { target: anchor, preventDefault: vi.fn() } as unknown as MouseEvent;
-
-      component.onBreadcrumbClick(event);
-
-      expect(event.preventDefault).toHaveBeenCalled();
-      expect(mockRouter.navigateByUrl).toHaveBeenCalledWith('/browse/default-domain');
-    });
-
-    it('should ignore a click that did not land on a link', () => {
-      const span = document.createElement('span');
-      const event = { target: span, preventDefault: vi.fn() } as unknown as MouseEvent;
-
-      component.onBreadcrumbClick(event);
-
-      expect(event.preventDefault).not.toHaveBeenCalled();
-      expect(mockRouter.navigateByUrl).not.toHaveBeenCalled();
     });
   });
 });

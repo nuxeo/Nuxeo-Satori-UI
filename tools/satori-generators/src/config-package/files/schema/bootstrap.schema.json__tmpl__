@@ -266,7 +266,8 @@
               },
               "path": {
                 "type": "string",
-                "pattern": "^/"
+                "description": "A path on the Nuxeo origin, e.g. /nuxeo/oauth2/authorization/azure. A leading // or /\\ is read by the browser as another host, and a backslash or control character anywhere makes the value differ from the path it looks like, so the application refuses all of them (NXSAT-731).",
+                "pattern": "^/(?![/\\\\])[^\\\\\\u0000-\\u001f\\u007f]*$"
               }
             }
           }

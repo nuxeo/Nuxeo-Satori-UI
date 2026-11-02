@@ -22,6 +22,15 @@ The tag editor is a document's tags, added and removed in place. It is the count
   it with `canTagDocument(doc)`: Write on the document itself, not a version or a proxy.
 - **Never out of order.** Changes are sent one at a time, so a slow answer cannot undo a later
   change. A failed change puts the chip back and says why; a 403 reads as a refusal.
+- **Never lost with the view.** A change is kept until Nuxeo answers it, even if the tab or panel
+  holding the editor closes, or the host moves to another document, first, and its toast still
+  shows. List `provideNxsTagWrites()` once in the application's providers and the next editor for
+  that document also shows what Nuxeo stored, read from Nuxeo rather than the host's copy, and passes
+  it on in `tagsChange`. Without the provider, that editor shows the tags its host passes in until
+  the host reloads the document.
+- **Never across users.** A change still waiting when its user signs out is dropped, not sent as
+  whoever signs in next, and an answer that arrives after sign-out is neither shown nor kept. The
+  user is the application's `CURRENT_USERNAME`.
 
 ## Demo showcase
 
@@ -43,8 +52,9 @@ export const usageHtml = `<nxs-properties-panel [document]="doc()">
 
 `documentUid` is required. Pass the labels of the document's `nxtag:tags` as `tags`, and keep the
 document in step from `tagsChange`. `canTag` above is the host's
-`computed(() => canTagDocument(this.doc()))`. The component lists its own toast provider and needs
-`TagService`. Its labels are translated under `satori-components.tag-editor.*`, with English from
+`computed(() => canTagDocument(this.doc()))`. The component needs `TagService`, and says its own
+toasts. List `provideNxsTagWrites()` once in the application's providers, beside
+`provideNxsComponents()`, so its changes outlive the panel that made them. Its labels are translated under `satori-components.tag-editor.*`, with English from
 `providePlatformEnglishFallback()`.
 
 Show it only on a document with the `NXTag` facet, as Web UI does. Inside `nxs-properties-panel`'s

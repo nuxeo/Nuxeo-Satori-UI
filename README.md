@@ -1,6 +1,6 @@
-# agentic-ui-poc
+# Nuxeo Agentic UI
 
-**Nuxeo Agentic UI** — a modern web interface for Nuxeo, delivered as a Marketplace package, that you change by configuration or with your own code.
+A modern web interface for Nuxeo, delivered as a Marketplace package, that you change by configuration or with your own code. You will also see it called **Nuxeo Satori** — the programme name, the title the Marketplace listing shows, and the name of this repository (`nuxeo/Nuxeo-Satori-UI`, renamed from `nuxeo/agentic-ui-poc` on 30 October 2026); the package itself is `nuxeo-agentic-ui`.
 
 > **Not a developer on this repository?** Read [the short version](documentation/20-product/00-the-short-version.md): five minutes on what it does, what it does not, what you can change without code, and how to start. To customise it with an AI coding agent, use the [prompt library](https://github.com/nuxeo-sandbox/nuxeo-agentic-ui-prompts).
 

@@ -4567,6 +4567,620 @@ function checkAdvertisedLocalesShip() {
 }
 
 /**
+ * `SHIPPED_CATALOGUE_LANGUAGES` names exactly the catalogues `apps/nuxeo-ui/public/i18n` holds.
+ *
+ * ## The defect this exists to make unrepeatable
+ *
+ * `defaultLanguage` used to reach `translate.use()` unchecked, so a value this build ships no
+ * catalogue for produced `<html lang="xx">` over English text and a 404 for `i18n/xx.json`
+ * (NXSAT-733). The guard that closes it has to know which catalogues exist, and it cannot find
+ * out at runtime: the folder is served over HTTP and a directory listing is not, so the only
+ * runtime test is to request a file and see whether it 404s — the very thing being removed.
+ *
+ * So the set is declared, and a declared set rots. Adding `es.json` without adding `es` here
+ * would leave Spanish refused and silently rendered in English; removing a catalogue without
+ * removing its entry would put the 404 straight back. Neither is visible in a diff of either
+ * file alone, which is why this compares them.
+ *
+ * ## Why both directions fail rather than one warning
+ *
+ * `checkLocaleDataRegistered` only *warns* when registration leads its catalogue, because that
+ * direction is harmless — Angular locale data nothing formats in is dead weight, not a defect.
+ * Here neither direction is harmless: both make the guard's answer disagree with what the
+ * browser would actually load, and a language guard that is wrong in either direction is worse
+ * than none, because it is trusted.
+ */
+function checkShippedCatalogueLanguages() {
+  const declaration = 'apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts';
+  const catalogueDir = 'apps/nuxeo-ui/public/i18n';
+  if (!fileExists(declaration)) {
+    fail(
+      `${declaration} is missing, so \`checkShippedCatalogueLanguages\` asserted nothing — and ` +
+        'the string-language guard in `provide-app-config.ts` has nothing to read.',
+    );
+    return;
+  }
+
+  /**
+   * Both declarations, read from the AST.
+   *
+   * A regex over the source was wrong in two ways that review on #531 found, and both of them
+   * were green-on-the-defect rather than noisy. Appending an identifier whose value is `'xx'`
+   * left the quoted elements still matching the catalogues on disk, while the application — which
+   * evaluates the real array — admitted a fourth language. And commenting an entry out left its
+   * quotes in the source for the regex to find, so this gate reported a locale the runtime array
+   * does not contain, which would disable pseudo-locale admission while the gate said the two
+   * sets agreed. `stringsOfArrayLiteral` refuses a non-literal element by name, and the AST
+   * cannot see into a comment at all.
+   */
+  const ast = ts.createSourceFile(
+    declaration,
+    read(declaration),
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ true,
+  );
+  const initialisers = new Map();
+  const collect = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      initialisers.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(ast);
+
+  /** One declaration's locales, or `null` having already failed with the reason. */
+  const localesOf = (name, consequence) => {
+    const { values, problem } = stringsOfArrayLiteral(initialisers.get(name));
+    if (problem) {
+      fail(
+        `${declaration} no longer declares \`${name}\` as an array of string literals ` +
+          `(${problem}), so ${consequence}\n` +
+          '    Keep it a literal list, or teach `checkShippedCatalogueLanguages` the new shape — ' +
+          'do not leave it asserting nothing. An element this gate cannot evaluate is refused ' +
+          'rather than skipped, because the application evaluates the real array.',
+      );
+      return null;
+    }
+    return values;
+  };
+
+  /**
+   * `GENERATED_AUDIT_LOCALES` must name exactly the locales this file already excludes from every
+   * other locale check.
+   *
+   * The two sets answer the same question from opposite ends — "which locales exist only while
+   * someone is auditing" — and they are read by different layers: this script skips them, and
+   * `hasCatalogue` admits them on a dev server. If they drift, either the audit boots in English
+   * and silently stops finding hard-coded strings, or a locale gets admitted that no gate checks.
+   */
+  const declaredAuditLocales = localesOf(
+    'GENERATED_AUDIT_LOCALES',
+    'the pseudo-locale seam is unchecked.',
+  );
+  if (declaredAuditLocales) {
+    const declaredAudit = [...declaredAuditLocales].sort();
+    const generated = [...GENERATED_LOCALES].sort();
+    if (declaredAudit.join(',') !== generated.join(',')) {
+      fail(
+        `${declaration} declares GENERATED_AUDIT_LOCALES as [${declaredAudit.join(', ')}] but ` +
+          `\`GENERATED_LOCALES\` in this script is [${generated.join(', ')}].\n` +
+          '    The two must agree: this script skips those locales in every other check, and ' +
+          '`hasCatalogue` admits them on a dev server so `npm run i18n:audit` can boot into one.\n' +
+          '    Drift one way makes the pseudo-locale audit boot in English and stop finding ' +
+          'hard-coded strings; the other way admits a locale no gate checks.',
+      );
+    }
+  }
+
+  const declaredLanguages = localesOf(
+    'SHIPPED_CATALOGUE_LANGUAGES',
+    'it asserted nothing about which catalogues ship.',
+  );
+  if (!declaredLanguages) return;
+  const declared = new Set(declaredLanguages);
+  if (declared.size === 0) {
+    fail(`${declaration} declares no language, so every configured language would be refused.`);
+    return;
+  }
+
+  // `en.context.json` is translator context, not a language, and the two-letter pattern already
+  // excludes it — `.context` breaks the match. Generated locales are excluded for the same
+  // reason `checkLocaleDataRegistered` excludes them.
+  const shipped = new Set(
+    [
+      ...walk(
+        catalogueDir,
+        (path) => /\/[a-z]{2}(-[A-Za-z]{2,4})?\.json$/.test(path) && !isGeneratedLocale(path),
+      ),
+    ].map((path) => path.slice(path.lastIndexOf('/') + 1).replace(/\.json$/, '')),
+  );
+  if (shipped.size === 0) {
+    fail(
+      `${catalogueDir} yielded no catalogue, so this gate asserted nothing. Check the path — the ` +
+        'application cannot render any language without one.',
+    );
+    return;
+  }
+
+  for (const locale of shipped) {
+    if (declared.has(locale)) continue;
+    fail(
+      `${catalogueDir} ships ${locale}.json but ${declaration} does not declare "${locale}".\n` +
+        `    \`resolveStringLanguage\` would refuse \`defaultLanguage: "${locale}"\` and boot in ` +
+        'English, so the catalogue would be shipped and never rendered.\n' +
+        `    Add "${locale}" to SHIPPED_CATALOGUE_LANGUAGES.`,
+    );
+  }
+
+  for (const locale of declared) {
+    if (shipped.has(locale)) continue;
+    fail(
+      `${declaration} declares "${locale}" but ${catalogueDir} ships no catalogue for it.\n` +
+        `    \`resolveStringLanguage\` would admit \`defaultLanguage: "${locale}"\`, so the ` +
+        'application would announce `<html lang="' +
+        locale +
+        '">` over English text and request a ' +
+        `catalogue that 404s — NXSAT-733 again, for ${locale} instead of xx.\n` +
+        `    Remove "${locale}", or ship ${catalogueDir}/${locale}.json.`,
+    );
+  }
+}
+
+/**
+ * Every element of an array literal, or a description of the first one that is not a literal.
+ *
+ * Filtering to `ts.isStringLiteral` and dropping the rest is a silent failure of the worst kind
+ * for a locale list: `['de', 'en', 'fr', extra]` reads as three languages and passes against a
+ * build shipping exactly those three, while the application — which evaluates the real array —
+ * goes on treating the fourth as admissible. The gate would be green on the defect it exists to
+ * catch.
+ *
+ * Reading the AST rather than the text also means a commented-out entry is simply absent, where a
+ * regex over the source would still find the quotes inside the comment and report a list the
+ * runtime does not have. Both halves of that were found by review on #531.
+ *
+ * Shared by `checkUpstreamCatalogueLanguages` and `checkShippedCatalogueLanguages` so the two
+ * cannot disagree about what counts as a readable declaration.
+ */
+function stringsOfArrayLiteral(node) {
+  if (!node || !ts.isArrayLiteralExpression(node)) return { problem: 'not an array literal' };
+  const values = [];
+  for (const element of node.elements) {
+    if (!ts.isStringLiteral(element)) {
+      return { problem: `\`${element.getText()}\` is not a string literal` };
+    }
+    values.push(element.text);
+  }
+  return { values };
+}
+
+const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
+
+/**
+ * `UPSTREAM_FOLDERS` names exactly the languages the installed package actually ships.
+ *
+ * ## The defect this exists to make unrepeatable
+ *
+ * `AppTranslateLoader` used to request `<folder>/i18n/<lang>.json` for whatever language was
+ * active. `@hylandsoftware/satori-ui` ships de, en, es, fr, it, pl and pt; `availableLanguages`
+ * advertises en, fr, de, ja, nl, th and zh. So four of the seven asked for a file that does not
+ * exist and every page load answered 404 and logged a console error (NXSAT-732). The request was
+ * caught into `{}`, so nothing broke — which is why it survived.
+ *
+ * The fix declares the shipped set per folder, and a declared set is a set that rots. A version
+ * bump that adds a language would leave it unrequested and silently untranslated; one that drops
+ * a language would put the 404 straight back. Neither is visible in a diff of `package.json`.
+ *
+ * ## Why it reads three sources rather than two
+ *
+ * The TS constant, the `assets` glob in `angular.json` that copies the folder into the build, and
+ * the package directory on disk. Comparing the constant to the package alone would pass while
+ * the glob pointed somewhere else entirely, and the served path would then 404 for *every*
+ * language — so the glob is what links a declared asset path to a real directory, and it is read
+ * rather than assumed.
+ */
+function checkUpstreamCatalogueLanguages() {
+  if (!fileExists(LOADER)) {
+    fail(`${LOADER} is missing, so \`checkUpstreamCatalogueLanguages\` asserted nothing.`);
+    return;
+  }
+
+  const source = ts.createSourceFile(LOADER, read(LOADER), ts.ScriptTarget.Latest, true);
+
+  /** The `UPSTREAM_FOLDERS` initializer, as an array of `{ path, languages }` literals. */
+  let declaration;
+  /** Read from the source rather than duplicated here, so the two cannot diverge. */
+  let translationDirectory;
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      if (node.name.text === 'UPSTREAM_FOLDERS') declaration = node.initializer;
+      if (
+        node.name.text === 'TRANSLATION_DIRECTORY' &&
+        node.initializer &&
+        ts.isStringLiteral(node.initializer)
+      ) {
+        translationDirectory = node.initializer.text;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+
+  if (translationDirectory === undefined) {
+    fail(
+      `${LOADER} no longer declares \`TRANSLATION_DIRECTORY\` as a string literal, so this gate ` +
+        'cannot work out which directory the loader actually fetches from.',
+    );
+    return;
+  }
+
+  if (!declaration || !ts.isArrayLiteralExpression(declaration)) {
+    fail(
+      `${LOADER} no longer declares \`UPSTREAM_FOLDERS\` as an array literal, so this gate ` +
+        'cannot read the languages each folder claims to ship. Keep it a literal, or teach ' +
+        '`checkUpstreamCatalogueLanguages` the new shape — do not leave it asserting nothing.',
+    );
+    return;
+  }
+
+  /**
+   * The installed package directory a `node_modules` path belongs to, or `null` for a repo path.
+   *
+   * Used to tell "this dependency is not installed" — which a clean checkout legitimately is —
+   * from "the dependency is installed and the directory this rule names is not there", which is
+   * a typo or a vendor that dropped the folder in a version bump. Only the second can be judged,
+   * and it has to be judged: it means the build copies nothing and the loader 404s for every
+   * language.
+   */
+  function installedPackageRoot(inputDir) {
+    const segments = inputDir.split('/');
+    const index = segments.lastIndexOf('node_modules');
+    if (index === -1) return null;
+    const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
+    const root = segments.slice(0, index + span).join('/');
+    return segments.length > index + span - 1 ? root : null;
+  }
+
+  /**
+   * The `assets` arrays of `nuxeo-ui`'s own build target — the base one and one per configuration.
+   *
+   * Scoped to that target, and kept as separate arrays rather than pooled, for the reason
+   * `phase-6-a11y` already records: **Angular REPLACES this array per configuration rather than
+   * merging it**, so an entry present in `build.options` and absent from `configurations.development`
+   * copies the folder in one build and not the other. Pooling every `{input, output}` object in the
+   * file would let a development-only mapping — or another project's — satisfy a check about the
+   * production build, which is the opposite of what this gate is for.
+   */
+  let assetArrays = [];
+  try {
+    const angular = JSON.parse(read('angular.json'));
+    const project = angular?.projects?.['nuxeo-ui'];
+    const build = project?.architect?.build ?? project?.targets?.build;
+    if (!build) {
+      fail(
+        'angular.json has no build target for `nuxeo-ui`, so `checkUpstreamCatalogueLanguages` ' +
+          'cannot find the asset globs that put the upstream catalogues in the bundle.',
+      );
+      return;
+    }
+    assetArrays = [
+      ['options', build.options?.assets],
+      ...Object.entries(build.configurations ?? {}).map(([name, config]) => [name, config?.assets]),
+    ].filter(([, assets]) => Array.isArray(assets));
+  } catch (error) {
+    fail(`angular.json is not valid JSON: ${error.message}`);
+    return;
+  }
+
+  if (assetArrays.length === 0) {
+    fail(
+      '`nuxeo-ui`’s build target declares no `assets` array, so nothing copies the upstream ' +
+        'catalogues into the bundle and this gate cannot check what they contain.',
+    );
+    return;
+  }
+
+  /**
+   * Whether an asset rule actually copies `<lang>.json` out of its input directory.
+   *
+   * The rule's `glob` is part of what it copies, and ignoring it would compare the declared
+   * languages against every file in the directory while the build copied a subset — green while
+   * the served folder was missing catalogues. Only the shapes this repository uses are
+   * interpreted; anything else fails rather than being assumed to match, because a glob this gate
+   * cannot read is a gate that has stopped asserting.
+   */
+  function globCopies(glob, file) {
+    if (glob === '**/*' || glob === '*' || glob === '**') return true;
+    if (glob === '*.json' || glob === '**/*.json') return file.endsWith('.json');
+    if (!/[*?{}[\]]/.test(glob)) return glob === file;
+    return null;
+  }
+
+  let folders = 0;
+  for (const element of declaration.elements) {
+    folders += 1;
+
+    // Counted and judged BEFORE the shape is known, because a `continue` here is the same silent
+    // skip as dropping a non-literal language: the loader iterates the real array and would
+    // request this folder, while the gate would say nothing about it and still pass on the
+    // entries it could read. Every element has to be legible or the gate has to fail.
+    if (!ts.isObjectLiteralExpression(element)) {
+      fail(
+        `${LOADER} declares an entry in \`UPSTREAM_FOLDERS\` that is not an object literal ` +
+          `(\`${element.getText().slice(0, 60)}\`). The loader iterates the real array, so an ` +
+          'entry this gate cannot read is a folder whose languages nobody checks — and it would ' +
+          'pass on the entries that are readable.',
+      );
+      continue;
+    }
+
+    // One rule rather than a growing list of shapes, because four review rounds each found a
+    // different way for the entry to be only partly static and the gate to validate the legible
+    // half: a computed language, a computed `path`, a non-object entry, and a spread that
+    // overrides a field already read. The last is the clearest statement of the class — the
+    // `path` and `languages` this gate validates are not necessarily the ones the loader ends up
+    // with. So the WHOLE entry has to be statically legible, and anything else fails.
+    const illegible = element.properties.find(
+      (property) =>
+        !ts.isPropertyAssignment(property) ||
+        (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name)),
+    );
+    if (illegible) {
+      fail(
+        `${LOADER} declares an upstream folder with a member this gate cannot read statically ` +
+          `(\`${illegible.getText().slice(0, 60)}\`). A spread, a shorthand or a computed key can ` +
+          'supply or override `path` and `languages` at run time, so the values validated here ' +
+          'would not be the ones the loader requests — and the check would pass on the half it ' +
+          'could read. Write every member as a literal key and value.',
+      );
+      continue;
+    }
+
+    const read_ = (name) =>
+      element.properties.find(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+          property.name.text === name,
+      )?.initializer;
+
+    const pathNode = read_('path');
+    const languagesNode = read_('languages');
+    if (!pathNode) {
+      fail(
+        `${LOADER} declares an entry in \`UPSTREAM_FOLDERS\` with no \`path\`, so this gate ` +
+          'cannot tell which served directory its languages are meant to match.',
+      );
+      continue;
+    }
+    if (!ts.isStringLiteral(pathNode)) {
+      fail(
+        `${LOADER} declares an upstream folder whose \`path\` is not a string literal ` +
+          `(\`${pathNode.getText().slice(0, 60)}\`). A computed path is resolved by the loader ` +
+          'and not by this gate, so the folder it actually requests would go unchecked.',
+      );
+      continue;
+    }
+    const folderPath = pathNode.text;
+
+    if (!languagesNode) {
+      fail(
+        `${LOADER} declares the upstream folder "${folderPath}" with no \`languages\` array. ` +
+          'Without one the loader cannot tell a language the folder ships from one it does not, ' +
+          'which is the 404 on every page load that NXSAT-732 reported.',
+      );
+      continue;
+    }
+
+    const languages = stringsOfArrayLiteral(languagesNode);
+    if (languages.problem) {
+      fail(
+        `${LOADER} declares the upstream folder "${folderPath}" with a \`languages\` array this ` +
+          `gate cannot read: ${languages.problem}. Every element must be a string literal, ` +
+          'because a computed one is evaluated by the loader and not by this gate — it would be ' +
+          'dropped here, compared against a shorter list, and pass while the loader went on ' +
+          'requesting the language it names.',
+      );
+      continue;
+    }
+    const declared = languages.values;
+
+    // The loader fetches `<path>/<TRANSLATION_DIRECTORY>/<lang>.json`, so the rule that has to
+    // exist is the one whose `output` is that directory; its `input` is the package directory.
+    const served = `${folderPath}/${translationDirectory}`;
+    const rulesByArray = assetArrays.map(([name, assets]) => [
+      name,
+      assets.filter(
+        (asset) =>
+          asset &&
+          typeof asset === 'object' &&
+          typeof asset.input === 'string' &&
+          typeof asset.output === 'string' &&
+          asset.output.replace(/^\/+|\/+$/g, '') === served,
+      ),
+    ]);
+
+    // Every array, not any array: a configuration that omits the rule produces a build whose
+    // served folder is simply absent, and the loader would 404 for every language there.
+    const without = rulesByArray.filter(([, rules]) => rules.length === 0).map(([name]) => name);
+    if (without.length > 0) {
+      fail(
+        `${LOADER} declares the upstream folder "${folderPath}", but \`nuxeo-ui\`’s ` +
+          `${without.map((name) => `\`${name}\``).join(', ')} asset array(s) in angular.json copy ` +
+          `nothing to "${served}". Angular replaces this array per configuration rather than ` +
+          'merging it, so those builds would serve no upstream catalogue at all — a 404 for ' +
+          'every language rather than only the unshipped ones.',
+      );
+      continue;
+    }
+
+    /**
+     * One asset array at a time; within it, the UNION of what its rules copy.
+     *
+     * Both halves of that matter, and they are the two review findings this loop spent the
+     * longest on.
+     *
+     * Not pooled across arrays: Angular replaces `assets` per configuration rather than merging
+     * it, so a union across configurations is satisfied by whichever is most permissive — a
+     * `development` rule with a match-everything glob would mask an `options` rule narrowed to
+     * `en.json`, and the production build would serve one catalogue while this gate reported all
+     * of them present.
+     *
+     * But pooled WITHIN an array, because several rules may legitimately copy to the same output
+     * from different inputs — one package contributing `de`, another `fr`. Within one build the
+     * served folder is their union, so comparing each input against the whole declared list
+     * would report each rule's languages as missing from the other and reject a correct setup.
+     */
+    const perArray = rulesByArray.map(([arrayName, rules]) => {
+      const byInput = new Map();
+      for (const rule of rules) {
+        const inputDir = rule.input.replace(/^\/+|\/+$/g, '');
+        const glob = typeof rule.glob === 'string' ? rule.glob : '**/*';
+        if (!byInput.has(inputDir)) byInput.set(inputDir, new Set());
+        byInput.get(inputDir).add(glob);
+      }
+      return {
+        arrayName,
+        inputs: [...byInput.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([inputDir, globs]) => ({ inputDir, globs: [...globs].sort() })),
+      };
+    });
+
+    // Configurations that copy exactly the same things are one verdict, reported once.
+    const seenArrays = new Set();
+    for (const { arrayName, inputs } of perArray) {
+      const arrayPrint = inputs
+        .map(({ inputDir, globs }) => `${inputDir}\u0001${globs.join('\u0001')}`)
+        .join('\u0000');
+      if (seenArrays.has(arrayPrint)) continue;
+      seenArrays.add(arrayPrint);
+      const where = `\`${arrayName}\``;
+
+      /** Every language this build actually serves at `served`, across all of its rules. */
+      const servedLangs = new Set();
+      let readable = true;
+
+      for (const { inputDir, globs } of inputs) {
+        const absolute = join(repoRoot, inputDir);
+        if (!existsSync(absolute)) {
+          // Two very different situations, and warning for both let the dangerous one pass.
+          //
+          // A dependency that is not installed cannot be judged: `node_modules` is not checked in,
+          // and a clean checkout is legitimately in that state. That warns — a gate that goes quiet
+          // without saying so is how a check becomes no check at all — and the `guardrails` gate
+          // runs after `npm ci` anyway.
+          //
+          // But a package that IS installed while the directory this rule names is absent is a
+          // typo, or a vendor that dropped the folder in a version bump. The build then copies
+          // nothing and the loader 404s for **every** language, which is worse than the defect
+          // NXSAT-732 reported, so it fails.
+          const packageRoot = installedPackageRoot(inputDir);
+          if (packageRoot === null) {
+            fail(
+              `the ${where} asset rule copies ${inputDir} to "${served}", but that directory ` +
+                'does not exist in the repository, so that build copies nothing from it.',
+            );
+            readable = false;
+          } else if (existsSync(join(repoRoot, packageRoot))) {
+            fail(
+              `${packageRoot} is installed but has no ${inputDir}, which the ${where} asset rule ` +
+                `copies to "${served}". Either the path is a typo or this version of the package ` +
+                'dropped the directory — either way that build serves nothing from it and the ' +
+                'loader 404s for any language it was the source of.',
+            );
+            readable = false;
+          } else {
+            warn(
+              `${packageRoot} is not installed, so the languages "${folderPath}" claims to ship ` +
+                'could not be checked against it. Run `npm ci` and re-run the guardrails.',
+            );
+            readable = false;
+          }
+          continue;
+        }
+
+        const unreadable = globs.filter((glob) => globCopies(glob, 'en.json') === null);
+        if (unreadable.length > 0) {
+          fail(
+            `the ${where} asset rule copying ${inputDir} to "${served}" uses glob ` +
+              `${unreadable.map((glob) => `\`${glob}\``).join(', ')}, which ` +
+              '`checkUpstreamCatalogueLanguages` cannot interpret — so it cannot tell which ' +
+              'catalogues actually reach the bundle. Teach the gate that glob rather than ' +
+              'leaving it asserting nothing.',
+          );
+          readable = false;
+          continue;
+        }
+
+        // What this rule actually copies: the directory filtered by the glob, not every file
+        // that happens to sit in it.
+        const files = readdirSync(absolute).filter((entry) => entry.endsWith('.json'));
+        for (const file of files) {
+          if (globs.some((glob) => globCopies(glob, file))) {
+            servedLangs.add(file.slice(0, -'.json'.length));
+          }
+        }
+
+        const uncopied = files
+          .filter((file) => !globs.some((glob) => globCopies(glob, file)))
+          .map((file) => file.slice(0, -'.json'.length))
+          .sort();
+        // Not a failure on its own — a vendor may ship a catalogue we deliberately do not serve,
+        // and another rule in the same build may supply it — but it must be visible, because it
+        // is the difference between "the package has it" and "the bundle has it".
+        if (uncopied.length > 0) {
+          warn(
+            `${inputDir} contains ${uncopied.join(', ')}, which the ${where} glob ` +
+              `${globs.map((glob) => `\`${glob}\``).join(', ')} does not copy to "${served}".`,
+          );
+        }
+      }
+
+      // One verdict per build, against the union of its rules. Comparing each input separately
+      // reported each rule's languages as missing from the other, so two packages contributing
+      // complementary catalogues to one output — which is what `UPSTREAM_FOLDERS` being a list
+      // is for — would have been rejected as a defect.
+      if (!readable) continue;
+
+      const served_ = [...servedLangs].sort();
+      const missing = served_.filter((lang) => !declared.includes(lang));
+      const stale = [...declared].sort().filter((lang) => !servedLangs.has(lang));
+      const from = inputs.map(({ inputDir }) => inputDir).join(' + ');
+
+      if (missing.length > 0) {
+        fail(
+          `the ${where} build copies a catalogue for ${missing.join(', ')} to "${served}" from ` +
+            `${from}, but "${folderPath}" does not list it in \`languages\` in ${LOADER}. An ` +
+            'unlisted language is never requested, so its shared strings stay in the fallback ' +
+            'language with nothing reporting it.',
+        );
+      }
+      if (stale.length > 0) {
+        fail(
+          `"${folderPath}" lists ${stale.join(', ')} in \`languages\` in ${LOADER}, but the ` +
+            `${where} build serves "${served}" no catalogue for it from ${from}. A listed ` +
+            'language the served folder does not have is a request that cannot succeed: a 404 ' +
+            'and a console error on every page load, which is NXSAT-732.',
+        );
+      }
+    }
+  }
+
+  // An empty array is legitimate — the application need not layer any upstream catalogue — but
+  // it means this gate asserted nothing, and a gate that can assert nothing without saying so is
+  // how the loader's own `UPSTREAM_FOLDERS` went a year unchecked. Every unreadable entry now
+  // fails above, so this is only ever reached by a genuinely empty list.
+  if (folders === 0) {
+    warn(
+      `${LOADER} declares no upstream catalogue folder, so \`checkUpstreamCatalogueLanguages\` ` +
+        'asserted nothing. That is legitimate if the application layers none; if it should, the ' +
+        'list has been emptied.',
+    );
+  }
+}
+
+/**
  * The Crowdin config points at catalogues that exist, and cannot reach `node_modules`.
  *
  * Two failure modes, both silent and both expensive.
@@ -9254,6 +9868,371 @@ function nativeDateAdapterUses(file) {
 }
 
 /**
+ * Physical inline-direction properties, which the `nxs-` libraries' stylesheets must not use.
+ *
+ * `margin-left`, `padding-right`, `left`, `right`, `text-align: left`, `float: right`,
+ * `border-left`, the corner radii, and a four-value `margin`/`padding` shorthand whose second
+ * and fourth values differ — each of those hardcodes a reading direction. The logical form is
+ * `margin-inline-start`, `padding-inline-end`, `inset-inline-start`, `text-align: start`,
+ * `padding-inline: <start> <end>`, and so on; it compiles to the identical result in
+ * left-to-right and mirrors itself in right-to-left.
+ *
+ * ## Why this gate exists
+ *
+ * NXSAT-752 replaced physical declarations in six components, and every one was a real
+ * right-to-left defect: a clear button on the far side of the text it clears, a dropdown panel
+ * hanging off the opposite side of its own trigger, a select's chevron sitting over the text
+ * instead of over the gutter reserved for it. They had never been noticed because nothing set
+ * `dir`, so the mirrored layout had never rendered. Now that it does, the next
+ * `margin-left: 4px` is a bug the moment it is written, and nothing was watching for it — the
+ * repository has no stylelint configuration, and `lint` has nothing to say about CSS.
+ *
+ * ## Scope, and why it is this narrow
+ *
+ * The two `nxs-` libraries only. They are what customers consume, they are where the
+ * right-to-left contract lives — five components carry `:host-context([dir='rtl'])` rules — and,
+ * after NXSAT-752, they contain **no** physical inline-direction declaration at all, which is
+ * what lets this be an absolute rule rather than a ratchet over a baseline.
+ *
+ * `libs/features/` and `apps/` are deliberately **not** covered: they hold 155 and 48 such
+ * declarations respectively. Mirroring those is real work and a separate ticket; a gate that
+ * failed on all 203 today would have to be born suppressed, and a suppressed gate is the kind
+ * that is still suppressed two years later. Stated here so a green run is not read as "the
+ * application is right-to-left clean".
+ *
+ * ## The escape hatch, and why it demands a reason
+ *
+ * `// logical-properties-ok: <reason>` on the preceding line. Nothing uses it today. It exists
+ * because a physical property inside a `[dir='rtl']` block is unambiguous by construction, and
+ * forcing a rewrite there would be the gate making the code worse. Requiring prose after the
+ * colon is what stops it becoming a reflex: a bare marker does not suppress anything.
+ *
+ * Block structure is deliberately not parsed. A symmetric `left: 0; right: 0` pair *is*
+ * direction-neutral and this rule still refuses it, in favour of `inset-inline: 0` — the one such
+ * pair in the libraries was converted rather than special-cased, because a symmetry heuristic is
+ * more code than the rule it guards and would have to be right about nesting, `@media` and SCSS
+ * interpolation to be worth having.
+ */
+const LOGICAL_PROPERTY_ALTERNATIVES = new Map([
+  ['margin-left', 'margin-inline-start'],
+  ['margin-right', 'margin-inline-end'],
+  ['padding-left', 'padding-inline-start'],
+  ['padding-right', 'padding-inline-end'],
+  ['border-left', 'border-inline-start'],
+  ['border-right', 'border-inline-end'],
+  ['border-left-width', 'border-inline-start-width'],
+  ['border-right-width', 'border-inline-end-width'],
+  ['border-left-color', 'border-inline-start-color'],
+  ['border-right-color', 'border-inline-end-color'],
+  ['border-left-style', 'border-inline-start-style'],
+  ['border-right-style', 'border-inline-end-style'],
+  ['border-top-left-radius', 'border-start-start-radius'],
+  ['border-top-right-radius', 'border-start-end-radius'],
+  ['border-bottom-left-radius', 'border-end-start-radius'],
+  ['border-bottom-right-radius', 'border-end-end-radius'],
+  ['left', 'inset-inline-start'],
+  ['right', 'inset-inline-end'],
+]);
+
+const LOGICAL_PROPERTY_WAIVER = /^\s*(?:\/\/|\/\*)\s*logical-properties-ok:\s*\S/;
+
+/**
+ * Whether the line above a declaration waives it: `// logical-properties-ok: <reason>`.
+ *
+ * The reason is required, and the **block** terminator has to be stripped before asking. `\S`
+ * alone was satisfied by the `*` of `*/ `, so `; /* logical-properties-ok: *\/` — a waiver with no
+ * reason at all — silently disabled the check for the declaration below it. The `//` spelling was
+ * never affected, because nothing follows its colon; that asymmetry is why this strips the
+ * terminator rather than loosening the reason test, which would have opened the `//` form too.
+ */
+function hasLogicalPropertyWaiver(line) {
+  return LOGICAL_PROPERTY_WAIVER.test((line ?? '').replace(/\*\/\s*$/, ''));
+}
+
+/**
+ * A value's top-level space-separated parts, with `calc(100% - 8px)` counted as **one**.
+ *
+ * `value.split(/\s+/)` is wrong in both directions and the first version of this gate did it:
+ * `padding: calc(100% - 8px) 0` became four parts and was rejected though it is symmetric, and
+ * `padding: 0 calc(8px + 2px) 0 16px` became six and was skipped though it is a real defect. So
+ * whitespace only separates at paren depth zero, and never inside a quoted string.
+ */
+function topLevelParts(value) {
+  const parts = [];
+  let current = '';
+  let paren = 0;
+  let interpolation = 0;
+  let quote = null;
+  for (let i = 0; i < value.length; i += 1) {
+    const c = value[i];
+    if (quote) {
+      current += c;
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      current += c;
+      continue;
+    }
+    /*
+     * `#{…}` counts as one value, the same as `calc(…)`. This was fixed in `scssDeclarations` and
+     * NOT here, which is the whole defect: `padding: 0 #{8px + 2px}` split into four parts and was
+     * rejected though symmetric, while `padding: 0 #{8px + 2px} 0 16px` split into six and was
+     * skipped though asymmetric. Two functions split on whitespace and only one had been taught
+     * about interpolation — so when the next construct needs handling, fix both.
+     */
+    if (c === '#' && value[i + 1] === '{') {
+      interpolation += 1;
+      current += '#{';
+      i += 1;
+      continue;
+    }
+    if (interpolation > 0 && c === '}') {
+      interpolation -= 1;
+      current += c;
+      continue;
+    }
+    if (c === '(') paren += 1;
+    else if (c === ')') paren = Math.max(0, paren - 1);
+    if (paren === 0 && interpolation === 0 && /\s/.test(c)) {
+      if (current) parts.push(current);
+      current = '';
+      continue;
+    }
+    current += c;
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
+/**
+ * A declaration's value without its priority or SCSS flag.
+ *
+ * `!important` was counted as an edge value, which made symmetric `margin: 0 0 4px !important`
+ * fail on `0` vs `!important` while asymmetric `padding: 12px 8px 12px 16px !important` became a
+ * five-part value and was skipped entirely — a false rejection and a missed defect from one
+ * omission. `text-align: left !important` was missed for the same reason: the equality test saw
+ * `left !important`.
+ */
+function withoutPriority(value) {
+  return value.replace(/!\s*(important|default|global)\b/gi, '').trim();
+}
+
+/**
+ * Every `property: value` declaration in a stylesheet, with the line its property starts on.
+ *
+ * ## Why a scanner and not a regex
+ *
+ * This is the fourth attempt and the first one that is not a regex, because the previous three
+ * each bought one case and sold another. Anchoring to the start of a line missed
+ * `.x { margin-left: 4px; }`; un-anchoring then found `left: 4px` inside `$left: 4px` and
+ * `margin-left: 4px;` inside `content: "…; margin-left: 4px;"`. Requiring a brace-free value kept
+ * `&:focus {` from parsing as a declaration but could not cross `#{`, so
+ * `margin-left: #{$gutter}` escaped entirely. Three rounds of refinement, each fixing and
+ * breaking, is the signal to stop refining: CSS is not a line-oriented format and a regex cannot
+ * be told that.
+ *
+ * So: one pass, tracking quotes, `#{}` interpolation and parentheses. A statement ends at a
+ * top-level `;` or `}`; a statement ended by `{` was a selector or an at-rule prelude and is
+ * discarded, which is what keeps `&:focus`, `:host-context([dir='rtl'])` and
+ * `@media (min-width: 600px)` out without a special case for any of them.
+ *
+ * What makes `$gutter: 4px` and `--nxs-left: 0` safe is this statement-wise reading, not the
+ * identifier guard below it: the property comes out as `$gutter`, whole, so it simply is not a
+ * key in any of the maps. The old regex found `left` *inside* `$left` because it matched a
+ * fragment rather than a statement. Said explicitly because mutation testing showed no control
+ * depends on the identifier guard — it is a scope guard, not a defect-catcher.
+ *
+ * Comments are the caller's business: pass source that has been through `blankComments`.
+ */
+function* scssDeclarations(source) {
+  let buffer = '';
+  let colonAt = -1;
+  let line = 1;
+  let startLine = 1;
+  let quote = null;
+  let paren = 0;
+  let interpolation = 0;
+
+  const flush = (terminator) => {
+    const statement = { text: buffer, colonAt, line: startLine, terminator };
+    buffer = '';
+    colonAt = -1;
+    return statement;
+  };
+
+  for (let i = 0; i < source.length; i += 1) {
+    const c = source[i];
+    if (c === '\n') line += 1;
+    if (!buffer.trim()) startLine = line;
+
+    if (quote) {
+      buffer += c;
+      if (c === '\\') buffer += source[++i] ?? '';
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      buffer += c;
+      continue;
+    }
+    if (c === '#' && source[i + 1] === '{') {
+      interpolation += 1;
+      buffer += '#{';
+      i += 1;
+      continue;
+    }
+    if (interpolation > 0 && c === '}') {
+      interpolation -= 1;
+      buffer += c;
+      continue;
+    }
+    if (c === '(') paren += 1;
+    else if (c === ')') paren = Math.max(0, paren - 1);
+
+    if (paren === 0 && interpolation === 0) {
+      if (c === ':' && colonAt === -1) {
+        colonAt = buffer.length;
+        buffer += c;
+        continue;
+      }
+      if (c === ';' || c === '}') {
+        const statement = flush(c);
+        if (statement.colonAt !== -1) yield statement;
+        continue;
+      }
+      if (c === '{') {
+        flush(c); // a selector or at-rule prelude, not a declaration
+        continue;
+      }
+    }
+    buffer += c;
+  }
+}
+
+/**
+ * A plain CSS property name: not `$sass`, not `--custom`, not an at-rule, no whitespace.
+ *
+ * A scope guard — it keeps declarations this gate has no opinion about out of the lookup — rather
+ * than something that catches a defect on its own. Case-insensitive because CSS property names
+ * are: `MARGIN-LEFT: 4px` is a physical declaration, and both it and the lookup below were
+ * case-sensitive, so it went unreported. A control covers that.
+ */
+const CSS_PROPERTY = /^[a-z][a-z0-9-]*$/i;
+
+function checkSatoriStylesheetsAreLogical() {
+  let scanned = 0;
+  for (const { root } of SATORI_LIBRARIES) {
+    for (const file of walk(`${root}/src`, (path) => path.endsWith('.scss'))) {
+      if (!fileExists(file)) continue;
+      scanned += 1;
+      const source = read(file);
+      const original = source.split('\n');
+      /*
+       * Comments blanked by the shared scanner rather than by testing whether a line *starts*
+       * with a marker, which only ever skipped a block comment's opening line — so a
+       * `margin-left: 4px;` on the second line of a `/* … *\/` block was read as live CSS and
+       * failed the gate on a stylesheet with no defect at all. `blankComments` keeps newlines, so
+       * offsets still map to the line as written, and it knows that the `//` in `url(//cdn…)` is
+       * not a comment.
+       *
+       * The waiver is matched against the ORIGINAL lines, because the waiver *is* a comment and
+       * would have been blanked away.
+       */
+      const scannable = blankComments(source, 'scss');
+
+      for (const statement of scssDeclarations(scannable)) {
+        const declared = statement.text.slice(0, statement.colonAt).trim();
+        const rawValue = statement.text.slice(statement.colonAt + 1).trim();
+        if (!CSS_PROPERTY.test(declared) || !rawValue) continue;
+        // Lower-cased for the lookups, which are keyed by the canonical spelling. CSS property
+        // names are case-insensitive, so `MARGIN-LEFT` is the same declaration as `margin-left`.
+        const property = declared.toLowerCase();
+        const line = statement.line;
+        if (hasLogicalPropertyWaiver(original[line - 2])) continue;
+        const at = `${file}:${line}`;
+        const value = withoutPriority(rawValue);
+        /*
+         * The one place a value is case-folded, because CSS keywords are case-insensitive and
+         * `text-align: LEFT` hardcodes a direction exactly as `left` does.
+         *
+         * Folded here rather than at each comparison, and this is the third round of the same
+         * mistake: the property-name lookup and the identifier guard were both case-sensitive
+         * (`MARGIN-LEFT` went unreported), and `#{}` was taught to `scssDeclarations` and not to
+         * `topLevelParts`. Each time, one of the places that needed teaching got taught. One
+         * named value is the cheap insurance against a fourth.
+         *
+         * Deliberately NOT applied to the shorthand parts below. Sass identifiers are
+         * case-sensitive, so folding them would make `margin: 0 $Gutter 0 $gutter` compare equal
+         * and hide a real asymmetry — a missed defect, which is the worse direction. `12PX` versus
+         * `12px` would then over-report, and nobody writes that.
+         */
+        const keyword = value.toLowerCase();
+
+        const logical = LOGICAL_PROPERTY_ALTERNATIVES.get(property);
+        if (logical) {
+          fail(
+            `${at} uses the physical property \`${property}\`, which hardcodes a reading ` +
+              `direction. Use \`${logical}\`.\n` +
+              '    Arabic and Hebrew mirror the layout (NXSAT-752), so a physical left/right is a ' +
+              'right-to-left defect.\n' +
+              '    If the direction is genuinely fixed, put `// logical-properties-ok: <reason>` ' +
+              'on the line above.',
+          );
+          continue;
+        }
+
+        if (
+          (property === 'text-align' || property === 'float' || property === 'clear') &&
+          (keyword === 'left' || keyword === 'right')
+        ) {
+          const replacement =
+            property === 'text-align'
+              ? keyword === 'left'
+                ? 'start'
+                : 'end'
+              : keyword === 'left'
+                ? 'inline-start'
+                : 'inline-end';
+          // Reported as written, so the line is findable; the advice uses the canonical spelling.
+          fail(
+            `${at} sets \`${property}: ${value}\`, which hardcodes a reading direction. ` +
+              `Use \`${property}: ${replacement}\`.`,
+          );
+          continue;
+        }
+
+        // A four-value shorthand is only a problem when its horizontal values differ: `0 8px 8px`
+        // and `8px 12px` are already symmetric. `padding: 12px 8px 12px 16px` is the shape that
+        // produced five of NXSAT-752's physical declarations, and it reads as deliberate rather than as
+        // an oversight, which is why it needs naming explicitly.
+        if (property === 'margin' || property === 'padding') {
+          const parts = topLevelParts(value);
+          if (parts.length === 4 && parts[1] !== parts[3]) {
+            fail(
+              `${at} sets \`${property}\` with a four-value shorthand whose inline values differ ` +
+                `(\`${parts[1]}\` then \`${parts[3]}\`), so it hardcodes a reading direction.\n` +
+                `    Split it: \`${property}: ${parts[0]} 0 ${parts[2]};\` plus ` +
+                `\`${property}-inline: ${parts[3]} ${parts[1]};\` — inline takes start then end.`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  if (scanned === 0) {
+    fail(
+      'No `nxs-` stylesheet was read, so the logical-property gate asserted nothing. Either the ' +
+        'library roots moved or `walk` is not seeing `.scss` — fix the gate rather than leaving ' +
+        'it passing empty.',
+    );
+  }
+}
+
+/**
  * No library in the family puts Material's native date adapter in an injector (NXSAT-649).
  *
  * A component that lists `provideNativeDateAdapter()` or `MatNativeDateModule` hides the adapter a
@@ -9724,15 +10703,18 @@ const ADOPTION_SCAN_SKIP = /(\.spec\.ts|\.stories\.ts|test-setup\.ts|\/__mocks__
 /**
  * Sites that already bypassed an adopted primitive when this guardrail landed (NXSAT-676).
  *
- * The ticket asks for *new* use to fail, and twelve sites predate it: the tag, avatar and
+ * The ticket asks for *new* use to fail, and twelve sites predated it: the tag, avatar and
  * breadcrumbs primitives were adopted in NXSAT-673 after this code was written against Satori
  * directly. Failing them here would have made the gate red on arrival, which is how a gate gets
- * demoted to a warning and then deleted.
+ * demoted to a warning and then deleted. NXSAT-652 moved the screens onto the primitive IDs and
+ * left four: the app shell's header avatar, the dashboard's two, and document detail's
+ * `SatTagCategory`.
  *
  * Exempt per symbol, not per file. Listing only the file exempted every *future* import from that
- * entry point there too: adding `SatStatusTag` beside trash's `SatTagModule` collapsed into the
- * same exempt pair and passed. The legacy symbols are recorded, under the names the module
- * exports, so a site keeps exactly the imports it already had and a new one fails.
+ * entry point there too: adding `SatStatusTag` beside trash's then-baselined `SatTagModule`
+ * collapsed into the same exempt pair and passed. The legacy symbols are recorded, under the
+ * names the module exports, so a site keeps exactly the imports it already had and a new one
+ * fails.
  *
  * The list may only shrink, in both directions. A file that no longer imports the entry point is
  * reported as stale, and so is a listed symbol it no longer imports — migrating a site and
@@ -9749,47 +10731,19 @@ const ADOPTION_BASELINE = new Map([
     new Map([
       [
         'apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts',
-        new Set(['SatAvatarModule', 'SatAvatarCategory']),
+        new Set(['SatAvatarCategory']),
       ],
       ['apps/nuxeo-ui/src/app/shell/app-shell.component.ts', new Set(['SatAvatarModule'])],
-      ['libs/features/browse/src/lib/browse/browse.ts', new Set(['SatAvatarModule'])],
-      [
-        'libs/features/collections/src/lib/collection-detail/collection-detail.ts',
-        new Set(['SatAvatarModule']),
-      ],
-      [
-        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
-        new Set(['SatAvatarModule']),
-      ],
-    ]),
-  ],
-  [
-    '@hylandsoftware/satori-ui/breadcrumbs',
-    new Map([
-      [
-        'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
-        new Set(['SatBreadcrumbs', 'SatBreadcrumbsItem']),
-      ],
-      [
-        'libs/features/tasks/src/lib/tasks-page/tasks-page.component.ts',
-        new Set(['SatBreadcrumbs', 'SatBreadcrumbsItem']),
-      ],
     ]),
   ],
   [
     '@hylandsoftware/satori-ui/tag',
     new Map([
       ['apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.ts', new Set(['SatTagModule'])],
-      ['libs/features/browse/src/lib/browse/browse.ts', new Set(['SatTagModule'])],
       [
         'libs/features/document-detail/src/lib/document-detail/document-detail.ts',
-        new Set(['SatTagModule', 'SatTagCategory']),
+        new Set(['SatTagCategory']),
       ],
-      [
-        'libs/features/tasks/src/lib/task-detail/task-detail.component.ts',
-        new Set(['SatTagModule']),
-      ],
-      ['libs/features/trash/src/lib/trash/trash.component.ts', new Set(['SatTagModule'])],
     ]),
   ],
 ]);
@@ -10128,7 +11082,7 @@ function adoptedSatoriEntryPoints() {
  * ticket's goal sentence asks for.
  *
  * Not scoped to the diff either. It reads the whole tree, so a bypass that moves between files
- * in a refactor stays caught; `ADOPTION_BASELINE` carries the twelve pre-existing sites instead.
+ * in a refactor stays caught; `ADOPTION_BASELINE` carries the sites that predate it instead.
  */
 function checkAdoptedPatternsNotBypassed() {
   if (!fileExists(SATORI_ADOPTION_REGISTRY)) {
@@ -10326,8 +11280,9 @@ function workflowLines(body) {
     // script body back into the YAML the parser reads. Indentation is still measured from the raw
     // lines, because comment blanking would erase the indentation the boundary depends on.
     const header = stripTrailingYamlComment(raw[i]);
-    const blockScalar =
-      /^(\s*)((?:-\s+)?)['"]?([A-Za-z_][\w.-]*)['"]?\s*:\s*[|>][-+]?\d*\s*$/.exec(header);
+    const blockScalar = /^(\s*)((?:-\s+)?)['"]?([A-Za-z_][\w.-]*)['"]?\s*:\s*[|>][-+]?\d*\s*$/.exec(
+      header,
+    );
     /* A mapping whose VALUE is opaque data rather than workflow structure. Its body is blanked for
      * the same reason a `run:` script is: the gate scan treats any `if:` under `jobs:` as a
      * condition, so a job declaring `env.if` — or a `with:` input named `if` — had that data read
@@ -10521,8 +11476,7 @@ const LONG_LIVED_BRANCHES = ['main', 'master', 'develop', 'gh-pages'];
 const isLongLivedBranch = (branch) => LONG_LIVED_BRANCHES.includes(branch.toLowerCase());
 
 /** A filter pattern that names exactly one branch, rather than a family of them. */
-const isLiteralBranchPattern = (pattern) =>
-  !/[*?+[\]]/.test(pattern) && !pattern.startsWith('!');
+const isLiteralBranchPattern = (pattern) => !/[*?+[\]]/.test(pattern) && !pattern.startsWith('!');
 
 /**
  * A GitHub branch-filter pattern as a `RegExp`, or `null` for syntax this does not model.
@@ -10580,7 +11534,7 @@ function githubBranchFilterToRegExp(pattern) {
  * Also caught on #494. A doubled quote — GitHub's escape inside an expression string — is part of
  * the literal and is unescaped below.
  */
-const EXPRESSION_STRING = "'((?:[^']|'')*)'|\"((?:[^\"]|\"\")*)\"";
+const EXPRESSION_STRING = '\'((?:[^\']|\'\')*)\'|"((?:[^"]|"")*)"';
 
 /**
  * The comparison matcher, parameterised by which `github.*` contexts to look for.
@@ -10773,7 +11727,9 @@ function comparisonIsNegated(expression, index) {
 
   return (
     introducedByBang(index) ||
-    enclosing.some(([start, end]) => introducedByBang(start) || invertedByBooleanCompare(start, end))
+    enclosing.some(
+      ([start, end]) => introducedByBang(start) || invertedByBooleanCompare(start, end),
+    )
   );
 }
 
@@ -10876,12 +11832,15 @@ function parseWorkflowTriggersAndGates(body) {
        * YAML implementation, and not being one is the whole constraint this parser works under. */
       if (/^\s*[&*]/.test(ownValue)) return null;
       let filter = inlineFilter(
-        ownValue.trim().startsWith('{') ? [ownValue, ...lines.slice(i + 1, eventEnd)].join(' ') : ownValue,
+        ownValue.trim().startsWith('{')
+          ? [ownValue, ...lines.slice(i + 1, eventEnd)].join(' ')
+          : ownValue,
       );
       if (filter === null) {
         filter = NO_FILTER;
         for (let j = i + 1; j < eventEnd; j += 1) {
-          if (/^\s*['"]?tags(?:-ignore)?['"]?\s*:/.test(lines[j])) filter = { ...filter, tags: true };
+          if (/^\s*['"]?tags(?:-ignore)?['"]?\s*:/.test(lines[j]))
+            filter = { ...filter, tags: true };
           const match = /^\s*['"]?(branches|branches-ignore)['"]?\s*:/.exec(lines[j]);
           if (!match) continue;
           const list = parseYamlStringList(lines, j, yamlIndent(lines[j]));
@@ -10988,8 +11947,8 @@ function parseWorkflowTriggersAndGates(body) {
  *       deploy:
  *         if: github.ref == 'refs/heads/integration/nxsat-308'
  *
- * That branch merged into `main` and was deleted. https://nuxeo.github.io/agentic-ui-poc/ then went
- * un-refreshed from 2026-10-23 until NXSAT-649, and the failure mode is the nastiest kind: a
+ * That branch merged into `main` and was deleted. https://nuxeo.github.io/Nuxeo-Satori-UI/ then
+ * went un-refreshed from 2026-10-23 until NXSAT-649, and the failure mode is the nastiest kind: a
  * `workflow_dispatch` from `main` still checked out, still built the Storybook, still passed
  * `scripts/storybook-publication-gate.mjs` — and then **skipped** `deploy`, because its `if:` was
  * false. A skipped job leaves the run **green**. So there was a green run, a stale site, and no
@@ -11159,7 +12118,10 @@ function checkWorkflowRefGates() {
      * false positive, reported on #494 in the round after it. */
     let tagsArePossible = false;
     for (const [event, filter] of events) {
-      if (event === 'push' && (filter.tags || (!filter.unparsed && filter.branches === null && !filter.ignore))) {
+      if (
+        event === 'push' &&
+        (filter.tags || (!filter.unparsed && filter.branches === null && !filter.ignore))
+      ) {
         tagsArePossible = true;
       }
       if (!BRANCH_FILTERED_EVENTS.includes(event)) {
@@ -11182,7 +12144,8 @@ function checkWorkflowRefGates() {
      * is the mistake. `pull_request_target` is excluded deliberately: that one does run with the
      * base branch as `github.ref`, so a branch gate there is legitimate. Found in review on
      * #494, where this shape passed the check completely. */
-    const pullRequestOnly = events.size > 0 && [...events.keys()].every((e) => e === 'pull_request');
+    const pullRequestOnly =
+      events.size > 0 && [...events.keys()].every((e) => e === 'pull_request');
 
     /* The trigger half. An allowlist of nothing but pinned work-in-progress branches stops matching
      * anything the day they merge, and then the workflow does not run at all — which is how the
@@ -11376,7 +12339,7 @@ function checkWorkflowRefGates() {
               `${workflow}:${gate.line} gates ${where} on \`github.ref_name == '${literal}'\`, ` +
                 'and a tag can start this workflow, so this guardrail cannot tell whether ' +
                 `\`${literal}\` is a branch or a tag and has judged neither.\n` +
-                "    Compare `github.ref` to `refs/heads/…` or `refs/tags/…` — that form says " +
+                '    Compare `github.ref` to `refs/heads/…` or `refs/tags/…` — that form says ' +
                 'which it is — or assert `github.ref_type` alongside this comparison.',
             );
           }
@@ -11411,7 +12374,7 @@ function checkWorkflowRefGates() {
           if (!allowed) {
             fail(
               `${workflow}:${gate.line} gates ${where} on the branch \`${branch}\`, which none ` +
-                'of the workflow\'s own branch filters admit:\n' +
+                "of the workflow's own branch filters admit:\n" +
                 allowlists
                   .map(
                     ([event, patterns]) =>
@@ -11506,6 +12469,8 @@ const GUARDRAILS = [
   checkCataloguesAreTranslated,
   checkCataloguePlaceholders,
   checkAdvertisedLocalesShip,
+  checkShippedCatalogueLanguages,
+  checkUpstreamCatalogueLanguages,
   checkCrowdinConfig,
   checkPackagedConfigIsNotADemo,
   checkInstallerOwnsNoCustomerFile,
@@ -11525,6 +12490,7 @@ const GUARDRAILS = [
   checkSatoriComponentsHaveStories,
   checkSatoriComponentsHaveOverviews,
   checkSatoriComponentsHaveSpecs,
+  checkSatoriStylesheetsAreLogical,
   checkSatoriLibrariesKeepHostDateAdapter,
   checkMdxCodeSamplesFormatted,
   checkPlatformEntryPointsListed,

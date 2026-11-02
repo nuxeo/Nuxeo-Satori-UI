@@ -789,36 +789,38 @@ describe('NxsMetadataEditorComponent, typed dates', () => {
   it('reads a typed date day first in French, under a day-first hint', async () => {
     await setup('fr');
     expect(expires().placeholder).toBe('dd/mm/yyyy');
-    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 3, 3).toISOString());
+    expect(await typeDate('03/04/2026')).toBe('2026-04-03T00:00:00.000Z');
   });
 
   it('reads the same text month first in American English, under a month-first hint', async () => {
     await setup('en-US');
     expect(expires().placeholder).toBe('mm/dd/yyyy');
-    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 2, 4).toISOString());
+    expect(await typeDate('03/04/2026')).toBe('2026-03-04T00:00:00.000Z');
   });
 
   it('reads as its hint says over a host’s native subclass that keeps Date.parse', async () => {
     await setup('fr', DatesHostWithNativeSubclassComponent);
     expect(expires().placeholder).toBe('dd/mm/yyyy');
-    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 3, 3).toISOString());
+    expect(await typeDate('03/04/2026')).toBe('2026-04-03T00:00:00.000Z');
   });
 
   it('uses a date adapter the host provides, for the hint and for what is typed', async () => {
     await setup('fr', DatesHostWithAdapterComponent);
     expect(expires().placeholder).toBe('yyyy-mm-dd');
-    expect(await typeDate('anything')).toBe(new Date(2030, 0, 1).toISOString());
+    expect(await typeDate('anything')).toBe('2030-01-01T00:00:00.000Z');
   });
 });
 
 /** A Nuxeo date property: an instant, with a time of day. */
 const EXPIRES = '2026-04-03T10:30:00.000Z';
 
-/** A day as `CalendarDayAdapter` writes it, `yyyy-mm-dd`, from a JS date's local fields. */
-const written = (date: Date) =>
-  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
-    .map((n, i) => String(n).padStart(i === 0 ? 4 : 2, '0'))
-    .join('-');
+/**
+ * The calendar day `EXPIRES` names, as `CalendarDayAdapter` writes it. The **UTC** day, spelled
+ * out rather than derived from the host's local fields: a date field edits a calendar day anchored
+ * in UTC (NXSAT-727), so this is the same string on every machine — and `10:30Z` is a different
+ * local day in UTC+14, which is what made the derived form host-dependent.
+ */
+const EXPIRES_DAY = '2026-04-03';
 
 /** A host whose date adapter holds calendar days, not JS dates, as Luxon's holds `DateTime`s. */
 @Component({
@@ -865,7 +867,7 @@ describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS 
   });
 
   it('shows the property’s day, valid, and writes back its instant with its time of day', () => {
-    expect(expires().value).toBe(written(new Date(EXPIRES)));
+    expect(expires().value).toBe(EXPIRES_DAY);
     expect(editor().validate()).toBe(true);
     expect(editor().properties()['dc:expired']).toBe(EXPIRES);
     expect(editor().dirtyProperties()).toEqual({});
@@ -878,13 +880,11 @@ describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS 
     expires().dispatchEvent(new Event('blur'));
     await render();
     expect(editor().validate()).toBe(true);
-    expect(editor().dirtyProperties()).toEqual({
-      'dc:expired': new Date(2027, 4, 6).toISOString(),
-    });
+    expect(editor().dirtyProperties()).toEqual({ 'dc:expired': '2027-05-06T00:00:00.000Z' });
   });
 
   it('keeps the property’s time of day when its date is cleared and typed again', async () => {
-    const day = written(new Date(EXPIRES));
+    const day = EXPIRES_DAY;
     expires().value = '';
     expires().dispatchEvent(new Event('input'));
     await render();
@@ -910,9 +910,8 @@ describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS 
     expect(fifteenth).toBeDefined();
     fifteenth?.click();
     await render();
-    const shown = new Date(EXPIRES);
-    const picked = new Date(shown.getFullYear(), shown.getMonth(), 15);
-    expect(expires().value).toBe(written(picked));
-    expect(editor().dirtyProperties()).toEqual({ 'dc:expired': picked.toISOString() });
+    // The calendar opened on the property's UTC day, so the 15th is the 15th of that month.
+    expect(expires().value).toBe('2026-04-15');
+    expect(editor().dirtyProperties()).toEqual({ 'dc:expired': '2026-04-15T00:00:00.000Z' });
   });
 });

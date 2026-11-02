@@ -263,10 +263,10 @@ Four things guard it, and each was added because something got past the ones bef
 - **`beta:customer-guardrails`** — the shipped guardrail, run against our own reference
   extension library, so we do not learn it is broken from a customer's CI log.
 
-**Publishing is deliberately deferred.** `private: true` is still set; the scope and
-registry are decided (`@nuxeo/satori-platform` on Nuxeo Nexus) and the runbook is
-`docs/publishing-to-nuxeo-registry.md`. Flipping it is a documented, small change — see
-`docs/publish-readiness.md` §4.
+**Publishing was deferred at this phase.** `private: true` was set then. NXSAT-667 has since
+removed it, and `publishConfig` names the Nuxeo registry. The scope and registry are decided
+(`@nuxeo/satori-platform` on Nuxeo Nexus) and the runbook is
+`docs/publishing-to-nuxeo-registry.md`. Nothing has been published yet.
 
 ---
 

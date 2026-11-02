@@ -11,10 +11,12 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of, Subject, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
+import { testTranslateProviders } from '@agentic-ui/testing/i18n';
+import { CURRENT_USERNAME, TagService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsToastService } from '../toast/toast.service';
 import { NxsTagEditorComponent } from './tag-editor.component';
+import { provideNxsTagWrites } from './tag-writes.service';
 
 @Component({
   standalone: true,
@@ -45,9 +47,12 @@ describe('NxsTagEditorComponent', () => {
     addTag: ReturnType<typeof vi.fn<TagCall>>;
     removeTag: ReturnType<typeof vi.fn<TagCall>>;
     suggestTags: ReturnType<typeof vi.fn<(term: string) => Observable<string[]>>>;
+    tagsOf: ReturnType<typeof vi.fn<(uid: string) => Observable<string[]>>>;
   };
   let toastShow: ReturnType<typeof vi.spyOn>;
   let toastError: ReturnType<typeof vi.spyOn>;
+  /** Who is signed in, as the app shell reports it through `CURRENT_USERNAME`. */
+  const user = signal<string | null>('alice');
 
   const el = (): HTMLElement => fixture.nativeElement;
   const chips = (): string[] =>
@@ -81,24 +86,44 @@ describe('NxsTagEditorComponent', () => {
   const removeButton = (tag: string): HTMLButtonElement =>
     el().querySelector(`button[aria-label="Remove tag ${tag}"]`) as HTMLButtonElement;
 
-  async function mount(): Promise<void> {
+  /** Renders a host, on `tags` when given: the document as the host loaded it. */
+  async function mount(tags?: readonly string[]): Promise<void> {
     fixture = TestBed.createComponent(HostComponent);
     host = fixture.componentInstance;
+    if (tags) host.tags.set(tags);
     await settle();
   }
 
-  beforeEach(async () => {
-    tags = { addTag: vi.fn(), removeTag: vi.fn(), suggestTags: vi.fn(() => of([])) };
-    toastShow = vi.spyOn(NxsToastService.prototype, 'show').mockImplementation(() => undefined);
-    toastError = vi.spyOn(NxsToastService.prototype, 'error').mockImplementation(() => undefined);
+  /**
+   * As the app runs it: with `provideNxsTagWrites()` at the root, unless told otherwise. It resets
+   * the module, so it lists the translations the test setup would otherwise have provided.
+   */
+  async function configure({ writes = true } = {}): Promise<void> {
+    TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       imports: [HostComponent],
       providers: [
         provideZonelessChangeDetection(),
         provideNoopAnimations(),
+        testTranslateProviders(),
         { provide: TagService, useValue: tags },
+        { provide: CURRENT_USERNAME, useValue: () => user() },
+        ...(writes ? [provideNxsTagWrites()] : []),
       ],
     }).compileComponents();
+  }
+
+  beforeEach(async () => {
+    tags = {
+      addTag: vi.fn(),
+      removeTag: vi.fn(),
+      suggestTags: vi.fn(() => of([])),
+      tagsOf: vi.fn(() => of(['contract', 'q3', 'invoice'])),
+    };
+    user.set('alice');
+    toastShow = vi.spyOn(NxsToastService.prototype, 'show').mockImplementation(() => undefined);
+    toastError = vi.spyOn(NxsToastService.prototype, 'error').mockImplementation(() => undefined);
+    await configure();
   });
 
   afterEach(() => {
@@ -260,6 +285,28 @@ describe('NxsTagEditorComponent', () => {
 
       expect(tags.removeTag).toHaveBeenCalledTimes(1);
     });
+
+    it('adds a tag straight back while its removal is still on its way', async () => {
+      const removed = new Subject<string[]>();
+      tags.removeTag.mockReturnValue(removed);
+      tags.addTag.mockReturnValue(of(['q3', 'contract']));
+      await mount();
+
+      removeButton('contract').click();
+      await settle();
+      await type('contract');
+      key(box(), 27, 'Escape');
+      await enter();
+
+      // Queued behind the removal, so the document ends up as the user last left it.
+      expect(tags.addTag).not.toHaveBeenCalled();
+      removed.next(['q3']);
+      removed.complete();
+      await settle();
+
+      expect(tags.addTag).toHaveBeenCalledExactlyOnceWith('doc-1', 'contract');
+      expect(chips()).toEqual(['q3', 'contract']);
+    });
   });
 
   describe('suggestions', () => {
@@ -409,7 +456,7 @@ describe('NxsTagEditorComponent', () => {
       ]);
     });
 
-    it('drops what is still pending when the document changes', async () => {
+    it('keeps a change going when the document changes, and shows it on the way back', async () => {
       const added = new Subject<string[]>();
       tags.addTag.mockReturnValue(added);
       await mount();
@@ -423,10 +470,388 @@ describe('NxsTagEditorComponent', () => {
 
       expect(el().querySelector('.nxs-tag-editor__pending')).toBeNull();
       added.next(['contract', 'q3', 'invoice']);
+      added.complete();
       await settle();
 
+      // Not doc-2's tags, so neither the chips nor the host hear it here.
       expect(chips()).toEqual(['other']);
       expect(host.changes).toEqual([]);
+      expect(toastShow).toHaveBeenCalledWith('The tag invoice has been added to the document.');
+
+      host.uid.set('doc-1');
+      host.tags.set(['contract', 'q3']);
+      await settle();
+
+      expect(chips()).toEqual(['contract', 'q3', 'invoice']);
+      expect(host.changes).toEqual([['contract', 'q3', 'invoice']]);
+    });
+
+    it('finishes every change when the editor is closed mid-write, for the next one to show', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      tags.removeTag.mockReturnValue(of(['q3', 'invoice']));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('contract').click();
+      await settle();
+      const closed = host;
+      fixture.destroy();
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      // The queued removal still went out, after the add, and nothing reached the closed host.
+      expect(tags.removeTag).toHaveBeenCalledExactlyOnceWith('doc-1', 'contract');
+      expect(closed.changes).toEqual([]);
+      expect(toastShow).toHaveBeenCalledWith('The tag invoice has been added to the document.');
+      expect(toastShow).toHaveBeenCalledWith(
+        'The tag contract has been removed from the document.',
+      );
+
+      // Reopened with the tags the host loaded before the change: it reads Nuxeo's once, and only once.
+      tags.tagsOf.mockReturnValue(of(['q3', 'invoice']));
+      await mount();
+      expect(chips()).toEqual(['q3', 'invoice']);
+      expect(host.changes).toEqual([['q3', 'invoice']]);
+
+      host.tags.set(['q3', 'invoice']);
+      await settle();
+      expect(host.changes).toEqual([['q3', 'invoice']]);
+    });
+
+    it('without provideNxsTagWrites, still finishes the changes of a closed editor', async () => {
+      await configure({ writes: false });
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      tags.removeTag.mockReturnValue(of(['q3', 'invoice']));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('contract').click();
+      await settle();
+      fixture.destroy();
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      expect(tags.removeTag).toHaveBeenCalledExactlyOnceWith('doc-1', 'contract');
+      expect(toastShow).toHaveBeenCalledWith(
+        'The tag contract has been removed from the document.',
+      );
+
+      // The documented limit: the next editor has its own writes, so it shows what the host passes.
+      await mount();
+      expect(chips()).toEqual(['contract', 'q3']);
+      expect(host.changes).toEqual([]);
+    });
+
+    it('still says a change failed when the editor was closed before the answer', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.error(new HttpErrorResponse({ status: 500 }));
+
+      expect(toastError).toHaveBeenCalledWith('The tag invoice could not be added.');
+
+      await mount();
+      expect(chips()).toEqual(['contract', 'q3']);
+      expect(host.changes).toEqual([]);
+    });
+
+    it('does not replay an add another client reversed, over the tags the host reloaded', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      // Another client removed the tag again. The host reloads the tags it had before the add.
+      tags.tagsOf.mockReturnValue(of(['contract', 'q3']));
+      await mount(['contract', 'q3']);
+
+      expect(tags.tagsOf).toHaveBeenCalledExactlyOnceWith('doc-1');
+      expect(chips()).toEqual(['contract', 'q3']);
+      expect(host.changes).toEqual([['contract', 'q3']]);
+    });
+
+    it("never sends one user's queued change as the next, nor says another's answer", async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      tags.removeTag.mockReturnValue(of(['q3', 'invoice']));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('contract').click();
+      await settle();
+
+      // alice signs out and bob signs in while her add is still on its way.
+      user.set(null);
+      user.set('bob');
+      await settle();
+      expect(el().querySelector('.nxs-tag-editor__pending')).toBeNull();
+      expect(chips()).toEqual(['contract', 'q3']);
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+      await settle();
+
+      // Her queued removal was never sent with bob's session, and her answer is not his to hear.
+      expect(tags.removeTag).not.toHaveBeenCalled();
+      expect(toastShow).not.toHaveBeenCalled();
+      expect(host.changes).toEqual([]);
+
+      fixture.destroy();
+      await mount();
+      expect(chips()).toEqual(['contract', 'q3']);
+      expect(host.changes).toEqual([]);
+    });
+  });
+
+  describe('sessions and reloads', () => {
+    it('shows the tags Nuxeo holds after changes no editor heard, whatever the host reloaded', async () => {
+      const added = new Subject<string[]>();
+      const removed = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      tags.removeTag.mockReturnValueOnce(removed);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('q3').click();
+      await settle();
+      fixture.destroy();
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+      removed.next(['contract', 'invoice']);
+      removed.complete();
+
+      // The host reloaded between the two writes, so it holds the intermediate tags.
+      tags.tagsOf.mockReturnValue(of(['contract', 'invoice']));
+      await mount(['contract', 'q3', 'invoice']);
+
+      expect(tags.tagsOf).toHaveBeenCalledExactlyOnceWith('doc-1');
+      expect(chips()).toEqual(['contract', 'invoice']);
+      expect(host.changes).toEqual([['contract', 'invoice']]);
+    });
+
+    it('hears the answer to a change still in flight when the editor reopens', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+
+      await mount();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+      await settle();
+
+      expect(chips()).toEqual(['contract', 'q3', 'invoice']);
+      expect(host.changes).toEqual([['contract', 'q3', 'invoice']]);
+      expect(tags.tagsOf).not.toHaveBeenCalled();
+    });
+
+    it('does not store a read for a document the editor has left, even after coming back to it', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      const first = new Subject<string[]>();
+      const second = new Subject<string[]>();
+      tags.tagsOf.mockReturnValueOnce(first).mockReturnValueOnce(second);
+      await mount();
+      host.uid.set('doc-2');
+      await settle();
+      host.uid.set('doc-1');
+      await settle();
+      expect(tags.tagsOf).toHaveBeenCalledTimes(2);
+
+      // The read started before the document changed answers last: it must not win.
+      first.next(['stale']);
+      first.complete();
+      second.next(['contract', 'invoice']);
+      second.complete();
+      await settle();
+
+      expect(chips()).toEqual(['contract', 'invoice']);
+      expect(host.changes).toEqual([['contract', 'invoice']]);
+    });
+
+    it('cancels a change still on its way when its user signs out', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      expect(added.observed).toBe(true);
+
+      user.set(null);
+      user.set('bob');
+      TestBed.flushEffects();
+      await settle();
+
+      expect(added.observed).toBe(false);
+      expect(toastShow).not.toHaveBeenCalled();
+    });
+
+    it('without provideNxsTagWrites, cancels a change of a closed editor when its user signs out', async () => {
+      await configure({ writes: false });
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      expect(added.observed).toBe(true);
+
+      user.set(null);
+      user.set('bob');
+      TestBed.flushEffects();
+
+      expect(added.observed).toBe(false);
+    });
+
+    it('reads again on the next open when the read failed', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      tags.tagsOf.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await mount();
+      expect(chips()).toEqual(['contract', 'q3']);
+
+      fixture.destroy();
+      await mount();
+      expect(tags.tagsOf).toHaveBeenCalledTimes(2);
+      expect(chips()).toEqual(['contract', 'q3', 'invoice']);
+    });
+
+    it('does not read again on a later open when sign-out cut off the read on its way', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      tags.tagsOf.mockReturnValueOnce(new Subject<string[]>());
+      await mount();
+      expect(tags.tagsOf).toHaveBeenCalledTimes(1);
+
+      user.set(null);
+      user.set('bob');
+      TestBed.flushEffects();
+      await settle();
+      fixture.destroy();
+      await mount();
+
+      expect(tags.tagsOf).toHaveBeenCalledTimes(1);
+    });
+
+    it('is not cancelled by a change that failed while the read was on its way', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValueOnce(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      const read = new Subject<string[]>();
+      tags.tagsOf.mockReturnValueOnce(read);
+      tags.removeTag.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await mount();
+      removeButton('q3').click();
+      await settle();
+      expect(toastError).toHaveBeenCalledOnce();
+
+      read.next(['contract', 'invoice']);
+      read.complete();
+      await settle();
+
+      expect(chips()).toEqual(['contract', 'invoice']);
+      expect(host.changes).toEqual([['contract', 'invoice']]);
+    });
+
+    it('drops a change still waiting when its user signs out and back in as the same user', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      tags.removeTag.mockReturnValue(of(['q3', 'invoice']));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('contract').click();
+      await settle();
+
+      // alice signs out and back in while her add is on its way, all within one change detection.
+      user.set(null);
+      user.set('alice');
+      TestBed.flushEffects();
+      await settle();
+      expect(el().querySelector('.nxs-tag-editor__pending')).toBeNull();
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+      await settle();
+
+      // Her queued removal is never sent in her new session, and her old answer is not kept.
+      expect(tags.removeTag).not.toHaveBeenCalled();
+      expect(toastShow).not.toHaveBeenCalled();
+      expect(host.changes).toEqual([]);
+
+      fixture.destroy();
+      await mount();
+      expect(tags.tagsOf).not.toHaveBeenCalled();
+      expect(chips()).toEqual(['contract', 'q3']);
     });
   });
 

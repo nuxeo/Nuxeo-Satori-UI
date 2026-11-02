@@ -352,5 +352,34 @@ describe('ExtensionSlotRegistry', () => {
         'acme.actions.archive',
       );
     });
+
+    /**
+     * The contract NXSAT-760 changed, at the level it changed: `resolve` tells a packaged row from
+     * a manifest-owned one by its position, because `merged` starts as the packaged list and only
+     * grows by appending contributions.
+     *
+     * Before, `action` was withheld from this patch too, so the customer's second row lost its
+     * action to their first. That protected nothing — the test above shows they may bind any
+     * action to an id they own — and it is what made which-row-wins depend on the layer stack.
+     */
+    it('lets a later entry replace the action of an earlier one the manifest also owns', () => {
+      registry.register<ActionDescriptor>(EXTENSION_SLOTS.toolbar, [{ id: 'app.toolbar.delete' }]);
+
+      const resolved = registry.resolve<ActionDescriptor>(
+        EXTENSION_SLOTS.toolbar,
+        overrides(
+          additionsFor<ActionDescriptor>(EXTENSION_SLOTS.toolbar, [
+            { id: 'acme.toolbar.archive', label: 'Archive', action: 'acme.actions.first' },
+            { id: 'acme.toolbar.archive', label: 'Archive v2', action: 'acme.actions.second' },
+          ]),
+        ),
+      );
+
+      const archive = resolved.find((a) => a.id === 'acme.toolbar.archive');
+      expect(archive?.label).toBe('Archive v2');
+      expect(archive?.action).toBe('acme.actions.second');
+      // One row, not two: the pair really did collapse rather than both surviving.
+      expect(resolved.filter((a) => a.id === 'acme.toolbar.archive')).toHaveLength(1);
+    });
   });
 });

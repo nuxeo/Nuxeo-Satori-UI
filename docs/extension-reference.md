@@ -34,11 +34,11 @@ the real permission server-side on every operation, so:
 
 Use Nuxeo ACLs for authorisation. Use the manifest for what the interface presents.
 
-### A manifest cannot rebind a packaged action
+### A manifest cannot rebind an action that was registered in code
 
-Hiding is yours to decide; **rebinding is not**. When a manifest entry reuses a packaged ID it
-patches that descriptor — `label`, `icon`, `order`, `rule` and the rest all apply — but an `action`
-it supplies is **ignored**:
+Hiding is yours to decide; **rebinding is not**. When a manifest entry reuses the ID of a
+descriptor that was **registered in code**, it patches that descriptor — `label`, `icon`, `order`,
+`rule` and the rest all apply — but an `action` it supplies is **ignored**:
 
 ```json
 { "id": "app.toolbar.addToFavorites", "action": "app.toolbar.delete" }
@@ -50,20 +50,32 @@ The rule in the section above — that the server still checks permissions — i
 safe, and it is exactly what does **not** make this safe: the user has `Remove`, so the deletion
 succeeds. Presentation and behaviour have to stay attached to each other.
 
-To introduce behaviour, add a descriptor under **your own** ID, where the label and the action are
-both yours:
+To introduce behaviour, add a descriptor under an ID **the manifest alone declares**, where the
+label and the action are both yours:
 
 ```json
 { "id": "acme.toolbar.archive", "label": "Archive", "action": "acme.actions.archive" }
 ```
 
-Replacing what a packaged ID _does_ is a Layer 2 operation: register a handler under that ID from
+"Registered in code" means ours **or your own**. The check is on how the descriptor reached the
+registry, not on the shape of its ID, so a descriptor your Layer 2 library registered is protected
+exactly as one of ours is — `acme.toolbar.archive` registered from your library keeps its `action`
+against a manifest entry that patches it, for the same reason `app.toolbar.addToFavorites` does.
+That is deliberate: your reviewed, versioned code is the thing a JSON fragment should not be able
+to re-point either. An ID that only ever appears in the manifest has nothing registered behind it,
+so there its `action` is simply yours to set.
+
+Replacing what an already-registered ID _does_ is a Layer 2 operation: register a handler from
 your own library (section 14), where the change is in reviewed, versioned code rather than in a
-JSON fragment.
+JSON fragment. Register it under the **`action` the descriptor names**, falling back to its `id`
+only where the descriptor sets no `action` — which is what every packaged descriptor does, so for
+one of ours the ID is the key. `ExtensionActionRegistry.execute` resolves
+`descriptor.action ?? descriptor.id`, so registering under the `id` of a descriptor that _does_
+name an `action` leaves the original handler running and changes nothing.
 
 ### Where the manifest lives, and how it survives upgrade
 
-Layer 0 and Layer 1 are contributed, not edited. Since NXSAT-312 a customer ships their own
+Layer 0 and Layer 1 are contributed, not edited. A customer ships their own
 Marketplace package that contributes `bootstrap` and `manifest` fragments to the
 `org.nuxeo.agentic.ui.config` extension point, and the server serves them after our defaults at
 `/nuxeo/agentic-ui-config/bootstrap.json` and `manifest.json`. Ordering needs two declarations:
@@ -76,12 +88,22 @@ Scaffold that package rather than writing it by hand. In a clone of this reposit
 Node 20 — no `npm ci`, no registry token:
 `node tools/satori-generators/src/config-package/create.mjs acme-config --owner=acme` writes both
 declarations, starter fragments with JSON schemas for your editor, and a `build.mjs` that refuses
-what the server would reject — JSON that does not parse, a repeated key, a fragment over 1 MiB, a
-missing asset — and writes the installable zip: `node config-packages/acme-config/build.mjs`. The
+what the server would reject — JSON that does not parse, a repeated key, a fragment over 1 MiB or
+nested more than 1000 deep, a missing asset — and writes the installable zip:
+`node config-packages/acme-config/build.mjs`. Nesting is the one of those limits the server does
+not set itself: `ConfigSnapshot` parses with a plain Jackson `ObjectMapper`, so the depth it
+accepts is jackson-core's `StreamReadConstraints` default, and a fragment past it is dropped at
+`error invalid-json` while the package installs and Nuxeo starts normally (NXSAT-730). The
 `config-package` Nx generator writes the same files, byte for byte, where Nx is installed:
 `npx nx g ./tools/satori-generators:config-package acme-config --owner=acme` after a full install
 of this repository, or `npx nx g @nuxeo/satori-platform:config-package acme-config --owner=acme`
-from the published package. `config-packages/presales-demo` in this repository is one, with two
+from the published package. Both refuse a package name they cannot honour before writing
+anything, and say what it would clash with: a name Satori itself uses — `defaults`, the name of
+our own packaged fragments, and `nuxeo-agentic-ui`, the package yours depends on — or a device
+name Windows reserves, such as `con` or `nul`, which cannot be a directory there. A package named
+`defaults` would otherwise contribute a fragment on the same key as ours and take its place, which
+the server reports as a warning — see "Displacing one of our packaged defaults" below.
+`config-packages/presales-demo` in this repository is one, with two
 demo presets. The `bootstrap.json` that used to be copied and edited beside
 the bundle is **removed with no migration**: a file left in `nxserver/nuxeo.war/agentic-ui-config`
 is not served.
@@ -93,13 +115,38 @@ wins over an earlier one. Each fragment's `extensions` block is handled in two s
 layers. Then the resolved blocks merge in the same order, and that merge is **not** isolated: slot
 entries with the same `id` merge across packages, so a later package can patch a descriptor an
 earlier one contributed. Nothing is read from the repository: the Nuxeo Note at
-`/default-domain/config/agentic-ui` that held the manifest before NXSAT-312 is no longer read, by
+`/default-domain/config/agentic-ui` that once held the manifest is no longer read, by
 any request, with **no migration** — re-create its content as a manifest fragment in your package.
 Nothing about configuration changes when a user signs in or out.
 
 `AppConfigService.diagnostics()` reports where each half came from (`configuration-service` or
 `packaged-default`), the package component behind every fragment, and the server's own
 diagnostics — a replacement it rejected, a contribution it removed.
+
+#### Displacing one of our packaged defaults
+
+A later fragment on the same key replaces the earlier one, and that is how you override our
+defaults deliberately. But replacing or disabling a fragment **we** packaged usually is not
+deliberate — the usual way to arrive is to name your package `defaults`, which makes its fragment
+`defaults` too — and the result is that you silently lose the documentation and themes defaults we
+ship. So the server distinguishes the two:
+
+| What happened                                            | Code                                                     | Level     |
+| -------------------------------------------------------- | -------------------------------------------------------- | --------- |
+| Your fragment replaces or disables **another package's** | `replaced` · `removed`                                   | `info`    |
+| Your fragment replaces or disables **one of ours**       | `replaced-packaged-default` · `removed-packaged-default` | `warning` |
+
+The warning reaches `server.log` at `WARN` and the served `bootstrap.json` / `manifest.json`
+`diagnostics`, and it names the fragment, the component that shipped it and the component that
+displaced it. It does not block anything: the contribution still takes effect, because replacement
+is a supported operation and you may well have meant it.
+
+If you did not mean it, **rename the fragment** — `name` on the `<fragment>` element in your
+component XML, which the `config-package` generator sets from the package name. If you did mean
+it, nothing needs doing; the warning is the record that our defaults are no longer in force.
+
+The distinction is drawn on the **bundle** that contributed the displaced fragment, not on its
+name, so it holds for anything we package rather than only for the fragments called `defaults`.
 
 The Layer 1 configuration is the `extensions` key of a manifest fragment:
 
@@ -226,7 +273,7 @@ slot the library has never heard of and showing the existing ones unchanged.
 
 | Field      | Meaning                                                                                                                                                                             |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`       | Required. The address. An entry without one is dropped.                                                                                                                             |
+| `id`       | Required. The address. An entry without one is dropped and reported — see §2a.                                                                                                      |
 | `order`    | Ascending. Absent sorts as `Number.MAX_SAFE_INTEGER` — after any ordinary number, tied with that value, before `Infinity`. `null` sorts as `0`. Packaged entries are spaced by ten. |
 | `disabled` | `true` removes the entry. ACA's semantics: any truthy value does, the string `"false"` too.                                                                                         |
 | `rule`     | A rule ID, or a nested rule reference — see section 4.                                                                                                                              |
@@ -287,6 +334,174 @@ Find an entry's `labelKey` in `PACKAGED_NAV_ITEMS`; they follow `nav.item.<slug>
   }
 }
 ```
+
+---
+
+## 2a. What is refused, and how you hear about it
+
+The manifest is read **tolerantly**: something malformed costs you that slot, that entry, that
+override or that one key, never the application. What it must not cost you is the explanation.
+Every refusal below names what was refused, the reason and the contribution it came from, in two
+places:
+
+- **a signal on `AppExtensionsService`** — `refusedSlotEntries()` for a slot or slot entry,
+  `refusedOverrides()` for a per-ID override, `refusedSections()` for a whole `slots` or
+  `overrides` map, alongside `missingLayers()` and `invalidRoutes()`. The template application
+  renders all five; a fork should too.
+- **the browser console**, prefixed `[agentic-ui-extensions]`, **once per load**. This is where
+  support looks, because the product application has no diagnostics page.
+
+Three signals rather than one because the three are addressed differently, and a field left empty
+on one of them would be worse than a list of its own. A slot refusal names the slot it belongs to.
+An override belongs to no slot — `overrides` is keyed by descriptor ID precisely so a slot added
+after Beta needs no schema change (§2). A map lost whole has neither a slot nor an ID, because
+what went wrong is the key itself.
+
+### In `slots`
+
+| What you wrote                                   | What happens                  | Reported as                                       |
+| ------------------------------------------------ | ----------------------------- | ------------------------------------------------- |
+| `"documentView": { … }` instead of `[ … ]`       | the **whole slot** is dropped | `a slot must be a list of entries, not an object` |
+| a slot named `__proto__`                         | the **whole slot** is dropped | `a slot may not be named "__proto__"`             |
+| an entry that is not an object                   | that entry is dropped         | `entry 2 must be an object, not a string`         |
+| an entry with no `id`, or a non-string one       | that entry is dropped         | `entry 2 has no string "id"`                      |
+| an entry whose `id` is blank or whitespace       | that entry is dropped         | `entry 2 has a blank "id"`                        |
+| the same `id` twice **in one slot of one layer** | the two merge into one        | `entry 2 repeats the id "…"`                      |
+
+### In `overrides`
+
+| What you wrote                                     | What happens       | Reported as                                    |
+| -------------------------------------------------- | ------------------ | ---------------------------------------------- |
+| `"app.navbar.trash": true` instead of `{ … }`      | that override goes | `an override must be an object, not a boolean` |
+| `"app.navbar.trash": [ … ]`, or `"x"`, `3`, `null` | that override goes | `an override must be an object, not a list`    |
+| an override keyed `__proto__`                      | that override goes | `an override may not be keyed "__proto__"`     |
+
+The one most worth knowing is the first. `{ "overrides": { "app.navbar.trash": true } }` looks
+like it should hide the entry; it is not an override at all, and before this was reported it cost
+you nothing but silence. What you want is `{ "app.navbar.trash": { "visible": false } }` — the
+keys are in §2.
+
+### A whole `slots` or `overrides` map of the wrong shape
+
+Both keys are objects — `slots` keyed by slot ID, `overrides` keyed by descriptor ID. When either
+is something else, **every entry under it in that contribution is gone**, and that is reported on
+`refusedSections()`:
+
+| What you wrote                                     | What happens                             | Reported as                                                        |
+| -------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| `"overrides": [ { "id": "…", "visible": false } ]` | **every override** in that layer is gone | `"overrides" must be an object keyed by descriptor id, not a list` |
+| `"slots": "x"`, or `3`, `true`, `null`             | **every slot** in that layer is gone     | `"slots" must be an object keyed by slot id, not a string`         |
+
+The first is the one worth knowing, and it is an easy mistake to make: a `slots` **entry** is a
+list, so writing the `overrides` **map** as a list looks consistent. It is not — the map is keyed
+by ID, and the ID is the key:
+
+```json
+{ "overrides": { "app.navbar.trash": { "visible": false } } }
+```
+
+The other keys of that contribution still apply, and so do your other contributions. Only the one
+key is lost. An **absent** key is not a refusal, and nor is an empty one: `"overrides": {}` is a
+contribution that overrides nothing, which is a perfectly good thing for a generated manifest to
+write.
+
+The contribution is named by its `$name` when it declares one, by the `$layers` entry it sits in
+when that is where it was written, and by its position in contribution order otherwise
+(`contribution 2`). Writing `$name` on your layer is what makes the message say which file to
+open, which is most of why `$name` exists.
+
+### What is still silent, and why
+
+Some things have no effect and say nothing. They are listed here rather than left to be
+discovered.
+
+**Two leave an override in place that never does anything**, and are deliberate, on the §1
+tolerance rule:
+
+- **an unknown key inside an override** — `{ "visibl": false }` is kept and ignored.
+- **an override for an ID nothing registers** — `"app.navbr.trash"` is kept and never matches.
+
+Overrides are read before any descriptor registers, and you may legitimately override an ID a
+library registers later, or a key a newer release adds — so a warning would fire on manifests that
+are correct for the build they were written against. Check an ID against the tables in §3 onward.
+
+**Four are about layer _names_ and _bodies_** rather than about configuration. No two of them are
+the same, and the difference is how much you lose:
+
+| What you wrote                           | What happens                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------ |
+| `"$references": { … }`, or a bare string | reads as an **empty** list — no layer referenced, none ignored           |
+| `"$references": ["brand", 42, "acme"]`   | only the `42` is lost; `brand` and `acme` still apply. **Not** emptied   |
+| `"$layers": "x"`                         | **every** named layer is gone, so every name you reference is unresolved |
+| `"$layers": { "brand": "x" }`            | only `brand` is skipped; your other layers resolve and apply as written  |
+
+`$ignoreReferenceList` reads exactly as `$references` does, in both of the first two rows.
+
+The two `$references` rows say nothing, because a name that was never read is a name nothing can go
+looking for.
+
+The two `$layers` rows are about **a name that will not resolve**, and they surface on
+`missingLayers()` (§12) — but only for a name this contribution's own `$references` actually
+resolves. So `"$layers": "x"` reports every name you reference and do not ignore, and one bad body
+reports just that one. Three lookups never happen, so three stay silent:
+
+- **a name you reference _and_ also list in `$ignoreReferenceList`.** Ignored names are dropped
+  before the lookup.
+- **a name reached only by a _nested_ `$references`**, inside a layer you referenced. References
+  resolve one level deep (§12), so the inner list is metadata and is skipped.
+- **a body nothing references at all.** There is no lookup to fail.
+
+**None of that means ignoring a layer silences it.** Resolving a layer _name_ and reading a
+layer's _configuration_ are different passes, and only the first depends on references. Every
+object-shaped `$layers` body is **read** whether or not it is referenced or ignored — so a
+malformed `slots` or `overrides` _inside_ one is reported exactly as the tables above describe,
+sourced `$layers.<name> of <parent>`. You hear about a typo in a layer you are not currently
+using, which is deliberate: §12 says the same, and the message names the layer rather than
+implying it took effect.
+
+These are about layer **resolution** rather than configuration, which is why `refusedSections()`
+covers only `slots` and `overrides`.
+
+### A repeated `id` across layers is **not** reported, and that is deliberate
+
+Reusing an `id` is the override mechanism, not a mistake:
+
+- a `$references` layer patching an entry an earlier layer declared (§12);
+- a `slots` entry reusing a **packaged** `id`, which patches the packaged descriptor — minus its
+  `action`, per §1;
+- your own extension library re-registering an `id` through `provideSatoriExtensions` (§14).
+
+A diagnostic on any of those would fire on every correctly layered manifest, so none of them says
+anything. **The one case that is reported is two entries with the same `id` inside a single slot of
+a single layer** — there is no override to express there, because you would have edited the row, so
+it is a copy-paste duplicate.
+
+**At most one of your two rows reaches the slot, and which fields it carries is not specified** —
+not in this document, not in the diagnostic, and nowhere you can rely on. It varies with where your
+layers sit, which of them set the same slot, which side of the merge the duplicates land on,
+whether an earlier layer already declared that `id`, and whether the field holds a string or a
+structure. A later `"<slot>.$replace"` can leave **no** row at all. A manifest must not depend on
+any of it.
+
+One thing is guaranteed, and it is the one that matters: on an `id` whose descriptor was
+**registered in code** — ours, or your own Layer 2 library's — that registered `action` is never
+rebindable, whatever you write, because that is a check in the registry rather than a property of
+the merge (§1).
+
+The remedy is the same whatever happens, which is why the diagnostic gives only the remedy: **give
+each entry its own `id`.** If you meant to change an entry you already declared, edit that entry; to
+override one of ours, use `overrides` (§2) or declare an `id` of your own.
+
+> **Eight** review findings across PRs #534 and #537 went into that paragraph, each refuting a
+> different attempt to state the outcome as a rule — including "the later entry wins", a carve-out
+> for `action`, four different conditions on the layer stack, a guarantee for rows that set every
+> field, and finally "exactly one row survives". The outcome is a property of ACA's merge semantics
+> meeting the registry's across a whole stack, not of the duplicate, and `extension-merge.ts` is a
+> pinned reproduction of that merge. Measured stacks are in `app-extensions.service.spec.ts`;
+> nothing short enough for this document has survived contact with the next stack anyone tried.
+
+Entries dropped for an unreachable `path` are reported the same way, on
+`invalidRoutes()` — see §11.
 
 ---
 
@@ -600,13 +815,16 @@ at the table below, conflating the two.
 
 Components are referenced by ID and must already be compiled in. Contributing a new one is Layer 2.
 
-| Component ID                      | Renders                                                                                        |
-| --------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `app.sidebar.assets`              | Asset facet filters                                                                            |
-| `app.sidebar.searchFilters`       | Search filter panel                                                                            |
-| `app.sidebar.trashFilters`        | Trash filter panel                                                                             |
-| `app.page.contracts`              | A full-page surface, for the `routes` slot                                                     |
-| `nxs.components.permissionsPanel` | Local and inherited permissions in the document-detail, browse and collection Permissions tabs |
+| Component ID                           | Renders                                                                                                                                                  |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app.sidebar.assets`                   | Asset facet filters                                                                                                                                      |
+| `app.sidebar.searchFilters`            | Search filter panel                                                                                                                                      |
+| `app.sidebar.trashFilters`             | Trash filter panel                                                                                                                                       |
+| `app.page.contracts`                   | A full-page surface, for the `routes` slot                                                                                                               |
+| `nxs.components.permissionsPanel`      | Local and inherited permissions in the document-detail, browse and collection Permissions tabs                                                           |
+| `nxs.components.adminUsersGroupsPage`  | The users and groups administration screen at `/administration/users-groups`: search, recently created, and create, edit and delete for users and groups |
+| `nxs.components.adminUserDetailsPage`  | One user at `/administration/users-groups/user/:userId`: profile, groups, and direct and group permissions                                               |
+| `nxs.components.adminGroupDetailsPage` | One group at `/administration/users-groups/group/:groupId`: members, nested groups, and permissions                                                      |
 
 `app.page.contracts` is the first component registered for the **`routes`** slot rather than for a
 drawer, and it exists because that slot went live with **no component in the product able to serve
@@ -677,6 +895,11 @@ providers: [
 ];
 ```
 
+A host that shows `nxs-tag-editor` also lists `provideNxsTagWrites()` once in the same providers.
+It registers no ID; it keeps the editor's tag changes for as long as the application runs, so
+closing the panel that holds the editor mid-change neither cancels nor drops one, and the next
+editor for that document shows what Nuxeo stored.
+
 `provideNxsSatoriComponents()` also needs what any Satori host provides: `provideSatori()` for the
 theme and icons, and Satori's `sat.*` catalogue in ngx-translate (upstream's
 `provideAndConfigureSatoriUITranslations`, or seeded into your own loader). Without the catalogue
@@ -702,26 +925,45 @@ from a button you pass in `headerAction` or `actions`. The one difference: on Sa
 few pixels of padding _around_ those controls opens the item, where on Material it does nothing. A
 replacement you register decides this for itself.
 
-**Where packaged screens render them.** Browse and the collection page render their breadcrumb
-trail through `nxs.primitives.breadcrumbs`. Browse, the collection page, document detail and task
-detail render their status tags through `nxs.primitives.statusTag`. Document detail renders its tab
-strip through `nxs.primitives.tabs` and its header's action row through `nxs.primitives.actionBar`
-(section 8 and 9). Browse's and search's card views render each card through `nxs.primitives.card`,
-passing its open and selection handlers and the templates for its thumbnail and actions as inputs,
-because the outlet binds no outputs. `nxs-document-list` renders each row's type through
-`nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`. An override of those
-IDs reaches these screens. Document detail's trashed-document and version banners, search's AI error
-banner and create-import's two location hints render through `nxs.primitives.banner`; create-import's
-subject, nature and coverage chips and the search filters' chips render through `nxs.primitives.chipSet`.
-The banners pass their message and buttons as `componentInputs`, and the chip sets pass
-`removeHandler`, since the outlet binds no outputs. Each keeps its built-in element as the fallback, and
-each sits in a wrapper that carries the layout, so the layout holds whichever component the ID resolves
-to. Document detail's workflow, task-action and AI error banners are still `sat-banner`, as are the
-other `sat-*` uses noted below.
+**Where packaged screens render them.** The screens place no `sat-avatar`, `sat-category-tag` or
+`sat-breadcrumbs` of their own: each of those uses is resolved through its ID, so an override of the
+ID reaches it. The uses resolved by ID are these:
 
-Other `sat-*` uses in packaged screens are not yet on these IDs, so an override does not reach them.
-Those elements render directly until they move onto the IDs. Nor does an override of the tabs or the
-action bar reach any other tab group or action row: browse's and the collection page's tabs are
+| Component ID                 | Rendered on                                                                                                                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nxs.primitives.avatar`      | browse (the history tab's users, the info panel's creator and contributor, activity), document detail (activity), the collection page (the history tab's users), the dashboard, `nxs-document-list` |
+| `nxs.primitives.tag`         | browse (a trashed child's type), search (a list row's type), document detail (the AI primary category, a publication's version), task detail, trash, `nxs-document-list`                            |
+| `nxs.primitives.breadcrumbs` | browse, document detail, the collection page, the tasks page                                                                                                                                        |
+| `nxs.primitives.statusTag`   | browse, document detail, the collection page, task detail                                                                                                                                           |
+| `nxs.primitives.card`        | browse's and search's card views, one per document; the card shows the type as its subheading                                                                                                       |
+| `nxs.primitives.tabs`        | document detail's tab strip (sections 8 and 9)                                                                                                                                                      |
+| `nxs.primitives.actionBar`   | document detail's header action row (sections 8 and 9)                                                                                                                                              |
+
+Search shows no avatar, breadcrumb trail or status tag.
+
+Banners and chip sets resolve through their own IDs too. Document detail's trashed-document and
+version banners, search's AI error banner and create-import's two location hints render through
+`nxs.primitives.banner`; create-import's subject, nature and coverage chips and the search filters'
+chips render through `nxs.primitives.chipSet`. The banners pass their message and buttons as
+`componentInputs`, and the chip sets pass `removeHandler`, since the outlet binds no outputs. Each
+keeps its built-in element as the fallback, and each sits in a wrapper that carries the layout, so
+the layout holds whichever component the ID resolves to. Document detail's workflow, task-action
+and AI error banners are still `sat-banner`, as are the other `sat-*` uses noted below.
+
+Breadcrumb page layout belongs to the screen, not the registered implementation. Browse,
+document detail, collections and tasks wrap both the outlet and its fallback in the same layout
+container, preserving spacing and compact header typography when the registration changes.
+The built-in Material breadcrumb inherits that compact typography in headers; its own component
+still owns separators, folding and RTL mirroring. The packaged Satori registration retains the
+screens' compact text separators, scoped through the wrapper rather than the outlet's internals.
+Custom implementations own their internal separators and may deliberately supply their own typography.
+
+**Not reached by an override yet.** Four library components on document detail draw the built-in
+`nxs-avatar` or `nxs-tag` themselves rather than resolving the ID, so an override does not replace
+them there: `nxs-comments` (each author's avatar), `nxs-document-history` (each entry's avatar and
+lifecycle tag), `nxs-properties-panel` (the creator and contributor avatars, and its state, tag,
+coverage and collection tags) and `nxs-tag-editor` (each tag). Nor does an override of the tabs or
+the action bar reach any other tab group or action row: browse's and the collection page's tabs are
 Material tab groups and their header actions their own markup, the search and trash toolbars are
 their own markup, and the metadata editor writes `nxs-tabs` into its template. Nothing in a packaged screen renders
 `nxs.primitives.errorState`, `nxs.primitives.richTooltip`, `nxs.primitives.emptyState` or
@@ -994,6 +1236,40 @@ refetched or another document using the same entry opens — at most twice, so a
 is permanently missing is requested three times in all. The packaged view stays on screen
 while a retry is in flight.
 
+**A component that throws while it is drawn** falls back the same way, and one warning is
+written to the console naming the component the entry asked for — its `componentId`, which is
+the descriptor `id` unless you set it to something else. That covers the mistakes a manifest can
+make: a component with a required input the entry's `inputs` does not supply, an input name
+spelled wrong, or a view that cannot read a particular document. Until this was contained, such
+an entry left the View tab **empty**, with no fallback and nothing said — the throw escaped the
+change detection that draws the tab body, so whatever Angular was drawing at that moment was
+abandoned (NXSAT-746, which also reported the surrounding tab group disappearing; on the build
+the fix landed on, the tab strip survives and only the body is lost).
+
+What is covered, precisely. The host draws your component itself — once when it first puts it on
+the page, and again each time it hands it a new document — and those are the passes where a throw
+is caught. So a view that cannot be drawn at all falls back, and so does one that draws some
+documents and throws on another; the next document is drawn afresh, so a failure on one does not
+cost you the view for the rest of the session.
+
+The limit, because Angular has no error boundary: a component that draws successfully and throws
+**later**, on a change detection the host did not trigger — when its own asynchronous state
+settles, or on a signal it writes to itself — throws on a pass nobody is guarding, and that still
+takes the surrounding view with it. A custom view is ordinary Angular code and has to handle its
+own failures. What is guaranteed is narrower than "it cannot break the page": it is that the
+drawing the host asks for cannot.
+
+One known wrinkle if your view **measures layout or moves focus** in `ngAfterViewInit`. When a
+view is drawn as a _recovery_ — the attempt after a failed load or a failed draw of the same slot
+— the host may still be hiding the slot at that moment, because it stops hiding it only once the
+draw has succeeded. In the View tab that means `display: none`, so a one-shot
+`getBoundingClientRect()` reads zero and `focus()` does nothing; the element becomes visible
+immediately afterwards, but the hook does not run again. A view that measures in
+`afterNextRender`, or watches with a `ResizeObserver`, is unaffected. Tracked as NXSAT-758.
+
+The same containment applies to every slot that names a component, not just this one: the host
+shows whatever it falls back to when the slot is empty.
+
 **The document is the host's.** The component receives the focused document on its
 `document` input. A manifest `inputs.document` is overwritten, so configuration cannot
 make the tab show a different document from the one the toolbar and properties panel act
@@ -1117,16 +1393,16 @@ nothing generated is merged in. The type must match exactly.
 }
 ```
 
-| Key                   | Meaning                                                                                                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `version`             | Required, `1`. Any other value and the file is refused.                                                                                    |
-| `display`             | `"sections"` (default), or `"tabs"` for one tab per section.                                                                               |
-| `sections`            | Required list, may be empty — an empty layout shows nothing.                                                                               |
-| `sections[].id`       | Required, unique; 1 to 64 letters, digits, `.`, `_` or `-`, starting with a letter or digit.                                               |
-| `sections[].label`    | Heading, as a literal. Wins over `labelKey`. A section with neither has no heading (a tab is named from `id`).                             |
-| `sections[].labelKey` | Heading, as a translation key.                                                                                                             |
-| `sections[].fields`   | Required list of `"<prefix>:<field>"`, or `{ "field", "label"?, "labelKey"?, "required"? }`. Top-level fields only, each once per section. |
-| `fields[].required`   | `true` makes the field required in an `edit` or `create` form, on top of the schema's own constraints. Ignored in `metadata`.              |
+| Key                   | Meaning                                                                                                                                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`             | Required, `1`. Any other value and the file is refused.                                                                                                                                                   |
+| `display`             | `"sections"` (default), or `"tabs"` for one tab per section.                                                                                                                                              |
+| `sections`            | Required list, may be empty — an empty layout shows nothing.                                                                                                                                              |
+| `sections[].id`       | Required, unique; 1 to 64 letters, digits, `.`, `_` or `-`, starting with a letter or digit.                                                                                                              |
+| `sections[].label`    | Heading, as a literal. Wins over `labelKey`. A section with neither has no heading (a tab is named from `id`).                                                                                            |
+| `sections[].labelKey` | Heading, as a translation key.                                                                                                                                                                            |
+| `sections[].fields`   | Required list of `"<prefix>:<field>"`, or `{ "field", "label"?, "labelKey"?, "required"? }`. Top-level fields only, each once per section. May be empty, but a section with no field to show is left out. |
+| `fields[].required`   | `true` makes the field required in an `edit` or `create` form, on top of the schema's own constraints. Ignored in `metadata`.                                                                             |
 
 A field neither the type nor the document's facets have, an entry that is not `<prefix>:<field>`, or a field listed twice in
 one section is skipped and the rest of the file applies; a file that is refused shows the generated layout instead. Both are logged in
@@ -1134,10 +1410,18 @@ the browser console under `[agentic-ui-layouts]`, and the page never breaks. A s
 is addressed by its name, as Nuxeo does: `file:content`. Unknown keys are ignored without a message,
 so that a file written for a later version still loads.
 
+**A section left with no field is not shown** — whether it listed none or every field it listed
+was skipped. There is no heading with nothing under it, and in `"tabs"` display no tab with
+nothing in it, the same way the generated layout leaves out a schema with no fields. A file whose
+every section ends up empty therefore shows nothing at all, as an empty `sections` list does.
+The skipped fields are still named in the console, so a typo is still reported even where the
+section holding it has gone.
+
 A file may name a field of a facet's schema, such as `externalEntity:origin` in a File layout. It
 shows on a document that carries the facet; on one that does not, it is skipped and logged as for
-any field the document lacks, so expect that message for every such document. If the facet's
-schema could not be read, the message says so instead of calling the field absent.
+any field the document lacks, so expect that message for every such document — and a section
+holding only such fields is left out on those documents, rather than showing a dangling heading.
+If the facet's schema could not be read, the message says so instead of calling the field absent.
 
 How each value is shown is decided by its schema type — there is no widget name to set:
 
@@ -1167,6 +1451,23 @@ In an `edit` or `create` form, the schema type picks the control:
 | `complex`                          | a labelled group of its sub-fields, each with its own control                               |
 | `complex[]`                        | one group per item, with Add and Remove                                                     |
 | `blob`, or `complex` nested deeper | shown, not editable                                                                         |
+
+**A `date` field edits a calendar day, and that day is anchored in UTC.** A day picked or typed is
+sent as that day at UTC midnight — 6 March 2024 is always `2024-03-06T00:00:00.000Z`, whatever zone
+the user is in — and a stored value is read back as the day it names in UTC, so the form opens on
+the day that was saved everywhere. This is the same anchoring the view uses (`date` renders in UTC,
+above) and the same one Nuxeo itself applies to a day-only write, so one picked day is one stored
+value and every surface showing it agrees.
+
+Two consequences worth designing around:
+
+- A `date` property that carries a meaningful time of day is **not** a calendar day, and the form
+  does not treat it as one beyond its day: it is shown and edited by day, and written back
+  unchanged — time of day included — as long as the day is not altered. Alter the day and the time
+  is replaced by UTC midnight.
+- A value written by another client at midnight in a local zone (Nuxeo Web UI does this) names the
+  previous UTC day when that zone is ahead of UTC, and will be shown and edited as that previous
+  day. Nothing records the zone it was written in, so it cannot be recovered.
 
 **Validation before saving.** Save checks the schema's constraints in the browser first: a
 required field (`NotNullConstraint`, or `"required": true` in the file), a `PatternConstraint`
@@ -1448,6 +1749,16 @@ from the `null` and `__proto__` items below, where ACA's merge threw or rewrote 
 - `$ignoreReferenceList` drops a layer even when it is referenced.
 - A layer that cannot be resolved is reported on `AppExtensionsService.missingLayers()`, not silently
   dropped, and the rest of the stack still applies.
+- A malformed slot, slot entry or override **inside** a layer is reported on
+  `AppExtensionsService.refusedSlotEntries()` or `refusedOverrides()` and in the console —
+  including in a layer you listed in `$ignoreReferenceList`, which is read even though it does not
+  apply, so the message names the layer rather than implying it took effect. Patching an entry or
+  an override by `id` from a later layer is the point of layering and is never reported. §2a has
+  the whole list.
+- A layer whose **whole `slots` or `overrides` key** is not an object loses every entry under that
+  key, and is reported on `refusedSections()` and in the console, per layer. The layer's other
+  keys still apply, and so do the other layers in the stack. A `$layers` body that is not an
+  object is skipped instead, and referencing it shows up on `missingLayers()` above.
 
 ```json
 {
@@ -1553,9 +1864,10 @@ late registration means a gated entry is briefly visible.
 Re-registering one of our IDs replaces it — that is the supported way to override a packaged rule or
 component without forking.
 
-### Replacing what a packaged action does
+### Replacing what a registered action does
 
-Section 1 explains why a manifest cannot rebind a packaged action. Here is where you can:
+Section 1 explains why a manifest cannot rebind an action that was registered in code — ours or
+your own library's. Here is where you can:
 
 ```ts
 import { ExtensionActionRegistry } from '@nuxeo/satori-platform/extensions';
@@ -1566,6 +1878,20 @@ const registration = actions.register({
   'app.toolbar.delete': { execute: (context) => myArchiveFlow(context.document) },
 });
 ```
+
+**The key is the handler ID, which is not always the descriptor ID.** `execute` resolves
+`descriptor.action ?? descriptor.id`, so register under whatever the descriptor's `action` says
+and fall back to its `id` only when it names none. Every packaged descriptor omits `action`, which
+is why `app.toolbar.delete` above is both — but a descriptor that sets one, as a customer's own
+usually does, is overridden by registering under **that** value:
+
+```ts
+// { id: 'acme.toolbar.archive', label: 'Archive', action: 'acme.actions.archive' }
+actions.register({ 'acme.actions.archive': { execute: (context) => myNewFlow(context.document) } });
+```
+
+Registering under `acme.toolbar.archive` instead would leave the original handler running and
+change nothing.
 
 `register` puts your handler in the **customer tier**, which always answers ahead of ours — timing
 does not matter. That guarantee is deliberate: you register from an `APP_INITIALIZER`, while a

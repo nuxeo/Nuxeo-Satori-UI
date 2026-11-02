@@ -1,10 +1,24 @@
+import { Directionality } from '@angular/cdk/bidi';
 import { DOCUMENT } from '@angular/common';
-import { APP_INITIALIZER, DestroyRef, LOCALE_ID, Provider, inject } from '@angular/core';
+import {
+  DestroyRef,
+  EnvironmentProviders,
+  Injector,
+  LOCALE_ID,
+  Provider,
+  effect,
+  inject,
+  isDevMode,
+  provideAppInitializer,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { AppConfigService, textDirectionForLanguage } from '@nuxeo/satori-platform/app-config';
 import { TranslateService } from '@ngx-translate/core';
 
+import { canFormatDatesIn } from '@nuxeo/satori-platform/ui';
+
 import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
+import { GENERATED_AUDIT_LOCALES, SHIPPED_CATALOGUE_LANGUAGES } from '../i18n/shipped-catalogues';
 import { firstValueFrom } from 'rxjs';
 import { AI_BACKEND_URL } from '@agentic-ui/shared/ai-client';
 import { DEFAULT_KD_CIC_OPERATIONS, KD_CIC_OPERATIONS } from '@agentic-ui/shared/kd-client';
@@ -52,6 +66,111 @@ function derivedNuxeoServerUrl(): string {
  * same reason.
  */
 /**
+ * The language every other one falls back to.
+ *
+ * Both halves of i18n hold English unconditionally — `en.json` ships, `EN_FALLBACK_TRANSLATIONS`
+ * is compiled in besides, and Angular bundles `en` locale data — so it is the one value that is
+ * always honourable whatever Layer 0 says.
+ */
+const FALLBACK_LANGUAGE = 'en';
+
+/**
+ * Why `defaultLanguage` cannot be used as the string language, or `null` if it can.
+ *
+ * ## The defect this closes (NXSAT-733)
+ *
+ * `defaultLanguage` used to go straight to `translate.use()`. For **strings** that is harmless
+ * and deliberate: `setFallbackLang('en')` means every key falls through to English, so
+ * `translate.use('xx')` renders a perfectly readable English page. The ticket's summary reads as
+ * though the English text were the bug; it is not, and the fallback is not to be "fixed".
+ *
+ * Two things were wrong, and neither is about the strings:
+ *
+ * 1. `syncDocumentLanguage` mirrors whatever ngx-translate is actually using — correctly, that is
+ *    why a French page now announces French — so an unsupported value reached
+ *    `<html lang="xx">` over English text. A screen reader picks a voice from that attribute and
+ *    browser translation offers it as the source language, which is WCAG 3.1.1.
+ * 2. `AppTranslateLoader` asked for `i18n/xx.json`, which cannot exist, and got a 404 on every
+ *    load. Guarding here rather than in `syncDocumentLanguage` removes both: nothing downstream
+ *    is handed a language this build cannot render.
+ *
+ * ## Why the shipped catalogue is the authority, and `availableLanguages` is not sufficient
+ *
+ * The ticket suggests checking `availableLanguages`. That is necessary — a deployment that does
+ * not offer a language should not boot into it — but it cannot be the whole test, for exactly the
+ * reason the #522 review gave against the first version of {@link resolveFormattingLocale}:
+ * Layer 0 is customer-editable, so `{ "defaultLanguage": "es", "availableLanguages":
+ * ["en", "es"] }` is valid configuration that parses cleanly and still names a language this
+ * build has no catalogue for. `checkAdvertisedLocalesShip` closes that hole for the **packaged**
+ * config and cannot see a customer's.
+ *
+ * `<html lang>` is a claim about the text on the page, and only `SHIPPED_CATALOGUE_LANGUAGES`
+ * decides what language the text is in. So admission is the intersection: the catalogue says what
+ * this build *can* render, `availableLanguages` says what this deployment *will* offer.
+ *
+ * The configured-but-unshipped case is genuinely *partly* translated — upstream
+ * `@hylandsoftware/satori-ui` ships `es`, so the shared navigation strings would be Spanish while
+ * the application's own strings are English. `en` is still the honest answer for the document as a
+ * whole, because the app catalogue is the bulk of the text on every screen.
+ *
+ * Returns the reason rather than a boolean so the diagnostic can say which of the two checks
+ * refused the value — "a typo" and "a language this deployment chose not to offer" need
+ * different fixes from whoever reads the console.
+ */
+function describeUnsupportedLanguage(
+  defaultLanguage: string,
+  availableLanguages: readonly string[],
+  devMode: boolean,
+): string | null {
+  if (defaultLanguage === FALLBACK_LANGUAGE) return null;
+  if (!hasCatalogue(defaultLanguage, devMode)) {
+    return 'this build ships no translation catalogue for it';
+  }
+  if (!availableLanguages.includes(defaultLanguage)) {
+    return 'availableLanguages does not offer it';
+  }
+  return null;
+}
+
+/**
+ * Whether a catalogue for this language can actually be loaded here.
+ *
+ * `devMode` is a parameter rather than a call to `isDevMode()` inside, for the reason
+ * `insecureAllowedForHost(isDevMode())` in `document-detail.ts` is written the same way: the
+ * production branch is the one that must not regress, and a test cannot reach it if the mode is
+ * read from ambient state — Karma runs in development mode, so a seam read internally would only
+ * ever be exercised on its permissive side.
+ */
+function hasCatalogue(language: string, devMode: boolean): boolean {
+  if (SHIPPED_CATALOGUE_LANGUAGES.includes(language)) return true;
+  // See `GENERATED_AUDIT_LOCALES`: generated into `public/i18n` by `npm run i18n:pseudo`, never
+  // committed and never in a release build, so only a dev server may honour one.
+  return devMode && GENERATED_AUDIT_LOCALES.includes(language);
+}
+
+/**
+ * The configured language, narrowed to one whose text this build can actually render.
+ *
+ * The sibling of {@link resolveFormattingLocale}, for the other half of i18n: that one guards
+ * Angular's formatting locale, this one guards ngx-translate's string language. They are
+ * deliberately separate — see {@link resolveFormattingLocale} for why the two are allowed to
+ * differ — and they ask different questions of different lists, which is why neither can be
+ * expressed in terms of the other.
+ *
+ * Exported for the spec; the application reaches it through
+ * {@link initialiseAppConfigAndLanguage}.
+ */
+export function resolveStringLanguage(
+  defaultLanguage: string,
+  availableLanguages: readonly string[],
+  devMode: boolean = isDevMode(),
+): string {
+  return describeUnsupportedLanguage(defaultLanguage, availableLanguages, devMode) === null
+    ? defaultLanguage
+    : FALLBACK_LANGUAGE;
+}
+
+/**
  * Loads Layer 0 configuration, then applies the language it names.
  *
  * Exported and named rather than inline in the provider so it can be tested. The behaviour
@@ -62,7 +181,7 @@ export function initialiseAppConfigAndLanguage(
   // Narrowed to the members actually used, rather than the whole service. A test double then
   // needs no cast, and the signature states the real dependency surface — widening it later
   // is a visible change instead of an invisible one.
-  config: Pick<AppConfigService, 'load' | 'bootstrap'>,
+  config: Pick<AppConfigService, 'load' | 'bootstrap' | 'reportUnsupportedDefaultLanguage'>,
   translate: Pick<TranslateService, 'setFallbackLang' | 'use'>,
 ): () => Promise<void> {
   return async () => {
@@ -72,11 +191,17 @@ export function initialiseAppConfigAndLanguage(
     // is named by the configuration that has just been fetched. The
     // manifest's `labels` are layered on by `AppTranslateLoader`, so this
     // also has to happen after the manifest has landed.
-    const { defaultLanguage } = config.bootstrap();
-    translate.setFallbackLang('en');
+    const { defaultLanguage, availableLanguages } = config.bootstrap();
+    translate.setFallbackLang(FALLBACK_LANGUAGE);
+    // The fallback above is what makes an unsupported value survivable for strings; it is not
+    // what makes it correct. See `resolveStringLanguage`.
+    const refusal = describeUnsupportedLanguage(defaultLanguage, availableLanguages, isDevMode());
+    if (refusal) {
+      config.reportUnsupportedDefaultLanguage(defaultLanguage, FALLBACK_LANGUAGE, refusal);
+    }
     // Must not prefer a language stored by an earlier boot: it would outlive a customer's
     // change to `defaultLanguage` on every browser that had already run the app.
-    await firstValueFrom(translate.use(defaultLanguage));
+    await firstValueFrom(translate.use(refusal ? FALLBACK_LANGUAGE : defaultLanguage));
   };
 }
 
@@ -93,9 +218,49 @@ export function initialiseAppConfigAndLanguage(
  *
  * So the string language and the formatting locale are allowed to differ, on purpose. Strings
  * follow the configuration; formatting follows it only where we have the data to honour it.
+ *
+ * ## Why registration alone is not enough to admit a locale
+ *
+ * This checked `REGISTERED_LOCALES` alone, which was correct only while every registered locale
+ * also shipped a catalogue. It stopped being true when `ar`, `es`, `he`, `it` and `sv` were
+ * registered ahead of their translations (`D8e-webui`): registration made them admissible as
+ * `LOCALE_ID`, and `DATE_FNS_LOCALES` does not carry them, so `defaultLanguage: 'es'` gave
+ * Angular's pipes Spanish dates — `3/4/2026`, day-first — while `provideSatoriDateAdapter()`
+ * fell through to `enUS` and read `03/04/2026` back as **4 March**.
+ *
+ * That is NXSAT-629 exactly: display honouring the locale while parsing does not, which has no
+ * symptom on screen because the calendar overlay looks right. Caught in review on #522 rather
+ * than by a test, which is why there is one now.
+ *
+ * ## Why `availableLanguages` is not sufficient either
+ *
+ * The first fix for the above checked `availableLanguages`, which closed the hole for the
+ * **packaged** config — `checkAdvertisedLocalesShip` fails a packaged language with no catalogue
+ * — and left it open for every customer override, as the #522 review then pointed out. Layer 0
+ * is customer-editable: `{ "defaultLanguage": "es", "availableLanguages": ["en", "es"] }` is
+ * valid, parses cleanly, and still names a locale the bundled date-fns map has no entry for. The
+ * config cannot be the authority on a capability that is decided at build time.
+ *
+ * So admission is the intersection of three things, each answering a different question:
+ *
+ * | Check | Question | Authority |
+ * | --- | --- | --- |
+ * | `REGISTERED_LOCALES` | can Angular format it without `NG0701`? | this build |
+ * | `canFormatDatesIn` | can the date adapter parse it back? | this build |
+ * | `availableLanguages` | does this deployment offer it? | the customer |
+ *
+ * The two build-time checks are what a customer cannot edit their way past; the third is intent,
+ * and keeps a language registered ahead of its catalogue out until it ships. English is the
+ * fallback and needs none of them: Angular bundles its data and the date map names it.
  */
-export function resolveFormattingLocale(defaultLanguage: string): string {
-  return REGISTERED_LOCALES.includes(defaultLanguage) ? defaultLanguage : 'en';
+export function resolveFormattingLocale(
+  defaultLanguage: string,
+  availableLanguages: readonly string[],
+): string {
+  const angularCanFormat = REGISTERED_LOCALES.includes(defaultLanguage);
+  const adapterCanParse = canFormatDatesIn(defaultLanguage);
+  const deploymentOffers = availableLanguages.includes(defaultLanguage);
+  return angularCanFormat && adapterCanParse && deploymentOffers ? defaultLanguage : 'en';
 }
 
 /**
@@ -120,25 +285,137 @@ export function syncDocumentLanguage(
     .subscribe((event) => apply(event.lang));
 }
 
-export function provideAppConfig(): Provider[] {
+/**
+ * Keeps `<html dir>` — and Angular CDK's `Directionality` — equal to the active language's
+ * reading direction.
+ *
+ * Seven `nxs-` components carry `:host-context([dir='rtl'])` rules, `rich-tooltip` and
+ * `details-panel` read `getComputedStyle(…).direction`, and `document-tree` and `document-list`
+ * swap their inward and outward arrow keys off `Directionality`. **None of that activated**,
+ * because nothing ever set `dir`: `index.html` ships `lang="en"` and no `dir` at all, so every
+ * language rendered left to right and the component work was dead code. Arabic and Hebrew are
+ * declared in `availableLanguages` (D8e-webui), which is what made it visible.
+ *
+ * ## Why `Directionality` has to be written and not merely read
+ *
+ * CDK's root `Directionality` reads `body.dir || documentElement.dir` **once, in its
+ * constructor**, and then never observes the attribute again — it has no mutation observer, and
+ * its `change` emitter exists for the `[dir]` *directive*, `Dir`, which is the only thing
+ * upstream that ever emits on it. So setting `<html dir>` after bootstrap leaves
+ * `Directionality.value` permanently stale. Verified by reading
+ * `@angular/cdk/fesm2022/_directionality-chunk.mjs`, not inferred.
+ *
+ * That is not a detail about two keyboard handlers. **Every CDK overlay takes its direction from
+ * this service rather than from the document**: `createOverlayRef()` runs
+ * `overlayConfig.direction = overlayConfig.direction || directionality.value`, so with the
+ * service stale every dialog, menu, select and date picker in the application opens
+ * left-to-right no matter what `<html dir>` says. `overlay-direction.spec.ts` holds that as a
+ * negative control.
+ *
+ * `BidiModule` does **not** fix this and is not imported: it only declares `Dir`, which binds
+ * `[dir]` on an element inside an Angular template. `<html>` is outside the application, so
+ * there is no element for the directive to sit on. `valueSignal` and `change` are both public,
+ * documented members of `Directionality` in CDK 22 — writing them is the supported way to tell
+ * it about a direction it cannot see for itself, and this function is the single write site.
+ *
+ * Reactive readers follow `valueSignal`; `change` is emitted for the imperative subscribers,
+ * and only on an actual change, so a `fr` → `de` switch does not wake them for nothing.
+ *
+ * Follows `onLangChange` rather than the configured default for the same reason
+ * `syncDocumentLanguage` does: a later `translate.use()` has to be honoured, not just the boot
+ * value. Note that a language with no catalogue still emits it — `AppTranslateLoader` catches
+ * the 404 and resolves with the English fallback — so `ar` and `he` mirror today, ahead of their
+ * translations.
+ */
+export function syncDocumentDirection(
+  translate: Pick<TranslateService, 'onLangChange' | 'getCurrentLang'>,
+  document: Document,
+  directionality: Pick<Directionality, 'valueSignal' | 'change'>,
+  destroyRef: DestroyRef,
+): void {
+  const apply = (lang: string | undefined): void => {
+    if (!lang) return;
+    const direction = textDirectionForLanguage(lang);
+    document.documentElement.dir = direction;
+    if (directionality.valueSignal() === direction) return;
+    directionality.valueSignal.set(direction);
+    directionality.change.emit(direction);
+  };
+  apply(translate.getCurrentLang() ?? undefined);
+  translate.onLangChange
+    .pipe(takeUntilDestroyed(destroyRef))
+    .subscribe((event) => apply(event.lang));
+}
+
+/**
+ * Keeps the browser tab title equal to Layer 0 `branding.documentTitle`, on every route.
+ *
+ * This used to be an `effect` in `AppShellComponent`'s constructor. The effect itself was right —
+ * the configuration load is asynchronous, so a reactive reader is what re-runs when it lands — but
+ * the shell only mounts on authenticated routes. The sign-in page, the first page a customer sees
+ * and the one that ends up in their history and bookmarks, therefore kept the packaged
+ * `<title>` from `index.html` for the whole of the session before sign-in (NXSAT-722).
+ *
+ * At application scope instead, so there is no route where it does not apply. `nuxeo-satori-template`
+ * writes the title in its initializer after `await config.load()`; an effect is the form its own
+ * comment prefers, and it needs no sequencing because it re-runs when the signal changes.
+ *
+ * `branding.documentTitle` can no longer be blank — `mergeBootstrapConfig` keeps the packaged
+ * value for a blank or whitespace-only one — so this does not need to guard against writing an
+ * empty title.
+ *
+ * The `injector` is passed in for the same reason `syncDocumentLanguage` takes a `DestroyRef`:
+ * the initializer's closure runs after provider resolution, outside an injection context, so
+ * `effect()` cannot find one for itself.
+ */
+export function syncDocumentTitle(
+  config: Pick<AppConfigService, 'bootstrap'>,
+  document: Document,
+  injector: Injector,
+): void {
+  effect(
+    () => {
+      document.title = config.bootstrap().branding.documentTitle;
+    },
+    { injector },
+  );
+}
+
+// `EnvironmentProviders` in the union because `provideAppInitializer` returns that rather than a
+// `Provider`. `ApplicationConfig.providers` accepts both, and the spec that picks out the
+// `LOCALE_ID` provider keys on a `provide` property, which an `EnvironmentProviders` does not have.
+export function provideAppConfig(): (Provider | EnvironmentProviders)[] {
   return [
-    {
-      provide: APP_INITIALIZER,
-      useFactory: (config: AppConfigService, translate: TranslateService) =>
-        initialiseAppConfigAndLanguage(config, translate),
-      deps: [AppConfigService, TranslateService],
-      multi: true,
-    },
-    {
-      provide: APP_INITIALIZER,
-      useFactory: () => {
-        const translate = inject(TranslateService);
-        const document = inject(DOCUMENT);
-        const destroyRef = inject(DestroyRef);
-        return () => syncDocumentLanguage(translate, document, destroyRef);
-      },
-      multi: true,
-    },
+    // `provideAppInitializer` rather than the `APP_INITIALIZER` token, which Angular has
+    // deprecated. Its callback runs in an injection context, so these inject directly instead of
+    // resolving in a factory and returning a closure. Same ordering and the same concurrency —
+    // Angular still runs initializers concurrently, which is why
+    // `initialiseAppConfigAndLanguage` sequences the language load inside itself rather than
+    // relying on a second initializer. `nuxeo-satori-template` already uses this form.
+    provideAppInitializer(() =>
+      initialiseAppConfigAndLanguage(inject(AppConfigService), inject(TranslateService))(),
+    ),
+    provideAppInitializer(() =>
+      syncDocumentLanguage(inject(TranslateService), inject(DOCUMENT), inject(DestroyRef)),
+    ),
+    // Beside the language sync rather than inside it: both derive from the same `onLangChange`,
+    // but one writes `lang` for assistive technology and the other writes `dir` for layout, and
+    // keeping them separate is what lets each be tested on its own. Registered immediately after,
+    // so there is no window in which the two disagree.
+    provideAppInitializer(() =>
+      syncDocumentDirection(
+        inject(TranslateService),
+        inject(DOCUMENT),
+        inject(Directionality),
+        inject(DestroyRef),
+      ),
+    ),
+    // Application scope rather than the shell, so the sign-in page gets the configured title
+    // too (NXSAT-722). An effect, so it re-runs when the asynchronous load lands and does not
+    // need sequencing against the other initializers.
+    provideAppInitializer(() =>
+      syncDocumentTitle(inject(AppConfigService), inject(DOCUMENT), inject(Injector)),
+    ),
     /*
      * Angular's OWN formatting locale, which is a different mechanism from the string language.
      *
@@ -161,8 +438,10 @@ export function provideAppConfig(): Provider[] {
      */
     {
       provide: LOCALE_ID,
-      useFactory: () =>
-        resolveFormattingLocale(inject(AppConfigService).bootstrap().defaultLanguage),
+      useFactory: () => {
+        const bootstrap = inject(AppConfigService).bootstrap();
+        return resolveFormattingLocale(bootstrap.defaultLanguage, bootstrap.availableLanguages);
+      },
     },
     {
       provide: NUXEO_API_ORIGIN,

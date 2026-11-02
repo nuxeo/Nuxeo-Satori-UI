@@ -287,6 +287,13 @@ function field(
 /**
  * A contributed file, in place of the generated layout. A field neither the type nor the
  * document's facet schemas have is skipped and reported, and the rest of the file still applies.
+ *
+ * A section left with no field is left out, as `sectionsOf` leaves out a schema with no fields:
+ * a heading with nothing under it is not a section, and in tabs display it would be a tab with
+ * nothing in it. That covers a section whose `fields` list is empty and one whose every field
+ * was skipped — including a facet field on a document without that facet, which is the case a
+ * layout shared across types hits. Every skipped field is still reported, so the console still
+ * names a typo in the file even where the section holding it has gone.
  */
 export function applyLayoutFile(
   type: DocumentTypeDefinition,
@@ -301,25 +308,28 @@ export function applyLayoutFile(
     }
   }
   const skipped: string[] = [];
-  const sections = file.sections.map((section) => ({
-    id: section.id,
-    label: {
-      ...(section.label ? { literal: section.label } : {}),
-      keys: section.labelKey ? [section.labelKey] : [],
-      fallback: null,
-    },
-    fields: section.fields.flatMap((entry) => {
-      const match = known.get(entry.field);
-      if (!match) {
-        skipped.push(entry.field);
-        return [];
-      }
-      const definition = entry.required
-        ? { ...match.definition, required: true }
-        : match.definition;
-      return [field(entry.field, match.name, definition, entry.label, entry.labelKey)];
-    }),
-  }));
+  const sections = file.sections
+    .map((section) => ({
+      id: section.id,
+      label: {
+        ...(section.label ? { literal: section.label } : {}),
+        keys: section.labelKey ? [section.labelKey] : [],
+        fallback: null,
+      },
+      fields: section.fields.flatMap((entry) => {
+        const match = known.get(entry.field);
+        if (!match) {
+          skipped.push(entry.field);
+          return [];
+        }
+        const definition = entry.required
+          ? { ...match.definition, required: true }
+          : match.definition;
+        return [field(entry.field, match.name, definition, entry.label, entry.labelKey)];
+      }),
+    }))
+    // Mapped first, so a field dropped from a section that is itself dropped is still reported.
+    .filter((section) => section.fields.length > 0);
   return {
     layout: { type: type.name, mode, source: 'contributed', display: file.display, sections },
     skipped,

@@ -4,10 +4,12 @@ import { TranslateService } from '@ngx-translate/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { of, throwError } from 'rxjs';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { vi } from 'vitest';
 
 import {
   DocumentDetailService,
+  UserService,
   PERMISSION_NOTIFICATION_MAIL_HINT_KEY,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -23,9 +25,9 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
 
   const selectedUser = {
     id: 'user-readonly01',
-    displayLabel: 'Read Only User',
-    type: 'USER_TYPE' as const,
-    prefixed_id: 'user:user-readonly01',
+    label: 'Read Only User',
+    kind: 'user' as const,
+    prefixedId: 'user:user-readonly01',
   };
 
   beforeEach(async () => {
@@ -58,7 +60,7 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
 
     fixture = TestBed.createComponent(AddPermissionDialogComponent);
     component = fixture.componentInstance;
-    component.selectedUser = selectedUser;
+    component.selectedUser.set(selectedUser);
     component.sendNotify = true;
     component.notifyComment = 'Please review this document';
   });
@@ -126,7 +128,7 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
     expect(toast.show).toHaveBeenCalledWith('Permission added and notification sent', {
       duration: 7000,
     });
-    expect(component.selectedUser).toBeNull();
+    expect(component.selectedUser()).toBeNull();
     expect(component.notifyComment).toBe('');
     expect(closeSpy).not.toHaveBeenCalled();
   });
@@ -147,76 +149,129 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
     expect(closeSpy).not.toHaveBeenCalled();
   });
 
-  describe('user selection and search', () => {
-    it('updates search text and triggers search on change', () => {
-      // The emission is what makes this test match its name. Asserting only `searchText` and
-      // `selectedUser` leaves it green when `this.searchSubject.next(value)` is deleted, so the
-      // debounce is advanced and the resulting service call is the load-bearing assertion.
-      vi.useFakeTimers();
-      try {
-        const searchUsersGroups = TestBed.inject(DocumentDetailService)
-          .searchUsersGroups as unknown as ReturnType<typeof vi.fn>;
-        searchUsersGroups.mockReturnValue(of([selectedUser]));
-        component.selectedUser = selectedUser;
+  it('does not create after the picker clears a selection', () => {
+    component.selectedUser.set(null);
+    component.create(false);
+    expect(addPermissionWithNotification).not.toHaveBeenCalled();
+  });
 
-        component.onSearchChange('new search');
+  it('preserves the selected principal for retry after a server error', () => {
+    addPermissionWithNotification.mockReturnValue(throwError(() => ({ status: 403 })));
+    component.create(false);
+    expect(component.selectedUser()).toEqual(selectedUser);
+    expect(component.saving()).toBe(false);
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
+  });
+});
 
-        expect(component.searchText).toBe('new search');
-        expect(component.selectedUser).toBeNull();
+describe('Add permission — rendered principal picker', () => {
+  let fixture: ComponentFixture<AddPermissionDialogComponent>;
+  const search = vi.fn((_term: string) =>
+    of([
+      {
+        id: 'legal-team',
+        displayLabel: 'Legal team',
+        type: 'GROUP_TYPE' as const,
+        prefixed_id: 'group:legal-team',
+      },
+    ]),
+  );
+  const add = vi.fn(() => of({ document: { uid: 'doc-1' }, notificationSent: false }));
 
-        // Nothing until the 300ms debounce elapses.
-        expect(searchUsersGroups).not.toHaveBeenCalled();
+  afterEach(() => {
+    fixture?.destroy();
+    TestBed.resetTestingModule();
+  });
 
-        vi.advanceTimersByTime(300);
+  it('searches only from three typed characters', async () => {
+    vi.clearAllMocks();
+    TestBed.overrideProvider(NxsToastService, { useValue: { show: vi.fn(), error: vi.fn() } });
+    await TestBed.configureTestingModule({
+      imports: [AddPermissionDialogComponent, testTranslateModule()],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: MAT_DIALOG_DATA, useValue: { documentUid: 'doc-1' } },
+        { provide: MatDialogRef, useValue: { close: vi.fn() } },
+        {
+          provide: DocumentDetailService,
+          useValue: { searchUsersGroups: search, addPermissionWithNotification: add },
+        },
+        { provide: UserService, useValue: {} },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(AddPermissionDialogComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const box: HTMLInputElement = fixture.nativeElement.querySelector(
+      'nxs-user-group-picker input',
+    );
+    const typeText = async (text: string): Promise<void> => {
+      box.focus();
+      box.value = text;
+      box.dispatchEvent(new Event('input'));
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    };
 
-        expect(searchUsersGroups).toHaveBeenCalledWith('new search');
-        expect(component.suggestions()).toEqual([selectedUser]);
-      } finally {
-        vi.useRealTimers();
-      }
-    });
+    await typeText('le');
+    expect(search).not.toHaveBeenCalled();
+    await typeText('leg');
+    expect(search.mock.calls[0]?.[0]).toBe('leg');
+  });
 
-    it('does not search for an empty term', () => {
-      vi.useFakeTimers();
-      try {
-        const searchUsersGroups = TestBed.inject(DocumentDetailService)
-          .searchUsersGroups as unknown as ReturnType<typeof vi.fn>;
-        component.suggestions.set([selectedUser]);
-
-        component.onSearchChange('');
-        vi.advanceTimersByTime(300);
-
-        // The pipeline short-circuits to `of([])` below one character rather than querying.
-        expect(searchUsersGroups).not.toHaveBeenCalled();
-        expect(component.suggestions()).toEqual([]);
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it('sets selected user and updates search text', () => {
-      component.selectedUser = null;
-      component.onUserSelected(selectedUser);
-
-      expect(component.selectedUser).toBe(selectedUser);
-      expect(component.searchText).toBe('Read Only User');
-    });
-
-    it('displays user label from suggestion object', () => {
-      expect(component.displayUser(selectedUser)).toBe('Read Only User');
-    });
-
-    it('displays string value as-is', () => {
-      expect(component.displayUser('test-string')).toBe('test-string');
-    });
-
-    it('returns empty string for null or undefined', () => {
-      // `displayUser` is typed `UserGroupSuggestion | string`, so both of these are off-type on
-      // purpose: `mat-autocomplete`'s `displayWith` is called with the control's raw value, which is
-      // `null` before the user has picked anything. The cast goes through `unknown` rather than
-      // `any` so it reads as a deliberate off-type probe and not a silenced error.
-      expect(component.displayUser(null as unknown as string)).toBe('');
-      expect(component.displayUser(undefined as unknown as string)).toBe('');
-    });
+  it('sends the selected raw group id and clears the form, error-free, after create-and-add-another', async () => {
+    vi.clearAllMocks();
+    TestBed.overrideProvider(NxsToastService, { useValue: { show: vi.fn(), error: vi.fn() } });
+    await TestBed.configureTestingModule({
+      imports: [AddPermissionDialogComponent, testTranslateModule()],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: MAT_DIALOG_DATA, useValue: { documentUid: 'doc-1' } },
+        { provide: MatDialogRef, useValue: { close: vi.fn() } },
+        {
+          provide: DocumentDetailService,
+          useValue: { searchUsersGroups: search, addPermissionWithNotification: add },
+        },
+        { provide: UserService, useValue: {} },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(AddPermissionDialogComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const box: HTMLInputElement = fixture.nativeElement.querySelector(
+      'nxs-user-group-picker input',
+    );
+    box.focus();
+    box.value = 'legal';
+    box.dispatchEvent(new Event('input'));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    fixture.detectChanges();
+    const option = document.querySelector<HTMLElement>(
+      '.mat-mdc-autocomplete-panel mat-option:not([aria-disabled="true"])',
+    );
+    expect(option).not.toBeNull();
+    option?.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.selectedUser()?.kind).toBe('group');
+    // Leaving the picker for the button touches it: focus moves out of the picker's host.
+    const button = fixture.nativeElement.querySelector('button[mat-flat-button]') as HTMLElement;
+    box.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: button }));
+    fixture.detectChanges();
+    fixture.componentInstance.create(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(add).toHaveBeenCalledWith('doc-1', expect.objectContaining({ username: 'legal-team' }));
+    expect(fixture.componentInstance.selectedUser()).toBeNull();
+    expect(box.value).toBe('');
+    // Emptied for the next entry, not flagged as a missed required field.
+    expect(
+      fixture.nativeElement.querySelector('nxs-user-group-picker .mat-form-field-invalid'),
+    ).toBeNull();
   });
 });

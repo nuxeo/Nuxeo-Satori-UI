@@ -19,7 +19,7 @@ Complete guide to set up GPG commit signing using only GitHub's web interface.
 
 ### 1.1 Open Codespaces
 
-1. Go to: https://github.com/nuxeo/agentic-ui-poc
+1. Go to: https://github.com/nuxeo/Nuxeo-Satori-UI
 2. Click the green **"Code"** button
 3. Click **"Codespaces"** tab
 4. Click **"Create codespace on main"** (or open existing)
@@ -159,7 +159,7 @@ OR manually:
 ### 3.1 Go to Repository Settings
 
 1. **Log in** as your admin account (not the bot)
-2. Go to: https://github.com/nuxeo/agentic-ui-poc/settings/secrets/actions
+2. Go to: https://github.com/nuxeo/Nuxeo-Satori-UI/settings/secrets/actions
 3. You should see **"Actions secrets and variables"**
 
 ### 3.2 Add Private Key Secret
@@ -209,7 +209,7 @@ git push origin main
 
 ### 4.2 Check the Result
 
-1. Go to: https://github.com/nuxeo/agentic-ui-poc/actions
+1. Go to: https://github.com/nuxeo/Nuxeo-Satori-UI/actions
 2. Wait for the workflow to complete
 3. Check the latest commit on main branch
 4. You should see **"Verified ✅"** badge next to the bot's commit

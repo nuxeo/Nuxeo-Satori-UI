@@ -8,25 +8,278 @@ Re-measure before quoting anything here. The 16 September edition of this page c
 **23 of 23 green** while `guardrails` was failing, and put the catalogue at **1653** keys when it
 held 1968 — both figures had a command printed beside them and neither had been re-run.
 
-## Languages that ship — 5 October 2026
+## Languages — the set is Nuxeo Web UI's, 30 October 2026
 
-| Language             | Catalogue | Crowdin id | Status                                                                                                                                                  |
-| -------------------- | --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| English              | `en.json` | source     | ships                                                                                                                                                   |
-| French               | `fr.json` | `fr`       | ships, 99% approved                                                                                                                                     |
-| German               | `de.json` | `de`       | ships, 99% approved                                                                                                                                     |
-| Japanese             | `ja.json` | `ja`       | ships since NXSAT-293, 99% approved                                                                                                                     |
-| Dutch                | `nl.json` | `nl`       | ships since NXSAT-293, 99% approved                                                                                                                     |
-| Thai                 | `th.json` | `th`       | ships since NXSAT-293, 99% approved                                                                                                                     |
-| Chinese (Simplified) | `zh.json` | `zh-CN`    | ships since NXSAT-293, 99% approved                                                                                                                     |
-| Spanish              | —         | `es`       | **pending** — 99% approved, but `kd.knowledge-discovery.selected` is `Seleccionado(s)`, which `checkCatalogueValuesAreRenderable` fails. Fix in Crowdin |
-| Portuguese           | —         | `pt`       | **pending** — 88% approved                                                                                                                              |
-| Polish               | —         | `pl`       | **pending** — 99% translated, 2% approved (813 Crowdin QA issues)                                                                                       |
+The application's language set was aligned to the one Nuxeo Web UI supports. That **dropped Thai
+and Chinese**, which were shipping at 99% approved, and **added Arabic, Hebrew, Italian, Spanish
+and Swedish**, none of which has a catalogue yet.
 
-There is **no language picker** (NXSAT-294): `availableLanguages` is read only by the config
-parser, so a deployment selects its language through `defaultLanguage`. Every shipped catalogue is
+The five additions are set up everywhere a language **can** be set up before its translations
+exist — Angular locale data in `register-locale-data.ts`, and a `--language` in the Crowdin pull
+— and are deliberately absent from the two touchpoints that cannot run ahead of a catalogue:
+`availableLanguages` and `DATE_FNS_LOCALES`. So the gate is green and the app ships five
+languages today, with each of the other five becoming advertisable in a small pull request when
+its catalogue arrives. See `D8e-webui`.
+
+**Crowdin configuration is no longer the blocker — approvals are.** All four missing target
+languages were added and the one failing Spanish string was fixed on 30 October, so the pull can
+run.
+
+Because the pull delivers everything it is asked for into **one** shared pull request, a language
+with no approvals would arrive as an all-English catalogue and hold that one pull request red —
+Spanish and the four shipping languages with it. So the pull list is now `fr de ja nl es`:
+`ar`, `he`, `it` and `sv` are registered and are Crowdin targets, but are **not requested until
+they have approvals**. Item 2 below has the reasoning. What is left is translation, and RTL for
+Arabic and Hebrew.
+
+| Language | Code | Catalogue | Crowdin id | Status                                                                                                                                                                         |
+| -------- | ---- | --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| English  | `en` | `en.json` | source     | ships                                                                                                                                                                          |
+| French   | `fr` | `fr.json` | `fr`       | ships, 99% approved                                                                                                                                                            |
+| German   | `de` | `de.json` | `de`       | ships, 99% approved                                                                                                                                                            |
+| Japanese | `ja` | `ja.json` | `ja`       | ships since NXSAT-293, 99% approved                                                                                                                                            |
+| Dutch    | `nl` | `nl.json` | `nl`       | ships since NXSAT-293, 99% approved                                                                                                                                            |
+| Spanish  | `es` | —         | `es`       | **requested, arriving next pull** — 99% approved, and the `Seleccionado(s)` string that was failing `checkCatalogueValuesAreRenderable` is fixed. In the pull list; nothing else holds it |
+| Italian  | `it` | —         | `it`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2)                                                                                       |
+| Swedish  | `sv` | —         | `sv`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2)                                                                                       |
+| Arabic   | `ar` | —         | `ar`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2). RTL ready ([#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523)); refused until the catalogue lands (NXSAT-733), so it runs as `en` |
+| Hebrew   | `he` | —         | `he`       | **target, not yet requested** — as Arabic, including RTL                                                                         |
+
+Dropped: **Thai** (`th`) and **Chinese Simplified** (`zh`), both at 99% approved when removed.
+Their translations remain in Crowdin, so re-adding either is a pull rather than new work.
+Still in Crowdin and not in the app's set: **Portuguese** (`pt`, 88% approved) and **Polish**
+(`pl`, 99% translated / 2% approved).
+
+The Crowdin column carried `?` for four of these until 30 October, because an id must be read off
+the project rather than guessed — a wrong one fails the pull exactly as an absent target does. They
+are confirmed now, on INTERN-1363, and all four are the bare two-letter forms the pull list already
+named, so nothing in the repository had to change. The nine the project carried before were
+`de es fr ja nl pl pt th zh`.
+
+### What is owed, and by whom
+
+**The two Crowdin items are done**, both on 30 October (INTERN-1363, Enrico Stengert): `ar`, `he`,
+`it` and `sv` are target languages on project 160, and the `Seleccionado(s)` string is corrected to
+`Seleccionado`. A proof-reading step plus post-translation localization QA is confirmed configured,
+which closes the proof-reading row in `D8-standard` — **one row, not the file**. That row is
+updated to `CONFORMS` in the same change as this page, because a status page claiming a row is
+closed while the conformance record still reads `OWNER-ACTION-PENDING` is worse than either
+document being wrong alone.
+
+An earlier revision of this page called it "the last open conformance item", which it is not.
+`D8-standard` still carries Project Content Initialization seeding, setup-token revocation, the
+service-account commit identity, **and the row immediately below the one just closed**: project
+-level export settings take precedence over the pipeline's, and nobody has seen project 160's.
+Enrico confirmed the project's workflow while noting the Localization team cannot see our
+`crowdin-conf.yml`; we confirmed `export_only_approved: 'true'` while unable to see the project's
+settings. Each side confirmed its own half, so "approved-only export actually happens" remains
+unverified even though both halves look right.
+
+**The pull never actually broke, and saying it had is an error worth keeping visible.** Earlier
+revisions of this page and of `crowdin-pull.yaml` asserted in the present tense that the nightly
+pull was failing and that `fr`, `de`, `ja` and `nl` had stopped updating. Neither happened. The run
+history, which is the only thing that settles it:
+
+| Time (UTC) | |
+| --- | --- |
+| 30 Oct 00:03 | scheduled run — **succeeded**, `main` still had the old language list |
+| 30 Oct 11:39 | NXSAT-754 merged; `main` first carried `--language=ar/he/it/sv` |
+| 30 Oct 12:00 | INTERN-1363 — the four became targets on project 160 |
+| 31 Oct 00:00 | next scheduled run |
+
+The workflow is `0 0 * * *` against `main`, so the unknown languages were exposed for **21
+minutes** and no run fell inside them. The last twelve scheduled runs all succeeded, including the
+one that day.
+
+The underlying risk was real and is worth keeping: the CLI rejects the **whole** invocation on an
+unknown `--language` rather than the single flag, so declaring languages before Crowdin has them
+would have failed the pull entirely rather than per-language. What was wrong was the tense. A
+forecast written as a current outage is not a smaller mistake than being wrong about the mechanism —
+it travelled into a request to another team and made it sound more damaging than it was.
+
+What remains:
+
+1. **Translation itself**, for `ar`, `he`, `it` and `sv`. Not started.
+
+   Spanish is the exception at 99% approved — but "needs only a pull" is not quite true, and an
+   earlier revision of this page said it was. `SHIPPED_CATALOGUE_LANGUAGES` in
+   `apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts` is `['de', 'en', 'fr', 'ja', 'nl']`, and
+   `resolveStringLanguage` refuses anything outside it, so **the pull request that delivers
+   `es.json` will be red until someone adds `es` there**. `checkShippedCatalogueLanguages` fails
+   both directions, so it cannot be added in advance either — it lands in the same commit as the
+   catalogue, and the automated pull will not write it. That commit is a person's.
+
+2. **Nothing, now — `ar`, `he`, `it` and `sv` were taken out of the pull list on 30 October, and
+   that is why.** Recorded because the reasoning is not obvious from the list itself.
+
+   The pull is **one** pull request, not one per language: a single `create_pull_request`, a
+   single `localization_branch_name: crowdin-translations-update`, and every `--language` landing
+   in that one branch. So one language that is not ready holds the whole pull request red, and
+   with it every language that is.
+
+   All four became Crowdin targets on 30 October but have no approvals yet. Approved-only export
+   fills an unapproved string with its English source, so each would arrive as an entirely
+   English catalogue, and `checkCataloguesAreTranslated` fails exactly that on purpose — it
+   cannot be told apart from a destructive sync (D8d). Leaving them listed would have blocked
+   **Spanish, which is at 99% approved and ready**, plus routine updates to the four shipping
+   languages.
+
+   An earlier revision of this page said the pull "turns green per language as approvals land".
+   The branching model makes that impossible, and the workflow's own `pull_request_body` had it
+   right all along — "**this** pull request stays red until approvals exist", singular.
+
+   Nothing is lost by holding them back: all four stay registered in `register-locale-data.ts`
+   and stay targets on the project. **Add each `--language` back when its approvals exist** — and
+   note that is a change of its own, not the one that advertises the language. It has to reach
+   `main` and then wait for a scheduled run before any catalogue exists; `availableLanguages` and
+   `DATE_FNS_LOCALES` follow in a third change, once that catalogue is on disk. Three pull
+   requests per language, and they cannot be collapsed: one cannot be both before and after the
+   pull.
+
+3. **RTL, for Arabic and Hebrew.** No longer "tracked separately" — it is
+   [#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523), which sets `<html dir>` from the
+   active language and writes CDK's `Directionality` so overlays follow.
+
+   An earlier revision of this item said that until #523 merges "either language renders
+   left-to-right". That is no longer true, and NXSAT-733 is why: `describeUnsupportedLanguage`
+   refuses a `defaultLanguage` with no shipped catalogue, so `boot('ar')` applies `en` and neither
+   language can be **reached** at startup at all. They do not render left-to-right; they do not
+   render as Arabic or Hebrew. The mechanism is ready and activates when the catalogue lands —
+   which is a claim with no shelf life, unlike "you can select it today".
+
+4. **Shared-component strings, which are a different team's.** `@hylandsoftware/satori-ui` ships
+   no catalogue for `ar`, `he`, `ja`, `nl` or `sv` — 15 files in its `i18n/` but only seven
+   distinct languages, `de en es fr it pl pt`. So `sat.*` strings, including accessible names,
+   render in English in those five. **`ja` and `nl` ship today**, so this is live rather than
+   pending. Tracked as [DS-2803](https://hyland.atlassian.net/browse/DS-2803) with the Satori
+   Design System team. Re-measure rather than quoting the figures:
+
+   ```bash
+   ls node_modules/@hylandsoftware/satori-ui/i18n/*.json | xargs -n1 basename | sed 's/.json//'
+   ```
+
+### Right to left — delivered, NXSAT-752
+
+The direction mechanism is in place: when `ar` or `he` is the active language the layout flips, the
+chevrons point the other way, and the arrow keys swap their inward and outward meanings.
+
+**Neither language is reachable today, and that is correct.** NXSAT-733 made
+`resolveStringLanguage` refuse a `defaultLanguage` this build ships no catalogue for, so `ar` and
+`he` fall back to `en` and the application runs left-to-right in English with a diagnostic. That
+refusal is the fix for a real WCAG 3.1.1 defect — `<html lang="ar">` over English text — and it is
+not a regression of this work: the two are ordered, not opposed. **The moment `ar.json` lands the
+language is accepted, `syncDocumentDirection` sees it on `onLangChange`, and the layout mirrors
+with no further change.** A date-fns `ar` entry has to arrive with it, or dates stay English while
+strings and direction do not.
+
+So the direction behaviour is verified by unit tests and by a manual pass taken before NXSAT-733
+closed the startup path, not by booting `ar` today — which is why the registration test below
+boots `fr` from a stale `rtl` instead.
+
+**The whole defect was one missing attribute.** Right-to-left handling already existed in `nxs-`
+components across three mechanisms — seven components, four of them via the CSS attribute, with
+`document-tree` in two rows. The table and the two `grep` commands that reproduce it are in
+`D8e-webui` in [the plan](i18n-localization-plan.md); they are **not** repeated here, because two
+copies of one inventory in two documents is how the inventory in `AGENTS/11-beta-program.md` went
+stale. Upstream's own `platform-nav` and `split-button` carry `:dir(rtl)` too.
+
+**None of it had ever run**, because nothing set `dir`: `index.html` ships `lang="en"` and no `dir`
+at all. Same family as gap 10 below — `translate.use()` sets the string language and touches
+neither `LOCALE_ID` nor the document's direction.
+
+One figure that is only here, with its command, because the prose got it wrong twice: the physical
+declarations replaced are **thirteen across six stylesheets** — eight of the simple kind, and five
+asymmetric four-value shorthands, which is the half a property-name pattern cannot see. It appeared
+as "seven" in two places.
+
+```bash
+git diff origin/main...HEAD -- '*.scss' | grep '^-' | grep -cE \
+  "margin-(left|right)|padding-(left|right)|^-[[:space:]]*(left|right):|text-align: (left|right)|^-[[:space:]]*(margin|padding): ([^;]+ ){3}[^;]+;"
+```
+
+Both halves are in that one expression on purpose. The first draft of it omitted the shorthand
+alternation and printed 8 beside a claim of 13 — a command that disagrees with the number it is
+meant to support is worse than no command, so it was run before being written down.
+
+`syncDocumentDirection` in `provide-app-config.ts` sets it, beside the existing `lang` sync and off
+the same `onLangChange`, so a language changed after startup is honoured and not only the
+configured default. The right-to-left set is `RTL_LANGUAGES` in
+`libs/shared/app-config/src/lib/text-direction.ts` — one named place, mirroring the primary
+subtags in Angular CDK's own `RTL_LOCALE_PATTERN`, so a customer who configures a language we do
+not ship still gets the right direction.
+
+Two things were established rather than assumed, and each of them changed the implementation:
+
+- **CDK's `Directionality` has to be written, not just read.** It reads
+  `body.dir || documentElement.dir` **once in its constructor** and never observes the attribute
+  again, so setting `<html dir>` alone leaves `Directionality.value` stale for the application's
+  lifetime. `valueSignal` and `change` are public members in CDK 22; the sync writes both, and
+  that is the only write site. `BidiModule` does not help and is not imported — it declares the
+  `[dir]` **directive**, and `<html>` is outside the application, so there is no element for it.
+- **Overlays need nothing extra.** NXSAT-752 expected otherwise, on the strength of satori-ui's
+  `syncOverlayDirection`, but that is a **private** method of upstream's own rich tooltip rather
+  than an exported helper. Measured instead: CDK 22's `createOverlayRef()` runs
+  `overlayConfig.direction = overlayConfig.direction || directionality.value`, so dialogs, menus,
+  selects and date pickers all pick the direction up from the service. No provider was added.
+  `overlay-direction.spec.ts` carries that as three tests, the third being the negative control
+  that fails when only the attribute is set — which is what makes the point above load-bearing
+  rather than decorative.
+
+Mirrored layout itself is **CSS logical properties**, not more `[dir='rtl']` overrides.
+`search-filters`, `column-picker`, `saved-search-select`, `drive-dialog`, `details-panel` and
+`upload-queue` moved from `right`, `margin-left`, `text-align: left` and asymmetric four-value
+shorthands to `inset-inline-end`, `margin-inline-start`, `text-align: start` and
+`padding-inline` — the shorthands being five of them, and the subtle kind, because
+`padding: 12px 8px 12px 16px` reads as deliberate rather than as an oversight.
+
+The existing `:host-context([dir='rtl'])` rules were left alone. Each is `transform: scaleX(-1)`
+on a chevron or arrow, which is a mirrored **glyph** and has no logical-property equivalent.
+
+**`checkSatoriStylesheetsAreLogical` keeps it that way.** Both `nxs-` libraries are now free of
+physical inline-direction declarations, so the guardrail is an absolute rule over their `.scss`
+rather than a ratchet: `margin-left`, `left`, `text-align: left`, `float: right`, the physical
+corner radii, and a four-value `margin`/`padding` shorthand whose inline values differ. The one
+symmetric `left: 0; right: 0` pair was converted to `inset-inline: 0` rather than special-cased,
+because a symmetry heuristic is more code than the rule it guards. `// logical-properties-ok:
+<reason>` waives a line and **requires prose** — a bare marker suppresses nothing, which the
+selftest asserts. `libs/features/` and `apps/` are deliberately out of scope: they hold 155 and 48
+such declarations, so a gate covering them would have to be born suppressed. A green run here does
+not mean the application is right-to-left clean, only the shipped components.
+
+**What is still English in `ar` or `he`, and is meant to be.** Beyond the strings: dates too.
+`resolveFormattingLocale` admits a locale only if Angular has its data, the deployment advertises
+it, **and** `canFormatDatesIn` finds a bundled date-fns entry — and `ar`/`he` fail the third until
+their catalogues land. So `LOCALE_ID` clamps to `en` and dates render US-ordered under
+`lang="ar" dir="rtl"`. That looks wrong and is correct: `format` and `parse` then agree on `enUS`,
+which is what keeps the misparse class out. All three converge when `ar.json` and a date-fns `ar`
+entry arrive together.
+
+**Known limit, not worth code today.** `createOverlayRef` snapshots the direction as a string when
+an overlay is created, so an overlay already open when the language changes keeps the direction it
+opened with. There is no language picker (NXSAT-294), so nothing a user can do reaches that state.
+
+Coverage, in `text-direction.spec.ts`, `provide-app-config.spec.ts`, `overlay-direction.spec.ts`
+and a `keyboard, right to left` block in each of `document-tree.component.spec.ts` and
+`document-list.component.spec.ts`. No totals here on purpose — the counts moved three times during
+review and a number in prose beside a suite it does not come from goes wrong immediately.
+
+What makes them evidence rather than decoration is that each was watched to fail:
+
+- forcing the two components' `rtl` checks to `false` turns **exactly three** assertions red and
+  nothing else;
+- deleting the `provideAppInitializer` entry left **every** test in `provide-app-config.spec.ts`
+  green before the startup test existed, and turns **exactly one** red now;
+- `overlay-direction.spec.ts`'s third case is a negative control: with the attribute set and
+  `Directionality` left alone, every CDK overlay opens left-to-right.
+
+There is **no language picker** (NXSAT-294), so a deployment selects its language through
+`defaultLanguage`. `availableLanguages` is no longer only parsed and stored: it is one half of the
+admission check on `defaultLanguage` — `resolveFormattingLocale` for Angular's formatting locale,
+and `resolveStringLanguage` for ngx-translate's string language since NXSAT-733. Both intersect it
+with a build-time capability, because Layer 0 is customer-editable and so cannot be the authority
+on what this build can render. Every shipped catalogue is
 checked by `checkCataloguePlaceholders`, which fails a translation whose `{{ … }}` placeholders differ
-from English; all six had zero mismatches when added.
+from English; all of the delivered ones had zero mismatches when added.
 
 This is the status page. The **plan** is [`docs/i18n-localization-plan.md`](i18n-localization-plan.md);
 the two are separate on purpose, because a plan that carries its own progress report goes stale
@@ -36,7 +289,7 @@ silently and gets believed anyway.
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Beta ticket  | [NXSAT-227](https://hyland.atlassian.net/browse/NXSAT-227) — delivered, in review                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | GA ticket    | [NXSAT-284](https://hyland.atlassian.net/browse/NXSAT-284) — delivered, in review. This row said **not started** while the branch implementing it was open, and the same page measured its output two sections below.                                                                                                                                                                                                                                                                                                                                  |
-| Pull request | [#198](https://github.com/nuxeo/agentic-ui-poc/pull/198) (NXSAT-227, merged) · [#217](https://github.com/nuxeo/agentic-ui-poc/pull/217) (NXSAT-284)                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Pull request | [#198](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/198) (NXSAT-227, merged) · [#217](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/217) (NXSAT-284)                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Branch       | `feature/nxsat-227a-i18n` (merged) · `feature/nxsat-284-descriptor-labels`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Gate         | `lockfile, guardrails, lint, test, build, typecheck, api-surface` all pass as of 2026-09-22, **under Node 20** — on Node 25 a built-in `localStorage` shadows jsdom's and `test` reports 126 false failures. `guardrails` was RED on pristine `origin/main` earlier the same day (`header-search-focus-ring.spec.html` carried a hard-coded `placeholder`); NXENG-755 fixed it by binding the pipe. Re-measure rather than reading this: `nvm use 20 && npm run beta:gate`. This row said **23 of 23 green** for six days while that gate was failing. |
 
@@ -499,17 +752,53 @@ an unknown.
 
 ### Locale coverage is uneven upstream, and that bites
 
-| Catalogue source                          | Locales shipped                    |
-| ----------------------------------------- | ---------------------------------- |
-| `@alfresco/adf-core`                      | 19                                 |
-| `@hylandsoftware/satori-ui`               | 15                                 |
-| `adf-hx-content-services` (ui + services) | **7** — `de es fr it pl pt` + `en` |
-| ours                                      | 3                                  |
+The adf-hx rows this table used to carry are gone with the dependency (NXSAT-635, NXSAT-637).
+One upstream catalogue is left, and the problem they described is live in it:
 
-**A locale outside adf-hx's seven gets English adf-hx strings inside an otherwise translated
-application.** That is why `fr` and `de` were chosen for the first pass: both are covered by
-every catalogue we seed, so switching locale exercises the whole stack rather than our own file
-alone.
+| Catalogue source                            | Locale ids shipped                                                                  |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `@hylandsoftware/satori-ui@1.0.0-alpha.171` | **15** — `de en es fr it pl pt` + `de-DE en-AU en-US es-ES fr-FR it-IT pl-PL pt-PT` |
+| ours (`apps/nuxeo-ui/public/i18n`)          | one per advertised language — see `availableLanguages`                              |
+
+**Locale ids, matched exactly.** The loader requests `<lang>.json` for the active language
+verbatim, so `en-US` and `fr-FR` are covered upstream while `pt-BR` is not, even though `pt` is:
+nothing falls back from a regional variant to its base language. A regional variant the vendor
+does not ship is in the same position as a language it never shipped.
+
+**The advertised set is deliberately not written out here.** It is Layer 0 configuration and it
+moves: it was `en fr de ja nl th zh`, Thai and Chinese have since been dropped, and the supported
+set is being taken to ten. Every prose copy of that list in this repository has gone stale at
+least once. Read it from `availableLanguages` in `libs/shared/app-config/src/lib/bootstrap-config.ts`.
+
+What is stable is the shape of the problem: **an advertised locale id outside the vendor's fifteen
+has no shared-component strings at all**, so every `sat.*` string — including the accessible names
+on `sat-platform-nav` — renders in English inside an otherwise translated application. `fr` and
+`de` were chosen for the first pass precisely because they are inside the intersection, so
+switching locale exercises the whole stack rather than our own file alone.
+
+This is **not** something this repository can fix. Authoring a vendor's component strings is not
+ours to do, and the loader cannot invent them; it is tracked upstream as
+[DS-2803](https://hyland.atlassian.net/browse/DS-2803). What was ours was asking for a file that
+does not exist: the loader requested `assets/satori-ui/i18n/<lang>.json` for whatever language
+was active, so every language outside the intersection 404'd and logged a console error on every
+page load (NXSAT-732). Each folder in `UPSTREAM_FOLDERS` now names the languages it ships and is
+asked only for those, and `checkUpstreamCatalogueLanguages` compares that list to the installed
+package on every pull request — so a version bump that adds or drops a language fails the
+`guardrails` gate with the difference rather than silently reinstating the 404 or leaving a new
+language unrequested.
+
+The loader does **not** read `availableLanguages`, which is what makes the two independent:
+adding a language needs no change there. It is requested if the vendor ships it and skipped if
+not, and `app-translate-loader.spec.ts` asserts that by iterating the configured list rather than
+by naming it, so the assertion survives the list changing.
+
+**Right-to-left is a separate concern, owned by NXSAT-752.** The vendor's components carry
+`:dir(rtl)` rules and depend on `@angular/cdk/bidi`. On `main` as of this change, this
+application sets no `dir` at all — not in `apps/nuxeo-ui/src`, not from configuration — so a
+right-to-left language would give correct text in a mirrored-the-wrong-way layout. NXSAT-752 sets
+the document direction from the active language; **this paragraph records the state at the time of
+writing, not the current one**, so check whether it has landed rather than citing it. Not
+addressed by NXSAT-732.
 
 ---
 
@@ -695,7 +984,7 @@ Worth recording, because it is the argument for writing controls at all:
 
 ## Next steps
 
-### Immediate — what [#198](https://github.com/nuxeo/agentic-ui-poc/pull/198) is actually waiting on
+### Immediate — what [#198](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/198) is actually waiting on
 
 **One thing: a human approval.** CI is green, every review thread is resolved, and nothing here
 needs a repo admin.
@@ -820,12 +1109,13 @@ See D8d.
 **29 September 2026 — the nightly pull exported blank values.** `skip_untranslated_strings: true`
 had been added to stop the English overwrite, on the untested belief that it would leave an
 untranslated key out. For our nested JSON it keeps the key and blanks the value. The nightly pull
-([#293](https://github.com/nuxeo/agentic-ui-poc/pull/293)) carried nine catalogues with every
+([#293](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/293)) carried nine catalogues with every
 unapproved value `""` — all 1,972 in seven of them, all but 8 approved strings in `fr.json` and
 `de.json` — and
 `checkTranslationCatalogues` failed it, correctly. The Technical Usage Guide warns of exactly this.
 The pull now follows the standard: approved-only export, neither skip option, and only the
-shipped languages downloaded — `fr` and `de` then, `fr de ja nl th zh-CN` since NXSAT-293 (D8d, D8h).
+shipped languages downloaded — `fr` and `de` then, `fr de ja nl th zh-CN` after NXSAT-293, and
+`fr de ja nl ar es he it sv` since the Web UI alignment of 30 October 2026 (D8d, D8h, `D8e-webui`).
 
 Dispatched from that fix, the pull refreshed #293 to `fr.json` and `de.json` only, each 1,972 keys
 with no blank value, 1,964 English and 8 approved translations. That is 99% English, so
@@ -844,7 +1134,7 @@ fails any source that is not.
 
 ### NXSAT-284 — GA extraction: 1350 template strings, 257 descriptor strings, plus an unknown number passed imperatively
 
-> **Delivered in [#217](https://github.com/nuxeo/agentic-ui-poc/pull/217).** What follows is the
+> **Delivered in [#217](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/217).** What follows is the
 > PLAN as it was written, kept because the decisions and the corrected assumptions in it are the
 > record of why the work took the shape it did. For what actually shipped, read the measured
 > table at the top of this page — not the counts here, which are the estimate this planning
@@ -928,9 +1218,11 @@ fails any source that is not.
 
 ### Separate stories, not part of either ticket
 
-9. **A language picker** (NXSAT-294). `availableLanguages` is validated, unit-tested and read only
-   by the config parser, so a deployment selects its language through `defaultLanguage`.
-   adf-core ships `LanguagePickerComponent`.
+9. **A language picker** (NXSAT-294). `availableLanguages` is validated and unit-tested, and
+   nothing *renders* it, so a deployment still selects its language through `defaultLanguage`.
+   It is read by the two admission checks on that key — `resolveFormattingLocale` and, since
+   NXSAT-733, `resolveStringLanguage` — which is why the wording here no longer says it is read
+   only by the config parser. adf-core ships `LanguagePickerComponent`.
 10. **`LOCALE_ID` — CLOSED 2026-09-22.** Locale _data_ is registered for `fr` and `de` (and for `ja`, `nl`, `th`, `zh` since NXSAT-293), adf-core's
     formatting locale follows the configuration, and `LOCALE_ID` is now **provided** from it too,
     in `provide-app-config.ts`. Both consumers share `resolveFormattingLocale()`, so Angular's
@@ -939,8 +1231,16 @@ fails any source that is not.
     `inject(LOCALE_ID)` — got the built-in `en-US` regardless of configuration. Covered by
     `LOCALE_ID provider` in `provide-app-config.spec.ts`; deleting the provider turns four tests
     red. See "Locale-aware date formatting" above.
-11. **RTL** — DS-2277. Satori needs 4–6 weeks of its own work before an app can start, and the
-    target should be the "good enough" level from its spectrum, agreed explicitly.
+11. **RTL — CLOSED 2026-10-30 (NXSAT-752).** Both of this entry's premises had expired.
+    [DS-2277](https://hyland.atlassian.net/browse/DS-2277) is **Done** (resolved 21 October 2026),
+    so "Satori needs 4–6 weeks before an app can start" was stale — satori-ui ships `:dir(rtl)`
+    rules and depends on `@angular/cdk/bidi`, reading direction and expecting the host to own it.
+    And the recommendation of _no_ against plan decision Q3 was made when RTL was hypothetical;
+    advertising `ar` and `he` (D8e-webui) changed that input, because once those two are
+    advertised, rendering them left-to-right is a defect rather than an absent feature. The app
+    half turned out to be one attribute and six stylesheets, not weeks: see "Right to
+    left" above. Q3 itself is a plan decision and this does not close it — what it closes is the
+    claim that the design system was the blocker.
 12. **Pluralisation — the deferral has expired, and the convention is now two keys.** This entry
     said "no ICU usage anywhere; defer until a real plural string appears". Real plural strings
     appeared during NXSAT-284: **21 complete singular/plural pairs** exist, measured with

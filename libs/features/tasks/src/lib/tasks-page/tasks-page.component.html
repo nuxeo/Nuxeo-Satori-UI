@@ -25,11 +25,17 @@
           {{ selectedTask()!.targetDocTitle || ('tasks.document' | translate) }}
         }
         @if (targetDoc()) {
-          <sat-breadcrumbs
-            sat-header-bar-trailing
-            [items]="breadcrumbItems()"
-            (click)="onBreadcrumbClick($event)"
-          ></sat-breadcrumbs>
+          @let trailLabel = 'tasks.breadcrumbs' | translate;
+          <div class="task-breadcrumbs" sat-header-bar-trailing>
+            <lib-extension-outlet
+              #breadcrumbsOutlet
+              [componentId]="breadcrumbsId"
+              [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
+            />
+            @if (breadcrumbsOutlet.unresolved()) {
+              <nxs-breadcrumbs [items]="breadcrumbItems()" [label]="trailLabel" />
+            }
+          </div>
         }
       </sat-header-bar>
 

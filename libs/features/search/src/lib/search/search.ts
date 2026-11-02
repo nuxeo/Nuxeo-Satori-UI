@@ -14,6 +14,7 @@ import {
   descriptorLabel,
 } from '@nuxeo/satori-platform/extensions';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   type Observable,
@@ -65,6 +66,7 @@ import {
   NxsPagerComponent,
   NxsSavedSearchActionsComponent,
   NxsSpinnerComponent,
+  NxsTagComponent,
   NxsThumbnailComponent,
   nxsErrorStatus,
   provideNxsThumbnailCache,
@@ -156,7 +158,6 @@ const API_FIELD_TO_COLUMN: Record<string, string> = Object.fromEntries(
 interface SearchResultViewModel {
   id: string;
   name: string;
-  imageUrl: string;
   type: string;
   modifiedDate: string;
   lastContributor: string;
@@ -171,17 +172,10 @@ interface SearchResultViewModel {
   icon: string;
 }
 
-/**
- * Relative, so it resolves against `<base href>`: the Marketplace package serves the app from
- * `/nuxeo/agentic-ui/`, where a root-absolute path 404s.
- */
-const FALLBACK_ART_URL = 'images/Login-background.svg';
-
 function mapToView(item: SearchResultItem): SearchResultViewModel {
   return {
     id: item.id,
     name: item.title,
-    imageUrl: FALLBACK_ART_URL,
     type: item.type,
     modifiedDate: item.modifiedDate,
     lastContributor: item.lastContributor,
@@ -210,6 +204,8 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
     NxsPagerComponent,
     NxsSavedSearchActionsComponent,
     NxsSpinnerComponent,
+    NxsTagComponent,
+    NgTemplateOutlet,
     NxsThumbnailComponent,
     DocTypeLabelPipe,
     DescriptorLabelPipe,
@@ -242,6 +238,9 @@ export class SearchComponent {
   private readonly aiGateway = inject(AiGatewayService);
   readonly featureFlags = inject(AiFeatureFlagService);
   readonly selectionService = inject(SelectionService);
+
+  /** A result's type renders by ID, so an override of `nxs.primitives.tag` reaches search too. */
+  protected readonly tagId = NXS_PRIMITIVE_IDS.tag;
 
   /**
    * Sequence for the whole AI request lifecycle — `nlToNxql` *and* the `nxqlSearch` it triggers.
@@ -672,12 +671,6 @@ export class SearchComponent {
     anchor.download = 'search-results.csv';
     anchor.click();
     URL.revokeObjectURL(url);
-  }
-
-  onImageError(event: Event): void {
-    const img = event.target as HTMLImageElement | null;
-    if (!img) return;
-    img.src = FALLBACK_ART_URL;
   }
 
   /** A result's star confirmed a change: keep the page's view of it in step. */

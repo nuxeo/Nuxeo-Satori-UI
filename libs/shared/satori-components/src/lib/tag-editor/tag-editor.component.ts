@@ -1,8 +1,8 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   ElementRef,
   inject,
   input,
@@ -27,33 +27,28 @@ import {
 } from '@angular/material/chips';
 import { MatFormField } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
 import {
   catchError,
-  concatMap,
   debounceTime,
   distinctUntilChanged,
+  EMPTY,
+  filter,
+  finalize,
   map,
+  merge,
   of,
   Subject,
   switchMap,
+  takeUntil,
+  tap,
   type Observable,
 } from 'rxjs';
 
 import { NxsSpinnerComponent } from '../spinner/spinner.component';
 import { NxsTagComponent } from '../tag/tag.component';
-import { provideNxsToast, NxsToastService } from '../toast/toast.service';
-
-type NxsTagChange = 'add' | 'remove';
-
-interface NxsTagRequest {
-  readonly change: NxsTagChange;
-  readonly label: string;
-}
-
-/** What the server answered to one request: the document's tags afterwards, or why not. */
-type NxsTagOutcome = NxsTagRequest & ({ readonly tags: string[] } | { readonly error: unknown });
+import { NxsTagWrites, type NxsTagAnswer, type NxsTagChange } from './tag-writes.service';
 
 /** One entry of the suggestion list: an existing tag, or the typed text as a new one. */
 interface NxsTagOption {
@@ -78,8 +73,11 @@ let nextId = 0;
  * - `readOnly` shows the tags without the box or the remove buttons. Web UI's rule for it is
  *   `canTagDocument`: Write on the document itself, not a version or a proxy.
  *
- * Changes are sent one at a time, in order, so an answer can never overwrite a later one.
- * `tagsChange` hands the document's tags to the host after each saved change.
+ * Changes are sent one at a time, in order, so an answer can never overwrite a later one, and
+ * closing the editor or moving it to another document neither cancels a change nor drops the ones
+ * queued behind it. `tagsChange` hands the document's tags to the host after each saved change —
+ * or, with `provideNxsTagWrites()` installed, for a change answered while no editor was open, when
+ * the next editor for that document appears.
  */
 @Component({
   selector: 'nxs-tag-editor',
@@ -100,13 +98,14 @@ let nextId = 0;
     NxsSpinnerComponent,
     NxsTagComponent,
   ],
-  providers: [provideNxsToast()],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NxsTagEditorComponent {
   private readonly tagService = inject(TagService);
-  private readonly translate = inject(TranslateService);
-  private readonly toast = inject(NxsToastService);
+  private readonly destroyRef = inject(DestroyRef);
+  // The host's, from `provideNxsTagWrites()`; otherwise this editor's own, which still finishes
+  // its changes after the editor closes but cannot hand their answers to the next one.
+  private readonly writes = inject(NxsTagWrites, { optional: true }) ?? new NxsTagWrites();
 
   /** The document to tag. */
   readonly documentUid = input.required<string>();
@@ -129,8 +128,10 @@ export class NxsTagEditorComponent {
     source: () => ({ uid: this.documentUid(), tags: this.tags() }),
     computation: ({ tags }) => tags,
   });
-  protected readonly adding = signal<readonly string[]>([]);
-  protected readonly removing = signal<ReadonlySet<string>>(new Set());
+  /** This document's tags on their way in, from the changes still queued. */
+  protected readonly adding = computed(() => this.queued('add'));
+  /** This document's tags on their way out. */
+  protected readonly removing = computed<ReadonlySet<string>>(() => new Set(this.queued('remove')));
   protected readonly term = signal('');
   private readonly suggestions = signal<readonly string[]>([]);
 
@@ -141,7 +142,7 @@ export class NxsTagEditorComponent {
   protected readonly options = computed<readonly NxsTagOption[]>(() => {
     const term = this.term().trim().toLowerCase();
     if (!term) return [];
-    const taken = [...this.saved(), ...this.adding()];
+    const taken = this.taken();
     const existing = this.suggestions()
       .filter((tag) => !taken.some((other) => same(other, tag)))
       .map((label) => ({ label, isNew: false }));
@@ -149,20 +150,25 @@ export class NxsTagEditorComponent {
     return known ? existing : [{ label: term, isNew: true }, ...existing];
   });
 
-  private readonly requests = new Subject<NxsTagRequest>();
   private readonly terms = new Subject<string>();
 
   constructor() {
-    toObservable(this.documentUid)
+    this.writes.answers
       .pipe(
-        switchMap((uid) => {
-          this.adding.set([]);
-          this.removing.set(new Set());
-          return this.requests.pipe(concatMap((request) => this.send(uid, request)));
-        }),
+        filter((answer) => answer.write.uid === this.documentUid()),
         takeUntilDestroyed(),
       )
-      .subscribe((outcome) => this.settle(outcome));
+      .subscribe((answer) => this.hear(answer));
+
+    // An answer may have come while no editor for this document was open to hear it. Neither the
+    // host's copy nor that answer is known to be current, so Nuxeo is asked for the tags instead.
+    // A read is replaced when the document changes, so only the current document's tags are stored.
+    toObservable(this.documentUid)
+      .pipe(
+        switchMap((uid) => (this.writes.takeUnheard(uid) ? this.refresh(uid) : EMPTY)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((tags) => this.store(tags));
 
     this.terms
       .pipe(
@@ -203,60 +209,66 @@ export class NxsTagEditorComponent {
 
   protected remove(tag: string): void {
     if (this.removing().has(tag)) return;
-    this.removing.update((labels) => new Set([...labels, tag]));
-    this.requests.next({ change: 'remove', label: tag });
+    this.writes.write(this.documentUid(), 'remove', tag, this.saved());
   }
 
   private add(label: string): void {
-    const taken = [...this.saved(), ...this.adding()];
-    if (taken.some((tag) => same(tag, label))) return;
-    this.adding.update((labels) => [...labels, label]);
-    this.requests.next({ change: 'add', label });
+    if (this.taken().some((tag) => same(tag, label))) return;
+    this.writes.write(this.documentUid(), 'add', label, this.saved());
   }
 
-  private send(uid: string, request: NxsTagRequest): Observable<NxsTagOutcome> {
-    const call =
-      request.change === 'add'
-        ? this.tagService.addTag(uid, request.label)
-        : this.tagService.removeTag(uid, request.label);
-    return call.pipe(
-      map((tags) => ({ ...request, tags })),
-      catchError((error: unknown) => of({ ...request, error })),
+  /**
+   * The tags the document has, or will once the queue drains: a tag on its way out is not one, so
+   * it can be added straight back, and is queued after its removal.
+   */
+  private taken(): string[] {
+    return [...this.shown(), ...this.adding()];
+  }
+
+  private queued(change: NxsTagChange): string[] {
+    const uid = this.documentUid();
+    return this.writes
+      .pending()
+      .filter((write) => write.uid === uid && write.change === change)
+      .map((write) => write.label);
+  }
+
+  /** Only a saved change needs anything here: a failed one's chip went back with the queue. */
+  private hear(answer: NxsTagAnswer): void {
+    if (!('tags' in answer)) return;
+    this.writes.heard(answer.write.uid);
+    this.store(answer.tags);
+  }
+
+  /**
+   * The document's tags as Nuxeo holds them now. A saved change for the document that is answered
+   * first is newer than this read, so it wins and the read is dropped. A read that fails, is
+   * interrupted (the document changed, the session ended, the editor closed) keeps the mark, so the
+   * next editor reads again.
+   */
+  private refresh(uid: string): Observable<readonly string[]> {
+    let answered = false;
+    let stored = false;
+    // A sign-out ends the read too, and its mark was cleared for the new session: it must not come back.
+    let ended = false;
+    const answer = this.writes.answers.pipe(
+      filter((saved) => saved.write.uid === uid && 'tags' in saved),
+      tap(() => (answered = true)),
+    );
+    const signedOut = this.writes.sessionsEnded.pipe(tap(() => (ended = true)));
+    return this.tagService.tagsOf(uid).pipe(
+      tap(() => (stored = true)),
+      catchError(() => EMPTY),
+      takeUntil(merge(answer, signedOut)),
+      finalize(() => {
+        if (!answered && !stored && !ended) this.writes.keepUnheard(uid);
+      }),
     );
   }
 
-  private settle(outcome: NxsTagOutcome): void {
-    const { change, label } = outcome;
-    if (change === 'add') {
-      this.adding.update((labels) => labels.filter((tag) => tag !== label));
-    } else {
-      this.removing.update((labels) => new Set([...labels].filter((tag) => tag !== label)));
-    }
-    if ('error' in outcome) {
-      this.toast.error(this.failure(change, outcome.error, label));
-      return;
-    }
-    const before = this.saved();
-    this.saved.set(outcome.tags);
-    this.tagsChange.emit(outcome.tags);
-    // The label Nuxeo stored, which is the one to announce: "Q3 Report" comes back as `q3report`.
-    const stored =
-      change === 'add'
-        ? (outcome.tags.find((tag) => !before.includes(tag)) ?? label.replace(/\s+/g, ''))
-        : label;
-    const done = change === 'add' ? 'added' : 'removed';
-    this.toast.show(
-      this.translate.instant(`satori-components.tag-editor.${done}`, { tag: stored }),
-    );
-  }
-
-  private failure(change: NxsTagChange, error: unknown, tag: string): string {
-    const status = error instanceof HttpErrorResponse ? error.status : 0;
-    const key =
-      status === 401 || status === 403
-        ? `satori-components.tag-editor.error.forbidden`
-        : `satori-components.tag-editor.error.${change}`;
-    return this.translate.instant(key, { tag });
+  private store(tags: readonly string[]): void {
+    this.saved.set(tags);
+    this.tagsChange.emit(tags);
   }
 
   private clearBox(): void {

@@ -159,10 +159,13 @@
         A configured logo is decorative for the same reason, hence its empty alt.
         crossorigin="anonymous": a remote logo that redirects to a Nuxeo URL must not carry the
         session cookie there.
+        appBrandLogoFallback: a logo the browser cannot show reports itself, which clears
+        brandLogo() and brings the word mark below back (NXSAT-721).
       -->
       @if (brandLogo(); as logo) {
         <img
           satAppHeaderLogo
+          appBrandLogoFallback
           class="app-brand-logo"
           [src]="logo.url"
           alt=""

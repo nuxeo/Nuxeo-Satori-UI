@@ -52,7 +52,10 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{workspaceRoot}",
-        "command": "ng test nuxeo-ui --no-watch --browsers=ChromeHeadless"
+        "command": "ng test nuxeo-ui --no-watch --browsers=ChromeHeadless",
+        "env": {
+          "TZ": "Asia/Calcutta"
+        }
       }
     },
     "typecheck": {

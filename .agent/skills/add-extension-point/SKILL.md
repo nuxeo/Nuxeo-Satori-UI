@@ -1,6 +1,6 @@
 ---
 name: add-extension-point
-description: Make something in agentic-ui-poc customer-customisable through the extension manifest rather than hardcoded — register a rule, action, route, nav item, tab or component by ID so a JSON manifest can rewire it without a rebuild. Use when asked to make a feature configurable or extensible, add an extension point, register an evaluator or action, drive navigation or routes from the manifest, or move a hardcoded list into Layer 0 or Layer 1.
+description: Make something in Nuxeo-Satori-UI customer-customisable through the extension manifest rather than hardcoded — register a rule, action, route, nav item, tab or component by ID so a JSON manifest can rewire it without a rebuild. Use when asked to make a feature configurable or extensible, add an extension point, register an evaluator or action, drive navigation or routes from the manifest, or move a hardcoded list into Layer 0 or Layer 1.
 ---
 
 # Add an extension point

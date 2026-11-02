@@ -1,6 +1,6 @@
 ---
 name: verify-gate
-description: Run the agentic-ui-poc quality gates and iterate to green without churning — cheapest-first gate ordering, fix only the first reported failure, three-attempt cap, and explicit stop conditions that require a human. Use when asked to verify a change, get the build green, run preflight or the Beta gate, fix lint/test/build failures, or confirm a step is actually complete.
+description: Run the Nuxeo-Satori-UI quality gates and iterate to green without churning — cheapest-first gate ordering, fix only the first reported failure, three-attempt cap, and explicit stop conditions that require a human. Use when asked to verify a change, get the build green, run preflight or the Beta gate, fix lint/test/build failures, or confirm a step is actually complete.
 ---
 
 # Verify and iterate to green

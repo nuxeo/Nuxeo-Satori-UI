@@ -1,5 +1,5 @@
 import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -28,7 +28,9 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { AuthService } from '../auth/auth.service';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
-import { SatAvatarModule, type SatAvatarCategory } from '@hylandsoftware/satori-ui/avatar';
+import type { SatAvatarCategory } from '@hylandsoftware/satori-ui/avatar';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
+import { NXS_PRIMITIVE_IDS, NxsAvatarComponent } from '@nuxeo/satori-platform/components';
 import {
   AiGatewayService,
   AiFeatureFlagService,
@@ -40,8 +42,9 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 /**
  * `AvatarColor` is nuxeo-client's own copy of `SatAvatarCategory`, because that library may not
  * import a design system. It must stay exactly upstream's, since `avatarColor()` feeds
- * `<sat-avatar [category]>`, so the check lives here: both types are in scope and CI's build
- * compiles it. A colour missing on either side is TS2344.
+ * `nxs.primitives.avatar`, whose Satori implementation hands it to `<sat-avatar [category]>`, so
+ * the check lives here: both types are in scope and CI's build compiles it. A colour missing on
+ * either side is TS2344.
  *
  * Two details are load-bearing. The else branch is `false`, because `never` satisfies
  * `extends true`. The conditions are tuple-wrapped, because a bare union distributes and
@@ -66,7 +69,9 @@ type _AvatarColorCoversUpstream = Assert<[SatAvatarCategory] extends [AvatarColo
     WidgetGridComponent,
     WidgetContainerComponent,
     SatTagModule,
-    SatAvatarModule,
+    ExtensionOutletComponent,
+    NgTemplateOutlet,
+    NxsAvatarComponent,
   ],
   templateUrl: './dashboard-page.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -266,6 +271,9 @@ export class DashboardPageComponent {
   avatarColor(name: string) {
     return avatarColor(name);
   }
+
+  /** A contributor's avatar renders by ID, so an override of `nxs.primitives.avatar` reaches it. */
+  protected readonly avatarId = NXS_PRIMITIVE_IDS.avatar;
 
   taskLabel(task: NuxeoTask): string {
     const key = task.name.replace(/^wf\.\w+\./, '').replace(/\.(title|directive)$/i, '');

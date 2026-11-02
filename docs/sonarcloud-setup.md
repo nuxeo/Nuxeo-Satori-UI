@@ -20,8 +20,12 @@ This document outlines the steps to complete SonarCloud integration for the Nuxe
    - Import your GitHub organization
 
 4. **Add the Repository**:
-   - Select the `agentic-ui-poc` repository
+   - Select the `Nuxeo-Satori-UI` repository
    - Click "Set Up"
+   - The project already exists under the key `nuxeo_agentic-ui-poc`, which SonarCloud derived from
+     the repository's former name and did not change when GitHub renamed the repository on
+     30 October 2026. Adding the repository again would create a second, empty project — use the
+     existing one, and leave `sonar.projectKey` in `sonar-project.properties` alone.
 
 5. **Configure Analysis Method**:
    - Choose "With GitHub Actions" as the analysis method

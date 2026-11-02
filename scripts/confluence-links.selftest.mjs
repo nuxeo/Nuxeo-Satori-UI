@@ -25,8 +25,8 @@ const pageTitles = new Map([
 const isDirectory = (p) =>
   statSync(join(ROOT, p), { throwIfNoEntry: false })?.isDirectory() ?? false;
 const ctx = { pageTitles, branch: 'main', isDirectory };
-const BLOB = 'https://github.com/nuxeo/agentic-ui-poc/blob/main';
-const TREE = 'https://github.com/nuxeo/agentic-ui-poc/tree/main';
+const BLOB = 'https://github.com/nuxeo/Nuxeo-Satori-UI/blob/main';
+const TREE = 'https://github.com/nuxeo/Nuxeo-Satori-UI/tree/main';
 
 const CONTROLS = [
   [

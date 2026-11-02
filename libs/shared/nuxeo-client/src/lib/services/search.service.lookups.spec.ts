@@ -209,9 +209,20 @@ describe('SearchService — lookups', () => {
       });
       const [hit, rest] = suggestion.displayLabelHighlights ?? [];
       expect(hit).toEqual({ text: 'Board', matched: true });
-      // The text after a match loses its leading space to the HTML parser; not asserted here.
-      expect(rest?.matched).toBe(false);
-      expect(rest?.text.trim()).toBe('minutes');
+      expect(rest).toEqual({ text: ' minutes', matched: false });
+    });
+
+    it('keeps the space between a match and the text that follows it', async () => {
+      const [suggestion] = await suggest([
+        {
+          uid: 'd',
+          title: 'D',
+          highlights: [{ field: 'dc:title', segments: ['<em>Board</em> and <em>minutes</em>'] }],
+        },
+      ]);
+      expect(suggestion.displayLabelHighlights?.map((part) => part.text).join('')).toBe(
+        'Board and minutes',
+      );
     });
 
     it('finds suggestions nested in containers, and caps them at the page size', async () => {
@@ -234,6 +245,33 @@ describe('SearchService — lookups', () => {
         { uid: 'd', title: 'D', highlights: [{ field: 'dc:title', segments: ['<b>plain</b>'] }] },
       ]);
       expect(suggestion.displayLabelHighlights).toEqual([{ text: 'plain', matched: false }]);
+    });
+
+    it('drops an empty match and keeps the text around it', async () => {
+      const [suggestion] = await suggest([
+        { uid: 'd', title: 'D', highlights: [{ field: 'dc:title', segments: ['<em></em>plain'] }] },
+      ]);
+      expect(suggestion.displayLabelHighlights).toEqual([{ text: 'plain', matched: false }]);
+    });
+
+    it('keeps the raw text when no template can parse it', async () => {
+      const create = document.createElement.bind(document);
+      const spy = vi.spyOn(document, 'createElement').mockImplementation((tag: string, options) => {
+        if (tag === 'template') throw new Error('no template');
+        return create(tag, options);
+      });
+      try {
+        const [suggestion] = await suggest([
+          {
+            uid: 'd',
+            title: 'D',
+            highlights: [{ field: 'dc:title', segments: ['<em>Board</em>'] }],
+          },
+        ]);
+        expect(suggestion.displayLabelHighlights).toEqual([{ text: 'Board', matched: true }]);
+      } finally {
+        spy.mockRestore();
+      }
     });
 
     it('answers an empty list when the suggesters fail', async () => {

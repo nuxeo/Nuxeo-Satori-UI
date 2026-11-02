@@ -32,6 +32,7 @@ import {
   BrowseContextService,
   SelectionService,
   TagService,
+  type AuditEntry,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -119,6 +120,12 @@ const detail = {
   unsubscribe: vi.fn((): DetailReturn<'unsubscribe'> => EMPTY),
 };
 
+const tag = {
+  suggestTags: vi.fn(() => of(['legal'])),
+  addTag: vi.fn(() => of(['legal'])),
+  removeTag: vi.fn(() => of([] as string[])),
+};
+
 const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
 
 /**
@@ -130,6 +137,28 @@ const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLaye
  * branches are the whole of what a user sees on this page, so they are asserted
  * here through the DOM, driving the controls rather than calling the methods.
  */
+
+/** A customer's tag, registered under `nxs.primitives.tag`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-tag',
+  template: '<span class="acme-tag" [attr.data-color]="color()">{{ label() }}</span>',
+})
+class AcmeTagComponent {
+  readonly label = input('');
+  readonly color = input('');
+}
+
+/** A customer's avatar, registered under `nxs.primitives.avatar`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-avatar',
+  template: '<span class="acme-avatar" [attr.data-size]="size()">{{ initials() }}</span>',
+})
+class AcmeAvatarComponent {
+  readonly initials = input('');
+  readonly size = input('');
+}
 
 /** A customer's permissions panel, registered under the packaged panel's ID. */
 @Component({
@@ -179,6 +208,9 @@ describe('BrowseComponent — rendered document list', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    tag.suggestTags.mockReturnValue(of(['legal']));
+    tag.addTag.mockReturnValue(of(['legal']));
+    tag.removeTag.mockReturnValue(of([]));
     localStorage.removeItem('browse_column_settings');
     browse.getByPath.mockReturnValue(of(folder));
     browse.getBrowseFolderContents.mockReturnValue(of({ folder, entries: [], totalSize: 0 }));
@@ -238,7 +270,7 @@ describe('BrowseComponent — rendered document list', () => {
             getAllL10nEntries: vi.fn(() => of([])),
           },
         },
-        { provide: TagService, useValue: { searchTags: vi.fn(() => of([])) } },
+        { provide: TagService, useValue: tag },
         {
           provide: MatDialog,
           useValue: { open: vi.fn(() => ({ afterClosed: () => of(false) })) },
@@ -264,6 +296,80 @@ describe('BrowseComponent — rendered document list', () => {
     await new Promise((resolve) => setTimeout(resolve));
     await settle();
   }
+
+  it('uses the shared tag editor to suggest and save tags in the Browse panel', async () => {
+    const component = await render([provideNoopAnimations()]);
+    component.panelOpen.set(true);
+    component.panelSubTab.set('tags');
+    await settle();
+    const box = query('nxs-tag-editor input') as HTMLInputElement;
+    expect(box).not.toBeNull();
+    box.focus();
+    box.value = 'leg';
+    box.dispatchEvent(new Event('input'));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await settle();
+    expect(tag.suggestTags).toHaveBeenCalledWith('leg');
+    const option = [
+      ...document.querySelectorAll<HTMLElement>('.mat-mdc-autocomplete-panel mat-option'),
+    ].find((entry) => entry.textContent?.trim() === 'legal');
+    expect(option).not.toBeUndefined();
+    option?.click();
+    await settle();
+    expect(tag.addTag).toHaveBeenCalledWith('ws-1', 'legal');
+    expect(component.tags()).toEqual(['legal']);
+    const remove = query('nxs-tag-editor button[aria-label="Remove tag legal"]');
+    expect(remove).not.toBeNull();
+    remove?.click();
+    await settle();
+    expect(tag.removeTag).toHaveBeenCalledWith('ws-1', 'legal');
+    expect(component.tags()).toEqual([]);
+  });
+
+  it('keeps existing tags after a failed write and permits another attempt', async () => {
+    const component = await render([provideNoopAnimations()]);
+    component.currentDoc.set({ ...folder, properties: { 'nxtag:tags': ['retained'] } });
+    component.panelOpen.set(true);
+    component.panelSubTab.set('tags');
+    await settle();
+    tag.addTag.mockReturnValueOnce(throwError(() => ({ status: 500 })));
+    const box = query('nxs-tag-editor input') as HTMLInputElement;
+    const choose = async (): Promise<void> => {
+      box.focus();
+      box.value = 'leg';
+      box.dispatchEvent(new Event('input'));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await settle();
+      const option = [
+        ...document.querySelectorAll<HTMLElement>('.mat-mdc-autocomplete-panel mat-option'),
+      ].find((entry) => entry.textContent?.trim() === 'legal');
+      expect(option).not.toBeUndefined();
+      option?.click();
+      await settle();
+    };
+    await choose();
+    expect(component.tags()).toEqual(['retained']);
+    tag.addTag.mockReturnValue(of(['retained', 'legal']));
+    await choose();
+    expect(tag.addTag).toHaveBeenCalledTimes(2);
+    expect(component.tags()).toEqual(['retained', 'legal']);
+  });
+
+  it('renders tags without editing controls when the browsed document is read-only', async () => {
+    const component = await render();
+    component.currentDoc.set({
+      ...folder,
+      properties: { 'nxtag:tags': ['legal'] },
+      contextParameters: { permissions: ['Read'] },
+    });
+    component.panelOpen.set(true);
+    component.panelSubTab.set('tags');
+    await settle();
+    expect(query('nxs-tag-editor')?.textContent).toContain('legal');
+    expect(query('nxs-tag-editor input')).toBeNull();
+    expect(query('nxs-tag-editor button')).toBeNull();
+    expect(tag.suggestTags).not.toHaveBeenCalled();
+  });
 
   /**
    * Let a changed filter's debounce elapse, then render what the reload produced.
@@ -1787,6 +1893,107 @@ describe('BrowseComponent — rendered document list', () => {
     const reads = detail.getDocumentPermissions.mock.calls.length;
     custom.permissionsChanged()?.();
     expect(detail.getDocumentPermissions).toHaveBeenCalledTimes(reads + 1);
+  });
+
+  /**
+   * NXSAT-652. The details panel's avatars and tags render by their `nxs.primitives.*` ID, so a
+   * component registered under one replaces every use; with nothing registered, the `nxs-`
+   * element renders instead. Seen red on purpose by restoring `<sat-avatar>` in the info panel.
+   */
+  describe('nxs.primitives.* in the details panel', () => {
+    const described = doc({
+      ...folder,
+      properties: {
+        'dc:creator': 'alice',
+        'dc:lastContributor': 'bob',
+        'nxtag:tags': [{ label: 'urgent' }, 'q3'],
+      },
+    });
+    const overrides = provideSatoriExtensions({
+      components: {
+        [NXS_PRIMITIVE_IDS.avatar]: AcmeAvatarComponent,
+        [NXS_PRIMITIVE_IDS.tag]: AcmeTagComponent,
+      },
+    });
+    const texts = (selector: string): string[] =>
+      [...fixture.nativeElement.querySelectorAll(selector)].map(
+        (el) => (el as HTMLElement).textContent?.trim() ?? '',
+      );
+
+    beforeEach(() => {
+      browse.getByPath.mockReturnValue(of(described));
+      browse.getFolderContext.mockReturnValue(of(described));
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder: described, entries: [], totalSize: 0 }),
+      );
+    });
+
+    async function openPanel(
+      tab: 'info' | 'tags' | 'activity',
+      providers: unknown[],
+    ): Promise<BrowseComponent> {
+      const component = await render(providers);
+      component.panelOpen.set(true);
+      component.panelSubTab.set(tab);
+      await settleOutlets();
+      return component;
+    }
+
+    it('renders the creator and contributor avatars through nxs.primitives.avatar', async () => {
+      await openPanel('info', [overrides]);
+
+      expect(texts('.details-panel .avatar-value .acme-avatar')).toEqual(['alice', 'bob']);
+      expect(query('.details-panel .avatar-value nxs-avatar')).toBeNull();
+    });
+
+    it('renders the tags in the shared tag editor, which does not take nxs.primitives.tag', async () => {
+      await openPanel('tags', [overrides]);
+
+      expect(texts('.details-panel nxs-tag-editor mat-chip-row')).toEqual(['urgent', 'q3']);
+      expect(texts('.details-panel .acme-tag')).toEqual([]);
+    });
+
+    it('renders the activity avatars through nxs.primitives.avatar', async () => {
+      const component = await openPanel('activity', [overrides]);
+      component.activityLoading.set(false);
+      component.activityEntries.set([
+        { id: 1, principalName: 'carol', eventId: 'documentModified' } as AuditEntry,
+      ]);
+      await settle();
+
+      const avatar = query('.details-panel .activity-item .acme-avatar');
+      expect(avatar?.textContent?.trim()).toBe('carol');
+      expect(avatar?.dataset['size']).toBe('28');
+    });
+
+    it('falls back to the nxs- elements when nothing is registered under the IDs', async () => {
+      await openPanel('info', []);
+
+      expect(texts('.details-panel .avatar-value nxs-avatar.nxs-avatar')).toEqual(['A', 'B']);
+
+      fixture.componentInstance.panelSubTab.set('tags');
+      await settleOutlets();
+      expect(texts('.details-panel nxs-tag-editor mat-chip-row')).toEqual(['urgent', 'q3']);
+    });
+
+    it('renders a trashed child type through nxs.primitives.tag', async () => {
+      browse.getTrashedChildren.mockReturnValue(
+        of({
+          entries: [doc({ uid: 'trash-1', title: 'Old', type: 'File' })],
+          totalSize: 1,
+          currentPageSize: 1,
+          currentPageIndex: 0,
+          numberOfPages: 1,
+        }),
+      );
+
+      const component = await render([provideNoopAnimations(), overrides]);
+      component.onTabChange(3);
+      await settleOutlets();
+
+      expect(texts('.browse-table .acme-tag')).toEqual(['File']);
+      expect(query('.browse-table nxs-tag')).toBeNull();
+    });
   });
   /**
    * The card view renders each document's card by `nxs.primitives.card`, so whatever is registered

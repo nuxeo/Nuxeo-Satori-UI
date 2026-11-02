@@ -67,7 +67,7 @@ final class ContributionRegistry {
                                     contribution.kind() == Contribution.Kind.LAYOUT ? "type and mode" : "name")));
                 } else {
                     inForce.remove(key);
-                    diagnostics.add(Diagnostic.info("removed", contribution.scope(), contribution.provenance(),
+                    diagnostics.add(displacement(previous, contribution, "removed", "removed-packaged-default",
                             String.format("%s from %s is removed by %s.", key, describe(previous.provenance()),
                                     describe(contribution.provenance()))));
                 }
@@ -85,13 +85,36 @@ final class ContributionRegistry {
             if (previous != null) {
                 // `put` on an existing key keeps its position: a replacement takes the place of the
                 // fragment it replaces rather than jumping over everything registered in between.
-                diagnostics.add(Diagnostic.info("replaced", contribution.scope(), contribution.provenance(),
+                diagnostics.add(displacement(previous, contribution, "replaced", "replaced-packaged-default",
                         String.format("%s from %s is replaced by %s.", key, describe(previous.provenance()),
                                 describe(contribution.provenance()))));
             }
             inForce.put(key, loaded);
         }
         return new Resolution(List.copyOf(inForce.values()), List.copyOf(diagnostics));
+    }
+
+    /**
+     * One contribution displacing another: a replacement, or a removal by a disabled contribution.
+     *
+     * Displacing another package's contribution is ordinary layering — that is what the ordering
+     * and the disable flag are for — so it stays {@code info}. Displacing something <em>we</em>
+     * packaged is almost never deliberate: the customer loses documented product behaviour, and
+     * before NXSAT-747 the only trace was an {@code info}, which nobody greps {@code server.log}
+     * for. That case is a {@code warning}, and carries its own code so a consumer can recognise it
+     * without matching on prose.
+     *
+     * The message is deliberately the same either way: it already names what was displaced and who
+     * displaced it, and two wordings would be two things to keep in step.
+     *
+     * @param displaced what was in force on this key until now
+     * @param by the contribution taking or clearing the key
+     */
+    private static Diagnostic displacement(Contribution displaced, Contribution by, String code,
+            String packagedCode, String message) {
+        return displaced.provenance().isPackaged()
+                ? Diagnostic.warning(packagedCode, by.scope(), by.provenance(), message)
+                : Diagnostic.info(code, by.scope(), by.provenance(), message);
     }
 
     /** Why a contribution cannot be used, or {@code null} when it can. */

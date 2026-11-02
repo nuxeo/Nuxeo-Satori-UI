@@ -21,9 +21,18 @@
           images (WCAG 1.1.1, NXENG-743 / NXENG-746). A configured logo is decorative for the
           same reason: the link is named from branding instead. crossorigin="anonymous": a remote
           logo that redirects to a Nuxeo URL must not carry the session cookie there.
+          appBrandLogoFallback: a logo the browser cannot show reports itself, which clears
+          brandLogo() and restores both the lockup below and this link's "Hyland" name
+          (NXSAT-721).
         -->
         @if (brandLogo(); as logo) {
-          <img class="login-brand-logo" [src]="logo.url" alt="" crossorigin="anonymous" />
+          <img
+            class="login-brand-logo"
+            appBrandLogoFallback
+            [src]="logo.url"
+            alt=""
+            crossorigin="anonymous"
+          />
         } @else {
           <sat-logo direction="horizontal" aria-hidden="true">
             <sat-h-mark-logo />

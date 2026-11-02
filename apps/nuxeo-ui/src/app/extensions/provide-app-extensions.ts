@@ -28,7 +28,13 @@ import {
 } from '@nuxeo/satori-platform/extensions';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
+  NXS_ADMIN_GROUP_DETAILS_PAGE_ID,
+  NXS_ADMIN_USER_DETAILS_PAGE_ID,
+  NXS_ADMIN_USERS_GROUPS_PAGE_ID,
   NXS_PERMISSIONS_PANEL_ID,
+  NxsAdminGroupDetailsPageComponent,
+  NxsAdminUserDetailsPageComponent,
+  NxsAdminUsersGroupsPageComponent,
   NxsPermissionsPanelComponent,
 } from '@nuxeo/satori-platform/components';
 import { SelectionService } from '@nuxeo/satori-platform/nuxeo-client';
@@ -166,6 +172,13 @@ function provideAppContributions(): EnvironmentProviders {
         // `app.config.ts` imports the library eagerly for `provideNxsComponents()`, so a lazy
         // import of it would load nothing later, and the module-boundary rule rejects the mix.
         [NXS_PERMISSIONS_PANEL_ID]: NxsPermissionsPanelComponent,
+
+        // The users and groups administration screens. The administration routes render each
+        // through its ID, so a customer library can re-register one, and fall back to the
+        // packaged component when no registration resolves.
+        [NXS_ADMIN_USERS_GROUPS_PAGE_ID]: NxsAdminUsersGroupsPageComponent,
+        [NXS_ADMIN_USER_DETAILS_PAGE_ID]: NxsAdminUserDetailsPageComponent,
+        [NXS_ADMIN_GROUP_DETAILS_PAGE_ID]: NxsAdminGroupDetailsPageComponent,
       },
     };
   });

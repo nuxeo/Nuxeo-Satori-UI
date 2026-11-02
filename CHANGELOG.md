@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `0.1.0`). This section holds breaking changes made since `0.1.0`, and `^0.1.0` admits only `0.1.x`,
 so the next publish has to be a minor. Nothing has been published yet.
 
+### Changed (configuration service) — a displaced packaged default is a warning
+
+A fragment, layout or asset that replaces or disables one **we** packaged is now reported at
+`warning` with its own diagnostic code — `replaced-packaged-default` or
+`removed-packaged-default` — instead of `info` with `replaced` / `removed` (NXSAT-747). It reaches
+`server.log` at `WARN` and the `diagnostics` of the served `bootstrap.json` and `manifest.json`.
+The usual way to arrive is naming a configuration package `defaults`, which makes its fragment
+`defaults` too and silently takes the place of ours; the generator refuses that name since
+NXSAT-729, but a hand-written component XML still reaches the server.
+
+Displacing **another package's** contribution is unchanged — ordinary layering, still `replaced` /
+`removed` at `info`. Nothing is blocked either way: replacement remains a supported operation, so
+a customer who meant it keeps the behaviour and gains a record of it. The distinction is drawn on
+the bundle that contributed the displaced item, so it covers anything we package rather than only
+the fragments named `defaults`. `level` was already one of `error` / `warning` / `info` and `code`
+is an open string, so neither is a schema change — but a consumer that matched on `replaced` or
+`removed` to notice this case should match the new codes instead.
+
 ### Changed — BREAKING (registered IDs) — one Browse entry again
 
 The adf-hx proof of concept is removed, with its two routes and its navigation entry.
@@ -145,6 +163,30 @@ private readonly locale = inject(LOCALE_ID);
 
 ### Changed (`@nuxeo-satori/platform` generators)
 
+- A generated package's `build.mjs` refuses JSON nested deeper than the server accepts, which was
+  the one server limit it did not know (NXSAT-730). Between 1001 and about 3700 deep the build used
+  to succeed and the package to install, while the server dropped the fragment at
+  `error invalid-json` and the customer's setting silently did nothing; deeper than that the
+  recursive duplicate-key check overflowed the stack and the build reported the bare words
+  "Maximum call stack size exceeded". Depth is now counted with an explicit stack before anything
+  walks the document, so the refusal names the file and the limit at any depth:
+  `nested 1001 deep; the server's JSON parser refuses a fragment or layout nested deeper than 1000`.
+  That limit is jackson-core's `StreamReadConstraints` default rather than one `nuxeo-agentic-core`
+  sets — `ConfigSnapshot` parses with a plain `ObjectMapper` — so the message names the parser, and
+  on a server whose Jackson raised the default the build is stricter than it needs to be rather
+  than generous enough to ship a package that does not work. Component XML is bounded the same way
+  at 256 elements, this script's own limit, because the recursive well-formedness walk used to
+  overflow and print a raw Node stack trace.
+- The `config-package` generator and `create.mjs` refuse a package name they cannot honour, before
+  writing anything, and say what it would clash with (NXSAT-729). Refused: `defaults`, the name of
+  Satori's own packaged fragments in both layers — a package of that name contributed a fragment on
+  the same key as ours and took its place on the server, reported only at `info`; `nuxeo-agentic-ui`,
+  the package every configuration package depends on; and the device names Windows reserves (`con`,
+  `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9`), which cannot be directory names there, through
+  any case and through a trailing extension. A `--directory` segment is held to the Windows names
+  too, since it also becomes a directory; Satori's names are refused for the package name only. A
+  package already generated under one of these names is unaffected until it is regenerated with
+  `--force`.
 - The `config-package` generator no longer runs Prettier over what it writes, so its output no
   longer depends on the workspace's Prettier configuration or on the title (Prettier rewrote
   `*Claims*` as `_Claims_`). Its templates are stored as Prettier formatted them, so the only file

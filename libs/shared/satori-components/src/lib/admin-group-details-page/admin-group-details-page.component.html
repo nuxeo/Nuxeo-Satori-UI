@@ -1,0 +1,202 @@
+@if (status(); as current) {
+  <p
+    class="nxs-gdp__status"
+    [class.nxs-gdp__status--error]="current.error"
+    [attr.role]="current.error ? 'alert' : 'status'"
+  >
+    {{ current.text | translate }}
+  </p>
+}
+
+@if (loading()) {
+  <mat-spinner
+    diameter="36"
+    [attr.aria-label]="'satori-components.admin-group-details-page.loading' | translate"
+  />
+} @else if (loadFailed()) {
+  <p class="nxs-gdp__error" role="alert">
+    {{ 'satori-components.admin-group-details-page.could-not-load' | translate }}
+  </p>
+} @else if (group(); as g) {
+  <section class="nxs-gdp__card nxs-gdp__profile">
+    <div class="nxs-gdp__identity">
+      <div class="nxs-gdp__avatar" aria-hidden="true"><mat-icon svgIcon="user_group" /></div>
+      <div>
+        <h1 class="nxs-gdp__title">{{ g.grouplabel || g.groupname }}</h1>
+        <p class="nxs-gdp__sub">{{ g.groupname }}</p>
+      </div>
+    </div>
+    <div class="nxs-gdp__actions">
+      <button type="button" mat-button (click)="deleteGroup()">
+        <mat-icon svgIcon="trash" />
+        {{ 'satori-components.admin-group-details-page.delete' | translate }}
+      </button>
+      <button type="button" mat-flat-button (click)="edit()">
+        <mat-icon svgIcon="pencil" />
+        {{ 'satori-components.admin-group-details-page.edit' | translate }}
+      </button>
+    </div>
+  </section>
+
+  <section class="nxs-gdp__card" aria-labelledby="nxs-gdp-members">
+    <h2 id="nxs-gdp-members" class="nxs-gdp__section-title">
+      {{ 'satori-components.admin-group-details-page.members' | translate }}
+    </h2>
+    <table mat-table [dataSource]="g.memberUsers ?? []" class="nxs-gdp__table">
+      <ng-container matColumnDef="username">
+        <th mat-header-cell *matHeaderCellDef>
+          {{ 'satori-components.admin-group-details-page.username' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let id">
+          <button type="button" class="nxs-gdp__link" (click)="userChosen()(id)">
+            {{ id }}
+          </button>
+        </td>
+      </ng-container>
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let id">
+          <button
+            type="button"
+            mat-icon-button
+            [attr.aria-label]="
+              'satori-components.admin-group-details-page.remove-member' | translate: { name: id }
+            "
+            [matTooltip]="
+              'satori-components.admin-group-details-page.remove-member-tooltip' | translate
+            "
+            (click)="removeMember(id)"
+          >
+            <mat-icon svgIcon="x_large" />
+          </button>
+        </td>
+      </ng-container>
+      <tr mat-header-row *matHeaderRowDef="memberColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: memberColumns"></tr>
+    </table>
+    @if ((g.memberUsers ?? []).length === 0) {
+      <p class="nxs-gdp__empty">
+        {{ 'satori-components.admin-group-details-page.no-members' | translate }}
+      </p>
+    }
+  </section>
+
+  <section class="nxs-gdp__card" aria-labelledby="nxs-gdp-nested">
+    <h2 id="nxs-gdp-nested" class="nxs-gdp__section-title">
+      {{ 'satori-components.admin-group-details-page.nested-groups' | translate }}
+    </h2>
+    <table mat-table [dataSource]="g.memberGroups ?? []" class="nxs-gdp__table">
+      <ng-container matColumnDef="groupname">
+        <th mat-header-cell *matHeaderCellDef>
+          {{ 'satori-components.admin-group-details-page.group' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let id">
+          <button type="button" class="nxs-gdp__link" (click)="groupChosen()(id)">
+            {{ id }}
+          </button>
+        </td>
+      </ng-container>
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let id">
+          <button
+            type="button"
+            mat-icon-button
+            [attr.aria-label]="
+              'satori-components.admin-group-details-page.remove-nested' | translate: { name: id }
+            "
+            [matTooltip]="
+              'satori-components.admin-group-details-page.remove-nested-tooltip' | translate
+            "
+            (click)="removeNestedGroup(id)"
+          >
+            <mat-icon svgIcon="x_large" />
+          </button>
+        </td>
+      </ng-container>
+      <tr mat-header-row *matHeaderRowDef="nestedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: nestedColumns"></tr>
+    </table>
+    @if ((g.memberGroups ?? []).length === 0) {
+      <p class="nxs-gdp__empty">
+        {{ 'satori-components.admin-group-details-page.no-nested' | translate }}
+      </p>
+    }
+  </section>
+
+  <section class="nxs-gdp__card" aria-labelledby="nxs-gdp-permissions">
+    <h2 id="nxs-gdp-permissions" class="nxs-gdp__section-title">
+      {{ 'satori-components.admin-group-details-page.permissions' | translate }}
+    </h2>
+    @if (permissionsLoading()) {
+      <mat-spinner
+        diameter="32"
+        [attr.aria-label]="'satori-components.admin-group-details-page.loading' | translate"
+      />
+    } @else {
+      <table mat-table [dataSource]="permissionsPage().rows" class="nxs-gdp__table">
+        <ng-container matColumnDef="on">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-group-details-page.on' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">
+            <button type="button" class="nxs-gdp__link" (click)="documentChosen()(row.documentUid)">
+              {{ row.documentTitle }}
+            </button>
+            <div class="nxs-gdp__path">{{ row.documentPath }}</div>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="right">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-group-details-page.right' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">{{ row.permission }}</td>
+        </ng-container>
+        <ng-container matColumnDef="timeFrame">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-group-details-page.time-frame' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">{{ timeFrame(row) }}</td>
+        </ng-container>
+        <ng-container matColumnDef="grantedBy">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.admin-group-details-page.granted-by' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">{{ row.grantedBy ?? '—' }}</td>
+        </ng-container>
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let row">
+            <button
+              type="button"
+              mat-icon-button
+              [attr.aria-label]="
+                'satori-components.admin-group-details-page.remove-permission' | translate
+              "
+              [matTooltip]="
+                'satori-components.admin-group-details-page.remove-permission' | translate
+              "
+              (click)="removePermission(row)"
+            >
+              <mat-icon svgIcon="trash" />
+            </button>
+          </td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="permissionColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: permissionColumns"></tr>
+      </table>
+      @if (permissionsPage().rows.length === 0) {
+        <p class="nxs-gdp__empty">
+          {{ 'satori-components.admin-group-details-page.no-permissions' | translate }}
+        </p>
+      }
+      <mat-paginator
+        [length]="permissionsPage().totalDocuments"
+        [pageSize]="pageSize"
+        [pageIndex]="permissionsIndex()"
+        [hidePageSize]="true"
+        (page)="onPermissionsPage($event)"
+      />
+    }
+  </section>
+}

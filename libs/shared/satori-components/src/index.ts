@@ -14,6 +14,7 @@ export {
 } from './lib/comments/comment-extra.directive';
 export { NxsCommentsComponent } from './lib/comments/comments.component';
 export { NxsTagEditorComponent } from './lib/tag-editor/tag-editor.component';
+export { provideNxsTagWrites } from './lib/tag-editor/tag-writes.service';
 export {
   NxsManageVersionsComponent,
   nxsVersionLabel,
@@ -105,6 +106,37 @@ export {
   type NxsVocabularyLabel,
 } from './lib/properties-panel/properties-panel.component';
 export { nxsPropertyText } from './lib/properties-panel/property-text';
+export {
+  NxsChangePasswordDialogComponent,
+  type NxsChangePasswordDialogData,
+} from './lib/change-password-dialog/change-password-dialog.component';
+export {
+  NxsUserFormDialogComponent,
+  type NxsUserFormDialogData,
+  type NxsUserFormDialogResult,
+} from './lib/user-form-dialog/user-form-dialog.component';
+export {
+  NxsGroupFormDialogComponent,
+  type NxsGroupFormDialogData,
+  type NxsGroupFormDialogResult,
+} from './lib/group-form-dialog/group-form-dialog.component';
+export {
+  NxsConfirmDialogComponent,
+  type NxsConfirmDialogData,
+} from './lib/confirm-dialog/confirm-dialog.component';
+export {
+  NXS_ADMIN_USERS_GROUPS_PAGE_ID,
+  NxsAdminUsersGroupsPageComponent,
+  type NxsRecentPrincipalRow,
+} from './lib/admin-users-groups-page/admin-users-groups-page.component';
+export {
+  NXS_ADMIN_USER_DETAILS_PAGE_ID,
+  NxsAdminUserDetailsPageComponent,
+} from './lib/admin-user-details-page/admin-user-details-page.component';
+export {
+  NXS_ADMIN_GROUP_DETAILS_PAGE_ID,
+  NxsAdminGroupDetailsPageComponent,
+} from './lib/admin-group-details-page/admin-group-details-page.component';
 export {
   NxsRenameDialogComponent,
   type NxsRenameDialogData,

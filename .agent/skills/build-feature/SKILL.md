@@ -2,7 +2,7 @@
 name: build-feature
 description: >-
   End-to-end agentic playbook for building a feature, enhancement or new module in the
-  agentic-ui-poc Nx/Angular monorepo. Extends the fix-bug skill: inherits its workspace,
+  Nuxeo-Satori-UI Nx/Angular monorepo. Extends the fix-bug skill: inherits its workspace,
   evidence story, gate, PR, CI, Jira and metrics machinery, and overrides the bug-shaped
   phases with design and layer placement, vertical-slice delivery, extension points, public
   API review and docs as deliverables. Use when asked to implement a feature or Jira story,

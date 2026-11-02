@@ -45,7 +45,12 @@ import {
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
-import { SatBreadcrumbs, type SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
+import {
+  NXS_PRIMITIVE_IDS,
+  NxsBreadcrumbsComponent,
+  type NxsBreadcrumbItem,
+} from '@nuxeo/satori-platform/components';
 import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
@@ -83,7 +88,8 @@ const DUE_LABEL_KEYS = {
     MatTabsModule,
     MatDividerModule,
     DocumentViewerComponent,
-    SatBreadcrumbs,
+    ExtensionOutletComponent,
+    NxsBreadcrumbsComponent,
     SatHeaderBar,
   ],
   templateUrl: './tasks-page.component.html',
@@ -176,11 +182,13 @@ export class TasksPageComponent implements OnInit {
   readonly groupResults = signal<NuxeoGroup[]>([]);
   readonly searching = signal(false);
   private breadcrumbPathCache: string | null = null;
-  private breadcrumbItemsCache: SatBreadcrumbsItem[] = [];
+  private breadcrumbItemsCache: NxsBreadcrumbItem[] = [];
+  /** The target document's trail renders by ID, so an override of `nxs.primitives.breadcrumbs` reaches it. */
+  protected readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
 
   /* ─── Computed ─── */
   readonly hasSelection = computed(() => this.selectedTask() !== null);
-  readonly breadcrumbItems = computed<SatBreadcrumbsItem[]>(() => {
+  readonly breadcrumbItems = computed<NxsBreadcrumbItem[]>(() => {
     const doc = this.targetDoc();
     if (!doc?.path) return [];
 
@@ -189,25 +197,15 @@ export class TasksPageComponent implements OnInit {
     }
 
     this.breadcrumbPathCache = doc.path;
-    let accumulated = '/browse';
-    this.breadcrumbItemsCache = doc.path
-      .split('/')
-      .filter(Boolean)
-      .map((s) => {
-        accumulated += `/${s}`;
-        return { label: decodeURIComponent(s), href: accumulated };
-      });
+    // Router links, so the trail routes itself in the app whichever component renders it,
+    // including links Material folds into a menu outside its host.
+    const parts = doc.path.split('/').filter(Boolean);
+    this.breadcrumbItemsCache = parts.map((s, index) => ({
+      label: decodeURIComponent(s),
+      routerLink: ['/browse', ...parts.slice(0, index + 1)],
+    }));
     return this.breadcrumbItemsCache;
   });
-
-  onBreadcrumbClick(event: MouseEvent): void {
-    const anchor = (event.target as HTMLElement).closest('a');
-    const href = anchor?.getAttribute('href');
-    if (href) {
-      event.preventDefault();
-      void this.router.navigateByUrl(href);
-    }
-  }
 
   /** Actors assigned to the current task (from task actors list). */
   readonly taskActors = computed<string[]>(() => {

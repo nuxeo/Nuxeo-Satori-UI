@@ -1,13 +1,11 @@
 import { provideZonelessChangeDetection } from '@angular/core';
-import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { of } from 'rxjs';
-import { vi } from 'vitest';
-
-import {
-  DocumentDetailService,
-  type UserGroupSuggestion,
-} from '@nuxeo/satori-platform/nuxeo-client';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { testTranslateModule } from '@agentic-ui/testing/i18n';
+import { DocumentDetailService, UserService } from '@nuxeo/satori-platform/nuxeo-client';
+import { of, throwError } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ShareSavedSearchAddPermissionDialogComponent,
@@ -15,126 +13,268 @@ import {
   type ShareSavedSearchAddPermissionResult,
 } from './share-saved-search-add-permission-dialog.component';
 
-const MEMBERS: UserGroupSuggestion = {
-  id: 'members',
-  displayLabel: 'members',
-  type: 'GROUP_TYPE',
-  prefixed_id: 'group:members',
-};
-
-/** A saved search's `userVisiblePermissions` on a stock server, measured on the local Nuxeo. */
-const SAVED_SEARCH_VISIBLE = ['Read', 'ReadWrite', 'Everything'];
-
-describe('ShareSavedSearchAddPermissionDialogComponent', () => {
+describe('Saved-search sharing — principal picker integration', () => {
   let fixture: ComponentFixture<ShareSavedSearchAddPermissionDialogComponent>;
+  let search: ReturnType<typeof vi.fn>;
+  let close: ReturnType<typeof vi.fn>;
+  const group = {
+    id: 'legal-team',
+    displayLabel: 'Legal team',
+    type: 'GROUP_TYPE' as const,
+    prefixed_id: 'group:legal-team',
+  };
+  const box = (): HTMLInputElement =>
+    fixture.nativeElement.querySelector('nxs-user-group-picker input');
+  const settle = async (): Promise<void> => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  };
+  const type = async (text: string): Promise<void> => {
+    box().focus();
+    box().value = text;
+    box().dispatchEvent(new Event('input'));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await settle();
+  };
+  const pick = async (): Promise<void> => {
+    await type('legal');
+    const option = document.querySelector<HTMLElement>(
+      '.mat-mdc-autocomplete-panel mat-option:not([aria-disabled="true"])',
+    );
+    expect(option).not.toBeNull();
+    option?.click();
+    await settle();
+  };
 
-  async function open(data: ShareSavedSearchAddPermissionDialogData) {
+  async function render(data: ShareSavedSearchAddPermissionDialogData = {}): Promise<void> {
     await TestBed.configureTestingModule({
-      imports: [ShareSavedSearchAddPermissionDialogComponent],
+      imports: [ShareSavedSearchAddPermissionDialogComponent, testTranslateModule()],
       providers: [
         provideZonelessChangeDetection(),
+        provideNoopAnimations(),
         { provide: MAT_DIALOG_DATA, useValue: data },
-        { provide: MatDialogRef, useValue: { close: vi.fn() } },
-        { provide: DocumentDetailService, useValue: { searchUsersGroups: vi.fn(() => of([])) } },
+        { provide: MatDialogRef, useValue: { close } },
+        { provide: DocumentDetailService, useValue: { searchUsersGroups: search } },
+        { provide: UserService, useValue: {} },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(ShareSavedSearchAddPermissionDialogComponent);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    return fixture.componentInstance;
+    await settle();
   }
 
+  beforeEach(() => {
+    search = vi.fn(() => of([group]));
+    close = vi.fn();
+  });
+  afterEach(() => {
+    fixture?.destroy();
+    TestBed.resetTestingModule();
+  });
+
+  it('waits for three characters and returns the chosen group id, not its label', async () => {
+    await render();
+    await type('le');
+    expect(search).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.isSubmitDisabled()).toBe(true);
+    await pick();
+    expect(search).toHaveBeenCalledWith('legal');
+    fixture.componentInstance.create(false);
+    expect(close).toHaveBeenCalledWith([
+      expect.objectContaining({
+        userGroup: 'legal-team',
+        right: 'Read',
+        timeFrame: 'Permanent',
+        grantedBy: 'Group',
+      }),
+    ]);
+  });
+
+  it('clears selection when typing and keeps failed searches retryable', async () => {
+    await render();
+    await pick();
+    search.mockReturnValueOnce(throwError(() => new Error('Network')));
+    await type('offline');
+    expect(fixture.componentInstance.selectedPrincipal()).toBeNull();
+    expect(fixture.componentInstance.isSubmitDisabled()).toBe(true);
+    fixture.componentInstance.create(false);
+    expect(close).not.toHaveBeenCalled();
+    await pick();
+    expect(fixture.componentInstance.selectedPrincipal()?.id).toBe('legal-team');
+  });
+
+  it('clears the picker, error-free, after create-and-add-another and accumulates entries', async () => {
+    await render();
+    await pick();
+    // Leaving the picker for the button touches it: focus moves out of the picker's host.
+    const button = fixture.nativeElement.querySelector('button[mat-flat-button]') as HTMLElement;
+    box().dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: button }));
+    fixture.componentInstance.create(true);
+    await settle();
+    expect(box().value).toBe('');
+    expect(
+      fixture.nativeElement.querySelector('nxs-user-group-picker .mat-form-field-invalid'),
+    ).toBeNull();
+    expect(fixture.componentInstance.isSubmitDisabled()).toBe(true);
+    expect(close).not.toHaveBeenCalled();
+    await pick();
+    fixture.componentInstance.create(false);
+    expect(close.mock.calls[0][0]).toHaveLength(2);
+  });
+
+  it('resets date and notification state after adding another', async () => {
+    await render();
+    await pick();
+    const dialog = fixture.componentInstance;
+    dialog.timeFrameMode = 'date-based';
+    dialog.beginDate = new Date(2030, 0, 2);
+    dialog.endDate = new Date(2030, 0, 31);
+    dialog.sendNotify = false;
+    dialog.notifyComment = 'Notify the team';
+
+    dialog.create(true);
+
+    expect(dialog.timeFrameMode).toBe('permanent');
+    expect(dialog.beginDate).toBeNull();
+    expect(dialog.endDate).toBeNull();
+    expect(dialog.sendNotify).toBe(true);
+    expect(dialog.notifyComment).toBe('');
+  });
+
+  it('does not submit without a principal or while saving, and cancels without a result', async () => {
+    await render();
+    const dialog = fixture.componentInstance;
+    dialog.create(false);
+    expect(close).not.toHaveBeenCalled();
+    await pick();
+    dialog.saving.set(true);
+    dialog.create(false);
+    expect(close).not.toHaveBeenCalled();
+    dialog.cancel();
+    expect(close).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it('keeps an existing principal read-only and preserves its group kind on edit', async () => {
+    await render({
+      initialData: {
+        userGroup: 'Legal team',
+        right: 'Edit',
+        timeFrame: 'Permanent',
+        grantedBy: 'Group',
+      },
+    });
+    expect(fixture.nativeElement.querySelector('nxs-user-group-picker')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.user-group-display').textContent).toContain(
+      'Legal team',
+    );
+    fixture.componentInstance.create(false);
+    expect(close).toHaveBeenCalledWith([
+      expect.objectContaining({
+        userGroup: 'Legal team',
+        right: 'Edit',
+        timeFrame: 'Permanent',
+        grantedBy: 'Group',
+      }),
+    ]);
+    expect(search).not.toHaveBeenCalled();
+  });
+
   const values = (dialog: ShareSavedSearchAddPermissionDialogComponent) =>
-    dialog.rightOptions.map((o) => o.value);
+    dialog.rightOptions.map((option) => option.value);
 
   it("offers the saved search's own list, which has no Can collect", async () => {
-    const dialog = await open({ permissions: SAVED_SEARCH_VISIBLE });
+    await render({ permissions: ['Read', 'ReadWrite', 'Everything'] });
+    const dialog = fixture.componentInstance;
     expect(values(dialog)).toEqual(['Read', 'ReadWrite', 'Everything']);
-    expect(dialog.rightOptions.map((o) => o.label)).toEqual(['Read', 'Edit', 'Manage everything']);
+    expect(dialog.rightOptions.map((option) => option.label)).toEqual([
+      'Read',
+      'Edit',
+      'Manage everything',
+    ]);
   });
 
   it('offers whatever the server lists for the type rather than a fixed list', async () => {
-    const dialog = await open({
-      permissions: ['Read', 'ReadCanCollect', 'ReadWrite', 'Everything'],
-    });
-    expect(values(dialog)).toEqual(['Read', 'ReadCanCollect', 'ReadWrite', 'Everything']);
+    await render({ permissions: ['Read', 'ReadCanCollect', 'ReadWrite', 'Everything'] });
+    expect(values(fixture.componentInstance)).toEqual([
+      'Read',
+      'ReadCanCollect',
+      'ReadWrite',
+      'Everything',
+    ]);
   });
 
-  describe('with a list that does not hold Read', () => {
-    const NO_READ = ['ReadWrite', 'Everything'];
+  it('starts a new entry on the first right offered when Read is absent', async () => {
+    await render({ permissions: ['ReadWrite', 'Everything'] });
+    expect(fixture.componentInstance.right).toBe('ReadWrite');
+  });
 
-    it('starts a new entry on the first right offered', async () => {
-      const dialog = await open({ permissions: NO_READ });
-      expect(dialog.right).toBe('ReadWrite');
-    });
+  it('resets to the first offered right and clears the picker after adding another', async () => {
+    await render({ permissions: ['ReadWrite', 'Everything'] });
+    await pick();
+    const dialog = fixture.componentInstance;
+    dialog.right = 'Everything';
+    dialog.create(true);
+    await settle();
+    expect(dialog.right).toBe('ReadWrite');
+    expect(dialog.selectedPrincipal()).toBeNull();
+    expect(box().value).toBe('');
+    expect(close).not.toHaveBeenCalled();
+  });
 
-    it('resets to the first right offered after Create And Add Another', async () => {
-      const dialog = await open({ permissions: NO_READ });
-      dialog.onSuggestionSelected(MEMBERS);
-      dialog.right = 'Everything';
+  it('disables submission when the selected right is not offered', async () => {
+    await render({ permissions: ['ReadWrite', 'Everything'] });
+    await pick();
+    const dialog = fixture.componentInstance;
+    expect(dialog.isSubmitDisabled()).toBe(false);
+    dialog.right = 'Read';
+    expect(dialog.isSubmitDisabled()).toBe(true);
+  });
 
-      dialog.create(true);
-
-      expect(dialog.right).toBe('ReadWrite');
-    });
-
-    it('will not submit a right the list does not offer', async () => {
-      const dialog = await open({ permissions: NO_READ });
-      dialog.onSuggestionSelected(MEMBERS);
-      expect(dialog.isSubmitDisabled()).toBe(false);
-
-      dialog.right = 'Read';
-
-      expect(dialog.isSubmitDisabled()).toBe(true);
-    });
-
-    it('no-ops when create() is called with a right the list does not offer', async () => {
-      const dialog = await open({ permissions: NO_READ });
-      const mockDialogRef = TestBed.inject(MatDialogRef);
-      dialog.onSuggestionSelected(MEMBERS);
-      dialog.right = 'Read';
-
-      dialog.create(false);
-
-      expect(mockDialogRef.close).not.toHaveBeenCalled();
-    });
-
-    it('does not queue an unoffered right through Create And Add Another', async () => {
-      const dialog = await open({ permissions: NO_READ });
-      const mockDialogRef = TestBed.inject(MatDialogRef);
-      dialog.onSuggestionSelected(MEMBERS);
-      dialog.right = 'Read';
-
-      dialog.create(true);
-
-      expect(mockDialogRef.close).not.toHaveBeenCalled();
-      expect(dialog.selectedPrincipal).toEqual(MEMBERS);
-      dialog.right = 'ReadWrite';
-      dialog.create(false);
-
-      expect(mockDialogRef.close).toHaveBeenCalledExactlyOnceWith([
-        expect.objectContaining({ right: 'ReadWrite' }),
-      ]);
-    });
+  it('does not create an entry for a right the server does not offer', async () => {
+    await render({ permissions: ['ReadWrite', 'Everything'] });
+    await pick();
+    fixture.componentInstance.right = 'Read';
+    fixture.componentInstance.create(false);
+    expect(close).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.saving()).toBe(false);
   });
 
   it("falls back to Nuxeo's default three when the read carried no list", async () => {
-    const dialog = await open({});
-    expect(values(dialog)).toEqual(['Read', 'ReadWrite', 'Everything']);
+    await render();
+    expect(values(fixture.componentInstance)).toEqual(['Read', 'ReadWrite', 'Everything']);
   });
 
-  it('keeps an edited entry’s permission in the list when the type does not offer it', async () => {
-    const dialog = await open({
-      permissions: SAVED_SEARCH_VISIBLE,
+  it("keeps an edited entry's permission when the type no longer offers it", async () => {
+    await render({
+      permissions: ['Read', 'ReadWrite', 'Everything'],
       initialData: { userGroup: 'members', right: 'ReadCanCollect', timeFrame: 'Permanent' },
     });
+    const dialog = fixture.componentInstance;
     expect(dialog.right).toBe('ReadCanCollect');
     expect(values(dialog)).toEqual(['Read', 'ReadWrite', 'Everything', 'ReadCanCollect']);
   });
 
-  // NXSAT-300: editing an entry must not change the permission it holds. Nuxeo Web UI's
-  // `nuxeo-popup-permission` assigns `params.permission = ace.permission` verbatim and only ever
-  // defaults to `Read` for a *new* entry (`_getResetParams`), never for an edit.
+  it('falls back to Read when an empty permissions list is provided', async () => {
+    await render({ permissions: [] });
+    expect(fixture.componentInstance.right).toBe('Read');
+    expect(values(fixture.componentInstance)).toEqual(['Read', 'ReadWrite', 'Everything']);
+  });
+
+  it('translates each offered right label', async () => {
+    await render({ permissions: ['Read', 'Everything'] });
+    expect(fixture.componentInstance.rightOptions).toEqual([
+      { value: 'Read', label: 'Read' },
+      { value: 'Everything', label: 'Manage everything' },
+    ]);
+  });
+
+  // NXSAT-334: permissions and dates round-trip through an edit. Carried over from main, adapted
+  // to the principal picker (the edit seeds the picker from `userGroup`).
+  const SAVED_SEARCH_VISIBLE = ['Read', 'ReadWrite', 'Everything'];
+  const openDialog = async (data: ShareSavedSearchAddPermissionDialogData) => {
+    await render(data);
+    return fixture.componentInstance;
+  };
   describe('an entry holding a permission outside the type’s list', () => {
     // The nine grants NXSAT-300 added, the retention pair, and the section-root permission Nuxeo
     // grants `members` by default. None is in a saved search's `userVisiblePermissions`.
@@ -154,7 +294,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     ];
 
     it.each(OUTSIDE)('opens an edit of %s on that permission, not another', async (permission) => {
-      const dialog = await open({
+      const dialog = await openDialog({
         permissions: SAVED_SEARCH_VISIBLE,
         initialData: { userGroup: 'members', right: permission, timeFrame: 'Permanent' },
       });
@@ -162,7 +302,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     });
 
     it.each(OUTSIDE)('offers %s so the edit can be submitted unchanged', async (permission) => {
-      const dialog = await open({
+      const dialog = await openDialog({
         permissions: SAVED_SEARCH_VISIBLE,
         initialData: { userGroup: 'members', right: permission, timeFrame: 'Permanent' },
       });
@@ -172,7 +312,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     it.each(OUTSIDE)(
       'returns %s unchanged when the user edits only the dates',
       async (permission) => {
-        const dialog = await open({
+        const dialog = await openDialog({
           permissions: SAVED_SEARCH_VISIBLE,
           initialData: { userGroup: 'members', right: permission, timeFrame: 'Permanent' },
         });
@@ -197,7 +337,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     );
 
     it.each(OUTSIDE)('returns %s unchanged for a permanent entry', async (permission) => {
-      const dialog = await open({
+      const dialog = await openDialog({
         permissions: SAVED_SEARCH_VISIBLE,
         initialData: { userGroup: 'members', right: permission, timeFrame: 'Permanent' },
       });
@@ -228,7 +368,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
       initial: Partial<ShareSavedSearchAddPermissionDialogData['initialData']> = {},
       act: (d: ShareSavedSearchAddPermissionDialogComponent) => void = () => undefined,
     ) => {
-      const dialog = await open({
+      const dialog = await openDialog({
         permissions: SAVED_SEARCH_VISIBLE,
         initialData: {
           userGroup: 'powerusers',
@@ -301,7 +441,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     // an existing expiry read as "cleared" and the save removed the boundary.
     describe('invalid date input', () => {
       /** Types `text` into one of the pickers, the way a user would. */
-      const type = async (which: 'from' | 'to', text: string) => {
+      const typeDate = async (which: 'from' | 'to', text: string) => {
         const host: HTMLElement = fixture.nativeElement;
         // The two date inputs are the ones bound to a datepicker, in From/To order.
         const inputs = host.querySelectorAll<HTMLInputElement>('.date-fields input');
@@ -315,7 +455,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
       };
 
       it('will not submit a mistyped expiry, so the boundary cannot be cleared', async () => {
-        const dialog = await open({
+        const dialog = await openDialog({
           permissions: SAVED_SEARCH_VISIBLE,
           initialData: {
             userGroup: 'powerusers',
@@ -327,7 +467,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
         });
         expect(dialog.isSubmitDisabled()).toBe(false);
 
-        await type('to', 'not a date');
+        await typeDate('to', 'not a date');
 
         expect(dialog.endDate).toBeNull();
         expect(dialog.isSubmitDisabled()).toBe(true);
@@ -338,7 +478,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
       });
 
       it('still allows clearing a date on purpose', async () => {
-        const dialog = await open({
+        const dialog = await openDialog({
           permissions: SAVED_SEARCH_VISIBLE,
           initialData: {
             userGroup: 'powerusers',
@@ -349,7 +489,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
           },
         });
 
-        await type('to', '');
+        await typeDate('to', '');
 
         expect(dialog.isSubmitDisabled()).toBe(false);
 
@@ -368,7 +508,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     // `nxs-permissions-panel` refuses the same shape as `invalid-time-frame`.
     describe('an inverted range', () => {
       const dated = () =>
-        open({
+        openDialog({
           permissions: SAVED_SEARCH_VISIBLE,
           initialData: {
             userGroup: 'powerusers',
@@ -465,7 +605,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     });
 
     it('opens a dated entry in date-based mode, from the instants not the label', async () => {
-      const dated = await open({
+      const dated = await openDialog({
         permissions: SAVED_SEARCH_VISIBLE,
         initialData: { userGroup: 'powerusers', right: 'Write', timeFrame: 'x', end: END },
       });
@@ -475,7 +615,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     });
 
     it('opens an entry with no dates as permanent', async () => {
-      const undated = await open({
+      const undated = await openDialog({
         permissions: SAVED_SEARCH_VISIBLE,
         initialData: { userGroup: 'members', right: 'Read', timeFrame: 'x' },
       });
@@ -487,7 +627,7 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     it('shows no date for an instant it cannot parse, but still writes it back', async () => {
       // A value the server sent that is not a date leaves the picker empty rather than showing
       // `Invalid Date`; untouched, it is still returned as it came, so nothing is destroyed.
-      const dialog = await open({
+      const dialog = await openDialog({
         permissions: SAVED_SEARCH_VISIBLE,
         initialData: {
           userGroup: 'powerusers',
@@ -522,105 +662,5 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
       });
       expect(result).toMatchObject({ notify: false, comment: null });
     });
-  });
-
-  it('falls back to Read when an empty permissions list is provided', async () => {
-    const dialog = await open({ permissions: [] });
-    expect(dialog.right).toBe('Read');
-    expect(values(dialog)).toEqual(['Read', 'ReadWrite', 'Everything']);
-  });
-
-  it('creates option labels by passing each right through permissionRightLabel', async () => {
-    const dialog = await open({ permissions: ['Read', 'Everything'] });
-    expect(dialog.rightOptions).toHaveLength(2);
-    expect(dialog.rightOptions[0]).toEqual({ value: 'Read', label: 'Read' });
-    expect(dialog.rightOptions[1]).toEqual({ value: 'Everything', label: 'Manage everything' });
-  });
-
-  it.each([
-    [new Date(2030, 0, 2), new Date(2030, 0, 31), '2030-01-02 - 2030-01-31'],
-    [new Date(2030, 0, 2), null, 'From 2030-01-02'],
-    [null, new Date(2030, 0, 31), 'Until 2030-01-31'],
-    [null, null, 'Permanent'],
-  ])('serializes date-based entries with begin %s and end %s', async (begin, end, timeFrame) => {
-    const dialog = await open({});
-    dialog.onSuggestionSelected(MEMBERS);
-    dialog.timeFrameMode = 'date-based';
-    dialog.beginDate = begin;
-    dialog.endDate = end;
-
-    dialog.create(false);
-
-    expect(TestBed.inject(MatDialogRef).close).toHaveBeenCalledExactlyOnceWith([
-      expect.objectContaining({
-        userGroup: 'members',
-        right: 'Read',
-        timeFrame,
-        grantedBy: 'Group',
-      }),
-    ]);
-    expect(dialog.saving()).toBe(false);
-  });
-
-  it('resets date and notification state after adding another, retaining queued entries', async () => {
-    const dialog = await open({});
-    dialog.onSuggestionSelected(MEMBERS);
-    dialog.timeFrameMode = 'date-based';
-    dialog.beginDate = new Date(2030, 0, 2);
-    dialog.endDate = new Date(2030, 0, 31);
-    dialog.sendNotify = false;
-    dialog.notifyComment = 'Notify the team';
-    dialog.suggestions.set([MEMBERS]);
-
-    dialog.create(true);
-
-    expect(dialog.searchText).toBe('');
-    expect(dialog.selectedPrincipal).toBeNull();
-    expect(dialog.beginDate).toBeNull();
-    expect(dialog.endDate).toBeNull();
-    expect(dialog.timeFrameMode).toBe('permanent');
-    expect(dialog.sendNotify).toBe(true);
-    expect(dialog.notifyComment).toBe('');
-    expect(dialog.suggestions()).toEqual([]);
-    dialog.onSuggestionSelected({
-      ...MEMBERS,
-      id: 'alice',
-      displayLabel: 'Alice',
-      type: 'USER_TYPE',
-    });
-    dialog.create(false);
-    expect(TestBed.inject(MatDialogRef).close).toHaveBeenCalledExactlyOnceWith([
-      expect.objectContaining({ timeFrame: '2030-01-02 - 2030-01-31', grantedBy: 'Group' }),
-      expect.objectContaining({
-        userGroup: 'Alice',
-        right: 'Read',
-        timeFrame: 'Permanent',
-        grantedBy: 'User',
-      }),
-    ]);
-  });
-
-  it('does not submit without a principal or while saving, and cancels without a result', async () => {
-    const dialog = await open({});
-    const close = TestBed.inject(MatDialogRef).close;
-    dialog.create(false);
-    expect(close).not.toHaveBeenCalled();
-    dialog.onSuggestionSelected(MEMBERS);
-    dialog.saving.set(true);
-    dialog.create(false);
-    expect(close).not.toHaveBeenCalled();
-    dialog.cancel();
-    expect(close).toHaveBeenCalledExactlyOnceWith(null);
-  });
-
-  it('displays suggestions and clears the selection when the search changes', async () => {
-    const dialog = await open({});
-    expect(dialog.displaySuggestion(null)).toBe('');
-    expect(dialog.displaySuggestion('Alice')).toBe('Alice');
-    expect(dialog.displaySuggestion(MEMBERS)).toBe('members');
-    dialog.onSuggestionSelected(MEMBERS);
-    dialog.onSearchChange('new');
-    expect(dialog.searchText).toBe('new');
-    expect(dialog.selectedPrincipal).toBeNull();
   });
 });

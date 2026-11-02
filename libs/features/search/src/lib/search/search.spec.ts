@@ -47,6 +47,17 @@ import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 type SearchResponseLike = { items: SearchResultItem[]; aggregations: Record<string, unknown> };
 
+/** A customer's tag, registered under `nxs.primitives.tag`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-tag',
+  template: '<span class="acme-tag" [attr.data-color]="color()">{{ label() }}</span>',
+})
+class AcmeTagComponent {
+  readonly label = input('');
+  readonly color = input('');
+}
+
 /** A card registered under the packaged card's ID, which shows what the page passed it. */
 @Component({
   standalone: true,
@@ -220,7 +231,6 @@ describe('SearchComponent', () => {
     return {
       id: 'doc1',
       name: 'Test Doc',
-      imageUrl: 'images/Login-background.svg',
       type: 'File',
       modifiedDate: '2026-08-24',
       lastContributor: 'admin',
@@ -656,28 +666,6 @@ describe('SearchComponent', () => {
     it('falls back to its own message when the server sends none', () => {
       component.onFavoriteFailed(new Error(''));
       expect(toast.error).toHaveBeenCalledWith('Failed to update favorites.', { duration: 5000 });
-    });
-  });
-
-  describe('onImageError', () => {
-    // NXSAT-318: the packaged app is served from /nuxeo/agentic-ui/, so the fallback must
-    // resolve against the base href rather than the server root.
-    it('should replace image src with the fallback, resolved against the base href', () => {
-      const mockImg = { src: '' } as HTMLImageElement;
-      const event = { target: mockImg } as unknown as Event;
-
-      component.onImageError(event);
-
-      expect(new URL(mockImg.src, 'http://nuxeo.test/nuxeo/agentic-ui/').pathname).toBe(
-        '/nuxeo/agentic-ui/images/Login-background.svg',
-      );
-    });
-
-    it('should do nothing when target is not an image', () => {
-      const event = { target: null } as Event;
-
-      // Should not throw
-      expect(() => component.onImageError(event)).not.toThrow();
     });
   });
 
@@ -1357,19 +1345,51 @@ describe('SearchComponent', () => {
 
       expect(component.displayResults().map((r) => r.name)).toEqual(['From AI']);
     });
+  });
 
-    it('gives each row fallback art that resolves against the base href (NXSAT-318)', async () => {
+  /**
+   * NXSAT-652. A list row's type renders through `nxs.primitives.tag`, so a component registered
+   * under the ID replaces it; with nothing registered, `nxs-tag` renders. The grid shows the type
+   * as its card's subheading instead, which `grid view` covers. Seen red on purpose by restoring
+   * the plain-text type badge.
+   */
+  describe('the type tag', () => {
+    async function renderList(providers: (Provider | EnvironmentProviders)[]): Promise<void> {
       mockSearchService.search.mockReturnValue(
-        of({ items: [resultItem({ id: 'doc', title: 'Doc' })], aggregations: {} }),
+        of({ items: [resultItem({ id: 'a', type: 'File' })], aggregations: {} }),
       );
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true, providers });
       fixture = TestBed.createComponent(SearchComponent);
       component = fixture.componentInstance;
+      component.setViewMode('list');
       await fixture.whenStable();
+      fixture.detectChanges();
+      // An unregistered ID is reported unresolved from a promise.
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+    }
 
-      const [view] = component.displayResults();
-      expect(new URL(view.imageUrl, 'http://nuxeo.test/nuxeo/agentic-ui/').pathname).toBe(
-        '/nuxeo/agentic-ui/images/Login-background.svg',
-      );
+    const override = provideSatoriExtensions({
+      components: { [NXS_PRIMITIVE_IDS.tag]: AcmeTagComponent },
+    });
+    const el = (selector: string): HTMLElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector(selector);
+
+    it('renders the list row’s type through nxs.primitives.tag', async () => {
+      await renderList([override]);
+
+      const tag = el('.simple-list-type .acme-tag');
+      expect(tag?.textContent?.trim()).toBe('File');
+      expect(tag?.dataset['color']).toBe('gray');
+      expect(el('.simple-list-type')?.getAttribute('title')).toBe('File');
+    });
+
+    it('falls back to nxs-tag when nothing is registered under the ID', async () => {
+      await renderList([]);
+
+      expect(el('.simple-list-type nxs-tag')?.textContent?.trim()).toBe('File');
+      expect(el('.simple-list-type .acme-tag')).toBeNull();
     });
   });
 
