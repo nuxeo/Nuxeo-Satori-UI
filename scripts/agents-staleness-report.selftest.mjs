@@ -25,8 +25,24 @@ const repoRoot = resolve(here, '..');
 const script = join(here, 'agents-staleness-report.mjs');
 const WORKFLOW = join(repoRoot, '.github/workflows/staleness-check.yml');
 
+/**
+ * Whether the filesystem can hold the filenames two of these controls need.
+ *
+ * `>` and a newline are illegal in a Win32 filename, which is a property of the filesystem and
+ * not of the thing under test. Backticks, `$(…)` and `;` **are** legal there, so the main hostile
+ * name below is portable and only the redirection and the newline cases are POSIX-only.
+ *
+ * Reported as SKIPPED, not quietly omitted. "9 of 9 green" on a platform where two could not run
+ * would misreport the coverage, which is the class of defect this whole change is about.
+ */
+const POSIX_FILENAMES = process.platform !== 'win32';
+
 const controls = [];
-function control(name, fn) {
+function control(name, fn, { needs = true, why = '' } = {}) {
+  if (!needs) {
+    controls.push({ name, skipped: true, why });
+    return;
+  }
   try {
     fn();
     controls.push({ name, ok: true });
@@ -41,9 +57,9 @@ function expect(condition, message) {
 const workspace = mkdtempSync(join(tmpdir(), 'staleness-selftest-'));
 
 /**
- * A service basename carrying every metacharacter the old shell body would have acted on:
- * backticks, `$(…)`, a statement separator and a redirection. The real list items are
- * backticked, which is the half that actually fired in production.
+ * A service basename carrying the metacharacters the old shell body acted on: backticks,
+ * `$(…)` and a statement separator. The real list items are backticked, which is the half that
+ * actually fired in production, and every one of these is a legal filename on both platforms.
  *
  * The canary is a bare name, not a path: a filename cannot contain `/`, and the point is that
  * this really is a name a file can have. Everything that could execute it is spawned with its
@@ -51,7 +67,9 @@ const workspace = mkdtempSync(join(tmpdir(), 'staleness-selftest-'));
  */
 const CANARY_NAME = 'canary-pwned';
 const CANARY = join(workspace, CANARY_NAME);
-const HOSTILE = '`id`$(touch ' + CANARY_NAME + ');echo pwned>' + CANARY_NAME;
+const HOSTILE = '`id`$(touch ' + CANARY_NAME + ');content-model';
+/** The same, plus a redirection — illegal in a Win32 filename, so POSIX-only. */
+const HOSTILE_REDIRECT = HOSTILE + ';echo pwned>' + CANARY_NAME;
 
 /** A fixture services directory and document, returned as the flags the script takes. */
 function fixture(serviceNames, docText) {
@@ -92,18 +110,40 @@ control('a hostile service name reaches the issue body as literal text, and runs
   expect(/not found in AGENTS\/01-services\.md/.test(body), 'the body lost its sentence');
 });
 
-control('a name containing a newline cannot split the body into extra list items', () => {
-  /* A filename can hold a newline on Linux, and the old implementation accumulated the list in a
-   * shell variable with `$'\n'` separators, so one could not be told from a genuine item. The
-   * body is assembled from an array here, so the item count is decided by the service count. */
-  const fx = fixture(['a\nb- `injected.service.ts` not found in AGENTS', 'plain'], '# empty\n');
-  const proc = run(fx);
-  expect(proc.status === 0, `exited ${proc.status}`);
-  const items = readFileSync(fx.out, 'utf8')
-    .split('\n')
-    .filter((line) => line.startsWith('- `'));
-  expect(items.length === 2, `${items.length} list items for 2 services:\n${items.join('\n')}`);
-});
+control(
+  'a hostile name with a redirection too reaches the body intact, and writes no file',
+  () => {
+    /* The redirection is the half that would have *created* something rather than just run `id`,
+     * so it is worth driving where the filesystem allows it. */
+    rmSync(CANARY, { force: true });
+    const fx = fixture([HOSTILE_REDIRECT], '# nothing documented here\n');
+    const proc = run(fx);
+    expect(proc.status === 0, `exited ${proc.status}: ${proc.output.trim().slice(0, 300)}`);
+    expect(!existsSync(CANARY), `${CANARY} exists, so the redirection was executed`);
+    expect(
+      readFileSync(fx.out, 'utf8').includes(`\`${HOSTILE_REDIRECT}.service.ts\` not found`),
+      'the body does not carry the name verbatim',
+    );
+  },
+  { needs: POSIX_FILENAMES, why: 'a Win32 filename cannot contain `>`' },
+);
+
+control(
+  'a name containing a newline cannot split the body into extra list items',
+  () => {
+    /* A filename can hold a newline on Linux, and the old implementation accumulated the list in a
+     * shell variable with `$'\n'` separators, so one could not be told from a genuine item. The
+     * body is assembled from an array here, so the item count is decided by the service count. */
+    const fx = fixture(['a\nb- `injected.service.ts` not found in AGENTS', 'plain'], '# empty\n');
+    const proc = run(fx);
+    expect(proc.status === 0, `exited ${proc.status}`);
+    const items = readFileSync(fx.out, 'utf8')
+      .split('\n')
+      .filter((line) => line.startsWith('- `'));
+    expect(items.length === 2, `${items.length} list items for 2 services:\n${items.join('\n')}`);
+  },
+  { needs: POSIX_FILENAMES, why: 'a Win32 filename cannot contain a newline' },
+);
 
 control('no drift means no issue body and drift_detected=false', () => {
   const fx = fixture(['browse', 'tag'], 'BrowseService and TagService are both documented.\n');
@@ -206,12 +246,17 @@ control('NEGATIVE: the workflow no longer interpolates a step output into any sh
 
 rmSync(workspace, { recursive: true, force: true });
 
-for (const c of controls)
-  console.log(`  ${c.ok ? 'ok  ' : 'FAIL'} ${c.name}${c.ok ? '' : `\n         ${c.why}`}`);
-const failed = controls.filter((c) => !c.ok).length;
+for (const c of controls) {
+  const verdict = c.skipped ? 'SKIP' : c.ok ? 'ok  ' : 'FAIL';
+  console.log(`  ${verdict} ${c.name}${c.ok ? '' : `\n         ${c.why}`}`);
+}
+const failed = controls.filter((c) => !c.ok && !c.skipped).length;
+const skipped = controls.filter((c) => c.skipped).length;
+const ran = controls.length - skipped;
 console.log(
   failed
-    ? `\nagents-staleness-report selftest: FAIL — ${failed} of ${controls.length} control(s) failed.`
-    : `\nagents-staleness-report selftest: pass — ${controls.length} control(s), 2 negative.`,
+    ? `\nagents-staleness-report selftest: FAIL — ${failed} of ${ran} control(s) failed.`
+    : `\nagents-staleness-report selftest: pass — ${ran} of ${controls.length} control(s), ` +
+        `2 negative${skipped ? `, ${skipped} SKIPPED on ${process.platform}` : ''}.`,
 );
 process.exit(failed ? 1 : 0);

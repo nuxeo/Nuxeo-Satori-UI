@@ -604,13 +604,20 @@ const ALL_GATES = [
   // with a hostile value and require it to misbehave. Without them the suite would not distinguish
   // a closed injection from a harmless fixture.
   //
-  // In process, fixtures under `os.tmpdir()`, ~1 s. One control shells out to `bash`, which is why
-  // it declares platform sensitivity.
+  // In process, fixtures under `os.tmpdir()`, ~1 s.
   {
     id: 'staleness-report-selftest',
-    // One control runs `bash` to reproduce the original injection; Windows resolves that
-    // differently, and whether it does is worth knowing on the platform that runs it.
-    platformSensitive: true,
+    /* The workflow it covers runs on `ubuntu-latest` and nowhere else, and what is under test is
+     * a Node script's text handling plus the shape of a YAML `run:` body — neither of which a
+     * second operating system can say anything new about. The one `bash` control deliberately
+     * reproduces a Linux runner's shell, so running it under a different shell would weaken it
+     * rather than widen the coverage.
+     *
+     * Declared `false` after the Windows job proved the point from the other direction: two
+     * controls need a filename containing `>` or a newline, which Win32 cannot create, so they
+     * failed on the filesystem rather than on the subject. They are POSIX-gated and reported as
+     * SKIPPED now, so a Windows developer's full `beta:gate` is green and honest about what ran. */
+    platformSensitive: false,
     label: 'AGENTS staleness report controls',
     cmd: 'node',
     argv: ['scripts/agents-staleness-report.selftest.mjs'],
