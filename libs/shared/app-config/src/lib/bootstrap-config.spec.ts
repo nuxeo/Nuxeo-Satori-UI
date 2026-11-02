@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  type AppBootstrapConfig,
+  type AppBrandingConfig,
   DEFAULT_APP_BOOTSTRAP_CONFIG,
   describeBrandingLogoRefusal,
   describeSsoEndpointPathForm,
@@ -117,6 +119,40 @@ describe('branding.favicon', () => {
 
   it('ships absent, so the packaged icon renders', () => {
     expect(DEFAULT_APP_BOOTSTRAP_CONFIG.branding.favicon).toBeNull();
+  });
+
+  /**
+   * The key is **optional**, so a branding object written before it existed is still a valid one
+   * — the half of the Copilot finding on PR 546 that was conceded. A required member added to an
+   * exported interface breaks every caller that constructs one, which is what made the PR's
+   * "minor" classification wrong until the key became optional.
+   *
+   * Asserted on a base with the key genuinely deleted rather than set to `null`, because `null`
+   * is the case the suite above already covers and it is not the one that used to fail to
+   * compile. The merge must leave the absence alone: normalising it to `null` would be a value
+   * the caller's base never had, and would make the `?` on the type a decoration.
+   */
+  it('leaves an absent key absent rather than normalising it to null', () => {
+    const branding: AppBrandingConfig = {
+      applicationTitle: 'Acme',
+      documentTitle: 'Acme',
+      logo: null,
+    };
+    const base: AppBootstrapConfig = { ...DEFAULT_APP_BOOTSTRAP_CONFIG, branding };
+
+    // Nothing configured, and nothing invented.
+    expect(mergeBootstrapConfig(base, {}).branding.favicon).toBeUndefined();
+    expect(
+      mergeBootstrapConfig(base, { branding: { applicationTitle: 'X' } }).branding.favicon,
+    ).toBeUndefined();
+    // A key that is absent from the base is still *settable*, and still refused when unusable:
+    // optional must not mean unvalidated.
+    expect(mergeBootstrapConfig(base, { branding: { favicon: { src: 'a.png' } } }).branding.favicon)
+      .toEqual({ src: 'a.png', alt: '' });
+    expect(
+      mergeBootstrapConfig(base, { branding: { favicon: { src: '/nuxeo/api/v1/me' } } }).branding
+        .favicon,
+    ).toBeUndefined();
   });
 
   it.each([

@@ -58,7 +58,7 @@ interface AppBrandingConfig {
     readonly applicationTitle: string;
     readonly documentTitle: string;
     readonly logo: AppBrandingLogo | null;
-    readonly favicon: AppBrandingLogo | null;
+    readonly favicon?: AppBrandingLogo | null;
     }
 }
 interface AppBrandingLogo {

@@ -782,6 +782,29 @@ describe('AppConfigService', () => {
         expect(service.brandingFavicon()).not.toBeNull();
       });
 
+      /**
+       * The other half of making the key optional (review of PR 546): a fragment that brands the
+       * application without mentioning the tab icon — every configuration written before this
+       * key existed — must be *silent*, not merely refused quietly. A reporting pass that walked
+       * `BRANDING_IMAGE_KEYS` and reported an unset one would turn every pre-existing
+       * configuration into a warning on every load.
+       */
+      it('says nothing when no favicon is configured at all', async () => {
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'acme',
+              component: 'com.acme.branding',
+              content: { branding: { applicationTitle: 'Acme', logo: { src: 'assets/a.svg' } } },
+            },
+          ]),
+        );
+
+        expect(faviconMessages()).toEqual([]);
+        expect(service.brandingFavicon()).toBeNull();
+        expect(warn).not.toHaveBeenCalled();
+      });
+
       it('names the key, so a fragment that sets both is not ambiguous', async () => {
         await load(
           envelope('bootstrap', [
