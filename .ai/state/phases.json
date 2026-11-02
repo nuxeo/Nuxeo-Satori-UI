@@ -96,7 +96,7 @@
     {
       "id": "phase-3-adfhx",
       "title": "adf-hx component adoption",
-      "status": "blocked",
+      "status": "superseded",
       "evidence": {
         "manifest": "phase-3-adf-hx/2026-11-02T14-38-04",
         "searchManifest": "phase-3-search/2026-08-24T02-58-00",
@@ -116,7 +116,8 @@
         "CI was RED for 16 consecutive runs (2026-08-22 to 2026-08-24) on the bundle-size step, while local gates were green and every status document said 'CI green'. The programme's own verified facts say 'Only a CI run is authoritative. A local green is necessary, not sufficient' — that rule was not followed. Root cause: CI enforces a 5 MiB ceiling on TOTAL shipped JS+CSS, set 2026-04-21 before adf-hx adoption was planned, mentioned in exactly one unrelated skill file and in no Beta document; every bundle discussion tracked the Angular *initial* budget instead. Breach began at 99db609 (document viewer, +60 kB) and was 0.60%. Ceiling raised to 6 MiB on 2026-08-24 as a recorded decision. Found by independent adversarial review, not by any gate.",
         "2026-11-02 (NXSAT-660): status moved from complete to blocked. The adf-hx adoption claim is not evidenced by the rewritten steps, which capture the browse page.",
         "2026-11-02 (NXSAT-660): the sign-off gate report this phase cited (gates/2026-08-24T03-05-47-all-phases-signoff) is recorded on the machine where it ran and is not on this one. The citation now points at the full gate run on 319dc651c, which covers this phase. The historical citation is kept here for the record.",
-        "2026-11-02 (NXSAT-660), review: sort and card checks are direction-aware and count real cards. Re-captured on 9ba733864: 27 of 27 (browse page, not adoption)."
+        "2026-11-02 (NXSAT-660), review: sort and card checks are direction-aware and count real cards. Re-captured on 9ba733864: 27 of 27 (browse page, not adoption).",
+        "2026-11-02 (NXSAT-660): adf-hx is removed from the repository, so this phase's adoption claim cannot stand and the phase is superseded. Its steps now assert the Satori browse page (29 of 29 on the review head); that evidence is kept as a record, and it is not adoption evidence."
       ],
       "notCovered": [
         "Search is now verified against live Nuxeo (phase-3-search, 13/13). Still NOT covered there: the four upstream search filter components (created-date, document-category, file-type, saved searches) remain unadopted; the HXQL translation refuses every statement it does not recognise by name; and the UI's count differs from a plain REST fulltext count because the page appends a `*` wildcard — recorded as a note, not asserted as equal.",
@@ -201,9 +202,6 @@
         "The screenshot shows \"Couldn't load preview. Unsupported file type\" — that's adf-core's own ViewerComponent message, not an integration error. The component rendered correctly; the content fetch is handled by BlobDownloadService and RenditionsService which are already provided.",
         "Permissions display: the read-only HxpBrowsePermissionsComponent is retained as the Phase 3 deliverable. It reads from Nuxeo contextParameters.acls (enricher requested in getFullDocument), displays local/inherited/external ACEs with permission names, granted-by, and time frames. The upstream PermissionsManagementPanelComponent has write capabilities through updateDocumentById which throws in Scope A, so adopting it would replace a working read-only tab with failing edits. The editable panel is deferred to GA when writes are in scope.",
         "CORRECTION to the search claim: the search path threw on every query as shipped. The HXQL field substitution required an operator after the field name so ORDER BY was never translated, and the statement regex required WHERE which the page does not send until the user narrows something — so the first page load threw. Both fixed and pinned by wire-level specs asserting the generated NXQL. Searches now also exclude versions and trashed documents (ecm:isVersion = 0 AND ecm:isTrashed = 0), which upstream HXQL has no way to express and without which a search returned every version of every match plus the trash."
-      ],
-      "blockedOn": [
-        "adf-hx was removed (NXSAT-635, NXSAT-637), so the adoption claim no longer exists. The steps now capture the Satori browse page (26 of 26 on 319dc651c). That is not adoption evidence, so the claim cannot be re-stated as complete without a decision on what phase 3 is."
       ],
       "verifiedOnCi": "NOT verified on CI. The evidence runs need a live Nuxeo and a dev server, neither of which CI has; CI covers lint, build, test, typecheck, api-surface and fork-simulation only."
     },
