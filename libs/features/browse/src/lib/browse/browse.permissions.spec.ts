@@ -456,8 +456,15 @@ describe('BrowseComponent — permissions tab', () => {
   it('shows a share’s end as the day its writer picked, as the update dialog reads it', () => {
     // Midnight on 15 July in UTC+12, which the suite's zone (UTC+5:30) reads as 14 July locally.
     const share = ace({ id: 'x-1', externalUser: true, end: '2030-07-14T12:00:00.000Z' });
+    // Built from the same `Intl` call for that day, so ICU data cannot make it brittle.
+    const fifteenth = new Date('2030-07-15').toLocaleDateString(component['locale'], {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
 
-    expect(component.aceTimeFrame(share)).toBe('Until Jul 15, 2030');
+    expect(component.aceTimeFrame(share)).toBe(`Until ${fifteenth}`);
   });
 
   it('shareWithExternal reloads the ACLs only when a share was created', () => {

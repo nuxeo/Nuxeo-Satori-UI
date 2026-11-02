@@ -311,10 +311,14 @@ describe('NxsUpdatePermissionDialogComponent', () => {
       write();
       expect(replace).not.toHaveBeenCalled();
 
-      await type(start, '1/2/2030');
+      // Month first, as this suite's other typed dates; a day of 20 cannot be read the other way.
+      await type(start, '1/20/2030');
+      start.dispatchEvent(new Event('blur'));
+      await settle();
       expect(update().disabled).toBe(false);
       write();
       expect(replace).toHaveBeenCalledTimes(1);
+      expect(sent()).toMatchObject({ begin: '2030-01-20' });
     });
 
     it('is replaced in place, with a notification, its unchanged end kept', async () => {

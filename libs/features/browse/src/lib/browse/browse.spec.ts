@@ -832,8 +832,16 @@ describe('BrowseComponent', () => {
     // Both dates present resolves `permissions.time-frame.range`, which separates them rather
     // than joining them with English connectives. The days are the ones a day-only write names —
     // Nuxeo anchors those at the server's midnight, which the suite's UTC+5:30 reads as 05:30 —
-    // and the ones the update dialog edits, not the local dates of the instants.
-    expect(component.aceTimeFrame(ace)).toBe('Jul 01, 2026 - Dec 31, 2026');
+    // and the ones the update dialog edits, not the local dates of the instants. Expected text is
+    // built from the same `Intl` call for those days, so ICU data cannot make it brittle.
+    const day = (iso: string) =>
+      new Date(iso).toLocaleDateString(component['locale'], {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+    expect(component.aceTimeFrame(ace)).toBe(`${day('2026-07-01')} - ${day('2026-12-31')}`);
   });
 
   it('canManageCurrentPermissions is false for read-only users (NXSAT-162)', () => {
