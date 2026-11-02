@@ -757,7 +757,7 @@ One upstream catalogue is left, and the problem they described is live in it:
 
 | Catalogue source                            | Locale ids shipped                                                                  |
 | ------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `@hylandsoftware/satori-ui@1.0.0-alpha.171` | **15** — `de en es fr it pl pt` + `de-DE en-AU en-US es-ES fr-FR it-IT pl-PL pt-PT` |
+| `@hylandsoftware/satori-ui@1.0.0-alpha.175` | **15** — `de en es fr it pl pt` + `de-DE en-AU en-US es-ES fr-FR it-IT pl-PL pt-PT` |
 | ours (`apps/nuxeo-ui/public/i18n`)          | one per advertised language — see `availableLanguages`                              |
 
 **Locale ids, matched exactly.** The loader requests `<lang>.json` for the active language
