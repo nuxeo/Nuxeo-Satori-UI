@@ -241,6 +241,28 @@ function tableAfter(anchor) {
     );
     return [];
   }
+  /* The second line must actually BE the `| --- | --- |` separator before two lines are thrown
+   * away as "the header and its separator".
+   *
+   * Dropping them unchecked was the same defect as the unbounded scan above, one step further in,
+   * and my fix for that one did not close it: deleting the header and separator of the section-2
+   * slot table promoted the first two DATA rows into their place, so the `navbar` and
+   * `bulk-actions` claims vanished and the gate printed "every slot-state claim holds" and exited
+   * 0. Reproduced on the real document before fixing. Found by review on PR #544, one round after
+   * the same shape of hole in the same function.
+   *
+   * Checking the separator covers all three ways the pair can be damaged: both lines gone, the
+   * separator alone gone, or the header alone gone — in each case line two is not a separator. */
+  const separator = lines[start + 1];
+  if (!/^\|(\s*:?-{3,}:?\s*\|)+$/.test(separator.trim())) {
+    fail(
+      `docs/extension-reference.md has a table after \`${anchor}\` whose second line is not a ` +
+        `Markdown separator:\n    ${separator.trim().slice(0, 90)}\n` +
+        '  Two lines are dropped as the header and its separator, so without that row a data row ' +
+        'would be discarded as one and its claim would go unchecked.',
+    );
+    return [];
+  }
   // The header and its separator are not data.
   return lines.slice(start + 2, end);
 }

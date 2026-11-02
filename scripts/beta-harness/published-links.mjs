@@ -76,11 +76,68 @@ export const KNOWN_DEAD = [
   },
 ];
 
+/**
+ * `--ledger <path>` replaces both lists. Every way of getting it wrong is reported in this gate's
+ * own voice and exits 1, rather than as a Node stack trace.
+ *
+ * It already failed safe — an unhandled throw is exit 1, which the runner classifies as FAIL — so
+ * this is about diagnosability, not about a false pass. But a gate whose misuse surfaces as
+ * `TypeError: path must be a string` reads as a defect in the gate rather than in the invocation,
+ * and this file's other refusals (an empty ledger, an unanswered probe) all say what went wrong
+ * and what to do. Raised in review on PR #544.
+ */
 const ledgerFlag = process.argv.indexOf('--ledger');
-const ledger =
-  ledgerFlag === -1
-    ? { advertised: ADVERTISED, knownDead: KNOWN_DEAD }
-    : JSON.parse(readFileSync(process.argv[ledgerFlag + 1], 'utf8'));
+
+/** @returns {{ advertised: unknown[], knownDead: unknown[] }} */
+function readLedger() {
+  if (ledgerFlag === -1) return { advertised: ADVERTISED, knownDead: KNOWN_DEAD };
+
+  const path = process.argv[ledgerFlag + 1];
+  const refuse = (why) => {
+    console.error(
+      `published-links: --ledger ${why}\n` +
+        '  Usage: node scripts/beta-harness/published-links.mjs [--ledger <path-to-json>]\n' +
+        '  The JSON holds { "advertised": [...], "knownDead": [...] }; omit --ledger to use the\n' +
+        "  gate's own two lists.",
+    );
+    process.exit(1);
+  };
+
+  if (path === undefined || path.startsWith('--')) {
+    refuse(`needs a path, and was given ${path === undefined ? 'nothing' : `\`${path}\``}.`);
+  }
+
+  let text;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch (error) {
+    refuse(`could not read \`${path}\` — ${error.message}`);
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    refuse(`file \`${path}\` is not valid JSON — ${error.message}`);
+  }
+
+  // A string or an array would otherwise reach `.advertised` as `undefined` and read as an empty
+  // ledger, which is a different refusal with a misleading reason.
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    refuse(
+      `file \`${path}\` must hold a JSON object with "advertised" and "knownDead", not ` +
+        `${Array.isArray(parsed) ? 'an array' : typeof parsed}.`,
+    );
+  }
+  for (const key of ['advertised', 'knownDead']) {
+    if (parsed[key] !== undefined && !Array.isArray(parsed[key])) {
+      refuse(`file \`${path}\` has "${key}" as ${typeof parsed[key]}, not a list.`);
+    }
+  }
+  return parsed;
+}
+
+const ledger = readLedger();
 const advertised = ledger.advertised ?? [];
 const knownDead = ledger.knownDead ?? [];
 
