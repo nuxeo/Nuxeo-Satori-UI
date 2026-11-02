@@ -132,8 +132,9 @@ Gated by `adminGuard` → `hasAdministrationAccess()`, and by
 ## 7. Runtime AI features — 12 operations
 
 **All 12 depend on a backend package that is not in this repository.** Absent package ⇒
-HTTP 500, which is expected. Feature-flagged client-side
-(`ai-feature-flag.service`, `sessionStorage` key `ai-features-enabled`).
+HTTP 500, which is expected. **All 12 are also switched off for every user** and not reachable in
+any build today: `AI_FEATURES_ENABLED = false` in `ai-feature-flag.service.ts:35` since `a519ebd5d`,
+with no runtime toggle. The statuses below describe the backend, not availability.
 
 | Operation           | Capability                                | Status             |
 | ------------------- | ----------------------------------------- | ------------------ |

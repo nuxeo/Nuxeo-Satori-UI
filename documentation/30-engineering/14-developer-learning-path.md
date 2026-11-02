@@ -895,9 +895,11 @@ consequence of Automation's flat parameter model.
 RAG happens **server-side**. There is no client-side streaming: no `EventSource`, no chunked reads.
 Each chat turn is a single POST with the history replayed.
 
-Feature flag: `AiFeatureFlagService` is a signal backed by `localStorage['ai-features-enabled']`,
-**default on** with an explicit user opt-out, surfaced to the manifest as rule
-`app.rules.isAiEnabled`, which gates the `app.tabs.aiInsights` tab.
+Feature flag: `AiFeatureFlagService.aiEnabled` is **`false` for every user and not toggleable at
+runtime** — `AI_FEATURES_ENABLED = false` at `ai-feature-flag.service.ts:35` since `a519ebd5d`. It
+does not read `localStorage` while off; both stored keys are purged on construction. The flag is
+still surfaced to the manifest as rule `app.rules.isAiEnabled` (`surface-rules.ts:30`), which gates
+the `app.tabs.aiInsights` tab (`packaged-tabs.ts:30`) — so that tab never shows today.
 
 Concepts to learn: prompt/response contracts, RAG at a conceptual level, why a UI must treat every
 AI response as untrusted content (the `AiMarkdownPipe` renders through DOMPurify), and graceful

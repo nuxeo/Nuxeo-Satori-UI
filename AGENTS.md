@@ -97,7 +97,15 @@ Nuxeo server. The backend is **not in this repository** — it lives in its own 
 repo holds only the Angular client, which posts to
 `/nuxeo/api/v1/automation/AI.<Operation>`. If the package is absent on the target server,
 AI calls return 500; that is expected, not a client defect.
-Feature flag: **on by default** — gated by `AiFeatureFlagService`, with an explicit user opt-out
+Feature flag: **off for every user, and not toggleable at runtime.** `AI_FEATURES_ENABLED` is
+`false` in `libs/shared/ai-client/src/lib/ai-feature-flag.service.ts:35`, since `a519ebd5d`
+("disable AI features for all users behind a non-bypassable kill switch", 2026-10-16). There is no
+user opt-in: `aiEnabled` is a module-level `computed(() => false)` sealed onto the instance with
+`writable: false, configurable: false`, `setEnabled()` and `toggle()` return early, both
+`localStorage` keys are purged on construction, and `AiGatewayService` refuses the request anyway
+(`ai-gateway.service.ts:64`). Re-enabling means flipping that constant and restoring the
+commented-out Settings entry in `app-shell.component.html` — a code change and a release, not a
+setting. See `AGENTS/10-ai-features.md`.
 
 | Automation operation | Purpose                 |
 | -------------------- | ----------------------- |
