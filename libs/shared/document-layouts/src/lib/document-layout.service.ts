@@ -2,6 +2,7 @@ import { HttpBackend, HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
 import {
+  DocumentImportService,
   L10nDirectoryEntry,
   NuxeoApiBase,
   directoryPickerLabel,
@@ -130,6 +131,7 @@ function leafOf(id: string): string {
 @Injectable({ providedIn: 'root' })
 export class DocumentLayoutService {
   private readonly api = inject(NuxeoApiBase);
+  private readonly imports = inject(DocumentImportService);
   /**
    * The layout reads skip the interceptors: no `Authorization` header, and no reset of the idle
    * timer. They are not anonymous — same-origin, so the browser still attaches its cookies.
@@ -159,6 +161,25 @@ export class DocumentLayoutService {
       switchMap(([definition, file]) =>
         definition ? this.resolve(definition, mode, file, documentSchemas) : of(null),
       ),
+    );
+  }
+
+  /**
+   * The values a new document of `type` starts with in `parentPath`: the server's defaults, as
+   * `@emptyWithDefault` answers them, by xpath. Empty when they cannot be read. Never errors.
+   *
+   * Not cached: a default may depend on the folder, and a create form reads them once.
+   */
+  createDefaults(type: string, parentPath: string): Observable<Readonly<Record<string, unknown>>> {
+    return this.imports.getEmptyDocumentWithDefaults(parentPath, type).pipe(
+      timeout(LAYOUT_LOAD_TIMEOUT_MS),
+      map((template) => template.properties ?? {}),
+      catchError((error: unknown) => {
+        warn(
+          `defaults of a new ${type} not read: ${describe(error)}; the create form starts empty`,
+        );
+        return of({});
+      }),
     );
   }
 

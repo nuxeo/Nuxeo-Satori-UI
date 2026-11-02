@@ -87,6 +87,9 @@ describe('DocumentLayoutFormComponent', () => {
       (type: string, mode: string, schemas: readonly unknown[]) => Observable<ResolvedLayout | null>
     >
   >;
+  let createDefaults: ReturnType<
+    typeof vi.fn<(type: string, parentPath: string) => Observable<Record<string, unknown>>>
+  >;
   let slotEntries: Record<string, ExtensionDocumentLayoutDescriptor[]>;
   let resolve: ReturnType<
     typeof vi.fn<
@@ -127,6 +130,7 @@ describe('DocumentLayoutFormComponent', () => {
 
   beforeEach(() => {
     layoutFor = vi.fn();
+    createDefaults = vi.fn(() => of({}));
     slotEntries = {};
     resolve = vi.fn((slot: string) => slotEntries[slot] ?? []);
     TestBed.configureTestingModule({
@@ -134,7 +138,7 @@ describe('DocumentLayoutFormComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideNoopAnimations(),
-        { provide: DocumentLayoutService, useValue: { layoutFor } },
+        { provide: DocumentLayoutService, useValue: { layoutFor, createDefaults } },
         { provide: AppExtensionsService, useValue: { resolve } },
         {
           provide: DirectoryService,
@@ -225,7 +229,93 @@ describe('DocumentLayoutFormComponent', () => {
     it('asks for nothing until it knows the type', async () => {
       await render({ mode: 'create', type: null });
       expect(layoutFor).not.toHaveBeenCalled();
+      expect(createDefaults).not.toHaveBeenCalled();
       expect(resolve).not.toHaveBeenCalled();
+    });
+
+    describe("the type's defaults", () => {
+      const WS = '/default-domain/workspaces/ws';
+      const withUrgent = layout('create', {
+        sections: [
+          {
+            id: 'claim',
+            label: { keys: [], fallback: 'Claim' },
+            fields: [
+              {
+                xpath: 'claim:number',
+                definition: { type: 'string' },
+                label: { keys: [], fallback: 'Number' },
+              },
+              {
+                xpath: 'claim:urgent',
+                definition: { type: 'boolean' },
+                label: { keys: [], fallback: 'Urgent' },
+              },
+            ],
+          },
+        ],
+      });
+
+      it('fills the form from them, and sends a default left alone as it was', async () => {
+        createDefaults.mockReturnValue(of({ 'claim:number': 'CLM-0', 'claim:urgent': true }));
+        await render({ mode: 'create', type: 'Claim', parentPath: WS }, of(withUrgent));
+        expect(createDefaults).toHaveBeenCalledWith('Claim', WS);
+        expect(input$('claim:number')?.value).toBe('CLM-0');
+        expect(form.changedProperties()).toMatchObject({
+          'claim:number': 'CLM-0',
+          'claim:urgent': true,
+        });
+      });
+
+      it('shows a spinner until they are read, and offers nothing to save meanwhile', async () => {
+        const pending = new Subject<Record<string, unknown>>();
+        createDefaults.mockReturnValue(pending);
+        await render({ mode: 'create', type: 'Claim', parentPath: WS });
+        expect(form.ready()).toBe(false);
+        expect(host().querySelector('nxs-spinner')).not.toBeNull();
+        expect(form.validate()).toBe(false);
+        expect(form.changedProperties()).toEqual({});
+        pending.next({ 'claim:number': 'CLM-0' });
+        await settle();
+        expect(form.ready()).toBe(true);
+        expect(input$('claim:number')?.value).toBe('CLM-0');
+      });
+
+      it('starts empty when there are none to read', async () => {
+        await render({ mode: 'create', type: 'Claim', parentPath: WS });
+        expect(form.ready()).toBe(true);
+        expect(input$('claim:number')?.value).toBe('');
+      });
+
+      it('reads none until it knows the folder', async () => {
+        await render({ mode: 'create', type: 'Claim', parentPath: null });
+        expect(createDefaults).not.toHaveBeenCalled();
+        expect(form.ready()).toBe(true);
+      });
+
+      it('keeps what was typed when only the folder changes', async () => {
+        await render({ mode: 'create', type: 'Claim', parentPath: WS });
+        await type('claim:number', 'CLM-7');
+        fixture.componentRef.setInput('parentPath', `${WS}/sub`);
+        await settle();
+        expect(createDefaults).toHaveBeenCalledTimes(1);
+        expect(input$('claim:number')?.value).toBe('CLM-7');
+      });
+
+      it('reads the new type’s when the type changes', async () => {
+        await render({ mode: 'create', type: 'Claim', parentPath: WS });
+        fixture.componentRef.setInput('type', 'Policy');
+        await settle();
+        expect(createDefaults.mock.calls).toEqual([
+          ['Claim', WS],
+          ['Policy', WS],
+        ]);
+      });
+
+      it('reads none for an edit, which starts from the document', async () => {
+        await render({ mode: 'edit', document: CLAIM, parentPath: WS });
+        expect(createDefaults).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -289,6 +379,7 @@ describe('DocumentLayoutFormComponent', () => {
       });
       expect(claimForm()?.type()).toBe('Claim');
       expect(claimForm()?.parentPath()).toBe('/default-domain/workspaces/ws/');
+      expect(createDefaults).not.toHaveBeenCalled();
     });
 
     it('falls back to the layout when the entry names a component this build lacks', async () => {

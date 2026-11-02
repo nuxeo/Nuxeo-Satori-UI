@@ -652,6 +652,7 @@
   "browse.create-import-dialog.nature": "Visible text in create-import-dialog. Rendered in libs/features/browse/src/lib/create-import/create-import-dialog.component.html.",
   "browse.create-import-dialog.new-of-type": "Heading of the form that creates one document. {{ type }} is a Nuxeo document type label such as Workspace or Folder — already translated.",
   "browse.create-import-dialog.no-document-types-can-be-created": "Visible text in create-import-dialog. Rendered in libs/features/browse/src/lib/create-import/create-import-dialog.component.html.",
+  "browse.create-import-dialog.not-accepted": "Error under a field of the create form when the server rejected the value but gave no message of its own. Nuxeo is the content server (product name, do not translate). Rendered by libs/features/browse/src/lib/create-import/create-import-dialog.component.ts.",
   "browse.create-import-dialog.ok": "Visible text in create-import-dialog. Rendered in libs/features/browse/src/lib/create-import/create-import-dialog.component.html.",
   "browse.create-import-dialog.receive-the-import-report-by-email": "Visible text in create-import-dialog. Rendered in libs/features/browse/src/lib/create-import/create-import-dialog.component.html.",
   "browse.create-import-dialog.remove-csv-file": "Accessible name of the icon button that removes the chosen CSV file from the import dialog. Verb phrase. CSV = comma-separated values, a spreadsheet-style text file format; keep the acronym.",

@@ -1,6 +1,10 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
+  DocumentLayoutFormComponent,
+  readValidationFailure,
+} from '@agentic-ui/shared/document-layouts';
+import {
   NXS_PRIMITIVE_IDS,
   NxsBannerComponent,
   NxsChipSetComponent,
@@ -28,6 +32,7 @@ import {
   effect,
   inject,
   signal,
+  viewChild,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -40,7 +45,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { FormsModule, NgModel } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { finalize, forkJoin } from 'rxjs';
 
 import {
@@ -199,6 +204,7 @@ const DIALOG_SIZE = {
   selector: 'lib-create-import-dialog',
   standalone: true,
   imports: [
+    DocumentLayoutFormComponent,
     NxsDateInputComponent,
     NgTemplateOutlet,
     ExtensionOutletComponent,
@@ -228,7 +234,6 @@ const DIALOG_SIZE = {
 export class CreateImportDialogComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   @ViewChild('mainFileInput') mainFileInput?: ElementRef<HTMLInputElement>;
-  @ViewChild('expiresInput') expiresNgModel?: NgModel;
 
   private readonly dialogRef = inject(
     MatDialogRef<CreateImportDialogComponent, CreateImportDialogResult>,
@@ -359,6 +364,12 @@ export class CreateImportDialogComponent implements OnInit {
   });
 
   readonly isNoteType = computed(() => this.selectedDocType()?.type === 'Note');
+
+  /** The selected type's create form: its create layout, or a `documentCreate` component. */
+  private readonly layoutForm = viewChild(DocumentLayoutFormComponent);
+
+  /** Create waits for the form to be on screen; until then there is nothing to send. */
+  readonly createFormReady = computed(() => this.layoutForm()?.ready() ?? false);
 
   readonly importBlobTypeOptions = computed(() =>
     this.creatableTypes().filter((dt) => isBlobHoldingDocType(dt.type)),
@@ -764,12 +775,6 @@ export class CreateImportDialogComponent implements OnInit {
     );
     // The datepicker already holds null or this instant; another value makes [ngModel] rewrite the text.
     if (parsed?.getTime() !== this.expires?.getTime()) this.expires = parsed;
-    const ctrl = this.expiresNgModel?.control;
-    if (ctrl) {
-      ctrl.markAsDirty();
-      ctrl.markAsTouched();
-      ctrl.updateValueAndValidity({ emitEvent: false });
-    }
   }
 
   onExpiresChange(value: Date | null): void {
@@ -1195,38 +1200,38 @@ export class CreateImportDialogComponent implements OnInit {
     };
   }
 
-  private buildDocumentProperties(title: string): Record<string, unknown> {
-    const docType = this.selectedDocType();
-    const props: Record<string, unknown> = {
-      'dc:title': title,
-      'dc:description': this.description.trim() || null,
-      'dc:nature': this.nature || null,
-      'dc:subjects': this.subjects,
-      'dc:coverage': this.coverage || null,
-      // The picked day at UTC midnight, as the edit dialogs write it (NXSAT-727).
-      'dc:expired': utcMidnightOf(this.expires),
-    };
-
-    if (docType?.type === 'Note') {
+  /** The create form's values, and for a Note the empty body in the chosen format. */
+  private buildDocumentProperties(
+    docType: string,
+    formProperties: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const props: Record<string, unknown> = { ...formProperties };
+    if (docType === 'Note') {
       props['note:note'] = defaultNoteContent(this.noteFormat);
       props['note:mime_type'] = this.noteFormat;
     }
-
     return props;
   }
 
+  /**
+   * Creates the document from the type's create form. The form checks its fields first and
+   * shows each error on its field; Nuxeo's constraint messages go back to the fields they name.
+   */
   createDocument(): void {
     this.commitLocationInput();
     if (this.locationRestricted()) return;
     const path = this.parentPath();
     const docType = this.selectedDocType();
-    if (!path || !docType || !this.docTitle.trim()) return;
+    const form = this.layoutForm();
+    if (!path || !docType || !form?.ready()) return;
 
-    if (!this.isExpiresValid()) return;
+    this.error.set(null);
+    if (!form.validate()) return;
 
-    const title = this.docTitle.trim();
+    const properties = this.buildDocumentProperties(docType.type, form.changedProperties());
+    const rawTitle = properties['dc:title'];
+    const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
     const name = sanitizeDocumentName(title);
-    const properties = this.buildDocumentProperties(title);
     const mainFile = this.mainFile();
     const hasBlob = isBlobHoldingDocType(docType.type);
 
@@ -1276,8 +1281,18 @@ export class CreateImportDialogComponent implements OnInit {
         }),
       )
       .subscribe({
-        next: (doc) => this.finishCreateAndNavigate(doc, title, docType.type, !!mainFile),
+        next: (doc) =>
+          this.finishCreateAndNavigate(doc, title || doc.title, docType.type, !!mainFile),
         error: (err: { error?: { message?: string }; message?: string }) => {
+          const refused = readValidationFailure(
+            err,
+            this.translate.instant('browse.create-import-dialog.not-accepted'),
+          );
+          if (refused) {
+            const unplaced = form.showServerErrors(refused);
+            if (unplaced.length) this.error.set(unplaced.join(' '));
+            return;
+          }
           const raw = err?.error?.message ?? err?.message;
           const message =
             raw === BLOB_NOT_ATTACHED_ERROR

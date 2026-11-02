@@ -717,4 +717,65 @@ describe('DocumentLayoutService', () => {
       );
     });
   });
+
+  describe('createDefaults', () => {
+    const EMPTY = '/nuxeo/api/v1/path/default-domain/workspaces/ws/@emptyWithDefault';
+    const defaults = (type = 'Claim') =>
+      firstValueFrom(service.createDefaults(type, '/default-domain/workspaces/ws'));
+    const expectEmpty = (type = 'Claim') =>
+      http.expectOne((request) => request.url === EMPTY && request.params.get('type') === type);
+
+    it("answers the server's defaults for a new document of the type in the folder", async () => {
+      const answer = defaults();
+      const request = expectEmpty();
+      expect(request.request.headers.get('properties')).toBe('*');
+      request.flush({
+        'entity-type': 'document',
+        type: 'Claim',
+        properties: { 'claim:status': 'open', 'claim:urgent': true },
+      });
+      expect(await answer).toEqual({ 'claim:status': 'open', 'claim:urgent': true });
+      expect(intercepted).toContain(EMPTY);
+    });
+
+    it('reads them again for each form, since a default may depend on the folder', async () => {
+      const first = defaults();
+      expectEmpty().flush({ properties: {} });
+      await first;
+      const second = defaults();
+      expectEmpty().flush({ properties: {} });
+      await second;
+    });
+
+    it('answers no defaults, and says why, when they cannot be read', async () => {
+      const answer = defaults();
+      expectEmpty().flush('', { status: 403, statusText: 'Forbidden' });
+      expect(await answer).toEqual({});
+      expect(warnings).toContain(
+        '[agentic-ui-layouts] defaults of a new Claim not read: HTTP 403; the create form starts empty',
+      );
+    });
+
+    it('answers no defaults for a response that carries no properties', async () => {
+      const answer = defaults();
+      expectEmpty().flush({ 'entity-type': 'document' });
+      expect(await answer).toEqual({});
+    });
+
+    it('gives up on a read that never answers, so the create form still opens', async () => {
+      vi.useFakeTimers();
+      try {
+        const answer = defaults();
+        const pending = expectEmpty();
+        await vi.advanceTimersByTimeAsync(LAYOUT_LOAD_TIMEOUT_MS);
+        expect(pending.cancelled).toBe(true);
+        expect(await answer).toEqual({});
+        expect(warnings).toContain(
+          '[agentic-ui-layouts] defaults of a new Claim not read: no response within 10 s; the create form starts empty',
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });
