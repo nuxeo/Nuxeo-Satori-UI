@@ -1,6 +1,7 @@
 package org.nuxeo.agentic.config;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -216,7 +217,16 @@ final class DevOverrides {
      * come to differ.
      */
     private Contribution contribution(String relative, Path file) {
-        Contribution.Content content = () -> Files.readAllBytes(file);
+        // Bounded exactly as the packaged reader is, and for a sharper reason: a packaged body got
+        // into a JAR someone built, whereas this directory is whatever was last copied into it, so
+        // a mis-targeted `docker cp` of something enormous is an ordinary mistake rather than a
+        // malicious one. One byte past the largest limit is enough for ConfigSnapshot#load to see
+        // the overrun and report `too-large`, and it is all that is ever held.
+        Contribution.Content content = () -> {
+            try (InputStream in = Files.newInputStream(file)) {
+                return in.readNBytes(ConfigSnapshot.MAX_ASSET_BYTES + 1);
+            }
+        };
 
         String assetName = after(relative, "assets/");
         if (assetName != null) {

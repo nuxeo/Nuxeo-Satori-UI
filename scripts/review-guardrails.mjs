@@ -6631,6 +6631,21 @@ function checkDevConfigOverrideIsNotProductionReachable() {
   }
 
   // 2. One door, and it is the one that reads the switch.
+  //
+  // Every construction site is checked against the extent of `ifEnabled`, not against the file it
+  // sits in. Exempting the whole of DevOverrides.java and then separately confirming that
+  // `ifEnabled` still contains a construction looks equivalent and is not: it passes a sibling
+  // factory *added* beside an untouched `ifEnabled`, which is the cheaper mistake to make than
+  // moving the existing one out. Locating the method first and judging every site by whether it
+  // falls inside it rejects the added factory and the moved construction with one rule.
+  const devOverrideSource = read(DEV_OVERRIDE_CLASS);
+  const ifEnabledMatch = /static DevOverrides ifEnabled\([\s\S]*?\n {4}\}/.exec(devOverrideSource);
+  const ifEnabled = ifEnabledMatch?.[0] ?? '';
+  const ifEnabledFirstLine = ifEnabledMatch
+    ? devOverrideSource.slice(0, ifEnabledMatch.index).split('\n').length
+    : 0;
+  const ifEnabledLastLine = ifEnabledFirstLine + (ifEnabled ? ifEnabled.split('\n').length - 1 : 0);
+
   const constructions = walk(CONFIG_JAVA_DIR, (path) => path.endsWith('.java')).flatMap((file) =>
     read(file)
       .split('\n')
@@ -6638,12 +6653,15 @@ function checkDevConfigOverrideIsNotProductionReachable() {
       .filter(({ text }) => /\bnew\s+DevOverrides\s*\(/.test(text)),
   );
   for (const { file, line, text } of constructions) {
-    if (file === DEV_OVERRIDE_CLASS) continue;
+    const insideIfEnabled =
+      file === DEV_OVERRIDE_CLASS && line >= ifEnabledFirstLine && line <= ifEnabledLastLine;
+    if (insideIfEnabled) continue;
     fail(
-      `${file}:${line} constructs DevOverrides outside ${DEV_OVERRIDE_CLASS}: ${text.trim()}\n` +
-        `    DevOverrides.ifEnabled is the only place that reads ${DEV_OVERRIDE_PROPERTY}, so it ` +
-        'is the only place the override directory may be built. A second construction site is a ' +
-        'second way on, whether or not it happens to check the property today.',
+      `${file}:${line} constructs DevOverrides outside DevOverrides.ifEnabled: ${text.trim()}\n` +
+        `    ifEnabled is the only place that reads ${DEV_OVERRIDE_PROPERTY}, so it is the only ` +
+        'place the override directory may be built. Any other construction site is a second way ' +
+        'on, whether or not it happens to check the property today, and whether or not it sits ' +
+        'in the same class.',
     );
   }
   if (constructions.length === 0) {
@@ -6653,10 +6671,8 @@ function checkDevConfigOverrideIsNotProductionReachable() {
     );
   }
 
-  // The one construction site has to sit inside the function that reads the switch. Without
-  // this, moving it into a sibling method of the same class would pass check 2 silently.
-  const ifEnabled =
-    /static DevOverrides ifEnabled\([\s\S]*?\n {4}\}/.exec(read(DEV_OVERRIDE_CLASS))?.[0] ?? '';
+  // And the method every site was just judged against has to be the one that reads the switch,
+  // or the check above is measuring an extent that guarantees nothing.
   if (!ifEnabled.includes('ENABLED_PROPERTY') || !/\bnew\s+DevOverrides\s*\(/.test(ifEnabled)) {
     fail(
       `${DEV_OVERRIDE_CLASS}: ifEnabled must both read ENABLED_PROPERTY and be where DevOverrides ` +

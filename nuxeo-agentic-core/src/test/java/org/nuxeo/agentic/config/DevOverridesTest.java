@@ -187,6 +187,28 @@ class DevOverridesTest {
         assertEquals("dev-override-absent", scan.diagnostics().get(0).code());
     }
 
+    /* -------------------------------------------------------------- the bounded read */
+
+    /**
+     * A body is read up to one byte past the largest limit and no further, so an enormous file
+     * costs that much heap rather than its own size.
+     *
+     * The limit {@link ConfigSnapshot#load} applies is checked after the bytes are in hand, so
+     * reading the whole file first would mean a mis-targeted copy into this directory could
+     * exhaust the heap on the next request instead of being rejected. One byte past the largest
+     * limit is what the packaged reader takes and is all {@code load} needs to see the overrun.
+     */
+    @Test
+    void readsNoMoreThanOneByteBeyondTheLargestLimit(@TempDir Path dir) throws Exception {
+        int oversized = ConfigSnapshot.MAX_ASSET_BYTES + 4096;
+        Files.createDirectories(dir.resolve("assets"));
+        Files.write(dir.resolve("assets/huge.svg"), new byte[oversized]);
+
+        Contribution contribution = at(dir).scan().contributions().get(0);
+
+        assertEquals(ConfigSnapshot.MAX_ASSET_BYTES + 1, contribution.content().read().length);
+    }
+
     /* --------------------------------------------------------------------- the stamp */
 
     @Test

@@ -2463,6 +2463,27 @@ expectRed(
   /ifEnabled must both read ENABLED_PROPERTY and be where DevOverrides is constructed/,
 );
 
+// Adding a factory beside an untouched ifEnabled rather than moving the existing construction
+// out of it. This is the cheaper mistake of the two and the one the first version of the
+// guardrail missed: exempting the whole class and then confirming ifEnabled still constructs
+// something left both halves satisfied while a second, switchless door stood open.
+expectRed(
+  'a second factory added beside an ifEnabled that still reads the switch',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  DEV_OVERRIDE_TREE,
+  (write) =>
+    write(
+      DEV_OVERRIDE_CLASS,
+      DEV_OVERRIDES_JAVA.replace(
+        '    static DevOverrides ifEnabled',
+        '    static DevOverrides always() {\n' +
+          '        return new DevOverrides(java.nio.file.Path.of("/tmp/x"));\n    }\n\n' +
+          '    static DevOverrides ifEnabled',
+      ),
+    ),
+  /DevOverrides\.java:\d+ constructs DevOverrides outside DevOverrides\.ifEnabled/,
+);
+
 // The tautology control: with no construction anywhere, checks 2 and 3 would have nothing to
 // say and the guardrail would be green on a tree it understands nothing about.
 expectRed(

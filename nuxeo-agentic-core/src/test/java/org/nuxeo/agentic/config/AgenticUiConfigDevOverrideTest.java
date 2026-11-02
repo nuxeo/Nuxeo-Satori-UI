@@ -278,6 +278,28 @@ class AgenticUiConfigDevOverrideTest {
     }
 
     /**
+     * An override too large to use is rejected like any other, rather than being read into the
+     * heap first and rejected afterwards.
+     *
+     * The size limit is applied to bytes already in hand, so what keeps a mis-targeted copy of
+     * something enormous from taking the server down is that the read itself stops one byte past
+     * the limit. This asserts the outcome a developer sees; {@code DevOverridesTest} asserts that
+     * only that many bytes were ever held.
+     */
+    @Test
+    void anOverrideTooLargeToUseIsRejectedAndThePackagedFragmentStaysInForce(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir);
+        Files.write(dir.resolve("bootstrap.defaults.json"), new byte[ConfigSnapshot.MAX_JSON_BYTES + 4096]);
+
+        JsonNode envelope = body(component(dir, true), ConfigEndpoint.BOOTSTRAP_PATH);
+
+        assertEquals(List.of("defaults"), names(envelope));
+        assertEquals(List.of("Hyland Nuxeo"), titles(envelope));
+        assertTrue(diagnosticCodes(envelope).contains("too-large"), envelope.toString());
+        assertTrue(diagnosticCodes(envelope).contains("kept"), envelope.toString());
+    }
+
+    /**
      * An override named after a packaged fragment replaces it <em>in place</em> — it takes the
      * position it displaced rather than jumping over everything registered in between — and the
      * displacement of a product default is reported as a warning, because the override's
