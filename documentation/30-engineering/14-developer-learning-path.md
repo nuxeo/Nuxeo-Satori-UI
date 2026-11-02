@@ -448,8 +448,8 @@ Estimated effort: **8 hours**.
 
 | Tool                                                        | Version    |
 | ----------------------------------------------------------- | ---------- |
-| Vitest                                                      | **4.1.10** |
-| `@vitest/coverage-v8`, `@vitest/ui`                         | 4.1.10     |
+| Vitest                                                      | **4.1.12** |
+| `@vitest/coverage-v8`, `@vitest/ui`                         | 4.1.12     |
 | jsdom                                                       | **28.1.0** |
 | `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | **2.9.0**  |
 
@@ -1306,7 +1306,7 @@ before relying on it.
 | `ng-packagr`                                                | 22.2.5                                                   |
 | `vite`                                                      | 8.3.5 (`^8.3.5`; the same version pinned by `overrides`) |
 | `esbuild`                                                   | 0.28.2 (pinned by `overrides`)                           |
-| `vitest`, `@vitest/coverage-v8`, `@vitest/ui`               | 4.1.10                                                   |
+| `vitest`, `@vitest/coverage-v8`, `@vitest/ui`               | 4.1.12                                                   |
 | `jsdom`                                                     | 28.1.0                                                   |
 | `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | 1.22.5                                                   |
 | `eslint`                                                    | 9.39.5                                                   |
