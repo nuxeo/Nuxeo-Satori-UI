@@ -272,18 +272,35 @@ export default async function run(page, h) {
   await h.step('Breadcrumb links point at this app, and the current folder is the location');
   await h.goTo('/#/browse/default-domain/workspaces');
   await page.waitForTimeout(2000);
-  const crumbHrefs = await page.$$eval('nxs-satori-breadcrumbs a[href]', (as) =>
-    as.map((a) => a.getAttribute('href') ?? ''),
+  // The whole trail, not just the links: Root and Domain are links to their folders, and the
+  // folder itself is the current page, with no link. A missing or misrouted parent fails here.
+  const crumbs = await page.$$eval('nxs-satori-breadcrumbs a', (as) =>
+    as.map((a) => ({
+      text: (a.textContent ?? '').trim(),
+      href: a.getAttribute('href'),
+      current: a.getAttribute('aria-current'),
+    })),
+  );
+  const [root, domain, folder] = crumbs;
+  h.check(
+    'the trail is Root, Domain, Workspaces, in that order',
+    JSON.stringify(crumbs.map((c) => c.text)) === JSON.stringify(['Root', 'Domain', 'Workspaces']),
+    `trail was ${JSON.stringify(crumbs.map((c) => c.text))}`,
   );
   h.check(
-    'the breadcrumb carries at least one link to a folder',
-    crumbHrefs.length >= 1 && crumbHrefs.every((href) => href.includes('/browse')),
-    `hrefs were ${JSON.stringify(crumbHrefs)}`,
+    'Root and Domain link to their own folders',
+    root?.href === '#/browse' && domain?.href === '#/browse/default-domain',
+    `hrefs were ${JSON.stringify([root?.href, domain?.href])}`,
+  );
+  h.check(
+    'the folder is the current location and is not a link',
+    folder?.current === 'page' && !folder?.href,
+    `last crumb was ${JSON.stringify(folder ?? null)}`,
   );
   h.check(
     "no link points at upstream's /{repository}/documents/ shape",
-    !crumbHrefs.some((href) => href.includes('/documents/')),
-    `hrefs were ${JSON.stringify(crumbHrefs.slice(0, 4))}`,
+    !crumbs.some((c) => (c.href ?? '').includes('/documents/')),
+    `hrefs were ${JSON.stringify(crumbs.map((c) => c.href))}`,
   );
   await h.screenshot('breadcrumb');
 
