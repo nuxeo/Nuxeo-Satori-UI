@@ -32,13 +32,14 @@
       "title": "Unblock and verify",
       "status": "complete",
       "evidence": {
-        "manifest": "phase-0-baseline/2026-11-02T12-33-12",
+        "manifest": "phase-0-baseline/2026-11-02T13-47-57",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-02T13-26-53-nxsat-660-pr"
+        "regate": "gates/2026-11-02T14-22-09-nxsat-660-review"
       },
       "deviations": [
         "2026-11-02 (NXSAT-660): rewritten against the Satori browse page. The adf-hx POC checks were removed with the POC route (NXSAT-635, NXSAT-637). The baseline is re-captured on commit 319dc651c: 12 of 12 checks.",
-        "2026-11-02 (NXSAT-660): the sign-off gate report this phase cited (gates/latest:phase-0-committed) is recorded on the machine where it ran and is not on this one. The citation now points at the full gate run on 319dc651c, which covers this phase. The historical citation is kept here for the record."
+        "2026-11-02 (NXSAT-660): the sign-off gate report this phase cited (gates/latest:phase-0-committed) is recorded on the machine where it ran and is not on this one. The citation now points at the full gate run on 319dc651c, which covers this phase. The historical citation is kept here for the record.",
+        "2026-11-02 (NXSAT-660), review: the drawer check now asserts the first tree node is visible. Re-captured on 9ba733864: 12 of 12."
       ],
       "notCovered": [
         "No pull request has been opened, so the PR-triggered path of every workflow is unexercised; CI has only ever run via the push trigger."
@@ -48,16 +49,17 @@
     {
       "id": "phase-1-config",
       "title": "Layer 0 — upgrade-safe configuration",
-      "status": "complete",
+      "status": "in-progress",
       "evidence": {
-        "manifest": "phase-1-config/2026-11-02T12-45-24",
+        "manifest": "phase-1-config/2026-11-02T13-54-41",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-02T13-26-53-nxsat-660-pr"
+        "regate": "gates/2026-11-02T14-22-09-nxsat-660-review"
       },
       "deviations": [
         "Declared complete once with the config path wrong by one segment; remediated after independent review. Risk R7 was dropped to Low on the strength of the wrong path and has been withdrawn.",
         "2026-11-02 (NXSAT-660): the POC route checks now target the browse page. The configuration-fallback 404s for the base-href path are ignored by exact pattern. Re-captured on 319dc651c: 40 of 40.",
-        "2026-11-02 (NXSAT-660): the sign-off gate report this phase cited (gates/latest:phase-1-remediation) is recorded on the machine where it ran and is not on this one. The citation now points at the full gate run on 319dc651c, which covers this phase. The historical citation is kept here for the record."
+        "2026-11-02 (NXSAT-660): the sign-off gate report this phase cited (gates/latest:phase-1-remediation) is recorded on the machine where it ran and is not on this one. The citation now points at the full gate run on 319dc651c, which covers this phase. The historical citation is kept here for the record.",
+        "2026-11-02 (NXSAT-660), review: the 404 suppression for the base-href path is removed, because the runner records the response path and the pattern hid a real failure. The request is an XHR the app sends to /nuxeo/agentic-ui/ from the browse and themes pages. Its source is not yet identified, so this phase is in progress, not complete. Latest run on 9ba733864: 39 of 40."
       ],
       "notCovered": [
         "The marketplace install and upgrade were rehearsed only with `nuxeoctl mp-install` on a throwaway server (2026-10-07, NXSAT-317); the Admin Center / Update Center path is not rehearsed. That rehearsal disproved the original non-overwriting design, and R7 is Low only for the sample-file installer that NXSAT-317 ships",
@@ -67,16 +69,17 @@
     {
       "id": "phase-2-registry",
       "title": "Layer 1 — extension registry",
-      "status": "complete",
+      "status": "in-progress",
       "evidence": {
-        "manifest": "phase-2-registry/2026-11-02T12-38-53",
+        "manifest": "phase-2-registry/2026-11-02T13-49-56",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-02T13-26-53-nxsat-660-pr"
+        "regate": "gates/2026-11-02T14-22-09-nxsat-660-review"
       },
       "deviations": [
         "Shipped a `typecheck` target where the plan said `build`: Nx's module-boundary rule forbids a buildable library from importing a non-buildable one, and nothing in libs/ is buildable until Phase 4 adds ng-packagr.",
         "2026-11-02 (NXSAT-660): the packaged default is 13 enabled entries. Knowledge Discovery is registered but disabled, and the Browse id is app.navbar.browse. The non-administrator visibility check is not asserted in this run: it runs as a different user, and the identity guard refuses it at a step boundary. Re-captured on 319dc651c: 43 of 43.",
-        "2026-11-02 (NXSAT-660): the sign-off gate report this phase cited (gates/latest:phase-2-closure) is recorded on the machine where it ran and is not on this one. The citation now points at the full gate run on 319dc651c, which covers this phase. The historical citation is kept here for the record."
+        "2026-11-02 (NXSAT-660): the sign-off gate report this phase cited (gates/latest:phase-2-closure) is recorded on the machine where it ran and is not on this one. The citation now points at the full gate run on 319dc651c, which covers this phase. The historical citation is kept here for the record.",
+        "2026-11-02 (NXSAT-660), review: the same unexplained /nuxeo/agentic-ui/ XHR as phase 1 (see there). In progress, not complete. Latest run on 9ba733864: 42 of 43."
       ],
       "notCovered": [
         "document-detail toolbar: 11 controls, 8 with dynamic state, still markup rather than descriptors",
@@ -95,10 +98,10 @@
       "title": "adf-hx component adoption",
       "status": "blocked",
       "evidence": {
-        "manifest": "phase-3-adf-hx/2026-11-02T12-43-50",
+        "manifest": "phase-3-adf-hx/2026-11-02T13-52-13",
         "searchManifest": "phase-3-search/2026-08-24T02-58-00",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-02T13-26-53-nxsat-660-pr"
+        "regate": "gates/2026-11-02T14-22-09-nxsat-660-review"
       },
       "deviations": [
         "2026-09-23, after sign-off: the adopted breadcrumb is now upstream's inner HxpUiBreadcrumbComponent, fed the ancestors plus the current folder, rather than HxpBreadcrumbComponent, which never showed the current folder. The capture's 'links target browse-adf-hx' check had passed while every crumb but Home linked to browse-adf-hx%3Fpath%3D… — NuxeoDocumentRouterService.urlFor returned a string, and [routerLink] escapes a string's '?'. urlFor now returns a UrlTree, and the check requires the query to survive.",
@@ -112,7 +115,8 @@
         "Two defects in the phase-3-search evidence itself, fixed before trusting it: the paging check had a `length === 0 ||` escape that passed on zero rows — exactly the state the broken search produced — and the console-error ignore list contained 'Failed to load resource', which would have hidden any resource failure at all.",
         "CI was RED for 16 consecutive runs (2026-08-22 to 2026-08-24) on the bundle-size step, while local gates were green and every status document said 'CI green'. The programme's own verified facts say 'Only a CI run is authoritative. A local green is necessary, not sufficient' — that rule was not followed. Root cause: CI enforces a 5 MiB ceiling on TOTAL shipped JS+CSS, set 2026-04-21 before adf-hx adoption was planned, mentioned in exactly one unrelated skill file and in no Beta document; every bundle discussion tracked the Angular *initial* budget instead. Breach began at 99db609 (document viewer, +60 kB) and was 0.60%. Ceiling raised to 6 MiB on 2026-08-24 as a recorded decision. Found by independent adversarial review, not by any gate.",
         "2026-11-02 (NXSAT-660): status moved from complete to blocked. The adf-hx adoption claim is not evidenced by the rewritten steps, which capture the browse page.",
-        "2026-11-02 (NXSAT-660): the sign-off gate report this phase cited (gates/2026-08-24T03-05-47-all-phases-signoff) is recorded on the machine where it ran and is not on this one. The citation now points at the full gate run on 319dc651c, which covers this phase. The historical citation is kept here for the record."
+        "2026-11-02 (NXSAT-660): the sign-off gate report this phase cited (gates/2026-08-24T03-05-47-all-phases-signoff) is recorded on the machine where it ran and is not on this one. The citation now points at the full gate run on 319dc651c, which covers this phase. The historical citation is kept here for the record.",
+        "2026-11-02 (NXSAT-660), review: sort and card checks are direction-aware and count real cards. Re-captured on 9ba733864: 27 of 27 (browse page, not adoption)."
       ],
       "notCovered": [
         "Search is now verified against live Nuxeo (phase-3-search, 13/13). Still NOT covered there: the four upstream search filter components (created-date, document-category, file-type, saved searches) remain unadopted; the HXQL translation refuses every statement it does not recognise by name; and the UI's count differs from a plain REST fulltext count because the page appends a `*` wildcard — recorded as a note, not asserted as equal.",
@@ -210,7 +214,7 @@
       "evidence": {
         "manifest": "phase-4-platform/2026-11-02T12-46-51",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-02T13-26-53-nxsat-660-pr"
+        "regate": "gates/2026-11-02T14-22-09-nxsat-660-review"
       },
       "deviations": [
         "Merged from two duplicate entries. `phase-4-layer2` and `phase-4-platform` both carried the title \"Layer 2 — publishable platform\"; the latter was a stub whose notCovered read \"everything\". Kept the id the gate reports and the evidence directory use.",
@@ -246,7 +250,7 @@
       "evidence": {
         "manifest": "phase-5-harness/2026-11-02T12-46-57",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-02T13-26-53-nxsat-660-pr"
+        "regate": "gates/2026-11-02T14-22-09-nxsat-660-review"
       },
       "deviations": [
         "Departed from the plan's wording deliberately, and measured first. The plan said 'split the AGENTS/ knowledge base'; 50 files carry 185 references to AGENTS/ paths, and .github/workflows/staleness-check.yml asserts AGENTS/01-services.md and AGENTS/${i}-*.md exist — so a split breaks CI and every skill. Measuring the content settled it too: 3,177 lines, of which only 3 of 13 files mention extensions, slots or the Layers. libs/platform/AGENTS.md is therefore authored for the audience, not extracted.",
