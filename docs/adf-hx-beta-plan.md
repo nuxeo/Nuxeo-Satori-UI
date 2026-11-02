@@ -142,11 +142,13 @@ So configuration must not live inside the packaged `web` directory. Split it:
   edited. The package now ships only a sample and never installs the customer's file — see R7._
 - **Runtime manifest** (nav, actions, rules, presets, toggles) as a **Nuxeo document** at
   `/default-domain/config/agentic-ui`, fetched through the existing authenticated `HttpClient`,
-  with the packaged default as fallback. This inherits Nuxeo versioning, audit, ACLs and per-tenant
-  scoping for free, and can be edited from the app itself.
+  with the packaged default as fallback.
   _Superseded 2026-10-07 (NXSAT-312): both halves are now fragments contributed by Marketplace
   packages and served anonymously by `nuxeo-agentic-core` at `agentic-ui-config/`; the Note is no
-  longer read, with no migration._
+  longer read, with no migration._ The argument recorded here for the Note — that it inherited
+  Nuxeo's versioning, audit, ACLs and per-tenant scoping "for free" and could be edited in-app — is
+  **withdrawn, not merely superseded**, and is removed rather than restated: configuration now ships
+  as versioned package content, which is where those properties actually come from.
 
 ---
 
@@ -288,36 +290,13 @@ Remaining, deliberately not attempted:
 - An in-app editor for the configuration document. _Superseded 2026-10-07 (NXSAT-312): there is
   no document to edit; configuration ships in the customer's own Marketplace package._
 
-### Configuration document ACLs — the model to apply
+### Configuration document ACLs — removed 2026-11-02 (NXSAT-312)
 
-_Superseded 2026-10-07 (NXSAT-312): the manifest is no longer a Nuxeo document, so no ACL governs
-it. It is a package fragment served to everyone before sign-in, which is why it must hold nothing
-sensitive. Kept for the record of why the Note was chosen and what it cost._
-
-The runtime manifest is a Nuxeo document, fetched by `AppConfigService.loadManifest()` as
-`GET /nuxeo/api/v1/path{manifestDocumentPath}` **using the signed-in user's own session**. Nuxeo's
-permission model therefore governs it, with three consequences:
-
-- **Read permission decides who gets the customisation.** A user without Read triggers the tolerant
-  fallback and silently sees the _packaged default_ UI. Grant Read to the broadest set of application
-  users (typically `members`) or accept an inconsistent UI between users.
-- **Write permission is an administrative capability.** Anyone with Write can change navigation,
-  hide actions, relabel and flip feature toggles for everyone. Restrict it to `administrators` or a
-  dedicated group.
-- **Block inheritance on the config folder.** A document under `/default-domain/config/` inherits
-  ACLs by default, so a broad Write grant higher up silently confers the ability to reconfigure the
-  application.
-
-Two properties worth stating explicitly:
-
-- Storing config as a document gives **versioning and audit for free** — every change is attributable
-  and revertible, which a file on disk does not offer.
-- **Hiding an action in the manifest is not a security control.** Layer 1 can only reference already
-  registered IDs, and the server-side Nuxeo permission still decides whether an operation succeeds.
-  Customers must not treat manifest visibility as authorisation.
-
-Phase 6 should test the ACL-denied path: a user without Read must still get a working application on
-the default configuration.
+_The ACL model this section described governed a design that no longer exists: the manifest is not a
+Nuxeo document and nothing is read from the repository. The section carried a superseded label from
+2026-10-07 and two reviewers quoted it as current anyway, so the text is gone rather than relabelled.
+What replaced it is [`docs/extension-reference.md`](extension-reference.md) §2, lines 117-119 — the
+manifest is a package fragment served anonymously, before sign-in, with no migration from the Note._
 
 ## Phase 2 — Layer 1: extension registry (**complete**; toolbar/tabs/columns carried to Phase 3)
 
