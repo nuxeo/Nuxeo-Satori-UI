@@ -941,6 +941,15 @@ ID reaches it. The uses resolved by ID are these:
 
 Search shows no avatar, breadcrumb trail or status tag.
 
+Banners and chip sets resolve through their own IDs too. Document detail's trashed-document and
+version banners, search's AI error banner and create-import's two location hints render through
+`nxs.primitives.banner`; create-import's subject, nature and coverage chips and the search filters'
+chips render through `nxs.primitives.chipSet`. The banners pass their message and buttons as
+`componentInputs`, and the chip sets pass `removeHandler`, since the outlet binds no outputs. Each
+keeps its built-in element as the fallback, and each sits in a wrapper that carries the layout, so
+the layout holds whichever component the ID resolves to. Document detail's workflow, task-action
+and AI error banners are still `sat-banner`, as are the other `sat-*` uses noted below.
+
 Breadcrumb page layout belongs to the screen, not the registered implementation. Browse,
 document detail, collections and tasks wrap both the outlet and its fallback in the same layout
 container, preserving spacing and compact header typography when the registration changes.

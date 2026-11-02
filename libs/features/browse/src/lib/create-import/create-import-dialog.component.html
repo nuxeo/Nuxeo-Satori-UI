@@ -119,12 +119,24 @@
               }
             </div>
             @if (locationRestricted()) {
-              <nxs-banner
-                class="location-hint"
-                tone="error"
-                announce="alert"
-                [message]="importLocationHint() | translate"
-              />
+              <div class="location-hint">
+                <lib-extension-outlet
+                  #createHintOutlet
+                  [componentId]="bannerId"
+                  [componentInputs]="{
+                    message: importLocationHint() | translate,
+                    tone: 'error',
+                    announce: 'alert',
+                  }"
+                />
+                @if (createHintOutlet.unresolved()) {
+                  <nxs-banner
+                    tone="error"
+                    announce="alert"
+                    [message]="importLocationHint() | translate"
+                  />
+                }
+              </div>
             }
           </div>
 
@@ -343,12 +355,24 @@
                   }
                 </div>
                 @if (locationRestricted()) {
-                  <nxs-banner
-                    class="location-hint"
-                    tone="error"
-                    announce="alert"
-                    [message]="importLocationHint() | translate"
-                  />
+                  <div class="location-hint">
+                    <lib-extension-outlet
+                      #importHintOutlet
+                      [componentId]="bannerId"
+                      [componentInputs]="{
+                        message: importLocationHint() | translate,
+                        tone: 'error',
+                        announce: 'alert',
+                      }"
+                    />
+                    @if (importHintOutlet.unresolved()) {
+                      <nxs-banner
+                        tone="error"
+                        announce="alert"
+                        [message]="importLocationHint() | translate"
+                      />
+                    }
+                  </div>
                 }
               </div>
 
@@ -947,28 +971,43 @@
 
 <ng-template #natureChip>
   @if (nature) {
-    <nxs-chip-set
-      class="subjects-trigger-chips"
-      [items]="natureChips()"
-      (removed)="clearNature()"
-    />
+    <div class="subjects-trigger-chips">
+      <lib-extension-outlet
+        #natureChipOutlet
+        [componentId]="chipSetId"
+        [componentInputs]="{ items: natureChips(), removeHandler: removeNatureChip }"
+      />
+      @if (natureChipOutlet.unresolved()) {
+        <nxs-chip-set [items]="natureChips()" [removeHandler]="removeNatureChip" />
+      }
+    </div>
   }
 </ng-template>
 
 <ng-template #coverageChip>
   @if (coverage) {
-    <nxs-chip-set
-      class="subjects-trigger-chips"
-      [items]="coverageChips()"
-      (removed)="clearCoverage()"
-    />
+    <div class="subjects-trigger-chips">
+      <lib-extension-outlet
+        #coverageChipOutlet
+        [componentId]="chipSetId"
+        [componentInputs]="{ items: coverageChips(), removeHandler: removeCoverageChip }"
+      />
+      @if (coverageChipOutlet.unresolved()) {
+        <nxs-chip-set [items]="coverageChips()" [removeHandler]="removeCoverageChip" />
+      }
+    </div>
   }
 </ng-template>
 
 <ng-template #subjectsChip>
-  <nxs-chip-set
-    class="subjects-trigger-chips"
-    [items]="subjectChips()"
-    (removed)="removeSubject($event.id)"
-  />
+  <div class="subjects-trigger-chips">
+    <lib-extension-outlet
+      #subjectsChipOutlet
+      [componentId]="chipSetId"
+      [componentInputs]="{ items: subjectChips(), removeHandler: removeSubjectChip }"
+    />
+    @if (subjectsChipOutlet.unresolved()) {
+      <nxs-chip-set [items]="subjectChips()" [removeHandler]="removeSubjectChip" />
+    }
+  </div>
 </ng-template>
