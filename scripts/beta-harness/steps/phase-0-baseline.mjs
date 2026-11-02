@@ -6,16 +6,20 @@
  * expected to pass on the current branch; if it does not, Phase 0 has found a
  * real regression and the plan should not proceed past it.
  *
+ * The browse surfaces are the Satori browse page. The adf-hx POC route and its
+ * components were removed (NXSAT-635, NXSAT-637), and `/#/browse-adf-hx` now
+ * redirects to `/#/browse`, so the original checks against `hxp-*` elements could
+ * not run.
+ *
  * Two things learned while first running this, both encoded below:
  *
- * 1. The adf-hx nav drawer only mounts when the route is entered through the
- *    platform nav item, because the shell owns the drawer state. Navigating
- *    straight to the URL renders the page without a drawer, so asserting the
- *    tree after a direct `goTo` tests the wrong entry path.
- * 2. This Nuxeo instance does not provide the `AI.Insights` automation
- *    operation, and the app probes `/nuxeo/logout` on boot. Both surface as
- *    console errors that have nothing to do with browse, so they are ignored
- *    explicitly — and still counted in the report.
+ * 1. The nav drawer and folder tree mount only when the route is entered through
+ *    the platform nav item, because the shell owns the drawer state. Navigating
+ *    straight to the URL renders the page without a drawer, so the tree is
+ *    asserted after entering through the nav.
+ * 2. This Nuxeo instance does not provide the `AI.Insights` automation operation,
+ *    and the app probes `/nuxeo/logout` on boot. Both surface as console errors
+ *    unrelated to browse, so they are ignored explicitly and still counted.
  *
  * Prerequisites:
  *   docker start nuxeo          (container `nuxeo`, published on 8080)
@@ -30,17 +34,11 @@
  * `AI.*` operations come from a marketplace package that is not installed on a
  * plain local Nuxeo, and the app probes `/nuxeo/logout` on boot.
  *
- * The last two entries were added later than the others, and the reason matters:
- * they are a *Phase 1* behaviour appearing in a *Phase 0* baseline. The app loads
- * its configuration from `agentic-ui-config/`, which nothing answers under
- * `nx serve` unless a developer has put a file there, so the fetches 404 and the
- * app falls back to the packaged default by design. This file was written before that existed and
- * failed on it when re-run — a stale baseline, not a regression.
- *
- * Suppressing it is only safe because this run separately proves the fallback
- * worked: "platform nav offers the adf-hx entry" below is fed by the manifest, so
- * if the packaged default had not loaded, that check would fail rather than pass
- * quietly. `phase-1-config` asserts the fallback path directly.
+ * The configuration fetches are also listed. With no file under
+ * `agentic-ui-config/`, the app falls back to the packaged default by design, and
+ * `phase-1-config` asserts that fallback directly. Suppressing these is safe here
+ * because the nav checks below are fed by the packaged default, so a default that
+ * had not loaded would fail them rather than pass quietly.
  */
 const ENVIRONMENTAL_ERRORS = [
   /automation\/AI\./,
@@ -60,37 +58,65 @@ export default async function run(page, h) {
   // Who the run signed in as is checked by the identity guard at the next boundary (NXSAT-643).
   await h.screenshot('app-shell');
 
-  await h.step('Production browse renders real repository content');
+  await h.step('Browse renders real repository content');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
-  await h.expectText('repository content listed', 'lib-browse', 'Default domain');
-  await h.screenshot('production-browse');
+  await page.waitForSelector('nxs-document-list tr.nxs-document-list__row', { timeout: 120000 });
+  await h.expectText('repository content listed', 'lib-browse', 'Domain');
+  await h.screenshot('browse-root');
 
-  await h.step('adf-hx POC browse renders real repository content');
-  // Entered directly: the page and its hxp components must render on their own.
-  await h.goTo('/#/browse-adf-hx');
-  await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
-  await h.expectVisible('hxp folder header present', 'hxp-folder-header');
-  await h.expectVisible('hxp document list present', 'hxp-document-list');
-  await h.expectText('Nuxeo children listed', 'hxp-document-list', 'Default domain');
-  await h.expectText('Last Contributor column populated', 'hxp-document-list', 'Administrator');
-  await h.screenshot('adf-hx-poc-browse');
+  await h.step('A folder lists its children with real contributors');
+  await h.goTo('/#/browse/default-domain/workspaces');
+  await h.expectVisible('document list rendered', 'nxs-document-list');
+  await page.waitForSelector('nxs-document-list tr.nxs-document-list__row', { timeout: 120000 });
+  const headers = await page.$$eval('nxs-document-list thead th', (cells) =>
+    cells.map((c) => (c.textContent ?? '').trim()).filter(Boolean),
+  );
+  h.check(
+    'the Last Contributor column is present',
+    headers.includes('Last Contributor'),
+    `headers were ${JSON.stringify(headers)}`,
+  );
+  await h.expectText('Last Contributor column populated', 'nxs-document-list', 'Administrator');
+  await h.screenshot('folder-children');
 
-  await h.step('POC tabs render');
-  await h.expectVisible('hxp tabs present', 'hxp-browse-tabs');
-  await h.screenshot('adf-hx-poc-tabs');
+  await h.step('Folder tabs render');
+  const tabLabels = await page.$$eval('[role="tab"]', (els) =>
+    els.map((el) => (el.textContent ?? '').trim()).filter(Boolean),
+  );
+  h.check(
+    'the folder tab strip is the four folder tabs',
+    JSON.stringify(tabLabels) === JSON.stringify(['View', 'Permissions', 'History', 'Trash']),
+    `tab strip rendered ${JSON.stringify(tabLabels)}`,
+  );
+  await h.screenshot('folder-tabs');
 
   await h.step('Nav drawer and folder tree mount when entered via platform nav');
-  await h.goTo('/#/browse');
-  const navEntry = page
-    .locator('a,button')
-    .filter({ hasText: /adf-hx/i })
-    .first();
-  h.check('platform nav offers the adf-hx entry', (await navEntry.count()) > 0);
+  // Clicking the Browse entry while already on /browse collapses the drawer, so enter from another
+  // page the way a user does.
+  await h.goTo('/#/search');
+  await page.waitForTimeout(1500);
+  const navEntry = page.locator('sat-platform-nav a').filter({ hasText: 'Browse' }).first();
+  h.check('platform nav offers the Browse entry', (await navEntry.count()) > 0);
   await navEntry.click();
-  await page.waitForTimeout(3000);
-  await h.expectVisible('hxp nav drawer mounted', 'hxp-browse-nav-drawer');
-  await h.screenshot('adf-hx-poc-nav-drawer');
+  // The tree fills after its own request, so wait for its first node rather than for a fixed time.
+  await page.waitForFunction(
+    () => document.querySelectorAll('nxs-document-tree [role="treeitem"], nxs-document-tree mat-tree-node').length > 0,
+    null,
+    { timeout: 120000 },
+  ).catch(() => {});
+  const drawerWidth = await page.locator('app-nav-drawer').first().evaluate((el) => el.getBoundingClientRect().width);
+  h.check('the nav drawer is open when entered via the nav', drawerWidth > 0, `width ${drawerWidth}`);
+  const treeNodes = await page.$$eval(
+    'nxs-document-tree [role="treeitem"], nxs-document-tree mat-tree-node',
+    (nodes) => nodes.map((n) => (n.textContent ?? '').trim()).filter(Boolean),
+  );
+  h.check(
+    'the folder tree renders real Nuxeo folders',
+    treeNodes.length > 0,
+    `found ${treeNodes.length}: ${JSON.stringify(treeNodes.slice(0, 4))}`,
+  );
+  await h.screenshot('nav-drawer-tree');
 
   await h.step('Baseline health');
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);

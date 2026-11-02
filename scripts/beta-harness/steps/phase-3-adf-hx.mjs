@@ -361,6 +361,11 @@ export default async function run(page, h) {
   await h.screenshot('folder-tabs');
 
   await h.step('The fixture is listed in its own folder');
+  await page.waitForFunction(
+    () => document.querySelectorAll('nxs-document-list tr.nxs-document-list__row').length > 0,
+    null,
+    { timeout: 120000 },
+  );
   const fixtureRow = page
     .locator('nxs-document-list tr.nxs-document-list__row')
     .filter({ hasText: FIXTURE_DOC_TITLE })
