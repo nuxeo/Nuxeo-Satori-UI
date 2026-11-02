@@ -143,8 +143,8 @@ into a customer deployment.
 `{ "src": "assets/acme-logo.svg", "alt": "Acme Insurance" }` replaces the Satori word mark in the header
 and the Satori lockup on the login page. `null` or absent keeps the Satori marks. It does not
 replace the Hyland mark at the top of the navigation rail or the "Content Innovation Cloud" title
-shown when the rail is expanded (both hard-coded in Satori's `sat-platform-nav`), and there is no
-key for the favicon.
+shown when the rail is expanded (both hard-coded in Satori's `sat-platform-nav`). The browser tab
+icon has its own key, `branding.favicon`, below.
 
 - **`src`** is a relative path resolved against the directory `bootstrap.json` is served from,
   `/nuxeo/agentic-ui-config/`. The servlet serves images only under `assets/`, so a logo is
@@ -247,6 +247,81 @@ key for the favicon.
 - Contributed assets are served at `/nuxeo/agentic-ui-config/assets/<name>` (NXSAT-312). The servlet path is outside every
   `NuxeoAuthenticationFilter` URL pattern, which is what lets the login page load the logo before
   sign-in; the NXSAT-312 rehearsal fetched a contributed SVG there anonymously, as `image/svg+xml`.
+
+### `branding.favicon`
+
+`{ "src": "assets/acme-icon.png" }` replaces the browser tab icon. `null` or absent keeps the one
+the application bundle ships. It was the last branding surface that was not configurable
+(NXSAT-313), which showed: the tab _title_ has followed `branding.documentTitle` since NXSAT-722,
+so a demo branded for a prospect put their name next to the Nuxeo mark.
+
+- **Exactly the same forms and exactly the same checks as `branding.logo`.** A relative path
+  inside the configuration directory, an `https:` URL or a `data:image/` URI are accepted;
+  backslashes, control characters, a non-`https:` scheme, an absolute path, a `..` or `%2e%2e`
+  segment and any host that serves Nuxeo are refused. Not "the same rules" as a description —
+  literally the same functions, so a correction to one applies to the other. Four of the logo's
+  rules were added after review found a way past the first version, and a second implementation
+  would have had none of them.
+- **A refusal is reported the same way**, naming the key, the value, the fragment it came from and
+  the reason, once per load. The key is in the message, so a fragment that sets both a logo and a
+  favicon says which one was refused.
+- **A refused or absent value shows the packaged icon**, which is what every deployment saw before
+  this key existed.
+- **One icon, not a platform set.** Web UI ships six (`favicon-32x32.png`, `favicon-16x16.png`,
+  `favicon.ico`, `safari-pinned-tab.svg`, `apple-touch-icon.png`,
+  `ms-touch-icon-144x144-precomposed.png`) and has no configuration key for any of them — a
+  customer replaces the files inside a bundle. We cannot do that, because our Angular bundle is
+  installed whole and replaced on every upgrade, so a key is both the only mechanism open to us
+  and the better one. Accepting a single icon is a recorded limitation rather than an oversight;
+  the Apple and Microsoft variants are not addressable for Beta.
+- **`alt` is accepted and not used.** The shape is shared with `branding.logo`; a tab icon has no
+  accessible name to carry, because the tab title is its label.
+- The `type` hint `index.html` ships is removed when a configured icon is in force. It says
+  `image/x-icon`, which is false of the `.png` or `.svg` a customer is most likely to contribute,
+  and a browser may use it to skip a format it believes it cannot render.
+
+### Presales presets, and why they are not a hole in configuration-as-code
+
+One demo server can be shown to several prospects, each with their own branding, with nothing but
+a link — and this is **already shipped**, which is worth stating plainly because the most common
+request for it comes from people who believe it needs a fork (NXSAT-684).
+
+A bootstrap fragment declares named presets under `presales`; each carries a whole `bootstrap` and
+`manifest` patch applied **after** every package's fragments, so it wins over all of them:
+application title, document title, logo, favicon, the entire theme token map, `defaultThemeId`,
+languages, and every Layer 1 capability. `config-packages/presales-demo` ships two worked
+prospects:
+
+```
+https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance
+https://<server>/nuxeo/agentic-ui/?preset=logistics    # Globex Logistics
+https://<server>/nuxeo/agentic-ui/?preset=             # clear it
+```
+
+The choice is remembered in `localStorage` for that browser and a badge in the header names the
+preset in force. The full key reference is in
+[the extension reference](../../docs/extension-reference.md#presales-presets).
+
+**This does not contradict the regulated-customer requirement that configuration is code.** The
+distinction is between the content and the selection, and only one of them is runtime:
+
+- A preset's **content** is a JSON fragment inside a reviewed, versioned, built-from-source
+  Marketplace package. Nothing is stored in the repository, nothing is edited on the server, and
+  it reaches a server by the same install path as every other fragment.
+- Only the **selection** is runtime, and it is per browser, held in `localStorage`, invisible to
+  every other user, and backed by no server-side state at all. It is a view switch in one browser,
+  not multi-tenancy.
+- **Nothing happens unless a package sets `presetSwitching: true`.** A customer production server
+  ignores `?preset=` and the stored choice alike, and records in the diagnostics and the console
+  that it did. A later fragment can turn it off, so a customer package layered over a demo one
+  wins.
+
+**What still costs a rebuild, said honestly:** adding a _new_ prospect means editing
+`bootstrap.json`, raising the version, rebuilding, reinstalling and restarting — two to four
+minutes, because presets are package content and package content is read once at startup. The fix
+is the development override directory: with `nuxeo.agentic.ui.config.dev=true` a new preset is one
+`docker cp` and a reload. See "The fast loop while you are tuning a value" in
+`config-packages/presales-demo/README.md`.
 
 ### `sso.endpoints`
 

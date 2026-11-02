@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  type AppBootstrapConfig,
+  type AppBrandingConfig,
   DEFAULT_APP_BOOTSTRAP_CONFIG,
   describeBrandingLogoRefusal,
   describeSsoEndpointPathForm,
@@ -97,6 +99,112 @@ describe('branding.logo', () => {
     expect(resolveBrandingLogoUrl('https://cdn.example.com/a.svg', configUrl)).toBe(
       'https://cdn.example.com/a.svg',
     );
+  });
+});
+
+/**
+ * NXSAT-313, plan item F1. The tab icon was the last branding surface that was not configurable,
+ * so a demo branded for a prospect showed their name next to the Nuxeo mark.
+ *
+ * These assert the property the ticket turns on: `favicon` is read by the **same** function as
+ * `logo`, so every rule the logo's `src` has — and there are four of them that cost a review
+ * round each — applies to it without a second implementation to keep in step. The cases are
+ * therefore deliberately a subset of the logo's above, picked to span the rule families rather
+ * than to re-enumerate them; re-listing all 24 would be a second copy of the thing this ticket
+ * exists not to have.
+ */
+describe('branding.favicon', () => {
+  const faviconOf = (favicon: unknown) =>
+    mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, { branding: { favicon } }).branding.favicon;
+
+  it('ships absent, so the packaged icon renders', () => {
+    expect(DEFAULT_APP_BOOTSTRAP_CONFIG.branding.favicon).toBeNull();
+  });
+
+  /**
+   * The key is **optional**, so a branding object written before it existed is still a valid one
+   * — the half of the Copilot finding on PR 546 that was conceded. A required member added to an
+   * exported interface breaks every caller that constructs one, which is what made the PR's
+   * "minor" classification wrong until the key became optional.
+   *
+   * Asserted on a base with the key genuinely deleted rather than set to `null`, because `null`
+   * is the case the suite above already covers and it is not the one that used to fail to
+   * compile. The merge must leave the absence alone: normalising it to `null` would be a value
+   * the caller's base never had, and would make the `?` on the type a decoration.
+   */
+  it('leaves an absent key absent rather than normalising it to null', () => {
+    const branding: AppBrandingConfig = {
+      applicationTitle: 'Acme',
+      documentTitle: 'Acme',
+      logo: null,
+    };
+    const base: AppBootstrapConfig = { ...DEFAULT_APP_BOOTSTRAP_CONFIG, branding };
+
+    // Nothing configured, and nothing invented.
+    expect(mergeBootstrapConfig(base, {}).branding.favicon).toBeUndefined();
+    expect(
+      mergeBootstrapConfig(base, { branding: { applicationTitle: 'X' } }).branding.favicon,
+    ).toBeUndefined();
+    // A key that is absent from the base is still *settable*, and still refused when unusable:
+    // optional must not mean unvalidated.
+    expect(mergeBootstrapConfig(base, { branding: { favicon: { src: 'a.png' } } }).branding.favicon)
+      .toEqual({ src: 'a.png', alt: '' });
+    expect(
+      mergeBootstrapConfig(base, { branding: { favicon: { src: '/nuxeo/api/v1/me' } } }).branding
+        .favicon,
+    ).toBeUndefined();
+  });
+
+  it.each([
+    ['a contributed asset', 'assets/acme-icon.png'],
+    ['an .ico beside bootstrap.json', 'acme.ico'],
+    ['an https URL', 'https://cdn.example.com/acme.ico'],
+    ['a data:image URI', 'data:image/png;base64,iVBORw0KGgo='],
+  ])('accepts %s', (_label, src) => {
+    expect(faviconOf({ src })).toEqual({ src, alt: '' });
+  });
+
+  it.each([
+    ['an absolute Nuxeo REST path', '/nuxeo/api/v1/id/abc/@blob/file:content'],
+    ['a protocol-relative URL', '//evil.example/icon.png'],
+    ['a parent-directory segment', '../agentic-ui/assets/icon.png'],
+    ['an encoded parent-directory segment', '%2e%2e/api/v1/me'],
+    ['a backslash path', '..\\secret.ico'],
+    ['an http URL', 'http://cdn.example.com/acme.ico'],
+    ['a javascript URL', 'javascript:alert(1)'],
+    ['a non-image data URI', 'data:text/html,<script>alert(1)</script>'],
+    ['a tab hidden in a parent segment', '.\t./api/v1/me'],
+    ['a blank src', '   '],
+  ])('rejects %s and keeps the packaged icon', (_label, src) => {
+    expect(faviconOf({ src })).toBeNull();
+  });
+
+  it('keeps a favicon an earlier layer set when this one omits or garbles it, and clears it on null', () => {
+    const base = {
+      ...DEFAULT_APP_BOOTSTRAP_CONFIG,
+      branding: { ...DEFAULT_APP_BOOTSTRAP_CONFIG.branding, favicon: { src: 'a.png', alt: '' } },
+    };
+
+    expect(
+      mergeBootstrapConfig(base, { branding: { favicon: { src: '/nuxeo/api' } } }).branding.favicon,
+    ).toEqual({ src: 'a.png', alt: '' });
+    expect(
+      mergeBootstrapConfig(base, { branding: { applicationTitle: 'X' } }).branding.favicon,
+    ).toEqual({ src: 'a.png', alt: '' });
+    expect(mergeBootstrapConfig(base, { branding: { favicon: null } }).branding.favicon).toBeNull();
+  });
+
+  it('is independent of the logo, so a deployment may set either alone', () => {
+    const logoOnly = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+      branding: { logo: { src: 'a.svg', alt: 'A' } },
+    }).branding;
+    const faviconOnly = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+      branding: { favicon: { src: 'a.png' } },
+    }).branding;
+
+    expect(logoOnly.favicon).toBeNull();
+    expect(faviconOnly.logo).toBeNull();
+    expect(faviconOnly.favicon).toEqual({ src: 'a.png', alt: '' });
   });
 });
 

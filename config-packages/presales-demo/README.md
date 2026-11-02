@@ -49,7 +49,94 @@ not `<require>` Satori's defaults.
 the same version is the package it already has.
 
 The server reads the fragments once, at startup. A change applies after the restart that installing
-the package requires, and a browser picks it up on its next load.
+the package requires, and a browser picks it up on its next load. **While you are still deciding
+what a value should be, do not pay that.** Switch on the development override directory below,
+edit a file, reload the tab.
+
+## The fast loop while you are tuning a value
+
+Everything above is the way a change reaches a customer: reviewed, versioned, built from source,
+installed. It is also two to four minutes per iteration and a restart that drops every open
+session, which is the wrong price for finding out whether a title fits in the header.
+
+A development server can read a directory on its own disk on every request instead
+(NXSAT-312). Switch it on in `nuxeo.conf`:
+
+```
+nuxeo.agentic.ui.config.dev=true
+# optional; defaults to ${nuxeo.data.dir}/agentic-ui-config-dev
+# nuxeo.agentic.ui.config.dev.dir=/var/lib/nuxeo/agentic-ui-config-dev
+```
+
+Restart once, for that line only. From then on the loop is **edit the file, reload the tab** —
+no rebuild, no version bump, no reinstall, no restart. Measured on a local Docker Nuxeo: 0.1 s
+against 8.5 s for the restart alone on that same container, and the plan's figure for a real
+demo server is 60–120 s.
+
+The directory has the same shape as `bundle/agentic-ui-config/`, so you copy a file across rather
+than learn a second layout:
+
+| File                                     | What it contributes                                             |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| `bootstrap.json`                         | a bootstrap fragment named `dev`, applied after every package's |
+| `bootstrap.<name>.json`                  | a bootstrap fragment named `<name>`                             |
+| `manifest.json` / `manifest.<name>.json` | the same, in the manifest layer                                 |
+| `layouts/<Type>/<mode>.layout.json`      | a per-type layout                                               |
+| `assets/<file>`                          | an image a fragment names                                       |
+
+`bootstrap.json` is named `dev`, which no package uses, so it is appended and wins on the keys it
+sets. Name the file after a packaged fragment instead — `bootstrap.defaults.json` — and it
+**replaces** that fragment in place, losing every key it does not restate. Both are useful; pick
+deliberately. Any other file name is reported in the response's `diagnostics` rather than passed
+over, so a mistyped `bootsrap.json` tells you what happened.
+
+An override is an ordinary contribution and nothing about the contract is relaxed for it: it is
+validated the same way, a malformed one is rejected and reported and the packaged fragment stays
+in force, replacements keep their position, each fragment carries the file it came from in its
+provenance, and a contributed image is served with the same `default-src 'none'; sandbox` policy
+and the same name allow-list. That is deliberate — an override that skipped validation would be
+worse than the restart it saves.
+
+### Getting the file onto the server
+
+Docker, which is what a local Nuxeo usually is:
+
+```bash
+# Once, before the first copy. The server reports the directory as absent rather than creating
+# it, and `docker cp` of a single file into a parent that does not exist fails.
+docker exec nuxeo mkdir -p /var/lib/nuxeo/agentic-ui-config-dev
+
+docker cp bundle/agentic-ui-config/bootstrap.json \
+  nuxeo:/var/lib/nuxeo/agentic-ui-config-dev/bootstrap.json
+```
+
+To watch and copy on every save, with `fswatch` (macOS) or `inotifywait` (Linux):
+
+```bash
+fswatch -o bundle/agentic-ui-config | while read -r _; do
+  docker cp bundle/agentic-ui-config/. nuxeo:/var/lib/nuxeo/agentic-ui-config-dev/
+done
+```
+
+**`nuxeo sync` does not help in Docker mode, and this is worth knowing before you try.** The
+Nuxeo CLI watcher is real and does exactly this job, but `generator-nuxeo`'s configure step skips
+the destination prompt when the deployment is Docker and hardcodes
+`/opt/nuxeo/server/nxserver/nuxeo.war/ui/`, which is Web UI's directory, not ours
+(`generators/synchronize/configure-delegate.js`, verified against `generator-nuxeo@4.0.7`). In
+**local** deployment mode `dest` is prompted and free, so on a non-containerised server
+`nuxeo sync` can target the override directory and works.
+
+### Before you put it on anything shared
+
+- **It is off unless that property is set.** With the property unset the directory is not read,
+  not stat-ed and not reached, whatever is in it — asserted on the response bytes by
+  `AgenticUiConfigDevOverrideTest`, and by the `checkDevConfigOverrideIsNotProductionReachable`
+  guardrail on anything this repository ships.
+- **Never set it in production.** It makes configuration editable by anyone who can write to the
+  server's filesystem, which is exactly the privilege separation a regulated customer is relying
+  on. It belongs on a development box or a demo box, nowhere else.
+- **A value you keep is not finished until it is in the package.** The override directory is for
+  deciding; `bundle/agentic-ui-config/` plus a version bump is how the decision ships.
 
 ## Three things to know
 

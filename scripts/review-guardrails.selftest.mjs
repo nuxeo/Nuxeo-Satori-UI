@@ -2339,6 +2339,183 @@ expectRed(
   /No install\.xml was found[\s\S]*asserted nothing/,
 );
 
+/* -------- checkDevConfigOverrideIsNotProductionReachable (NXSAT-312, plan item H1) -------- */
+
+const DEV_OVERRIDE_CLASS =
+  'nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/DevOverrides.java';
+
+/**
+ * `DevOverrides` reduced to the two things the guardrail reads: `ifEnabled` consults the switch,
+ * and the constructor is called there and nowhere else.
+ *
+ * A stand-in rather than the real file, for the reason every fixture here is a stand-in — the
+ * controls must keep meaning what they mean when the real class grows a method. The shape they
+ * assert is small and stated, so a rename that breaks it is caught by the real file's own run of
+ * the guardrail, not silently absorbed here.
+ */
+const DEV_OVERRIDES_JAVA = `package org.nuxeo.agentic.config;
+
+final class DevOverrides {
+
+    static final String ENABLED_PROPERTY = "nuxeo.agentic.ui.config.dev";
+
+    private DevOverrides(java.nio.file.Path directory) {
+    }
+
+    static DevOverrides ifEnabled(java.util.function.UnaryOperator<String> properties) {
+        if (!Boolean.parseBoolean(properties.apply(ENABLED_PROPERTY))) {
+            return null;
+        }
+        return new DevOverrides(java.nio.file.Path.of("/tmp/x"));
+    }
+}
+`;
+
+const DEV_OVERRIDE_TREE = { [DEV_OVERRIDE_CLASS]: DEV_OVERRIDES_JAVA };
+
+falsePositiveControls += 1;
+expectGreen(
+  'the override switched on nowhere, constructed only behind ifEnabled',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  DEV_OVERRIDE_TREE,
+);
+
+// 1. A shipped file switching it on. This is the defect that would hand every customer a
+// configuration directory on their server's disk, which is the thing the feature promises not
+// to do.
+expectRed(
+  'a nuxeo.conf fragment that switches the override on',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  DEV_OVERRIDE_TREE,
+  (write) => write('nuxeo-conf/60-dev-config.conf', 'nuxeo.agentic.ui.config.dev=true\n'),
+  /60-dev-config\.conf:1 sets nuxeo\.agentic\.ui\.config\.dev=true/,
+);
+
+expectRed(
+  'the marketplace installer switching the override on',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  DEV_OVERRIDE_TREE,
+  (write) =>
+    write(
+      'nuxeo-agentic-ui-package/src/main/resources/install.xml',
+      '<install>\n  <config addtonuxeoconf="nuxeo.agentic.ui.config.dev=true" />\n</install>\n',
+    ),
+  /install\.xml:2 sets nuxeo\.agentic\.ui\.config\.dev=true/,
+);
+
+// The runbook has to be able to show the line, so a commented one stays green. Without this
+// control the obvious fix for the above — documenting it — would be a gate failure.
+falsePositiveControls += 1;
+expectGreen('a commented-out sample line', 'checkDevConfigOverrideIsNotProductionReachable', {
+  ...DEV_OVERRIDE_TREE,
+  'nuxeo-conf/60-dev-config.sample.conf':
+    '## Uncomment on a development server only:\n# nuxeo.agentic.ui.config.dev=true\n',
+});
+
+// And a README showing the line inside a fenced block, uncommented, which is how it reads best.
+// This control exists because the first version of the guardrail failed on exactly this: the
+// package README that documents the feature was reported as switching it on.
+falsePositiveControls += 1;
+expectGreen(
+  'a README documenting the property in a fenced code block',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  {
+    ...DEV_OVERRIDE_TREE,
+    'config-packages/demo/README.md':
+      '## The fast loop\n\nSwitch it on in `nuxeo.conf`:\n\n```\nnuxeo.agentic.ui.config.dev=true\n```\n',
+  },
+);
+
+// 2. A second construction site. It does not have to skip the property check to be a defect —
+// it is a second door, and the next person to touch it has no reason to know about the first.
+expectRed(
+  'DevOverrides constructed from another class',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  DEV_OVERRIDE_TREE,
+  (write) =>
+    write(
+      'nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/AgenticUiConfigComponent.java',
+      'package org.nuxeo.agentic.config;\n\nclass AgenticUiConfigComponent {\n' +
+        '    private final DevOverrides overrides = new DevOverrides(java.nio.file.Path.of("/tmp"));\n}\n',
+    ),
+  /AgenticUiConfigComponent\.java:4 constructs DevOverrides outside/,
+);
+
+// Moving the construction to a sibling method passes the "one site" check and still removes the
+// switch from the path, which is why the function's own body is asserted.
+expectRed(
+  'the construction moved out of ifEnabled into a sibling method',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  DEV_OVERRIDE_TREE,
+  (write) =>
+    write(
+      DEV_OVERRIDE_CLASS,
+      DEV_OVERRIDES_JAVA.replace(
+        '        return new DevOverrides(java.nio.file.Path.of("/tmp/x"));\n',
+        '        return build();\n',
+      ).replace(
+        '    static DevOverrides ifEnabled',
+        '    static DevOverrides build() {\n' +
+          '        return new DevOverrides(java.nio.file.Path.of("/tmp/x"));\n    }\n\n' +
+          '    static DevOverrides ifEnabled',
+      ),
+    ),
+  /ifEnabled must both read ENABLED_PROPERTY and be where DevOverrides is constructed/,
+);
+
+// Adding a factory beside an untouched ifEnabled rather than moving the existing construction
+// out of it. This is the cheaper mistake of the two and the one the first version of the
+// guardrail missed: exempting the whole class and then confirming ifEnabled still constructs
+// something left both halves satisfied while a second, switchless door stood open.
+expectRed(
+  'a second factory added beside an ifEnabled that still reads the switch',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  DEV_OVERRIDE_TREE,
+  (write) =>
+    write(
+      DEV_OVERRIDE_CLASS,
+      DEV_OVERRIDES_JAVA.replace(
+        '    static DevOverrides ifEnabled',
+        '    static DevOverrides always() {\n' +
+          '        return new DevOverrides(java.nio.file.Path.of("/tmp/x"));\n    }\n\n' +
+          '    static DevOverrides ifEnabled',
+      ),
+    ),
+  /DevOverrides\.java:\d+ constructs DevOverrides outside DevOverrides\.ifEnabled/,
+);
+
+// The tautology control: with no construction anywhere, checks 2 and 3 would have nothing to
+// say and the guardrail would be green on a tree it understands nothing about.
+expectRed(
+  'DevOverrides never constructed, so the gate would assert nothing',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  {
+    [DEV_OVERRIDE_CLASS]:
+      'package org.nuxeo.agentic.config;\n\nfinal class DevOverrides {\n' +
+      '    static final String ENABLED_PROPERTY = "nuxeo.agentic.ui.config.dev";\n}\n',
+  },
+  null,
+  /No "new DevOverrides\(" appears under[\s\S]*asserted nothing/,
+);
+
+expectRed(
+  'the DevOverrides class missing entirely',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  { 'nuxeo-agentic-core/pom.xml': '<project/>\n' },
+  null,
+  /DevOverrides\.java is missing, so this gate asserted nothing/,
+);
+
+// 3. Shipping the directory itself.
+expectRed(
+  'the override directory packaged for installation',
+  'checkDevConfigOverrideIsNotProductionReachable',
+  DEV_OVERRIDE_TREE,
+  (write) =>
+    write('nuxeo-agentic-ui-package/src/main/agentic-ui-config-dev/bootstrap.json', '{}\n'),
+  /agentic-ui-config-dev\/bootstrap\.json ships the development override directory/,
+);
+
 // The comment explaining the rule has to quote the attribute — here as a whole commented-out copy
 // into agentic-ui-config, the strongest form of it. It must not trip either rule.
 falsePositiveControls += 1;

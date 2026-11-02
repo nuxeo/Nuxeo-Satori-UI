@@ -709,9 +709,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
   }
 
   .subjects-trigger-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    display: block;
     width: 100%;
     padding: 6px 8px 6px 12px;
     box-sizing: border-box;

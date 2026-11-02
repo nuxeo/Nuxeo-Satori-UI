@@ -448,8 +448,8 @@ Estimated effort: **8 hours**.
 
 | Tool                                                        | Version    |
 | ----------------------------------------------------------- | ---------- |
-| Vitest                                                      | **4.1.10** |
-| `@vitest/coverage-v8`, `@vitest/ui`                         | 4.1.10     |
+| Vitest                                                      | **4.1.12** |
+| `@vitest/coverage-v8`, `@vitest/ui`                         | 4.1.12     |
 | jsdom                                                       | **28.1.0** |
 | `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | **2.9.0**  |
 
@@ -857,7 +857,7 @@ most of that surface; `app.config.ts` and the shell nav drawer also import it on
 - [ADF source](https://github.com/Alfresco/alfresco-ng2-components)
 - **In-repo, and the only accurate source for the bridge:** `libs/shared/adf-hx-bridge/ARCHITECTURE.md`
   (removed with the bridge; in git history),
-  `docs/adf-hx-upstream-findings.md`, `docs/adf-hx-workarounds.md`, `docs/adf-hx-beta-plan.md`
+  `docs/adf-hx-upstream-findings.md`, `docs/adf-hx-beta-plan.md`
 
 Estimated effort: **30 hours**.
 
@@ -1306,7 +1306,7 @@ before relying on it.
 | `ng-packagr`                                                | 22.2.5                                                   |
 | `vite`                                                      | 8.3.5 (`^8.3.5`; the same version pinned by `overrides`) |
 | `esbuild`                                                   | 0.28.2 (pinned by `overrides`)                           |
-| `vitest`, `@vitest/coverage-v8`, `@vitest/ui`               | 4.1.10                                                   |
+| `vitest`, `@vitest/coverage-v8`, `@vitest/ui`               | 4.1.12                                                   |
 | `jsdom`                                                     | 28.1.0                                                   |
 | `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | 1.22.5                                                   |
 | `eslint`                                                    | 9.39.5                                                   |

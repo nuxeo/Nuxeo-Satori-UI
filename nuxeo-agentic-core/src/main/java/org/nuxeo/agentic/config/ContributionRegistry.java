@@ -47,9 +47,30 @@ final class ContributionRegistry {
 
     /** The contributions in force, in order, and what happened to the others. */
     synchronized Resolution resolve() {
+        return resolve(List.of(), List.of());
+    }
+
+    /**
+     * The same, with the development override directory's contributions appended after every
+     * registered one.
+     *
+     * Appended rather than served separately, which is the whole design of {@link DevOverrides}:
+     * an override is last in the order so it wins, and is otherwise an ordinary contribution —
+     * validated here, read and parsed by {@link ConfigSnapshot#load}, able to replace a named
+     * fragment in place, and reported with its provenance if it is rejected. Nothing below
+     * distinguishes one, so there is no second set of rules to keep in step with these.
+     *
+     * @param appended contributions read from outside the registry, in the order they apply
+     * @param notices what the scan that produced them has to say — a file whose name it did not
+     *            recognise, or a directory it could not read. Carried through rather than logged
+     *            at the scan, so it reaches the browser's diagnostics with everything else.
+     */
+    synchronized Resolution resolve(List<Contribution> appended, List<Diagnostic> notices) {
         Map<String, ConfigSnapshot.Loaded> inForce = new LinkedHashMap<>();
-        List<Diagnostic> diagnostics = new ArrayList<>();
-        for (Contribution contribution : contributions) {
+        List<Diagnostic> diagnostics = new ArrayList<>(notices);
+        List<Contribution> all = new ArrayList<>(contributions);
+        all.addAll(appended);
+        for (Contribution contribution : all) {
             String invalid = validate(contribution);
             if (invalid != null) {
                 diagnostics.add(Diagnostic.error("invalid-contribution", contribution.scope(),

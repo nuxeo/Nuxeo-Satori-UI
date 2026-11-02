@@ -1652,120 +1652,6 @@ function checkAngularDevAssets() {
 }
 
 /**
- * Every adf-hx marker in the codebase must have a row in `docs/adf-hx-workarounds.md`, and every
- * row naming a code site must have its marker there.
- *
- * The register exists so the cost of adopting adf-hx is countable. A markdown list with no gate
- * decays the moment someone adds a thirteenth workaround and forgets the row — the programme has
- * three gates that exist for exactly that reason, so this one does too.
- *
- * Checked in both directions, because they catch different decay:
- *
- * - **marker with no row** — a workaround was added and never registered. The common case.
- * - **row with no marker** — a workaround was removed, or the row points at the wrong file, so the
- *   register overstates what the code does. Rows whose site is a `.json` file are exempt: JSON
- *   cannot carry a comment, and `— (config)` in the row declares that.
- * - **marker kind disagreeing with its ID** — `MISSING(adf-hx): W3` is a mislabelled category, and
- *   the categories have different audiences, so the mislabel matters.
- */
-function checkAdfHxWorkaroundIds() {
-  const register = 'docs/adf-hx-workarounds.md';
-  if (!fileExists(register)) {
-    fail(`${register} does not exist, but the adf-hx marker gate depends on it.`);
-    return;
-  }
-
-  const KIND_BY_LETTER = {
-    W: 'WORKAROUND(adf-hx)',
-    M: 'MISSING(adf-hx)',
-    R: 'REFUSES',
-    D: 'DEGRADED(adf-hx)',
-  };
-  const MARKER =
-    /(WORKAROUND\(adf-hx\)|MISSING\(adf-hx\)|REFUSES|DEGRADED\(adf-hx\)):\s*([WMRD]\d+)/g;
-
-  // ---- the register's rows ----
-  /** @type {Map<string, { configOnly: boolean, line: number }>} */
-  const rows = new Map();
-  const registerLines = read(register).split('\n');
-  registerLines.forEach((text, index) => {
-    // A table row whose first cell is an id: `| W1  | … |`
-    const match = /^\|\s*([WMRD]\d+)\s*\|/.exec(text);
-    if (!match) return;
-    const id = match[1];
-    if (rows.has(id)) {
-      fail(`${register}:${index + 1} declares ${id} twice. An id must identify one row.`);
-      return;
-    }
-    // Two documented exemptions from the "must have a marker" rule:
-    //   `(config)` — the site is a `.json` file, which cannot hold a comment.
-    //   `(fixed`   — the workaround is gone. The register keeps the row on purpose, because the
-    //                history of what adf-hx cost is the point of the file, but there is no longer
-    //                a marker to find.
-    rows.set(id, {
-      configOnly: text.includes('(config)') || text.includes('(fixed'),
-      line: index + 1,
-    });
-  });
-
-  if (rows.size === 0) {
-    fail(`${register} has no id rows, so the marker gate cannot verify anything.`);
-    return;
-  }
-
-  // ---- the codebase's markers ----
-  /** @type {Map<string, string[]>} */
-  const markerSites = new Map();
-  // `--others --exclude-standard` as well as tracked, because a workaround introduced in a
-  // **new** file is invisible to `ls-files` alone. That gap surfaced the first time this gate ran
-  // against a new pager component: the row was flagged as having no marker while the marker was
-  // sitting in an untracked file. Gitignored files stay excluded — they are not the codebase.
-  const sources = git(['ls-files', '--cached', '--others', '--exclude-standard'])
-    .split('\n')
-    .filter(Boolean)
-    // The register and the findings document quote marker names as documentation, and the gate's
-    // own source contains the pattern. Scanning them would make the gate assert about itself.
-    .filter((file) => !file.startsWith('docs/') && file !== 'scripts/review-guardrails.mjs')
-    .filter((file) => /\.(ts|mts|mjs|js|html|scss)$/.test(file));
-
-  for (const file of sources) {
-    if (!fileExists(file)) continue;
-    const body = read(file);
-    for (const found of body.matchAll(MARKER)) {
-      const [, kind, id] = found;
-      const expected = KIND_BY_LETTER[id[0]];
-      if (kind !== expected) {
-        fail(
-          `${file} marks ${id} as \`${kind}:\` but its id belongs to category ${id[0]}, whose ` +
-            `marker is \`${expected}:\`. The categories have different audiences.`,
-        );
-      }
-      if (!markerSites.has(id)) markerSites.set(id, []);
-      markerSites.get(id).push(file);
-    }
-  }
-
-  // ---- forward: every marker has a row ----
-  for (const [id, sites] of markerSites) {
-    if (rows.has(id)) continue;
-    fail(
-      `${sites[0]} carries marker ${id}, which has no row in ${register}. Add the row, or use an ` +
-        'existing id if this is another site for the same workaround.',
-    );
-  }
-
-  // ---- reverse: every non-config row has a marker ----
-  for (const [id, row] of rows) {
-    if (row.configOnly || markerSites.has(id)) continue;
-    fail(
-      `${register}:${row.line} declares ${id} but no source file carries that marker. Either the ` +
-        'workaround is gone — strike the row through rather than deleting it — or the row names ' +
-        'the wrong site.',
-    );
-  }
-}
-
-/**
  * No `@alfresco/*` type may be reachable from a library's public barrel.
  *
  * `docs/adf-hx-beta-plan.md` sets this as a **hard rule** for Phase 3 — "adf-hx types must never
@@ -6534,6 +6420,164 @@ function checkInstallerOwnsNoCustomerFile() {
         '    Configuration is contributed to the org.nuxeo.agentic.ui.config extension point from ' +
         'a bundle, never installed as a file (NXSAT-312).',
     );
+  }
+}
+
+/* ------------------- the development configuration override directory (NXSAT-312, H1) ---- */
+
+const CONFIG_JAVA_DIR = 'nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config';
+
+const DEV_OVERRIDE_CLASS = `${CONFIG_JAVA_DIR}/DevOverrides.java`;
+
+const DEV_OVERRIDE_PROPERTY = 'nuxeo.agentic.ui.config.dev';
+
+/**
+ * Where a value that reaches a customer's server can come from: the Marketplace package the
+ * installer runs, the configuration packages, and the `nuxeo.conf` fragments and templates this
+ * repository ships. A sample file here is copied onto real servers by the runbooks, so an
+ * enabling line in one is the same defect as an enabling line in the installer.
+ */
+const DEPLOYED_CONFIG_ROOTS = [PACKAGE_SOURCES, 'config-packages', 'nuxeo-conf', 'docker'];
+
+/**
+ * The development override directory must not be reachable on a server nobody switched it on.
+ *
+ * ## What is being guarded
+ *
+ * `DevOverrides` makes the configuration servlet read a directory on each request, so a value
+ * can be changed without a package rebuild and a restart (NXSAT-312 round 3, plan item H1).
+ * Everything good about that is also what makes it dangerous shipped on: it turns configuration
+ * — which the regulated-customer requirement says must need the same privilege as deploying code
+ * — into something editable from the server's filesystem. So the whole feature rests on one
+ * claim, that it is off and unreachable unless an explicit property is set, and this is the
+ * static half of holding that claim. The runtime half is
+ * `AgenticUiConfigDevOverrideTest.withThePropertyUnsetTheDirectoryIsIgnoredEntirely`, which puts
+ * a fragment in the directory and compares the response byte for byte.
+ *
+ * ## The three ways it could become production-reachable, and the check for each
+ *
+ * 1. **A shipped file sets the property.** Any line in the Marketplace package, a configuration
+ *    package, `nuxeo-conf/` or `docker/` that assigns it a true value — commented-out lines
+ *    excepted, since the runbook has to be able to show the line a developer uncomments.
+ * 2. **Something constructs the overrides without asking the property.** `DevOverrides` must be
+ *    built in exactly one place, inside `ifEnabled`, which is the one function that reads the
+ *    switch. A second construction site is a second door, whether or not it happens to check.
+ * 3. **The directory ships.** A package that installs the directory, or a template that creates
+ *    it, turns "off because there is nothing there" into the only thing standing in the way.
+ *
+ * ## Shown failing on purpose
+ *
+ * `review-guardrails.selftest.mjs` has a negative control for each of the three, and positive
+ * controls for the two forms that must stay green: a commented-out sample line, and the
+ * construction inside `ifEnabled` itself.
+ */
+function checkDevConfigOverrideIsNotProductionReachable() {
+  if (!fileExists(DEV_OVERRIDE_CLASS)) {
+    fail(
+      `${DEV_OVERRIDE_CLASS} is missing, so this gate asserted nothing.\n` +
+        '    It is the single place the development override directory may be constructed. If it ' +
+        'was renamed, rename it here too; if the feature was removed, remove this guardrail with it.',
+    );
+    return;
+  }
+
+  // 1. Nothing a customer installs may set the switch.
+  //
+  // Markdown is out of scope, and that is a rule rather than an exemption for an inconvenience:
+  // no server reads a `.md` file, and the runbook's whole job is to show the line a developer
+  // writes into `nuxeo.conf`. Without this the correct documentation of the feature failed its
+  // own guardrail, which is how a gate teaches people to stop documenting things.
+  for (const root of DEPLOYED_CONFIG_ROOTS) {
+    for (const file of walk(
+      root,
+      (path) => !/\/(dist|target)\//.test(path) && !/\.mdx?$/.test(path),
+    )) {
+      let body;
+      try {
+        body = read(file);
+      } catch {
+        // A binary or unreadable file cannot carry a property assignment in a form a server reads.
+        continue;
+      }
+      if (!body.includes(DEV_OVERRIDE_PROPERTY)) continue;
+      for (const [index, line] of body.split('\n').entries()) {
+        // A commented line is the documentation: `nuxeo.conf` comments with `#`, XML with `<!--`,
+        // and the sample files in `nuxeo-conf/` are entirely `##` prose around one dead line.
+        if (/^\s*(?:#|\/\/|<!--|\*)/.test(line)) continue;
+        if (!new RegExp(`${DEV_OVERRIDE_PROPERTY}\\s*[=:]\\s*["']?true`, 'i').test(line)) continue;
+        fail(
+          `${file}:${index + 1} sets ${DEV_OVERRIDE_PROPERTY}=true: ${line.trim()}\n` +
+            "    That property makes the configuration servlet read a directory on the server's " +
+            'disk on every request. It is a development setting, and nothing a customer installs ' +
+            'may switch it on — configuration changes must need the same privilege as deploying ' +
+            'code (NXSAT-312). Leave the line commented out, as the runbook does.',
+        );
+      }
+    }
+  }
+
+  // 2. One door, and it is the one that reads the switch.
+  //
+  // Every construction site is checked against the extent of `ifEnabled`, not against the file it
+  // sits in. Exempting the whole of DevOverrides.java and then separately confirming that
+  // `ifEnabled` still contains a construction looks equivalent and is not: it passes a sibling
+  // factory *added* beside an untouched `ifEnabled`, which is the cheaper mistake to make than
+  // moving the existing one out. Locating the method first and judging every site by whether it
+  // falls inside it rejects the added factory and the moved construction with one rule.
+  const devOverrideSource = read(DEV_OVERRIDE_CLASS);
+  const ifEnabledMatch = /static DevOverrides ifEnabled\([\s\S]*?\n {4}\}/.exec(devOverrideSource);
+  const ifEnabled = ifEnabledMatch?.[0] ?? '';
+  const ifEnabledFirstLine = ifEnabledMatch
+    ? devOverrideSource.slice(0, ifEnabledMatch.index).split('\n').length
+    : 0;
+  const ifEnabledLastLine = ifEnabledFirstLine + (ifEnabled ? ifEnabled.split('\n').length - 1 : 0);
+
+  const constructions = walk(CONFIG_JAVA_DIR, (path) => path.endsWith('.java')).flatMap((file) =>
+    read(file)
+      .split('\n')
+      .map((text, index) => ({ file, line: index + 1, text }))
+      .filter(({ text }) => /\bnew\s+DevOverrides\s*\(/.test(text)),
+  );
+  for (const { file, line, text } of constructions) {
+    const insideIfEnabled =
+      file === DEV_OVERRIDE_CLASS && line >= ifEnabledFirstLine && line <= ifEnabledLastLine;
+    if (insideIfEnabled) continue;
+    fail(
+      `${file}:${line} constructs DevOverrides outside DevOverrides.ifEnabled: ${text.trim()}\n` +
+        `    ifEnabled is the only place that reads ${DEV_OVERRIDE_PROPERTY}, so it is the only ` +
+        'place the override directory may be built. Any other construction site is a second way ' +
+        'on, whether or not it happens to check the property today, and whether or not it sits ' +
+        'in the same class.',
+    );
+  }
+  if (constructions.length === 0) {
+    fail(
+      `No "new DevOverrides(" appears under ${CONFIG_JAVA_DIR}, so this gate asserted nothing ` +
+        'about where the override directory may be constructed.',
+    );
+  }
+
+  // And the method every site was just judged against has to be the one that reads the switch,
+  // or the check above is measuring an extent that guarantees nothing.
+  if (!ifEnabled.includes('ENABLED_PROPERTY') || !/\bnew\s+DevOverrides\s*\(/.test(ifEnabled)) {
+    fail(
+      `${DEV_OVERRIDE_CLASS}: ifEnabled must both read ENABLED_PROPERTY and be where DevOverrides ` +
+        'is constructed.\n' +
+        '    Those two in one function are what makes "the overrides are off unless the property ' +
+        'is set" true by construction rather than by convention.',
+    );
+  }
+
+  // 3. The directory itself must not ship.
+  for (const root of DEPLOYED_CONFIG_ROOTS) {
+    for (const file of walk(root, (path) => path.includes('agentic-ui-config-dev'))) {
+      fail(
+        `${file} ships the development override directory.\n` +
+          '    The directory is created by whoever switches the overrides on, on their own ' +
+          'server. Installing it puts the override path one property away on every customer ' +
+          'deployment.',
+      );
+    }
   }
 }
 
@@ -12636,7 +12680,6 @@ const GUARDRAILS = [
   checkHardcodedSecrets,
   checkNoNuxeoCredentialDefaults,
   checkAngularDevAssets,
-  checkAdfHxWorkaroundIds,
   checkNoAdfHxInPublicApi,
   checkNoHardcodedUiText,
   checkNoHardcodedDescriptorText,
@@ -12655,6 +12698,7 @@ const GUARDRAILS = [
   checkCrowdinConfig,
   checkPackagedConfigIsNotADemo,
   checkInstallerOwnsNoCustomerFile,
+  checkDevConfigOverrideIsNotProductionReachable,
   checkTranslationContext,
   checkTranslatorNotesFlagProductsAndAcronyms,
   checkPlatformEnglishFallback,

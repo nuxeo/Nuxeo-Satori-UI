@@ -319,8 +319,7 @@ DocumentService`. The chain, read from the published bundle:
   subclass field of that name fails `TS2415`/`TS4114`. adf-core also fetches
   `assets/adf-core/i18n/<lang>.json`, which has to be added to the build's asset globs.
   _Changed by NXSAT-636 (2026-10):_ with adf-core's wiring removed, `AppTranslateLoader` is a
-  plain `TranslateLoader` again and the adf-core asset glob is gone (W2 in
-  `docs/adf-hx-workarounds.md`).
+  plain `TranslateLoader` again and the adf-core asset glob is gone.
 - **`nuxeo-ui` has no `typecheck` target, so the `typecheck` gate does not cover the
   app.** Two real `TS` errors in `app.config.ts`-adjacent app code passed
   `nx affected -t typecheck` and were caught only by `build`. This is the same trap as

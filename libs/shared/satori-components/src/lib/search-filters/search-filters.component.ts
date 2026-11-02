@@ -25,6 +25,7 @@ import {
   type SearchAggregations,
   type SearchCollectionOption,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 
 import {
   NXS_EMPTY_SEARCH_FILTERS,
@@ -38,7 +39,7 @@ import {
   type NxsSearchFilters,
 } from './search-filters.model';
 import { NxsChipSetComponent } from '../chip-set/chip-set.component';
-import type { NxsChipItem } from '../primitives';
+import { NXS_PRIMITIVE_IDS, type NxsChipItem } from '../primitives';
 
 /** A group of checkboxes, and which field of the filters it edits. */
 type CheckboxField = 'modified' | 'nature' | 'subjects' | 'coverage' | 'size';
@@ -94,11 +95,16 @@ let nextId = 0;
     MatIconModule,
     NgTemplateOutlet,
     TranslatePipe,
+    ExtensionOutletComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-search-filters' },
 })
 export class NxsSearchFiltersComponent {
+  /** The chip sets are rendered by ID, so a component registered under it replaces the built-in. */
+  protected readonly chipSetId = NXS_PRIMITIVE_IDS.chipSet;
+  private readonly chipRemovers = new Map<ChoiceField, (item: NxsChipItem) => void>();
+
   /** The filters shown. Two-way: every change the user makes is written back. */
   readonly filters = model<NxsSearchFilters>(NXS_EMPTY_SEARCH_FILTERS);
   /** The server's aggregates for the query the filters produce: each choice's count. */
@@ -286,6 +292,19 @@ export class NxsSearchFiltersComponent {
 
   protected removeChoice(field: ChoiceField, value: string): void {
     this.update({ [field]: this.filters()[field].filter((entry) => entry !== value) });
+  }
+
+  /**
+   * The handler a choice field's chips call when one is removed, built once per field: the outlet
+   * that renders the chip set by ID binds no outputs, and a new function each check would reset it.
+   */
+  protected chipRemover(field: ChoiceField): (item: NxsChipItem) => void {
+    let remove = this.chipRemovers.get(field);
+    if (!remove) {
+      remove = (item) => this.removeChoice(field, item.id);
+      this.chipRemovers.set(field, remove);
+    }
+    return remove;
   }
 
   /** The chips for one field's chosen values: a collection shows its title, anything else its value. */
