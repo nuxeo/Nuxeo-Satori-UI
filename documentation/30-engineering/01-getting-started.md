@@ -2,16 +2,21 @@
 title: Developer Getting Started
 parent: Engineering
 order: 1
-last_reviewed: 2026-10-15
-repo_commit: c053e63
+last_reviewed: 2026-11-02
+repo_commit: 561e927
 audience: engineering
 ---
 
 # Developer Getting Started — zero to productive
 
-> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
-> Before that, last reviewed 2026-10-14 at `d36176c` (`feature/nxsat-308-remove-adf-packages`):
+> **Last reviewed:** 2026-11-02 · **Repository:** `561e92759` (`main`)
+> The **Node version, `localStorage` hazard, npm version, gate count, the `nuxeo-ui` description,
+> three `Common problems` rows, the programme-status paragraph and the `Extending the system`
+> table** were re-verified against the code at that commit and corrected — the Node and
+> `localStorage` numbers had both been wrong since NXSAT-669.
+> Before that, last reviewed 2026-10-15 at `c053e63` (`integration/nxsat-308`):
+> only the adf-hx bridge and POC-route passages, for NXSAT-648.
+> Before that, 2026-10-14 at `d36176c` (`feature/nxsat-308-remove-adf-packages`):
 > Only the registry guidance (the token row and install snippet, `.npmrc` and the `E404` row) was re-verified at that commit,
 > for NXSAT-637; the gate guidance (the lockfile trap) on 2026-10-08 at `fb97d44`; the rest of the
 > page was last reviewed on 2026-08-24 at `77265f9`.
@@ -28,30 +33,58 @@ Budget about two hours, most of which is Docker pulling Nuxeo.
 
 | Requirement                | Version                           | Why this exact version                                                                                                         |
 | -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Node.js                    | **20.x**                          | Pinned in [`.nvmrc`](../../.nvmrc) and `engines` in [`package.json`](../../package.json). Not optional — see the warning below |
-| npm                        | 10.x (ships with Node 20)         | The lockfile is `lockfileVersion` 3                                                                                            |
+| Node.js                    | **24.x**                          | Pinned in [`.nvmrc`](../../.nvmrc) (`24`) and `engines` in [`package.json`](../../package.json) (`^24.15.0`). Not optional — see the warning below |
+| npm                        | 11.x (ships with Node 24)         | The lockfile is `lockfileVersion` 3                                                                                            |
 | Docker + Docker Compose    | any current                       | Runs Nuxeo, OpenSearch, and optionally ARender and Mailpit                                                                     |
 | Java + Maven               | 17+, Maven 3.9+                   | Only if you need to build the marketplace package ([`pom.xml`](../../pom.xml))                                                 |
 | `SATORI_GH_READONLY_TOKEN` | a GitHub PAT with `read:packages` | Required to install the `@hylandsoftware` packages                                                                             |
 
 ### The Node version will bite you
 
-Use Node 20. On Node 22+ a built-in `localStorage` global shadows jsdom's, and specs that
-touch `localStorage` fail with `SecurityError` **on correct code**. The temptation is then
-to edit the failing spec, which damages working code.
-
-`npm run beta:gate` works around it by passing `--no-experimental-webstorage` to every
-child process. A bare `npx nx test` does **not**.
+Use Node 24.
 
 ```bash
-nvm use            # reads .nvmrc → 20
-node -v            # must print v20.x
+nvm use            # reads .nvmrc → 24
+node -v            # must print v24.x
 ```
 
-If you are on a newer Node and cannot switch, route **every** verification through
-`npm run beta:gate` and read the warning it prints at startup — it is gate zero
-([`scripts/beta-harness/node-version.mjs`](../../scripts/beta-harness/node-version.mjs))
-and exists precisely because this cost someone a day.
+**Node 20 no longer works here, and the gate stops you rather than letting you find out
+later.** Anything older than the pinned major fails gate zero outright — "the Angular 22 /
+Nx 23 toolchain in this repo is not expected to work here, and any failure the later gates
+report would be uninterpretable"
+([`node-version.mjs:82-92`](../../scripts/beta-harness/node-version.mjs)). That changed with
+NXSAT-669; before it, the repo pinned 20.
+
+**The `localStorage` hazard is Node 25, not "22+".** Node moved `localStorage` from absent
+on 20, 22 and 24 to a global getter on 25 that *throws* unless `--localstorage-file` is
+given, and that global shadows jsdom's — so specs touching `localStorage` fail with
+`SecurityError` **on correct code** (`node-version.mjs:145-146`). The temptation is then to
+edit the failing spec, which damages working code. There is no hazard on Node 24, so if you
+are on the pinned version this paragraph is history, not a warning.
+
+If you are on Node 25 and cannot switch, route **every** verification through
+`npm run beta:gate`: it passes `--no-experimental-webstorage` to every child process, and a
+bare `npx nx test` does **not**. The gate prints a `PASS WITH WARNING` saying exactly that
+(`node-version.mjs:116-133`), and it **probes** the hazard rather than matching a version
+number, so a future Node that reintroduces it is caught without this page being edited.
+
+Set `BETA_GATE_NODE_STRICT=1` to make any major but the pinned one a hard failure. CI does
+**not** set it and does not need to — every workflow installs Node 24 directly, by
+`node-version: 24` or `node-version-file: .nvmrc`, so the running major already equals the
+pinned one. The flag is for holding a local run to the same standard.
+
+### Two Node versions, both correct — do not flatten them
+
+This page is the **contributor** path: building and testing the Angular application, which
+needs Node 24. A **customer** building a configuration package is on a different path with a
+different floor — that needs only Node 20, no `npm ci` and no registry token, and the
+scaffolder and build script use Node built-ins only. Measured on 20, 22, 24 and 25 with
+byte-identical output.
+
+Confusing the two has already cost time in review. If you are writing about the customer
+path, use the customer guide's wording — "Node.js 20 or later" — rather than quoting 24 from
+here. That guide is `CUSTOMISING.md` at the repository root; it arrives with NXSAT-312's
+customer-tooling change, so it is not linked from here until that lands.
 
 ---
 
@@ -144,8 +177,8 @@ than hitting :8080 directly.
 
 | App                     | Purpose                                                                                                                                       |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nuxeo-ui`              | The product. Every feature library, adf-hx, Material, Satori design system                                                                    |
-| `nuxeo-satori-template` | The **forkable customer template**. Deliberately ships no design system, so a customer brings their own. `npx nx serve nuxeo-satori-template` |
+| `nuxeo-ui`              | The product. Every feature library, Material, and the Satori design system                                                                    |
+| `nuxeo-satori-template` | The **forkable customer template**. Built on plain Angular Material — a prebuilt theme at [`styles.scss:13`](../../apps/nuxeo-satori-template/src/styles.scss) — with **no Satori import of its own**, so a customer brings their own look (`libs/platform/AGENTS.md:278`). `npx nx serve nuxeo-satori-template` |
 
 ---
 
@@ -182,11 +215,16 @@ Full list: `grep -rhoE "process\.env\[?'?\"?[A-Z_]+" apps libs scripts tools`.
 npm run beta:gate -- --gates lockfile,guardrails,lint
 ```
 
-### The full gate — 17 gates
+### The full gate
 
 ```bash
 npm run beta:gate -- --phase my-change
 ```
+
+**Do not quote a gate count from this page.** It was "17 gates" here for long enough to be wrong;
+the gate prints its own total on every run (`3 of 35` in a partial run, for instance), and that
+number is the only one worth repeating. `beta:state` goes red when a phase cites a run with fewer
+gates than the pipeline now has, which is how the stale count surfaces.
 
 Order is cheapest-first and it **stops at the first failure**, because a lint error usually
 explains the test failure that would follow. See
@@ -229,7 +267,11 @@ phase claims more than the artifacts support. The narrative version is the **Pro
 status** section of [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md), which is
 dated.
 
-At `77265f9`: Phases 0–5 complete, Phase 6 in progress (steps 0–2 of 7). **As of 2026-09-23 Phase 6 is 5 of 7**, with steps 3 (WCAG, back in question) and 6 (coverage, reopened) open.
+This page used to end the section with a prose snapshot — "At `77265f9`: Phases 0–5 complete,
+Phase 6 in progress" — directly under the instruction not to read status from prose. It is
+removed rather than refreshed: a hand-written status two lines below "do not read status from
+prose" is the instruction disproving itself, and `CLAUDE.md` records the same mistake being
+believed for weeks elsewhere in the repository. Run the command.
 
 ---
 
@@ -294,11 +336,11 @@ From [`CLAUDE.md`](../../CLAUDE.md), each one enforced or hard-won:
 
 | Symptom                                                               | Cause                                                                                                  | Fix                                                                                                                                                                                |
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SecurityError` on `localStorage` in specs                            | Node 22+ shadows jsdom's `localStorage`                                                                | Use Node 20, or run via `npm run beta:gate`                                                                                                                                        |
+| `SecurityError` on `localStorage` in specs                            | **Node 25** defines a throwing global `localStorage` that shadows jsdom's. Absent on 20, 22 and 24     | Use the pinned Node 24, or route every run through `npm run beta:gate`, which passes `--no-experimental-webstorage`. Do not edit the spec — the code is correct                     |
 | `npm ci` fails on CI, green locally                                   | A bare `npm install` pruned Linux-only optional entries                                                | Restore a known-good lock, merge new entries only                                                                                                                                  |
 | `E404` installing `@hylandsoftware/*`                                 | `SATORI_GH_READONLY_TOKEN` missing or lacks `read:packages` on the **Hyland** org                      | Set the token; it needs `read:packages` on the Hyland org                                                                                                                          |
-| `NG0201: No provider for …` after adopting an adf-hx component        | Upstream services are `providedIn: 'root'` and resolve ports from the root injector                    | Provide the port in the **root** injector, not on the component. See the long comment in [`apps/nuxeo-ui/src/app/app.config.ts:37`](../../apps/nuxeo-ui/src/app/app.config.ts#L37) |
-| adf-hx components render raw keys like `MANAGE_VERSIONS.DIALOG.TITLE` | An i18n catalogue is missing from the bundle; the loader catches the 404 and returns `{}` **silently** | `npm run beta:bundle` — it asserts the catalogues are present _and non-empty_                                                                                                      |
+| `NG0201: No provider for …` from a library service                    | The service is `providedIn: 'root'` and resolves its dependency from the root injector                 | Provide it in the **root** injector, not on the component. (This row named adf-hx until NXSAT-308 removed it; the cited comment is gone and `app.config.ts:37` is now unrelated)    |
+| Components render raw translation keys instead of text                | An i18n catalogue is missing from the bundle; `AppTranslateLoader` catches the 404 and returns `{}` **silently** | `npm run beta:bundle` — it asserts both runtime catalogues are present, non-empty and not truncated (`no-test-libs-in-bundle.mjs:106-126`); a 0-byte file used to pass   |
 | HTTP 500 from an `AI.*` operation                                     | The AI backend is a **separate marketplace package not in this repo**                                  | Expected, not a client defect. See [Runtime AI Features](10-runtime-ai-features.md)                                                                                                |
 | Empty screens, intermittent 403 on `/nuxeo/api`                       | Session injected but XHRs unauthenticated                                                              | Both mechanisms are required — see the auth note in [Testing & Evidence](12-testing-and-evidence.md)                                                                               |
 | Evidence run passes suspiciously                                      | A capture that asserts nothing                                                                         | `npm run beta:audit` fails any assertion incapable of failing                                                                                                                      |
@@ -313,7 +355,7 @@ From [`CLAUDE.md`](../../CLAUDE.md), each one enforced or hard-won:
 | Add a feature to the product         | [Code KT](11-code-kt.md) → "Where do I make this change?"                                                |
 | Make something customer-configurable | [Extensibility Contract](07-extensibility-contract.md)                                                   |
 | Add an extension point               | [`.cursor/skills/add-extension-point/SKILL.md`](../../.cursor/skills/add-extension-point/SKILL.md)       |
-| Adopt a real adf-hx component        | [`.cursor/skills/adopt-adf-hx-component/SKILL.md`](../../.cursor/skills/adopt-adf-hx-component/SKILL.md) |
+| Add an `nxs-` component              | `npx nx g ./tools/satori-generators:satori-component` — rules in [`AGENTS/00-architecture.md`](../../AGENTS/00-architecture.md), "Adding a component"       |
 | Add a Nuxeo API call                 | [`AGENTS/02-nuxeo-apis.md`](../../AGENTS/02-nuxeo-apis.md)                                               |
 | Run a Beta phase end to end          | [`.cursor/skills/beta-phase/SKILL.md`](../../.cursor/skills/beta-phase/SKILL.md)                         |
 | Understand the AI tooling            | [Skills, Agents & Generators](09-skills-agents-generators.md)                                            |
