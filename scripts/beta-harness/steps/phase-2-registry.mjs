@@ -103,17 +103,16 @@ const MANIFEST_ROUTE = '**/agentic-ui-config/manifest.json';
  * Asserted as an ordered equality, which is what makes "the packaged default is
  * what we meant to ship" falsifiable rather than a count that a reorder would pass.
  *
- * **It diverges from that transcription by one entry, deliberately.** The product
- * now ships a single browse surface: `app.navbar.browse` carries `disabled: true`
- * and the adf-hx entry reads "Browse". So this list is the fourteen entries the
- * registry renders, out of fifteen registered, and the equality below proves "the
- * packaged default is what we intended to ship" rather than "nothing has changed
- * since Phase 2". Restoring the legacy entry means restoring its row here too.
+ * **It diverges from that transcription.** Knowledge Discovery is registered but
+ * `disabled` ("Temporarily disabled" in `nav-items.ts`), so it is not rendered, and
+ * the single browse surface is `app.navbar.browse`. This list is the thirteen
+ * **enabled** entries, and the equality below proves "the packaged default is what
+ * we intended to ship" rather than "nothing has changed since Phase 2". Re-enabling
+ * Knowledge Discovery means adding its row here too.
  */
 const PACKAGED_NAV = [
-  ['app.navbar.knowledgeDiscovery', 'Knowledge Discovery'],
   ['app.navbar.dashboard', 'Dashboard'],
-  ['app.navbar.browseAdfHx', 'Browse'],
+  ['app.navbar.browse', 'Browse'],
   ['app.navbar.recentlyViewed', 'Recently viewed'],
   ['app.navbar.search', 'Search filters'],
   ['app.navbar.expiredQueue', 'Expired Queue'],
@@ -257,14 +256,16 @@ export default async function run(page, h) {
   await h.step('Production browse is unaffected by the registry');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
-  await h.expectText('repository content listed', 'lib-browse', 'Default domain');
+  // The rows load after the page; without waiting, the text is read before the root row exists.
+  await page.waitForSelector('nxs-document-list tr.nxs-document-list__row', { timeout: 120000 });
+  await h.expectText('repository content listed', 'lib-browse', 'Domain');
   await h.screenshot('default-manifest-production-browse');
 
-  await h.step('The adf-hx POC route is unaffected by the registry');
-  await h.goTo('/#/browse-adf-hx');
-  await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
-  await h.expectText('Nuxeo children listed', 'hxp-document-list', 'Default domain');
-  await h.screenshot('default-manifest-adf-hx-browse');
+  await h.step('The browse document list is unaffected by the registry');
+  await h.goTo('/#/browse');
+  await h.expectVisible('browse document list present', 'nxs-document-list');
+  await h.expectText('Nuxeo children listed', 'nxs-document-list', 'Domain');
+  await h.screenshot('default-manifest-browse-list');
 
   // ---------------------------------------------------------------------------
   // LOAD-BEARING: one capability per step, each with the bundle hash pinned.
@@ -319,10 +320,10 @@ export default async function run(page, h) {
     // Both neighbours are asserted. The version this replaced named two entries and
     // checked only the left one, so an entry that landed after Dashboard but in the
     // wrong place further down would have passed a check claiming it was between them.
-    'the configured order places it between Dashboard and Browse',
+    'the configured order places it between Browse and Recently viewed',
     added.findIndex(([id]) => id === 'acme.navbar.contracts') ===
-      added.findIndex(([id]) => id === 'app.navbar.dashboard') + 1 &&
-      added.findIndex(([id]) => id === 'app.navbar.browseAdfHx') ===
+      added.findIndex(([id]) => id === 'app.navbar.browse') + 1 &&
+      added.findIndex(([id]) => id === 'app.navbar.recentlyViewed') ===
         added.findIndex(([id]) => id === 'acme.navbar.contracts') + 1,
     `rendered: ${JSON.stringify(added.map(([id]) => id))}`,
   );
@@ -389,24 +390,24 @@ export default async function run(page, h) {
 
   await h.step('A manifest gates an entry behind a registered rule, with no rebuild');
   const gatedOff = await applyManifest(
-    { overrides: { 'app.navbar.browseAdfHx': { rule: 'core.false' } } },
+    { overrides: { 'app.navbar.browse': { rule: 'core.false' } } },
     'rule denies',
     baselineBundle,
   );
   h.check(
     'a rule that denies removes the entry',
-    !gatedOff.some(([id]) => id === 'app.navbar.browseAdfHx'),
+    !gatedOff.some(([id]) => id === 'app.navbar.browse'),
     `rendered: ${JSON.stringify(gatedOff.map(([id]) => id))}`,
   );
 
   const gatedOn = await applyManifest(
-    { overrides: { 'app.navbar.browseAdfHx': { rule: 'app.rules.isAdministrator' } } },
+    { overrides: { 'app.navbar.browse': { rule: 'app.rules.isAdministrator' } } },
     'rule permits',
     baselineBundle,
   );
   h.check(
     'a rule that permits keeps the entry, so the gate is the rule and not the override',
-    gatedOn.some(([id]) => id === 'app.navbar.browseAdfHx'),
+    gatedOn.some(([id]) => id === 'app.navbar.browse'),
     `rendered: ${JSON.stringify(gatedOn.map(([id]) => id))}`,
   );
   await h.screenshot('manifest-rule-gates-nav');
@@ -611,6 +612,11 @@ export default async function run(page, h) {
     if (saved) sessionStorage.setItem('agentic_ui_nuxeo_session', saved);
     else sessionStorage.removeItem('agentic_ui_nuxeo_session');
   }, genuineSession);
+  // The synthetic block above leaves Nuxeo searches in flight, and the identity guard refuses a
+  // re-login over them. Let them finish first; the guard itself is not relaxed.
+  await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
+  // A saved-search request the synthetic block started can outlive networkidle; wait for it to answer.
+  await page.waitForResponse((r) => r.url().includes('/search/pp/default_search/execute'), { timeout: 30000 }).catch(() => {});
   await h.login();
   await page.waitForTimeout(500);
 
@@ -701,7 +707,7 @@ export default async function run(page, h) {
   );
   await h.goTo('/#/browse');
   await h.expectVisible('browse page still renders', 'lib-browse');
-  await h.expectText('repository content still listed', 'lib-browse', 'Default domain');
+  await h.expectText('repository content still listed', 'lib-browse', 'Domain');
   await h.screenshot('malformed-extensions-falls-back');
 
   await h.step('An absent configuration service leaves the packaged surface intact');
