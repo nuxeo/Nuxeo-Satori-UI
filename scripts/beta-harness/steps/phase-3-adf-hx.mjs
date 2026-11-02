@@ -151,7 +151,7 @@ export default async function run(page, h) {
 
   await h.step('Browse renders a document list over real Nuxeo children');
   await h.login();
-  await h.goTo('/#/browse?path=%2Fdefault-domain%2Fworkspaces');
+  await h.goTo('/#/browse/default-domain/workspaces');
   await h.expectVisible('document list rendered', 'nxs-document-list');
   await page.waitForFunction(
     () => document.querySelectorAll('nxs-document-list tr.nxs-document-list__row').length > 0,
@@ -217,11 +217,18 @@ export default async function run(page, h) {
   const titleHeader = page.locator('nxs-document-list th[mat-sort-header]').first();
   const requestsBeforeSort = childrenRequests.length;
   await titleHeader.click();
-  await page.waitForTimeout(2500);
+  await page.waitForFunction(() => document.querySelectorAll('nxs-document-list tr.nxs-document-list__row').length > 0, null, { timeout: 120000 });
   const sortedPage = await listRowTitles();
+  // The list was already in title order before the click, so "differs from before" cannot be the
+  // test. The result must be in title order, in one direction or the other; the wire check below
+  // is the one that proves the server did the ordering.
+  const ascending = [...sortedPage].sort((x, y) => x.localeCompare(y));
+  const descending = [...ascending].reverse();
   h.check(
-    'clicking a column header reorders the list',
-    sortedPage.length > 0 && JSON.stringify(sortedPage) !== JSON.stringify(firstPage),
+    'clicking a column header leaves the list in title order',
+    sortedPage.length > 1 &&
+      (JSON.stringify(sortedPage) === JSON.stringify(ascending) ||
+        JSON.stringify(sortedPage) === JSON.stringify(descending)),
     `before ${JSON.stringify(firstPage.slice(0, 3))} after ${JSON.stringify(sortedPage.slice(0, 3))}`,
   );
   // A reordered list alone does not prove the server was asked — adf-core-style tables also sort
@@ -256,7 +263,7 @@ export default async function run(page, h) {
   await page.waitForTimeout(300);
 
   await h.step('Breadcrumb links point at this app, and the current folder is the location');
-  await h.goTo('/#/browse?path=%2Fdefault-domain%2Fworkspaces');
+  await h.goTo('/#/browse/default-domain/workspaces');
   await page.waitForTimeout(2000);
   const crumbHrefs = await page.$$eval('nxs-satori-breadcrumbs a[href]', (as) =>
     as.map((a) => a.getAttribute('href') ?? ''),
@@ -279,7 +286,7 @@ export default async function run(page, h) {
   await columnsBtn.click().catch(() => {});
   await page.waitForTimeout(800);
   const dialogText = await page
-    .locator('mat-dialog-container')
+    .locator('nxs-column-picker')
     .first()
     .innerText()
     .catch(() => '');
@@ -316,7 +323,7 @@ export default async function run(page, h) {
   await page.waitForTimeout(800);
 
   await h.step('Document tree renders real Nuxeo folders in the navigation');
-  await h.goTo('/#/browse?path=%2Fdefault-domain%2Fworkspaces');
+  await h.goTo('/#/browse/default-domain/workspaces');
   await page.waitForTimeout(3000);
   const treeNodes = await page.$$eval(
     'nxs-document-tree [role="treeitem"], nxs-document-tree mat-tree-node',
@@ -340,7 +347,7 @@ export default async function run(page, h) {
   );
 
   await h.step('Folder tabs are the four folder tabs');
-  await h.goTo(`/#/browse?path=${encodeURIComponent(FIXTURE_FOLDER_PATH)}`);
+  await h.goTo(`/#/browse${FIXTURE_FOLDER_PATH}`);
   await page.waitForTimeout(2000);
   const tabLabels = await page.$$eval('[role="tab"]', (els) =>
     els.map((el) => (el.textContent ?? '').trim()).filter(Boolean),

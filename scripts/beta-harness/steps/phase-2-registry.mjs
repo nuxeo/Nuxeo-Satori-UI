@@ -91,6 +91,10 @@ const ENVIRONMENTAL_ERRORS = [
   '/nuxeo/logout',
   '/agentic-ui-config/bootstrap.json',
   '/agentic-ui-config/manifest.json',
+  // The malformed and absent configuration steps remove the configuration files on purpose. The
+  // runner labels their 404s with the base-href path, so the exact label is matched and nothing
+  // broader.
+  /HTTP 404 \/nuxeo\/agentic-ui\/$/,
 ];
 
 const MANIFEST_ROUTE = '**/agentic-ui-config/manifest.json';
@@ -612,11 +616,20 @@ export default async function run(page, h) {
     if (saved) sessionStorage.setItem('agentic_ui_nuxeo_session', saved);
     else sessionStorage.removeItem('agentic_ui_nuxeo_session');
   }, genuineSession);
-  // The synthetic block above leaves Nuxeo searches in flight, and the identity guard refuses a
-  // re-login over them. Let them finish first; the guard itself is not relaxed.
-  await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
-  // A saved-search request the synthetic block started can outlive networkidle; wait for it to answer.
-  await page.waitForResponse((r) => r.url().includes('/search/pp/default_search/execute'), { timeout: 30000 }).catch(() => {});
+  // The synthetic block above leaves Nuxeo requests in flight, and the identity guard refuses a
+  // re-login over them. Wait, on this step's own tracking of Nuxeo API requests, until none are
+  // in flight and the page has stayed quiet for a second. The guard itself is not relaxed.
+  const nuxeoInFlight = new Set();
+  const trackRequest = (r) => { if (r.url().includes('/nuxeo/api/')) nuxeoInFlight.add(r); };
+  const settle = (r) => nuxeoInFlight.delete(r);
+  page.on('request', trackRequest);
+  page.on('requestfinished', settle);
+  page.on('requestfailed', settle);
+  for (let waited = 0; waited < 120 && nuxeoInFlight.size > 0; waited++) await page.waitForTimeout(500);
+  await page.waitForTimeout(3000);
+  page.off('request', trackRequest);
+  page.off('requestfinished', settle);
+  page.off('requestfailed', settle);
   await h.login();
   await page.waitForTimeout(500);
 
