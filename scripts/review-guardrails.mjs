@@ -7576,7 +7576,9 @@ function proseStringConstants(sources) {
 /**
  * A catalogue value must be the text a user sees.
  *
- * Two defects this caught, both shipped:
+ * Three defects this caught. The first two had **shipped** before anything looked for them; the
+ * third was stopped in the pull request that introduced it, which is the only reason it is not a
+ * fourth entry in the shipped list:
  *
  * `"Back to Users &amp; Groups"` — the extraction codemod copied the HTML SOURCE of a text node into
  * JSON. In HTML the browser decodes `&amp;`; through `{{ … | translate }}` Angular sets
@@ -7587,10 +7589,55 @@ function proseStringConstants(sources) {
  * `"Choose file(s)"` — an `(s)` suffix assumes a language pluralises by appending one letter. This
  * branch removed that shape from three other places and then created a new one in the catalogue,
  * where nothing was looking.
+ *
+ * `"…la suivante\u00a0:"` — a **double-escaped** Unicode escape, so the value holds the six
+ * characters `\u00a0` rather than the non-breaking space they denote, and the user reads the
+ * escape. Twelve French values arrived this way in the 2 November 2026 Crowdin pull; `main` had
+ * none, and no other language in the same pull had any. It is the same mistake as `&amp;` in a
+ * different notation — source syntax stored where rendered text belongs — and it is the reason
+ * this arm exists rather than being folded into the entity arm: nothing was looking for it, so
+ * the strings were gate-green and would have shipped visibly broken.
+ *
+ * The rejected set is **escapes that denote a character**, not every backslash. A lone `\` is
+ * legitimate in user-facing text — a UNC path, `C:\Users` — whereas `\u00a0`, `\x41`, `\n` and
+ * `\t` are notation that something failed to decode. Measured before the rule was written: across
+ * every shipped catalogue the only literal escape of any kind was `\u`, all of them French and all
+ * from the one pull. So the narrow rule costs nothing today and the broad one would have banned a
+ * character no catalogue misuses. (No count here on purpose — the number of catalogues changes with
+ * every language that lands, so a figure written into this docstring would be wrong within a week.)
  */
 function checkCatalogueValuesAreRenderable() {
   const ENTITY = /&(?:[a-zA-Z]+|#\d+);/;
   const PLURAL_SUFFIX = /\(s\)/;
+  // An escape sequence that denotes a character, left undecoded. Not `\\` or `\` + any other
+  // letter: those are a real backslash in real text (a UNC path), which is a user-facing string.
+  const UNDECODED_ESCAPE = /\\(?:u\{[0-9a-fA-F]{1,6}\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[nrtbfv0])/;
+
+  /** What the escape was meant to be, so the message says what to store instead. */
+  const NAMED_ESCAPES = {
+    '\\n': 'a newline',
+    '\\r': 'a carriage return',
+    '\\t': 'a tab',
+    '\\b': 'a backspace',
+    '\\f': 'a form feed',
+    '\\v': 'a vertical tab',
+    '\\0': 'a NUL',
+  };
+  const NOTABLE_CODE_POINTS = {
+    0x00a0: 'a non-breaking space (U+00A0)',
+    0x202f: 'a narrow no-break space (U+202F)',
+    0x2009: 'a thin space (U+2009)',
+  };
+  const decodeEscape = (escape) => {
+    if (NAMED_ESCAPES[escape]) return NAMED_ESCAPES[escape];
+    const hex = /^\\(?:u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2}))$/.exec(escape);
+    if (!hex) return 'a character';
+    const code = parseInt(hex[1] ?? hex[2] ?? hex[3], 16);
+    return (
+      NOTABLE_CODE_POINTS[code] ??
+      `U+${code.toString(16).toUpperCase().padStart(4, '0')} ("${String.fromCodePoint(code)}")`
+    );
+  };
 
   const isCatalogue = (path) =>
     /(^|\/)i18n\/[a-z]{2}(-[A-Za-z]{2,4})?\.json$/.test(path) && !isGeneratedLocale(path);
@@ -7635,6 +7682,15 @@ function checkCatalogueValuesAreRenderable() {
           `${file} maps \`${key}\` to "${value}", which pluralises with an \`(s)\` suffix. That ` +
             'assumes a language forms its plural by appending one letter, and most do not. Use a ' +
             'key per grammatical number, chosen by a branch at the call site.',
+        );
+      }
+      const escape = UNDECODED_ESCAPE.exec(value);
+      if (escape) {
+        fail(
+          `${file} maps \`${key}\` to "${value}", which contains the literal characters ` +
+            `\`${escape[0]}\` rather than ${decodeEscape(escape[0])}. The value is already a ` +
+            'decoded JSON string, so an escape surviving into it was double-escaped at the ' +
+            'source and the user reads the escape itself. Store the character.',
         );
       }
     }
