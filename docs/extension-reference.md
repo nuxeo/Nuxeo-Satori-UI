@@ -1342,8 +1342,8 @@ modes:
   properties the user changed.
 - **`create`** — the same form for a new document of the type, in the Create tab of the Create /
   Import dialog once a type is chosen — opened from Browse and from the dashboard's Add Content.
-  It opens on the type's server defaults (`@emptyWithDefault`), as Web UI's does, and Create sends
-  every value in it. The dialog keeps what is not a property field: the location, the main file of
+  It opens empty; a field left empty takes the type's server default (`@emptyWithDefault`) when
+  the document is created. The dialog keeps what is not a property field: the location, the main file of
   a File, Picture, Audio or Video, and a Note's format. The import wizard's properties step is not
   this form.
 
@@ -1529,8 +1529,7 @@ What a layout file does **not** do:
 **The create form against Web UI `lts-2025`** (`nuxeo-document-create` and the stock
 `nuxeo-<type>-create-layout` elements), compared for NXSAT-630. The same: the fields a stock type
 offers — Title (required), Description, Nature, Subjects, Coverage and Expires, plus the main file
-of a File, Picture, Audio or Video and a Note's format; the form starts from `@emptyWithDefault`;
-Create checks the fields first and focuses the first one to correct; a `validation_report` puts
+of a File, Picture, Audio or Video and a Note's format; Create checks the fields first and focuses the first one to correct; a `validation_report` puts
 Nuxeo's message on its field. The differences:
 
 - **A type without a create layout.** Web UI needs a hand-written `nuxeo-<type>-create-layout`
@@ -1544,6 +1543,11 @@ Nuxeo's message on its field. The differences:
 - **Nuxeo 2025's own refusal.** This server answers a constraint violation with HTTP 422 and an
   `exception` naming the property, which Web UI reports as a generic failure; here its message goes
   on the field it names, as for a `validation_report`.
+- **Server defaults.** Web UI's form opens on the type's `@emptyWithDefault` values, and a default
+  the user clears is saved cleared. Here the form opens empty, and a field left empty takes its
+  server default when the document is created — so a default cannot be cleared at creation, only
+  by editing afterwards. Honouring a clear would need `DocumentImportService` to send explicit
+  nulls, which its published create methods deliberately do not.
 - **Dates.** A picked day is written at UTC midnight, where Web UI writes local midnight — see
   "A `date` field edits a calendar day" above.
 

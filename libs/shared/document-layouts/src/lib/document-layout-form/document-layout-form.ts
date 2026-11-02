@@ -62,8 +62,7 @@ const NOTHING_REPORTED: DocumentLayoutChange = { properties: {}, valid: false };
  *
  * The layout is the contributed `<Type>/<mode>.layout.json`, else one generated from the type's
  * schemas — and, for an edit, from the schemas the document's dynamic facets add. A layout that
- * cannot be resolved leaves the Dublin Core fields, so the form degrades rather than breaks. A
- * create form starts from the type's server defaults, as Web UI's does.
+ * cannot be resolved leaves the Dublin Core fields, so the form degrades rather than breaks.
  *
  * The host owns Save: it calls `validate()`, then sends `changedProperties()` — what the user
  * changed, for an edit; everything, for a create — and hands Nuxeo's validation messages back to
@@ -210,46 +209,12 @@ export class DocumentLayoutFormComponent {
   /** `contributed` or `generated`; `none` when the type could not be read and only Dublin Core shows. */
   protected readonly layoutSource = computed(() => this.layout()?.source ?? 'none');
 
-  /**
-   * The type whose server defaults a create form starts from, once it knows the folder. Not
-   * re-read when only the folder changes: the editor discards what was typed on new values.
-   */
-  private readonly defaultsFor = computed<string | null>(() =>
-    this.mode() === 'create' && this.parentPath() && !this.usesEntry() ? this.formType() : null,
+  protected readonly values = computed<NxsEditorValues>(() =>
+    this.mode() === 'edit' ? (this.document()?.properties ?? NO_VALUES) : NO_VALUES,
   );
 
-  private readonly defaults = toSignal(
-    toObservable(this.defaultsFor).pipe(
-      distinctUntilChanged(),
-      switchMap((type) =>
-        type
-          ? this.layouts
-              .createDefaults(type, untracked(this.parentPath) ?? '/')
-              .pipe(map((values) => ({ type, values })))
-          : of(null),
-      ),
-    ),
-    { initialValue: null },
-  );
-
-  private readonly defaultsRead = computed(() => {
-    const type = this.defaultsFor();
-    return type === null || this.defaults()?.type === type;
-  });
-
-  protected readonly values = computed<NxsEditorValues>(() => {
-    if (this.mode() === 'edit') return this.document()?.properties ?? NO_VALUES;
-    const defaults = this.defaults();
-    return defaults && defaults.type === this.defaultsFor() ? defaults.values : NO_VALUES;
-  });
-
-  /**
-   * The form is on screen: a contributed one, or the layout resolved — even to nothing — and,
-   * for a create, the type's defaults read.
-   */
-  readonly ready = computed(
-    () => this.usesEntry() || (this.layout() !== undefined && this.defaultsRead()),
-  );
+  /** The form is on screen: a contributed one, or the layout resolved — even to nothing. */
+  readonly ready = computed(() => this.usesEntry() || this.layout() !== undefined);
 
   constructor() {
     merge(this.translate.onLangChange, this.translate.onTranslationChange)

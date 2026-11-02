@@ -69,9 +69,6 @@ const mockImportService = {
   createBlobHoldingDocumentFromBatch: vi.fn(),
   createBlobHoldingDocument: vi.fn(),
   createChildDocument: vi.fn(),
-  getEmptyDocumentWithDefaults: vi.fn<DocumentImportService['getEmptyDocumentWithDefaults']>(() =>
-    of({ properties: {} }),
-  ),
   importFiles: vi.fn<DocumentImportService['importFiles']>(() => of([])),
   importFilesWithProperties: vi.fn<DocumentImportService['importFilesWithProperties']>(() =>
     of([]),
@@ -2153,6 +2150,59 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(m.toast.show).toHaveBeenCalledWith('Created Note “Minutes”');
     });
 
+    it('keeps a Note body the form filled in, and its own format', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Minutes')));
+      component.startCreateFromType({ type: 'Note', label: 'Note' });
+      component.noteFormat = 'text/html';
+      stubForm(fixture).properties = {
+        'dc:title': 'Minutes',
+        'note:note': '# Agenda',
+        'note:mime_type': 'text/x-web-markdown',
+      };
+
+      component.createDocument();
+      await flushAsync();
+
+      const [, , , properties] = m.createChildDocument.mock.calls[0];
+      expect(properties['note:note']).toBe('# Agenda');
+      expect(properties['note:mime_type']).toBe('text/x-web-markdown');
+    });
+
+    it('gives a Note body the form filled in the chosen format when the form names none', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Minutes')));
+      component.startCreateFromType({ type: 'Note', label: 'Note' });
+      component.noteFormat = 'text/plain';
+      stubForm(fixture).properties = { 'dc:title': 'Minutes', 'note:note': 'Agenda' };
+
+      component.createDocument();
+      await flushAsync();
+
+      const [, , , properties] = m.createChildDocument.mock.calls[0];
+      expect(properties['note:note']).toBe('Agenda');
+      expect(properties['note:mime_type']).toBe('text/plain');
+    });
+
+    it('writes the empty body when the form left the Note body blank', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Minutes')));
+      component.startCreateFromType({ type: 'Note', label: 'Note' });
+      component.noteFormat = 'text/html';
+      stubForm(fixture).properties = {
+        'dc:title': 'Minutes',
+        'note:note': '  ',
+        'note:mime_type': 'text/plain',
+      };
+
+      component.createDocument();
+      await flushAsync();
+
+      const [, , , properties] = m.createChildDocument.mock.calls[0];
+      expect(properties['note:note']).toBe('<p></p>');
+      expect(properties['note:mime_type']).toBe('text/html');
+    });
+
     it("sends what the form holds, the type's own fields included, through createChildDocument", async () => {
       await createDialog();
       m.createChildDocument.mockReturnValue(of(folder()));
@@ -2741,10 +2791,6 @@ describe('CreateImportDialogComponent with the real create form and Expires fiel
   it("creates through the type's generated create form, its own fields and Expires included", async () => {
     const fixture = await render();
     const http = await openFolderForm(fixture);
-    expect(mockImportService.getEmptyDocumentWithDefaults).toHaveBeenCalledWith(
-      PARENT_PATH,
-      'Folder',
-    );
     expect(fixture.componentInstance.createFormReady()).toBe(true);
 
     await typeInto(fixture, 'dc:title', 'Reports');

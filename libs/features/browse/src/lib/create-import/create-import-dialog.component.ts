@@ -1200,15 +1200,23 @@ export class CreateImportDialogComponent implements OnInit {
     };
   }
 
-  /** The create form's values, and for a Note the empty body in the chosen format. */
+  /**
+   * The create form's values. A Note gets an empty body in the chosen format unless the form
+   * filled one in — a create layout or a `documentCreate` component may offer `note:note`.
+   */
   private buildDocumentProperties(
     docType: string,
     formProperties: Record<string, unknown>,
   ): Record<string, unknown> {
     const props: Record<string, unknown> = { ...formProperties };
     if (docType === 'Note') {
-      props['note:note'] = defaultNoteContent(this.noteFormat);
-      props['note:mime_type'] = this.noteFormat;
+      const body = props['note:note'];
+      if (typeof body !== 'string' || body.trim() === '') {
+        props['note:note'] = defaultNoteContent(this.noteFormat);
+        props['note:mime_type'] = this.noteFormat;
+      } else {
+        props['note:mime_type'] ??= this.noteFormat;
+      }
     }
     return props;
   }
