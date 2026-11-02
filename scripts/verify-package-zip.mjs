@@ -77,33 +77,89 @@ function entriesOf(archive) {
 }
 
 /**
- * XML with its comments removed.
+ * The body of a start tag, matched as XML rather than as "everything up to the next `>`".
  *
- * The generated component file ships a commented-out `<asset>` as the example of how to add one,
- * so a scan that does not do this reports every package as naming an asset it does not hold — and
- * the mirror of that mistake is worse: a `<require>` someone commented out would satisfy the check
- * below while the server ignored it.
- *
- * Removed repeatedly, not once, which is `js/incomplete-multi-character-sanitization` and was
- * flagged by CodeQL on the single-pass version. One pass over `<!<!-- -->-- <require>…</require>
- * -->` removes the inner `<!-- -->` and leaves a residue that reads as a live `<require>` — the
- * exact false pass the paragraph above calls the worse mistake. Each pass can only shorten the
- * string, so the loop terminates.
+ * `[^>]*` ends a tag at the first `>`, including one inside a quoted attribute value, and would
+ * read `<fragment name="a>b" src="x.json"/>` as a tag with no `src`. The lookahead stops
+ * `<fragment-legacy` and `<assets` being read as `<fragment` and `<asset`, which `\b` does not.
+ * This is the shape `build.mjs` matches its own contributions with; the two agree by construction.
  */
-function withoutComments(xml) {
+const TAG = '(?=[ \\t\\r\\n/>])((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>';
+
+/**
+ * XML without its comments and processing instructions, with CDATA sections kept whole.
+ *
+ * Three things a scan that looks only for comments gets wrong, all of them confirmed against
+ * `build.mjs`, which strips exactly these before looking at anything:
+ *
+ * - The generated component ships a commented-out `<asset>` as the example of how to add one. Read
+ *   as live, every correct package fails with a missing-asset error.
+ * - A processing instruction's content is not markup. `<?note <asset src="gone.svg" /> ?>` is a
+ *   valid component that the server contributes nothing from, and would fail the same way.
+ * - Inside CDATA, `<!--` and `<?` are text. A section is therefore kept whole here and blanked by
+ *   `withoutCdata` later, so markup is never matched inside character data and never stripped out
+ *   of it either.
+ *
+ * Repeated until stable rather than scanned once. A single pass over
+ * `<!<!-- -->-- <require>…</require> -->` removes the inner `<!-- -->` and leaves a residue that
+ * reads as a live `<require>`, which is `js/incomplete-multi-character-sanitization` and is the
+ * false pass that matters most here. `build.mjs` can scan once because it rejects malformed XML
+ * first with a real parser; this script has no such parser, so the loop is its substitute. Each
+ * pass can only shorten the string, so it terminates.
+ *
+ * The limit, stated rather than implied: on malformed XML the loop errs towards seeing *less*
+ * markup. For the `<require>` and contribution checks that means reporting a problem, which is
+ * safe. For resolving a `src` it means a check skipped. Malformed XML is refused by `build.mjs`
+ * upstream and will not load on the server either, so this script is not the thing standing
+ * between that package and a user.
+ */
+function withoutCommentsOrInstructions(xml) {
+  const CLOSE = { '<!--': '-->', '<?': '?>', '<![CDATA[': ']]>' };
+  const strip = (text) => {
+    const next = /<!--|<\?|<!\[CDATA\[/g;
+    let out = '';
+    let at = 0;
+    for (;;) {
+      next.lastIndex = at;
+      const match = next.exec(text);
+      if (!match) return out + text.slice(at);
+      const close = CLOSE[match[0]];
+      const end = text.indexOf(close, match.index + match[0].length);
+      const stop = end < 0 ? text.length : end + close.length;
+      // A CDATA section is content: kept whole, and blanked later by `withoutCdata`.
+      out += text.slice(at, match[0] === '<![CDATA[' ? stop : match.index);
+      at = stop;
+    }
+  };
   let out = xml;
   let previous;
   do {
     previous = out;
-    out = out.replace(/<!--[\s\S]*?-->/g, '');
+    out = strip(out);
   } while (out !== previous);
   return out;
 }
 
-/** An attribute of the first element with this tag — enough for these two small, generated files. */
-function attribute(xml, tag, name) {
-  const element = new RegExp(`<${tag}\\b[^>]*>`).exec(xml)?.[0];
-  return element ? (new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`).exec(element)?.[1] ?? null) : null;
+/** The same XML with every CDATA section blanked, so markup is never matched inside text. */
+const withoutCdata = (xml) =>
+  xml.replace(/<!\[CDATA\[[\s\S]*?(?:\]\]>|$)/g, (section) => ' '.repeat(section.length));
+
+/**
+ * One attribute of a start tag's body, in either quote style.
+ *
+ * XML gives `"` and `'` equal standing and `build.mjs` reads both. Reading only double quotes
+ * fails in both directions at once: `src='missing.json'` looks like a contribution with no `src`
+ * and its file is never resolved, while `enabled='false'` looks enabled and its `src` is demanded.
+ */
+function attributeOf(tag, name) {
+  const match = new RegExp(`\\b${name}${S}=${S}(?:"([^"]*)"|'([^']*)')`).exec(tag);
+  return match ? (match[1] ?? match[2]) : null;
+}
+
+/** An attribute of the first element with this tag name. */
+function attribute(xml, name, attributeName) {
+  const tag = new RegExp(`<${name}${TAG}`).exec(xml);
+  return tag ? attributeOf(tag[1], attributeName) : null;
 }
 
 /**
@@ -141,7 +197,10 @@ export function verifyPackageZip(archive) {
   }
   if (problems.length > 0) return problems;
 
-  const read = (entry) => withoutComments(unzip(['-p', archive, entry]).stdout.toString('utf8'));
+  const read = (entry) =>
+    withoutCdata(
+      withoutCommentsOrInstructions(unzip(['-p', archive, entry]).stdout.toString('utf8')),
+    );
   const packageXml = read('package.xml');
   const installXml = read('install.xml');
 
@@ -185,9 +244,9 @@ export function verifyPackageZip(archive) {
   //    naming a path the zip does not hold, and deploying the bundle somewhere Nuxeo does not
   //    scan. Both leave `nuxeoctl mp-install` reporting success over a package that contributes
   //    no configuration, which is the whole class of failure this script exists for.
-  const updates = [...installXml.matchAll(/<update\b([^>]*)>/g)].map(([, tag]) => ({
-    file: /\bfile\s*=\s*"([^"]*)"/.exec(tag)?.[1] ?? null,
-    todir: /\btodir\s*=\s*"([^"]*)"/.exec(tag)?.[1]?.trim() ?? null,
+  const updates = [...installXml.matchAll(new RegExp(`<update${TAG}`, 'g'))].map(([, tag]) => ({
+    file: attributeOf(tag, 'file'),
+    todir: attributeOf(tag, 'todir')?.trim() ?? null,
   }));
   if (updates.length === 0) {
     problem('install.xml has no <update file="…">, so installing the package copies nothing.');
@@ -255,61 +314,86 @@ export function verifyPackageZip(archive) {
       /\r?\n /g,
       '',
     );
-    const component = /^Nuxeo-Component:\s*(.+)$/m.exec(headers)?.[1]?.trim();
-    if (!component) {
+    // `Nuxeo-Component` is a comma-separated list, and `build.mjs` reads it as one —
+    // `.split(',').map(trim).filter(Boolean)`, then a loop. Treating the whole header as a single
+    // file name rejects a bundle that carries a configuration component beside an unrelated one,
+    // which is a legitimate shape for a customer whose package grew past JSON.
+    const componentPaths = (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(headers)?.[1] ?? '')
+      .split(',')
+      .map((path) => path.trim())
+      .filter(Boolean);
+    if (componentPaths.length === 0) {
       problem(`${manifest} has no Nuxeo-Component header, so the bundle contributes nothing.`);
       return problems;
     }
-    if (!inJar.includes(component)) {
-      problem(`${manifest} names Nuxeo-Component ${component}, which is not in the jar.`);
-      return problems;
-    }
 
-    // 6. The component's fragments and assets, resolved against the jar. `build.mjs` checks this
-    //    against the source directory; this checks it against what was actually packaged.
-    const componentXml = withoutComments(
-      spawnSync('unzip', ['-p', jar, component], { encoding: 'utf8' }).stdout,
-    );
-    // Matched as XML rather than as a string. `<require >…</require >` and an element whose text
-    // sits on its own indented line are well-formed, the server reads them, and `build.mjs`
-    // accepts them — its own test is `/<require[ \t\n]*>[ \t\n]*…[ \t\n]*<\/require[ \t\n]*>/`.
-    // An exact `includes()` here would have failed a package that built cleanly, which is the one
-    // kind of CI failure nobody can act on.
+    // 6. Each component's contributions, resolved against the jar. `build.mjs` checks these
+    //    against the source directory; this checks them against what was actually packaged.
+    //
+    //    Scoped per component, and the `<require>` demanded only of the ones that contribute
+    //    configuration — `build.mjs` gates it on the same condition, an `<extension>` whose
+    //    `target` is `org.nuxeo.agentic.ui.config`. Demanding it of every component would fail a
+    //    bundle whose second component is an Automation operation or a listener, which has no
+    //    reason to require Satori's defaults and no fragments to order against them.
     const requiresDefaults = new RegExp(
       `<require${S}>${S}${DEFAULTS_COMPONENT.replaceAll('.', '\\.')}${S}</require${S}>`,
     );
-    if (!requiresDefaults.test(componentXml)) {
-      problem(
-        `${component} does not <require> ${DEFAULTS_COMPONENT}, so its fragments ` +
-          "may register before Satori's own and lose to them.",
+    const CONTRIBUTION = new RegExp(`<(fragment|layout|asset)${TAG}`, 'g');
+    const EXTENSION = new RegExp(`<extension${TAG}`, 'g');
+    let contributionCount = 0;
+
+    for (const componentPath of componentPaths) {
+      if (!inJar.includes(posix.normalize(componentPath))) {
+        problem(`${manifest} names Nuxeo-Component ${componentPath}, which is not in the jar.`);
+        continue;
+      }
+      const componentXml = withoutCdata(
+        withoutCommentsOrInstructions(
+          spawnSync('unzip', ['-p', jar, componentPath], { encoding: 'utf8' }).stdout,
+        ),
       );
+
+      const contributes = [...componentXml.matchAll(EXTENSION)].some(
+        ([, tag]) => attributeOf(tag, 'target') === 'org.nuxeo.agentic.ui.config',
+      );
+      // Matched as XML rather than as a string. `<require >…</require >` and an element whose
+      // text sits on its own indented line are well-formed, the server reads them, and
+      // `build.mjs` accepts them — its own test is
+      // `/<require[ \t\n]*>[ \t\n]*…[ \t\n]*<\/require[ \t\n]*>/`. An exact `includes()` here
+      // would have failed a package that built cleanly, which is the one kind of CI failure
+      // nobody can act on.
+      if (contributes && !requiresDefaults.test(componentXml)) {
+        problem(
+          `${componentPath} does not <require> ${DEFAULTS_COMPONENT}, so its fragments ` +
+            "may register before Satori's own and lose to them.",
+        );
+      }
+
+      // A contribution is a `<fragment>`, `<layout>` or `<asset>`, whatever form its body takes.
+      // Counting `src` attributes instead would reject a package whose fragments carry their JSON
+      // inline — `<fragment …><json>…</json></fragment>` — which `build.mjs` accepts and which
+      // the server reads exactly like a `src` one. `src` is resolved only where one exists.
+      for (const [, element, tag] of componentXml.matchAll(CONTRIBUTION)) {
+        contributionCount += 1;
+        const src = attributeOf(tag, 'src');
+        const enabled = attributeOf(tag, 'enabled');
+        // A disabled entry removes an earlier contribution and carries no body, so the server
+        // never resolves its `src`; `build.mjs` skips it for the same reason. Requiring the file
+        // here would fail a package whose only job is to switch one of ours off.
+        if (src === null || (enabled !== null && enabled.toLowerCase() !== 'true')) continue;
+        if (!inJar.includes(posix.normalize(src))) {
+          problem(`${componentPath} names <${element} src="${src}">, which the jar does not hold.`);
+        }
+      }
     }
 
-    // A contribution is a `<fragment>`, `<layout>` or `<asset>`, whatever form its body takes.
-    // Counting `src` attributes instead would reject a package whose fragments carry their JSON
-    // inline — `<fragment …><json>…</json></fragment>` — which `build.mjs` accepts and which the
-    // server reads exactly like a `src` one. `src` is resolved only where a contribution has one.
-    const contributions = [...componentXml.matchAll(/<(fragment|layout|asset)\b([^>]*)>/g)].map(
-      ([, element, tag]) => ({
-        element,
-        src: /\bsrc\s*=\s*"([^"]*)"/.exec(tag)?.[1] ?? null,
-        enabled: /\benabled\s*=\s*"([^"]*)"/.exec(tag)?.[1] ?? null,
-      }),
-    );
-    if (contributions.length === 0) {
+    // Across every component, not within each: a bundle may legitimately carry one that
+    // contributes configuration and one that does not.
+    if (contributionCount === 0) {
       problem(
-        `${component} has no <fragment>, <layout> or <asset>, so the package contributes no ` +
-          'configuration.',
+        `${componentPaths.join(', ')} has no <fragment>, <layout> or <asset>, so the package ` +
+          'contributes no configuration.',
       );
-    }
-    for (const { element, src, enabled } of contributions) {
-      // A disabled entry removes an earlier contribution and carries no body, so the server never
-      // resolves its `src`; `build.mjs` skips it for the same reason. Requiring the file here
-      // would fail a package whose only job is to switch one of ours off.
-      if (src === null || (enabled !== null && enabled.toLowerCase() !== 'true')) continue;
-      if (!inJar.includes(posix.normalize(src))) {
-        problem(`${component} names <${element} src="${src}">, which the jar does not hold.`);
-      }
     }
   } finally {
     rmSync(scratch, { recursive: true, force: true });

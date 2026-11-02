@@ -268,6 +268,126 @@ expectGreen('an install.xml with other updates beside the one that deploys the b
     '</install>\n',
 });
 
+// ---- second review round (PR #542): XML forms `build.mjs` reads and this did not ----
+
+expectGreen('a processing instruction whose content looks like a contribution', {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({
+      comment: '',
+      body: '    <?note <asset name="logo.svg" src="gone.svg" /> ?>\n',
+    }),
+  }),
+});
+
+expectGreen('a CDATA section whose text looks like a contribution', {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({
+      body: '    <![CDATA[ <asset name="logo.svg" src="gone.svg" /> ]]>\n',
+    }),
+  }),
+});
+
+expectGreen('an element name that merely begins with a contribution name', {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({ body: '    <fragment-legacy src="gone.json" />\n' }),
+  }),
+});
+
+expectGreen('an attribute value containing a greater-than sign', {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({
+      srcs: [],
+      body:
+        '    <fragment name="a&gt;b" layer="bootstrap" ' +
+        'src="agentic-ui-config/bootstrap.json" />\n',
+    }),
+  }),
+});
+
+// Single-quoted attributes. XML gives both quote styles equal standing and `build.mjs` reads both
+// — `/([\w:.-]+)\s*=\s*("([^"]*)"|'([^']*)')/g`. Reading only double quotes failed in both
+// directions at once, so there is a control for each.
+expectGreen('package.xml with single-quoted attributes', {
+  pkg:
+    "<package type='addon' name='acme-config' version='1.0.0'>\n" +
+    '  <dependencies>\n    <package>nuxeo-agentic-ui:2026.0.2</package>\n  </dependencies>\n' +
+    '</package>\n',
+});
+
+expectGreen('install.xml with single-quoted attributes', {
+  install:
+    '<install>\n' +
+    "  <update file='${package.root}/install/bundles' todir='${env.bundles}' />\n" +
+    '</install>\n',
+});
+
+expectGreen("a disabled entry written enabled='false', whose src the server never resolves", {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({
+      body: '    <fragment name="defaults" layer="manifest" enabled=\'false\' src="gone.json" />\n',
+    }),
+  }),
+});
+
+expectRed(
+  "a single-quoted src='…' naming a file the jar does not hold",
+  {
+    jar: jarFiles({
+      [COMPONENT]: componentXml({
+        srcs: [],
+        body: '    <fragment name="acme-config" layer="bootstrap" src=\'gone.json\' />\n',
+      }),
+    }),
+  },
+  /names <fragment src="gone\.json">, which the jar does not hold/,
+);
+
+// A comma-separated `Nuxeo-Component` is a list, and `build.mjs` reads it as one. A customer whose
+// package grew past JSON carries a second component beside the configuration one.
+const SECOND = 'OSGI-INF/acme-operations.xml';
+const unrelatedComponent =
+  '<?xml version="1.0"?>\n<component name="acme.config.operations" version="1.0">\n' +
+  '  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">\n' +
+  '    <operation class="com.acme.ExportClaim" />\n' +
+  '  </extension>\n</component>\n';
+
+expectGreen('two components, one contributing configuration and one unrelated', {
+  jar: jarFiles({
+    'META-INF/MANIFEST.MF': manifest(`${COMPONENT}, ${SECOND}`),
+    [SECOND]: unrelatedComponent,
+  }),
+});
+
+expectRed(
+  'a second component path the jar does not hold',
+  { jar: jarFiles({ 'META-INF/MANIFEST.MF': manifest(`${COMPONENT}, OSGI-INF/missing.xml`) }) },
+  /names Nuxeo-Component OSGI-INF\/missing\.xml, which is not in the jar/,
+);
+
+expectRed(
+  'of two components, the one that contributes configuration lacks the <require>',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': manifest(`${COMPONENT}, ${SECOND}`),
+      [COMPONENT]: componentXml({ require: false }),
+      [SECOND]: unrelatedComponent,
+    }),
+  },
+  new RegExp(`${COMPONENT.replaceAll('.', '\\.').replaceAll('/', '\\/')} does not <require>`),
+);
+
+expectRed(
+  'two components and neither contributes anything',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': manifest(`${COMPONENT}, ${SECOND}`),
+      [COMPONENT]: componentXml({ srcs: [] }),
+      [SECOND]: unrelatedComponent,
+    }),
+  },
+  /has no <fragment>, <layout> or <asset>/,
+);
+
 // The generated component ships exactly this: a commented-out `<asset>` showing how to add one.
 // Read as live, it fails every correct package — which is how this control came to exist.
 expectGreen('a commented-out asset, which the generator writes as the example', {
