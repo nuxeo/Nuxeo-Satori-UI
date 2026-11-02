@@ -71,6 +71,8 @@ export default async function run(page, h) {
   // Whether the folder is empty comes from Nuxeo, not from the page. Rows that never render are
   // then a failure to list, not a missing precondition.
   const children = await page.request.get(`${h.baseUrl}/nuxeo/api/v1/path/default-domain/workspaces/@children?pageSize=1`, { failOnStatusCode: false });
+  // A failed request is a failure, not an empty folder: only a successful answer of zero is a precondition.
+  h.check('the server answers the children request', children.ok(), `HTTP ${children.status()}`);
   const serverCount = children.ok() ? (await children.json()).resultsCount : -1;
   h.requirePrecondition(
     'the Workspaces folder has children on the server',
