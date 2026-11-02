@@ -151,12 +151,23 @@ final class DevOverrides {
      *
      * @param stamp identifies the directory's state, so the component can reuse the snapshot it
      *            built — and with it the rendered bodies and their ETags — while nothing has
-     *            changed. Built from each file's path, size and modification time, which is what
-     *            keeps the per-request cost to one directory walk: no body is read until the stamp
-     *            says one has changed. Known residue, stated rather than guarded: a filesystem
-     *            with whole-second timestamps cannot distinguish two edits inside one second that
-     *            leave the size identical. APFS, ext4 and NTFS all keep sub-second times, so this
-     *            is FAT and some NFS mounts; touching the file moves it on.
+     *            changed. Built from each file's path, size, modification time and readability,
+     *            which is what keeps the per-request cost to one directory walk: no body is read
+     *            until the stamp says one has changed.
+     *            <p>
+     *            Readability is in there because the other three cannot see a permission repair:
+     *            {@code chmod} and {@code chown} move a file's ctime and leave its path, size and
+     *            modification time alone, so a file that was unreadable when the cached snapshot
+     *            was built would go on serving the fallback until its body was also edited —
+     *            a configuration that stays broken after the developer has fixed it.
+     *            <p>
+     *            Known residue, stated rather than guarded. A filesystem with whole-second
+     *            timestamps cannot distinguish two edits inside one second that leave the size
+     *            identical; APFS, ext4 and NTFS all keep sub-second times, so this is FAT and
+     *            some NFS mounts. And readability here is {@link Files#isReadable}, so a read
+     *            that fails for a reason an access check does not predict — an I/O error on the
+     *            device, say — is not a state this distinguishes. Touching the file moves either
+     *            of them on.
      */
     record Scan(String stamp, List<Contribution> contributions, List<Diagnostic> diagnostics) {
     }
@@ -193,7 +204,7 @@ final class DevOverrides {
         for (Path file : files) {
             String relative = relative(file);
             stamp.append(relative).append('\u0000').append(size(file)).append('\u0000').append(modified(file))
-                 .append('\n');
+                 .append('\u0000').append(Files.isReadable(file)).append('\n');
             Contribution contribution = contribution(relative, file);
             if (contribution == null) {
                 diagnostics.add(Diagnostic.info("dev-override-ignored", ConfigScope.BOOTSTRAP, provenance(relative),

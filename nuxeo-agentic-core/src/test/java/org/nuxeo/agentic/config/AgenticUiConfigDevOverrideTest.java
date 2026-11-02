@@ -6,15 +6,20 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 
 import org.junit.jupiter.api.Test;
@@ -253,6 +258,32 @@ class AgenticUiConfigDevOverrideTest {
         write(dir, "bootstrap.json", "{\"branding\":{\"applicationTitle\":\"Second, and longer\"}}");
 
         assertNotEquals(before, response(component, ConfigEndpoint.BOOTSTRAP_PATH).headers().get("ETag"));
+    }
+
+    /**
+     * An override that could not be read is picked up once its permissions are repaired.
+     *
+     * {@code chmod} moves a file's ctime and leaves its path, size and modification time alone,
+     * so a stamp built from those three cannot see the repair. Without readability in the stamp
+     * this returns the cached fallback snapshot for as long as the body is not also edited, and
+     * the developer sees a configuration that stays broken after they have fixed it.
+     */
+    @Test
+    void anOverrideIsPickedUpAfterAPermissionOnlyRepair(@TempDir Path dir) throws Exception {
+        write(dir, "bootstrap.json", "{\"branding\":{\"applicationTitle\":\"Acme Insurance\"}}");
+        Path file = dir.resolve("bootstrap.json");
+        assumeTrue(Files.getFileStore(file).supportsFileAttributeView(PosixFileAttributeView.class),
+                "POSIX permissions are what this asserts the recovery from");
+        Files.setPosixFilePermissions(file, Set.of());
+        assumeFalse(Files.isReadable(file), "running as a user permissions do not apply to, root most likely");
+        AgenticUiConfigComponent component = component(dir, true);
+        assertEquals(List.of("defaults"), names(body(component, ConfigEndpoint.BOOTSTRAP_PATH)));
+
+        Files.setPosixFilePermissions(file, Set.of(PosixFilePermission.OWNER_READ));
+
+        assertEquals(List.of("defaults", "dev"), names(body(component, ConfigEndpoint.BOOTSTRAP_PATH)));
+        assertEquals(List.of("Hyland Nuxeo", "Acme Insurance"),
+                titles(body(component, ConfigEndpoint.BOOTSTRAP_PATH)));
     }
 
     /* ------------------------------------------- the composition contract, still applied */
