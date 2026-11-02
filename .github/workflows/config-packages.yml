@@ -89,14 +89,31 @@ jobs:
               fail "$var is set in this job; the credential-free path must not have one in scope"
             fi
           done
-          # setup-node writes ~/.npmrc only when given a registry-url. An auth line in either
-          # .npmrc would let a dependency resolve here that cannot resolve for a customer.
+          # An auth line matters only if it RESOLVES to a credential, which is a distinction this
+          # step learned the hard way: its first run went red on the repository's own committed
+          # `.npmrc`, whose `_authToken=${SATORI_GH_READONLY_TOKEN}` is inert when that variable
+          # is unset. npm substitutes nothing and the registry answers E401 — which is precisely
+          # the state a customer is in, and the state the clean room reproduced. Refusing it would
+          # have been refusing the thing under test.
+          #
+          # So: a literal value on an auth line is a leak, and a `${VAR}` whose VAR is set is a
+          # leak. The loop above already refuses the five variables we know about by name; this
+          # catches a sixth that nobody thought to list, which is the case worth catching.
           for rc in "$HOME/.npmrc" .npmrc; do
-            if [ -f "$rc" ] && grep -qiE '_auth|_authToken|_password' "$rc"; then
-              fail "$rc carries an auth line; this job would resolve packages a customer cannot"
-            fi
+            [ -f "$rc" ] || continue
+            while IFS= read -r line; do
+              value=${line#*=}
+              if [[ "$value" =~ ^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$ ]]; then
+                var="${BASH_REMATCH[1]}"
+                if [ -n "${!var:-}" ]; then
+                  fail "$rc authenticates with \$$var, which is set in this job; the credential-free path must not have one in scope"
+                fi
+              elif [ -n "$value" ]; then
+                fail "$rc carries a literal value on an auth line; this job would resolve packages a customer cannot"
+              fi
+            done < <(grep -iE '^[^;#]*(_auth|_authtoken|_password)[[:space:]]*=' "$rc" || true)
           done
-          echo "No node_modules, no registry token, no auth line. Node $(node --version)."
+          echo "No node_modules, no token in scope, no auth line that resolves. Node $(node --version)."
 
       # The committed packages. A customer edits fragments in a package shaped exactly like these,
       # so a break here is a break in what they were handed.
