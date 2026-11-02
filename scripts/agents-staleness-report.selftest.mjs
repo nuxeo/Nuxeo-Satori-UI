@@ -131,16 +131,32 @@ control(
 control(
   'a name containing a newline cannot split the body into extra list items',
   () => {
-    /* A filename can hold a newline on Linux, and the old implementation accumulated the list in a
-     * shell variable with `$'\n'` separators, so one could not be told from a genuine item. The
-     * body is assembled from an array here, so the item count is decided by the service count. */
-    const fx = fixture(['a\nb- `injected.service.ts` not found in AGENTS', 'plain'], '# empty\n');
+    /* A filename can hold a newline on Linux, and the item template puts the name inside a `- `
+     * bullet, so a newline followed by a list marker forges an entry.
+     *
+     * The fixture used to be `a\nb- \`injected…\``, with a `b` in front of the marker — so the
+     * forged line did not start with "- `", the count came out at 2, and the control passed
+     * while the protection it names did not exist. Review caught that (PR #544), and it was
+     * right twice over: the marker goes directly after the newline now, and driven that way the
+     * renderer produced THREE bullets for two services. `oneLine()` is the fix.
+     *
+     * Asserted on the count AND on the forged text being absent as a line of its own: a count of
+     * two would also hold if the escape dropped the second service entirely. */
+    const fx = fixture(['a\n- `injected.service.ts`', 'plain'], '# empty\n');
     const proc = run(fx);
     expect(proc.status === 0, `exited ${proc.status}`);
-    const items = readFileSync(fx.out, 'utf8')
-      .split('\n')
-      .filter((line) => line.startsWith('- `'));
+    const body = readFileSync(fx.out, 'utf8');
+    const items = body.split('\n').filter((line) => line.startsWith('- `'));
     expect(items.length === 2, `${items.length} list items for 2 services:\n${items.join('\n')}`);
+    expect(
+      items.some((line) => line.includes('plain.service.ts')),
+      `the second service was lost rather than kept on its own line:\n${items.join('\n')}`,
+    );
+    expect(
+      items.some((line) => line.includes('a\\n- `injected.service.ts`')),
+      `the newline was not escaped into the one item that owns it:\n${items.join('\n')}`,
+    );
+    expect(!/^- `injected\.service\.ts`/m.test(body), `a forged list item survived:\n${body}`);
   },
   { needs: POSIX_FILENAMES, why: 'a Win32 filename cannot contain a newline' },
 );
@@ -207,9 +223,22 @@ control('NEGATIVE: the old interpolated shell body executes the generated text',
   const missing = '- `' + HOSTILE + '.service.ts` not found in AGENTS/01-services.md';
   const old = `MISSING="${missing}"\n{ echo "## report"; echo -e "$MISSING"; } > old-body.md\n`;
   const proc = spawnSync('bash', ['-c', old], { cwd: workspace, encoding: 'utf8' });
+  /* `status !== 0` alone accepted a bash that never ran: `spawnSync` reports `status: null` for
+   * ENOENT, and `null !== 0` is true, so on a machine without bash this control passed while
+   * proving nothing about the old shell body. Review caught it (PR #544), and it is the same
+   * hollow-control shape the whole pull request is about — so the missing shell is now its own
+   * reported outcome rather than being folded into the failure it is meant to contrast with. */
+  if (proc.error?.code === 'ENOENT' || proc.status === null) {
+    throw new Error(
+      'bash did not run at all' +
+        `${proc.error ? ` (${proc.error.code ?? proc.error.message})` : ''}, so the old shell ` +
+        'body was never parsed and this control cannot speak for it. It needs a POSIX shell.',
+    );
+  }
   expect(
     existsSync(CANARY) || proc.status !== 0,
-    'the old form neither executed the text nor failed, so this control proves nothing about it',
+    `bash ran and exited ${proc.status} without executing the text, so the old form was not ` +
+      'reproduced and this control proves nothing about it',
   );
 });
 

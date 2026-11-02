@@ -92,6 +92,29 @@ const services = entries
 const lowerDoc = doc.toLowerCase();
 const missing = services.filter((name) => !lowerDoc.includes(name.toLowerCase()));
 
+/**
+ * One list item per service, whatever the filename contains.
+ *
+ * A POSIX filename may hold a newline, and the item template puts the name inside a `- ` bullet.
+ * So a service called `` a<newline>- `injected.service.ts` `` rendered as-is produced **three**
+ * bullet lines for two services — a forged entry in an issue a maintainer is meant to act on.
+ * Not a shell injection: the body reaches `gh issue create --body-file` and no shell parses it.
+ * It is a content forgery, and it was found by review (PR #544).
+ *
+ * C0 control characters are escaped rather than stripped. Stripping would silently rewrite the
+ * name, and the name is the thing the report exists to tell you; `\n` keeps it one line, keeps it
+ * legible, and keeps it faithful.
+ */
+function oneLine(name) {
+  return name.replace(
+    // eslint-disable-next-line no-control-regex
+    /[\u0000-\u001f\u007f]/g,
+    (character) =>
+      ({ '\n': '\\n', '\r': '\\r', '\t': '\\t' })[character] ??
+      `\\x${character.charCodeAt(0).toString(16).padStart(2, '0')}`,
+  );
+}
+
 const driftDetected = missing.length > 0;
 
 if (driftDetected) {
@@ -103,7 +126,9 @@ if (driftDetected) {
       'The following service files exist in the codebase but are not documented in',
       '`AGENTS/01-services.md`:',
       '',
-      ...missing.map((name) => `- \`${name}.service.ts\` not found in AGENTS/01-services.md`),
+      ...missing.map(
+        (name) => `- \`${oneLine(name)}.service.ts\` not found in AGENTS/01-services.md`,
+      ),
       '',
       '### What to do',
       '',

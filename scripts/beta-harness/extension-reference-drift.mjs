@@ -189,6 +189,19 @@ if (undocumented.length) {
  * first-cell pattern can now accept a dotted ID without a row from some other table being
  * classified by accident, which is what widening the document-wide regex would have risked.
  *
+ * ## The scan is bounded by the next heading, and an absent table is a failure
+ *
+ * Neither was true at first, and the two together were the worst defect in this gate. The search
+ * for the table ran to the end of the document, so **deleting the table left the anchor pointing
+ * at an unrelated one further down**. Driven on the real document: removing all thirteen rows of
+ * the section-2 slot table made `tableAfter` latch onto the next table it could find, whose rows
+ * the slot-claim pattern does not match, so `slotClaims()` returned zero claims, the `rows.length
+ * === 0` guard never fired — `rows` was four — and the gate printed
+ * *"every slot-state claim holds"* and exited 0 with the entire slot-state half gone.
+ *
+ * That is the precise failure this gate exists to catch, committed by the gate. Found by review
+ * on PR #544, reproduced before fixing.
+ *
  * @param {string} anchor a literal line, or the first line that contains it
  * @returns {string[]} the rows after the header and its `---` separator
  */
@@ -202,10 +215,32 @@ function tableAfter(anchor) {
     );
     return [];
   }
+  // A Markdown heading ends the anchor's own section. Past it, any table belongs to something
+  // else, and reading it would answer a question nobody asked.
+  const isHeading = (line) => /^#{1,6}\s/.test(line.trimStart());
   let start = at + 1;
-  while (start < lines.length && !lines[start].trimStart().startsWith('|')) start += 1;
+  while (start < lines.length && !lines[start].trimStart().startsWith('|')) {
+    if (isHeading(lines[start])) {
+      fail(
+        `docs/extension-reference.md has no table between \`${anchor}\` and the next heading ` +
+          `(\`${lines[start].trim()}\`), so the checks that read it would check nothing.\n` +
+          '  An absent table is not an empty one: restore it, or delete the check.',
+      );
+      return [];
+    }
+    start += 1;
+  }
   let end = start;
   while (end < lines.length && lines[end].trimStart().startsWith('|')) end += 1;
+  // A header and a separator and nothing else is a legitimately empty table — section 6b is one.
+  // Fewer than two lines is not a table at all.
+  if (end - start < 2) {
+    fail(
+      `docs/extension-reference.md has no table header after \`${anchor}\`, only ` +
+        `${end - start} line(s) beginning with a pipe.`,
+    );
+    return [];
+  }
   // The header and its separator are not data.
   return lines.slice(start + 2, end);
 }
@@ -372,12 +407,63 @@ for (const row of componentRows) {
         `slots whose descriptors name a component: ${slotNames.join(', ')}.`,
     );
   }
-  if (!new RegExp(String.raw`selector:\s*'${reEscape(row.element)}'`).test(allSource)) {
-    fail(
-      `Section 6b gives \`${row.id}\` the element \`${row.element}\`, and no component outside ` +
-        'specs declares that selector.',
-    );
+  /* The element must be the selector of **the class registered for this row's ID**, not merely a
+   * selector that exists somewhere.
+   *
+   * It used to be the latter — `selector: '<element>'` tested against all source — and that
+   * accepted any row whose element named any component in the repository. My own break test for
+   * this gate proved it and I did not notice: the row
+   * `| nxs.tabs.claimSummary | nxs-card | nonsenseSlot |` produced exactly one finding, about the
+   * slot, while `nxs-card` belonged to a completely different component. Review named it on
+   * PR #544. The element column is how a reader knows what to put in their template, so a wrong
+   * one that passes is a documented lie. */
+  const registration = slotRegistered.get(row.id);
+  if (registration) {
+    /* The file that REGISTERS the ID usually only imports the class; the `@Component` decorator
+     * is wherever the class is declared. Looking in the registering file found nothing and failed
+     * both the wrong-element case and the correct one — a false positive I caught by requiring
+     * the positive control to pass before replying to the review. */
+    const selector = selectorOf(registration.className);
+    if (!selector) {
+      fail(
+        `Section 6b gives \`${row.id}\` the element \`${row.element}\`, and no non-spec source ` +
+          `declares \`${registration.className}\` with a selector, so the element column is ` +
+          'unverified. Do not leave it asserted-but-unchecked.',
+      );
+    } else if (selector !== row.element) {
+      fail(
+        `Section 6b gives \`${row.id}\` the element \`${row.element}\`, but the component ` +
+          `registered for it — \`${registration.className}\` in ${registration.file} — declares ` +
+          `\`${selector}\`.\n` +
+          '  A reader copying that element into a template would write the wrong tag.',
+      );
+    }
   }
+}
+
+/**
+ * The `selector` of one component class, found wherever that class is declared.
+ *
+ * Searches every non-spec source for `export class <className>`, because the file that registers
+ * an ID is rarely the file that declares the component. Angular puts
+ * `@Component({ selector: '…' })` immediately above the class, so the selector wanted is the last
+ * one declared before it.
+ *
+ * Returns `null` when it cannot be read, and the caller **fails** rather than passing: an
+ * unreadable selector is an unverified column, not a matching one.
+ *
+ * @param {string} className
+ * @returns {string | null}
+ */
+function selectorOf(className) {
+  const declaration = new RegExp(String.raw`\bexport class ${reEscape(className)}\b`);
+  for (const text of sources.values()) {
+    const classAt = text.search(declaration);
+    if (classAt === -1) continue;
+    const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*'([^']+)'/g)];
+    if (selectors.length > 0) return selectors[selectors.length - 1][1];
+  }
+  return null;
 }
 
 for (const [id, { className, file }] of slotRegistered) {

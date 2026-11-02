@@ -75,12 +75,19 @@ const tail = Number(args.get('tail') ?? 40);
  * SHA of the current commit and the default `origin/main` on a freshly pulled `main` are all the
  * same situation, and only the SHA sees that.
  *
+ * **Peeled to a commit with `^{commit}`**, because `git rev-parse` on an *annotated* tag returns
+ * the tag object's own SHA, not the commit it points at. So `--base=v1.2.3` with that tag sitting
+ * on HEAD compared unequal, took the `affected` path, and Nx — which peels the ref itself — then
+ * diffed HEAD against HEAD and ran zero projects. That is the vacuous pass this whole mechanism
+ * exists to remove, reachable through a perfectly valid base ref. Found by review on PR #544 and
+ * confirmed against a real annotated tag before fixing.
+ *
  * A base that git cannot resolve — a shallow clone with no `origin/main`, a ref that does not
  * exist — is left to Nx to report. Guessing `--all` there would turn a broken checkout into a
  * fifteen-minute run whose failure says nothing about the checkout.
  */
-const headSha = gitFact(['rev-parse', 'HEAD'], null);
-const baseSha = gitFact(['rev-parse', base], null);
+const headSha = gitFact(['rev-parse', 'HEAD^{commit}'], null);
+const baseSha = gitFact(['rev-parse', `${base}^{commit}`], null);
 const baseIsHead = headSha !== null && baseSha !== null && baseSha === headSha;
 const scope = baseIsHead ? 'all' : 'affected';
 

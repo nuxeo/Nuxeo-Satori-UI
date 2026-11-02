@@ -125,27 +125,57 @@ async function probe(url) {
 
 const failures = [];
 const notes = [];
+/**
+ * Probes that produced no HTTP response at all, and are therefore evidence of nothing.
+ *
+ * A timeout, a DNS failure or a refused connection yields `status: null`. The first version read
+ * that as "not 2xx" and so, for a `KNOWN_DEAD` entry, as **confirmation that the link is still
+ * dead** — the gate could report pass having established neither claim. Review caught it
+ * (PR #544), and it is the standard this repository already applies elsewhere, stated in this
+ * file's own header and broken here: *reading nothing must not pass as finding nothing.*
+ *
+ * It is not a FAIL either, in either direction. A laptop on a plane, or a DNS blip, is not a dead
+ * published address, and a gate that goes red for the network gets bypassed and then ignored —
+ * which is the reasoning `supply-chain` records for gating on the production audit only.
+ *
+ * So an unanswered probe is an **inspection gap**, and the gate reports NOT RUN. `published-links`
+ * already declares `mayNotRun: true`, so the runner records it as NOT RUN rather than green and
+ * the whole run becomes `pass-incomplete`. A definite finding still wins: FAIL outranks a gap,
+ * because one unreachable address must not mask a genuinely dead one.
+ */
+const gaps = [];
 
 for (const entry of advertised) {
   const { status, finalUrl, error } = await probe(entry.url);
-  const alive = status !== null && status >= 200 && status < 300;
   const moved = finalUrl !== entry.url ? ` (via ${finalUrl})` : '';
-  if (alive) {
+  if (status === null) {
+    gaps.push(
+      `${entry.url} (advertised in ${entry.advertisedIn}) gave no response — ${error}.\n` +
+        '  That is not evidence it is dead, and not evidence it is alive.',
+    );
+    continue;
+  }
+  if (status >= 200 && status < 300) {
     notes.push(`  alive  ${status}  ${entry.url}${moved}`);
     continue;
   }
   failures.push(
-    `${entry.url} is advertised in ${entry.advertisedIn} and answers ` +
-      `${status === null ? `no response — ${error}` : status}.\n` +
+    `${entry.url} is advertised in ${entry.advertisedIn} and answers ${status}.\n` +
       '  A reader following it is sent nowhere. Fix the destination or stop advertising it.',
   );
 }
 
 for (const entry of knownDead) {
-  const { status, finalUrl } = await probe(entry.url);
-  const alive = status !== null && status >= 200 && status < 300;
-  if (!alive) {
-    notes.push(`  dead   ${status ?? 'no response'}  ${entry.url} — ${entry.owner} owns the fix`);
+  const { status, finalUrl, error } = await probe(entry.url);
+  if (status === null) {
+    gaps.push(
+      `${entry.url} (recorded as dead) gave no response — ${error}.\n` +
+        '  An unanswered probe does not confirm the record. Re-run with the network reachable.',
+    );
+    continue;
+  }
+  if (!(status >= 200 && status < 300)) {
+    notes.push(`  dead   ${status}  ${entry.url} — ${entry.owner} owns the fix`);
     continue;
   }
   failures.push(
@@ -162,7 +192,17 @@ for (const note of notes) console.log(note);
 if (failures.length) {
   console.error(`\npublished-links: FAIL — ${failures.length} problem(s)\n`);
   for (const message of failures) console.error(`- ${message}\n`);
+  for (const gap of gaps) console.error(`- UNANSWERED: ${gap}\n`);
   process.exit(1);
+}
+
+if (gaps.length) {
+  console.log(
+    `\npublished-links: NOT RUN — ${gaps.length} of ${advertised.length + knownDead.length} ` +
+      'address(es) gave no response, so this run establishes nothing about them.\n',
+  );
+  for (const gap of gaps) console.log(`- ${gap}\n`);
+  process.exit(NOT_RUN_EXIT_CODE);
 }
 
 console.log(

@@ -67,11 +67,22 @@ let fixtureCount = 0;
 function run(ledger, env = {}) {
   const path = join(workspace, `ledger-${(fixtureCount += 1)}.json`);
   writeFileSync(path, JSON.stringify(ledger), 'utf8');
+  /* `BETA_SKIP_PUBLISHED_LINKS` is deleted from the inherited environment before each control's
+   * own override is applied.
+   *
+   * Without that, running the documented offline path — `BETA_SKIP_PUBLISHED_LINKS=1 npm run
+   * beta:gate`, which is how this gate is meant to be skipped — leaked the flag into all eight
+   * children, every one exited with the not-run code instead of 0 or 1, and seven controls
+   * failed. So the skip that is supposed to make the run `pass-incomplete` made it FAIL instead,
+   * one gate later. Review caught it (PR #544); `expectSkipControl` below is the one control that
+   * sets the flag back on, deliberately. */
+  const inherited = { ...process.env };
+  delete inherited['BETA_SKIP_PUBLISHED_LINKS'];
   return new Promise((done) => {
     execFile(
       process.execPath,
       [script, '--ledger', path],
-      { cwd: repoRoot, encoding: 'utf8', env: { ...process.env, ...env } },
+      { cwd: repoRoot, encoding: 'utf8', env: { ...inherited, ...env } },
       (error, stdout, stderr) => {
         done({
           status: error ? (error.code ?? 1) : 0,
@@ -113,16 +124,65 @@ await control('an advertised URL that 404s FAILS, and says where it is advertise
   expect(/is advertised in a control and answers 404/.test(proc.output), proc.output.slice(-400));
 });
 
-await control('an advertised URL that does not resolve at all FAILS', async () => {
-  /* Distinct from a 404: a DNS or connection failure is `status: null`, which an `alive` test
-   * written as `status !== 404` would have treated as alive. */
+/** A port nothing listens on, so the probe gets no HTTP response of any kind. */
+const UNANSWERED = 'http://127.0.0.1:1/nothing-listens-here';
+
+await control('an advertised URL that does not resolve at all reports NOT RUN', async () => {
+  /* Distinct from a 404 in both directions: a DNS or connection failure is `status: null`, which
+   * an `alive` test written as `status !== 404` would read as alive, and which the first version
+   * of this gate read as a definite FAIL. Neither is right — a refused connection is the
+   * network, not a dead published address — so it is an inspection gap and the gate says so. */
   const proc = await run({
-    advertised: [{ url: 'http://127.0.0.1:1/nothing-listens-here', advertisedIn: 'a control' }],
+    advertised: [{ url: UNANSWERED, advertisedIn: 'a control' }],
     knownDead: [],
   });
-  expect(proc.status === 1, `exited ${proc.status}, expected 1:\n${proc.output}`);
-  expect(/answers no response/.test(proc.output), proc.output.slice(-400));
+  expect(
+    proc.status === NOT_RUN_EXIT_CODE,
+    `exited ${proc.status}, expected ${NOT_RUN_EXIT_CODE}:\n${proc.output}`,
+  );
+  expect(/gave no response/.test(proc.output), proc.output.slice(-400));
+  expect(!/^published-links: pass/m.test(proc.stdout), 'it claimed a pass over a gap');
 });
+
+await control(
+  'a known-dead URL that does not answer is NOT RUN, not evidence that it is still dead',
+  async () => {
+    /* The hole review found (PR #544). `status: null` fell through the `!alive` branch and was
+     * recorded as "dead — owner owns the fix", so the gate could report pass having established
+     * neither direction. This is the control that would have caught it. */
+    const proc = await run({
+      advertised: [],
+      knownDead: [{ url: UNANSWERED, why: 'a control', owner: 'a control', fix: 'a control' }],
+    });
+    expect(
+      proc.status === NOT_RUN_EXIT_CODE,
+      `exited ${proc.status}, expected ${NOT_RUN_EXIT_CODE}:\n${proc.output}`,
+    );
+    expect(
+      /does not confirm the record/.test(proc.output),
+      `it did not say why the probe proves nothing:\n${proc.output.slice(-400)}`,
+    );
+    expect(
+      !/ {2}dead {3}/.test(proc.stdout),
+      `an unanswered probe was still logged as confirmed dead:\n${proc.stdout}`,
+    );
+  },
+);
+
+await control(
+  'a definite failure outranks a gap, so one dead address cannot be masked',
+  async () => {
+    /* Otherwise an unreachable entry would downgrade the whole run to NOT RUN and hide a genuinely
+     * dead advertised address sitting beside it. */
+    const proc = await run({
+      advertised: [advertised('/gone'), { url: UNANSWERED, advertisedIn: 'a control' }],
+      knownDead: [],
+    });
+    expect(proc.status === 1, `exited ${proc.status}, expected 1:\n${proc.output}`);
+    expect(/answers 404/.test(proc.output), 'the definite finding is not reported');
+    expect(/UNANSWERED:/.test(proc.output), 'the gap is not reported alongside it');
+  },
+);
 
 await control(
   'a known-dead URL that is still dead passes, and names who owns the fix',
@@ -172,6 +232,6 @@ const failed = controls.filter((c) => !c.ok).length;
 console.log(
   failed
     ? `\npublished-links selftest: FAIL — ${failed} of ${controls.length} control(s) failed.`
-    : `\npublished-links selftest: pass — ${controls.length} control(s), 4 of them negative.`,
+    : `\npublished-links selftest: pass — ${controls.length} control(s), 5 of them negative.`,
 );
 process.exit(failed ? 1 : 0);
