@@ -13,8 +13,12 @@ contradicted each other before:
 | `.ai/state/phases.json`            | machine-checkable phase status, verified by `npm run beta:state` | **highest** on status         |
 | `docs/adf-hx-beta-plan.md`         | the plan of record: scope, phases, timelines                     | highest on _intent_           |
 | **this file**                      | the narrative: what was done, why, with numbers and evidence     | highest on _history_          |
-| `docs/adf-hx-workarounds.md`       | the register of what adopting adf-hx costs us; **gated**         | highest on _workarounds_      |
 | `docs/adf-hx-upstream-findings.md` | adf-hx-team-facing defect report, written to be sent as-is       | highest on _upstream defects_ |
+
+`docs/adf-hx-workarounds.md` was a seventh row here — the register of what adopting adf-hx cost,
+gated against markers in the code. It was deleted in 2026-11 with its gate: adf-hx and adf-core
+left in NXSAT-635/636/637, every row but the `angular.json` budget was struck through as fixed,
+and no source file carried a marker, so the gate guarded an empty set. The history is in git.
 
 If this file disagrees with §3 or `phases.json` on a fact, **they win and this is stale**.
 Nine cross-document contradictions accumulated earlier in this programme — including two
@@ -667,8 +671,7 @@ the point.
 
 **Exhaustive is the standard.** A diversion, a challenge and a dead end each get their own line in
 §10. A superseded claim moves to §7 rather than being deleted. Anything that is upstream's fault also
-goes to `docs/adf-hx-upstream-findings.md`, and anything we do because upstream forces us to gets a
-row in `docs/adf-hx-workarounds.md` **and a marker at the site** — that pair is gated.
+goes to `docs/adf-hx-upstream-findings.md`.
 
 Do not restate §3's facts here in different words. Link to them.
 
