@@ -40,6 +40,7 @@
  * key removed (it is for your editor, not the server).
  */
 import { createHash } from 'node:crypto';
+import AdmZip from 'adm-zip';
 import {
   existsSync,
   lstatSync,
