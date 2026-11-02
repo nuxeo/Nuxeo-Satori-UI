@@ -149,7 +149,7 @@
       function build(deck) {
         const host = document.getElementById('slides');
         host.innerHTML = deck.slides
-          .map((s) => {
+          .map((s, slideIndex) => {
             /**
              * An unknown block type renders as nothing, and said nothing about it until
              * 2026-11-02. `docs/demo-deck-plan.md` documents two further block types,
@@ -165,8 +165,15 @@
               .map((b) => {
                 const render = RENDER[b.type];
                 if (!render) {
+                  // Name the slide, not just the block type. Nine slides of `04-walkthrough`
+                  // emit the same `shot`/`shots` warning, so a message without the slide
+                  // sends the reader searching the JSON to find which ones.
+                  const where = `slide ${slideIndex + 1}/${deck.slides.length}` +
+                    (s.title ? ` "${s.title}"` : '') +
+                    (s.eyebrow ? ` (${s.eyebrow})` : '');
                   console.warn(
-                    `deck: no renderer for block type "${b.type}" — this slide will have an empty body. Known: ${Object.keys(RENDER).join(', ')}`,
+                    `deck: no renderer for block type "${b.type}" on ${where} — that slide will ` +
+                      `have an empty body. Known: ${Object.keys(RENDER).join(', ')}`,
                   );
                   return '';
                 }
