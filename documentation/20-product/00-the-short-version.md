@@ -191,9 +191,11 @@ the package is not published yet, you build it from this repository. Publishing 
 3. **Run it on your own machine** — only if you are working on Satori itself, or want to see a
    configuration change without installing a package on a server. This is contributor setup, not
    customer setup: follow [Developer Getting Started](../30-engineering/01-getting-started.md).
-   You need Docker, Node.js 20, and `SATORI_GH_READONLY_TOKEN`, a GitHub token that can read
-   Hyland's GitHub Packages. Without it `npm ci` fails and no `nx` command can run, so steps 1 and
-   2 above — which need none of it — are not blocked by anything here.
+   You need Docker, **Node.js 24** — the version `.nvmrc` pins, because Angular 22 refuses Node 20
+   (NXSAT-669) — and `SATORI_GH_READONLY_TOKEN`, a GitHub token that can read Hyland's GitHub
+   Packages. Without it `npm ci` fails and no `nx` command can run, so steps 1 and 2 above — which
+   need none of it — are not blocked by anything here. Note that step 1 is unaffected: the
+   configuration scripts use Node built-ins only, and 20 remains their documented floor.
 
 ## Read more
 

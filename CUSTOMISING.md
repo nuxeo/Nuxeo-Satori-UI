@@ -60,8 +60,8 @@ dependencies, so it builds the same way from anywhere.
 
 ## 3. Change something
 
-Open `bundle/agentic-ui-config/bootstrap.json`. This renames the product and makes a colour theme
-the default:
+Open `bundle/agentic-ui-config/bootstrap.json`. This renames the product, adds a theme of your own
+and makes it the default:
 
 ```json
 {
@@ -70,9 +70,18 @@ the default:
     "applicationTitle": "Acme Documents",
     "documentTitle": "Acme Documents"
   },
+  "themes": [{ "id": "acme-dark", "label": "Acme Dark", "base": "dark" }],
   "defaultThemeId": "acme-dark"
 }
 ```
+
+**`defaultThemeId` has to name a theme that exists, or nothing happens and nothing says so.** The
+four that ship are `nuxeo` (the default), `dark`, `kawaii` and `light`; to select one of those, set
+`defaultThemeId` to its ID and leave `themes` out. An ID that matches none of them falls back to
+the first theme, so the application looks exactly as it did and the only symptom is that your
+change had no effect. Your own entry needs an `id`; `base` says which shipped theme it starts from,
+and `tokens` overrides individual colours on top of that. Themes you list are merged over the
+shipped ones by `id`, so restyling one does not mean restating the other three.
 
 And `bundle/agentic-ui-config/manifest.json` hides the Trash entry, renames Collections, and shows
 Administration to administrators only:
@@ -164,6 +173,7 @@ To go back, `nuxeoctl mp-remove acme-config` and restart; Satori's defaults appl
 | Nuxeo refuses to start after installing               | The server is older than `nuxeo-agentic-ui:2026.0.2`                                  | `nuxeoctl mp-remove acme-config`, restart, then upgrade Satori                            |
 | `curl` returns Satori's defaults and not your values  | The fragments registered before ours instead of after                                 | Check the `<require>org.nuxeo.agentic.ui.config.defaults</require>` in your component XML |
 | An override you wrote does nothing                    | The ID is not one the product registers                                               | Check it against [`docs/extension-reference.md`](docs/extension-reference.md)             |
+| The colours did not change, and nothing said why      | `defaultThemeId` names a theme that does not exist, so the first one was used instead | Define it in `themes`, or name one of `nuxeo`, `dark`, `kawaii`, `light`                  |
 
 ## What this path does not cover
 
