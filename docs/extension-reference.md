@@ -1344,9 +1344,11 @@ modes:
   Import dialog once a type is chosen — opened from Browse and from the dashboard's Add Content.
   It opens empty, and Create sends only the fields the user filled in, as an edit sends only what
   changed: every field left untouched — an unticked checkbox included — takes the type's server
-  default (`@emptyWithDefault`) when the document is created. The dialog keeps what is not a property field: the location, the main file of
-  a File, Picture, Audio or Video, and a Note's format. The import wizard's properties step is not
-  this form.
+  default (`@emptyWithDefault`) when the document is created. A complex field is sent whole once
+  any of its sub-fields is filled in, so its untouched sub-fields go empty — `false` for a
+  checkbox — rather than to their server defaults. The dialog keeps what is not a property field:
+  the location, the main file of a File, Picture, Audio or Video, and a Note's format. The import
+  wizard's properties step is not this form.
 
 To replace the whole Properties section or form with a component of your own rather than a list
 of fields, use the `documentMetadata`, `documentEdit` and `documentCreate` slots, section 9c.
@@ -1519,7 +1521,8 @@ What a layout file does **not** do:
 - **Not the packaged rows above it.** Title, tags, description and the Dublin Core vocabularies are
   still the panel's own; a `dc:` field you list appears in your layout as well. In an `edit` or
   `create` form the Dublin Core fields are the form's own, so a `dc:` field you list is shown once,
-  in their place.
+  in their place — and its `"required": true` and its schema constraints apply there, so a file
+  can make Nature required.
 - **Not new controls.** The schema type picks the control; a file cannot name a widget, and a
   `blob` field it lists is shown, not edited.
 - **Folderish types.** Document detail redirects them to Browse, so their Properties panel is never

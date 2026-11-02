@@ -172,7 +172,10 @@ let nextId = 0;
   host: { class: 'nxs-metadata-editor' },
 })
 export class NxsMetadataEditorComponent {
-  /** The type's fields beyond Dublin Core, from its layout. A field Dublin Core already has is skipped. */
+  /**
+   * The type's fields beyond Dublin Core, from its layout. A field Dublin Core already has is shown
+   * once, as the Dublin Core field, which takes its `required` flag and constraints.
+   */
   readonly sections = input<readonly NxsEditorSection[]>([]);
   /** Show `sections` one after another under headings, or as tabs. */
   readonly display = input<NxsEditorDisplay>('sections');
@@ -218,9 +221,31 @@ export class NxsMetadataEditorComponent {
   /** Server messages arrived while the form was disabled: reveal them once it is enabled. */
   private revealOnEnable = false;
 
-  protected readonly standardFields = computed<readonly EditorField[]>(() =>
-    this.dublinCore() ? DUBLIN_CORE : [],
-  );
+  /**
+   * Dublin Core, each field taking the `required` flag and the constraints of a section field with
+   * the same xpath — a layout file that lists `dc:nature` as required makes Nature required.
+   */
+  protected readonly standardFields = computed<readonly EditorField[]>(() => {
+    if (!this.dublinCore()) return [];
+    const listed = new Map(
+      this.sections()
+        .flatMap((section) => section.fields)
+        .filter((field) => DUBLIN_CORE_XPATHS.has(field.xpath))
+        .map((field) => [field.xpath, field.definition]),
+    );
+    return DUBLIN_CORE.map((field) => {
+      const own = listed.get(field.xpath);
+      if (!own?.required && !own?.constraints) return field;
+      const definition: NxsEditorFieldType = {
+        ...field.definition,
+        ...(own.required ? { required: true } : {}),
+        ...(own.constraints
+          ? { constraints: { ...field.definition.constraints, ...own.constraints } }
+          : {}),
+      };
+      return { ...field, definition };
+    });
+  });
 
   protected readonly typeSections = computed<readonly NxsEditorSection[]>(() => {
     const skip = this.dublinCore() ? DUBLIN_CORE_XPATHS : new Set<string>();

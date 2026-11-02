@@ -2741,7 +2741,15 @@ describe('CreateImportDialogComponent with the real create form and Expires fiel
       {
         name: 'dublincore',
         '@prefix': 'dc',
-        fields: { title: 'string', description: 'string', expired: 'date' },
+        fields: {
+          title: 'string',
+          description: 'string',
+          expired: 'date',
+          nature: {
+            type: 'string',
+            constraints: [{ name: 'directoryResolver', parameters: { directory: 'nature' } }],
+          },
+        },
       },
       {
         name: 'acme',
@@ -2753,21 +2761,34 @@ describe('CreateImportDialogComponent with the real create form and Expires fiel
     ],
   };
 
-  /** Opens Folder's create form and answers the reads its generated layout needs. */
-  async function openFolderForm(fixture: ComponentFixture<CreateImportDialogComponent>) {
+  /**
+   * Opens Folder's create form and answers the reads its layout needs: generated, or the
+   * contributed `Folder/create` file `content` when one is given.
+   */
+  async function openFolderForm(
+    fixture: ComponentFixture<CreateImportDialogComponent>,
+    content?: object,
+  ) {
     const http = TestBed.inject(HttpTestingController);
     fixture.componentInstance.startCreateFromType({ type: 'Folder', label: 'Folder' });
     fixture.detectChanges();
     await fixture.whenStable();
+    const format = 'nuxeo-agentic-ui-config/1';
     http.expectOne((request) => request.url.endsWith('/config/types/Folder')).flush(FOLDER_TYPE);
     http
       .expectOne((request) => request.url.endsWith('/layouts.json'))
       .flush({
-        format: 'nuxeo-agentic-ui-config/1',
+        format,
         layer: 'layouts',
-        layouts: [],
+        layouts: content ? [{ type: 'Folder', mode: 'create', component: 'org.acme.config' }] : [],
         diagnostics: [],
       });
+    if (content) {
+      await fixture.whenStable();
+      http
+        .expectOne((request) => request.url.endsWith('/layouts/Folder/create.layout.json'))
+        .flush({ format, layer: 'layout', type: 'Folder', mode: 'create', content });
+    }
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -2817,6 +2838,29 @@ describe('CreateImportDialogComponent with the real create form and Expires fiel
       }),
     );
     http.verify();
+  });
+
+  it('sends nothing while a Dublin Core field the create file makes required is blank', async () => {
+    const fixture = await render();
+    await openFolderForm(fixture, {
+      version: 1,
+      sections: [{ id: 'classify', fields: [{ field: 'dc:nature', required: true }] }],
+    });
+    expect(
+      fixture.nativeElement
+        .querySelector('nxs-metadata-editor')
+        ?.getAttribute('data-layout-source'),
+    ).toBe('contributed');
+    await typeInto(fixture, 'dc:title', 'Reports');
+
+    fixture.componentInstance.createDocument();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(mockImportService.createChildDocument).not.toHaveBeenCalled();
+    expect(
+      fixture.nativeElement.querySelector('[data-xpath="dc:nature"] mat-error')?.textContent,
+    ).toContain('Required');
   });
 
   it('sends nothing while a required field of the type is blank, and says so on that field', async () => {

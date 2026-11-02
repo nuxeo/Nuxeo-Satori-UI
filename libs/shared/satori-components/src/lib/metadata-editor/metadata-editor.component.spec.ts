@@ -312,6 +312,42 @@ describe('NxsMetadataEditorComponent', () => {
     expect(element.textContent).not.toContain('Duplicate title');
   });
 
+  it('takes the required flag and constraints of a section field Dublin Core has', async () => {
+    host.sections.set([
+      {
+        id: 'dc',
+        heading: null,
+        fields: [
+          {
+            xpath: 'dc:nature',
+            label: 'Kind',
+            definition: { type: 'string', directory: 'nature', required: true },
+          },
+          {
+            xpath: 'dc:description',
+            label: 'Summary',
+            definition: { type: 'string', constraints: { maxLength: 5 } },
+          },
+        ],
+      },
+    ]);
+    host.values.set({ 'dc:title': 'Claim' });
+    await settle();
+    expect(element.querySelectorAll('[data-xpath="dc:nature"]')).toHaveLength(1);
+    expect(element.textContent).not.toContain('Kind');
+
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    // A vocabulary field says so in the picker's own words.
+    expect(errors()).toContain('Required');
+    expect(summary()).toBe('1 field needs a correction before you can save.');
+
+    await type('dc:description', 'Too long');
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(errors().some((error) => error?.startsWith('Description'))).toBe(true);
+  });
+
   it('reports nothing changed until the user edits, then only what changed, trimmed', async () => {
     expect(host.editor().dirtyProperties()).toEqual({});
     await type('dc:title', '  New title  ');
