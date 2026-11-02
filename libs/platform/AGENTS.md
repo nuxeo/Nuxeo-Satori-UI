@@ -155,10 +155,24 @@ places it, or a host route resolves it:
 Do **not** export your component from `index.ts`. A host that can import the class
 depends on a name that should stay free to change; it resolves by ID instead.
 
-The `routes` slot is declared but **nothing resolves it** — a library cannot contribute
-a route on its own, so a host must map the path. Check the slot table in
-`extension-reference.md` before assuming a slot is live: it distinguishes _populated_,
-_resolves_, and _reserved and inert_, and those are three different promises.
+The `routes` slot **does resolve — in a host that wires it**, and the distinction is
+about the host, not the slot. The product application calls `provideExtensionRoutes()`
+from `provideAppExtensions()` (`apps/nuxeo-ui/src/app/extensions/provide-app-extensions.ts:256`,
+spread into `app.config.ts:46`), and that provider runs an `effect` over the slot which
+re-applies contributed routes on every manifest change
+(`libs/shared/extensions/src/lib/extension-routes.ts:89-99`). A manifest route works there
+today. A **library** still cannot contribute a route on its own: your consumer must call
+`provideExtensionRoutes()` themselves, and nothing in this library does it for them.
+
+What a manifest route cannot do is conjure a page. It resolves to a **registered component
+ID**, and the product registers exactly one full-page surface for this slot today —
+`app.page.contracts` (`provide-app-extensions.ts:165`). A new destination needs its
+component registered in code first; after that, the path, the label and the rule gating it
+are all manifest.
+
+Check the slot table in `extension-reference.md` before assuming a slot is live: it
+distinguishes _populated_, _resolves_, and _reserved and inert_, and those are three
+different promises. `routes` is listed there as "Resolves; **no packaged entries**".
 
 ### 3.4 Hiding a control is not a security control
 
