@@ -121,7 +121,7 @@
           "code": "<b>\"overrides\"</b>: {\n  <span class=\"c\">// rename, and move it to the front</span>\n  \"app.documentList.lastContributor\": { <b>\"label\"</b>: \"Adjuster\", \"order\": 5 }\n},\n\n<b>\"slots\"</b>: {\n  <b>\"documentList\"</b>: [\n    <span class=\"c\">// gone from the picker — the user cannot turn it back on</span>\n    { \"id\": \"app.documentList.state\",   <b>\"disabled\"</b>: true },\n\n    <span class=\"c\">// in the picker, but starts unchecked</span>\n    { \"id\": \"app.documentList.version\", <b>\"hiddenByDefault\"</b>: true }\n  ]\n}"
         }
       ],
-      "footnote": "`hiddenByDefault` and `sortable` are honoured in `slots.documentList`, **not** in `overrides` — `overrides` reads only `order`, `label`, `rule` and `visible`, and silently drops the rest. The same descriptor ids drive the product's own list and upstream's `hxp-document-list`."
+      "footnote": "`hiddenByDefault` and `sortable` are honoured in `slots.documentList`, **not** in `overrides` — `overrides` reads only `order`, `label`, `rule` and `visible`, and silently drops the rest. The same descriptor ids drive every list in the product. They once also drove adf-hx's `hxp-document-list`; adf-hx was removed in NXSAT-308, so the ids now have one consumer, not two."
     },
     {
       "eyebrow": "Track A · 3 of 5 — columns",
