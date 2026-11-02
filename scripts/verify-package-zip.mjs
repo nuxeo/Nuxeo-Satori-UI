@@ -63,8 +63,22 @@ function entriesOf(archive) {
  * so a scan that does not do this reports every package as naming an asset it does not hold — and
  * the mirror of that mistake is worse: a `<require>` someone commented out would satisfy the check
  * below while the server ignored it.
+ *
+ * Removed repeatedly, not once, which is `js/incomplete-multi-character-sanitization` and was
+ * flagged by CodeQL on the single-pass version. One pass over `<!<!-- -->-- <require>…</require>
+ * -->` removes the inner `<!-- -->` and leaves a residue that reads as a live `<require>` — the
+ * exact false pass the paragraph above calls the worse mistake. Each pass can only shorten the
+ * string, so the loop terminates.
  */
-const withoutComments = (xml) => xml.replace(/<!--[\s\S]*?-->/g, '');
+function withoutComments(xml) {
+  let out = xml;
+  let previous;
+  do {
+    previous = out;
+    out = out.replace(/<!--[\s\S]*?-->/g, '');
+  } while (out !== previous);
+  return out;
+}
 
 /** An attribute of the first element with this tag — enough for these two small, generated files. */
 function attribute(xml, tag, name) {

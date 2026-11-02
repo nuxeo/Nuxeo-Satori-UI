@@ -221,6 +221,24 @@ expectRed(
   /does not <require> org\.nuxeo\.agentic\.ui\.config\.defaults/,
 );
 
+// Removing comments in one pass leaves a residue here that reads as a live `<require>`:
+// `<!<!-- -->-- …` loses the inner `<!-- -->` and the remainder begins `<!--`. CodeQL names the
+// class (`js/incomplete-multi-character-sanitization`); this is what it costs in this script.
+expectRed(
+  'a <require> hidden inside a comment that a single stripping pass would reassemble',
+  {
+    jar: jarFiles({
+      [COMPONENT]:
+        '<?xml version="1.0"?>\n<component name="acme.config.acme-config" version="1.0">\n' +
+        '  <!<!-- -->-- <require>org.nuxeo.agentic.ui.config.defaults</require> -->\n' +
+        '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+        '    <fragment name="acme-config" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />\n' +
+        '  </extension>\n</component>\n',
+    }),
+  },
+  /does not <require> org\.nuxeo\.agentic\.ui\.config\.defaults/,
+);
+
 expectRed(
   'a byte flipped inside an entry, which breaks its CRC',
   {
