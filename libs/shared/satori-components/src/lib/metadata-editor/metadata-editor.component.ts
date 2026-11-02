@@ -50,6 +50,7 @@ import {
   propertyValue,
 } from './metadata-editor-form';
 import {
+  NxsEditorConstraints,
   NxsEditorDisplay,
   NxsEditorField,
   NxsEditorFieldType,
@@ -208,6 +209,11 @@ export class NxsMetadataEditorComponent {
   protected readonly invalidCount = signal(0);
   protected readonly selectedTab = signal(0);
   private builtFrom: NxsEditorValues | null = null;
+  /** The definition each control was built from, and its JSON, to tell when one has changed. */
+  private readonly builtDefinitions = new Map<
+    string,
+    { readonly definition: NxsEditorFieldType; readonly shape: string }
+  >();
   /** Never shown: stands in for a control of an unexpected shape so a binding never throws. */
   private readonly detached = new FormControl();
   private readonly detachedList = new FormArray<AbstractControl>([]);
@@ -222,25 +228,29 @@ export class NxsMetadataEditorComponent {
   private revealOnEnable = false;
 
   /**
-   * Dublin Core, each field taking the `required` flag and the constraints of a section field with
-   * the same xpath — a layout file that lists `dc:nature` as required makes Nature required.
+   * Dublin Core, each field taking the `required` flag and the constraints of every section field
+   * with the same xpath — a layout file that lists `dc:nature` as required makes Nature required,
+   * wherever else it lists it.
    */
   protected readonly standardFields = computed<readonly EditorField[]>(() => {
     if (!this.dublinCore()) return [];
-    const listed = new Map(
-      this.sections()
-        .flatMap((section) => section.fields)
-        .filter((field) => DUBLIN_CORE_XPATHS.has(field.xpath))
-        .map((field) => [field.xpath, field.definition]),
-    );
+    const listed = this.sections()
+      .flatMap((section) => section.fields)
+      .filter((field) => DUBLIN_CORE_XPATHS.has(field.xpath));
     return DUBLIN_CORE.map((field) => {
-      const own = listed.get(field.xpath);
-      if (!own?.required && !own?.constraints) return field;
+      const own = listed.filter((entry) => entry.xpath === field.xpath);
+      const required = own.some((entry) => entry.definition.required === true);
+      const constraints = own.reduce<NxsEditorConstraints | undefined>(
+        (merged, entry) =>
+          entry.definition.constraints ? { ...merged, ...entry.definition.constraints } : merged,
+        undefined,
+      );
+      if (!required && !constraints) return field;
       const definition: NxsEditorFieldType = {
         ...field.definition,
-        ...(own.required ? { required: true } : {}),
-        ...(own.constraints
-          ? { constraints: { ...field.definition.constraints, ...own.constraints } }
+        ...(required ? { required: true } : {}),
+        ...(constraints
+          ? { constraints: { ...field.definition.constraints, ...constraints } }
           : {}),
       };
       return { ...field, definition };
@@ -457,11 +467,17 @@ export class NxsMetadataEditorComponent {
     this.selectedTab.set(index);
   }
 
+  /**
+   * Adds a control per field and drops those of fields no longer shown. A kept field whose
+   * definition changed — new sections that make it required, say — is rebuilt from what it holds,
+   * so its checks follow the new definition and what was typed, and whether it was, survive.
+   */
   private build(fields: readonly EditorField[], values: NxsEditorValues): void {
     if (values !== this.builtFrom) {
       for (const xpath of Object.keys(this.form.controls))
         this.form.removeControl(xpath, { emitEvent: false });
       this.builtFrom = values;
+      this.builtDefinitions.clear();
       this.serverMessages.clear();
       this.submitted.set(false);
       this.invalidCount.set(0);
@@ -470,14 +486,26 @@ export class NxsMetadataEditorComponent {
     for (const xpath of Object.keys(this.form.controls)) {
       if (wanted.has(xpath)) continue;
       this.form.removeControl(xpath, { emitEvent: false });
+      this.builtDefinitions.delete(xpath);
       this.serverMessages.delete(xpath);
     }
     for (const field of fields) {
-      if (this.form.controls[field.xpath]) continue;
-      const control = buildControl(field.definition, values[field.xpath], this.dateAdapter);
+      const existing = this.form.controls[field.xpath];
+      const built = this.builtDefinitions.get(field.xpath);
+      const shape = JSON.stringify(field.definition);
+      if (existing && built?.shape === shape) continue;
+      const value =
+        existing && built
+          ? propertyValue(built.definition, existing, this.dateAdapter, 0, field.multiline === true)
+          : values[field.xpath];
+      const control = buildControl(field.definition, value, this.dateAdapter);
       control.addValidators(this.heldServerMessage(field.xpath));
+      if (existing?.dirty) control.markAsDirty();
+      if (existing?.touched) control.markAsTouched();
       control.updateValueAndValidity({ emitEvent: false });
-      this.form.addControl(field.xpath, control, { emitEvent: false });
+      if (existing) this.form.setControl(field.xpath, control, { emitEvent: false });
+      else this.form.addControl(field.xpath, control, { emitEvent: false });
+      this.builtDefinitions.set(field.xpath, { definition: field.definition, shape });
     }
     this.applyDisabled(untracked(this.disabled));
     this.structure.update((value) => value + 1);

@@ -348,6 +348,51 @@ describe('NxsMetadataEditorComponent', () => {
     expect(errors().some((error) => error?.startsWith('Description'))).toBe(true);
   });
 
+  it('keeps a Dublin Core field required when any section listing it says so', async () => {
+    const nature = (required: boolean) => ({
+      xpath: 'dc:nature',
+      label: 'Kind',
+      definition: { type: 'string', directory: 'nature', ...(required ? { required } : {}) },
+    });
+    host.sections.set([
+      { id: 'a', heading: null, fields: [nature(true)] },
+      { id: 'b', heading: null, fields: [nature(false)] },
+    ]);
+    host.values.set({ 'dc:title': 'Claim' });
+    await settle();
+
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(errors()).toContain('Required');
+  });
+
+  it('checks what new sections ask of a field already typed in, keeping what was typed', async () => {
+    const description = (maxLength?: number) => ({
+      id: 'dc',
+      heading: null,
+      fields: [
+        {
+          xpath: 'dc:description',
+          label: 'Summary',
+          definition: { type: 'string', ...(maxLength ? { constraints: { maxLength } } : {}) },
+        },
+      ],
+    });
+    await type('dc:description', 'Too long');
+    expect(host.editor().validate()).toBe(true);
+
+    host.sections.set([POLICY, description(5)]);
+    await settle();
+    expect(host.editor().validate()).toBe(false);
+    expect(field<HTMLTextAreaElement>('dc:description').value).toBe('Too long');
+    expect(host.editor().dirtyProperties()['dc:description']).toBe('Too long');
+
+    host.sections.set([POLICY, description()]);
+    await settle();
+    expect(host.editor().validate()).toBe(true);
+    expect(host.editor().dirtyProperties()['dc:description']).toBe('Too long');
+  });
+
   it('reports nothing changed until the user edits, then only what changed, trimmed', async () => {
     expect(host.editor().dirtyProperties()).toEqual({});
     await type('dc:title', '  New title  ');
