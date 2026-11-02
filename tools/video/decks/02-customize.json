@@ -84,17 +84,17 @@
             {
               "series": "ours",
               "title": "Resolves — live, but nothing of ours is in it",
-              "sub": "Contribute here and it takes effect; there is just nothing to override — 6 of 13",
+              "sub": "Contribute here and it takes effect; there is just nothing to override — 6 of 13, with one exception below",
               "items": [
-                "`sidebar`, `routes`, `documentView`",
-                "`documentMetadata`, `documentEdit`, `documentCreate`",
-                "`routes` and the three layout slots need a component or layout file of yours"
+                "`sidebar`, `routes`, `documentView` — a component of yours, placed",
+                "`documentMetadata`, `documentEdit` — your fields, or your component, in the Properties panel and the Edit dialog",
+                "**`documentCreate` is the exception** — it resolves, but no product screen opens the create form yet, so a contribution has no visible effect today"
               ]
             }
           ]
         }
       ],
-      "footnote": "`docs/extension-reference.md` marks each slot _populated_, _resolves_ or _reserved and inert_, and those are three different promises. **No slot is inert today** — an earlier cut of this slide said five of them were, and that was still being shown after they went live. Read the reference rather than this slide if the two disagree."
+      "footnote": "`docs/extension-reference.md` marks each slot _populated_, _resolves_ or _reserved and inert_, and those are three different promises. **No slot is reserved-and-inert today** — an earlier cut of this slide said five of them were, and that was still being shown after they went live. But _resolves_ is not the same as _usable_: `documentCreate` resolves into a create form no screen opens (`extension-reference.md:245`), so it is the one slot where contributing changes nothing a user sees. Read the reference rather than this slide if the two disagree."
     },
     {
       "eyebrow": "Layer 2 — your own code",

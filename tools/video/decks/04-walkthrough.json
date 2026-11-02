@@ -121,7 +121,7 @@
           "code": "<b>\"overrides\"</b>: {\n  <span class=\"c\">// rename, and move it to the front</span>\n  \"app.documentList.lastContributor\": { <b>\"label\"</b>: \"Adjuster\", \"order\": 5 }\n},\n\n<b>\"slots\"</b>: {\n  <b>\"documentList\"</b>: [\n    <span class=\"c\">// gone from the picker — the user cannot turn it back on</span>\n    { \"id\": \"app.documentList.state\",   <b>\"disabled\"</b>: true },\n\n    <span class=\"c\">// in the picker, but starts unchecked</span>\n    { \"id\": \"app.documentList.version\", <b>\"hiddenByDefault\"</b>: true }\n  ]\n}"
         }
       ],
-      "footnote": "`hiddenByDefault` and `sortable` are honoured in `slots.documentList`, **not** in `overrides` — `overrides` reads only `order`, `label`, `rule` and `visible`, and silently drops the rest. The same descriptor ids drive every list in the product. They once also drove adf-hx's `hxp-document-list`; adf-hx was removed in NXSAT-308, so the ids now have one consumer, not two."
+      "footnote": "`hiddenByDefault` and `sortable` are honoured in `slots.documentList`, **not** in `overrides` — `overrides` reads only `order`, `label`, `rule` and `visible`, and silently drops the rest. These ids drive **the browse list** — `browse.ts:509` is the only place that resolves `slots.documentList` (registered at `provide-app-extensions.ts:114`). Other tables build their own columns in code and are not configurable this way; the collection members list is the one to know about, since it looks identical (`collection-detail.ts:195`). The ids once also drove adf-hx's `hxp-document-list`, which was removed in NXSAT-308."
     },
     {
       "eyebrow": "Track A · 3 of 5 — columns",

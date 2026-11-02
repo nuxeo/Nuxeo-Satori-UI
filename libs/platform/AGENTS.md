@@ -167,8 +167,23 @@ today. A **library** still cannot contribute a route on its own: your consumer m
 What a manifest route cannot do is conjure a page. It resolves to a **registered component
 ID**, and the product registers exactly one full-page surface for this slot today —
 `app.page.contracts` (`provide-app-extensions.ts:165`). A new destination needs its
-component registered in code first; after that, the path, the label and the rule gating it
-are all manifest.
+component registered in code first; after that the **path** is manifest.
+
+Two things a route descriptor does **not** give you, and both have bitten:
+
+- **No label.** `extensionRoutes()` builds each route from `path`, `component` and `data`
+  only (`libs/shared/extensions/src/lib/extension-routes.ts:37-46`). The router renders no
+  label. What a user reads is the `navbar` entry pointing at the path, and that is where
+  `label` and `labelKey` belong.
+- **No gate.** A `rule` on a route is resolved against an **empty rule context** — `resolve()`
+  is called with no context at `extension-routes.ts:96` — deliberately, because evaluating it
+  once at registration "would look like authorisation and be nothing of the kind"
+  (`:75-79`). A contributed route carries **no guard**, and adding one from a manifest is not
+  offered (`:81-83`). Use `disabled`, or a `visible: false` override, to withdraw a route.
+
+So gate the `navbar` entry, not the route — and read §3.4 before assuming that is
+protection. Hiding the entry does not protect the URL: the path still resolves and the page
+still loads for anyone who types it. Nuxeo decides server-side whether its data may be read.
 
 Check the slot table in `extension-reference.md` before assuming a slot is live: it
 distinguishes _populated_, _resolves_, and _reserved and inert_, and those are three

@@ -147,8 +147,13 @@ So configuration must not live inside the packaged `web` directory. Split it:
   packages and served anonymously by `nuxeo-agentic-core` at `agentic-ui-config/`; the Note is no
   longer read, with no migration._ The argument recorded here for the Note — that it inherited
   Nuxeo's versioning, audit, ACLs and per-tenant scoping "for free" and could be edited in-app — is
-  **withdrawn, not merely superseded**, and is removed rather than restated: configuration now ships
-  as versioned package content, which is where those properties actually come from.
+  **withdrawn, not merely superseded**, and is not restated in another form. A configuration package
+  is versioned and attributable: it carries a package version, it is built from reviewable source,
+  and `AppConfigService.diagnostics()` names the package component behind every fragment. It gives
+  **none of the other three**. Fragments are served anonymously, before sign-in, and nothing about
+  configuration changes when a user signs in or out (`docs/extension-reference.md:111`, `:120`), so
+  no ACL governs a fragment and there is no per-tenant scoping — which is exactly why nothing
+  sensitive may go in one.
 
 ---
 
