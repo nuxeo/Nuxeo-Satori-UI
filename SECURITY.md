@@ -58,8 +58,15 @@ repository**, though the same channels still accept them:
 
 ## How we handle dependency vulnerabilities
 
-Third-party dependency advisories are tracked through Dependabot, and the `supply-chain` gate in
-`npm run beta:gate` fails on any high or critical advisory in a production dependency. A
-lower-severity advisory with no available fix may be accepted for a limited time, with its reason
-and mitigations recorded in `.ai/state/supply-chain-allowlist.json`. Each acceptance carries an
-expiry date, and the gate fails once that date passes.
+**npm dependencies** — the web application, its libraries and `@nuxeo/satori-platform` — are
+tracked through Dependabot, and the `supply-chain` gate in `npm run beta:gate` fails on any high or
+critical advisory in a production npm dependency. A lower-severity advisory with no available fix
+may be accepted for a limited time, with its reason and mitigations recorded in
+`.ai/state/supply-chain-allowlist.json`. Each acceptance carries an expiry date, and the gate fails
+once that date passes.
+
+**Maven dependencies** of the `nuxeo-agentic-core` add-on are **not** covered by either check. Apart
+from test-only JUnit, every one is declared `provided`: Nuxeo Server supplies them at runtime and
+the marketplace package does not bundle them, so their advisories are fixed by upgrading Nuxeo Server, not this repository. If
+you find a vulnerability in one of them that this add-on makes reachable, report it through the
+channels above.
