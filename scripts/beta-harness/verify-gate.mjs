@@ -18,8 +18,12 @@ import { spawnToolSync } from './package-command.mjs';
  *                    unknown one prints the full current list, so that is the
  *                    authoritative enumeration rather than this line, which went stale
  *                    twice while gates were added.
- *   --base <ref>     git base for affected calculation (default origin/main)
+ *   --base <ref>     git base for affected calculation (default origin/main). When it resolves
+ *                    to HEAD there is nothing to be affected by, so lint, test, build and
+ *                    typecheck run `run-many --all` instead — see `scope` below.
  *   --tail <n>       lines of failing output to show (default 40)
+ *   --print-scope    print the resolved scope and the exact argv of the four scoped gates, then
+ *                    exit. Runs nothing.
  *   --require-complete  exit 1 unless the verdict is `pass`: every gate ran and passed
  *   --platform-sensitive  only the gates whose verdict can differ by operating system,
  *   --require-scope-complete  exit 1 unless every SELECTED gate ran and passed
@@ -51,6 +55,52 @@ for (let i = 2; i < process.argv.length; i += 1) {
 const phase = args.get('phase') ?? 'adhoc';
 const base = args.get('base') ?? process.env['NX_BASE'] ?? 'origin/main';
 const tail = Number(args.get('tail') ?? 40);
+
+/**
+ * Does `--base` resolve to HEAD?
+ *
+ * If it does, `nx affected --base=<base>` matches **zero projects**, and the four gates built on
+ * it pass in seconds having compiled, linted and run nothing. That is the state `main` is in:
+ * check out `main`, pull, and `base` is `origin/main` is `HEAD`. The in-gate timings looked like
+ * cache replay and were not — lint 19.0 s, test 1.5 s, build 1.4 s, typecheck 1.5 s, because Nx
+ * found nothing to do. **A green gate on `main` said nothing whatever about the code**, and a
+ * lint error merged to `main` was never seen by the gate again.
+ *
+ * So when the base is HEAD the scoped gates run `run-many --all` instead. Not a fallback and not
+ * a widening: with no diff to narrow by, the whole workspace *is* the affected set, and the only
+ * other honest option is to refuse to run at all. Cold, the full set is lint 29 projects, test
+ * 25, build 6 + 2, typecheck 8 + 1 — affordable, and measured in the pull request.
+ *
+ * Compared by resolved SHA, not by ref name: `--base=main` on `main`, `--base=HEAD`, an explicit
+ * SHA of the current commit and the default `origin/main` on a freshly pulled `main` are all the
+ * same situation, and only the SHA sees that.
+ *
+ * A base that git cannot resolve — a shallow clone with no `origin/main`, a ref that does not
+ * exist — is left to Nx to report. Guessing `--all` there would turn a broken checkout into a
+ * fifteen-minute run whose failure says nothing about the checkout.
+ */
+const headSha = gitFact(['rev-parse', 'HEAD'], null);
+const baseSha = gitFact(['rev-parse', base], null);
+const baseIsHead = headSha !== null && baseSha !== null && baseSha === headSha;
+const scope = baseIsHead ? 'all' : 'affected';
+
+/**
+ * The argv for a gate that would otherwise be `nx affected -t <target>`.
+ *
+ * One function, so the four gates cannot drift into disagreeing about scope — which is how this
+ * defect would come back: a fifth target added as plain `affected` is vacuous on `main` again,
+ * and nothing would say so.
+ *
+ * @param {string} target
+ * @returns {string[]}
+ */
+const scoped = (target) =>
+  baseIsHead
+    ? ['nx', 'run-many', '-t', target, '--all']
+    : ['nx', 'affected', '-t', target, `--base=${base}`];
+
+/** The label carries the scope, so a report cannot be read as the other one. */
+const scopedLabel = (what) => (baseIsHead ? `${what} (all projects)` : `Affected ${what}`);
 
 /**
  * Ordered cheapest-first. Stopping at the first failure is deliberate: a lint
@@ -323,23 +373,26 @@ const ALL_GATES = [
   {
     id: 'lint',
     platformSensitive: true,
-    label: 'Affected lint',
+    label: scopedLabel('lint'),
+    scoped: true,
     tool: 'npx',
-    argv: ['nx', 'affected', '-t', 'lint', `--base=${base}`],
+    argv: scoped('lint'),
   },
   {
     id: 'test',
     platformSensitive: true,
-    label: 'Affected tests',
+    label: scopedLabel('tests'),
+    scoped: true,
     tool: 'npx',
-    argv: ['nx', 'affected', '-t', 'test', `--base=${base}`],
+    argv: scoped('test'),
   },
   {
     id: 'build',
     platformSensitive: true,
-    label: 'Affected build',
+    label: scopedLabel('build'),
+    scoped: true,
     tool: 'npx',
-    argv: ['nx', 'affected', '-t', 'build', `--base=${base}`],
+    argv: scoped('build'),
   },
   // Libraries have no `build` target — Nx's module-boundary rule forbids a
   // buildable library from importing a non-buildable one, and nothing in
@@ -349,9 +402,10 @@ const ALL_GATES = [
   {
     id: 'typecheck',
     platformSensitive: true,
-    label: 'Affected typecheck',
+    label: scopedLabel('typecheck'),
+    scoped: true,
     tool: 'npx',
-    argv: ['nx', 'affected', '-t', 'typecheck', `--base=${base}`],
+    argv: scoped('typecheck'),
   },
   // `typecheck` above covers library sources only: it runs the per-project targets, which
   // point at `tsconfig.lib.json`, and that config excludes `*.spec.ts` by construction.
@@ -507,6 +561,62 @@ const ALL_GATES = [
   // is the shape of drift this repository keeps paying for, and it is worse here than usual:
   // a skill fixed in one tool's copy and stale in another is wrong only for whoever happens to
   // be using the other tool.
+  // The published addresses this repository advertises, and the ones it records as dead.
+  //
+  // Next to `supply-chain` and `peer-installability` in kind: it needs the network, so it declares
+  // the same skip. Registered because two addresses went wrong in October and neither was noticed
+  // by anything here — `https://nuxeo.github.io/agentic-ui-poc/` has been 404 with no redirect
+  // since the 30 October rename, because GitHub redirects a renamed repository's URL and not its
+  // Pages site; and the public Storybook was five days stale, found only because a human opened
+  // the page. A liveness check alone would rot in the direction nobody looks, so the gate is
+  // two-directional: a recorded-dead address that starts answering fails it too.
+  {
+    id: 'published-links',
+    // HTTP status codes from GitHub. Nothing about it reads the filesystem.
+    platformSensitive: false,
+    label: 'Published links',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/published-links.mjs'],
+    mayNotRun: true,
+    // Which addresses were checked, and which are recorded dead and whose they are, is the point.
+    echoOnPass: true,
+  },
+  // Its negative controls, against a local HTTP server. The gate observes one state of the world
+  // at a time and today both of its lists are correct, so nothing about a real run tells a working
+  // check from one that returns pass unconditionally. Four of the eight controls are negative.
+  {
+    id: 'published-links-selftest',
+    platformSensitive: false,
+    label: 'Published links controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/published-links.selftest.mjs'],
+    echoOnPass: true,
+  },
+  // The controls for the weekly AGENTS/ staleness report, and for the workflow that files it.
+  //
+  // Registered rather than left as a script someone remembers to run, because the thing it covers
+  // is the least observable kind of defect this repository has: `staleness-check.yml` interpolated
+  // its own generated text into a shell body, failed on exit 127 for seven consecutive weeks from
+  // 14 September, and filed nothing. The issue step runs *only* when there is drift, so the job
+  // was green precisely when it had nothing to report — nobody had a reason to look.
+  //
+  // Two of its nine controls are negative in the strict sense: they run the OLD interpolated shell
+  // with a hostile value and require it to misbehave. Without them the suite would not distinguish
+  // a closed injection from a harmless fixture.
+  //
+  // In process, fixtures under `os.tmpdir()`, ~1 s. One control shells out to `bash`, which is why
+  // it declares platform sensitivity.
+  {
+    id: 'staleness-report-selftest',
+    // One control runs `bash` to reproduce the original injection; Windows resolves that
+    // differently, and whether it does is worth knowing on the platform that runs it.
+    platformSensitive: true,
+    label: 'AGENTS staleness report controls',
+    cmd: 'node',
+    argv: ['scripts/agents-staleness-report.selftest.mjs'],
+    // Which controls are negative is the evidence, so surface it on a pass too.
+    echoOnPass: true,
+  },
   {
     id: 'agent-mirror',
     platformSensitive: true,
@@ -597,8 +707,32 @@ if (args.has('list-gates')) {
   process.exit(0);
 }
 
+/* `--print-scope` resolves the scope and runs nothing.
+ *
+ * It prints the gates' own `argv` arrays, not a re-derivation of them, so a control reading this
+ * output is reading the command that would be executed. A second copy of the decision here —
+ * even one that looked right — would be exactly the self-confirming check this repository has
+ * shipped three of: it would stay green with `scoped()` wired to `affected` unconditionally. */
+if (args.has('print-scope')) {
+  console.log(`scope ${scope}`);
+  console.log(`base ${base}${baseSha ? ` (${baseSha.slice(0, 9)})` : ' (unresolved)'}`);
+  console.log(`head ${headSha ? headSha.slice(0, 9) : 'unresolved'}`);
+  for (const gate of ALL_GATES.filter((g) => g.scoped)) {
+    console.log(`${gate.id} ${gate.tool ?? gate.cmd} ${gate.argv.join(' ')}`);
+  }
+  process.exit(0);
+}
+
 console.log(`\nBeta verification gate — ${phase}`);
 console.log(`  base   ${base}`);
+/* Printed every run, not only in the `--all` case. A reader who sees `affected` knows the run
+ * speaks for the diff and nothing else; a reader who sees nothing assumes whichever they expected,
+ * which is how the vacuous figures on `main` were quoted for weeks as if they covered the code. */
+console.log(
+  baseIsHead
+    ? `  scope  run-many --all — ${base} resolves to HEAD, so nothing is affected`
+    : `  scope  affected --base=${base} — this run speaks for the diff, not the workspace`,
+);
 console.log(
   `  gates  ${selected.map((g) => g.id).join(' -> ')}  (${selected.length} of ${ALL_GATES.length})`,
 );
@@ -681,12 +815,15 @@ const {
 });
 
 /**
- * The commit the gate actually ran against, and whether the tree was dirty.
+ * One fact out of git, or `fallback` if git refused.
  *
- * `ranAt` alone cannot answer the question that matters — "does this report
- * describe the code as it is now?" — because a wall-clock time says nothing about
- * what was committed since. `state-check.mjs` uses this to reject a phase signed
- * off on a run that predates the source it claims to cover.
+ * Hoisted on purpose: the scope resolution at the top of the file calls it too, and resolving
+ * `--base` against HEAD there is what decides whether the scoped gates are `affected` or `--all`.
+ *
+ * @param {readonly string[]} argv
+ * @param {T} fallback
+ * @template T
+ * @returns {string | T}
  */
 function gitFact(argv, fallback) {
   const proc = spawnSync('git', argv, { encoding: 'utf8' });
@@ -697,7 +834,14 @@ const report = {
   phase,
   verdict,
   base,
+  /* `affected` or `all`. Without it a report cannot be told apart from one whose scoped gates
+   * matched zero projects, and that is the distinction the whole of G3 is about. */
+  scope,
   ranAt: new Date().toISOString(),
+  /* The commit the gate actually ran against. `ranAt` alone cannot answer the question that
+   * matters — "does this report describe the code as it is now?" — because a wall-clock time says
+   * nothing about what was committed since. `state-check.mjs` uses this to reject a phase signed
+   * off on a run that predates the source it claims to cover. */
   commit: gitFact(['rev-parse', 'HEAD'], null),
   // A green gate on a dirty tree describes something no commit contains.
   dirty: gitFact(['status', '--porcelain'], '') !== '',

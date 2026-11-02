@@ -2,7 +2,7 @@ name: AGENTS.md Staleness Agent
 
 on:
   schedule:
-    - cron: '0 7 * * 1'  # weekly on Monday at 07:00 UTC
+    - cron: '0 7 * * 1' # weekly on Monday at 07:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -14,43 +14,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
 
+      # The detection and the issue body were a bash loop whose generated text was interpolated
+      # back into a shell body with `${{ steps.check.outputs.missing }}`. The list items carry
+      # backticks, so bash read them as command substitution and tried to execute
+      # `content-model.service.ts`, exiting 127. Seven consecutive weekly failures from
+      # 14 September, and not one issue filed — and invisible because the issue step runs only
+      # when there is drift to report, so the job was green exactly when it had nothing to say.
+      #
+      # No generated text reaches a shell body now: the script writes the body to a file under
+      # $RUNNER_TEMP and `gh issue create --body-file` reads it. Quoting the value would have
+      # fixed this instance and left the class. Needs no dependency install — it reads the
+      # services directory and the document with `node:fs` only.
       - name: Check for service files missing from AGENTS/01-services.md
         id: check
-        run: |
-          MISSING=""
-
-          # Get all service file names (without path or extension)
-          for file in libs/shared/nuxeo-client/src/lib/services/*.service.ts; do
-            SERVICE=$(basename "$file" .service.ts)
-            # Skip spec files
-            [[ "$SERVICE" == *".spec"* ]] && continue
-
-            # Check if the service name appears in AGENTS/01-services.md
-            if ! grep -qi "$SERVICE" AGENTS/01-services.md 2>/dev/null; then
-              if [ -n "$MISSING" ]; then
-                MISSING="${MISSING}"$'\n'"- \`${SERVICE}.service.ts\` not found in AGENTS/01-services.md"
-              else
-                MISSING="- \`${SERVICE}.service.ts\` not found in AGENTS/01-services.md"
-              fi
-            fi
-          done
-
-          {
-            echo "missing<<EOF"
-            echo "$MISSING"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-          if [ -n "$MISSING" ]; then
-            echo "drift_detected=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "drift_detected=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/agents-staleness-report.mjs --out "$RUNNER_TEMP/issue-body.md"
 
       - name: Check for AGENTS/ files referenced but missing
         run: |
-          # Verify all 11 AGENTS/ files exist
           for i in $(seq -w 0 10); do
             if ! ls AGENTS/${i}-*.md 1>/dev/null 2>&1; then
               echo "WARNING: AGENTS/${i}-*.md is missing"
@@ -62,35 +46,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          DATE=$(date +%Y-%m-%d)
-          MISSING="${{ steps.check.outputs.missing }}"
-
-          # Check if an open issue already exists
+          set -euo pipefail
           EXISTING=$(gh issue list --label "agents-stale" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
-
-          if [ -z "$EXISTING" ]; then
-            # Build the issue body in a file to avoid YAML/shell quoting issues
-            {
-              echo "## AGENTS.md Staleness Report"
-              echo ""
-              echo "The following service files exist in the codebase but are not documented in \`AGENTS/01-services.md\`:"
-              echo ""
-              echo -e "$MISSING"
-              echo ""
-              echo "### What to do"
-              echo "1. Open \`AGENTS/01-services.md\`"
-              echo "2. Add a section for each missing service with its public method signatures"
-              echo "3. Commit: \`docs: update AGENTS/01-services.md with new services\`"
-              echo ""
-              echo "---"
-              echo "*Generated automatically by the AGENTS.md Staleness Agent (staleness-check.yml).*"
-            } > /tmp/issue-body.md
-
-            gh issue create \
-              --title "AGENTS/ is out of date — ${DATE}" \
-              --body-file /tmp/issue-body.md \
-              --label "agents-stale,documentation"
+          if [ -n "$EXISTING" ]; then
+            echo "Issue #${EXISTING} is already open for this; not filing a second one."
+            exit 0
           fi
+          gh issue create \
+            --title "AGENTS/ is out of date — $(date +%Y-%m-%d)" \
+            --body-file "$RUNNER_TEMP/issue-body.md" \
+            --label "agents-stale,documentation"
 
       - name: Log no drift
         if: steps.check.outputs.drift_detected == 'false'

@@ -378,6 +378,94 @@ control('--require-complete stays strict about a scoped run', () => {
   expect(run.status === 1, `expected exit 1 for a partial scope, got ${run.status}`);
 });
 
+/* The scope resolution (G3). `--print-scope` prints the gates' own `argv` arrays, so these read
+ * the command that would run rather than a second derivation of the decision. Each asserts the
+ * mode it does NOT expect is absent as well: `affected` and `run-many` both contain the target
+ * name, so matching only the one you want passes under either. */
+function printScope(baseRef) {
+  const run = spawnSync(
+    process.execPath,
+    [join(here, 'verify-gate.mjs'), '--base', baseRef, '--print-scope'],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  expect(
+    run.status === 0,
+    `--print-scope exited ${run.status}: ${run.stderr.trim().slice(0, 200)}`,
+  );
+  return run.stdout;
+}
+
+const SCOPED = ['lint', 'test', 'build', 'typecheck'];
+
+control('a base that resolves to HEAD runs run-many --all, not affected', () => {
+  /* The defect: on `main`, `base` is `origin/main` is HEAD, so `nx affected` matched zero
+   * projects and lint/test/build/typecheck passed in seconds having checked nothing. */
+  const out = printScope('HEAD');
+  expect(/^scope all$/m.test(out), `scope line was not "all":\n${out}`);
+  for (const target of SCOPED) {
+    expect(
+      new RegExp(`^${target} npx nx run-many -t ${target} --all$`, 'm').test(out),
+      `${target} is not scoped to the whole workspace:\n${out}`,
+    );
+  }
+  expect(!/nx affected/.test(out), `a gate is still on affected with the base at HEAD:\n${out}`);
+});
+
+control('a base that differs from HEAD still runs affected', () => {
+  /* The other half, and the one that keeps the inner loop fast. Without it the control above
+   * would pass with `scoped()` wired to `--all` unconditionally, which would make every branch
+   * gate a full-workspace run. */
+  const parent = spawnSync('git', ['rev-parse', 'HEAD~1'], { cwd: repoRoot, encoding: 'utf8' });
+  expect(parent.status === 0, 'no HEAD~1 in this clone, so this control cannot run');
+  const sha = parent.stdout.trim();
+  const out = printScope(sha);
+  expect(/^scope affected$/m.test(out), `scope line was not "affected":\n${out}`);
+  for (const target of SCOPED) {
+    expect(
+      new RegExp(`^${target} npx nx affected -t ${target} --base=${sha}$`, 'm').test(out),
+      `${target} is not scoped to the diff:\n${out}`,
+    );
+  }
+  expect(!/run-many/.test(out), `a gate widened to the workspace off HEAD:\n${out}`);
+});
+
+control('the scope is decided by resolved SHA, not by the ref name', () => {
+  /* `--base=main` on `main` and `--base=origin/main` on a freshly pulled `main` are the same
+   * situation as `--base=HEAD`, and only a SHA comparison sees that. Driven through the SHA of
+   * HEAD, which is a different string from "HEAD" and must reach the same verdict. */
+  const sha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' });
+  expect(sha.status === 0, 'git rev-parse HEAD failed');
+  const out = printScope(sha.stdout.trim());
+  expect(/^scope all$/m.test(out), `an explicit HEAD SHA read as a diff:\n${out}`);
+  /* The commands too, not only the `scope` line. `scope` is computed beside the argv rather than
+   * from it, so asserting the line alone passes with the gates still wired to `affected` — which
+   * it did, when this control was first written that way. */
+  expect(
+    SCOPED.every((t) => new RegExp(`^${t} npx nx run-many -t ${t} --all$`, 'm').test(out)),
+    `the scope line said "all" while a gate stayed on the diff:\n${out}`,
+  );
+});
+
+control('every gate built on the affected set declares itself scoped', () => {
+  /* The anti-drift property. A fifth `nx affected` gate added without `scoped: true` would be
+   * vacuous on `main` exactly as these four were, and `--print-scope` would not show it — so the
+   * controls above would stay green while the hole reopened. */
+  const scopedIds = [...gateBlock.matchAll(/\n\s+id: '([a-z0-9-]+)',[\s\S]*?\n\s{2}\},/g)]
+    .filter((m) => /scoped: true/.test(m[0]))
+    .map((m) => m[1]);
+  expect(
+    scopedIds.join(',') === SCOPED.join(','),
+    `gates declaring \`scoped: true\` are ${JSON.stringify(scopedIds)}, expected ${JSON.stringify(SCOPED)}`,
+  );
+  const nxGates = [...gateBlock.matchAll(/\n\s+id: '([a-z0-9-]+)',[\s\S]*?\n\s{2}\},/g)]
+    .filter((m) => /argv: \[\s*'nx',/.test(m[0]) || /argv: scoped\(/.test(m[0]))
+    .map((m) => m[1]);
+  expect(
+    nxGates.join(',') === SCOPED.join(','),
+    `gate(s) run Nx without declaring their scope: ${nxGates.filter((id) => !SCOPED.includes(id))}`,
+  );
+});
+
 control('the cross-platform selection keeps the gate that waits for CodeQL', () => {
   /* `code-scanning` is not platform-sensitive and says so. It is still selected, because this is
    * the only job that waits for CodeQL on the revision — dropping it would remove CI's only

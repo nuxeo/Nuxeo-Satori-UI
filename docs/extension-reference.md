@@ -979,6 +979,15 @@ places them: a manifest entry in that slot does, with `componentId` set to the I
 | Component ID | Element | For the slot |
 | ------------ | ------- | ------------ |
 
+**Empty, and correctly so — not emptied.** Nothing has been generated for `sidebar`, `tabs`,
+`documentView` or `routes` yet. Every `nxs.` ID the product registers is either a
+`nxs.primitives.*` placed by a screen that resolves it (section 6a) or one of the four
+`nxs.components.*` panels and pages in section 6. The `reference-drift` gate asserts both
+directions of this table on every run: a row naming an ID `provideNxsComponents()` does not
+register fails it, and an `nxs.<slot>.<name>` registration with no row here fails it too. Until
+2026-11-02 neither could happen — the gate's row pattern could not match an ID containing dots, so
+no row in this table was ever read, and an empty table was indistinguishable from a correct one.
+
 ---
 
 ## 7. `documentList` — the packaged columns

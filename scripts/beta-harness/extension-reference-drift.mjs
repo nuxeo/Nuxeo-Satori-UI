@@ -177,7 +177,41 @@ if (undocumented.length) {
 }
 
 /**
- * The slot-state table.
+ * The contiguous Markdown table that follows `anchor`, as its data rows.
+ *
+ * Every table check below was a regex over the **whole document**, which is how the slot-state
+ * check came to be the only reader of a table it was not about: its first-cell pattern was
+ * `` `[a-zA-Z-]+` ``, a component ID contains dots, so no row of the `nxs-` component table could
+ * ever match it. The table has no rows, so nothing looked wrong — a gate that cannot tell
+ * "correctly empty" from "silently emptied".
+ *
+ * Anchoring each check to its own table is the fix for the class rather than the instance: the
+ * first-cell pattern can now accept a dotted ID without a row from some other table being
+ * classified by accident, which is what widening the document-wide regex would have risked.
+ *
+ * @param {string} anchor a literal line, or the first line that contains it
+ * @returns {string[]} the rows after the header and its `---` separator
+ */
+function tableAfter(anchor) {
+  const lines = reference.split('\n');
+  const at = lines.findIndex((line) => line.includes(anchor));
+  if (at === -1) {
+    fail(
+      `docs/extension-reference.md no longer contains \`${anchor}\`, so the table it anchors is ` +
+        'unchecked. Restore the anchor, or delete the check that depends on it.',
+    );
+    return [];
+  }
+  let start = at + 1;
+  while (start < lines.length && !lines[start].trimStart().startsWith('|')) start += 1;
+  let end = start;
+  while (end < lines.length && lines[end].trimStart().startsWith('|')) end += 1;
+  // The header and its separator are not data.
+  return lines.slice(start + 2, end);
+}
+
+/**
+ * The slot-state table in section 2.
  *
  * Rows read `| \`slot\` | description | state |`. The state column is prose, so it is
  * classified by the phrases the document itself defines in its "Read the three states
@@ -185,7 +219,10 @@ if (undocumented.length) {
  */
 function slotClaims() {
   const claims = [];
-  for (const row of reference.matchAll(/^\|\s*`([a-zA-Z-]+)`\s*\|([^|]*)\|([^|]*)\|/gm)) {
+  const rows = tableAfter('A slot is a named, ordered list of descriptors.');
+  if (rows.length === 0)
+    fail('The slot-state table in section 2 has no rows, so nothing is checked.');
+  for (const row of rows.join('\n').matchAll(/^\|\s*`([a-zA-Z0-9.-]+)`\s*\|([^|]*)\|([^|]*)\|/gm)) {
     const [, slot, , stateText] = row;
     const state = /nothing resolves it/i.test(stateText)
       ? 'inert'
@@ -237,6 +274,123 @@ for (const claim of slotClaims()) {
   }
 }
 
+/**
+ * Section 6b: the `nxs-` components registered for a slot.
+ *
+ * Three cells — the registered ID, the element, and the slot a manifest entry places it in — and
+ * `npx nx g ./tools/satori-generators:satori-component` appends one per component it adds. Until
+ * now **no row could be read at all**: the only regex that looked at this table required a
+ * first cell of `` `[a-zA-Z-]+` `` and every ID in it has dots. With zero rows that was invisible.
+ *
+ * The slot names come out of the generator rather than being listed again here. A fifth slot added
+ * there and not here would make every row naming it fail, which is the wrong failure: the document
+ * would be red for being correct.
+ */
+const GENERATOR = join(
+  ROOT,
+  'tools',
+  'satori-generators',
+  'src',
+  'satori-component',
+  'generator.ts',
+);
+const PROVIDER = join(
+  ROOT,
+  'libs',
+  'shared',
+  'satori-components',
+  'src',
+  'lib',
+  'provide-nxs-components.ts',
+);
+
+const generatorSource = stripComments(readFileSync(GENERATOR, 'utf8'));
+const slotNames = (
+  generatorSource.match(/const SLOTS: readonly SatoriComponentSlot\[\] = \[([^\]]*)\]/)?.[1] ?? ''
+)
+  .split(',')
+  .map((s) => s.trim().replace(/^'|'$/g, ''))
+  .filter(Boolean);
+if (slotNames.length === 0) {
+  fail(
+    'Could not read `SLOTS` out of the satori-component generator, so the component table was ' +
+      'checked against no slot names at all. Reading nothing must not pass as finding nothing.',
+  );
+}
+
+/** `nxs.<slot>.<name>` keys in `provideNxsComponents()`. The primitives key off a constant. */
+const providerSource = stripComments(readFileSync(PROVIDER, 'utf8'));
+const slotRegistered = new Map(
+  [
+    ...providerSource.matchAll(
+      new RegExp(
+        String.raw`'(nxs\.(?:${slotNames.map(reEscape).join('|')})\.[a-zA-Z0-9]+)'\s*:\s*(\w+)`,
+        'g',
+      ),
+    ),
+  ].map((m) => [m[1], m[2]]),
+);
+
+const componentRows = tableAfter('satori:register:nxs-components').map((line) => {
+  const cells = line
+    .split('|')
+    .slice(1, -1)
+    .map((cell) => cell.trim().replace(/^`|`$/g, ''));
+  return { line, id: cells[0], element: cells[1], slot: cells[2] };
+});
+
+for (const row of componentRows) {
+  if (!/^nxs\.[a-zA-Z0-9]+\.[a-zA-Z0-9]+$/.test(row.id ?? '')) {
+    fail(
+      `Section 6b has a row whose first cell is not an \`nxs.<slot>.<name>\` ID: ${row.line.trim()}`,
+    );
+    continue;
+  }
+  if (!slotRegistered.has(row.id)) {
+    fail(
+      `Section 6b lists \`${row.id}\` as registered for a slot, but \`provideNxsComponents()\` ` +
+        'registers no such ID.\n' +
+        '  A customer placing it in a manifest would place nothing.',
+    );
+  }
+  if (!slotNames.includes(row.slot)) {
+    fail(
+      `Section 6b says \`${row.id}\` is for the slot \`${row.slot}\`, which is not one of the ` +
+        `slots whose descriptors name a component: ${slotNames.join(', ')}.`,
+    );
+  }
+  if (!new RegExp(String.raw`selector:\s*'${reEscape(row.element)}'`).test(allSource)) {
+    fail(
+      `Section 6b gives \`${row.id}\` the element \`${row.element}\`, and no component outside ` +
+        'specs declares that selector.',
+    );
+  }
+}
+
+for (const [id, className] of slotRegistered) {
+  if (!componentRows.some((row) => row.id === id)) {
+    fail(
+      `\`${id}\` (${className}) is registered for a slot and has no row in section 6b.\n` +
+        '  An addressable component a customer cannot discover is not addressable.',
+    );
+  }
+}
+
+/**
+ * The empty case, stated rather than assumed.
+ *
+ * The table is empty today and that is **correct**: every `nxs.` ID the product registers is a
+ * `nxs.primitives.*` placed by a host that resolves it, or one of the four `nxs.components.*`
+ * panels and pages that section 6 lists; nothing has yet been generated for `sidebar`, `tabs`,
+ * `documentView` or `routes`. The distinction this gate could not previously draw is between that
+ * and a table somebody emptied, so the empty case now asserts the reason instead of passing by
+ * having found no rows to check.
+ */
+const emptyTableNote =
+  componentRows.length === 0
+    ? `section 6b is empty, and no \`nxs.{${slotNames.join(',')}}.*\` ID is registered, so it is correctly empty`
+    : `${componentRows.length} row(s) in section 6b, each registered and placeable`;
+
 if (failures.length) {
   console.error(`\nextension-reference-drift: FAIL — ${failures.length} problem(s)\n`);
   for (const message of failures) console.error(`- ${message}\n`);
@@ -249,5 +403,6 @@ if (failures.length) {
 
 console.log(
   `extension-reference-drift: pass — ${documented.size} documented ID(s) all registered, ` +
-    `${registered.size} registered ID(s) all documented, and every slot-state claim holds.`,
+    `${registered.size} registered ID(s) all documented, every slot-state claim holds, and ` +
+    `${emptyTableNote}.`,
 );
