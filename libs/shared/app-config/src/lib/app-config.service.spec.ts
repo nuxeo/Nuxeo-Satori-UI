@@ -484,6 +484,62 @@ describe('AppConfigService', () => {
     });
   });
 
+  /** NXSAT-313, plan item F1. The same resolver as the logo, on the other branding image. */
+  describe('brandingFavicon', () => {
+    const faviconUrl = (name: string) =>
+      new URL(`/agentic-ui-config/assets/${name}`, document.baseURI).href;
+
+    async function loadWithFavicon(src: string) {
+      await load(
+        envelope('bootstrap', [{ name: 'acme', content: { branding: { favicon: { src } } } }]),
+      );
+    }
+
+    it('is null until one is configured, so the packaged icon renders', () => {
+      expect(service.brandingFavicon()).toBeNull();
+    });
+
+    it('resolves a relative src against the configuration directory, where assets are served', async () => {
+      await loadWithFavicon('assets/acme-icon.png');
+
+      expect(service.brandingFavicon()).toBe(faviconUrl('acme-icon.png'));
+    });
+
+    it('is null for a src the URL check refuses, so the packaged icon renders', async () => {
+      // Accepted by the written-form check and refused on the URL it resolves to — the second of
+      // the two layers, which is the one a favicon would otherwise reach a Nuxeo endpoint past.
+      await loadWithFavicon('assets/../../api/v1/me');
+
+      expect(service.brandingFavicon()).toBeNull();
+    });
+
+    it('is unaffected by a logo the browser could not show', async () => {
+      // `reportBrandingLogoUnavailable` suppresses one URL for the logo. Sharing that state with
+      // the favicon would let a broken logo blank a perfectly good icon, or the reverse.
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'acme',
+            content: {
+              branding: {
+                logo: { src: 'assets/acme-logo.svg', alt: 'Acme' },
+                favicon: { src: 'assets/acme-icon.png' },
+              },
+            },
+          },
+        ]),
+      );
+
+      service.reportBrandingLogoUnavailable(
+        new URL('/agentic-ui-config/assets/acme-logo.svg', document.baseURI).href,
+        'the image could not be loaded',
+      );
+
+      expect(service.brandingLogo()).toBeNull();
+      expect(service.brandingFavicon()).toBe(faviconUrl('acme-icon.png'));
+    });
+  });
+
   /**
    * NXSAT-721. Every check before this one runs before the image is requested, so only the element
    * that loaded it can say whether the browser could show it.
@@ -682,6 +738,93 @@ describe('AppConfigService', () => {
       service.brandingLogo();
 
       expect(logoMessages()).toHaveLength(1);
+    });
+
+    /**
+     * NXSAT-313, plan item F1. A refused favicon has to be as audible as a refused logo: it goes
+     * through the same checks, so leaving it out of this pass would have recreated the exact
+     * silence NXSAT-724 closed, one key over.
+     */
+    describe('and so is a refused branding.favicon', () => {
+      const faviconMessages = () =>
+        service.diagnostics().messages.filter((message) => message.includes('branding.favicon'));
+
+      async function loadWithFavicon(src: string, component = 'com.acme.branding') {
+        await load(
+          envelope('bootstrap', [
+            { name: 'acme', component, content: { branding: { favicon: { src } } } },
+          ]),
+        );
+      }
+
+      it.each([
+        ['a parent-directory segment', '../x.png', 'parent-directory segment'],
+        ['a javascript: URL', 'javascript:alert(1)', 'uses "javascript:"'],
+        ['an http: URL', 'http://example.com/i.png', 'uses "http:"'],
+        ['an absolute path', '/nuxeo/api/v1/me', 'absolute path is not allowed'],
+        ['a src written as a blank string', '   ', 'blank'],
+      ])('reports %s, naming the key, the value and the reason', async (_l, src, expected) => {
+        await loadWithFavicon(src);
+
+        const messages = faviconMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain(src.trim() || '""');
+        expect(messages[0]).toContain('com.acme.branding');
+        expect(messages[0]).toContain(expected);
+        expect(warn).toHaveBeenCalledWith(`[agentic-ui-config] ${messages[0]}`);
+        expect(service.brandingFavicon()).toBeNull();
+      });
+
+      it('says nothing when the favicon is accepted', async () => {
+        await loadWithFavicon('assets/acme-icon.png');
+
+        expect(faviconMessages()).toEqual([]);
+        expect(service.brandingFavicon()).not.toBeNull();
+      });
+
+      it('names the key, so a fragment that sets both is not ambiguous', async () => {
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'acme',
+              component: 'com.acme.branding',
+              content: {
+                branding: { logo: { src: '../a.svg' }, favicon: { src: '../b.png' } },
+              },
+            },
+          ]),
+        );
+
+        expect(logoMessages()).toHaveLength(1);
+        expect(logoMessages()[0]).toContain('../a.svg');
+        expect(faviconMessages()).toHaveLength(1);
+        expect(faviconMessages()[0]).toContain('../b.png');
+      });
+
+      it('reports one a preset contributes, as it does for a logo', async () => {
+        window.history.replaceState({}, '', '/?preset=acme');
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'demo',
+              content: {
+                presales: {
+                  presetSwitching: true,
+                  presets: {
+                    acme: {
+                      label: 'Acme',
+                      bootstrap: { branding: { favicon: { src: '../x.png' } } },
+                    },
+                  },
+                },
+              },
+            },
+          ]),
+        );
+
+        expect(faviconMessages()).toHaveLength(1);
+        expect(faviconMessages()[0]).toContain('preset "acme"');
+      });
     });
 
     /** Review of PR 512 — four things this pass got wrong. */

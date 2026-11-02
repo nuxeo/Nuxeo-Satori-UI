@@ -100,6 +100,78 @@ describe('branding.logo', () => {
   });
 });
 
+/**
+ * NXSAT-313, plan item F1. The tab icon was the last branding surface that was not configurable,
+ * so a demo branded for a prospect showed their name next to the Nuxeo mark.
+ *
+ * These assert the property the ticket turns on: `favicon` is read by the **same** function as
+ * `logo`, so every rule the logo's `src` has — and there are four of them that cost a review
+ * round each — applies to it without a second implementation to keep in step. The cases are
+ * therefore deliberately a subset of the logo's above, picked to span the rule families rather
+ * than to re-enumerate them; re-listing all 24 would be a second copy of the thing this ticket
+ * exists not to have.
+ */
+describe('branding.favicon', () => {
+  const faviconOf = (favicon: unknown) =>
+    mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, { branding: { favicon } }).branding.favicon;
+
+  it('ships absent, so the packaged icon renders', () => {
+    expect(DEFAULT_APP_BOOTSTRAP_CONFIG.branding.favicon).toBeNull();
+  });
+
+  it.each([
+    ['a contributed asset', 'assets/acme-icon.png'],
+    ['an .ico beside bootstrap.json', 'acme.ico'],
+    ['an https URL', 'https://cdn.example.com/acme.ico'],
+    ['a data:image URI', 'data:image/png;base64,iVBORw0KGgo='],
+  ])('accepts %s', (_label, src) => {
+    expect(faviconOf({ src })).toEqual({ src, alt: '' });
+  });
+
+  it.each([
+    ['an absolute Nuxeo REST path', '/nuxeo/api/v1/id/abc/@blob/file:content'],
+    ['a protocol-relative URL', '//evil.example/icon.png'],
+    ['a parent-directory segment', '../agentic-ui/assets/icon.png'],
+    ['an encoded parent-directory segment', '%2e%2e/api/v1/me'],
+    ['a backslash path', '..\\secret.ico'],
+    ['an http URL', 'http://cdn.example.com/acme.ico'],
+    ['a javascript URL', 'javascript:alert(1)'],
+    ['a non-image data URI', 'data:text/html,<script>alert(1)</script>'],
+    ['a tab hidden in a parent segment', '.\t./api/v1/me'],
+    ['a blank src', '   '],
+  ])('rejects %s and keeps the packaged icon', (_label, src) => {
+    expect(faviconOf({ src })).toBeNull();
+  });
+
+  it('keeps a favicon an earlier layer set when this one omits or garbles it, and clears it on null', () => {
+    const base = {
+      ...DEFAULT_APP_BOOTSTRAP_CONFIG,
+      branding: { ...DEFAULT_APP_BOOTSTRAP_CONFIG.branding, favicon: { src: 'a.png', alt: '' } },
+    };
+
+    expect(
+      mergeBootstrapConfig(base, { branding: { favicon: { src: '/nuxeo/api' } } }).branding.favicon,
+    ).toEqual({ src: 'a.png', alt: '' });
+    expect(
+      mergeBootstrapConfig(base, { branding: { applicationTitle: 'X' } }).branding.favicon,
+    ).toEqual({ src: 'a.png', alt: '' });
+    expect(mergeBootstrapConfig(base, { branding: { favicon: null } }).branding.favicon).toBeNull();
+  });
+
+  it('is independent of the logo, so a deployment may set either alone', () => {
+    const logoOnly = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+      branding: { logo: { src: 'a.svg', alt: 'A' } },
+    }).branding;
+    const faviconOnly = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+      branding: { favicon: { src: 'a.png' } },
+    }).branding;
+
+    expect(logoOnly.favicon).toBeNull();
+    expect(faviconOnly.logo).toBeNull();
+    expect(faviconOnly.favicon).toEqual({ src: 'a.png', alt: '' });
+  });
+});
+
 describe('resolveBrandingLogoUrl — the check on the URL the browser loads', () => {
   const configUrl = 'https://app.example/nuxeo/agentic-ui-config/bootstrap.json';
 

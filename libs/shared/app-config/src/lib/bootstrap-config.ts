@@ -68,6 +68,22 @@ export interface AppBrandingConfig {
   readonly documentTitle: string;
   /** `null` keeps the Satori marks. */
   readonly logo: AppBrandingLogo | null;
+  /**
+   * The browser tab icon. `null` keeps the one `index.html` ships (NXSAT-313, plan item F1).
+   *
+   * The same shape and the same reader as {@link logo}, deliberately: a favicon is a configured
+   * image address with exactly the logo's hazards, so it goes through `readLogo`,
+   * `describeLogoSrcForm` and `resolveBrandingLogoUrl` unchanged. A second validator for the
+   * same rules is a second validator to keep in step, and the logo's has been corrected four
+   * times — for `..`, for IPv4-in-IPv6 hosts, for Tomcat's `;` path parameters, for the
+   * `*.localhost` suffix — none of which a fresh one would have had.
+   *
+   * `alt` is accepted and not used. A favicon has no accessible name to carry: it is decorative
+   * chrome the browser draws beside the tab title, which `documentTitle` already names. Sharing
+   * the type is worth one ignored field; the alternative is a near-duplicate type whose only
+   * difference is the absence of a string.
+   */
+  readonly favicon: AppBrandingLogo | null;
 }
 
 /**
@@ -215,6 +231,9 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
     applicationTitle: 'Hyland Nuxeo',
     documentTitle: 'Nuxeo Platform',
     logo: null,
+    // `null` is "the icon `index.html` ships", which is what every deployment showed before
+    // this key existed — including a branded demo, which is the gap it closes.
+    favicon: null,
   },
   defaultThemeId: 'nuxeo',
   themes: DEFAULT_APP_THEMES,
@@ -653,6 +672,9 @@ function describeLogoSrcForm(src: string): string | null {
 /**
  * `null` clears a logo an earlier layer set; anything unusable keeps `base`.
  *
+ * Reads both `branding.logo` and `branding.favicon`, which are the same thing to every rule
+ * below — a configured image address — and differ only in where the result is rendered.
+ *
  * **What a refusal falls back to depends on which of the two layers refused it**, and saying
  * "the packaged marks" for both is wrong — which this comment used to do, and the log message
  * used to repeat (review of PR 512):
@@ -983,6 +1005,7 @@ export function mergeBootstrapConfig(base: AppBootstrapConfig, patch: unknown): 
       ),
       documentTitle: readNonBlankString(branding, 'documentTitle', base.branding.documentTitle),
       logo: readLogo(branding['logo'], base.branding.logo),
+      favicon: readLogo(branding['favicon'], base.branding.favicon),
     },
     defaultThemeId: readString(patch, 'defaultThemeId', base.defaultThemeId),
     themes: mergeThemes(base.themes, patch['themes']),

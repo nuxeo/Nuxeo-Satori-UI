@@ -58,6 +58,7 @@ interface AppBrandingConfig {
     readonly applicationTitle: string;
     readonly documentTitle: string;
     readonly logo: AppBrandingLogo | null;
+    readonly favicon: AppBrandingLogo | null;
     }
 }
 interface AppBrandingLogo {
@@ -99,6 +100,7 @@ class AppConfigService {
     readonly url: string;
     readonly alt: string;
     } | null>;
+    readonly brandingFavicon: import("@angular/core").Signal<string | null>;
     reportBrandingLogoUnavailable(url: string, reason: string): void;
     reportUnsupportedDefaultLanguage(value: string, fallback: string, reason: string): void;
     load(): Promise<void>;
