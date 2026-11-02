@@ -7614,7 +7614,10 @@ function proseStringConstants(sources) {
  *
  * `\uXXXX` and `\u{…}` survive because the collision is not real for them: a path segment would
  * have to begin with four hex digits after the `u`. `C:\users` does not match (`sers` is not
- * hex), and the shapes that would are not directory names anyone writes.
+ * hex), and the shapes that would are not directory names anyone writes. The braced form is
+ * safer still — the `u` before the brace is mandatory, so `C:\{abc}` never matched it — which is
+ * why its digit count is left open rather than capped. `\u{…}` permits leading zeros, and a cap
+ * of six read straight past `\u{00000a0}`, a plain spelling of a non-breaking space.
  *
  * **What that leaves uncovered, stated rather than implied:** a double-escaped `\n` or `\t` in a
  * catalogue value now passes this gate. It is a real defect and nothing here catches it. The
@@ -7639,7 +7642,13 @@ function checkCatalogueValuesAreRenderable() {
   // with an escape letter — and no regex over the value alone can tell `"Ligne un\nLigne deux"`
   // from `"C:\new"`, because they are the same string shape. So those arms are out; see the
   // docstring for what that leaves uncovered.
-  const UNDECODED_ESCAPE = /\\u(?:\{[0-9a-fA-F]{1,6}\}|[0-9a-fA-F]{4})/;
+  //
+  // The braced form takes **any** number of hex digits, not six: `\u{…}` permits leading zeros, so
+  // `\u{00000a0}` is a perfectly ordinary spelling of a non-breaking space and a `{1,6}` cap read
+  // straight past it (#549 review). Widening cannot cost a false positive, because the `u` before
+  // the brace is mandatory — a path like `C:\{abc}` has no `u` and never matched. The range check
+  // below is what keeps the open-ended digits safe.
+  const UNDECODED_ESCAPE = /\\u(?:\{[0-9a-fA-F]+\}|[0-9a-fA-F]{4})/;
 
   const MAX_CODE_POINT = 0x10ffff;
   const NOTABLE_CODE_POINTS = {
@@ -7651,19 +7660,27 @@ function checkCatalogueValuesAreRenderable() {
   /**
    * What the escape was meant to be, so the message says what to store instead.
    *
-   * The range check is not defensive padding: `\u{1,6}` hex digits reach `U+FFFFFF`, far above
-   * Unicode's `U+10FFFF`, and `String.fromCodePoint` throws `RangeError` beyond it. That threw
-   * from inside the diagnostic, so one catalogue holding `\u{110000}` aborted the whole runner
-   * before it printed the failures it had already collected or ran the remaining checks — a
-   * reporting path that destroys the report. Out of range is still an undecoded escape and still
-   * fails; it just says so instead of crashing.
+   * The range check is not defensive padding: the braced form takes any number of hex digits, far
+   * above Unicode's `U+10FFFF`, and `String.fromCodePoint` throws `RangeError` beyond it. That
+   * threw from inside the diagnostic, so one catalogue holding `\u{110000}` aborted the whole
+   * runner before it printed the failures it had already collected or ran the remaining checks — a
+   * reporting path that destroys the report (#549 review). Out of range is still an undecoded
+   * escape and still fails; it just says so instead of crashing.
+   *
+   * Enough digits overflow `parseInt` to `Infinity`, so the message is built from the digits as
+   * written rather than from the parsed number — `U+INFINITY` would be a nonsense diagnostic.
    */
   const decodeEscape = (escape) => {
     const hex = /^\\u\{?([0-9a-fA-F]+)\}?$/.exec(escape);
     if (!hex) return 'a character';
     const code = parseInt(hex[1], 16);
-    if (code > MAX_CODE_POINT) {
-      return `a code point above Unicode's maximum (U+${code.toString(16).toUpperCase()}, max U+10FFFF), so it denotes nothing at all`;
+    if (!Number.isFinite(code) || code > MAX_CODE_POINT) {
+      // Elided because the digits are open-ended: a value could carry hundreds of them, and a
+      // diagnostic that pastes them all is unreadable at exactly the moment it is being read.
+      const digits = hex[1].toUpperCase();
+      const shown =
+        digits.length > 12 ? `${digits.slice(0, 12)}… (${digits.length} digits)` : digits;
+      return `a code point above Unicode's maximum (0x${shown}, max U+10FFFF), so it denotes nothing at all`;
     }
     return (
       NOTABLE_CODE_POINTS[code] ??

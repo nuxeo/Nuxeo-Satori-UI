@@ -4132,6 +4132,19 @@ expectRed(
   /above Unicode's maximum/,
 );
 
+// `\u{…}` permits leading zeros, so `\u{00000a0}` is an ordinary spelling of a non-breaking space.
+// The pattern capped the braced form at six hex digits and read straight past seven, which let a
+// value displaying broken text pass the arm. Found by review of #549. The digit count is open
+// now, and the control uses the spelling the cap missed rather than a short one that would have
+// passed either way.
+expectRed(
+  'a braced Unicode escape with leading zeros past the old six-digit cap',
+  'checkCatalogueValuesAreRenderable',
+  APP,
+  (write) => write('apps/nuxeo-ui/public/i18n/en.json', catalogue('la suivante\\u{00000a0}:')),
+  /literal characters `\\u\{00000a0\}` rather than a non-breaking space/,
+);
+
 // Windows and UNC paths, which the first version of this arm rejected. `\t` in `C:\temp` and `\n`
 // in `\\nas\files` are path separators followed by an ordinary letter, not escapes, and the
 // diagnostic told the author to "store the character" — that is, to corrupt the path.
