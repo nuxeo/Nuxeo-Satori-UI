@@ -12,9 +12,14 @@
  * **What this asserts, exactly, so it is not read as more:** that the zip opens, that its entries
  * pass an independent integrity check, that `package.xml` and `install.xml` are where the
  * installer looks for them, that the package name and version the zip is named after are the ones
- * `package.xml` declares, that every path `install.xml` copies exists in the zip, and that the
- * bundle inside is a readable jar whose `Nuxeo-Component` and fragment `src` targets resolve to
- * entries that are actually in it.
+ * `package.xml` declares, that every path `install.xml` copies exists in the zip and that one of
+ * them deploys the bundle into `${env.bundles}`, and that the bundle is a readable jar whose
+ * `Nuxeo-Component`, `<require>` and contribution `src` targets resolve to entries in it.
+ *
+ * **Where it stops, on purpose.** It does not check that a contribution with no `src` carries a
+ * body: reading inline `<json>` means parsing element content, which `build.mjs` already does
+ * properly against the source. This reads the packaged bytes for the things a build cannot see —
+ * what survived into the zip, and whether the installer puts it where Nuxeo looks.
  *
  * **What it does not assert.** It does not install anything. No Nuxeo server runs, so nothing here
  * says the server accepted the package, resolved its `nuxeo-agentic-ui` dependency, or served the
@@ -34,6 +39,21 @@ import { pathToFileURL } from 'node:url';
 
 /** Where `install.xml` refers to the root of the unpacked package. */
 const PACKAGE_ROOT = '${package.root}/';
+
+/** The only directory Nuxeo scans for bundles; `install.xml` names it through this variable. */
+const BUNDLES_DIR = '${env.bundles}';
+
+/**
+ * XML whitespace, as the specification defines `S`: space, tab, CR, LF and nothing else.
+ *
+ * Used instead of `\s` deliberately. `\s` in JavaScript also matches U+00A0 and the other Unicode
+ * spaces, which are **not** XML whitespace — `<require\u00a0>` is not a well-formed start tag, and
+ * accepting it here would pass a component the server's parser refuses.
+ */
+const S = '[ \\t\\r\\n]*';
+
+/** The component every configuration package must register after; `build.mjs` names it too. */
+const DEFAULTS_COMPONENT = 'org.nuxeo.agentic.ui.config.defaults';
 
 /** Run `unzip` and return its output; a non-zero exit is the caller's to interpret. */
 function unzip(args) {
@@ -150,27 +170,7 @@ export function verifyPackageZip(archive) {
     );
   }
 
-  // 4. Everything `install.xml` copies has to be in the zip, or the install copies nothing and
-  //    reports success. `file` may name a directory, so an entry *under* it counts.
-  const updates = [...installXml.matchAll(/<update\b[^>]*\bfile\s*=\s*"([^"]*)"/g)].map(
-    ([, value]) => value,
-  );
-  if (updates.length === 0) {
-    problem('install.xml has no <update file="…">, so installing the package copies nothing.');
-  }
-  for (const value of updates) {
-    if (!value.startsWith(PACKAGE_ROOT)) {
-      problem(`install.xml copies "${value}", which is not under ${PACKAGE_ROOT}.`);
-      continue;
-    }
-    const path = value.slice(PACKAGE_ROOT.length);
-    if (!entries.some((entry) => entry === path || entry.startsWith(`${path}/`))) {
-      problem(`install.xml copies "${value}", and the zip holds no ${path}.`);
-    }
-  }
-
-  // 5. The bundle itself. Everything above can hold while the jar is empty or unreadable, in which
-  //    case the package installs, starts nothing, and contributes no configuration.
+  // 4. The bundle has to be in the zip before anything can ask where `install.xml` puts it.
   const jars = entries.filter(
     (entry) => entry.startsWith('install/bundles/') && entry.endsWith('.jar'),
   );
@@ -179,6 +179,57 @@ export function verifyPackageZip(archive) {
       `the zip holds ${jars.length} jar(s) under install/bundles/; a configuration package has one.`,
     );
     return problems;
+  }
+
+  // 5. What `install.xml` copies, and where to. Two different ways to install nothing:
+  //    naming a path the zip does not hold, and deploying the bundle somewhere Nuxeo does not
+  //    scan. Both leave `nuxeoctl mp-install` reporting success over a package that contributes
+  //    no configuration, which is the whole class of failure this script exists for.
+  const updates = [...installXml.matchAll(/<update\b([^>]*)>/g)].map(([, tag]) => ({
+    file: /\bfile\s*=\s*"([^"]*)"/.exec(tag)?.[1] ?? null,
+    todir: /\btodir\s*=\s*"([^"]*)"/.exec(tag)?.[1]?.trim() ?? null,
+  }));
+  if (updates.length === 0) {
+    problem('install.xml has no <update file="…">, so installing the package copies nothing.');
+  }
+  for (const { file } of updates) {
+    if (file === null) {
+      problem('install.xml has an <update> with no file= attribute, which copies nothing.');
+      continue;
+    }
+    if (!file.startsWith(PACKAGE_ROOT)) {
+      problem(`install.xml copies "${file}", which is not under ${PACKAGE_ROOT}.`);
+      continue;
+    }
+    const path = file.slice(PACKAGE_ROOT.length);
+    if (!entries.some((entry) => entry === path || entry.startsWith(`${path}/`))) {
+      problem(`install.xml copies "${file}", and the zip holds no ${path}.`);
+    }
+  }
+
+  // The jar specifically, into the directory Nuxeo scans for bundles. An `<update>` may name the
+  // jar itself or a directory holding it — the generated one names `install/bundles` — so a
+  // covering path counts either way. Without this, an install.xml that copies only `package.xml`,
+  // or copies the bundle to `${env.data}`, satisfies every check above while Nuxeo never loads
+  // the bundle and the package's fragments never reach the server.
+  const deploysBundle = updates.some(
+    ({ file, todir }) =>
+      todir === BUNDLES_DIR &&
+      file !== null &&
+      file.startsWith(PACKAGE_ROOT) &&
+      (jars[0] === file.slice(PACKAGE_ROOT.length) ||
+        jars[0].startsWith(`${file.slice(PACKAGE_ROOT.length)}/`)),
+  );
+  if (!deploysBundle) {
+    const where = updates
+      .filter(({ todir }) => todir !== null)
+      .map(({ todir }) => todir)
+      .join(', ');
+    problem(
+      `install.xml has no <update> that copies ${jars[0]} into todir="${BUNDLES_DIR}"` +
+        `${where ? `, only into ${where}` : ''}. Nuxeo loads bundles from there and nowhere ` +
+        'else, so the package would install and contribute no configuration.',
+    );
   }
 
   const scratch = mkdtempSync(join(tmpdir(), 'verify-package-zip-'));
@@ -219,21 +270,45 @@ export function verifyPackageZip(archive) {
     const componentXml = withoutComments(
       spawnSync('unzip', ['-p', jar, component], { encoding: 'utf8' }).stdout,
     );
-    if (!componentXml.includes('<require>org.nuxeo.agentic.ui.config.defaults</require>')) {
+    // Matched as XML rather than as a string. `<require >…</require >` and an element whose text
+    // sits on its own indented line are well-formed, the server reads them, and `build.mjs`
+    // accepts them — its own test is `/<require[ \t\n]*>[ \t\n]*…[ \t\n]*<\/require[ \t\n]*>/`.
+    // An exact `includes()` here would have failed a package that built cleanly, which is the one
+    // kind of CI failure nobody can act on.
+    const requiresDefaults = new RegExp(
+      `<require${S}>${S}${DEFAULTS_COMPONENT.replaceAll('.', '\\.')}${S}</require${S}>`,
+    );
+    if (!requiresDefaults.test(componentXml)) {
       problem(
-        `${component} does not <require> org.nuxeo.agentic.ui.config.defaults, so its fragments ` +
+        `${component} does not <require> ${DEFAULTS_COMPONENT}, so its fragments ` +
           "may register before Satori's own and lose to them.",
       );
     }
-    const srcs = [...componentXml.matchAll(/<(?:fragment|asset)\b[^>]*\bsrc\s*=\s*"([^"]*)"/g)].map(
-      ([, value]) => value,
+
+    // A contribution is a `<fragment>`, `<layout>` or `<asset>`, whatever form its body takes.
+    // Counting `src` attributes instead would reject a package whose fragments carry their JSON
+    // inline — `<fragment …><json>…</json></fragment>` — which `build.mjs` accepts and which the
+    // server reads exactly like a `src` one. `src` is resolved only where a contribution has one.
+    const contributions = [...componentXml.matchAll(/<(fragment|layout|asset)\b([^>]*)>/g)].map(
+      ([, element, tag]) => ({
+        element,
+        src: /\bsrc\s*=\s*"([^"]*)"/.exec(tag)?.[1] ?? null,
+        enabled: /\benabled\s*=\s*"([^"]*)"/.exec(tag)?.[1] ?? null,
+      }),
     );
-    if (srcs.length === 0) {
-      problem(`${component} names no fragment src, so the package contributes no configuration.`);
+    if (contributions.length === 0) {
+      problem(
+        `${component} has no <fragment>, <layout> or <asset>, so the package contributes no ` +
+          'configuration.',
+      );
     }
-    for (const src of srcs) {
+    for (const { element, src, enabled } of contributions) {
+      // A disabled entry removes an earlier contribution and carries no body, so the server never
+      // resolves its `src`; `build.mjs` skips it for the same reason. Requiring the file here
+      // would fail a package whose only job is to switch one of ours off.
+      if (src === null || (enabled !== null && enabled.toLowerCase() !== 'true')) continue;
       if (!inJar.includes(posix.normalize(src))) {
-        problem(`${component} names src="${src}", which the jar does not hold.`);
+        problem(`${component} names <${element} src="${src}">, which the jar does not hold.`);
       }
     }
   } finally {
@@ -263,7 +338,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   console.log(
     `${basename(archive)}: a well-formed Nuxeo Package — entries verified by unzip, package.xml ` +
-      'and install.xml present and consistent, bundle jar readable and its component resolved.\n' +
+      `and install.xml present and consistent, the bundle deployed into ${BUNDLES_DIR}, the jar ` +
+      'readable and its component resolved.\n' +
       'Not asserted: that a Nuxeo server installed it. No server runs here.',
   );
 }

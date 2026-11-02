@@ -99,22 +99,27 @@ const packageXml = (overrides = {}) => {
   );
 };
 
-const installXml = (file = '${package.root}/install/bundles') =>
+const installXml = (file = '${package.root}/install/bundles', todir = '${env.bundles}') =>
   file === null
     ? '<install>\n</install>\n'
-    : `<install>\n  <update file="${file}" todir="\${env.bundles}" />\n</install>\n`;
+    : `<install>\n  <update file="${file}" todir="${todir}" />\n</install>\n`;
+
+const DEFAULTS_REQUIRE = '  <require>org.nuxeo.agentic.ui.config.defaults</require>\n';
 
 const componentXml = ({
   require = true,
+  requireText = DEFAULTS_REQUIRE,
   srcs = ['agentic-ui-config/bootstrap.json'],
+  body = '',
   comment = '',
 } = {}) =>
   '<?xml version="1.0"?>\n<component name="acme.config.acme-config" version="1.0">\n' +
-  (require ? '  <require>org.nuxeo.agentic.ui.config.defaults</require>\n' : '') +
+  (require ? requireText : '') +
   '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
   srcs
     .map((src) => `    <fragment name="acme-config" layer="bootstrap" src="${src}" />\n`)
     .join('') +
+  body +
   (comment ? `    <!-- ${comment} -->\n` : '') +
   '  </extension>\n</component>\n';
 
@@ -194,6 +199,73 @@ expectGreen('a component naming an asset as well as a fragment', {
     }),
     'agentic-ui-config/assets/logo.svg': '<svg/>',
   }),
+});
+
+// ---- forms a valid package may take that an earlier version of this check rejected (PR #542
+// review). Each of these builds cleanly through `build.mjs`, so failing it here would be a CI
+// failure on a correct package — the one kind nobody can act on. ----
+
+for (const [variant, requireText] of [
+  [
+    'whitespace before the closing bracket of both tags',
+    '  <require >org.nuxeo.agentic.ui.config.defaults</require >\n',
+  ],
+  [
+    'its text on its own indented line',
+    '  <require>\n    org.nuxeo.agentic.ui.config.defaults\n  </require>\n',
+  ],
+  ['a tab around the text', '  <require>\torg.nuxeo.agentic.ui.config.defaults\t</require>\n'],
+  [
+    'CRLF line endings inside the element',
+    '  <require>\r\n    org.nuxeo.agentic.ui.config.defaults\r\n  </require>\n',
+  ],
+]) {
+  expectGreen(`a <require> with ${variant}`, {
+    jar: jarFiles({ [COMPONENT]: componentXml({ requireText }) }),
+  });
+}
+
+expectGreen('a fragment carrying its JSON inline, with no src at all', {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({
+      srcs: [],
+      body:
+        '    <fragment name="acme-config" layer="bootstrap">\n' +
+        '      <json>{"branding":{"applicationTitle":"Acme"}}</json>\n' +
+        '    </fragment>\n',
+    }),
+    'agentic-ui-config/bootstrap.json': undefined,
+  }),
+});
+
+expectGreen('a layout contribution, which is a contribution like any other', {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({
+      srcs: [],
+      body: '    <layout type="Claim" mode="view" src="agentic-ui-config/claim.layout.json" />\n',
+    }),
+    'agentic-ui-config/claim.layout.json': '{"fields":[]}',
+  }),
+});
+
+expectGreen('a disabled fragment, whose src the server never resolves', {
+  jar: jarFiles({
+    [COMPONENT]: componentXml({
+      body: '    <fragment name="defaults" layer="manifest" enabled="false" src="gone.json" />\n',
+    }),
+  }),
+});
+
+expectGreen('an install.xml that names the jar itself rather than its directory', {
+  install: installXml(`\${package.root}/install/bundles/${NAME}.jar`),
+});
+
+expectGreen('an install.xml with other updates beside the one that deploys the bundle', {
+  install:
+    '<install>\n' +
+    '  <update file="${package.root}/install/bundles" todir="${env.bundles}" />\n' +
+    '  <update file="${package.root}/package.xml" todir="${env.data}" />\n' +
+    '</install>\n',
 });
 
 // The generated component ships exactly this: a commented-out `<asset>` showing how to add one.
@@ -303,6 +375,58 @@ expectRed(
   /which is not under \$\{package\.root\}/,
 );
 
+// The gap the PR #542 review found: every path resolving is not the same as the bundle reaching
+// the one directory Nuxeo scans. Both of these install cleanly and contribute nothing.
+expectRed(
+  'an install.xml that resolves, but copies only package.xml and never the bundle',
+  { install: installXml('${package.root}/package.xml', '${env.data}') },
+  /no <update> that copies install\/bundles\/.*\.jar into todir="\$\{env\.bundles\}"/,
+);
+
+expectRed(
+  'an install.xml that copies the bundle to ${env.data} instead of ${env.bundles}',
+  { install: installXml('${package.root}/install/bundles', '${env.data}') },
+  /only into \$\{env\.data\}\. Nuxeo loads bundles from there and nowhere else/,
+);
+
+expectRed(
+  'an install.xml whose update has no file= at all',
+  { install: '<install>\n  <update todir="${env.bundles}" />\n</install>\n' },
+  /an <update> with no file= attribute/,
+);
+
+expectRed(
+  'a contribution src that resolves nowhere, on an entry that is explicitly enabled',
+  {
+    jar: jarFiles({
+      [COMPONENT]: componentXml({
+        srcs: [],
+        body: '    <fragment name="acme-config" layer="bootstrap" enabled="true" src="gone.json" />\n',
+      }),
+    }),
+  },
+  /names <fragment src="gone\.json">, which the jar does not hold/,
+);
+
+expectRed(
+  'a component with no contribution of any kind',
+  { jar: jarFiles({ [COMPONENT]: componentXml({ srcs: [] }) }) },
+  /has no <fragment>, <layout> or <asset>/,
+);
+
+// `\s` would accept this; XML does not. A start tag may be separated only by space, tab, CR or LF.
+expectRed(
+  'a <require> separated by a non-breaking space, which is not XML whitespace',
+  {
+    jar: jarFiles({
+      [COMPONENT]: componentXml({
+        requireText: '  <require\u00a0>org.nuxeo.agentic.ui.config.defaults</require>\n',
+      }),
+    }),
+  },
+  /does not <require> org\.nuxeo\.agentic\.ui\.config\.defaults/,
+);
+
 expectRed('no bundle jar at all', { jar: null }, /holds 0 jar\(s\) under install\/bundles/);
 
 expectRed(
@@ -340,13 +464,7 @@ expectRed(
 expectRed(
   'a component naming a fragment src the jar does not hold',
   { jar: jarFiles({ [COMPONENT]: componentXml({ srcs: ['agentic-ui-config/bootstrap.jsno'] }) }) },
-  /names src="agentic-ui-config\/bootstrap\.jsno", which the jar does not hold/,
-);
-
-expectRed(
-  'a component with no fragment at all',
-  { jar: jarFiles({ [COMPONENT]: componentXml({ srcs: [] }) }) },
-  /names no fragment src/,
+  /names <fragment src="agentic-ui-config\/bootstrap\.jsno">, which the jar does not hold/,
 );
 
 // ------------------------------------------------------------------- report ----
