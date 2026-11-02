@@ -496,6 +496,63 @@ expectGreen('a fragment under the Satori configuration extension, beside an unre
   }),
 });
 
+// ---- fourth review round (PR #542): self-closing extensions, and components over 1 MiB ----
+
+// A self-closing `<extension … />` has no `</extension>` of its own. A matcher that pairs the two
+// in one expression reaches past it to the next extension's closing tag, which breaks both ways.
+const EMPTY_UNRELATED =
+  '  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener" />\n';
+const EMPTY_SATORI = '  <extension target="org.nuxeo.agentic.ui.config" point="configuration" />\n';
+const UNRELATED_WITH_FRAGMENTS =
+  '  <extension target="org.nuxeo.ecm.other" point="configuration">\n' +
+  '    <fragment name="acme-config" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />\n' +
+  '  </extension>\n';
+const SATORI_WITH_FRAGMENT =
+  '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+  '    <fragment name="acme-config" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />\n' +
+  '  </extension>\n';
+const componentOf = (inner) =>
+  '<?xml version="1.0"?>\n<component name="acme.config.acme-config" version="1.0">\n' +
+  DEFAULTS_REQUIRE +
+  inner +
+  '</component>\n';
+
+expectGreen('an empty self-closing unrelated extension before a valid Satori one', {
+  jar: jarFiles({ [COMPONENT]: componentOf(EMPTY_UNRELATED + SATORI_WITH_FRAGMENT) }),
+});
+
+expectRed(
+  'an empty self-closing Satori extension before an unrelated one that has fragments',
+  { jar: jarFiles({ [COMPONENT]: componentOf(EMPTY_SATORI + UNRELATED_WITH_FRAGMENTS) }) },
+  /has no <fragment>, <layout> or <asset>/,
+);
+
+expectGreen('two self-closing Satori extensions around one that contributes', {
+  jar: jarFiles({
+    [COMPONENT]: componentOf(EMPTY_SATORI + SATORI_WITH_FRAGMENT + EMPTY_SATORI),
+  }),
+});
+
+// `spawnSync`'s default output limit is 1 MiB and it truncates in silence. `build.mjs` allows a
+// fragment of up to 1 MiB, so two large inline ones are a valid component well over that limit;
+// truncated, its closing tags are cut off and it reads as malformed.
+const bigFragment = (name) =>
+  `    <fragment name="${name}" layer="bootstrap">\n` +
+  `      <json>{"branding":{"applicationTitle":"${'A'.repeat(700 * 1024)}"}}</json>\n` +
+  '    </fragment>\n';
+
+expectGreen('a component whose inline fragments exceed the default child-output limit', {
+  jar: jarFiles({
+    [COMPONENT]: componentOf(
+      '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+        bigFragment('acme-one') +
+        bigFragment('acme-two') +
+        '  </extension>\n',
+    ),
+    'agentic-ui-config/bootstrap.json': undefined,
+  }),
+});
+
 // The generated component ships exactly this: a commented-out `<asset>` showing how to add one.
 // Read as live, it fails every correct package — which is how this control came to exist.
 expectGreen('a commented-out asset, which the generator writes as the example', {

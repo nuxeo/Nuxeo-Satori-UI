@@ -340,12 +340,18 @@ export function verifyPackageZip(archive) {
       problem(`${jars[0]} has no ${manifest}, so Nuxeo does not load it as a bundle.`);
       return problems;
     }
+    // Read through `unzip()`, which raises the child's output limit to 64 MiB. `spawnSync`'s
+    // default is 1 MiB and it truncates silently: a component holding two 700 KiB inline
+    // fragments — both inside the 1 MiB-per-fragment ceiling `build.mjs` enforces, so both
+    // valid — would arrive with its closing tags cut off and be reported as malformed.
+    const manifestRead = unzip(['-p', jar, manifest]);
+    if (manifestRead.code !== 0) {
+      problem(`${manifest} could not be read out of ${jars[0]}.`);
+      return problems;
+    }
     // Manifest headers wrap at 72 bytes with a leading space on the continuation; unwrapped here
     // because a long component path is exactly where that happens.
-    const headers = spawnSync('unzip', ['-p', jar, manifest], { encoding: 'utf8' }).stdout.replace(
-      /\r?\n /g,
-      '',
-    );
+    const headers = manifestRead.stdout.toString('utf8').replace(/\r?\n /g, '');
     // `Nuxeo-Component` is a comma-separated list, and `build.mjs` reads it as one —
     // `.split(',').map(trim).filter(Boolean)`, then a loop. Treating the whole header as a single
     // file name rejects a bundle that carries a configuration component beside an unrelated one,
@@ -371,8 +377,7 @@ export function verifyPackageZip(archive) {
       `<require${S}>${S}${DEFAULTS_COMPONENT.replaceAll('.', '\\.')}${S}</require${S}>`,
     );
     const CONTRIBUTION = new RegExp(`<(fragment|layout|asset)${TAG}`, 'g');
-    // Extensions do not nest, so the body runs to the first `</extension>`.
-    const EXTENSION = new RegExp(`<extension${TAG}([\\s\\S]*?)</extension${S}>`, 'g');
+    const EXTENSION = new RegExp(`<extension${TAG}`, 'g');
     let contributionCount = 0;
 
     for (const componentPath of componentPaths) {
@@ -380,21 +385,42 @@ export function verifyPackageZip(archive) {
         problem(`${manifest} names Nuxeo-Component ${componentPath}, which is not in the jar.`);
         continue;
       }
+      const componentRead = unzip(['-p', jar, componentPath]);
+      if (componentRead.code !== 0) {
+        problem(`${componentPath} could not be read out of ${jars[0]}.`);
+        continue;
+      }
       const componentXml = withoutCdata(
-        withoutCommentsOrInstructions(
-          spawnSync('unzip', ['-p', jar, componentPath], { encoding: 'utf8' }).stdout,
-        ),
+        withoutCommentsOrInstructions(componentRead.stdout.toString('utf8')),
       );
 
       // Only an extension on Satori's configuration point registers anything. `point` is checked
       // as well as `target`: `org.nuxeo.agentic.ui.config` declares exactly one extension point,
       // `configuration` (agentic-ui-config-service.xml), so an extension naming that target with
       // any other point contributes nothing and the server reports an unknown point.
-      const satoriExtensions = [...componentXml.matchAll(EXTENSION)].filter(([, tag]) => {
+      //
+      // Start tags are found first and each body is then taken up to the next `</extension>`,
+      // rather than matching the pair in one expression. A self-closing `<extension … />` has no
+      // closing tag of its own, so a paired matcher reaches past it and takes the *next*
+      // extension's `</extension>` — which swallows a valid Satori extension sitting after an
+      // empty unrelated one (a false rejection) and, the other way round, counts an unrelated
+      // extension's fragments as configuration when an empty Satori one precedes it (a false
+      // pass). Extensions do not nest, so the first closing tag after a start tag is its own.
+      const satoriBodies = [];
+      let contributes = false;
+      for (const match of componentXml.matchAll(EXTENSION)) {
+        const tag = match[1];
         const { target, point } = attributesOf(tag);
-        return target === 'org.nuxeo.agentic.ui.config' && point === 'configuration';
-      });
-      const contributes = satoriExtensions.length > 0;
+        if (target !== 'org.nuxeo.agentic.ui.config' || point !== 'configuration') continue;
+        // An extension on the right point still orders this component's registration, so it
+        // decides whether the `<require>` is demanded even when it is empty — the condition
+        // `build.mjs` gates on is the start tag too.
+        contributes = true;
+        if (tag.trimEnd().endsWith('/')) continue;
+        const from = match.index + match[0].length;
+        const end = componentXml.indexOf('</extension', from);
+        satoriBodies.push(end < 0 ? componentXml.slice(from) : componentXml.slice(from, end));
+      }
       // Matched as XML rather than as a string. `<require >…</require >` and an element whose
       // text sits on its own indented line are well-formed, the server reads them, and
       // `build.mjs` accepts them — its own test is
@@ -417,7 +443,7 @@ export function verifyPackageZip(archive) {
       // whether the package contributes anything, and an entry anywhere else does not reach
       // `ContributionRegistry`. Counting across the component let a `<fragment>` under a mistyped
       // `target` satisfy the check while the package configured nothing.
-      for (const [, , body] of satoriExtensions) {
+      for (const body of satoriBodies) {
         contributionCount += [...body.matchAll(CONTRIBUTION)].length;
       }
       // Resolved across the whole component, which is deliberately wider than the count above and
