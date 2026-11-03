@@ -484,6 +484,22 @@ describe('DocumentViewerComponent — MIME dispatch and viewer state', () => {
       expect(component.showVideoStoryboard()).toBe(false);
     });
 
+    // `StoryboardItem` was published with writable fields and is now derived from the storyboard
+    // component's readonly `NxsStoryboardItem`. The assignments below are the test: a consumer
+    // that fills a frame in after fetching its blob — what `document-detail` does — must keep
+    // compiling, and the result must still satisfy the component's readonly input. Vitest strips
+    // types, so this one is enforced by the `spec-types` gate rather than by the run.
+    it('keeps StoryboardItem writable for consumers that fill a frame in later', () => {
+      const frame: StoryboardItem = { timecode: 0, thumbnailUrl: null, label: '' };
+      frame.thumbnailUrl = 'blob:fetched-later';
+      frame.label = '0:00';
+      frame.timecode = 12;
+
+      setInputs({ mimeType: 'video/mp4', blobUrl, storyboard: [frame] });
+      expect(component.showVideoStoryboard()).toBe(true);
+      expect(component.storyboard()[0].thumbnailUrl).toBe('blob:fetched-later');
+    });
+
     it('hides the picture cards for an image with no picture metadata', () => {
       setInputs({ mimeType: 'image/png', blobUrl, pictureInfo: null });
       expect(component.showPictureCards()).toBe(false);

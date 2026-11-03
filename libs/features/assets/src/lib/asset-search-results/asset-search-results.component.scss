@@ -351,6 +351,26 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  /*
+    Stretched hit area for the row's single control.
+   * ---------------------------------------------
+   * These rows used to be `<button>` elements wrapping a checkbox and action buttons, which is
+   * `nested-interactive` — invalid HTML and WCAG 4.1.2, because a control cannot contain a
+   * control. The title is now the row's one real control, and this pseudo-element extends its
+   * clickable area over the whole row, so clicking anywhere still opens the document.
+   *
+   * The alternative was a focusable `<div role="button">` with key handlers, which reintroduces
+   * exactly the nesting this removes; `@angular-eslint`'s `interactive-supports-focus` and
+   * `click-events-have-key-events` reject the middle ground of a click handler on a plain div,
+   * and they are right to.
+   */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
 }
 
 .col-checkbox {
@@ -495,30 +515,9 @@
   }
 }
 
-/*
-  Stretched hit area for the row's single control.
- * ---------------------------------------------
- * These rows used to be `<button>` elements wrapping a checkbox and action buttons, which is
- * `nested-interactive` — invalid HTML and WCAG 4.1.2, because a control cannot contain a
- * control. The title is now the row's one real control, and this pseudo-element extends its
- * clickable area over the whole row, so clicking anywhere still opens the document.
- *
- * The alternative was a focusable `<div role="button">` with key handlers, which reintroduces
- * exactly the nesting this removes; `@angular-eslint`'s `interactive-supports-focus` and
- * `click-events-have-key-events` reject the middle ground of a click handler on a plain div,
- * and they are right to.
- */
-.row-name-text {
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-  }
-}
-
-/* The controls have to sit above that overlay. `z-index` alone did nothing here: these
-   wrappers were `position: static`, on which `z-index` has no effect. */
+/* The controls have to sit above `.row-name-text::after`, the overlay that stretches the title's
+   hit area over the row. `z-index` alone did nothing here: these wrappers were `position: static`,
+   on which `z-index` has no effect. */
 .col-checkbox,
 .col-hover-actions,
 .col-gear,

@@ -57,7 +57,7 @@ export class NxsStoryboardComponent {
   /** The frames, in the order they are shown. Usually ordered by timecode. */
   readonly items = input<readonly NxsStoryboardItem[]>([]);
   /**
-   * The group's accessible name, already translated. Blank, or only whitespace or zero-width
+   * The list's accessible name, already translated. Blank, or only whitespace or zero-width
    * characters, names it "Video storyboard".
    */
   readonly label = input('');

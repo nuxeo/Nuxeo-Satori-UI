@@ -273,6 +273,13 @@
   flex-direction: column;
 }
 
+/* The panel is hidden rather than destroyed while the queue is showing, so that which group is open
+   survives the toggle. `display: flex` above is an author rule and the `hidden` attribute's
+   `display: none` is a user-agent one, so without this the attribute would do nothing at all. */
+.facets-host[hidden] {
+  display: none;
+}
+
 /* The constrained column has to reach the panel itself, not stop at this box. The panel scrolls its
    filters with `overflow-y: auto`, which does nothing unless something above it caps the height —
    and the drawer around this box is `overflow: hidden`, so without the cap enough open groups push

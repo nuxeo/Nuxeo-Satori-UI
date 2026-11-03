@@ -176,6 +176,27 @@ describe('NxsAssetFacetsDrawerComponent', () => {
     expect(el().querySelector(`#${controls}`)).not.toBeNull();
   });
 
+  // The options element exists only while the group is open, so an `aria-controls` left on a
+  // collapsed toggle names nothing in the document — including on first render, when every group
+  // the host did not seed is closed.
+  it('drops aria-controls while a group is collapsed, rather than dangling', async () => {
+    host.groups.set([group('type'), group('format')]);
+    host.initiallyExpanded.set(['type']);
+    await render();
+    expect(toggles()[1].hasAttribute('aria-controls')).toBe(false);
+
+    toggles()[0].click();
+    await render();
+    expect(toggles()[0].hasAttribute('aria-controls')).toBe(false);
+    expect(el().querySelector('.nxs-asset-facets-drawer__options')).toBeNull();
+
+    toggles()[0].click();
+    await render();
+    const reopened = toggles()[0].getAttribute('aria-controls');
+    expect(reopened).toMatch(/-group-type$/);
+    expect(el().querySelector(`#${reopened}`)).not.toBeNull();
+  });
+
   it('shows a count only where the server gave one', async () => {
     host.groups.set([group('type')]);
     host.initiallyExpanded.set(['type']);

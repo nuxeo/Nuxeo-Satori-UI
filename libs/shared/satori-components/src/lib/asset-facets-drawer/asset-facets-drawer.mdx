@@ -156,9 +156,10 @@ inherited override, which would put the panel's colours outside a customer's rea
 
 - **A named region.** The panel is a `section` with a name, "Asset filters" unless you give it a
   `label`, so a screen reader can jump to the filters rather than walking the drawer.
-- **Groups announce their state.** Each group heading is a button with `aria-expanded`, pointing at
-  the choices it controls with `aria-controls`, so the collapsed state is announced and not merely
-  drawn as a chevron.
+- **Groups announce their state.** Each group heading is a button with `aria-expanded`, so the
+  collapsed state is announced and not merely drawn as a chevron. While the group is open the
+  button also carries `aria-controls` naming its choices; while it is closed the attribute is
+  dropped, because the element it would name is not rendered and the reference would dangle.
 - **Named checkboxes.** Each is named with its label through Material's own `[aria-label]`, so the
   name lands on the `input` that carries the checkbox role — `[attr.aria-label]` on the
   `mat-checkbox` host does not reach it. The count stays in the visible text rather than the name,

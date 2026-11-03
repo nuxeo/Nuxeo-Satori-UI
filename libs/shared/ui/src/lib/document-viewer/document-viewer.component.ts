@@ -40,12 +40,18 @@ export interface VideoSource {
 /**
  * One frame of a video's storyboard.
  *
- * The same type as the storyboard component's own, not a second copy of it: the viewer passes these
- * straight through to `nxs-storyboard`, and two structurally identical declarations are two things
- * to keep in step for no benefit. Kept under this name because it is part of this package's
- * published surface.
+ * Derived from the storyboard component's own `NxsStoryboardItem`, not a second copy of it: the
+ * viewer passes these straight through to `nxs-storyboard`, and two structurally identical
+ * declarations are two things to keep in step for no benefit. Kept under this name because it is
+ * part of this package's published surface.
+ *
+ * The fields are stripped of `readonly` rather than aliased straight through. This name was
+ * published with writable fields, and a consumer that fills in a frame's `thumbnailUrl` after
+ * fetching the blob — which is exactly what `document-detail` does with the objects it builds —
+ * would stop compiling if the alias made them readonly. A mutable object still satisfies the
+ * component's `readonly NxsStoryboardItem[]` input, so nothing is lost by keeping the promise.
  */
-export type StoryboardItem = NxsStoryboardItem;
+export type StoryboardItem = { -readonly [K in keyof NxsStoryboardItem]: NxsStoryboardItem[K] };
 
 export interface PictureInfo {
   width: number;

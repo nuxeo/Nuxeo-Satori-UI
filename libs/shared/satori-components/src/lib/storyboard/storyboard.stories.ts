@@ -37,7 +37,7 @@ const meta: Meta<NxsStoryboardComponent> = {
     label: {
       control: 'text',
       description:
-        'The group’s accessible name, already translated. Blank, or only whitespace or zero-width characters, names it “Video storyboard”.',
+        'The list’s accessible name, already translated. Blank, or only whitespace or zero-width characters, names it “Video storyboard”.',
     },
     activeTimecode: {
       control: 'number',
@@ -55,7 +55,8 @@ type Story = StoryObj<NxsStoryboardComponent>;
 export const VideoStoryboard: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('group', { name: 'Video storyboard' })).toBeVisible();
+    await expect(canvas.getByRole('list', { name: 'Video storyboard' })).toBeVisible();
+    await expect(canvas.getAllByRole('listitem')).toHaveLength(5);
     await userEvent.click(canvas.getByRole('button', { name: 'Seek to The interview begins' }));
     await expect(args.seek).toHaveBeenCalledWith(75);
   },
@@ -78,7 +79,7 @@ export const ThumbnailsMissing: Story = {
 export const NoFrames: Story = {
   args: { items: [] },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).queryByRole('group')).toBeNull();
+    await expect(within(canvasElement).queryByRole('list')).toBeNull();
   },
 };
 

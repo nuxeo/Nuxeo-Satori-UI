@@ -110,11 +110,15 @@ describe('NxsAssetGridComponent', () => {
     expect(grid()?.getAttribute('aria-label')).toBe('Search results');
   });
 
+  // Native `<ul>`/`<li>`, not a `div` with `role="list"`. The tag names are the assertion: an ARIA
+  // role would read the same here, and the point of the markup is that it does not need one.
   it('is a list of list items, so a screen reader can count them', async () => {
     host.assets.set([card('a'), card('b')]);
     await render();
-    expect(grid()?.getAttribute('role')).toBe('list');
-    expect(cards().map((c) => c.getAttribute('role'))).toEqual(['listitem', 'listitem']);
+    expect(grid()?.tagName).toBe('UL');
+    expect(grid()?.hasAttribute('role')).toBe(false);
+    expect(cards().map((c) => c.tagName)).toEqual(['LI', 'LI']);
+    expect(cards().every((c) => !c.hasAttribute('role'))).toBe(true);
   });
 
   it('shows the thumbnail when there is one, and the type icon when there is not', async () => {

@@ -202,9 +202,10 @@ screen puts on the box around the grid, and the `theme.tokens` a customer ships,
 
 ## Accessibility
 
-- **A named list.** The grid is a `list` of `listitem`s, named "Assets" unless you give it a
-  `label`, so a screen reader announces how many results there are instead of reading a run of
-  unrelated controls.
+- **A named list.** The grid is a `<ul>` of `<li>`s, named "Assets" unless you give it a `label`, so
+  a screen reader announces how many results there are instead of reading a run of unrelated
+  controls. Native elements rather than `role="list"`, and no `list-style: none`, which is what
+  makes VoiceOver drop the list role.
 - **Named checkboxes.** Each is named "Select &lt;document&gt;", bound through Material's own
   `[aria-label]` so the name lands on the `input` that carries the checkbox role — `[attr.aria-label]`
   on the `mat-checkbox` host does not reach it.

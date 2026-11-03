@@ -17,7 +17,11 @@
   );
   align-content: start;
   gap: var(--nxs-asset-grid-gap, 16px);
-  padding-bottom: 16px;
+  /* The `<ul>`'s own margin and indent, reset. No `list-style: none` — the cards are `display:
+     flex` so no marker is generated anyway, and `list-style: none` is what makes VoiceOver drop
+     the list role. */
+  margin: 0;
+  padding: 0 0 16px;
 }
 
 .nxs-asset-grid__card {
@@ -134,14 +138,6 @@
   }
 }
 
-/* Above that overlay, so the pill is not a second way to open the document. `z-index` needs a
-   positioned element to act on, hence `position: relative` — `.nxs-asset-grid__select` already
-   carries both, so it must not be restated here or its `absolute` would be overridden. */
-.nxs-asset-grid__type {
-  position: relative;
-  z-index: 2;
-}
-
 // IBM Equal Access `style_focus_visible` reads `:focus` only, so each ring is a standalone `:focus`
 // rule rather than a list with `:focus-visible`.
 .nxs-asset-grid__name:focus {
@@ -154,7 +150,13 @@
   outline-offset: 2px;
 }
 
+/* `position: relative` and `z-index` put the pill above the name button's overlay, so it is not a
+   second way to open the document. `z-index` needs a positioned element to act on, hence
+   `relative` — `.nxs-asset-grid__select` already carries both, so it must not be restated there or
+   its `absolute` would be overridden. */
 .nxs-asset-grid__type {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;

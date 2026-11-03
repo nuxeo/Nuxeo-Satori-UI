@@ -14,10 +14,19 @@
 .nxs-storyboard__strip {
   display: flex;
   gap: 8px;
+  // The `<ul>`'s own margin and indent, reset. No `list-style: none` — the items are `display:
+  // flex` so no marker is generated anyway, and `list-style: none` is what makes VoiceOver drop
+  // the list role.
+  margin: 0;
   padding: 8px 12px;
   overflow-x: auto;
   background: var(--nxs-storyboard-surface, var(--mat-sys-inverse-surface));
   scrollbar-width: thin;
+}
+
+.nxs-storyboard__item {
+  display: flex;
+  flex-shrink: 0;
 }
 
 .nxs-storyboard__frame {
@@ -33,24 +42,28 @@
   cursor: pointer;
   transition: border-color 0.15s;
 
+  // `inverse-primary`, not `primary`: every accent here is drawn on `inverse-surface`, and the two
+  // primaries are tuned for opposite backgrounds. In the default azure theme `--mat-sys-primary`
+  // (#005cbb) on `--mat-sys-inverse-surface` (#2f3033) is 2.04:1, under the 3:1 WCAG 1.4.11 asks of
+  // a focus indicator; `--mat-sys-inverse-primary` (#abc7ff) on the same surface is 7.76:1.
   &:hover {
-    border-color: var(--nxs-storyboard-accent, var(--mat-sys-primary));
+    border-color: var(--nxs-storyboard-accent, var(--mat-sys-inverse-primary));
   }
 }
 
 .nxs-storyboard__frame--active {
-  border-color: var(--nxs-storyboard-accent, var(--mat-sys-primary));
+  border-color: var(--nxs-storyboard-accent, var(--mat-sys-inverse-primary));
 }
 
 // IBM Equal Access `style_focus_visible` reads `:focus` only, so each ring is a standalone `:focus`
 // rule rather than a list with `:focus-visible`.
 .nxs-storyboard__frame:focus {
-  outline: 2px solid var(--nxs-storyboard-accent, var(--mat-sys-primary));
+  outline: 2px solid var(--nxs-storyboard-accent, var(--mat-sys-inverse-primary));
   outline-offset: 2px;
 }
 
 .nxs-storyboard__frame:focus-visible {
-  outline: 2px solid var(--nxs-storyboard-accent, var(--mat-sys-primary));
+  outline: 2px solid var(--nxs-storyboard-accent, var(--mat-sys-inverse-primary));
   outline-offset: 2px;
 }
 

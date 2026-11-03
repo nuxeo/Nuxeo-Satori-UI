@@ -5477,7 +5477,7 @@ class DocumentViewerComponent {
     readonly noteContent: import("@angular/core").InputSignal<string | null>;
     readonly noteHtml: import("@angular/core").InputSignal<SafeHtml | null>;
     readonly videoSources: import("@angular/core").InputSignal<VideoSource[]>;
-    readonly storyboard: import("@angular/core").InputSignal<NxsStoryboardItem[]>;
+    readonly storyboard: import("@angular/core").InputSignal<StoryboardItem[]>;
     readonly posterUrl: import("@angular/core").InputSignal<string | null>;
     readonly hasPdfRendition: import("@angular/core").InputSignal<boolean>;
     readonly previewUrl: import("@angular/core").InputSignal<SafeResourceUrl | null>;
@@ -5505,7 +5505,7 @@ class DocumentViewerComponent {
     readonly showVideoStoryboard: import("@angular/core").Signal<boolean>;
     protected readonly storyboardId = "nxs.components.storyboard";
     protected readonly storyboardInputs: import("@angular/core").Signal<{
-    items: NxsStoryboardItem[];
+    items: StoryboardItem[];
     seekHandler: (timecode: number) => void;
     }>;
     readonly showPictureCards: import("@angular/core").Signal<boolean>;
@@ -5869,7 +5869,7 @@ interface ShareSavedSearchDialogData {
     id: string;
     }
 }
-type StoryboardItem = NxsStoryboardItem;
+type StoryboardItem = { -readonly [K in keyof NxsStoryboardItem]: NxsStoryboardItem[K]; };
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
 class TranslatedDatepickerIntl extends TranslatedDatepickerIntl$1 {
     static ɵfac: i0.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;

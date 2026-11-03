@@ -83,30 +83,31 @@
 <!-- The facets themselves are `nxs-asset-facets-drawer`, rendered through
      `nxs.components.assetFacetsDrawer` so a customer library can replace the panel without
      reimplementing the saved searches and the queue around it. The packaged component follows when
-     nothing is registered. -->
-@if (viewMode() === 'filter') {
-  <div class="facets-host">
-    <lib-extension-outlet
-      #facetsOutlet
-      [componentId]="facetsId"
-      [componentInputs]="facetsInputs()"
+     nothing is registered.
+
+     Hidden rather than removed while the queue is showing. Which group is open is the panel's own
+     state, so an `@if` here would destroy the panel on every toggle and reseed it from
+     `initiallyExpandedGroupIds` — a user who collapsed everything, glanced at the queue and came
+     back would find Asset Type open again. `[hidden]` keeps the one instance, and its state, alive.
+     `.facets-host[hidden]` restates `display: none`, because the author `display: flex` beside it
+     would otherwise beat the attribute's user-agent rule. -->
+<div class="facets-host" [hidden]="viewMode() !== 'filter'">
+  <lib-extension-outlet #facetsOutlet [componentId]="facetsId" [componentInputs]="facetsInputs()" />
+  @if (facetsOutlet.unresolved()) {
+    <nxs-asset-facets-drawer
+      [groups]="facetsInputs().groups"
+      [fullText]="facetsInputs().fullText"
+      [autoSearch]="facetsInputs().autoSearch"
+      [canSaveAs]="facetsInputs().canSaveAs"
+      [initiallyExpandedGroupIds]="facetsInputs().initiallyExpandedGroupIds"
+      (fullTextChange)="onSecondarySearchInput($event)"
+      (fullTextSubmit)="onSecondarySearchEnter()"
+      (optionToggle)="toggleOption($event.groupId, $event.value)"
+      (autoSearchChange)="autoSearch.set($event)"
+      (action)="onFacetsAction($event)"
     />
-    @if (facetsOutlet.unresolved()) {
-      <nxs-asset-facets-drawer
-        [groups]="facetsInputs().groups"
-        [fullText]="facetsInputs().fullText"
-        [autoSearch]="facetsInputs().autoSearch"
-        [canSaveAs]="facetsInputs().canSaveAs"
-        [initiallyExpandedGroupIds]="facetsInputs().initiallyExpandedGroupIds"
-        (fullTextChange)="onSecondarySearchInput($event)"
-        (fullTextSubmit)="onSecondarySearchEnter()"
-        (optionToggle)="toggleOption($event.groupId, $event.value)"
-        (autoSearchChange)="autoSearch.set($event)"
-        (action)="onFacetsAction($event)"
-      />
-    }
-  </div>
-}
+  }
+</div>
 
 @if (viewMode() === 'queue') {
   <lib-assets-queue

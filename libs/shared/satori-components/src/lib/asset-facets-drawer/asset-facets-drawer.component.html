@@ -35,11 +35,14 @@
 
   @for (group of groups(); track group.id) {
     <div class="nxs-asset-facets-drawer__group">
+      <!-- `aria-controls` only while the group is open: the options element below is rendered only
+           then, so naming it while collapsed is a reference to an element that is not in the
+           document. -->
       <button
         class="nxs-asset-facets-drawer__group-toggle"
         type="button"
         [attr.aria-expanded]="isExpanded(group.id)"
-        [attr.aria-controls]="ids.group(group.id)"
+        [attr.aria-controls]="isExpanded(group.id) ? ids.group(group.id) : null"
         (click)="toggleGroup(group.id)"
       >
         <span class="nxs-asset-facets-drawer__group-label">{{ group.label }}</span>

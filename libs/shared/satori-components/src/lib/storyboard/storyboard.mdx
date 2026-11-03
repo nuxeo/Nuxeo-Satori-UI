@@ -36,7 +36,7 @@ export const usageHtml = `<nxs-storyboard [items]="storyboard()" [activeTimecode
 
 <Source language="html" dark code={usageHtml} />
 
-Every input is optional. The component's own words — the group's name and each frame's name — are
+Every input is optional. The component's own words — the list's name and each frame's name — are
 translated with ngx-translate under `satori-components.storyboard.*`, and
 `providePlatformEnglishFallback()` supplies the English when your catalogue does not.
 
@@ -109,7 +109,7 @@ override, which would put the strip's colours outside a customer's reach.
         <code>--nxs-storyboard-accent</code>
       </td>
       <td>
-        <code>--mat-sys-primary</code>
+        <code>--mat-sys-inverse-primary</code>
       </td>
       <td>Hover, the playing frame, and the focus ring</td>
     </tr>
@@ -129,10 +129,18 @@ The strip defaults to the **inverse** surface because it sits under a video play
 strip against a dark picture is the one combination that reads badly. A host showing it on the page
 surface instead overrides all four.
 
+That is also why the accent defaults to `--mat-sys-inverse-primary` rather than `--mat-sys-primary`:
+the two are tuned for opposite backgrounds, and on the inverse surface the ordinary primary is
+2.04:1 in the default azure theme — under the 3:1 WCAG 1.4.11 asks of a focus indicator — where the
+inverse primary is 7.76:1. A host that moves the strip onto the page surface should override the
+accent along with it.
+
 ## Accessibility
 
-- **A named group.** The strip is a `group`, named "Video storyboard" unless you give it a `label`,
-  so a screen reader announces what the run of buttons is before reading them.
+- **A named list.** The strip is a `<ul>` of `<li>`s, named "Video storyboard" unless you give it a
+  `label`, so a screen reader announces what the run of buttons is — and how many frames there are
+  — before reading them. Native elements rather than `role="list"`, and no `list-style: none`,
+  which is what makes VoiceOver drop the list role.
 - **Named frames.** Each button is named "Seek to &lt;label&gt;", falling back to "Seek to 0:15" when
   the frame has no label. The image is decorative (`alt=""`) and the visible timecode is
   `aria-hidden`, so the name is said once rather than three times.

@@ -79,7 +79,20 @@ describe('NxsStoryboardComponent', () => {
     expect(times()).toEqual(['0:00', '0:05', '1:05']);
   });
 
-  it('names the group "Video storyboard" until a label is given', async () => {
+  // Native `<ul>`/`<li>`, not a `div` with `role="group"`: the list also announces how many frames
+  // there are, and it does it without an ARIA attribute.
+  it('is a list of frames, so a screen reader can count them', async () => {
+    host.items.set([frame(0), frame(5)]);
+    await render();
+    expect(strip()?.tagName).toBe('UL');
+    expect(strip()?.hasAttribute('role')).toBe(false);
+    expect(Array.from(el().querySelectorAll('.nxs-storyboard__item'), (n) => n.tagName)).toEqual([
+      'LI',
+      'LI',
+    ]);
+  });
+
+  it('names the list "Video storyboard" until a label is given', async () => {
     host.items.set([frame(0)]);
     await render();
     expect(strip()?.getAttribute('aria-label')).toBe('Video storyboard');
