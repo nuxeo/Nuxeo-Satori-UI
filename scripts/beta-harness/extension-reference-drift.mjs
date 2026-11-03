@@ -225,6 +225,39 @@ function stripComments(text) {
 const DEFAULT_BINDING = Symbol('default export');
 
 /**
+ * How a name is being looked up in a module: as a binding inside it, or as something it publishes.
+ *
+ * `LOCAL` — the name is already known to live in that file, so any declaration answers it. Used
+ * for the file that registers the component, for the target of a module's own `export default X;`,
+ * and for a declaration this gate located by searching.
+ *
+ * `EXPORTED` — the file must *publish* the name. Used on every hop that crosses a module
+ * boundary: a named import, an `export … from` clause, and each `export *` target. A module's
+ * private class is not what an importer received, so accepting one accepts an unrelated
+ * component's selector as identity.
+ *
+ * **Declared here with the other module constants, and this is the third time that placement has
+ * been the bug rather than a preference.** `TSCONFIG_PATHS` and `DEFAULT_BINDING` above both
+ * record it; these two were written beside `selectorOfBinding`, which the section-6b loop reaches
+ * while this file is still executing its top level, and every fixture with a 6b row died with
+ * `ReferenceError: Cannot access 'LOCAL' before initialization`. Caught by the 48 controls — 24
+ * of them went red at once — and not by reading the diff.
+ */
+const LOCAL = 'local';
+/** See {@link LOCAL}. */
+const EXPORTED = 'exported';
+
+/**
+ * `export class X` / `export abstract class X` — published by the declaration itself.
+ *
+ * Deliberately **not** `export default class X`: that publishes `default`, not `X`, and
+ * `export *` does not re-export a default at all. Treating it as a named export would let a
+ * barrel's star hop resolve a name the barrel does not actually provide.
+ */
+const exportedClassDeclaration = (name) =>
+  new RegExp(String.raw`\bexport\s+(?:abstract\s+)?class\s+${reEscape(name)}\b`);
+
+/**
  * `compilerOptions.paths` from `tsconfig.base.json`, for resolving a path-alias import.
  *
  * Declared **here**, with the other module constants, and not beside the function that uses it.
@@ -1054,6 +1087,29 @@ function parseBindings(clause) {
 }
 
 /**
+ * The local name a bare `export { … }` clause publishes as `name`, or `null`.
+ *
+ * `export { Inner as FxCardComponent };` publishes `FxCardComponent` while the class is declared
+ * as `Inner`, so neither the declaration lookup nor the `export … from` loop below sees it. That
+ * rejected a *correct* row: the gate reported no source declared the component at all. Not
+ * reported by review — found by enumerating the ways a module can publish a name while fixing
+ * the one that was.
+ *
+ * Clauses with a `from` are skipped here: those re-export from another module and are followed
+ * by the loop that resolves the specifier, not by a local lookup.
+ */
+function locallyExportedAs(text, name) {
+  for (const clause of text.matchAll(
+    /export\s*(?:type\s*)?\{([^}]*)\}\s*(from\s*['"`][^'"`]+['"`])?/g,
+  )) {
+    if (clause[2]) continue;
+    const binding = parseBindings(clause[1]).find((b) => b.inner === name);
+    if (binding) return binding.outer;
+  }
+  return null;
+}
+
+/**
  * The selector of the component a given binding name refers to, in a given file.
  *
  * Follows renames: a re-export whose exposed name matches is followed under the name the target
@@ -1061,8 +1117,26 @@ function parseBindings(clause) {
  * cannot be resolved, it returns `null` so the caller refuses — it does **not** fall through to a
  * name match, because the whole point of following the binding is that the name alone is not
  * identity.
+ *
+ * ## Why `mode` exists
+ *
+ * This function was asked two different questions through one lookup, and the answer to one is
+ * wrong for the other. "What does the name `X` refer to inside this file?" is answered by any
+ * declaration of `X`. "What does this module publish as `X`?" is not — a private class is not
+ * what an importer received.
+ *
+ * While the declaration lookup required the `export` modifier the two questions happened to
+ * coincide. Relaxing it so a bare `class X {}` reached through `export default X;` could be
+ * resolved — a real defect, a correct row rejected — made them diverge, and the module-crossing
+ * question started accepting private classes. Reported on PR #555 immediately after: a barrel
+ * whose first `export *` target holds a private `FxCardComponent` resolved to **its** selector,
+ * so the fixture exited 0 for the wrong element and 1 for the right one.
+ *
+ * So the mode is passed explicitly at every call rather than defaulted per site: every hop that
+ * crosses a module boundary is `EXPORTED`, and `LOCAL` is only used where the name is already
+ * known to live in the file being read.
  */
-function selectorOfBinding(name, file, depth = 0) {
+function selectorOfBinding(name, file, mode, depth = 0) {
   const text = sources.get(file);
   if (text === undefined) return null;
 
@@ -1070,10 +1144,13 @@ function selectorOfBinding(name, file, depth = 0) {
    * caller passes for it, because a default export has no name of its own at the import site —
    * which is exactly why a default import cannot be resolved by name and must be followed. */
   if (name === DEFAULT_BINDING) {
+    /* Both recursions are LOCAL on purpose: `export default X;` names a binding in *this* file,
+     * and that binding is very often a class the file never marks `export`. That is the form
+     * whose rejection was the previous round's finding. */
     const declared = /export\s+default\s+class\s+([A-Za-z_$][\w$]*)/.exec(text);
-    if (declared) return selectorOfBinding(declared[1], file, depth);
+    if (declared) return selectorOfBinding(declared[1], file, LOCAL, depth);
     const reexported = /export\s+default\s+([A-Za-z_$][\w$]*)\s*;/.exec(text);
-    if (reexported) return selectorOfBinding(reexported[1], file, depth);
+    if (reexported) return selectorOfBinding(reexported[1], file, LOCAL, depth);
     // `export default class { … }` with its decorator above it: read the nearest selector.
     const anonymous = text.search(/export\s+default\s+class\s*[{<]/);
     if (anonymous !== -1) {
@@ -1083,13 +1160,26 @@ function selectorOfBinding(name, file, depth = 0) {
     return null;
   }
 
-  /* Any declaration form, exported at the declaration or not — see `classDeclaration`. Reached
-   * from the default-export branch above, which recurses with the declared name, and from a
-   * re-export clause, both of which can land on a class the file never marks `export`. */
-  const classAt = text.search(classDeclaration(name));
-  if (classAt !== -1) {
-    const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*['"`]([^'"`]+)['"`]/g)];
+  /** The selector nearest above an offset — the decorator belonging to what is declared there. */
+  const selectorAbove = (offset) => {
+    const selectors = [...text.slice(0, offset).matchAll(/selector:\s*['"`]([^'"`]+)['"`]/g)];
     return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
+  };
+
+  /* A class declared in this file. In LOCAL mode any declaration answers it; in EXPORTED mode
+   * only one the file actually publishes does, either at the declaration or through a bare
+   * `export { … }` clause naming it. */
+  if (mode === LOCAL) {
+    const classAt = text.search(classDeclaration(name));
+    if (classAt !== -1) return selectorAbove(classAt);
+  } else {
+    const exportedAt = text.search(exportedClassDeclaration(name));
+    if (exportedAt !== -1) return selectorAbove(exportedAt);
+    const localName = locallyExportedAs(text, name);
+    if (localName !== null) {
+      const classAt = text.search(classDeclaration(localName));
+      if (classAt !== -1) return selectorAbove(classAt);
+    }
   }
   // Two hops is a barrel re-exporting a barrel; beyond that, refuse rather than crawl.
   if (depth >= 2) return null;
@@ -1101,16 +1191,39 @@ function selectorOfBinding(name, file, depth = 0) {
     if (!binding) continue;
     const target = resolveModule(clause[2], relative(ROOT, file));
     // The binding was found and its module was not: refuse rather than guess.
-    return target ? selectorOfBinding(binding.outer, target, depth + 1) : null;
+    if (!target) return null;
+    /* `export { default as X } from './m'` is a barrel idiom, and `default` is not a class name
+     * anything declares — looked up by name it resolved to nothing and rejected a correct row. */
+    return binding.outer === 'default'
+      ? selectorOfBinding(DEFAULT_BINDING, target, EXPORTED, depth + 1)
+      : selectorOfBinding(binding.outer, target, EXPORTED, depth + 1);
   }
 
-  // `export * from './x'` — the name is unchanged, so try each and take the first that declares it.
+  /* `export * from './x'` — the name is unchanged, so ask each target what it publishes.
+   *
+   * Every hit is collected rather than the first one returned. Taking the first made the order
+   * of the barrel's lines decide identity, which is how the private-class finding produced a
+   * *wrong* answer rather than no answer. Two stars that disagree is ambiguous — illegal in
+   * TypeScript, and not something to resolve by reading top to bottom — so it is refused, the
+   * same way the global fallback refuses a name declared in more than one file. Agreeing hits
+   * are not ambiguous: the same module reached by two paths answers once. */
+  const hits = [];
   for (const star of text.matchAll(/export\s*\*\s*from\s*['"`]([^'"`]+)['"`]/g)) {
     const target = resolveModule(star[1], relative(ROOT, file));
-    const found = target && selectorOfBinding(name, target, depth + 1);
-    if (found) return found;
+    if (!target) continue;
+    const found = selectorOfBinding(name, target, EXPORTED, depth + 1);
+    if (found) hits.push({ target, found });
   }
-  return null;
+  if (new Set(hits.map((h) => h.found)).size > 1) {
+    fail(
+      `\`${name}\` is re-exported by ${relative(ROOT, file)} from more than one module with ` +
+        `different selectors — ${hits.map((h) => `${relative(ROOT, h.target)} declares \`${h.found}\``).join(', ')}.\n` +
+        '  Which one a `export *` barrel publishes is ambiguous, so the element column cannot be ' +
+        'verified against it. An ambiguous answer is not a verified one.',
+    );
+    return null;
+  }
+  return hits.length > 0 ? hits[0].found : null;
 }
 
 function selectorOf(className, registeringFile) {
@@ -1124,7 +1237,7 @@ function selectorOf(className, registeringFile) {
   if (registering !== undefined) {
     /* Declared in the file that registers it: no binding to follow. Checked first, because a
      * local declaration is unambiguous and cheaper than resolving a module. */
-    const own = selectorOfBinding(className, join(ROOT, registeringFile));
+    const own = selectorOfBinding(className, join(ROOT, registeringFile), LOCAL);
     if (own) return own;
 
     /* A default import of this class: `import ClassName from 'm'`. Matched before the named
@@ -1148,7 +1261,7 @@ function selectorOf(className, registeringFile) {
         );
         return null;
       }
-      const selector = selectorOfBinding(DEFAULT_BINDING, target);
+      const selector = selectorOfBinding(DEFAULT_BINDING, target, EXPORTED);
       if (selector) return selector;
       fail(
         `\`${className}\` is default-imported into ${registeringFile} from ` +
@@ -1187,7 +1300,12 @@ function selectorOf(className, registeringFile) {
         );
         return null;
       }
-      const selector = selectorOfBinding(binding.outer, target);
+      /* EXPORTED: this crosses a module boundary, so what matters is what `target` publishes
+       * under that name, not merely what it declares. */
+      const selector =
+        binding.outer === 'default'
+          ? selectorOfBinding(DEFAULT_BINDING, target, EXPORTED)
+          : selectorOfBinding(binding.outer, target, EXPORTED);
       if (selector) return selector;
       fail(
         `\`${className}\` is imported into ${registeringFile} from \`${clause[2]}\`` +
@@ -1223,7 +1341,9 @@ function selectorOf(className, registeringFile) {
    * matcher cannot see, of a class no other file declares) which is why nothing else hit it.
    * Reported on PR #555; reproduced before fixing, and the positive control for this fallback is
    * what the existing ambiguity control did not cover. */
-  return declaring.length === 1 ? selectorOfBinding(className, declaring[0]) : null;
+  /* LOCAL: `declaring[0]` was found by searching for the declaration itself, so the name is
+   * known to live there and whether it is exported is not the question being asked. */
+  return declaring.length === 1 ? selectorOfBinding(className, declaring[0], LOCAL) : null;
 }
 
 /**

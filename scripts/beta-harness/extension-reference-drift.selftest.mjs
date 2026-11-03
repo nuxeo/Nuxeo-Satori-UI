@@ -1112,6 +1112,183 @@ control(
   },
 );
 
+/* ── PR #555, next round: a module's private class is not what it publishes ──────────────────
+ *
+ * The reported finding was a regression from the fix above. Relaxing the declaration lookup so a
+ * bare `class X {}` reached through `export default X;` resolves was right for a name already
+ * known to live in the file, and wrong for every hop that crosses a module boundary, where the
+ * question is what the module *publishes*. `selectorOfBinding` was answering both with one
+ * lookup, so the second started accepting private classes.
+ */
+
+/** A barrel whose FIRST `export *` target holds a private class of the sought name. */
+const PRIVATE_BARREL_SOURCES = {
+  'libs/fx/src/private.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-private', template: '' })\n" +
+    'class FxCardComponent {}\n' +
+    'export const USED = FxCardComponent;\n',
+  'libs/fx/src/real.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-actual', template: '' })\n" +
+    'export class FxCardComponent {}\n',
+  'libs/fx/src/index.ts': "export * from './private';\nexport * from './real';\n",
+  'libs/fx/src/registrar.ts':
+    "import { FxCardComponent } from '@fx/components';\n" +
+    "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+};
+
+control('a barrel starring only a private class resolves nothing, and says so', NEGATIVE, () => {
+  /**
+   * The control that pins the visibility fix **on its own**.
+   *
+   * The two-module version below is the scenario as reported, but it does not discriminate:
+   * reverting the visibility fix leaves the private and the real class both answering, which the
+   * ambiguity refusal then catches, so that control stays green with the visibility fix gone and
+   * its message assertion matches by coincidence — the refusal names the real class too. A
+   * control satisfied by a different fix is not evidence for this one.
+   *
+   * Here the barrel stars exactly one module and that module's class is private, so there is
+   * nothing to be ambiguous about. The only correct answer is a refusal: with the fix reverted
+   * the gate accepts `fx-private` and exits 0.
+   */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-private`', '`tabs`']] }),
+      sources: {
+        'libs/fx/src/private.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-private', template: '' })\n" +
+          'class FxCardComponent {}\n' +
+          'export const USED = FxCardComponent;\n',
+        'libs/fx/src/index.ts': "export * from './private';\n",
+        'libs/fx/src/registrar.ts':
+          "import { FxCardComponent } from '@fx/components';\n" +
+          "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+      },
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /no selector could be read for it there/.test(proc.output),
+    `the private class answered for the barrel:\n${proc.output.slice(-500)}`,
+  );
+});
+
+control('a private class in a starred module does not answer for the barrel', NEGATIVE, () => {
+  /* The order of the barrel's two lines decided identity: the private class came first, so the
+   * gate exited 0 for ITS selector. Nothing about `fx-private` is importable from this barrel. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-private`', '`tabs`']] }),
+      sources: PRIVATE_BARREL_SOURCES,
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(/declares `fx-actual`/.test(proc.output), proc.output.slice(-500));
+});
+
+falsePositive('the same barrel accepts the element of the class it really exports', () => {
+  /* The other direction of the same hole: with the row naming the exported component's real
+   * selector, the gate exited 1 — a correct row rejected because a private namesake won. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-actual`', '`tabs`']] }),
+      sources: PRIVATE_BARREL_SOURCES,
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
+falsePositive('a bare `export { Inner as X }` through a barrel resolves', () => {
+  /* Publishing a name under a rename, with no `from`: neither the declaration lookup nor the
+   * re-export loop saw it, and the gate reported that no source declared the component at all.
+   * Not reported — found by enumerating the ways a module can publish a name. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-actual`', '`tabs`']] }),
+      sources: {
+        'libs/fx/src/real.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-actual', template: '' })\n" +
+          'class Inner {}\n' +
+          'export { Inner as FxCardComponent };\n',
+        'libs/fx/src/index.ts': "export * from './real';\n",
+        'libs/fx/src/registrar.ts':
+          "import { FxCardComponent } from '@fx/components';\n" +
+          "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+      },
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
+/** `export { default as X } from './m'` — a barrel idiom, and `default` names no class. */
+const DEFAULT_REEXPORT_SOURCES = {
+  'libs/fx/src/card.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-actual', template: '' })\n" +
+    'export default class ActualComponent {}\n',
+  'libs/fx/src/index.ts': "export { default as FxCardComponent } from './card';\n",
+  'libs/fx/src/registrar.ts':
+    "import { FxCardComponent } from '@fx/components';\n" +
+    "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+};
+
+falsePositive('a `export { default as X }` re-export is followed to the default', () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-actual`', '`tabs`']] }),
+      sources: DEFAULT_REEXPORT_SOURCES,
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
+control('the same `default as` re-export still rejects a wrong element', NEGATIVE, () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-wrong`', '`tabs`']] }),
+      sources: DEFAULT_REEXPORT_SOURCES,
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(/declares `fx-actual`/.test(proc.output), proc.output.slice(-400));
+});
+
+control('two starred modules publishing the same name disagree, so it is refused', NEGATIVE, () => {
+  /* With visibility fixed, first-match-wins across `export *` is still the hazard the finding
+   * was an instance of. Two stars that disagree is ambiguous — illegal in TypeScript, and not
+   * something to settle by reading the barrel top to bottom. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-one`', '`tabs`']] }),
+      sources: {
+        'libs/fx/src/one.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-one', template: '' })\n" +
+          'export class FxCardComponent {}\n',
+        'libs/fx/src/two.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-two', template: '' })\n" +
+          'export class FxCardComponent {}\n',
+        'libs/fx/src/index.ts': "export * from './one';\nexport * from './two';\n",
+        'libs/fx/src/registrar.ts':
+          "import { FxCardComponent } from '@fx/components';\n" +
+          "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+      },
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /re-exported by .* from more than one module with different selectors/.test(proc.output),
+    `the barrel resolved an ambiguous name instead of refusing:\n${proc.output.slice(-600)}`,
+  );
+});
+
 /* ── report ──────────────────────────────────────────────────────────────────────────────────── */
 
 rmSync(workspace, { recursive: true, force: true });
