@@ -46,10 +46,14 @@ export default async function run(page, h) {
   // power users, so the membership is what decides, not a flag the client can hold.
   const me = await page.request.get(`${h.baseUrl}/nuxeo/api/v1/me`).then((r) => r.json());
   const groups = me?.properties?.groups ?? [];
+  // Group membership is not the whole test: AuthService also accepts an isAdministrator flag, top-level or
+  // nested, and the built-in Administrator username. Any of those makes this account an administrator.
+  const flagged = me?.isAdministrator === true || me?.properties?.isAdministrator === true;
+  const builtIn = me?.id === 'Administrator' || me?.properties?.username === 'Administrator';
   h.check(
-    'the account is a member and holds no administration group',
-    groups.includes('members') && !groups.includes('administrators') && !groups.includes('powerusers'),
-    `groups ${JSON.stringify(groups)}`,
+    'the account is a member with no administration group, flag or built-in name',
+    groups.includes('members') && !groups.includes('administrators') && !groups.includes('powerusers') && !flagged && !builtIn,
+    `groups ${JSON.stringify(groups)}, isAdministrator ${JSON.stringify(me?.isAdministrator)}, id ${JSON.stringify(me?.id)}`,
   );
 
   await h.step('A user without administration access is not offered Administration');
