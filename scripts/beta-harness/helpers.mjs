@@ -152,9 +152,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
    * `identity.valid: true` over a result that may have been read as the guest, which is false
    * evidence rather than a missing check. A bounded wait would need a deadline *and* an expiry
    * policy, and admits a harness that hangs instead of reporting — its own failure mode. The
-   * cost is that a legitimately slow request fails the step; the remedy the refusal names is to
-   * let the app settle before the transition is declared. See `pendingRequests` in
-   * `identity-guard.mjs` for the full trade-off.
+   * cost is that a legitimately slow request invalidates the run, though the run was not
+   * compromised; this refusal's message says to let the app settle before the transition is
+   * declared. See `pendingRequests` in `identity-guard.mjs` for the full trade-off.
    *
    * @param {string} what names the transition, e.g. `h.signedOut()`
    * @param {string} [where] distinguishes a second verification of the same transition, e.g.
