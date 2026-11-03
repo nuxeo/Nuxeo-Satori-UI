@@ -96,7 +96,7 @@
       type="button"
       [matTooltip]="'satori-components.trash-list.export-csv' | translate"
       [attr.aria-label]="'satori-components.trash-list.export-csv' | translate"
-      [disabled]="documents().length === 0"
+      [disabled]="loading() || documents().length === 0"
       (click)="exportCsv()"
     >
       <mat-icon aria-hidden="true" svgIcon="download" />

@@ -888,6 +888,17 @@ describe('NxsTrashListComponent', () => {
       ]);
     });
 
+    it('holds the export while a page loads, so it cannot download the previous results', async () => {
+      await create();
+      const exportButton = () =>
+        el().querySelector('button[aria-label="Export CSV"]') as HTMLButtonElement;
+      expect(exportButton().disabled).toBe(false);
+      searchTrash.mockReturnValue(new Subject<NuxeoDocumentList>());
+      internals().goToPage(1);
+      await render();
+      expect(exportButton().disabled).toBe(true);
+    });
+
     it('reads every column a row can show, and nothing for one it cannot', async () => {
       await create();
       const d = doc(1, { properties: { 'dc:created': 'c', 'dc:creator': 'a', 'dc:modified': 7 } });
