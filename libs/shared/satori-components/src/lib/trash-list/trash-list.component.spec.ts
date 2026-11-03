@@ -324,7 +324,7 @@ describe('NxsTrashListComponent', () => {
       await render();
       expect(restoreDocument).toHaveBeenCalledWith('uid-2');
       expect(toastShow).toHaveBeenCalledWith('Restored "Note 2".');
-      expect(searchTrash.mock.calls.length).toBe(before + 1);
+      expect(searchTrash.mock.calls).toHaveLength(before + 1);
       expect(el().querySelectorAll('tr.nxs-document-list__row')).toHaveLength(2);
       expect(el().querySelector('.nxs-trash-list__count')?.textContent).toContain(
         '2 trashed documents',
@@ -423,7 +423,7 @@ describe('NxsTrashListComponent', () => {
         expect(settled - before).toBeLessThanOrEqual(4);
 
         await vi.advanceTimersByTimeAsync(10_000);
-        expect(searchTrash.mock.calls.length).toBe(settled);
+        expect(searchTrash.mock.calls).toHaveLength(settled);
       } finally {
         vi.useRealTimers();
       }
@@ -501,7 +501,7 @@ describe('NxsTrashListComponent', () => {
       internals().restore([doc(1)]);
       await render();
       expect(toastError).toHaveBeenCalledWith('Could not restore "Note 1".');
-      expect(searchTrash.mock.calls.length).toBe(before);
+      expect(searchTrash.mock.calls).toHaveLength(before);
       expect(internals().busy().size).toBe(0);
     });
 

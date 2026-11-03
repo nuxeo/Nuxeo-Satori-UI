@@ -1,7 +1,6 @@
 @if (selectedCount() > 0) {
-  <div
+  <section
     class="nxs-trash-list__selection"
-    role="region"
     [attr.aria-label]="'satori-components.trash-list.selection' | translate"
   >
     <span class="nxs-trash-list__selection-count">{{
@@ -34,11 +33,11 @@
       <mat-icon aria-hidden="true" svgIcon="trash_x" />
       {{ 'satori-components.trash-list.purge' | translate }}
     </button>
-  </div>
+  </section>
 }
 
 <div class="nxs-trash-list__toolbar">
-  <span class="nxs-trash-list__count" role="status">
+  <output class="nxs-trash-list__count">
     @if (!loading() && !error() && totalSize() >= 0) {
       {{
         (totalSize() === 1
@@ -47,7 +46,7 @@
         ) | translate: { count: totalSize() }
       }}
     }
-  </span>
+  </output>
 
   <div class="nxs-trash-list__tools">
     @if (view() !== 'table') {
@@ -102,9 +101,8 @@
     >
       <mat-icon aria-hidden="true" svgIcon="download" />
     </button>
-    <div
+    <fieldset
       class="nxs-trash-list__views"
-      role="group"
       [attr.aria-label]="'satori-components.trash-list.views' | translate"
     >
       @for (option of views; track option) {
@@ -122,7 +120,7 @@
           <mat-icon aria-hidden="true" [svgIcon]="viewIcon(option)" />
         </button>
       }
-    </div>
+    </fieldset>
   </div>
 </div>
 

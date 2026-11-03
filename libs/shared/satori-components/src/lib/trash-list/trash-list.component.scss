@@ -40,6 +40,14 @@
   font: var(--mat-sys-title-small);
 }
 
+// A native group for the view buttons, without the fieldset's box.
+.nxs-trash-list__views {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 .nxs-trash-list__tools,
 .nxs-trash-list__views {
   display: flex;

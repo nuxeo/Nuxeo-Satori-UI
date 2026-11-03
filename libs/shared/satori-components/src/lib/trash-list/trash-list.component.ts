@@ -456,9 +456,10 @@ export class NxsTrashListComponent {
   }
 
   protected setSelected(uid: string, on: boolean): void {
-    this.selectedIds.update((ids) =>
-      on ? (ids.includes(uid) ? ids : [...ids, uid]) : ids.filter((id) => id !== uid),
-    );
+    this.selectedIds.update((ids) => {
+      if (!on) return ids.filter((id) => id !== uid);
+      return ids.includes(uid) ? ids : [...ids, uid];
+    });
   }
 
   protected allSelected(): boolean {
