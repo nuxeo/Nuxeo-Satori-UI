@@ -82,7 +82,8 @@ fetches and caches its own.
 
 ## Theming and layout
 
-The colours are custom properties on the host — set them by targeting `nxs-asset-grid`:
+The colours are custom properties the grid reads with a default. Set them on `nxs-asset-grid` or on
+any ancestor, including `<html>` — which is where a customer's `theme.tokens` land:
 
 <table>
   <thead>
@@ -192,11 +193,12 @@ screen change the grid at a breakpoint:
   </tbody>
 </table>
 
-The difference is deliberate and easy to get wrong: a property **declared on `:host`** is set on the
-grid element, so it beats anything inherited from an ancestor. The layout knobs are therefore
-written as `var()` fallbacks and declared nowhere, so a media query on the box around the grid wins.
-The colours are declared on `:host`, and a caller overrides those by targeting `nxs-asset-grid`,
-which outranks `:host`.
+Both tables work the same way, and the reason is worth knowing because it is easy to get wrong: a
+custom property **declared on `:host`** is set on the grid element itself, so it beats the same
+property inherited from an ancestor. Every knob here is therefore written as a `var()` fallback at
+the point it is used and declared nowhere, which leaves both overrides working — the media query a
+screen puts on the box around the grid, and the `theme.tokens` a customer ships, which
+`AppThemeService.applyTheme()` writes inline on `<html>` and which the grid inherits.
 
 ## Accessibility
 

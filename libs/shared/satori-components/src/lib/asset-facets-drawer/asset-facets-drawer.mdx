@@ -99,7 +99,10 @@ change no longer re-renders them for free — read the active language as a sign
 
 ## Theming
 
-Four custom properties, on the host — set them by targeting `nxs-asset-facets-drawer`:
+Four custom properties, each read with the default below. Set them on `nxs-asset-facets-drawer` or
+on any ancestor, including `<html>` — which is where a customer's `theme.tokens` land. They are
+declared nowhere: a property declared on `:host` is set on the element itself and would beat an
+inherited override, which would put the panel's colours outside a customer's reach.
 
 <table>
   <thead>

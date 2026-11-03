@@ -72,7 +72,10 @@ does not care which way they were made.
 
 ## Theming
 
-Four custom properties, on the host:
+Four custom properties, each read with the default below. Set them on `nxs-storyboard` or on any
+ancestor, including `<html>` — which is where a customer's `theme.tokens` land. They are declared
+nowhere: a property declared on `:host` is set on the element itself and would beat an inherited
+override, which would put the strip's colours outside a customer's reach.
 
 <table>
   <thead>
