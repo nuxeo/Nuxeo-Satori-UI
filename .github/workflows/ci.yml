@@ -753,7 +753,8 @@ jobs:
       #
       # The fix for the apt half is a container image that ships both
       # (`mcr.microsoft.com/playwright:v<version>-noble`), which is a larger change than this one
-      # and is NOT made here. So `timeout-minutes: 25` below stays exactly where it is.
+      # and is NOT made here. So the pre-suite half of `timeout-minutes` below stays exactly where
+      # it is; NXSAT-331 raised the total to 30 for the suite's own cap, not for this install.
       - name: Cache the pinned Playwright browser
         if: steps.scope.outputs.interactions == 'true'
         uses: actions/cache@v4
@@ -772,7 +773,7 @@ jobs:
       # checked for MatDialog's layout at 1280 and 320 px (`storybook-dialog-layout.mjs`), after
       # that check's own negative controls have run.
       #
-      # The suite is about four and a half minutes — 268.9 s for all 214 stories, measured in run
+      # The suite was four and a half minutes — 268.9 s for all 214 stories, measured in run
       # 39914726264 — and it is NOT what spends this step's budget. `playwright install --with-deps`
       # is: the apt fetch of its 25.9 MB set (CJK fonts, NSS, xvfb) from the Azure Ubuntu mirror was
       # recorded at 90.9 kB/s (4m45s), 82.9 kB/s (5m13s) and 49.2 kB/s (8m47s) in three runs on
@@ -784,19 +785,29 @@ jobs:
       # workflow into independent jobs removes that masking, since a red static gate no longer
       # prevents this job from running and reporting.
       #
-      # So 25 minutes, and it is not headroom over the suite: the suite already has its own budget.
-      # `storybook-interactions.mjs` defaults to `--budget 600000`, a hard 10-minute cap measured
+      # So 30 minutes, and it is not headroom over the suite: the suite already has its own budget.
+      # `storybook-interactions.mjs` defaults to `--budget 900000`, a hard 15-minute cap measured
       # from browser launch after which every remaining story is FAILED rather than skipped, so a
       # suite that slows down goes red on its own terms and this timeout can never be what hides
-      # it. 25 = that 10-minute self-cap plus 15 minutes for everything before it, which is 1.5x the
+      # it. 30 = that 15-minute self-cap plus 15 minutes for everything before it, which is 1.5x the
       # slowest pre-suite phase on record. Do not trim it back towards the suite's duration: the
       # install is the unbounded half, it answers to a mirror's throughput rather than to anything
       # in this repository, and `registry-auth.yml` already allows 25 for the same reason. The
       # browser cache above does not change this: it covers the Chromium binary, not the apt set.
+      #
+      # The self-cap was 600000 until NXSAT-331 and is a wall clock over a suite that grows with
+      # the component library, so it tightens every time anyone adds a story and goes red for a
+      # reason that has nothing to do with the story that tripped it. Run 41637854927 on `main`
+      # printed `300 of 300 stories passed ... in 582.2 s` — 17.8 s of headroom, about nine
+      # stories — and the eighteen this ticket adds spent it, stranding 61 stories behind
+      # `budget ... spent before it ran`. 900000 restores a trip wire that means something: at the
+      # 1.94 s per story that run measured it is hit at roughly 464 stories, so the cap still
+      # catches a suite that slows down rather than one that merely grew. Re-measure and raise it
+      # again — do not delete it — when a green run on `main` comes within 15% of the cap.
       - name: Storybook interactions (satori-components)
         if: steps.scope.outputs.interactions == 'true'
         shell: bash
-        timeout-minutes: 25
+        timeout-minutes: 30
         env:
           # `.npmrc` reads both; npm refuses to start when a variable it names is unset.
           NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}

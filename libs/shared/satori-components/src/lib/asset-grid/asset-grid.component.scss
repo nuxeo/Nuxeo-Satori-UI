@@ -1,20 +1,14 @@
 :host {
-  --nxs-asset-grid-card-surface: var(--mat-sys-surface);
-  --nxs-asset-grid-card-border: var(--mat-sys-outline-variant);
-  --nxs-asset-grid-thumbnail-surface: var(--mat-sys-surface-container);
-  --nxs-asset-grid-icon: var(--mat-sys-on-surface-variant);
-  --nxs-asset-grid-accent: var(--mat-sys-primary);
-  --nxs-asset-grid-selected-surface: var(--mat-sys-primary-container);
   display: block;
   min-height: 0;
 }
 
-/* The three layout knobs take their defaults from `var()` fallbacks rather than a `:host`
-   declaration, and that is not a style choice. A property declared on `:host` is set on this
-   element, so it *overrides* a value inherited from an ancestor — and a screen's media query sets
-   these on the box around the grid. Written as fallbacks, an ancestor wins; written on `:host`, the
-   breakpoints would silently do nothing. The colours above are the opposite case: a caller overrides
-   those by targeting `nxs-asset-grid` itself, which outranks `:host`. */
+/* Every knob below takes its default from a `var()` fallback rather than a `:host` declaration, and
+   that is not a style choice. A custom property declared on `:host` is set *on this element*, so it
+   overrides whatever the same property inherits from an ancestor — and both callers that set these
+   are ancestors: a screen's media query sets the layout knobs on the box around the grid, and
+   `AppThemeService.applyTheme()` writes a customer's `theme.tokens` inline on `<html>`. Declared on
+   `:host`, both would be silently ignored, which would leave the grid's colours outside Layer 0. */
 .nxs-asset-grid__grid {
   display: grid;
   grid-template-columns: var(
@@ -31,9 +25,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--nxs-asset-grid-card-border);
+  border: 1px solid var(--nxs-asset-grid-card-border, var(--mat-sys-outline-variant));
   border-radius: 8px;
-  background: var(--nxs-asset-grid-card-surface);
+  background: var(--nxs-asset-grid-card-surface, var(--mat-sys-surface));
   transition:
     box-shadow 0.15s ease,
     background-color 0.15s ease;
@@ -42,36 +36,33 @@
     box-shadow: var(--mat-sys-level2);
   }
 
-  // The checkbox is out of the way until it is wanted — but `:focus-within` is as load-bearing as
-  // `:hover`: without it a keyboard user tabs onto a control that is `visibility: hidden`, which is
-  // focus they cannot see.
+  // The checkbox is out of the way until it is wanted. `:focus-within` is as load-bearing as
+  // `:hover`: it is what reveals the control once Tab reaches it, so keyboard focus is visible.
   &:hover .nxs-asset-grid__select,
   &:focus-within .nxs-asset-grid__select {
     opacity: 1;
-    visibility: visible;
   }
 }
 
 .nxs-asset-grid__card--selected {
-  background: var(--nxs-asset-grid-selected-surface);
-  border-color: var(--nxs-asset-grid-accent);
+  background: var(--nxs-asset-grid-selected-surface, var(--mat-sys-primary-container));
+  border-color: var(--nxs-asset-grid-accent, var(--mat-sys-primary));
 
   .nxs-asset-grid__select {
     opacity: 1;
-    visibility: visible;
   }
 }
 
+// Transparent, never `visibility: hidden`. `visibility` takes the checkbox out of the tab order and
+// out of the accessibility tree, so the control it hides has no name to read and Tab cannot reach it
+// — which also means it could never trigger the `:focus-within` rule written to reveal it.
 .nxs-asset-grid__select {
   position: absolute;
   top: 8px;
   inset-inline-start: 8px;
   z-index: 2;
   opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.2s ease,
-    visibility 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .nxs-asset-grid__thumbnail {
@@ -84,7 +75,7 @@
   height: 120px;
   overflow: hidden;
   border-radius: 8px 8px 0 0;
-  background: var(--nxs-asset-grid-thumbnail-surface);
+  background: var(--nxs-asset-grid-thumbnail-surface, var(--mat-sys-surface-container));
 }
 
 .nxs-asset-grid__image {
@@ -100,7 +91,7 @@
   width: 48px;
   height: 48px;
   font-size: 48px;
-  color: var(--nxs-asset-grid-icon);
+  color: var(--nxs-asset-grid-icon, var(--mat-sys-on-surface-variant));
 }
 
 .nxs-asset-grid__body {
@@ -154,12 +145,12 @@
 // IBM Equal Access `style_focus_visible` reads `:focus` only, so each ring is a standalone `:focus`
 // rule rather than a list with `:focus-visible`.
 .nxs-asset-grid__name:focus {
-  outline: 2px solid var(--nxs-asset-grid-accent);
+  outline: 2px solid var(--nxs-asset-grid-accent, var(--mat-sys-primary));
   outline-offset: 2px;
 }
 
 .nxs-asset-grid__name:focus-visible {
-  outline: 2px solid var(--nxs-asset-grid-accent);
+  outline: 2px solid var(--nxs-asset-grid-accent, var(--mat-sys-primary));
   outline-offset: 2px;
 }
 

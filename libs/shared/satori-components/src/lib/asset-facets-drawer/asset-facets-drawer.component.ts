@@ -19,6 +19,8 @@ import { nxsVisibleText } from '../visible-text';
 /** The ID the host renders the asset facets under, through `lib-extension-outlet`. */
 export const NXS_ASSET_FACETS_DRAWER_ID = 'nxs.components.assetFacetsDrawer';
 
+let nextId = 0;
+
 /** One choice within a facet group. */
 export interface NxsFacetChoice {
   /** The bucket key the host filters by. Unique within its group. */
@@ -156,6 +158,20 @@ export class NxsAssetFacetsDrawerComponent {
     source: this.initiallyExpandedGroupIds,
     computation: (ids) => new Set(ids),
   });
+
+  /**
+   * Element IDs, numbered per instance. Two panels can be on one page — an outlet renders one while
+   * a screen keeps its own — and a hardcoded `id` would then point both `for=` labels and both
+   * `aria-controls` at the first panel's elements, silently unnaming the second's controls.
+   */
+  protected readonly ids = (() => {
+    const base = `nxs-asset-facets-${nextId++}`;
+    return {
+      fulltext: `${base}-fulltext`,
+      autoLabel: `${base}-auto-label`,
+      group: (id: string) => `${base}-group-${id}`,
+    };
+  })();
 
   protected readonly ownLabel = computed(() => nxsVisibleText(this.label()));
   protected readonly hasText = computed(() => this.text().trim().length > 0);

@@ -7,12 +7,12 @@
   </p>
 
   <div class="nxs-asset-facets-drawer__group">
-    <label class="nxs-asset-facets-drawer__group-title" for="nxs-asset-facets-fulltext">
+    <label class="nxs-asset-facets-drawer__group-title" [for]="ids.fulltext">
       {{ 'satori-components.asset-facets-drawer.full-text' | translate }}
     </label>
     <div class="nxs-asset-facets-drawer__input-wrap">
       <input
-        id="nxs-asset-facets-fulltext"
+        [id]="ids.fulltext"
         class="nxs-asset-facets-drawer__input"
         type="search"
         [placeholder]="'satori-components.asset-facets-drawer.search-placeholder' | translate"
@@ -39,7 +39,7 @@
         class="nxs-asset-facets-drawer__group-toggle"
         type="button"
         [attr.aria-expanded]="isExpanded(group.id)"
-        [attr.aria-controls]="'nxs-asset-facets-group-' + group.id"
+        [attr.aria-controls]="ids.group(group.id)"
         (click)="toggleGroup(group.id)"
       >
         <span class="nxs-asset-facets-drawer__group-label">{{ group.label }}</span>
@@ -50,7 +50,7 @@
       </button>
 
       @if (isExpanded(group.id)) {
-        <div class="nxs-asset-facets-drawer__options" [id]="'nxs-asset-facets-group-' + group.id">
+        <div class="nxs-asset-facets-drawer__options" [id]="ids.group(group.id)">
           @if (group.dynamic && group.options.length === 0) {
             <span class="nxs-asset-facets-drawer__no-results">{{
               'satori-components.asset-facets-drawer.no-available-results' | translate
@@ -78,11 +78,14 @@
 
 <div class="nxs-asset-facets-drawer__footer">
   <div class="nxs-asset-facets-drawer__auto">
-    <span id="nxs-asset-facets-auto-label" class="nxs-asset-facets-drawer__auto-label">
+    <span [id]="ids.autoLabel" class="nxs-asset-facets-drawer__auto-label">
       {{ 'satori-components.asset-facets-drawer.auto-search' | translate }}
     </span>
+    <!-- Material's own input, not `[attr.]`: the `switch` role is on the inner button, and the
+         component forwards this to it. Set as a bare attribute it would stay on the host, where
+         nothing reads it. -->
     <mat-slide-toggle
-      aria-labelledby="nxs-asset-facets-auto-label"
+      [aria-labelledby]="ids.autoLabel"
       [checked]="autoSearch()"
       (change)="setAutoSearch($event.checked)"
     />

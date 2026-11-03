@@ -47,6 +47,20 @@ class HostComponent {
   readonly actions: NxsAssetFacetsAction[] = [];
 }
 
+/** Two panels on one page: an outlet renders one while a screen keeps its own. */
+@Component({
+  standalone: true,
+  imports: [NxsAssetFacetsDrawerComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `
+    <nxs-asset-facets-drawer [groups]="groups()" [initiallyExpandedGroupIds]="['type']" />
+    <nxs-asset-facets-drawer [groups]="groups()" [initiallyExpandedGroupIds]="['type']" />
+  `,
+})
+class TwinHostComponent {
+  readonly groups = signal<readonly NxsFacetGroup[]>([]);
+}
+
 /** The outlet path: callbacks as inputs, because an outlet cannot bind an output. */
 @Component({
   standalone: true,
@@ -158,7 +172,7 @@ describe('NxsAssetFacetsDrawerComponent', () => {
     host.initiallyExpanded.set(['type']);
     await render();
     const controls = toggles()[0].getAttribute('aria-controls');
-    expect(controls).toBe('nxs-asset-facets-group-type');
+    expect(controls).toMatch(/-group-type$/);
     expect(el().querySelector(`#${controls}`)).not.toBeNull();
   });
 
@@ -295,5 +309,40 @@ describe('NxsAssetFacetsDrawerComponent', () => {
 
     expect(handlerHost.toggled).toEqual([{ groupId: 'type', value: 'type-a' }]);
     expect(handlerHost.actions).toEqual(['reset']);
+  });
+
+  // Two panels can share a page — an outlet renders one while a screen keeps its own. Hardcoded
+  // `id`s would make the second panel's label point at the first panel's input, so the second box
+  // would have no accessible name and clicking its label would focus the wrong field.
+  it('numbers its element ids per instance, so two panels on a page stay separate', async () => {
+    const twins = TestBed.createComponent(TwinHostComponent);
+    twins.componentInstance.groups.set([group('type')]);
+    twins.detectChanges();
+    await twins.whenStable();
+    const root = twins.nativeElement as HTMLElement;
+
+    const ids = (selector: string): string[] =>
+      Array.from(root.querySelectorAll(selector), (n) => n.id);
+    const inputs = ids('.nxs-asset-facets-drawer__input');
+    const regions = ids('.nxs-asset-facets-drawer__options');
+    const autoLabels = ids('.nxs-asset-facets-drawer__auto-label');
+
+    expect(new Set([...inputs, ...regions, ...autoLabels]).size).toBe(6);
+
+    // Every reference resolves to its own panel's element, not the first one's.
+    Array.from(root.querySelectorAll('nxs-asset-facets-drawer')).forEach((panel, index) => {
+      expect(
+        panel.querySelector('.nxs-asset-facets-drawer__group-title')?.getAttribute('for'),
+      ).toBe(inputs[index]);
+      expect(
+        panel
+          .querySelector('.nxs-asset-facets-drawer__group-toggle')
+          ?.getAttribute('aria-controls'),
+      ).toBe(regions[index]);
+      // The `switch` role is the inner button, which is where Material forwards the name.
+      expect(panel.querySelector('button[role="switch"]')?.getAttribute('aria-labelledby')).toBe(
+        autoLabels[index],
+      );
+    });
   });
 });

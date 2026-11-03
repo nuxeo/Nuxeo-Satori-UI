@@ -104,7 +104,10 @@ export const ExpandingAGroup: Story = {
     await expect(format).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(format);
     await expect(format).toHaveAttribute('aria-expanded', 'true');
-    await expect(canvas.getByRole('checkbox', { name: 'JPEG' })).toBeVisible();
+    // Material's checkbox input carries the role but is painted at opacity 0, so visibility is
+    // asserted on the label the user actually reads.
+    await expect(canvas.getByRole('checkbox', { name: 'JPEG' })).toBeInTheDocument();
+    await expect(canvas.getByText(/^JPEG/)).toBeVisible();
   },
 };
 

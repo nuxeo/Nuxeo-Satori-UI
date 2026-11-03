@@ -253,7 +253,10 @@
 
 .save-as-btn {
   background: var(--mat-sys-primary, #3f51b5);
-  color: #fff;
+  /* Paired with the `primary` background above, so it has to follow a customer's primary into
+     whatever contrasts with it. Hardcoded white went unnoticed while the default primary was dark;
+     a light one leaves this label unreadable. */
+  color: var(--mat-sys-on-primary, #fff);
 }
 
 .search-btn {
@@ -268,4 +271,18 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
+}
+
+/* The constrained column has to reach the panel itself, not stop at this box. The panel scrolls its
+   filters with `overflow-y: auto`, which does nothing unless something above it caps the height —
+   and the drawer around this box is `overflow: hidden`, so without the cap enough open groups push
+   Search and Reset past the bottom edge and out of reach rather than scrolling.
+
+   `display: contents` rather than `flex: 1` on the outlet, because the outlet element is in the
+   template whether or not it resolved: given a share of the height it would claim one while empty,
+   and the packaged fallback beside it would get the rest. With `contents` the outlet has no box at
+   all — nothing when it renders nothing, and the component it renders becomes the flex item here,
+   sized by its own `:host`, exactly as the fallback element is. */
+.facets-host > lib-extension-outlet {
+  display: contents;
 }
