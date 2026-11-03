@@ -869,6 +869,21 @@ The form an administrator uses to create a group or edit one, and to set its mem
 
 The dialog saves nothing itself: it closes with the values and the caller creates or updates the group. The group name is fixed once the group exists; the label and members can change.
 
+### Publish dialog
+
+| Field           | Value                               |
+| --------------- | ----------------------------------- |
+| Component       | `NxsPublishDialogComponent`         |
+| Registered ID   | `nxs.components.publishDialog`      |
+| With Satori     | Same component; theme only          |
+| Storybook story | `dialogs-publish--choose-a-section` |
+
+![Publish dialog: without Satori on the left, with Satori on the right](publish-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+Publishing a supplier contract at 1.2: the sections as a tree, Contracts chosen, and the version to publish. The same dialog in both; the theme sets the type, the fields and the button styles.
+
+The library defines its ID and our app registers it; `provideNxsComponents()` does not. Both publish actions open whatever the ID resolves to.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -977,6 +992,7 @@ The components in the library today:
 | Confirm dialog                  | —                                                                                                                            | Same component; theme only   |
 | User form dialog                | —                                                                                                                            | Same component; theme only   |
 | Group form dialog               | —                                                                                                                            | Same component; theme only   |
+| Publish dialog                  | `nxs.components.publishDialog` (the library defines the ID; our app registers it, `provideNxsComponents()` does not)         | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

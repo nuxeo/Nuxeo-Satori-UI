@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -39,6 +39,7 @@ import {
 import {
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
+  ExtensionComponentRegistry,
   ExtensionRuleContextService,
   PACKAGED_DOCUMENT_TABS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
@@ -47,7 +48,15 @@ import {
 } from '@nuxeo/satori-platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
-import { NxsToastService } from '@nuxeo/satori-platform/components';
+import {
+  NXS_PUBLISH_DIALOG_ID,
+  NxsPublishDialogComponent,
+  NxsToastService,
+} from '@nuxeo/satori-platform/components';
+
+/** A customer's replacement for the publish dialog, registered under its ID. */
+@Component({ selector: 'lib-custom-publish-dialog', template: '' })
+class CustomPublishDialogComponent {}
 
 /**
  * Toolbar behaviour, document actions, and the dialogs they open.
@@ -1198,16 +1207,32 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         ...over,
       });
 
-    it('publishes the document on screen, with its versions read from the repository', async () => {
-      const v = doc({ uid: 'v1', properties: { 'uid:major_version': 1 } });
-      mockDetailService.getVersionsDirect.mockReturnValue(of([v]));
+    it('opens the dialog registered for publishing, for the document on screen', async () => {
       await build(publishable());
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
+      await Promise.resolve();
 
-      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-1');
-      expect(lastDialogData()).toMatchObject({ documentUid: 'doc-1', versions: [v] });
+      expect(mockDialog.open.mock.calls.at(-1)?.[0]).toBe(NxsPublishDialogComponent);
+      expect(lastDialogData()).toMatchObject({
+        documentUid: 'doc-1',
+        documentTitle: doc().title,
+        versionableUid: 'doc-1',
+      });
+    });
+
+    it('opens a replacement registered under the publish dialog ID instead', async () => {
+      await build(publishable());
+      TestBed.inject(ExtensionComponentRegistry).register({
+        [NXS_PUBLISH_DIALOG_ID]: CustomPublishDialogComponent,
+      });
+      mockDialog.open.mockClear();
+
+      component.openPublishDialog();
+      await Promise.resolve();
+
+      expect(mockDialog.open.mock.calls.at(-1)?.[0]).toBe(CustomPublishDialogComponent);
     });
 
     it('publishes a version as it is, as Web UI does, listing its live document’s versions', async () => {
@@ -1222,20 +1247,14 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
+      await Promise.resolve();
 
       expect(toast.error).not.toHaveBeenCalled();
-      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-live');
-      expect(lastDialogData()).toMatchObject({ documentUid: 'v-1-0', versionLabel: '1.0' });
-    });
-
-    it('still opens the dialog with no versions when the fetch fails', async () => {
-      mockDetailService.getVersionsDirect.mockReturnValue(throwError(() => new Error('500')));
-      await build(publishable());
-      mockDialog.open.mockClear();
-
-      component.openPublishDialog();
-
-      expect(lastDialogData()).toMatchObject({ versions: [] });
+      expect(lastDialogData()).toMatchObject({
+        documentUid: 'v-1-0',
+        versionLabel: '1.0',
+        versionableUid: 'doc-live',
+      });
     });
 
     it('offers the renditions the document actually has', async () => {
@@ -1250,6 +1269,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
+      await Promise.resolve();
 
       expect(lastDialogData()).toMatchObject({
         renditions: [
@@ -1264,6 +1284,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
+      await Promise.resolve();
 
       expect(lastDialogData()).toMatchObject({
         renditions: [
@@ -1281,6 +1302,8 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       mockDetailService.getPublishedVersions.mockClear();
 
       component.openPublishDialog();
+      await Promise.resolve();
+      await Promise.resolve();
 
       expect(mockDetailService.getPublishedVersions).toHaveBeenCalledWith('doc-1');
     });

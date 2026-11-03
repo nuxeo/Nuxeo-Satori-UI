@@ -1,0 +1,98 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as PublishDialogStories from './publish-dialog.stories';
+
+<Meta of={PublishDialogStories} name="Overview" />
+
+# Publish dialog
+
+The publish dialog publishes a document to a section. It is the counterpart of Web UI's
+`nuxeo-internal-publish` dialog, and the dialog the document page's Publish and a selection's
+Publish both open.
+
+## Key features
+
+- **The sections as a tree.** The sections the user can read — the first 200 — are listed each under
+  its parent, indented by depth; Publish stays disabled until one is chosen.
+- **The version you choose is the one published.** The Version field offers the document as it is
+  and its earlier versions, newest first. Choosing 1.0 publishes version 1.0.
+- **A rendition instead of the document.** Show renditions offers None, the default rendition and
+  the renditions passed in.
+- **Override.** Existing publications of the document in the section can be replaced.
+- **Says what happened.** A toast names the document and the section; a refusal reads as one, and
+  the dialog stays open to try again.
+- **Replaceable by ID.** It is registered as `nxs.components.publishDialog`, and both publish
+  actions open whatever that ID resolves to.
+
+## Demo showcase
+
+<Canvas of={PublishDialogStories.ChooseASection} />
+
+## Usage
+
+export const usageTs = `import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';
+import { nxsOpenPublishDialog } from '@nuxeo/satori-platform/components';
+
+const ref = await nxsOpenPublishDialog(this.dialog, inject(ExtensionComponentRegistry), {
+  documentUid: doc.uid,
+  documentTitle: doc.title,
+  versionLabel: '1.2',
+  versionableUid: liveUid,
+  renditions: [{ name: 'pdf', label: this.translate.instant('rendition.pdf') }],
+});
+ref.afterClosed().subscribe((publication) => {
+  if (publication) this.reloadPublications();
+});`;
+
+<Source language="typescript" dark code={usageTs} />
+
+`nxsOpenPublishDialog` opens the component registered under `NXS_PUBLISH_DIALOG_ID`
+(`nxs.components.publishDialog`), or this one when nothing is registered or the registration fails
+to load. Register your own component under the ID to replace it everywhere it opens; it receives
+the same `MAT_DIALOG_DATA` and should close with the publication or with nothing.
+
+It closes with the publication created, or with nothing when cancelled. It does not decide who may
+publish: open it only where `canPublishDocument(doc)` holds. Nuxeo still checks the right to add to
+the section. The dialog lists its own toast provider and needs `DocumentDetailService`. Rendition
+labels arrive translated; its own labels are translated under `satori-components.publish-dialog.*`,
+with English from `providePlatformEnglishFallback()`.
+
+## Where its data comes from
+
+`DocumentDetailService`: `getSectionTree()` for the sections, `getVersionsDirect()` for the
+versions of `versionableUid` (or of the document itself), and `publishDocument()` for
+`Document.PublishToSection`. The stories use an in-memory fake.
+
+## Examples
+
+### With renditions
+
+<Canvas of={PublishDialogStories.WithRenditions} />
+
+### Loading
+
+<Canvas of={PublishDialogStories.Loading} />
+
+### No sections
+
+<Canvas of={PublishDialogStories.NoSections} />
+
+### Sections failed to load
+
+<Canvas of={PublishDialogStories.SectionsFailed} />
+
+### Refused
+
+Publish fails with 403: the toast says the user may not publish to the section.
+
+<Canvas of={PublishDialogStories.Refused} />
+
+## Accessibility
+
+- **The dialog's title names it**: "Publish Supplier contract".
+- **Every field has a label** — Location, Version and Rendition — and the checkboxes are named by
+  their text.
+- **Loading has a name.** The spinner reads "Loading the sections"; a failure is an alert, and the
+  empty case a status message.
+- **Progress has a name.** While it runs, the button reads "Publishing" beside a turning icon
+  hidden from assistive technology.

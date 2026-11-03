@@ -2562,6 +2562,27 @@
     },
     "vocabulary-select": {
       "failed": "Could not load the list. Open it again to try again."
+    },
+    "publish-dialog": {
+      "title": "Publish {{document}}",
+      "loading": "Loading the sections",
+      "sections-failed": "The sections could not be loaded.",
+      "retry": "Try again",
+      "no-sections": "There is no section to publish to.",
+      "location": "Location",
+      "version": "Version",
+      "current-version": "Current version",
+      "rendition": "Rendition",
+      "rendition-none": "None",
+      "rendition-default": "Default rendition",
+      "show-renditions": "Show renditions",
+      "override": "Override existing publications",
+      "cancel": "Cancel",
+      "publish": "Publish",
+      "publishing": "Publishing",
+      "published": "\"{{document}}\" published to {{section}}",
+      "forbidden": "You do not have permission to publish to this section.",
+      "failed": "The document could not be published."
     }
   },
   "search": {

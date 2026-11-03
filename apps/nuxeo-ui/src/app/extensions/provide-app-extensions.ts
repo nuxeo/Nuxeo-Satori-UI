@@ -32,10 +32,12 @@ import {
   NXS_ADMIN_USER_DETAILS_PAGE_ID,
   NXS_ADMIN_USERS_GROUPS_PAGE_ID,
   NXS_PERMISSIONS_PANEL_ID,
+  NXS_PUBLISH_DIALOG_ID,
   NxsAdminGroupDetailsPageComponent,
   NxsAdminUserDetailsPageComponent,
   NxsAdminUsersGroupsPageComponent,
   NxsPermissionsPanelComponent,
+  NxsPublishDialogComponent,
 } from '@nuxeo/satori-platform/components';
 import { SelectionService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -179,6 +181,11 @@ function provideAppContributions(): EnvironmentProviders {
         [NXS_ADMIN_USERS_GROUPS_PAGE_ID]: NxsAdminUsersGroupsPageComponent,
         [NXS_ADMIN_USER_DETAILS_PAGE_ID]: NxsAdminUserDetailsPageComponent,
         [NXS_ADMIN_GROUP_DETAILS_PAGE_ID]: NxsAdminGroupDetailsPageComponent,
+
+        // The dialog both publish actions open — `app.toolbar.publish` and
+        // `app.bulkActions.publish` — through `nxsOpenPublishDialog`, so re-registering this ID
+        // replaces it for both.
+        [NXS_PUBLISH_DIALOG_ID]: NxsPublishDialogComponent,
       },
     };
   });

@@ -228,6 +228,14 @@ export {
 } from './lib/saved-search-select/saved-search-select.component';
 export { NxsSavedSearchActionsComponent } from './lib/saved-search-actions/saved-search-actions.component';
 export { NxsCardComponent } from './lib/card/card.component';
+export {
+  NXS_PUBLISH_DIALOG_ID,
+  NxsPublishDialogComponent,
+  nxsOpenPublishDialog,
+  type NxsPublishDialogData,
+  type NxsPublishDialogResult,
+  type NxsPublishRendition,
+} from './lib/publish-dialog/publish-dialog.component';
 // satori:export:components — `satori-component` inserts above this line
 
 export { TranslatedDatepickerIntl } from './lib/date-input/translated-datepicker-intl';

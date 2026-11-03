@@ -778,6 +778,11 @@ descriptors. **Nuxeo decides whether the operation succeeds**, server-side, on
 every one of them. Adding `app.rules.canRemoveSelection` to Delete would hide it
 from everyone, because that rule is still inert — see section 4.
 
+`app.bulkActions.publish` opens the Publish dialog for the first selected document, through
+`nxs.components.publishDialog` (section 6) — the dialog `app.toolbar.publish` opens too. To change
+the dialog for both, register your own component under that ID; to change what the action does,
+register a handler for the action ID.
+
 Adding your own:
 
 ```json
@@ -848,6 +853,7 @@ Components are referenced by ID and must already be compiled in. Contributing a 
 | `nxs.components.adminUsersGroupsPage`  | The users and groups administration screen at `/administration/users-groups`: search, recently created, and create, edit and delete for users and groups |
 | `nxs.components.adminUserDetailsPage`  | One user at `/administration/users-groups/user/:userId`: profile, groups, and direct and group permissions                                               |
 | `nxs.components.adminGroupDetailsPage` | One group at `/administration/users-groups/group/:groupId`: members, nested groups, and permissions                                                      |
+| `nxs.components.publishDialog`         | The Publish dialog that `app.toolbar.publish` and `app.bulkActions.publish` both open                                                                    |
 
 `app.page.contracts` is the first component registered for the **`routes`** slot rather than for a
 drawer, and it exists because that slot went live with **no component in the product able to serve
@@ -1145,6 +1151,10 @@ so the owner and date are then reachable by pointer only. Keep it inline where t
 `app.toolbar.export` is the one entry with no `rule`, deliberately: it was
 outside the trashed-document guard in the markup this replaced, and exporting a
 trashed document still works.
+
+`app.toolbar.publish` opens whatever `nxs.components.publishDialog` resolves to (section 6), so a
+component registered under that ID replaces the Publish dialog here and for `app.bulkActions.publish`
+alike.
 
 The document-specific header controls that are **not** in this table —
 attachments, Knowledge Enrichment, the trashed-document restore banner, the

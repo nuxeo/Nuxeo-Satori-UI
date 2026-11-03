@@ -195,7 +195,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-166 exported symbol(s).
+172 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -221,6 +221,7 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly upload: "nxs.primitives.upload";
     }>;
 }
+const NXS_PUBLISH_DIALOG_ID = "nxs.components.publishDialog";
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
 const NXS_TOAST_DURATION = 4000;
 interface NxsActionBarInputs {
@@ -2178,6 +2179,41 @@ class NxsPropertiesPanelComponent {
     }, never, ["[nxsVersion]", "[nxsTags]", "*"], true, never>;
     }
 }
+class NxsPublishDialogComponent {
+    protected readonly data: NxsPublishDialogData;
+    protected readonly noRendition = "none";
+    protected readonly defaultRendition = "default";
+    protected readonly renditions: readonly NxsPublishRendition[];
+    protected readonly sectionsState: import("@angular/core").WritableSignal<"failed" | "loading" | "ready">;
+    protected readonly sections: import("@angular/core").WritableSignal<readonly SectionOption[]>;
+    protected readonly versions: import("@angular/core").WritableSignal<readonly VersionOption[]>;
+    protected readonly section: import("@angular/core").WritableSignal<string>;
+    protected readonly version: import("@angular/core").WritableSignal<string>;
+    protected readonly showRenditions: import("@angular/core").WritableSignal<boolean>;
+    protected readonly rendition: import("@angular/core").WritableSignal<string>;
+    protected readonly override: import("@angular/core").WritableSignal<boolean>;
+    protected readonly publishing: import("@angular/core").WritableSignal<boolean>;
+    constructor();
+    protected loadSections(): void;
+    protected publish(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsPublishDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsPublishDialogComponent, "nxs-publish-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsPublishDialogData {
+    readonly documentUid: string;
+    readonly documentTitle: string;
+    readonly versionLabel?: string;
+    readonly versionableUid?: string;
+    readonly renditions?: readonly NxsPublishRendition[];
+    }
+}
+type NxsPublishDialogResult = NuxeoDocument | undefined;
+interface NxsPublishRendition {
+    readonly name: string;
+    readonly label: string;
+    }
+}
 interface NxsRecentPrincipalRow {
     readonly kind: 'group' | 'user';
     readonly name: string;
@@ -3090,6 +3126,7 @@ function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
 function nxsInitials(text: string | null | undefined, count: number): string;
 function nxsOfferedRights(visible: readonly string[] | null | undefined, current?: string): readonly string[];
+function nxsOpenPublishDialog(dialog: MatDialog, components: ExtensionComponentRegistry, data: NxsPublishDialogData): Promise<MatDialogRef<unknown, NxsPublishDialogResult>>;
 function nxsPropertyText(value: unknown): string;
 function nxsRangeOptions(ranges: readonly string[], aggregation: AggregateResult | undefined): NxsFacetOption[];
 function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): boolean;
