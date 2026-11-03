@@ -133,8 +133,8 @@ interface and a spec compares their declared inputs, so `componentInputs` mean t
 whichever is registered. `@hylandsoftware/satori-ui` is an **optional** peer of the package, and
 `beta:installable` proves the built tarball installs without it. The IDs are in
 `docs/extension-reference.md` §6a. The screens resolve each avatar, category tag, status tag and
-trail of their own by ID, with the `nxs-` element as the fallback, never `sat-*` directly; browse's
-and search's card views render each card by ID, document detail its tab strip and header actions,
+trail of their own by ID, with the `nxs-` element as the fallback, never `sat-*` directly; browse's,
+search's and the trash's card views render each card by ID, document detail its tab strip and header actions,
 and `nxs-document-list` each row's type tag and contributor avatar. Library components nested in a
 screen — `nxs-comments`, `nxs-document-history`, `nxs-properties-panel`, `nxs-tag-editor` — still
 draw `nxs-avatar`/`nxs-tag` directly, so an override does not reach them; §6a lists them. A
