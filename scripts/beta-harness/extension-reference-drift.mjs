@@ -115,6 +115,30 @@ function stripComments(text) {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
+/**
+ * `compilerOptions.paths` from `tsconfig.base.json`, for resolving a path-alias import.
+ *
+ * Declared **here**, with the other module constants, and not beside the function that uses it.
+ * It was declared at the bottom of the file, after the section-6b validation loop that reaches it
+ * through `selectorOf()` → `resolveModule()` — and a `const` is in its temporal dead zone until
+ * its own line runs. So the first 6b row whose component is imported through an alias crashed the
+ * gate with `ReferenceError: Cannot access 'TSCONFIG_PATHS' before initialization`, rejecting a
+ * valid registered-and-documented component. The empty table hid it. Found by review on PR #544
+ * and reproduced before fixing.
+ *
+ * `null` rather than `{}` when it cannot be read, so `resolveModule` can tell "no aliases are
+ * configured" from "I could not find out" and report the second instead of silently losing alias
+ * resolution.
+ */
+const TSCONFIG_PATHS = (() => {
+  try {
+    const raw = readFileSync(join(ROOT, 'tsconfig.base.json'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
+    return JSON.parse(raw).compilerOptions?.paths ?? {};
+  } catch {
+    return null;
+  }
+})();
+
 const files = sourceFiles();
 const sources = new Map(files.map((f) => [f, stripComments(readFileSync(f, 'utf8'))]));
 const allSource = [...sources.values()].join('\n');
@@ -717,14 +741,42 @@ for (const row of componentRows) {
 function selectorOf(className, registeringFile) {
   const declaration = new RegExp(String.raw`\bexport class ${reEscape(className)}\b`);
 
-  /** The selector immediately above the class declaration in one file, or `null`. */
-  const readFrom = (file) => {
+  /**
+   * The selector immediately above the class declaration in one file, or `null`.
+   *
+   * Follows a **re-export** when the file does not declare the class itself, because that is what
+   * an alias import almost always lands on: `@nuxeo/satori-platform/components` maps to
+   * `libs/shared/satori-components/src/index.ts`, which re-exports `NxsCardComponent` from
+   * `./lib/card/card.component` and declares nothing. Without this, fixing the initialisation
+   * order alone would have left the reported case still failing — one step further on, which is
+   * the pattern this function has now produced three times.
+   *
+   * One level of indirection, then it gives up and lets the ambiguity check below refuse. A
+   * general resolver is not worth building here; refusing is.
+   */
+  const readFrom = (file, depth = 0) => {
     const text = sources.get(file);
     if (text === undefined) return null;
     const classAt = text.search(declaration);
-    if (classAt === -1) return null;
-    const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*'([^']+)'/g)];
-    return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
+    if (classAt !== -1) {
+      const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*'([^']+)'/g)];
+      return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
+    }
+    if (depth > 0) return null;
+    const reExport = new RegExp(
+      String.raw`export\s*(?:type\s*)?\{[^}]*\b${reEscape(className)}\b[^}]*\}\s*from\s*'([^']+)'`,
+    ).exec(text);
+    if (reExport) {
+      const target = resolveModule(reExport[1], relative(ROOT, file));
+      if (target) return readFrom(target, depth + 1);
+    }
+    // `export * from './x'` — try each, and accept the first that declares the class.
+    for (const star of text.matchAll(/export\s*\*\s*from\s*'([^']+)'/g)) {
+      const target = resolveModule(star[1], relative(ROOT, file));
+      const found = target && readFrom(target, depth + 1);
+      if (found) return found;
+    }
+    return null;
   };
 
   /* First choice: follow the import in the file that registers the ID. That is the only thing
@@ -780,6 +832,18 @@ function resolveModule(specifier, fromFile) {
     const base = resolve(ROOT, fromFile, '..', specifier);
     candidates.push(`${base}.ts`, join(base, 'index.ts'));
   } else {
+    /* An alias specifier with no readable `paths` map is reported, not shrugged off. Returning
+     * `{}` on an unreadable `tsconfig.base.json` would have made alias resolution quietly stop
+     * working and every aliased component fall through to the ambiguity refusal — a capability
+     * lost in silence, which is the defect class this whole gate exists for. */
+    if (TSCONFIG_PATHS === null) {
+      fail(
+        `Could not read \`compilerOptions.paths\` from tsconfig.base.json, so the import ` +
+          `\`${specifier}\` in ${fromFile} cannot be resolved and the component's selector is ` +
+          'unverified. Fix the tsconfig rather than letting alias resolution fail quietly.',
+      );
+      return null;
+    }
     for (const [alias, targets] of Object.entries(TSCONFIG_PATHS)) {
       const prefix = alias.replace(/\*$/, '');
       if (!specifier.startsWith(prefix)) continue;
@@ -792,16 +856,6 @@ function resolveModule(specifier, fromFile) {
   }
   return candidates.find((candidate) => sources.has(candidate)) ?? null;
 }
-
-/** `compilerOptions.paths` from `tsconfig.base.json`, for alias resolution. `{}` if unreadable. */
-const TSCONFIG_PATHS = (() => {
-  try {
-    const raw = readFileSync(join(ROOT, 'tsconfig.base.json'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
-    return JSON.parse(raw).compilerOptions?.paths ?? {};
-  } catch {
-    return {};
-  }
-})();
 
 for (const [id, { className, file }] of slotRegistered) {
   if (!componentRows.some((row) => row.id === id)) {
