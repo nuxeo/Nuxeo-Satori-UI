@@ -797,12 +797,13 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
  * run can still report `identity.valid: true` over it. A transition therefore **refuses** when
  * this is non-empty (`verifyBeforeTransition` in `helpers.mjs`) rather than discarding it.
  *
- * Refusing, not waiting, is deliberate. A guard that discards unjudged traffic is worse than the
- * hardcoded fallback it replaced, because it produces false evidence: a result read as the guest,
- * asserted on, and certified. Refusing is noisy and correct. A bounded wait would need a deadline
- * *and* a policy for its expiry, and buys the possibility of a harness that hangs instead of
- * reporting — its own failure mode. Refusing is blunt: a legitimately slow request fails a run
- * that was not compromised. That trade-off is NXSAT-703, not settled here.
+ * Refusing, not waiting, is the decided behaviour (NXSAT-703). A guard that discards unjudged
+ * traffic is worse than the hardcoded fallback it replaced, because it produces false evidence: a
+ * result read as the guest, asserted on, and certified. A bounded wait would need a deadline *and*
+ * a policy for its expiry, and buys the possibility of a harness that hangs instead of reporting —
+ * its own failure mode. The cost is that a legitimately slow request fails a run that was not
+ * compromised; the refusal names the request and says to let the app settle before declaring the
+ * transition. The four controls that pin this behaviour are in `identity-guard.selftest.mjs`.
  *
  * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
  * @returns {SentRequest[]}
