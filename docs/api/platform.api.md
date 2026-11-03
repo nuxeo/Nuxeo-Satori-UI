@@ -195,7 +195,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-166 exported symbol(s).
+169 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -222,6 +222,7 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     }>;
 }
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
+const NXS_TASK_DETAIL_ID = "nxs.components.taskDetail";
 const NXS_TOAST_DURATION = 4000;
 interface NxsActionBarInputs {
     readonly actions: InputSignal<readonly NxsToolbarAction[]>;
@@ -2704,6 +2705,68 @@ interface NxsTagInputs {
     }
 }
 type NxsTagStatus = 'important' | 'important-loud' | 'info' | 'neutral' | 'neutral-quiet' | 'success' | 'warning';
+class NxsTaskDetailComponent {
+    readonly task: InputSignal<NuxeoTask>;
+    readonly taskDone: InputSignal<(task: NuxeoTask, outcome: NxsTaskOutcome) => void>;
+    readonly taskChanged: InputSignal<(task: NuxeoTask) => void>;
+    readonly headingLevel: InputSignal<NxsHeadingLevel>;
+    protected readonly panelHeadingLevel: import("@angular/core").Signal<number>;
+    protected readonly actions: import("@angular/core").Signal<readonly TaskAction[]>;
+    protected readonly choosesParticipants: import("@angular/core").Signal<boolean>;
+    protected readonly actors: import("@angular/core").Signal<string[]>;
+    protected readonly delegatedActors: import("@angular/core").Signal<string[]>;
+    protected readonly comments: import("@angular/core").Signal<TaskComment[]>;
+    protected readonly overdue: import("@angular/core").Signal<boolean>;
+    protected readonly dueLabel: import("@angular/core").Signal<string>;
+    protected readonly comment: import("@angular/core").WritableSignal<string>;
+    protected readonly participants: import("@angular/core").WritableSignal<readonly NxsPrincipal[]>;
+    protected readonly reviewType: import("@angular/core").WritableSignal<string>;
+    protected readonly panel: import("@angular/core").WritableSignal<Panel>;
+    protected readonly assignees: import("@angular/core").WritableSignal<readonly NxsPrincipal[]>;
+    protected readonly panelComment: import("@angular/core").WritableSignal<string>;
+    protected readonly graph: import("@angular/core").WritableSignal<Graph | null>;
+    protected readonly submitting: import("@angular/core").WritableSignal<boolean>;
+    constructor();
+    protected execute(action: TaskAction): void;
+    protected abandon(): void;
+    protected openPanel(panel: Exclude<Panel, null>): void;
+    protected closePanel(): void;
+    protected setParticipants(value: NxsPrincipal | readonly NxsPrincipal[] | null): void;
+    protected setAssignees(value: NxsPrincipal | readonly NxsPrincipal[] | null): void;
+    protected confirmPanel(): void;
+    protected openGraph(): void;
+    protected closeGraph(): void;
+    protected title(): string;
+    protected actionLabel(action: TaskAction): string;
+    protected actionTone(action: TaskAction): '' | 'primary' | 'warn';
+    protected principalLabel(id: string): string;
+    protected initial(id: string): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTaskDetailComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTaskDetailComponent, "nxs-task-detail", never, {
+    "task": {
+    "alias": "task";
+    "required": true;
+    "isSignal": true;
+    };
+    "taskDone": {
+    "alias": "taskDone";
+    "required": false;
+    "isSignal": true;
+    };
+    "taskChanged": {
+    "alias": "taskChanged";
+    "required": false;
+    "isSignal": true;
+    };
+    "headingLevel": {
+    "alias": "headingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+type NxsTaskOutcome = 'abandoned' | 'completed';
 class NxsThumbnailComponent {
     readonly documentId: import("@angular/core").InputSignal<string>;
     readonly alt: import("@angular/core").InputSignal<string>;

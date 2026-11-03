@@ -1,7 +1,6 @@
 import {
   Component,
   DestroyRef,
-  LOCALE_ID,
   inject,
   signal,
   OnInit,
@@ -12,84 +11,46 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
-import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatTabsModule } from '@angular/material/tabs';
-import { MatDividerModule } from '@angular/material/divider';
 
 import {
   NuxeoTask,
-  NuxeoUser,
-  NuxeoGroup,
   NuxeoDocument,
   TaskService,
-  UserService,
-  WorkflowService,
   DocumentService,
   NuxeoApiBase,
   CURRENT_USERNAME,
   trustObjectUrl,
-  taskDueDistance,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import {
-  DocumentViewerComponent,
-  provideSatoriDateAdapter,
-  provideTranslatedDatepickerIntl,
-} from '@nuxeo/satori-platform/ui';
+import { DocumentViewerComponent } from '@nuxeo/satori-platform/ui';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import {
   NXS_PRIMITIVE_IDS,
+  NXS_TASK_DETAIL_ID,
   NxsBreadcrumbsComponent,
+  NxsTaskDetailComponent,
   type NxsBreadcrumbItem,
 } from '@nuxeo/satori-platform/components';
 import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
-const DUE_LABEL_KEYS = {
-  due: {
-    one: 'tasks.due-label.due-in-days-one',
-    many: 'tasks.due-label.due-in-days-many',
-    hours: 'tasks.due-label.due-in-hours-many',
-    underTwoHours: 'tasks.due-label.due-in-less-than-an-hour',
-  },
-  overdue: {
-    one: 'tasks.due-label.overdue-days-one',
-    many: 'tasks.due-label.overdue-days-many',
-    hours: 'tasks.due-label.overdue-hours-many',
-    underTwoHours: 'tasks.due-label.overdue-less-than-an-hour',
-  },
-} as const;
-
 @Component({
   selector: 'lib-tasks-page',
   standalone: true,
-  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   imports: [
     TranslatePipe,
-    FormsModule,
     MatIconModule,
     MatButtonModule,
     MatProgressSpinnerModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
-    MatDatepickerModule,
-    MatSnackBarModule,
     MatTooltipModule,
-    MatTabsModule,
-    MatDividerModule,
     DocumentViewerComponent,
     ExtensionOutletComponent,
     NxsBreadcrumbsComponent,
+    NxsTaskDetailComponent,
     SatHeaderBar,
   ],
   templateUrl: './tasks-page.component.html',
@@ -99,17 +60,13 @@ const DUE_LABEL_KEYS = {
 export class TasksPageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
-  private readonly locale = inject(LOCALE_ID);
   readonly router = inject(Router);
   private readonly taskService = inject(TaskService);
-  private readonly userService = inject(UserService);
-  private readonly workflowService = inject(WorkflowService);
   private readonly docService = inject(DocumentService);
   private readonly nuxeoApi = inject(NuxeoApiBase);
   private readonly http = inject(HttpClient);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly currentUsername = inject(CURRENT_USERNAME);
-  private readonly snackBar = inject(MatSnackBar);
   private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
@@ -139,7 +96,6 @@ export class TasksPageComponent implements OnInit {
   readonly previewBlobType = signal<string>('');
   readonly taskLoading = signal(false);
   readonly docLoading = signal(false);
-  readonly submitting = signal(false);
 
   /**
    * Bumped on every task selection. `takeUntilDestroyed` cancels on teardown but not on *reselection*,
@@ -149,38 +105,23 @@ export class TasksPageComponent implements OnInit {
    */
   private selectionGeneration = 0;
 
-  /* ─── Form fields ─── */
-  comment = '';
-  participants: string[] = [];
-  participantInput = '';
-  dueDate: Date | null = null;
-  validationOrReview = 'simpleReview';
+  /** The task panel renders by ID, so an override of `nxs.components.taskDetail` reaches it. */
+  protected readonly taskDetailId = NXS_TASK_DETAIL_ID;
 
-  /* ─── Delegate / Reassign dialogs ─── */
-  readonly showDelegatePanel = signal(false);
-  readonly showReassignPanel = signal(false);
-  delegateInput = '';
-  delegateActors: string[] = [];
-  reassignInput = '';
-  reassignActors: string[] = [];
-  delegateComment = '';
-  reassignComment = '';
+  /** The task panel ran an action or abandoned the workflow: move on to the next task. */
+  protected readonly onTaskDone = (): void => {
+    this.selectedTask.set(null);
+    this.targetDoc.set(null);
+    // Navigate to /tasks (no task ID) so loadTasks picks the next available task
+    void this.router.navigate(['/tasks'], { replaceUrl: true }).then(() => this.loadTasks());
+  };
 
-  /* ─── Delegate/Reassign search results ─── */
-  readonly delegateUserResults = signal<NuxeoUser[]>([]);
-  readonly delegateGroupResults = signal<NuxeoGroup[]>([]);
-  readonly reassignUserResults = signal<NuxeoUser[]>([]);
-  readonly reassignGroupResults = signal<NuxeoGroup[]>([]);
+  /** The task panel delegated or reassigned the task: fetch it and the inbox again. */
+  protected readonly onTaskChanged = (): void => {
+    this.refreshCurrentTask();
+    this.loadTasks();
+  };
 
-  /* ─── View Graph ─── */
-  readonly showGraphPanel = signal(false);
-  readonly graphData = signal<unknown>(null);
-  readonly graphLoading = signal(false);
-
-  /* ─── User search ─── */
-  readonly userResults = signal<NuxeoUser[]>([]);
-  readonly groupResults = signal<NuxeoGroup[]>([]);
-  readonly searching = signal(false);
   private breadcrumbPathCache: string | null = null;
   private breadcrumbItemsCache: NxsBreadcrumbItem[] = [];
   /** The target document's trail renders by ID, so an override of `nxs.primitives.breadcrumbs` reaches it. */
@@ -206,33 +147,6 @@ export class TasksPageComponent implements OnInit {
     }));
     return this.breadcrumbItemsCache;
   });
-
-  /** Actors assigned to the current task (from task actors list). */
-  readonly taskActors = computed<string[]>(() => {
-    const task = this.selectedTask();
-    if (!task) return [];
-    return (task.actors ?? []).map((a) => a.id);
-  });
-
-  get isChooseParticipants(): boolean {
-    const t = this.selectedTask();
-    if (!t) return false;
-    const name = (t.name || '').toLowerCase();
-    const directive = (t.directive || '').toLowerCase();
-    const hasStartReview = (t.taskInfo?.taskActions ?? []).some((a) => a.name === 'start_review');
-    return (
-      hasStartReview ||
-      name.includes('chooseparticipants') ||
-      name.includes('choose_participants') ||
-      name.includes('choose participants') ||
-      directive.includes('select') ||
-      directive.includes('chooseparticipants')
-    );
-  }
-
-  get actions(): { name: string; label: string }[] {
-    return this.selectedTask()?.taskInfo?.taskActions ?? [];
-  }
 
   /* ════════════════════════════════════════════════════════
      Lifecycle
@@ -288,20 +202,7 @@ export class TasksPageComponent implements OnInit {
     // left the page on its loading state permanently. The trap was already documented two lines up
     // for `docLoading`; the guard reintroduced it one field over.
     this.taskLoading.set(false);
-    this.resetForm();
     this.router.navigate(['/tasks', task.id], { replaceUrl: true });
-
-    const vars = task.variables ?? {};
-    if (Array.isArray(vars['participants'])) {
-      this.participants = vars['participants'] as string[];
-    }
-    if (vars['end_date']) {
-      this.dueDate = new Date(vars['end_date'] as string);
-    } else {
-      const d = new Date();
-      d.setDate(d.getDate() + 5);
-      this.dueDate = d;
-    }
 
     const targetRef = task.targetDocumentIds?.[0];
     const docId = targetRef?.uid || targetRef?.id;
@@ -393,384 +294,6 @@ export class TasksPageComponent implements OnInit {
           /* keep current */
         },
       });
-  }
-
-  private resetForm(): void {
-    this.comment = '';
-    this.participants = [];
-    this.participantInput = '';
-    this.dueDate = null;
-    this.validationOrReview = 'simpleReview';
-    this.userResults.set([]);
-    this.groupResults.set([]);
-    this.closeDelegatePanel();
-    this.closeReassignPanel();
-    this.closeGraphPanel();
-  }
-
-  /* ════════════════════════════════════════════════════════
-     User / Group Search
-     ════════════════════════════════════════════════════════ */
-
-  searchUsers(): void {
-    const q = this.participantInput.trim();
-    if (q.length < 2) {
-      this.userResults.set([]);
-      this.groupResults.set([]);
-      return;
-    }
-    this.searching.set(true);
-    this.userService.searchUsers(q).subscribe({
-      next: (users) => {
-        this.userResults.set(users);
-        this.searching.set(false);
-      },
-      error: () => this.searching.set(false),
-    });
-    this.userService.searchGroups(q).subscribe({
-      next: (groups) => this.groupResults.set(groups),
-      error: () => {
-        /* swallow */
-      },
-    });
-  }
-
-  addParticipant(id: string): void {
-    if (!this.participants.includes(id)) {
-      this.participants = [...this.participants, id];
-    }
-    this.participantInput = '';
-    this.userResults.set([]);
-    this.groupResults.set([]);
-  }
-
-  removeParticipant(id: string): void {
-    this.participants = this.participants.filter((p) => p !== id);
-  }
-
-  formatParticipant(id: string): string {
-    return id.replace(/^(user:|group:)/, '');
-  }
-
-  /* ════════════════════════════════════════════════════════
-     Task Actions
-     ════════════════════════════════════════════════════════ */
-
-  executeAction(action: { name: string; label: string }): void {
-    const task = this.selectedTask();
-    if (!task) return;
-
-    this.submitting.set(true);
-    const variables: Record<string, unknown> = {};
-
-    if (this.isChooseParticipants) {
-      variables['participants'] =
-        this.participants.length > 0
-          ? this.participants.map((p) => (p.includes(':') ? p : `user:${p}`))
-          : [`user:${this.currentUsername() ?? 'Administrator'}`];
-      if (this.dueDate) {
-        variables['end_date'] = this.dueDate.toISOString();
-      } else {
-        // Nuxeo requires an end_date — default to 7 days from now
-        const d = new Date();
-        d.setDate(d.getDate() + 7);
-        variables['end_date'] = d.toISOString();
-      }
-      if (this.validationOrReview) variables['validationOrReview'] = this.validationOrReview;
-    }
-    if (this.comment) variables['comment'] = this.comment;
-
-    this.taskService
-      .completeTask(task.id, action.name, variables, this.comment || undefined)
-      .subscribe({
-        next: () => {
-          this.submitting.set(false);
-          this.snackBar.open(
-            this.translate.instant('tasks.message.task-completed-successfully'),
-            this.translate.instant('common.close'),
-            {
-              duration: 4000,
-            },
-          );
-          this.selectedTask.set(null);
-          this.targetDoc.set(null);
-          // Navigate to /tasks (no task ID) so loadTasks picks the next available task
-          this.router.navigate(['/tasks'], { replaceUrl: true }).then(() => {
-            this.loadTasks();
-          });
-          this.taskService.notifyTasksChanged();
-        },
-        error: (err) => {
-          this.submitting.set(false);
-          const msg =
-            err?.error?.message || this.translate.instant('tasks.message.failed-to-complete-task');
-          this.snackBar.open(msg, this.translate.instant('common.close'), { duration: 6000 });
-        },
-      });
-  }
-
-  abandonWorkflow(): void {
-    const task = this.selectedTask();
-    if (!task?.workflowInstanceId) return;
-
-    this.submitting.set(true);
-    this.workflowService.cancelWorkflow(task.workflowInstanceId).subscribe({
-      next: () => {
-        this.submitting.set(false);
-        this.snackBar.open(
-          this.translate.instant('tasks.message.workflow-abandoned'),
-          this.translate.instant('common.close'),
-          { duration: 4000 },
-        );
-        this.selectedTask.set(null);
-        this.targetDoc.set(null);
-        this.router.navigate(['/tasks'], { replaceUrl: true }).then(() => {
-          this.loadTasks();
-        });
-        this.taskService.notifyTasksChanged();
-      },
-      error: () => {
-        this.submitting.set(false);
-        this.snackBar.open(
-          this.translate.instant('tasks.message.failed-to-abandon-workflow'),
-          this.translate.instant('common.close'),
-          {
-            duration: 4000,
-          },
-        );
-      },
-    });
-  }
-
-  /* ════════════════════════════════════════════════════════
-     Delegate Task
-     ════════════════════════════════════════════════════════ */
-
-  openDelegatePanel(): void {
-    this.showDelegatePanel.set(true);
-    this.showReassignPanel.set(false);
-  }
-
-  closeDelegatePanel(): void {
-    this.showDelegatePanel.set(false);
-    this.delegateInput = '';
-    this.delegateActors = [];
-    this.delegateComment = '';
-    this.delegateUserResults.set([]);
-    this.delegateGroupResults.set([]);
-  }
-
-  searchDelegateUsers(): void {
-    const q = this.delegateInput.trim();
-    if (q.length < 2) {
-      this.delegateUserResults.set([]);
-      this.delegateGroupResults.set([]);
-      return;
-    }
-    this.userService.searchUsers(q).subscribe({
-      next: (users) => this.delegateUserResults.set(users),
-      error: () => {
-        /* swallow */
-      },
-    });
-    this.userService.searchGroups(q).subscribe({
-      next: (groups) => this.delegateGroupResults.set(groups),
-      error: () => {
-        /* swallow */
-      },
-    });
-  }
-
-  addDelegateActor(id: string): void {
-    if (!this.delegateActors.includes(id)) {
-      this.delegateActors = [...this.delegateActors, id];
-    }
-    this.delegateInput = '';
-    this.delegateUserResults.set([]);
-    this.delegateGroupResults.set([]);
-  }
-
-  removeDelegateActor(id: string): void {
-    this.delegateActors = this.delegateActors.filter((a) => a !== id);
-  }
-
-  confirmDelegate(): void {
-    const task = this.selectedTask();
-    if (!task || this.delegateActors.length === 0) return;
-
-    this.submitting.set(true);
-    this.taskService
-      .delegateTask(task.id, this.delegateActors, this.delegateComment || undefined)
-      .subscribe({
-        next: () => {
-          this.submitting.set(false);
-          this.snackBar.open(
-            this.translate.instant('tasks.message.task-delegated-successfully'),
-            this.translate.instant('common.close'),
-            { duration: 4000 },
-          );
-          this.closeDelegatePanel();
-          this.refreshCurrentTask();
-          this.loadTasks();
-          this.taskService.notifyTasksChanged();
-        },
-        error: (err) => {
-          this.submitting.set(false);
-          const msg =
-            err?.error?.message || this.translate.instant('tasks.message.failed-to-delegate-task');
-          this.snackBar.open(msg, this.translate.instant('common.close'), { duration: 6000 });
-        },
-      });
-  }
-
-  /* ════════════════════════════════════════════════════════
-     Reassign Task
-     ════════════════════════════════════════════════════════ */
-
-  openReassignPanel(): void {
-    this.showReassignPanel.set(true);
-    this.showDelegatePanel.set(false);
-  }
-
-  closeReassignPanel(): void {
-    this.showReassignPanel.set(false);
-    this.reassignInput = '';
-    this.reassignActors = [];
-    this.reassignComment = '';
-    this.reassignUserResults.set([]);
-    this.reassignGroupResults.set([]);
-  }
-
-  searchReassignUsers(): void {
-    const q = this.reassignInput.trim();
-    if (q.length < 2) {
-      this.reassignUserResults.set([]);
-      this.reassignGroupResults.set([]);
-      return;
-    }
-    this.userService.searchUsers(q).subscribe({
-      next: (users) => this.reassignUserResults.set(users),
-      error: () => {
-        /* swallow */
-      },
-    });
-    this.userService.searchGroups(q).subscribe({
-      next: (groups) => this.reassignGroupResults.set(groups),
-      error: () => {
-        /* swallow */
-      },
-    });
-  }
-
-  addReassignActor(id: string): void {
-    if (!this.reassignActors.includes(id)) {
-      this.reassignActors = [...this.reassignActors, id];
-    }
-    this.reassignInput = '';
-    this.reassignUserResults.set([]);
-    this.reassignGroupResults.set([]);
-  }
-
-  removeReassignActor(id: string): void {
-    this.reassignActors = this.reassignActors.filter((a) => a !== id);
-  }
-
-  confirmReassign(): void {
-    const task = this.selectedTask();
-    if (!task || this.reassignActors.length === 0) return;
-
-    this.submitting.set(true);
-    this.taskService
-      .reassignTask(task.id, this.reassignActors, this.reassignComment || undefined)
-      .subscribe({
-        next: () => {
-          this.submitting.set(false);
-          this.snackBar.open(
-            this.translate.instant('tasks.message.task-reassigned-successfully'),
-            this.translate.instant('common.close'),
-            { duration: 4000 },
-          );
-          this.closeReassignPanel();
-          this.refreshCurrentTask();
-          this.loadTasks();
-          this.taskService.notifyTasksChanged();
-        },
-        error: (err) => {
-          this.submitting.set(false);
-          const msg =
-            err?.error?.message || this.translate.instant('tasks.message.failed-to-reassign-task');
-          this.snackBar.open(msg, this.translate.instant('common.close'), { duration: 6000 });
-        },
-      });
-  }
-
-  /* ════════════════════════════════════════════════════════
-     View Graph
-     ════════════════════════════════════════════════════════ */
-
-  openGraphPanel(): void {
-    const task = this.selectedTask();
-    if (!task?.workflowInstanceId) return;
-
-    this.showGraphPanel.set(true);
-    this.graphLoading.set(true);
-    this.graphData.set(null);
-
-    this.workflowService.getWorkflowGraph(task.workflowInstanceId).subscribe({
-      next: (data) => {
-        this.graphData.set(data);
-        this.graphLoading.set(false);
-      },
-      error: () => {
-        this.graphData.set({ error: 'Failed to load graph' });
-        this.graphLoading.set(false);
-      },
-    });
-  }
-
-  closeGraphPanel(): void {
-    this.showGraphPanel.set(false);
-    this.graphData.set(null);
-  }
-
-  /** Get graph node entries for rendering. */
-  graphNodes(): { id: string; title: string; state: string; isCurrent: boolean }[] {
-    const data = this.graphData() as Record<string, unknown> | null;
-    if (!data || data['error']) return [];
-    const nodes = (data['nodes'] ?? data['elements'] ?? []) as Record<string, unknown>[];
-    const currentNode = this.selectedTask()?.nodeName;
-    return nodes.map((n) => ({
-      id: (n['id'] as string) ?? '',
-      title: (n['title'] as string) ?? (n['id'] as string) ?? '',
-      state: (n['state'] as string) ?? '',
-      isCurrent: (n['id'] as string) === currentNode,
-    }));
-  }
-
-  /* ════════════════════════════════════════════════════════
-     Task Comments (from task.comments array)
-     ════════════════════════════════════════════════════════ */
-
-  get taskComments(): { author: string; text: string; date: string }[] {
-    const task = this.selectedTask();
-    if (!task?.comments) return [];
-    // Comments can be objects {author, text, date} or plain strings
-    return task.comments.map((c: unknown) => {
-      if (typeof c === 'string') return { author: '', text: c, date: '' };
-      const obj = c as Record<string, string>;
-      return {
-        author: obj['author'] ?? '',
-        text: obj['text'] ?? obj['comment'] ?? '',
-        date: obj['date'] ?? obj['creationDate'] ?? '',
-      };
-    });
-  }
-
-  /** Delegated actors on the current task. */
-  get delegatedActorsList(): string[] {
-    const task = this.selectedTask();
-    if (!task?.delegatedActors) return [];
-    return task.delegatedActors.map((a) => a.id);
   }
 
   /* ════════════════════════════════════════════════════════
@@ -890,88 +413,6 @@ export class TasksPageComponent implements OnInit {
     const doc = this.targetDoc();
     const content = doc?.properties?.['file:content'] as Record<string, unknown> | undefined;
     return (content?.['name'] as string) || doc?.title || '';
-  }
-
-  /* ════════════════════════════════════════════════════════
-     Formatting Helpers
-     ════════════════════════════════════════════════════════ */
-
-  taskLabel(task: NuxeoTask): string {
-    const key = task.name.replace(/^wf\.\w+\./, '').replace(/\.(title|directive)$/i, '');
-    return key
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .replace(/\./g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-
-  taskDirective(task: NuxeoTask): string {
-    if (task.directive) {
-      const d = task.directive.replace(/^wf\.\w+\./, '').replace(/\.(title|directive)$/i, '');
-      return d
-        .replace(/([a-z])([A-Z])/g, '$1 $2')
-        .replace(/\./g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-    }
-    return this.taskLabel(task);
-  }
-
-  taskWorkflow(task: NuxeoTask): string {
-    const raw = task.workflowTitle || task.workflowModelName || '';
-    const key = raw.replace(/^wf\.\w+\./, '');
-    return key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-
-  dueDateFormatted(task: NuxeoTask): string {
-    if (!task.dueDate) return '';
-    return new Date(task.dueDate).toLocaleDateString(this.locale, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  }
-
-  actionLabel(action: { name: string; label: string }): string {
-    const raw = action.label || action.name;
-    const key = raw.replace(/^wf\.\w+\./, '');
-    return key
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-
-  actionColor(action: { name: string }): string {
-    const n = action.name.toLowerCase();
-    if (n.includes('reject') || n.includes('cancel')) return 'warn';
-    if (n.includes('approve') || n.includes('validate') || n.includes('start')) return 'primary';
-    return '';
-  }
-
-  actionIcon(action: { name: string }): string {
-    const n = action.name.toLowerCase();
-    if (n.includes('approve') || n.includes('validate')) return 'circle_check';
-    if (n.includes('reject')) return 'x_large';
-    if (n.includes('start')) return 'triangle_right';
-    if (n.includes('cancel')) return 'block';
-    return 'send';
-  }
-
-  isOverdue(task: NuxeoTask): boolean {
-    return !!task.dueDate && new Date(task.dueDate) < new Date();
-  }
-
-  dueLabel(task: NuxeoTask): string {
-    if (!task.dueDate) return '';
-    const { due, unit, count } = taskDueDistance(task.dueDate);
-    const keys = due ? DUE_LABEL_KEYS.due : DUE_LABEL_KEYS.overdue;
-    const key =
-      unit === 'days'
-        ? count === 1
-          ? keys.one
-          : keys.many
-        : unit === 'hours'
-          ? keys.hours
-          : keys.underTwoHours;
-    return this.translate.instant(key, { count });
   }
 
   docProp(key: string): unknown {

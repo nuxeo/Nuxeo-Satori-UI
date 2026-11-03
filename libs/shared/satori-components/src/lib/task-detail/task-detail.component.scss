@@ -1,0 +1,266 @@
+:host {
+  display: block;
+}
+
+.nxs-task-detail__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.nxs-task-detail__title.nxs-task-detail__title {
+  margin: 0;
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-task-detail__header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.nxs-task-detail__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-primary);
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.nxs-task-detail__graph-link {
+  display: inline-block;
+  margin-bottom: 16px;
+}
+
+.nxs-task-detail__panel {
+  margin-bottom: 20px;
+  padding: 24px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  background: var(--mat-sys-surface-container-lowest);
+}
+
+.nxs-task-detail__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.nxs-task-detail__panel-title.nxs-task-detail__panel-title {
+  margin: 0;
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-task-detail__hint {
+  margin: 0 0 20px;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-task-detail__panel-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.nxs-task-detail__field {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.nxs-task-detail__graph-state {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 16px 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-task-detail__graph {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.nxs-task-detail__graph-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-task-detail__graph-marker {
+  width: 18px;
+  height: 18px;
+  color: var(--mat-sys-outline);
+}
+
+.nxs-task-detail__graph-node--done {
+  color: var(--mat-sys-on-surface-variant);
+
+  .nxs-task-detail__graph-marker {
+    color: var(--mat-sys-tertiary);
+  }
+}
+
+.nxs-task-detail__graph-node--current {
+  font-weight: 600;
+  color: var(--mat-sys-primary);
+
+  .nxs-task-detail__graph-marker {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.nxs-task-detail__section {
+  margin-bottom: 16px;
+}
+
+.nxs-task-detail__label {
+  display: block;
+  margin-bottom: 4px;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-task-detail__actors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nxs-task-detail__actor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-task-detail__due {
+  font: var(--mat-sys-body-medium);
+  font-weight: 500;
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-task-detail__due--overdue {
+  color: var(--mat-sys-error);
+}
+
+.nxs-task-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.nxs-task-detail__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border: 2px solid var(--mat-sys-primary);
+  border-radius: 20px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font: var(--mat-sys-label-large);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: var(--mat-sys-on-primary-container);
+    background: var(--mat-sys-on-primary-container);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.nxs-task-detail__action--outline-warn {
+  border-color: var(--mat-sys-error);
+  background: transparent;
+  color: var(--mat-sys-error);
+
+  &:hover:not(:disabled) {
+    border-color: var(--mat-sys-error);
+    background: var(--mat-sys-error-container);
+  }
+}
+
+.nxs-task-detail__abandon,
+.nxs-task-detail__comments {
+  margin-top: 16px;
+  padding-top: 16px;
+
+  .nxs-task-detail__action,
+  .nxs-task-detail__label {
+    margin-top: 8px;
+  }
+}
+
+.nxs-task-detail__comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nxs-task-detail__comment {
+  padding: 8px 12px;
+  border-inline-start: 3px solid var(--mat-sys-primary);
+  border-radius: 6px;
+  background: var(--mat-sys-surface-container-low);
+}
+
+.nxs-task-detail__comment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.nxs-task-detail__comment-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-task-detail__comment-date {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-task-detail__comment-text {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface);
+}
