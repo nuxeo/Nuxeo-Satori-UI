@@ -347,7 +347,7 @@ describe('NxsPublishDialogComponent', () => {
       const pending = new Subject<NuxeoDocument>();
       documents.publishDocument.mockReturnValue(pending);
       const cancel = (): HTMLButtonElement =>
-        el().querySelector('[mat-dialog-close]') as HTMLButtonElement;
+        el().querySelector('.nxs-publish-dialog__cancel') as HTMLButtonElement;
       expect(cancel().disabled).toBe(false);
 
       publishButton().click();
@@ -364,7 +364,9 @@ describe('NxsPublishDialogComponent', () => {
       publishButton().click();
       await settle();
       expect(ref.disableClose).toBe(false);
-      expect((el().querySelector('[mat-dialog-close]') as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        (el().querySelector('.nxs-publish-dialog__cancel') as HTMLButtonElement).disabled,
+      ).toBe(false);
     });
 
     it('reads a refusal as one, re-enables Publish and stays open', async () => {
@@ -386,6 +388,13 @@ describe('NxsPublishDialogComponent', () => {
       expect(publishButton().disabled).toBe(false);
       expect(ref.close).not.toHaveBeenCalled();
     });
+  });
+
+  it('closes with undefined on Cancel, the result its type promises for a cancel', async () => {
+    await create();
+    (el().querySelector('.nxs-publish-dialog__cancel') as HTMLButtonElement).click();
+    expect(ref.close).toHaveBeenCalledTimes(1);
+    expect(ref.close.mock.calls[0][0]).toBeUndefined();
   });
 
   it('keeps Publish disabled and refuses to publish with no section chosen', async () => {
