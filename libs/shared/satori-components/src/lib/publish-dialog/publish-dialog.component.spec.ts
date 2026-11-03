@@ -189,9 +189,10 @@ describe('NxsPublishDialogComponent', () => {
     it('says there is nowhere to publish when the server lists no section', async () => {
       documents.getSectionTree.mockReturnValue(of(list([])));
       await create();
-      expect(el().querySelector('.nxs-publish-dialog__empty')?.textContent?.trim()).toBe(
-        'There is no section to publish to.',
-      );
+      const empty = el().querySelector('.nxs-publish-dialog__empty');
+      // <output> is a status live region by default, so the message is announced.
+      expect(empty?.tagName).toBe('OUTPUT');
+      expect(empty?.textContent?.trim()).toBe('There is no section to publish to.');
       expect(el().querySelector('.nxs-publish-dialog__section')).toBeNull();
       expect(publishButton().disabled).toBe(true);
     });

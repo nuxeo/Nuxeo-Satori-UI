@@ -27,9 +27,9 @@
     }
     @default {
       @if (sections().length === 0) {
-        <p class="nxs-publish-dialog__empty" role="status">
+        <output class="nxs-publish-dialog__empty">
           {{ 'satori-components.publish-dialog.no-sections' | translate }}
-        </p>
+        </output>
       } @else {
         <mat-form-field class="nxs-publish-dialog__field">
           <mat-label>{{ 'satori-components.publish-dialog.location' | translate }}</mat-label>
