@@ -12830,6 +12830,80 @@ expectRed(
 );
 
 expectRed(
+  'a double-quoted gate id with no row is caught, not skipped',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_RUNNER,
+      /* Reported on PR #554. The id pattern was single-quote-only, so this entry was skipped —
+       * and skipping *under-reads* the roster, so the gate it belongs to has no row to be
+       * missing and both inventory directions stayed green. */
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "    id: 'agent-mirror',",
+        '    id: "undocumented-gate",\n    platformSensitive: false,\n    label: "x",\n    cmd: "node",\n    argv: ["x.mjs"],\n  },\n  {\n    id: \'agent-mirror\',',
+      ),
+    ),
+  /`undocumented-gate` is registered in ALL_GATES and has no row in §2/,
+);
+
+expectRed(
+  'a partially read roster is refused rather than compared as a subset',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    /* The class behind the finding above, covered by a count the id pattern cannot influence:
+     * `verify-gate.mjs` refuses to start unless every gate declares `platformSensitive`, so the
+     * number of declarations is an independent count of the gates. An id in a shape no pattern
+     * matches — computed, templated, whatever a future gate does — must not read as "fewer
+     * gates", because fewer gates means fewer rows to be missing. */
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "    id: 'agent-mirror',",
+        '    id: ["agent", "mirror"].join("-"),',
+      ),
+    ),
+  /yielded 2 gate id\(s\) but 3 `platformSensitive` declaration\(s\), so the roster was read only partially/,
+);
+
+expectRed(
+  'a §2 row whose gate cell is not a backticked id is reported, not skipped',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'node' },
+          { number: 2, id: 'lint' },
+          { number: 3, id: 'agent-mirror' },
+        ],
+        sevenNames: ['node', 'lint, agent-mirror'],
+      }).replace('| 2   | `lint` |', '| 2   | lint |'),
+    ),
+  /§2 has a numbered row whose gate cell is not a single backticked id/,
+);
+
+falsePositiveControls += 1;
+expectGreen('a roster written with mixed quote styles is read in full', 'checkGateInventory', {
+  /* The positive half of the first control: once the pattern accepts any quote style, a roster
+   * that mixes them must read as complete rather than as a partial read. */
+  [INVENTORY_RUNNER]: gateRoster(['node', 'lint', 'agent-mirror'])
+    .replace("id: 'lint'", 'id: "lint"')
+    .replace("id: 'agent-mirror'", 'id: `agent-mirror`'),
+  [INVENTORY_PAGE]: inventoryPage({
+    rows: [
+      { number: 1, id: 'node' },
+      { number: 2, id: 'lint' },
+      { number: 3, id: 'agent-mirror' },
+    ],
+    sevenNames: ['node', 'lint, agent-mirror'],
+  }),
+});
+
+expectRed(
   'the roster block renamed: reading nothing must not pass as finding nothing',
   'checkGateInventory',
   INVENTORY_OK,

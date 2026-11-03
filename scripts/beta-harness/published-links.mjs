@@ -134,6 +134,72 @@ function readLedger() {
       refuse(`file \`${path}\` has "${key}" as ${typeof parsed[key]}, not a list.`);
     }
   }
+
+  /**
+   * Every entry is validated before anything is probed.
+   *
+   * The list-shape check above stopped at "is it an array", which review on PR #554 showed is not
+   * enough — and the two cases it named were only half of it. All four were driven against the
+   * real gate before fixing:
+   *
+   * | ledger | was | wrong because |
+   * | --- | --- | --- |
+   * | `{"advertised":[{}]}` | exit 78, "gave no response" | a configuration error reported as a network gap |
+   * | `{"advertised":[null]}` | `TypeError` stack trace | the shape this gate's own refusals exist to avoid |
+   * | a `file:` URL | exit 78, "fetch failed" | not an address a reader could follow at all |
+   * | the same URL in both lists | accepted | asserted alive **and** dead; whichever it is, one claim is false |
+   *
+   * The first is the worst of the four: NOT RUN is the verdict for "I could not find out", and
+   * spending it on a malformed ledger means a real inspection gap and a typo look identical.
+   */
+  const seen = new Map();
+  for (const [key, required] of [
+    ['advertised', ['advertisedIn']],
+    ['knownDead', ['why', 'owner', 'fix']],
+  ]) {
+    (parsed[key] ?? []).forEach((entry, index) => {
+      const at = `"${key}"[${index}]`;
+      if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+        refuse(
+          `file \`${path}\` has ${at} as ${entry === null ? 'null' : Array.isArray(entry) ? 'an array' : typeof entry}, ` +
+            'not an object with a "url".',
+        );
+      }
+      if (typeof entry.url !== 'string' || entry.url === '') {
+        refuse(`file \`${path}\` has ${at} with no "url" string.`);
+      }
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(entry.url);
+      } catch {
+        refuse(`file \`${path}\` has ${at} whose "url" is not a URL: \`${entry.url}\`.`);
+      }
+      // Only a scheme a reader could follow. A `file:` or `data:` URL would reach `fetch` and come
+      // back as "no response", which would read as an inspection gap rather than as a bad entry.
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        refuse(
+          `file \`${path}\` has ${at} with the scheme \`${parsedUrl.protocol}\`; only http: and ` +
+            'https: are addresses a reader can follow.',
+        );
+      }
+      for (const field of required) {
+        if (typeof entry[field] !== 'string' || entry[field] === '') {
+          refuse(
+            `file \`${path}\` has ${at} with no "${field}", so a finding about it could not say ` +
+              `${key === 'advertised' ? 'where it is advertised' : 'who owns the fix'}.`,
+          );
+        }
+      }
+      const previous = seen.get(entry.url);
+      if (previous) {
+        refuse(
+          `file \`${path}\` lists \`${entry.url}\` in both ${previous} and ${at}, so it is ` +
+            'asserted to answer and to stay dead at once. Whichever it does, one claim is false.',
+        );
+      }
+      seen.set(entry.url, at);
+    });
+  }
   return parsed;
 }
 

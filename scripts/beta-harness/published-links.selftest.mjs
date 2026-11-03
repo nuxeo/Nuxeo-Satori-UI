@@ -259,6 +259,61 @@ await control('an empty ledger is not a pass', NEGATIVE, async () => {
  * It already failed safe before this — an unhandled throw is exit 1 — so what these controls pin
  * is the diagnostic, which is the part a stack trace destroys. */
 const LEDGER_MISUSE = [
+  /* Entry-level validation, reported on PR #554. The list-shape check stopped at "is it an
+   * array", and the two cases review named were half of it — all four were driven against the
+   * real gate before fixing. The first is the worst: NOT RUN is the verdict for "I could not find
+   * out", and spending it on a malformed ledger makes a real inspection gap and a typo identical. */
+  [
+    'an entry that is not an object',
+    () => ['--ledger', fixtureFile('e1.json', '{"advertised":[null]}')],
+    /"advertised"\[0\] as null/,
+  ],
+  [
+    'an entry with no url',
+    () => ['--ledger', fixtureFile('e2.json', '{"advertised":[{}]}')],
+    /"advertised"\[0\] with no "url" string/,
+  ],
+  [
+    'a url that is not a URL',
+    () => [
+      '--ledger',
+      fixtureFile('e3.json', '{"advertised":[{"url":"not a url","advertisedIn":"x"}]}'),
+    ],
+    /whose "url" is not a URL/,
+  ],
+  [
+    'a non-http scheme',
+    () => [
+      '--ledger',
+      fixtureFile('e4.json', '{"advertised":[{"url":"file:///etc/passwd","advertisedIn":"x"}]}'),
+    ],
+    /with the scheme `file:`/,
+  ],
+  [
+    'an advertised entry with no advertisedIn',
+    () => ['--ledger', fixtureFile('e5.json', '{"advertised":[{"url":"https://example.test/"}]}')],
+    /with no "advertisedIn"/,
+  ],
+  [
+    'a known-dead entry with no owner',
+    () => [
+      '--ledger',
+      fixtureFile('e6.json', '{"knownDead":[{"url":"https://example.test/","why":"x","fix":"x"}]}'),
+    ],
+    /with no "owner"/,
+  ],
+  [
+    'the same url in both lists',
+    () => [
+      '--ledger',
+      fixtureFile(
+        'e7.json',
+        '{"advertised":[{"url":"https://example.test/","advertisedIn":"x"}],"knownDead":[{"url":"https://example.test/","why":"x","owner":"x","fix":"x"}]}',
+      ),
+    ],
+    /in both "advertised"\[0\] and "knownDead"\[0\]/,
+  ],
+
   ['no path at all', () => ['--ledger'], /needs a path, and was given nothing/],
   [
     'a flag where the path should be',

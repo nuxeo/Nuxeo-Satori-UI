@@ -12647,9 +12647,36 @@ function checkGateInventory() {
     );
     return;
   }
-  const roster = [...runnerSource.slice(open, close).matchAll(/\n\s+id: '([a-z0-9-]+)',/g)].map(
-    (match) => match[1],
-  );
+  /**
+   * The roster, read so that an entry this cannot parse is **impossible to miss**.
+   *
+   * The pattern was `/\n\s+id: '([a-z0-9-]+)',/` — single quotes, lower-case and hyphens only.
+   * Every gate happens to be written that way, so it read all 38 and looked correct. It is not:
+   * `id: "undocumented-gate",` is valid JavaScript and was skipped, and skipping *under-reads*
+   * the roster, so the gate it belongs to has no row to be missing and **both** inventory
+   * directions stay green. Reported in review on PR #554.
+   *
+   * Widening the quote class alone would have fixed that instance and left the class — an id with
+   * an underscore, or a descriptor written on one line, would still vanish. So the count is
+   * cross-checked against something the pattern cannot influence: `verify-gate.mjs` **refuses to
+   * run at all** unless every gate declares `platformSensitive`, so the number of those
+   * declarations is an independent count of the gates. If the two disagree, the roster was read
+   * partially and this check says so instead of comparing a subset.
+   */
+  const gateBlock = runnerSource.slice(open, close);
+  const roster = [...gateBlock.matchAll(/\bid:\s*['"`]([^'"`]+)['"`]/g)].map((match) => match[1]);
+  const declarations = [...gateBlock.matchAll(/\bplatformSensitive:\s*(?:true|false)\b/g)].length;
+  if (roster.length !== declarations) {
+    fail(
+      `${runner} yielded ${roster.length} gate id(s) but ${declarations} ` +
+        '`platformSensitive` declaration(s), so the roster was read only partially and this ' +
+        'check would compare a subset of the gates against the whole table.\n' +
+        '  Every gate declares `platformSensitive` — the runner refuses to start otherwise — so ' +
+        'the two counts must agree. A gate written in a shape the id pattern does not match is ' +
+        'the likely cause.',
+    );
+    return;
+  }
 
   const pageSource = read(page);
 
@@ -12686,9 +12713,26 @@ function checkGateInventory() {
 
   const sectionTwo = section(2, 'The gates');
   if (sectionTwo === null) return;
-  const rows = [...sectionTwo.matchAll(/^\|\s*(\d+)\s*\|\s*`([a-z0-9-]+)`\s*\|/gm)].map(
-    (match) => ({ number: Number(match[1]), id: match[2] }),
-  );
+  /* Same treatment as the roster above, for the same reason: a row this cannot parse would be
+   * absent from `rowIds`, so the gate it documents would read as "a gate with no row" — a real
+   * failure, but reported against the gate rather than against the malformed row, which sends the
+   * reader to the wrong file. Candidate rows are counted first and any shortfall named. */
+  const candidateRows = [...sectionTwo.matchAll(/^\|\s*\d+\s*\|.*\|/gm)].map((m) => m[0]);
+  const rows = [...sectionTwo.matchAll(/^\|\s*(\d+)\s*\|\s*`([^`]+)`\s*\|/gm)].map((match) => ({
+    number: Number(match[1]),
+    id: match[2],
+  }));
+  if (candidateRows.length !== rows.length) {
+    const unreadable = candidateRows.filter((line) => !/^\|\s*\d+\s*\|\s*`[^`]+`\s*\|/.test(line));
+    for (const line of unreadable) {
+      fail(
+        `${page} §2 has a numbered row whose gate cell is not a single backticked id:\n` +
+          `    ${line.trim().slice(0, 90)}\n` +
+          '  It cannot be compared to the roster, so it is a failure rather than a row to skip.',
+      );
+    }
+    return;
+  }
 
   /* Both emptiness guards are load-bearing, and in opposite directions. An empty roster would
    * make every row "a row with no gate"; an empty table would make every gate "a gate with no
