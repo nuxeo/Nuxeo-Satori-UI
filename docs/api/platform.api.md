@@ -195,7 +195,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-176 exported symbol(s).
+180 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -225,6 +225,7 @@ const NXS_PUBLISH_DIALOG_ID = "nxs.components.publishDialog";
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
 const NXS_TASK_DETAIL_ID = "nxs.components.taskDetail";
 const NXS_TOAST_DURATION = 4000;
+const NXS_TRASH_LIST_ID = "nxs.components.trashList";
 interface NxsActionBarInputs {
     readonly actions: InputSignal<readonly NxsToolbarAction[]>;
     readonly label: InputSignal<string>;
@@ -2862,6 +2863,107 @@ interface NxsToolbarAction {
     readonly overflow?: boolean;
     }
 }
+class NxsTrashListComponent {
+    readonly filters: import("@angular/core").InputSignal<TrashFilters>;
+    readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly initialView: import("@angular/core").InputSignal<NxsTrashListView>;
+    readonly openHandler: import("@angular/core").InputSignal<((document: NuxeoDocument) => void) | null>;
+    readonly resultsHandler: import("@angular/core").InputSignal<((results: NxsTrashListResults) => void) | null>;
+    protected readonly tagId: "nxs.primitives.tag";
+    protected readonly cardId: "nxs.primitives.card";
+    protected readonly views: readonly NxsTrashListView[];
+    protected readonly sortChoices: {
+    key: string;
+    field: string | null;
+    labelKey: string;
+    }[];
+    protected readonly view: import("@angular/core").WritableSignal<NxsTrashListView>;
+    protected readonly sort: import("@angular/core").WritableSignal<NxsDocumentListSort>;
+    protected readonly pageIndex: import("@angular/core").WritableSignal<number>;
+    protected readonly documents: import("@angular/core").WritableSignal<readonly NuxeoDocument[]>;
+    protected readonly totalSize: import("@angular/core").WritableSignal<number>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly error: import("@angular/core").WritableSignal<NxsErrorStatus | null>;
+    protected readonly selectedIds: import("@angular/core").WritableSignal<readonly string[]>;
+    protected readonly busy: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly visibleColumns: import("@angular/core").WritableSignal<readonly string[]>;
+    protected readonly pickerOpen: import("@angular/core").WritableSignal<boolean>;
+    protected readonly requiredColumns: readonly string[];
+    protected readonly defaultColumns: readonly string[];
+    protected readonly hasNextPage: import("@angular/core").WritableSignal<boolean>;
+    protected readonly selectedCount: import("@angular/core").Signal<number>;
+    protected readonly emptyHeading: import("@angular/core").Signal<any>;
+    protected readonly selected: import("@angular/core").Signal<Set<string>>;
+    protected readonly selectionBusy: import("@angular/core").Signal<boolean>;
+    protected readonly columns: import("@angular/core").Signal<readonly NxsDocumentListColumn[]>;
+    protected readonly pickerColumns: import("@angular/core").Signal<readonly NxsPickableColumn[]>;
+    protected readonly rowActions: import("@angular/core").Signal<Record<string, readonly NxsMenuAction[]>>;
+    protected readonly cardHandlers: import("@angular/core").Signal<Map<string, {
+    open: (() => void) | null;
+    select: (on: boolean) => void;
+    }>>;
+    constructor();
+    reload(): void;
+    protected setView(view: NxsTrashListView): void;
+    protected viewLabel(view: NxsTrashListView): string;
+    protected viewIcon(view: NxsTrashListView): string;
+    protected onSortChange(sort: NxsDocumentListSort | null): void;
+    protected onSortKey(key: string): void;
+    protected toggleDirection(): void;
+    protected goToPage(index: number): void;
+    protected applyColumns(keys: readonly string[]): void;
+    protected open(doc: NuxeoDocument): void;
+    protected title(doc: NuxeoDocument): string;
+    protected icon(doc: NuxeoDocument): string;
+    protected isSelected(uid: string): boolean;
+    protected setSelected(uid: string, on: boolean): void;
+    protected allSelected(): boolean;
+    protected toggleAll(on: boolean): void;
+    protected clearSelection(): void;
+    protected onRowAction({ action, document }: NxsDocumentListRowAction): void;
+    protected restoreSelected(): void;
+    protected purgeSelected(): void;
+    protected restore(docs: readonly NuxeoDocument[]): void;
+    protected purge(docs: readonly NuxeoDocument[]): void;
+    protected exportCsv(): void;
+    protected cellText(doc: NuxeoDocument, key: string): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTrashListComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTrashListComponent, "nxs-trash-list", never, {
+    "filters": {
+    "alias": "filters";
+    "required": false;
+    "isSignal": true;
+    };
+    "pageSize": {
+    "alias": "pageSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "initialView": {
+    "alias": "initialView";
+    "required": false;
+    "isSignal": true;
+    };
+    "openHandler": {
+    "alias": "openHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "resultsHandler": {
+    "alias": "resultsHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsTrashListResults {
+    readonly loading: boolean;
+    readonly documents: readonly NuxeoDocument[];
+    readonly totalSize: number;
+    }
+}
+type NxsTrashListView = 'grid' | 'list' | 'table';
 class NxsUpdatePermissionDialogComponent {
     protected datesValid(): boolean;
     protected readonly id: string;

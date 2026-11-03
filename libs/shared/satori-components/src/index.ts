@@ -242,6 +242,12 @@ export {
   NxsTaskDetailComponent,
   type NxsTaskOutcome,
 } from './lib/task-detail/task-detail.component';
+export {
+  NXS_TRASH_LIST_ID,
+  NxsTrashListComponent,
+  type NxsTrashListResults,
+  type NxsTrashListView,
+} from './lib/trash-list/trash-list.component';
 // satori:export:components — `satori-component` inserts above this line
 
 export { TranslatedDatepickerIntl } from './lib/date-input/translated-datepicker-intl';

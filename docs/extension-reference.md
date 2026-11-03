@@ -855,6 +855,7 @@ Components are referenced by ID and must already be compiled in. Contributing a 
 | `nxs.components.adminGroupDetailsPage` | One group at `/administration/users-groups/group/:groupId`: members, nested groups, and permissions                                                      |
 | `nxs.components.publishDialog`         | The Publish dialog that `app.toolbar.publish` and `app.bulkActions.publish` both open                                                                    |
 | `nxs.components.taskDetail`            | The task panel of the Tasks page at `/tasks/:taskId`: a task's actions, abandon, delegate, reassign, workflow graph                                      |
+| `nxs.components.trashList`             | The trash at `/trash`: trashed documents as a table, grid or list, with restore and permanent delete for one document or a selection                     |
 
 `app.page.contracts` is the first component registered for the **`routes`** slot rather than for a
 drawer, and it exists because that slot went live with **no component in the product able to serve
@@ -965,7 +966,7 @@ ID reaches it. The uses resolved by ID are these:
 | `nxs.primitives.tag`         | browse (a trashed child's type), search (a list row's type), document detail (the AI primary category, a publication's version), trash, `nxs-document-list`                                         |
 | `nxs.primitives.breadcrumbs` | browse, document detail, the collection page, the tasks page                                                                                                                                        |
 | `nxs.primitives.statusTag`   | browse, document detail, the collection page                                                                                                                                                        |
-| `nxs.primitives.card`        | browse's and search's card views, one per document; the card shows the type as its subheading                                                                                                       |
+| `nxs.primitives.card`        | browse's, search's and the trash's card views, one per document; the card shows the type as its subheading                                                                                          |
 | `nxs.primitives.tabs`        | document detail's tab strip (sections 8 and 9)                                                                                                                                                      |
 | `nxs.primitives.actionBar`   | document detail's header action row (sections 8 and 9)                                                                                                                                              |
 

@@ -34,12 +34,14 @@ import {
   NXS_PERMISSIONS_PANEL_ID,
   NXS_PUBLISH_DIALOG_ID,
   NXS_TASK_DETAIL_ID,
+  NXS_TRASH_LIST_ID,
   NxsAdminGroupDetailsPageComponent,
   NxsAdminUserDetailsPageComponent,
   NxsAdminUsersGroupsPageComponent,
   NxsPermissionsPanelComponent,
   NxsPublishDialogComponent,
   NxsTaskDetailComponent,
+  NxsTrashListComponent,
 } from '@nuxeo/satori-platform/components';
 import { SelectionService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -192,6 +194,9 @@ function provideAppContributions(): EnvironmentProviders {
         // The task panel of the tasks page: reading a task and completing it. The page renders it
         // through its ID, so a customer library can re-register it.
         [NXS_TASK_DETAIL_ID]: NxsTaskDetailComponent,
+        // The trash list. `/trash` renders it through this ID, so a customer library can replace
+        // it, and falls back to the packaged component when no registration resolves.
+        [NXS_TRASH_LIST_ID]: NxsTrashListComponent,
       },
     };
   });
