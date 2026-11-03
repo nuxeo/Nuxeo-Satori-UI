@@ -57,6 +57,23 @@ function expect(condition, message) {
 const workspace = mkdtempSync(join(tmpdir(), 'staleness-selftest-'));
 
 /**
+ * Does `body` hold `wanted` as the whole content of one list item's code span?
+ *
+ * Shared by the hostile-name controls and the code-span controls, because the delimiter length
+ * depends on the name — a name containing backticks gets a longer run — so no control may assume
+ * a single backtick.
+ */
+function codeSpanHolds(body, wanted) {
+  return body
+    .split('\n')
+    .filter((line) => line.startsWith('- '))
+    .some((line) => {
+      const match = /^- (`+)( ?)([\s\S]*?)\2\1 not found in AGENTS\/01-services\.md$/.exec(line);
+      return match !== null && match[3] === wanted;
+    });
+}
+
+/**
  * A service basename carrying the metacharacters the old shell body acted on: backticks,
  * `$(…)` and a statement separator. The real list items are backticked, which is the half that
  * actually fired in production, and every one of these is a legal filename on both platforms.
@@ -103,9 +120,12 @@ control('a hostile service name reaches the issue body as literal text, and runs
     `${CANARY} exists, so the metacharacters in the service name were executed`,
   );
   const body = readFileSync(fx.out, 'utf8');
+  /* Delimiter-agnostic: the code span's backtick run varies with the name, since a name
+   * containing backticks needs a longer one (see the code-span controls below). Asserting one
+   * backtick here is what made these two controls fail when `codeSpan()` was introduced. */
   expect(
-    body.includes(`\`${HOSTILE}.service.ts\` not found`),
-    `the body does not carry the name verbatim:\n${body}`,
+    codeSpanHolds(body, `${HOSTILE}.service.ts`),
+    `the body does not carry the name verbatim inside one code span:\n${body}`,
   );
   expect(/not found in AGENTS\/01-services\.md/.test(body), 'the body lost its sentence');
 });
@@ -121,8 +141,8 @@ control(
     expect(proc.status === 0, `exited ${proc.status}: ${proc.output.trim().slice(0, 300)}`);
     expect(!existsSync(CANARY), `${CANARY} exists, so the redirection was executed`);
     expect(
-      readFileSync(fx.out, 'utf8').includes(`\`${HOSTILE_REDIRECT}.service.ts\` not found`),
-      'the body does not carry the name verbatim',
+      codeSpanHolds(readFileSync(fx.out, 'utf8'), `${HOSTILE_REDIRECT}.service.ts`),
+      'the body does not carry the name verbatim inside one code span',
     );
   },
   { needs: POSIX_FILENAMES, why: 'a Win32 filename cannot contain `>`' },
@@ -160,6 +180,52 @@ control(
   },
   { needs: POSIX_FILENAMES, why: 'a Win32 filename cannot contain a newline' },
 );
+
+/**
+ * The filename is wrapped in a code span that its own backticks cannot close.
+ *
+ * Asserted structurally rather than by rendering, because this repository has no declared
+ * Markdown parser — `marked` is present only transitively. The structural property is the one
+ * CommonMark turns into "exactly one code span": the delimiter is a backtick run longer than any
+ * run inside the name, it appears exactly twice on the line, and nothing of the name sits outside
+ * it. Corroborated against a real CommonMark parse while fixing (PR #554), which is where the
+ * failing case came from: `` a` @report-canary b `` put the @mention OUTSIDE the span.
+ */
+for (const [label, name] of [
+  ['one backtick, the escaping case', 'a` @report-canary b'],
+  ['a backtick mid-name', 'a`b'],
+  ['a double-backtick run', 'x``y'],
+  ['a leading backtick', '`leading'],
+  ['a trailing backtick', 'trailing`'],
+]) {
+  control(`NEGATIVE: a name with ${label} cannot escape its code span`, () => {
+    const fx = fixture([name], '# nothing documented here\n');
+    const proc = run(fx);
+    expect(proc.status === 0, `exited ${proc.status}: ${proc.output.trim().slice(0, 200)}`);
+    const item = readFileSync(fx.out, 'utf8')
+      .split('\n')
+      .find((line) => line.startsWith('- '));
+    expect(item !== undefined, 'no list item was written');
+
+    const wanted = `${name}.service.ts`;
+    const match = /^- (`+)( ?)([\s\S]*?)\2\1 not found in AGENTS\/01-services\.md$/.exec(item);
+    expect(match !== null, `the item is not a single delimited code span:\n    ${item}`);
+    const [, fence, , content] = match;
+    expect(
+      content === wanted,
+      `the span holds ${JSON.stringify(content)}, not the whole filename ${JSON.stringify(wanted)}`,
+    );
+    const longestRun = Math.max(0, ...[...wanted.matchAll(/`+/g)].map((m) => m[0].length));
+    expect(
+      fence.length > longestRun,
+      `the delimiter is ${fence.length} backtick(s) against a run of ${longestRun} in the name, ` +
+        'so the name can close it early',
+    );
+    // The delimiter run must appear exactly twice, or something else on the line pairs with it.
+    const runs = [...item.matchAll(/`+/g)].filter((m) => m[0].length === fence.length).length;
+    expect(runs === 2, `the ${fence.length}-backtick delimiter appears ${runs} times, not twice`);
+  });
+}
 
 control('no drift means no issue body and drift_detected=false', () => {
   const fx = fixture(['browse', 'tag'], 'BrowseService and TagService are both documented.\n');

@@ -115,6 +115,32 @@ function oneLine(name) {
   );
 }
 
+/**
+ * `text` as a Markdown code span that cannot be escaped by backticks inside `text`.
+ *
+ * A single-backtick delimiter is not enough, and the consequence is worse than a mangled display.
+ * A filename may contain a backtick, and with an odd number of them the tail of the item falls
+ * **outside** the code span and is parsed as Markdown. Rendered through a real CommonMark parser,
+ * the legal filename `` a` @report-canary b.service.ts `` produced:
+ *
+ *     text outside <code>: "@report-canary b.service.ts` not found in AGENTS/01-services.md"
+ *
+ * — a live `@mention` in an issue a maintainer is meant to read, so a filename could notify people
+ * and inject markup. Raised in review on PR #554. `oneLine()` above stops a newline forging a
+ * list item; this stops a backtick forging anything else.
+ *
+ * CommonMark's rule: a code span may be delimited by any run of backticks, closed by a run of the
+ * same length, so a delimiter one longer than the longest run inside the text can never be closed
+ * early. The padding spaces matter when the text itself starts or ends with a backtick — a parser
+ * strips exactly one space from each end when both are present, so the content survives verbatim.
+ */
+function codeSpan(text) {
+  const longestRun = Math.max(0, ...[...text.matchAll(/`+/g)].map((m) => m[0].length));
+  const fence = '`'.repeat(longestRun + 1);
+  const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : '';
+  return `${fence}${pad}${text}${pad}${fence}`;
+}
+
 const driftDetected = missing.length > 0;
 
 if (driftDetected) {
@@ -127,7 +153,7 @@ if (driftDetected) {
       '`AGENTS/01-services.md`:',
       '',
       ...missing.map(
-        (name) => `- \`${oneLine(name)}.service.ts\` not found in AGENTS/01-services.md`,
+        (name) => `- ${codeSpan(`${oneLine(name)}.service.ts`)} not found in AGENTS/01-services.md`,
       ),
       '',
       '### What to do',
