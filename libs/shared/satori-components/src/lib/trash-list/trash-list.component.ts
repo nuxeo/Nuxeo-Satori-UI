@@ -306,7 +306,11 @@ export class NxsTrashListComponent {
   constructor() {
     merge(
       toObservable(this.request).pipe(map((request) => ({ request, quiet: false }))),
-      this.reload$.pipe(map((quiet) => ({ request: this.request(), quiet }))),
+      // Quiet only when nothing is loading: a refresh that arrives during a filter or page search
+      // replaces it, so it has to show the loader and its failure as that search would.
+      this.reload$.pipe(
+        map((quiet) => ({ request: this.request(), quiet: quiet && !this.loading() })),
+      ),
     )
       .pipe(
         switchMap(({ request, quiet }) => {

@@ -445,6 +445,39 @@ describe('NxsTrashListComponent', () => {
       }
     });
 
+    it('lets a refresh that arrives during a filter search load and fail as that search would', async () => {
+      const reports: NxsTrashListResults[] = [];
+      await create({ resultsHandler: (results: NxsTrashListResults) => reports.push(results) });
+      const pendingRestore = new Subject<unknown>();
+      restoreDocument.mockReturnValue(pendingRestore);
+      internals().restore([doc(1)]);
+
+      searchTrash.mockReturnValue(new Subject<NuxeoDocumentList>());
+      fixture.componentRef.setInput('filters', {
+        fullText: 'q',
+        path: '/',
+        author: '',
+        sizeRanges: [],
+      });
+      await render();
+      expect(reports.at(-1)?.loading).toBe(true);
+
+      // The restore answers while the filter search is in flight; its refresh fails.
+      searchTrash.mockReturnValue(throwError(() => ({ status: 500 })));
+      pendingRestore.next({});
+      pendingRestore.complete();
+      await render();
+      expect(
+        el().querySelector('nxs-error-state, nxs-document-list nxs-error-state'),
+      ).not.toBeNull();
+      expect(toastError).not.toHaveBeenCalledWith(
+        'The trash could not be refreshed.',
+        expect.anything(),
+      );
+      expect(reports.at(-1)).toEqual({ loading: false, documents: [], totalSize: 0 });
+      expect(searchTrash).toHaveBeenLastCalledWith(expect.objectContaining({ fullText: 'q' }));
+    });
+
     it('lists a handled document again once it has been hidden long enough', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       try {
