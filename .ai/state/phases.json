@@ -32,7 +32,7 @@
       "title": "Unblock and verify",
       "status": "complete",
       "evidence": {
-        "manifest": "phase-0-baseline/2026-11-02T17-03-22",
+        "manifest": "phase-0-baseline/2026-11-03T05-48-18",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
         "regate": "gates/2026-11-03T05-10-32-nxsat-660-review"
       },
@@ -98,7 +98,7 @@
       "title": "adf-hx component adoption",
       "status": "superseded",
       "evidence": {
-        "manifest": "phase-3-adf-hx/2026-11-02T14-38-04",
+        "manifest": "phase-3-adf-hx/2026-11-03T05-49-10",
         "searchManifest": "phase-3-search/2026-08-24T02-58-00",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
         "regate": "gates/2026-11-03T05-10-32-nxsat-660-review"
