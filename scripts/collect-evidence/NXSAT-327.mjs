@@ -9,7 +9,8 @@
  */
 
 const DOC_A = process.env['NXSAT327_DOC_A'] ?? '06551048-ee78-43fd-a014-86f76c70c325';
-const APP = process.env['APP_URL'] ?? 'http://localhost:4233';
+// The runner's own default, so seeding and navigation reach the same app with the same credentials.
+const APP = process.env['APP_URL'] ?? 'http://localhost:4200';
 const api = (path) => `${APP}/nuxeo/api/v1${path}`;
 
 const PANEL = '.task-form-panel';

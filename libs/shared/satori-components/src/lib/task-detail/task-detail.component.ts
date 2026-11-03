@@ -269,7 +269,9 @@ export class NxsTaskDetailComponent {
     );
   }
 
+  /** A write in flight closes the panel it came from when it lands, so no other opens meanwhile. */
   protected openPanel(panel: Exclude<Panel, null>): void {
+    if (this.submitting()) return;
     this.panel.set(panel);
     this.assignees.set([]);
     this.panelComment.set('');

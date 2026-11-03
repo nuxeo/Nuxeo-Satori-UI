@@ -10,6 +10,7 @@
       type="button"
       class="nxs-task-detail__link"
       [attr.aria-expanded]="panel() === 'delegate'"
+      [disabled]="submitting()"
       (click)="openPanel('delegate')"
     >
       {{ 'satori-components.task-detail.delegate' | translate }}
@@ -18,6 +19,7 @@
       type="button"
       class="nxs-task-detail__link"
       [attr.aria-expanded]="panel() === 'reassign'"
+      [disabled]="submitting()"
       (click)="openPanel('reassign')"
     >
       {{ 'satori-components.task-detail.reassign' | translate }}

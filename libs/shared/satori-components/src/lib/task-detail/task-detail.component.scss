@@ -31,8 +31,13 @@
   white-space: nowrap;
   cursor: pointer;
 
-  &:hover {
+  &:hover:not(:disabled) {
     text-decoration: underline;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 }
 

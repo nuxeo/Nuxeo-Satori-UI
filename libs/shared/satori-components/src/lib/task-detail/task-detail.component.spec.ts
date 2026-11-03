@@ -629,6 +629,23 @@ describe('NxsTaskDetailComponent', () => {
     });
   });
 
+  it('keeps the delegate panel while its delegation is pending', async () => {
+    tasks['delegateTask'].mockReturnValue(new Subject<void>());
+    await render();
+    await click('Delegate');
+    pickers()[0].value.set([principal('user', 'asmith')]);
+    fixture.detectChanges();
+    (el().querySelector('.nxs-task-detail__confirm') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(button('Reassign')?.disabled).toBe(true);
+    expect(button('Delegate')?.disabled).toBe(true);
+    detail()['openPanel']('reassign');
+    fixture.detectChanges();
+    expect(el().querySelector('[data-panel="delegate"]')).toBeTruthy();
+    expect(el().querySelector('[data-panel="reassign"]')).toBeNull();
+  });
+
   it('replaces the delegate panel with the reassign panel', async () => {
     await render();
     await click('Delegate');
