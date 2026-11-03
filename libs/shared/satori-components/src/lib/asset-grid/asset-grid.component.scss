@@ -1,0 +1,189 @@
+:host {
+  --nxs-asset-grid-card-surface: var(--mat-sys-surface);
+  --nxs-asset-grid-card-border: var(--mat-sys-outline-variant);
+  --nxs-asset-grid-thumbnail-surface: var(--mat-sys-surface-container);
+  --nxs-asset-grid-icon: var(--mat-sys-on-surface-variant);
+  --nxs-asset-grid-accent: var(--mat-sys-primary);
+  --nxs-asset-grid-selected-surface: var(--mat-sys-primary-container);
+  display: block;
+  min-height: 0;
+}
+
+/* The three layout knobs take their defaults from `var()` fallbacks rather than a `:host`
+   declaration, and that is not a style choice. A property declared on `:host` is set on this
+   element, so it *overrides* a value inherited from an ancestor — and a screen's media query sets
+   these on the box around the grid. Written as fallbacks, an ancestor wins; written on `:host`, the
+   breakpoints would silently do nothing. The colours above are the opposite case: a caller overrides
+   those by targeting `nxs-asset-grid` itself, which outranks `:host`. */
+.nxs-asset-grid__grid {
+  display: grid;
+  grid-template-columns: var(
+    --nxs-asset-grid-columns,
+    repeat(auto-fill, minmax(var(--nxs-asset-grid-min-column, 180px), 1fr))
+  );
+  align-content: start;
+  gap: var(--nxs-asset-grid-gap, 16px);
+  padding-bottom: 16px;
+}
+
+.nxs-asset-grid__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--nxs-asset-grid-card-border);
+  border-radius: 8px;
+  background: var(--nxs-asset-grid-card-surface);
+  transition:
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+
+  &:hover {
+    box-shadow: var(--mat-sys-level2);
+  }
+
+  // The checkbox is out of the way until it is wanted — but `:focus-within` is as load-bearing as
+  // `:hover`: without it a keyboard user tabs onto a control that is `visibility: hidden`, which is
+  // focus they cannot see.
+  &:hover .nxs-asset-grid__select,
+  &:focus-within .nxs-asset-grid__select {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.nxs-asset-grid__card--selected {
+  background: var(--nxs-asset-grid-selected-surface);
+  border-color: var(--nxs-asset-grid-accent);
+
+  .nxs-asset-grid__select {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.nxs-asset-grid__select {
+  position: absolute;
+  top: 8px;
+  inset-inline-start: 8px;
+  z-index: 2;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s ease;
+}
+
+.nxs-asset-grid__thumbnail {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 120px;
+  overflow: hidden;
+  border-radius: 8px 8px 0 0;
+  background: var(--nxs-asset-grid-thumbnail-surface);
+}
+
+.nxs-asset-grid__image {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.nxs-asset-grid__icon {
+  width: 48px;
+  height: 48px;
+  font-size: 48px;
+  color: var(--nxs-asset-grid-icon);
+}
+
+.nxs-asset-grid__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.nxs-asset-grid__name {
+  // Button reset. The card is not a button: it holds a checkbox and this one, and a control
+  // containing controls is `nested-interactive` (WCAG 4.1.2).
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: var(--mat-sys-body-medium);
+  font-weight: 500;
+  color: var(--mat-sys-on-surface);
+  text-align: start;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  /* The whole card opens the document, without the card being a control. This pseudo-element
+     stretches the name button's hit area over the card — the alternative, a focusable
+     `div[role=button]` around a checkbox, is the `nested-interactive` nesting the markup avoids. */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+}
+
+/* Above that overlay, so the pill is not a second way to open the document. `z-index` needs a
+   positioned element to act on, hence `position: relative` — `.nxs-asset-grid__select` already
+   carries both, so it must not be restated here or its `absolute` would be overridden. */
+.nxs-asset-grid__type {
+  position: relative;
+  z-index: 2;
+}
+
+// IBM Equal Access `style_focus_visible` reads `:focus` only, so each ring is a standalone `:focus`
+// rule rather than a list with `:focus-visible`.
+.nxs-asset-grid__name:focus {
+  outline: 2px solid var(--nxs-asset-grid-accent);
+  outline-offset: 2px;
+}
+
+.nxs-asset-grid__name:focus-visible {
+  outline: 2px solid var(--nxs-asset-grid-accent);
+  outline-offset: 2px;
+}
+
+.nxs-asset-grid__type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 120px;
+  padding: 2px 8px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 999px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-small);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nxs-asset-grid__card,
+  .nxs-asset-grid__select {
+    transition: none;
+  }
+}

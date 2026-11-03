@@ -2677,6 +2677,26 @@
       "purged-many": "Deleted {{count}} documents permanently.",
       "purge-failed-one": "Could not delete \"{{title}}\".",
       "purge-failed-many": "Could not delete {{failed}} of {{count}} documents."
+    },
+    "storyboard": {
+      "label": "Video storyboard",
+      "seek-to": "Seek to {{frame}}"
+    },
+    "asset-grid": {
+      "label": "Assets",
+      "select": "Select {{name}}"
+    },
+    "asset-facets-drawer": {
+      "label": "Asset filters",
+      "filters": "Filters",
+      "full-text": "Full text",
+      "search-placeholder": "Search for something",
+      "clear": "Clear the search text",
+      "no-available-results": "No available results",
+      "auto-search": "Auto search",
+      "reset": "Reset",
+      "save-as": "Save as",
+      "search": "Search"
     }
   },
   "search": {

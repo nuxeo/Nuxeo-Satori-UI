@@ -1,3 +1,11 @@
+/* The grid itself is `nxs-asset-grid`, rendered through `nxs.components.assetGrid`. This is the
+   box it scrolls in: the component lays the cards out, the screen decides how much room they get. */
+.asset-grid-host {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 :host {
   display: block;
   height: 100%;
@@ -238,153 +246,6 @@
   color: var(--mat-sys-on-surface-variant, #5c5f6b);
 }
 
-.asset-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  align-content: start;
-  gap: 16px;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-  padding-bottom: 16px;
-}
-
-.asset-card {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  padding: 0;
-  transition:
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
-  position: relative;
-
-  &:hover {
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-
-    .grid-card-checkbox {
-      opacity: 1;
-      visibility: visible;
-    }
-  }
-
-  &.selected {
-    background: var(--mat-sys-primary-container, #e8def8);
-    border-color: var(--mat-sys-primary, #5c6bc0);
-
-    .grid-card-checkbox {
-      opacity: 1;
-      visibility: visible;
-    }
-  }
-}
-
-.grid-card-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.2s ease,
-    visibility 0.2s ease;
-  z-index: 2;
-}
-
-.asset-card-thumbnail {
-  position: relative;
-  height: 120px;
-  width: 100%;
-  background: #f5f5f5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px 8px 0 0;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.asset-card-body {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.asset-card-head {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 0;
-}
-
-.asset-card-name {
-  /* Button reset: this is a `<button>` so a keyboard user can open the document.
-     The row itself is no longer a button — it wrapped a checkbox and action buttons,
-     which is `nested-interactive` (WCAG 4.1.2). */
-  appearance: none;
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--mat-sys-on-surface);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 100%;
-}
-
-.asset-type-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--mat-sys-surface-container-high, #eef0f4);
-  border: 1px solid var(--mat-sys-outline-variant, #d8dbe2);
-  color: var(--mat-sys-on-surface-variant, #5c5f6b);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  max-width: 120px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.asset-icon {
-  font-size: 48px;
-  width: 48px;
-  height: 48px;
-  color: #bdbdbd;
-}
-
-.asset-thumbnail-image {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  position: absolute;
-  inset: 0;
-}
-
 /* Table View */
 .list-wrapper {
   display: flex;
@@ -611,8 +472,8 @@
 }
 
 @media (max-width: 1400px) {
-  .asset-grid {
-    grid-template-columns: repeat(4, 1fr);
+  .asset-grid-host {
+    --nxs-asset-grid-columns: repeat(4, 1fr);
   }
 }
 
@@ -621,16 +482,16 @@
     padding: 14px 16px;
   }
 
-  .asset-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+  .asset-grid-host {
+    --nxs-asset-grid-columns: repeat(3, 1fr);
+    --nxs-asset-grid-gap: 12px;
   }
 }
 
 @media (max-width: 900px) {
-  .asset-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+  .asset-grid-host {
+    --nxs-asset-grid-columns: repeat(2, 1fr);
+    --nxs-asset-grid-gap: 10px;
   }
 }
 
@@ -647,7 +508,6 @@
  * `click-events-have-key-events` reject the middle ground of a click handler on a plain div,
  * and they are right to.
  */
-.asset-card-name,
 .row-name-text {
   &::after {
     content: '';
@@ -659,9 +519,7 @@
 
 /* The controls have to sit above that overlay. `z-index` alone did nothing here: these
    wrappers were `position: static`, on which `z-index` has no effect. */
-.grid-card-checkbox,
 .col-checkbox,
-.grid-card-actions,
 .col-hover-actions,
 .col-gear,
 .action-btn {

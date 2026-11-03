@@ -7,15 +7,20 @@ import {
   untracked,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
+import { ExtensionOutletComponent, descriptorLabel } from '@nuxeo/satori-platform/extensions';
+import {
+  NXS_ASSET_FACETS_DRAWER_ID,
+  NxsAssetFacetsDrawerComponent,
+  type NxsAssetFacetsAction,
+  type NxsFacetGroup,
+  type NxsFacetSelection,
+} from '@nuxeo/satori-platform/components';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
@@ -28,6 +33,7 @@ import {
 import { SavedSearchDialogComponent } from '@nuxeo/satori-platform/ui';
 import { AssetsQueueComponent } from '../assets-queue/assets-queue.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { map } from 'rxjs';
 
 export interface FilterOption {
   label: string;
@@ -54,6 +60,8 @@ interface SavedSearchSelectOption {
 }
 
 const DYNAMIC_GROUPS = new Set(['asset-type', 'asset-format', 'color-profile', 'color-depth']);
+/** The one group the drawer opens on arrival, as it always has. */
+const INITIALLY_EXPANDED_GROUPS: readonly string[] = ['asset-type'];
 type DrawerViewMode = 'filter' | 'queue';
 
 function toMimeType(value: string): string {
@@ -82,13 +90,12 @@ function toMimeType(value: string): string {
   selector: 'lib-assets-drawer',
   standalone: true,
   imports: [
-    DescriptorLabelPipe,
+    ExtensionOutletComponent,
+    NxsAssetFacetsDrawerComponent,
     TranslatePipe,
     MatIconModule,
     MatButtonModule,
-    MatCheckboxModule,
     MatDividerModule,
-    MatSlideToggleModule,
     MatSnackBarModule,
     MatTooltipModule,
     AssetsQueueComponent,
@@ -107,7 +114,6 @@ export class AssetsDrawerComponent {
   private readonly searchService = inject(SearchService);
   private readonly queryParams = toSignal(this.route.queryParamMap, { requireSync: true });
 
-  readonly dynamicGroups = DYNAMIC_GROUPS;
   readonly viewMode = signal<DrawerViewMode>(this.loadViewModeFromStorage());
   readonly selectedDocumentId = signal('');
   readonly filterSearchInput = signal('');
@@ -137,6 +143,90 @@ export class AssetsDrawerComponent {
       this.filterGroups().some((group) => group.options.some((option) => option.selected)),
   );
 
+  /** The ID the facets panel is rendered under, so a customer library can replace it. */
+  protected readonly facetsId = NXS_ASSET_FACETS_DRAWER_ID;
+
+  /**
+   * The active language as a signal. `translate.instant` is not reactive, so the facet labels —
+   * resolved in TypeScript now that the panel takes them already translated, rather than by the
+   * impure `descriptorLabel` pipe in a template — read this to follow a language change.
+   */
+  private readonly currentLang = toSignal(
+    this.translate.onLangChange.pipe(map((event) => event.lang)),
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
+  );
+
+  /** The facet groups as the panel takes them: labels resolved, counts resolved, nothing to look up. */
+  protected readonly facetGroups = computed<readonly NxsFacetGroup[]>(() => {
+    this.currentLang();
+    const resolve = (key: string): string => this.translate.instant(key);
+    return this.filterGroups().map((group) => ({
+      id: group.id,
+      label: descriptorLabel(group, resolve),
+      dynamic: DYNAMIC_GROUPS.has(group.id),
+      options: group.options.map((option) => ({
+        value: option.value,
+        label: descriptorLabel(option, resolve),
+        selected: option.selected,
+        count: this.facetCount(group.id, option.aggKey),
+      })),
+    }));
+  });
+
+  /** What a facets panel registered under that ID is given. Handlers, because an outlet sets inputs only. */
+  protected readonly facetsInputs = computed(() => ({
+    groups: this.facetGroups(),
+    fullText: this.secondarySearchInput(),
+    autoSearch: this.autoSearch(),
+    canSaveAs: this.hasActiveFilters(),
+    initiallyExpandedGroupIds: INITIALLY_EXPANDED_GROUPS,
+    fullTextChangeHandler: this.onFacetFullTextChange,
+    fullTextSubmitHandler: this.onFacetFullTextSubmit,
+    optionToggleHandler: this.onFacetOptionToggle,
+    autoSearchChangeHandler: this.onFacetAutoSearchChange,
+    actionHandler: this.onFacetAction,
+  }));
+
+  /**
+   * Results in a facet's bucket, or `null` to show no count.
+   *
+   * The `ALWAYS_SHOW_ZERO` groups are ranges the server only reports when something falls in them,
+   * and for those an absent bucket genuinely means zero. For every other group an absent bucket
+   * means the server said nothing, so claiming zero would be an invention.
+   */
+  private facetCount(groupId: string, aggKey?: string): number | null {
+    if (!aggKey) return null;
+    const aggField = this.GROUP_AGG_KEY[groupId];
+    if (!aggField) return null;
+    const agg = this.aggregationService.aggregations()[aggField];
+    if (!agg) return this.ALWAYS_SHOW_ZERO.has(groupId) ? 0 : null;
+    const bucket = agg.buckets.find((b) => b.key === aggKey);
+    return bucket?.docCount ?? (this.ALWAYS_SHOW_ZERO.has(groupId) ? 0 : null);
+  }
+
+  // Arrows, not the prototype methods beside them: these are passed as values to the panel, and an
+  // unbound method would lose `this` the moment it is called from there.
+  private readonly onFacetFullTextChange = (value: string): void =>
+    this.onSecondarySearchInput(value);
+
+  private readonly onFacetFullTextSubmit = (): void => this.onSecondarySearchEnter();
+
+  private readonly onFacetOptionToggle = (selection: NxsFacetSelection): void =>
+    this.toggleOption(selection.groupId, selection.value);
+
+  private readonly onFacetAutoSearchChange = (autoSearch: boolean): void =>
+    this.autoSearch.set(autoSearch);
+
+  /** Run a footer button. Bound by the fallback element's `action`, and by `onFacetAction`. */
+  protected onFacetsAction(action: NxsAssetFacetsAction): void {
+    if (action === 'reset') this.resetFilters();
+    else if (action === 'save-as') this.openSaveAsDialog();
+    else this.applySearch();
+  }
+
+  private readonly onFacetAction = (action: NxsAssetFacetsAction): void =>
+    this.onFacetsAction(action);
+
   readonly filteredSavedSearches = computed(() => {
     const term = this.savedSearchFilter().trim().toLowerCase();
     if (!term) return this.availableSavedSearches();
@@ -144,19 +234,6 @@ export class AssetsDrawerComponent {
       option.label.toLowerCase().includes(term),
     );
   });
-
-  getCountText(groupId: string, aggKey?: string): string {
-    if (!aggKey) return '';
-    const aggField = this.GROUP_AGG_KEY[groupId];
-    if (!aggField) return '';
-    const agg = this.aggregationService.aggregations()[aggField];
-    if (!agg) return this.ALWAYS_SHOW_ZERO.has(groupId) ? ' (0)' : '';
-    const bucket = agg.buckets.find((b) => b.key === aggKey);
-    const count = bucket?.docCount ?? (this.ALWAYS_SHOW_ZERO.has(groupId) ? 0 : null);
-    return count !== null ? ` (${count})` : '';
-  }
-
-  readonly expandedFilters = signal<Set<string>>(new Set());
 
   readonly filterGroups = signal<FilterGroup[]>([
     { id: 'asset-type', labelKey: 'assets.filter.asset-type', label: 'Asset Type', options: [] },
@@ -295,8 +372,6 @@ export class AssetsDrawerComponent {
   readonly autoSearch = signal(true);
 
   constructor() {
-    this.expandedFilters.set(new Set(['asset-type']));
-
     effect(() => {
       const version = this.aggregationService.savedSearchVersion();
       if (version === 0) return;
@@ -440,11 +515,6 @@ export class AssetsDrawerComponent {
     });
   }
 
-  onSecondarySearchClear(): void {
-    this.secondarySearchInput.set('');
-    this.onSecondarySearchEnter();
-  }
-
   openSaveAsDialog(): void {
     this.dialog
       .open(SavedSearchDialogComponent, {
@@ -483,19 +553,6 @@ export class AssetsDrawerComponent {
             },
           });
       });
-  }
-
-  isExpanded(id: string): boolean {
-    return this.expandedFilters().has(id);
-  }
-
-  toggleFilter(id: string): void {
-    this.expandedFilters.update((set) => {
-      const next = new Set(set);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   }
 
   resetFilters(): void {

@@ -856,6 +856,9 @@ Components are referenced by ID and must already be compiled in. Contributing a 
 | `nxs.components.publishDialog`         | The Publish dialog that `app.toolbar.publish` and `app.bulkActions.publish` both open                                                                    |
 | `nxs.components.taskDetail`            | The task panel of the Tasks page at `/tasks/:taskId`: a task's actions, abandon, delegate, reassign, workflow graph                                      |
 | `nxs.components.trashList`             | The trash at `/trash`: trashed documents as a table, grid or list, with restore and permanent delete for one document or a selection                     |
+| `nxs.components.storyboard`            | The strip of frames under a video that seeks it, wherever the document viewer shows a video — the document page's View tab and the asset screens         |
+| `nxs.components.assetGrid`             | The cards of the asset search screen's grid view at `/documents`: thumbnail, name, type pill and the selection checkbox                                  |
+| `nxs.components.assetFacetsDrawer`     | The faceted filter panel inside the assets drawer: full-text box, a collapsible group per facet with its counts, and reset / save-as / search            |
 
 `app.page.contracts` is the first component registered for the **`routes`** slot rather than for a
 drawer, and it exists because that slot went live with **no component in the product able to serve
@@ -1021,8 +1024,9 @@ places them: a manifest entry in that slot does, with `componentId` set to the I
 
 **Empty, and correctly so — not emptied.** Nothing has been generated for `sidebar`, `tabs`,
 `documentView` or `routes` yet. Every `nxs.` ID the product registers is either a
-`nxs.primitives.*` placed by a screen that resolves it (section 6a) or one of the four
-`nxs.components.*` panels and pages in section 6.
+`nxs.primitives.*` placed by a screen that resolves it (section 6a) or one of the ten
+`nxs.components.*` panels and pages in section 6 — each of which is rendered by a packaged screen
+through a `lib-extension-outlet`, not merely registered.
 
 The `reference-drift` gate checks this table in both directions on every run: a row naming an ID
 that nothing outside specs registers to a component fails it, and an `nxs.<slot>.<name>`

@@ -195,12 +195,14 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-180 exported symbol(s).
+193 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
 const NXS_ADMIN_USERS_GROUPS_PAGE_ID = "nxs.components.adminUsersGroupsPage";
 const NXS_ADMIN_USER_DETAILS_PAGE_ID = "nxs.components.adminUserDetailsPage";
+const NXS_ASSET_FACETS_DRAWER_ID = "nxs.components.assetFacetsDrawer";
+const NXS_ASSET_GRID_ID = "nxs.components.assetGrid";
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
 const NXS_MODIFIED_RANGES: readonly ["last24h", "lastWeek", "lastMonth", "lastYear", "priorToLastYear"];
@@ -223,6 +225,7 @@ const NXS_PRIMITIVE_IDS: Readonly<{
 }
 const NXS_PUBLISH_DIALOG_ID = "nxs.components.publishDialog";
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
+const NXS_STORYBOARD_ID = "nxs.components.storyboard";
 const NXS_TASK_DETAIL_ID = "nxs.components.taskDetail";
 const NXS_TOAST_DURATION = 4000;
 const NXS_TRASH_LIST_ID = "nxs.components.trashList";
@@ -442,6 +445,162 @@ class NxsAdminUsersGroupsPageComponent implements OnInit {
     "isSignal": true;
     };
     }, {}, never, never, true, never>;
+    }
+}
+interface NxsAssetCard {
+    readonly id: string;
+    readonly name: string;
+    readonly type: string;
+    readonly icon: string;
+    readonly thumbnailUrl: string | null;
+    }
+}
+type NxsAssetFacetsAction = 'reset' | 'save-as' | 'search';
+class NxsAssetFacetsDrawerComponent {
+    readonly groups: import("@angular/core").InputSignal<readonly NxsFacetGroup[]>;
+    readonly fullText: import("@angular/core").InputSignal<string>;
+    readonly autoSearch: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly canSaveAs: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly initiallyExpandedGroupIds: import("@angular/core").InputSignal<readonly string[]>;
+    readonly fullTextChangeHandler: import("@angular/core").InputSignal<((value: string) => void) | null>;
+    readonly fullTextSubmitHandler: import("@angular/core").InputSignal<((value: string) => void) | null>;
+    readonly optionToggleHandler: import("@angular/core").InputSignal<((selection: NxsFacetSelection) => void) | null>;
+    readonly autoSearchChangeHandler: import("@angular/core").InputSignal<((autoSearch: boolean) => void) | null>;
+    readonly actionHandler: import("@angular/core").InputSignal<((action: NxsAssetFacetsAction) => void) | null>;
+    readonly fullTextChange: import("@angular/core").OutputEmitterRef<string>;
+    readonly fullTextSubmit: import("@angular/core").OutputEmitterRef<string>;
+    readonly optionToggle: import("@angular/core").OutputEmitterRef<NxsFacetSelection>;
+    readonly autoSearchChange: import("@angular/core").OutputEmitterRef<boolean>;
+    readonly action: import("@angular/core").OutputEmitterRef<NxsAssetFacetsAction>;
+    protected readonly text: import("@angular/core").WritableSignal<string>;
+    protected readonly expanded: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly ownLabel: import("@angular/core").Signal<string>;
+    protected readonly hasText: import("@angular/core").Signal<boolean>;
+    protected isExpanded(id: string): boolean;
+    protected toggleGroup(id: string): void;
+    protected countText(choice: NxsFacetChoice): string;
+    protected onText(value: string): void;
+    protected submitText(): void;
+    protected clearText(): void;
+    protected toggleOption(groupId: string, value: string): void;
+    protected setAutoSearch(autoSearch: boolean): void;
+    protected run(action: NxsAssetFacetsAction): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAssetFacetsDrawerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAssetFacetsDrawerComponent, "nxs-asset-facets-drawer", never, {
+    "groups": {
+    "alias": "groups";
+    "required": false;
+    "isSignal": true;
+    };
+    "fullText": {
+    "alias": "fullText";
+    "required": false;
+    "isSignal": true;
+    };
+    "autoSearch": {
+    "alias": "autoSearch";
+    "required": false;
+    "isSignal": true;
+    };
+    "canSaveAs": {
+    "alias": "canSaveAs";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "initiallyExpandedGroupIds": {
+    "alias": "initiallyExpandedGroupIds";
+    "required": false;
+    "isSignal": true;
+    };
+    "fullTextChangeHandler": {
+    "alias": "fullTextChangeHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "fullTextSubmitHandler": {
+    "alias": "fullTextSubmitHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "optionToggleHandler": {
+    "alias": "optionToggleHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "autoSearchChangeHandler": {
+    "alias": "autoSearchChangeHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "actionHandler": {
+    "alias": "actionHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "fullTextChange": "fullTextChange";
+    "fullTextSubmit": "fullTextSubmit";
+    "optionToggle": "optionToggle";
+    "autoSearchChange": "autoSearchChange";
+    "action": "action";
+    }, never, never, true, never>;
+    }
+}
+class NxsAssetGridComponent {
+    readonly assets: import("@angular/core").InputSignal<readonly NxsAssetCard[]>;
+    readonly selectedIds: import("@angular/core").InputSignal<readonly string[] | ReadonlySet<string>>;
+    readonly selectable: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly openHandler: import("@angular/core").InputSignal<((asset: NxsAssetCard) => void) | null>;
+    readonly selectionToggleHandler: import("@angular/core").InputSignal<((id: string) => void) | null>;
+    readonly assetOpen: import("@angular/core").OutputEmitterRef<NxsAssetCard>;
+    readonly selectionToggle: import("@angular/core").OutputEmitterRef<string>;
+    protected readonly ownLabel: import("@angular/core").Signal<string>;
+    protected isSelected(id: string): boolean;
+    protected open(asset: NxsAssetCard): void;
+    protected toggle(id: string): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAssetGridComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAssetGridComponent, "nxs-asset-grid", never, {
+    "assets": {
+    "alias": "assets";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectedIds": {
+    "alias": "selectedIds";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectable": {
+    "alias": "selectable";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "openHandler": {
+    "alias": "openHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectionToggleHandler": {
+    "alias": "selectionToggleHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "assetOpen": "assetOpen";
+    "selectionToggle": "selectionToggle";
+    }, never, never, true, never>;
     }
 }
 type NxsAvatarColor = 'blue' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow';
@@ -1668,10 +1827,29 @@ interface NxsErrorStateInputs {
     }
 }
 type NxsErrorStatus = 401 | 403 | 404 | 500;
+interface NxsFacetChoice {
+    readonly value: string;
+    readonly label: string;
+    readonly selected: boolean;
+    readonly count: number | null;
+    }
+}
+interface NxsFacetGroup {
+    readonly id: string;
+    readonly label: string;
+    readonly options: readonly NxsFacetChoice[];
+    readonly dynamic: boolean;
+    }
+}
 type NxsFacetLabels = Readonly<Partial<Record<string, Readonly<Record<string, string>>>>>;
 interface NxsFacetOption {
     readonly value: string;
     readonly count: number | null;
+    }
+}
+interface NxsFacetSelection {
+    readonly groupId: string;
+    readonly value: string;
     }
 }
 class NxsFavoriteToggleComponent {
@@ -2545,6 +2723,54 @@ interface NxsStatusTagInputs {
     readonly hideIcon: InputSignal<boolean>;
     }
 }
+class NxsStoryboardComponent {
+    readonly items: import("@angular/core").InputSignal<readonly NxsStoryboardItem[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly activeTimecode: import("@angular/core").InputSignal<number | null>;
+    readonly seekHandler: import("@angular/core").InputSignal<((timecode: number) => void) | null>;
+    readonly seek: import("@angular/core").OutputEmitterRef<number>;
+    protected readonly visible: import("@angular/core").Signal<boolean>;
+    protected readonly ownLabel: import("@angular/core").Signal<string>;
+    protected readonly frames: import("@angular/core").Signal<{
+    item: NxsStoryboardItem;
+    timecode: string;
+    name: string;
+    active: boolean;
+    }[]>;
+    protected select(item: NxsStoryboardItem): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsStoryboardComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsStoryboardComponent, "nxs-storyboard", never, {
+    "items": {
+    "alias": "items";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "activeTimecode": {
+    "alias": "activeTimecode";
+    "required": false;
+    "isSignal": true;
+    };
+    "seekHandler": {
+    "alias": "seekHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "seek": "seek";
+    }, never, never, true, never>;
+    }
+}
+interface NxsStoryboardItem {
+    readonly timecode: number;
+    readonly thumbnailUrl: string | null;
+    readonly label: string;
+    }
+}
 interface NxsTab {
     readonly id: string;
     readonly label: string;
@@ -3295,6 +3521,7 @@ function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: 
 function nxsActionBarView(bar: NxsActionBarSource): NxsActionBarView;
 function nxsDocumentSuggestionQuery(term: string, types?: readonly string[]): string;
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
+function nxsFormatTimecode(seconds: number): string;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
 function nxsInitials(text: string | null | undefined, count: number): string;
 function nxsOfferedRights(visible: readonly string[] | null | undefined, current?: string): readonly string[];
@@ -5245,7 +5472,7 @@ class DocumentViewerComponent {
     readonly noteContent: import("@angular/core").InputSignal<string | null>;
     readonly noteHtml: import("@angular/core").InputSignal<SafeHtml | null>;
     readonly videoSources: import("@angular/core").InputSignal<VideoSource[]>;
-    readonly storyboard: import("@angular/core").InputSignal<StoryboardItem[]>;
+    readonly storyboard: import("@angular/core").InputSignal<NxsStoryboardItem[]>;
     readonly posterUrl: import("@angular/core").InputSignal<string | null>;
     readonly hasPdfRendition: import("@angular/core").InputSignal<boolean>;
     readonly previewUrl: import("@angular/core").InputSignal<SafeResourceUrl | null>;
@@ -5271,6 +5498,11 @@ class DocumentViewerComponent {
     readonly showARenderViewer: import("@angular/core").Signal<boolean>;
     readonly showImageToolbar: import("@angular/core").Signal<boolean>;
     readonly showVideoStoryboard: import("@angular/core").Signal<boolean>;
+    protected readonly storyboardId = "nxs.components.storyboard";
+    protected readonly storyboardInputs: import("@angular/core").Signal<{
+    items: NxsStoryboardItem[];
+    seekHandler: (timecode: number) => void;
+    }>;
     readonly showPictureCards: import("@angular/core").Signal<boolean>;
     readonly showVideoInfoCard: import("@angular/core").Signal<boolean>;
     readonly arenderAvailable: import("@angular/core").Signal<boolean>;
@@ -5632,12 +5864,7 @@ interface ShareSavedSearchDialogData {
     id: string;
     }
 }
-interface StoryboardItem {
-    timecode: number;
-    thumbnailUrl: string | null;
-    label: string;
-    }
-}
+type StoryboardItem = NxsStoryboardItem;
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
 class TranslatedDatepickerIntl extends TranslatedDatepickerIntl$1 {
     static ɵfac: i0.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;

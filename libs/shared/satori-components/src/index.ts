@@ -2,6 +2,19 @@ export {
   NxsActionMenuComponent,
   type NxsMenuAction,
 } from './lib/action-menu/action-menu.component';
+export {
+  NxsAssetFacetsDrawerComponent,
+  NXS_ASSET_FACETS_DRAWER_ID,
+  type NxsAssetFacetsAction,
+  type NxsFacetChoice,
+  type NxsFacetGroup,
+  type NxsFacetSelection,
+} from './lib/asset-facets-drawer/asset-facets-drawer.component';
+export {
+  NxsAssetGridComponent,
+  NXS_ASSET_GRID_ID,
+  type NxsAssetCard,
+} from './lib/asset-grid/asset-grid.component';
 export { NxsBannerComponent } from './lib/banner/banner.component';
 export { NxsChipSetComponent } from './lib/chip-set/chip-set.component';
 export {
@@ -142,6 +155,12 @@ export {
   type NxsRenameDialogData,
 } from './lib/rename-dialog/rename-dialog.component';
 export { NxsSpinnerComponent } from './lib/spinner/spinner.component';
+export {
+  NxsStoryboardComponent,
+  NXS_STORYBOARD_ID,
+  nxsFormatTimecode,
+  type NxsStoryboardItem,
+} from './lib/storyboard/storyboard.component';
 export {
   NxsTabBodyDirective,
   type NxsTab,

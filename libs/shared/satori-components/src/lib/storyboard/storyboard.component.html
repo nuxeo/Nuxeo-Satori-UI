@@ -1,0 +1,30 @@
+@if (visible()) {
+  <div
+    class="nxs-storyboard__strip"
+    role="group"
+    [attr.aria-label]="ownLabel() || ('satori-components.storyboard.label' | translate)"
+  >
+    @for (frame of frames(); track frame.item.timecode) {
+      <button
+        type="button"
+        class="nxs-storyboard__frame"
+        [class.nxs-storyboard__frame--active]="frame.active"
+        [attr.aria-current]="frame.active ? 'true' : null"
+        [attr.aria-label]="
+          'satori-components.storyboard.seek-to' | translate: { frame: frame.name }
+        "
+        [matTooltip]="frame.name"
+        (click)="select(frame.item)"
+      >
+        @if (frame.item.thumbnailUrl; as url) {
+          <img class="nxs-storyboard__thumb" [src]="url" alt="" />
+        } @else {
+          <span class="nxs-storyboard__thumb nxs-storyboard__thumb--empty">
+            <mat-icon svgIcon="page" />
+          </span>
+        }
+        <span class="nxs-storyboard__time" aria-hidden="true">{{ frame.timecode }}</span>
+      </button>
+    }
+  </div>
+}

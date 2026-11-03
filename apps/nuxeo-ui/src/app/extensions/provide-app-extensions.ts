@@ -28,18 +28,24 @@ import {
 } from '@nuxeo/satori-platform/extensions';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
+  NXS_ASSET_FACETS_DRAWER_ID,
+  NXS_ASSET_GRID_ID,
   NXS_ADMIN_GROUP_DETAILS_PAGE_ID,
   NXS_ADMIN_USER_DETAILS_PAGE_ID,
   NXS_ADMIN_USERS_GROUPS_PAGE_ID,
   NXS_PERMISSIONS_PANEL_ID,
   NXS_PUBLISH_DIALOG_ID,
+  NXS_STORYBOARD_ID,
   NXS_TASK_DETAIL_ID,
   NXS_TRASH_LIST_ID,
   NxsAdminGroupDetailsPageComponent,
   NxsAdminUserDetailsPageComponent,
   NxsAdminUsersGroupsPageComponent,
+  NxsAssetFacetsDrawerComponent,
+  NxsAssetGridComponent,
   NxsPermissionsPanelComponent,
   NxsPublishDialogComponent,
+  NxsStoryboardComponent,
   NxsTaskDetailComponent,
   NxsTrashListComponent,
 } from '@nuxeo/satori-platform/components';
@@ -197,6 +203,22 @@ function provideAppContributions(): EnvironmentProviders {
         // The trash list. `/trash` renders it through this ID, so a customer library can replace
         // it, and falls back to the packaged component when no registration resolves.
         [NXS_TRASH_LIST_ID]: NxsTrashListComponent,
+
+        // The strip of frames under a video that seeks it. The document viewer renders it through
+        // this ID wherever it shows a video — the document page's View tab, and the asset screens
+        // that use the same viewer — so re-registering it replaces the strip in all of them.
+        // Inputs only, so the viewer passes `seekHandler` rather than binding `seek`.
+        [NXS_STORYBOARD_ID]: NxsStoryboardComponent,
+
+        // The cards of the asset search screen's grid view. `/documents` renders them through this
+        // ID, so a customer library can replace the card without touching the search around it.
+        // Inputs only, so the screen passes `openHandler` and `selectionToggleHandler`.
+        [NXS_ASSET_GRID_ID]: NxsAssetGridComponent,
+
+        // The faceted filter panel inside the assets drawer. The drawer renders it through this ID,
+        // so a customer library can replace the facets without reimplementing the drawer's saved
+        // searches and queue around them. Inputs only, so the drawer passes handlers.
+        [NXS_ASSET_FACETS_DRAWER_ID]: NxsAssetFacetsDrawerComponent,
       },
     };
   });

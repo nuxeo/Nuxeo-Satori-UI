@@ -1,0 +1,139 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as StoryboardStories from './storyboard.stories';
+
+<Meta of={StoryboardStories} name="Overview" />
+
+# Storyboard
+
+The storyboard is the strip of frames under a video that seeks it: one button per frame, showing the
+frame and the time it is at. Use it under any player of a Nuxeo video — the document viewer's View
+tab has one, and an asset screen that plays a video uses the same component rather than its own copy.
+
+## Key features
+
+- **It seeks, it does not play.** The component owns no player. Pressing a frame emits `seek` with
+  the timecode in seconds, and the host moves whichever player it has.
+- **A placeholder, never a broken image.** A frame whose `thumbnailUrl` is `null` — no rendition, or
+  the thumbnail has not arrived — keeps its place and its timecode and shows an icon.
+- **Nothing for no frames.** With an empty `items` it renders nothing, so a host can place it over a
+  document that turns out not to be a video without guarding.
+- **The playing frame is marked.** `activeTimecode` outlines one frame and marks it `aria-current`.
+
+## Demo showcase
+
+<Canvas of={StoryboardStories.VideoStoryboard} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsStoryboardComponent, NXS_STORYBOARD_ID } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-storyboard [items]="storyboard()" [activeTimecode]="currentTime()" (seek)="seekTo($event)" />`;
+
+<Source language="html" dark code={usageHtml} />
+
+Every input is optional. The component's own words — the group's name and each frame's name — are
+translated with ngx-translate under `satori-components.storyboard.*`, and
+`providePlatformEnglishFallback()` supplies the English when your catalogue does not.
+
+## Where its data comes from
+
+The storyboard reads nothing and fetches nothing. Pass it the frames you already have.
+
+For a Nuxeo video, those come from the `vid:storyboard` property: one entry per frame, with a
+`timecode` and a `content` blob. **Fetch each blob through the authenticated client and pass an
+object URL** — `DocumentDetailService.fetchBlobByXpath(uid, 'vid:storyboard/<i>/content')`, then
+`URL.createObjectURL()`. A Nuxeo URL will not work: the browser loads an `img[src]` without
+credentials, so the request is unauthenticated and the frame does not appear.
+
+**The host owns those URLs.** This component only reads them, and never creates or revokes one, so
+whoever called `createObjectURL()` revokes it — when the document changes and in `ngOnDestroy`.
+Documents whose video has no server-side storyboard, such as a `File` with a video attachment, have
+no `vid:storyboard`; a host may generate frames from the video itself instead, and the component
+does not care which way they were made.
+
+## Examples
+
+### The frame the player is on
+
+<Canvas of={StoryboardStories.Playing} />
+
+### Thumbnails that did not arrive
+
+<Canvas of={StoryboardStories.ThumbnailsMissing} />
+
+### Not a video
+
+<Canvas of={StoryboardStories.NoFrames} />
+
+## Theming
+
+Four custom properties, on the host:
+
+<table>
+  <thead>
+    <tr>
+      <th>Property</th>
+      <th>Default</th>
+      <th>What it colours</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>--nxs-storyboard-surface</code>
+      </td>
+      <td>
+        <code>--mat-sys-inverse-surface</code>
+      </td>
+      <td>The strip behind the frames</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-storyboard-text</code>
+      </td>
+      <td>
+        <code>--mat-sys-inverse-on-surface</code>
+      </td>
+      <td>The timecodes</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-storyboard-accent</code>
+      </td>
+      <td>
+        <code>--mat-sys-primary</code>
+      </td>
+      <td>Hover, the playing frame, and the focus ring</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-storyboard-placeholder</code>
+      </td>
+      <td>
+        <code>--mat-sys-surface-variant</code>
+      </td>
+      <td>Behind a frame with no image</td>
+    </tr>
+  </tbody>
+</table>
+
+The strip defaults to the **inverse** surface because it sits under a video player, where a light
+strip against a dark picture is the one combination that reads badly. A host showing it on the page
+surface instead overrides all four.
+
+## Accessibility
+
+- **A named group.** The strip is a `group`, named "Video storyboard" unless you give it a `label`,
+  so a screen reader announces what the run of buttons is before reading them.
+- **Named frames.** Each button is named "Seek to &lt;label&gt;", falling back to "Seek to 0:15" when
+  the frame has no label. The image is decorative (`alt=""`) and the visible timecode is
+  `aria-hidden`, so the name is said once rather than three times.
+- **The playing frame.** `aria-current="true"` marks it, as well as the outline.
+- **Keyboard.** Every frame is an ordinary button: **Tab** reaches it, **Enter** or **Space** presses
+  it. The focus ring is drawn on `:focus` as well as `:focus-visible`.
+- **Reduced motion.** The hover transition is dropped under `prefers-reduced-motion`.

@@ -1,0 +1,81 @@
+:host {
+  // The strip sits under a video player, so it defaults to the inverse surface rather than the
+  // page's: a light strip under a dark video is the one combination that reads badly. A host that
+  // wants it on the page surface overrides these four.
+  --nxs-storyboard-surface: var(--mat-sys-inverse-surface);
+  --nxs-storyboard-text: var(--mat-sys-inverse-on-surface);
+  --nxs-storyboard-accent: var(--mat-sys-primary);
+  --nxs-storyboard-placeholder: var(--mat-sys-surface-variant);
+  display: block;
+  flex-shrink: 0;
+}
+
+.nxs-storyboard__strip {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  background: var(--nxs-storyboard-surface);
+  scrollbar-width: thin;
+}
+
+.nxs-storyboard__frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 4px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+
+  &:hover {
+    border-color: var(--nxs-storyboard-accent);
+  }
+}
+
+.nxs-storyboard__frame--active {
+  border-color: var(--nxs-storyboard-accent);
+}
+
+// IBM Equal Access `style_focus_visible` reads `:focus` only, so each ring is a standalone `:focus`
+// rule rather than a list with `:focus-visible`.
+.nxs-storyboard__frame:focus {
+  outline: 2px solid var(--nxs-storyboard-accent);
+  outline-offset: 2px;
+}
+
+.nxs-storyboard__frame:focus-visible {
+  outline: 2px solid var(--nxs-storyboard-accent);
+  outline-offset: 2px;
+}
+
+.nxs-storyboard__thumb {
+  width: 120px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 2px;
+  background: var(--nxs-storyboard-placeholder);
+}
+
+.nxs-storyboard__thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nxs-storyboard-text);
+}
+
+.nxs-storyboard__time {
+  font: var(--mat-sys-body-small);
+  font-family: monospace;
+  color: var(--nxs-storyboard-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nxs-storyboard__frame {
+    transition: none;
+  }
+}

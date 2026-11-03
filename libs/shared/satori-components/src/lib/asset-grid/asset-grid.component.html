@@ -1,0 +1,49 @@
+@if (assets().length > 0) {
+  <div
+    class="nxs-asset-grid__grid"
+    role="list"
+    [attr.aria-label]="ownLabel() || ('satori-components.asset-grid.label' | translate)"
+  >
+    @for (asset of assets(); track asset.id) {
+      <div
+        class="nxs-asset-grid__card"
+        role="listitem"
+        [class.nxs-asset-grid__card--selected]="isSelected(asset.id)"
+      >
+        @if (selectable()) {
+          <div class="nxs-asset-grid__select">
+            <!-- `[aria-label]`, Material's own input, not `[attr.aria-label]`: the checkbox role is
+                 the inner `<input>`, which a name on the host element does not reach. -->
+            <mat-checkbox
+              [checked]="isSelected(asset.id)"
+              [aria-label]="'satori-components.asset-grid.select' | translate: { name: asset.name }"
+              (change)="toggle(asset.id)"
+            />
+          </div>
+        }
+
+        <div class="nxs-asset-grid__thumbnail">
+          @if (asset.thumbnailUrl; as url) {
+            <img class="nxs-asset-grid__image" [src]="url" alt="" />
+          } @else {
+            <mat-icon class="nxs-asset-grid__icon" [svgIcon]="asset.icon" />
+          }
+        </div>
+
+        <div class="nxs-asset-grid__body">
+          <button
+            type="button"
+            class="nxs-asset-grid__name"
+            [title]="asset.name"
+            (click)="open(asset)"
+          >
+            {{ asset.name }}
+          </button>
+          <span class="nxs-asset-grid__type" [title]="asset.type | docTypeLabel">{{
+            asset.type | docTypeLabel
+          }}</span>
+        </div>
+      </div>
+    }
+  </div>
+}
