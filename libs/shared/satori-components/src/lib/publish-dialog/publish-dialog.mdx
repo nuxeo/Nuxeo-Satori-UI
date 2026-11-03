@@ -40,7 +40,7 @@ const ref = await nxsOpenPublishDialog(this.dialog, inject(ExtensionComponentReg
   versionableUid: liveUid,
   renditions: [{ name: 'pdf', label: this.translate.instant('rendition.pdf') }],
 });
-ref.afterClosed().subscribe((publication) => {
+ref?.afterClosed().subscribe((publication) => {
   if (publication) this.reloadPublications();
 });`;
 
