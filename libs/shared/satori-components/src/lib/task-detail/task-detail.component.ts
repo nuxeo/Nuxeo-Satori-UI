@@ -88,7 +88,7 @@ const DUE_KEYS = {
   },
 } as const;
 
-/** Nuxeo asks for an end date when participants are chosen; Web UI proposes five days out. */
+/** Nuxeo asks for an end date when participants are chosen; the default when the task stores none. */
 const DEFAULT_DUE_DAYS = 5;
 
 /**
