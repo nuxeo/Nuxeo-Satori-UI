@@ -232,6 +232,7 @@ export {
   NXS_PUBLISH_DIALOG_ID,
   NxsPublishDialogComponent,
   nxsOpenPublishDialog,
+  type NxsOpenPublishDialogOptions,
   type NxsPublishDialogData,
   type NxsPublishDialogResult,
   type NxsPublishRendition,

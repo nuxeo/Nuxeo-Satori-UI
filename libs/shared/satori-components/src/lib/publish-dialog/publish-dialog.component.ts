@@ -62,18 +62,30 @@ interface VersionOption {
 const NO_RENDITION = 'none';
 const DEFAULT_RENDITION = 'default';
 
+/** When to give up on opening: the page the dialog was asked for may be gone once it resolves. */
+export interface NxsOpenPublishDialogOptions {
+  /** Checked once the component has resolved; `false` opens nothing. */
+  readonly stillWanted?: () => boolean;
+}
+
 /**
  * Open the dialog registered as `NXS_PUBLISH_DIALOG_ID`, or `nxs-publish-dialog` when nothing
  * resolves it — the one way both publish actions open it, so re-registering the ID replaces the
  * dialog for the document page and for a selection alike. A replacement receives the same
  * `MAT_DIALOG_DATA` and should close with the same result.
+ *
+ * A lazily registered replacement resolves later than the click, so the caller can pass
+ * `stillWanted` to refuse a dialog for a document the user has since left; the promise then
+ * resolves with `undefined`.
  */
 export async function nxsOpenPublishDialog(
   dialog: MatDialog,
   components: ExtensionComponentRegistry,
   data: NxsPublishDialogData,
-): Promise<MatDialogRef<unknown, NxsPublishDialogResult>> {
+  options: NxsOpenPublishDialogOptions = {},
+): Promise<MatDialogRef<unknown, NxsPublishDialogResult> | undefined> {
   const component = (await components.resolve(NXS_PUBLISH_DIALOG_ID)) ?? NxsPublishDialogComponent;
+  if (options.stillWanted && !options.stillWanted()) return undefined;
   return dialog.open<unknown, NxsPublishDialogData, NxsPublishDialogResult>(component, {
     width: '600px',
     maxWidth: '95vw',
@@ -157,6 +169,9 @@ export class NxsPublishDialogComponent {
     const target = this.sections().find((s) => s.uid === this.section());
     if (!target || this.publishing()) return;
     this.publishing.set(true);
+    // Closing mid-request would unsubscribe from a publication Nuxeo may already have made, and
+    // drop both its toast and the result the page refreshes on.
+    this.dialogRef.disableClose = true;
     const rendition = this.showRenditions() ? this.rendition() : NO_RENDITION;
     this.documents
       .publishDocument(this.version(), target.uid, {
@@ -179,6 +194,7 @@ export class NxsPublishDialogComponent {
         },
         error: (err: unknown) => {
           this.publishing.set(false);
+          this.dialogRef.disableClose = false;
           this.toast.error(
             this.translate.instant(
               isPermissionDeniedError(err)

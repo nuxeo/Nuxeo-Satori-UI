@@ -87,7 +87,7 @@ describe('NxsPublishDialogComponent', () => {
       >
     >;
   };
-  let ref: { close: ReturnType<typeof vi.fn> };
+  let ref: { close: ReturnType<typeof vi.fn>; disableClose: boolean };
   let shown: ReturnType<typeof vi.spyOn>;
   let failed: ReturnType<typeof vi.spyOn>;
 
@@ -133,7 +133,7 @@ describe('NxsPublishDialogComponent', () => {
       getVersionsDirect: vi.fn(() => of([version('v-1-0', 1, 0), version('v-1-1', 1, 1)])),
       publishDocument: vi.fn(() => of(doc({ uid: 'proxy-1', isProxy: true }))),
     };
-    ref = { close: vi.fn() };
+    ref = { close: vi.fn(), disableClose: false };
     shown = vi.spyOn(NxsToastService.prototype, 'show').mockImplementation(() => undefined);
     failed = vi.spyOn(NxsToastService.prototype, 'error').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
@@ -343,6 +343,30 @@ describe('NxsPublishDialogComponent', () => {
       expect(documents.publishDocument).toHaveBeenCalledTimes(1);
     });
 
+    it('cannot be dismissed while publishing, so the outcome is never dropped', async () => {
+      const pending = new Subject<NuxeoDocument>();
+      documents.publishDocument.mockReturnValue(pending);
+      const cancel = (): HTMLButtonElement =>
+        el().querySelector('[mat-dialog-close]') as HTMLButtonElement;
+      expect(cancel().disabled).toBe(false);
+
+      publishButton().click();
+      await settle();
+      expect(ref.disableClose).toBe(true);
+      expect(cancel().disabled).toBe(true);
+
+      pending.next(doc({ uid: 'proxy-2' }));
+      expect(ref.close).toHaveBeenCalledWith(expect.objectContaining({ uid: 'proxy-2' }));
+    });
+
+    it('can be dismissed again once a publish fails', async () => {
+      documents.publishDocument.mockReturnValue(throwError(() => new Error('500')));
+      publishButton().click();
+      await settle();
+      expect(ref.disableClose).toBe(false);
+      expect((el().querySelector('[mat-dialog-close]') as HTMLButtonElement).disabled).toBe(false);
+    });
+
     it('reads a refusal as one, re-enables Publish and stays open', async () => {
       documents.publishDocument.mockReturnValue(
         throwError(() => new HttpErrorResponse({ status: 403 })),
@@ -414,6 +438,17 @@ describe('nxsOpenPublishDialog', () => {
     registry.register({ [NXS_PUBLISH_DIALOG_ID]: () => Promise.reject(new Error('chunk')) });
     await nxsOpenPublishDialog(TestBed.inject(MatDialog), registry, DATA_IN);
     expect(dialog.open.mock.calls[0][0]).toBe(NxsPublishDialogComponent);
+  });
+
+  it('opens nothing once the caller no longer wants it, as after navigating away', async () => {
+    registry.register({ [NXS_PUBLISH_DIALOG_ID]: () => Promise.resolve(CustomPublishComponent) });
+    let wanted = true;
+    const opening = nxsOpenPublishDialog(TestBed.inject(MatDialog), registry, DATA_IN, {
+      stillWanted: () => wanted,
+    });
+    wanted = false;
+    expect(await opening).toBeUndefined();
+    expect(dialog.open).not.toHaveBeenCalled();
   });
 
   it('is the ID the reference documents', () => {

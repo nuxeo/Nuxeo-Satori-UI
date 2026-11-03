@@ -3457,19 +3457,25 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     }
     const requestedFor = this.docUid;
     const generation = this.documentLoadGeneration;
-    void nxsOpenPublishDialog(this.dialog, this.componentRegistry, {
-      documentUid: doc.uid,
-      documentTitle: doc.title,
-      versionLabel: this.versionLabel(),
-      versionableUid: this.liveDocumentUid(),
-      renditions: this.buildRenditionOptions(),
-    }).then((ref) =>
+    const stillHere = () =>
+      requestedFor === this.docUid && generation === this.documentLoadGeneration;
+    void nxsOpenPublishDialog(
+      this.dialog,
+      this.componentRegistry,
+      {
+        documentUid: doc.uid,
+        documentTitle: doc.title,
+        versionLabel: this.versionLabel(),
+        versionableUid: this.liveDocumentUid(),
+        renditions: this.buildRenditionOptions(),
+      },
+      { stillWanted: stillHere },
+    ).then((ref) =>
       ref
-        .afterClosed()
+        ?.afterClosed()
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe((published) => {
-          if (!published) return;
-          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
+          if (!published || !stillHere()) return;
           this.publishTabLoaded = false;
           this.refreshPublishedDocs();
         }),

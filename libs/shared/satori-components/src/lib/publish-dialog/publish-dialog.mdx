@@ -49,7 +49,9 @@ ref.afterClosed().subscribe((publication) => {
 `nxsOpenPublishDialog` opens the component registered under `NXS_PUBLISH_DIALOG_ID`
 (`nxs.components.publishDialog`), or this one when nothing is registered or the registration fails
 to load. Register your own component under the ID to replace it everywhere it opens; it receives
-the same `MAT_DIALOG_DATA` and should close with the publication or with nothing.
+the same `MAT_DIALOG_DATA` and should close with the publication or with nothing. A replacement
+registered behind an `import()` resolves after the click, so pass `stillWanted` to open nothing
+for a page the user has since left — the promise then resolves with `undefined`.
 
 It closes with the publication created, or with nothing when cancelled. It does not decide who may
 publish: open it only where `canPublishDocument(doc)` holds. Nuxeo still checks the right to add to
@@ -95,4 +97,5 @@ Publish fails with 403: the toast says the user may not publish to the section.
 - **Loading has a name.** The spinner reads "Loading the sections"; a failure is an alert, and the
   empty case a status message.
 - **Progress has a name.** While it runs, the button reads "Publishing" beside a turning icon
-  hidden from assistive technology.
+  hidden from assistive technology. Cancel, Escape and the backdrop do not close the dialog until
+  Nuxeo has answered, so the outcome is always announced.

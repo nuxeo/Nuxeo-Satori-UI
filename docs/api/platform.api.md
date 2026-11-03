@@ -195,7 +195,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-172 exported symbol(s).
+173 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -1951,6 +1951,10 @@ class NxsMetadataEditorComponent {
     }, never, never, true, never>;
     }
 }
+interface NxsOpenPublishDialogOptions {
+    readonly stillWanted?: () => boolean;
+    }
+}
 class NxsPagerComponent {
     readonly pageIndex: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
@@ -3126,7 +3130,7 @@ function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
 function nxsInitials(text: string | null | undefined, count: number): string;
 function nxsOfferedRights(visible: readonly string[] | null | undefined, current?: string): readonly string[];
-function nxsOpenPublishDialog(dialog: MatDialog, components: ExtensionComponentRegistry, data: NxsPublishDialogData): Promise<MatDialogRef<unknown, NxsPublishDialogResult>>;
+function nxsOpenPublishDialog(dialog: MatDialog, components: ExtensionComponentRegistry, data: NxsPublishDialogData, options?: NxsOpenPublishDialogOptions): Promise<MatDialogRef<unknown, NxsPublishDialogResult> | undefined>;
 function nxsPropertyText(value: unknown): string;
 function nxsRangeOptions(ranges: readonly string[], aggregation: AggregateResult | undefined): NxsFacetOption[];
 function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): boolean;

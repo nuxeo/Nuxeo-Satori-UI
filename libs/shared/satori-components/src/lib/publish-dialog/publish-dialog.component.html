@@ -109,7 +109,7 @@
 </mat-dialog-content>
 
 <mat-dialog-actions>
-  <button mat-stroked-button type="button" mat-dialog-close>
+  <button mat-stroked-button type="button" mat-dialog-close [disabled]="publishing()">
     {{ 'satori-components.publish-dialog.cancel' | translate }}
   </button>
   <span class="nxs-publish-dialog__spacer"></span>
