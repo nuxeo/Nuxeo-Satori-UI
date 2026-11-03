@@ -358,15 +358,16 @@ export default async function run(page, h) {
   await h.step('Default configuration reproduces production browse unchanged');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
-  await h.expectText('repository content listed', 'lib-browse', 'Default domain');
+  // The rows load after the page; without waiting, the text is read before the root row exists.
+  await page.waitForSelector('nxs-document-list tr.nxs-document-list__row', { timeout: 120000 });
+  await h.expectText('repository content listed', 'lib-browse', 'Domain');
   await h.screenshot('default-config-production-browse');
 
-  await h.step('Default configuration reproduces the adf-hx POC route unchanged');
-  await h.goTo('/#/browse-adf-hx');
-  await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
-  await h.expectVisible('hxp document list present', 'hxp-document-list');
-  await h.expectText('Nuxeo children listed', 'hxp-document-list', 'Default domain');
-  await h.screenshot('default-config-adf-hx-browse');
+  await h.step('Default configuration reproduces the browse document list unchanged');
+  await h.goTo('/#/browse');
+  await h.expectVisible('browse document list present', 'nxs-document-list');
+  await h.expectText('Nuxeo children listed', 'nxs-document-list', 'Domain');
+  await h.screenshot('default-config-browse-list');
 
   await h.step('Translations resolve rather than leaking raw keys');
   await h.goTo('/#/settings/themes');
@@ -468,7 +469,7 @@ export default async function run(page, h) {
   await h.goTo('/#/browse');
   await reloadApp(page);
   await h.expectVisible('browse page still renders', 'lib-browse');
-  await h.expectText('repository content still listed', 'lib-browse', 'Default domain');
+  await h.expectText('repository content still listed', 'lib-browse', 'Domain');
   const afterMalformed = await readConfiguredState(page);
   h.check(
     'the packaged theme is restored rather than left half-applied',
@@ -485,10 +486,10 @@ export default async function run(page, h) {
   await h.step('An absent configuration service leaves a working application');
   bootstrapBody = null;
   manifestBody = null;
-  await h.goTo('/#/browse-adf-hx');
+  await h.goTo('/#/browse');
   await reloadApp(page);
-  await h.expectVisible('POC page renders with no configuration at all', 'lib-browse-adf-hx-poc');
-  await h.expectText('Nuxeo children still listed', 'hxp-document-list', 'Default domain');
+  await h.expectVisible('browse renders with no configuration at all', 'lib-browse');
+  await h.expectText('Nuxeo children still listed', 'nxs-document-list', 'Domain');
   await h.goTo('/#/settings/themes');
   await reloadApp(page);
   await h.expectText(

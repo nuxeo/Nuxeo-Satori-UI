@@ -47,7 +47,15 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -65,6 +73,15 @@ function runGuardrail(target) {
     return { code: 0, output: stdout };
   } catch (error) {
     return { code: error.status ?? 1, output: `${error.stdout ?? ''}${error.stderr ?? ''}` };
+  }
+}
+
+/** Delete every spec file under a directory, so a fixture has none that could name the registry. */
+function removeSpecs(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) removeSpecs(full);
+    else if (entry.name.endsWith('.spec.ts')) rmSync(full, { force: true });
   }
 }
 
@@ -250,19 +267,13 @@ export default async function run(page, h) {
     {
       label: 'no-specs',
       expect: 'no spec files',
-      mutate: (dir) => {
-        for (const name of ['extensions.spec.ts', 'generated-registration.spec.ts']) {
-          rmSync(join(dir, 'src', 'lib', name), { force: true });
-        }
-      },
+      mutate: (dir) => removeSpecs(join(dir, 'src', 'lib')),
     },
     {
       label: 'blind-specs',
       expect: 'reference a registry',
       mutate: (dir) => {
-        for (const name of ['extensions.spec.ts', 'generated-registration.spec.ts']) {
-          rmSync(join(dir, 'src', 'lib', name), { force: true });
-        }
+        removeSpecs(join(dir, 'src', 'lib'));
         writeFileSync(
           join(dir, 'src', 'lib', 'blind.spec.ts'),
           "describe('blind', () => { it('never touches a registry', () => { expect(1).toBe(1); }); });\n",
