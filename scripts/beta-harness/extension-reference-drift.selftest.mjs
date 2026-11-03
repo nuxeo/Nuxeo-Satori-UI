@@ -1289,6 +1289,120 @@ control('two starred modules publishing the same name disagree, so it is refused
   );
 });
 
+/* ── PR #555, next round: an explicit export beats a star, and a local binding may be imported ──
+ *
+ * `LOCAL` meant "declared in this file", and a binding is just as often imported into it. A
+ * barrel that imports a class and re-exports it under the sought name therefore resolved to
+ * nothing, fell through to its own `export *`, and let an unrelated starred module answer for a
+ * name the barrel explicitly publishes — which the language says the star does not even export.
+ */
+
+const FX_ACTUAL =
+  "import { Component } from '@angular/core';\n" +
+  "@Component({ selector: 'fx-actual', template: '' })\n" +
+  'export class ActualComponent {}\n';
+const FX_OTHER_NAMESAKE =
+  "import { Component } from '@angular/core';\n" +
+  "@Component({ selector: 'fx-other', template: '' })\n" +
+  'export class FxCardComponent {}\n';
+const BARREL_REGISTRAR =
+  "import { FxCardComponent } from '@fx/components';\n" +
+  "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n";
+
+/** The barrel exports an imported binding under the sought name, and also stars a namesake. */
+const IMPORTED_REEXPORT_SOURCES = {
+  'libs/fx/src/actual.ts': FX_ACTUAL,
+  'libs/fx/src/other.ts': FX_OTHER_NAMESAKE,
+  'libs/fx/src/index.ts':
+    "import { ActualComponent as Inner } from './actual';\n" +
+    'export { Inner as FxCardComponent };\n' +
+    "export * from './other';\n",
+  'libs/fx/src/registrar.ts': BARREL_REGISTRAR,
+};
+
+control('a starred namesake does not answer for an explicitly exported name', NEGATIVE, () => {
+  /* `export { Inner as FxCardComponent }` publishes the name, so `export * from './other'` does
+   * not export it at all. The gate exited 0 for the starred module's `fx-other`. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-other`', '`tabs`']] }),
+      sources: IMPORTED_REEXPORT_SOURCES,
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(/declares `fx-actual`/.test(proc.output), proc.output.slice(-500));
+});
+
+falsePositive('an imported binding re-exported under another name resolves', () => {
+  /* The other direction: with the row naming the component the barrel really publishes, the
+   * gate exited 1 because the starred namesake had answered instead. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-actual`', '`tabs`']] }),
+      sources: IMPORTED_REEXPORT_SOURCES,
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
+control('an unresolvable explicit export refuses rather than taking the star', NEGATIVE, () => {
+  /* Pins the precedence on its own, with no correct answer available anywhere: the explicit
+   * export names a binding whose module does not exist, and a starred namesake is present. A
+   * fix that merely followed local imports, without also stopping the fall-through, resolves
+   * this one to `fx-other` and exits 0. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-other`', '`tabs`']] }),
+      sources: {
+        'libs/fx/src/other.ts': FX_OTHER_NAMESAKE,
+        'libs/fx/src/index.ts':
+          "import { ActualComponent as Inner } from './nowhere-at-all';\n" +
+          'export { Inner as FxCardComponent };\n' +
+          "export * from './other';\n",
+        'libs/fx/src/registrar.ts': BARREL_REGISTRAR,
+      },
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /no selector could be read for it there/.test(proc.output),
+    `the starred namesake was substituted for the explicit export:\n${proc.output.slice(-500)}`,
+  );
+});
+
+/** `export default <imported binding>` — the same root, reached through the default branch. */
+const DEFAULT_OF_IMPORT_SOURCES = {
+  'libs/fx/src/actual.ts': FX_ACTUAL,
+  'libs/fx/src/card.ts':
+    "import { ActualComponent as Inner } from './actual';\nexport default Inner;\n",
+  'libs/fx/src/registrar.ts':
+    "import FxCardComponent from './card';\n" +
+    "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+};
+
+falsePositive('`export default <imported binding>` is followed to the import', () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-actual`', '`tabs`']] }),
+      sources: DEFAULT_OF_IMPORT_SOURCES,
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
+control('the same default-of-an-import still rejects a wrong element', NEGATIVE, () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-wrong`', '`tabs`']] }),
+      sources: DEFAULT_OF_IMPORT_SOURCES,
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(/declares `fx-actual`/.test(proc.output), proc.output.slice(-400));
+});
+
 /* ── report ──────────────────────────────────────────────────────────────────────────────────── */
 
 rmSync(workspace, { recursive: true, force: true });

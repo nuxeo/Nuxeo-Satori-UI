@@ -134,6 +134,78 @@ function classDeclaration(name) {
 }
 
 /**
+ * `import Name from 'm'`, with either companion the grammar allows after the comma.
+ *
+ * A **function declaration**, like its neighbours below, so that it is hoisted: the section-6b
+ * loop runs while this file is still executing its top level, and a `const` here would be read
+ * from inside its own temporal dead zone. That has been the bug three times in this file.
+ *
+ * Defined once and used by both the resolver that reports a failure and the one that answers
+ * silently, because two copies of an import pattern is how the combined-clause hole survived a
+ * round: the fix went into one site and the other kept its blind spot.
+ */
+function defaultImportClause(name) {
+  return new RegExp(
+    String.raw`import\s+${reEscape(name)}\s*(?:,\s*(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?\s*from\s*['"\`]([^'"\`]+)['"\`]`,
+  );
+}
+
+/** Every named import clause, with an optional default binding before the brace. Fresh each call: `/g` carries `lastIndex`. */
+function namedImportClauses() {
+  return /import\s*(?:type\s*)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*['"`]([^'"`]+)['"`]/g;
+}
+
+/**
+ * The module a name is *imported* from in this file, and the name it carries there.
+ *
+ * A local binding is not only a class declared here — it is just as often one imported here, and
+ * treating "not declared" as "not bound locally" is what let a starred export answer for a name
+ * the barrel had explicitly exported. `default` maps to {@link DEFAULT_BINDING} because
+ * `import { default as X }` and a default import are the same binding reached two ways.
+ */
+function importedBinding(text, name) {
+  const asDefault = defaultImportClause(name).exec(text);
+  if (asDefault) return { specifier: asDefault[1], outer: DEFAULT_BINDING };
+  for (const clause of text.matchAll(namedImportClauses())) {
+    const binding = parseBindings(clause[1]).find((b) => b.inner === name);
+    if (binding) {
+      return {
+        specifier: clause[2],
+        outer: binding.outer === 'default' ? DEFAULT_BINDING : binding.outer,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * The selector of a name bound *inside* `file` — declared there, or imported into it.
+ *
+ * This is what `LOCAL` means, and the import half was missing. A barrel writing
+ * `import { ActualComponent as Inner } from './actual'; export { Inner as FxCardComponent };`
+ * binds `Inner` by import, so the declaration lookup found nothing, resolution fell through to
+ * the file's `export *`, and an unrelated starred module answered for a name the barrel had
+ * explicitly exported — accepting its selector and rejecting the real one. Reported on PR #555.
+ */
+function localBinding(name, file, depth) {
+  const text = sources.get(file);
+  if (text === undefined) return null;
+  const classAt = text.search(classDeclaration(name));
+  if (classAt !== -1) {
+    const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*['"`]([^'"`]+)['"`]/g)];
+    return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
+  }
+  // Two hops is a barrel re-exporting a barrel; beyond that, refuse rather than crawl.
+  if (depth >= 2) return null;
+  const imported = importedBinding(text, name);
+  if (!imported) return null;
+  const target = resolveModule(imported.specifier, relative(ROOT, file));
+  // Known to come from elsewhere and that elsewhere is unreadable: refuse rather than guess.
+  if (!target) return null;
+  return selectorOfBinding(imported.outer, target, EXPORTED, depth + 1);
+}
+
+/**
  * Every non-spec TypeScript file under the source roots.
  *
  * A source root that cannot be listed is a **reported gap**, not a root to skip. `walk()` called
@@ -1166,21 +1238,26 @@ function selectorOfBinding(name, file, mode, depth = 0) {
     return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
   };
 
-  /* A class declared in this file. In LOCAL mode any declaration answers it; in EXPORTED mode
-   * only one the file actually publishes does, either at the declaration or through a bare
-   * `export { … }` clause naming it. */
-  if (mode === LOCAL) {
-    const classAt = text.search(classDeclaration(name));
-    if (classAt !== -1) return selectorAbove(classAt);
-  } else {
-    const exportedAt = text.search(exportedClassDeclaration(name));
-    if (exportedAt !== -1) return selectorAbove(exportedAt);
-    const localName = locallyExportedAs(text, name);
-    if (localName !== null) {
-      const classAt = text.search(classDeclaration(localName));
-      if (classAt !== -1) return selectorAbove(classAt);
-    }
-  }
+  /* A name bound in this file: declared here or imported here. A `export *` in this file binds
+   * nothing locally, so LOCAL answers from `localBinding` alone and never falls through to one. */
+  if (mode === LOCAL) return localBinding(name, file, depth);
+
+  // EXPORTED. Published at the declaration itself.
+  const exportedAt = text.search(exportedClassDeclaration(name));
+  if (exportedAt !== -1) return selectorAbove(exportedAt);
+
+  /**
+   * Published by a bare `export { … }` clause naming a local binding.
+   *
+   * **Returns whatever that resolves to, including `null`.** In the language an explicit export
+   * shadows `export *` — a name the module exports itself is not also taken from a star — so
+   * continuing to the star loop when this cannot be resolved substitutes an unrelated module's
+   * answer for the one the barrel actually publishes. That was the finding, and it had both
+   * directions: the starred namesake's selector accepted, the real one rejected.
+   */
+  const localName = locallyExportedAs(text, name);
+  if (localName !== null) return localBinding(localName, file, depth);
+
   // Two hops is a barrel re-exporting a barrel; beyond that, refuse rather than crawl.
   if (depth >= 2) return null;
 
@@ -1248,9 +1325,7 @@ function selectorOf(className, registeringFile) {
      * binding here and what accompanies it changes nothing. The namespace alternative is the
      * mirror of the combined-clause hole found in the named matcher below: the same statement
      * shape, the other binding position. */
-    const defaultImport = new RegExp(
-      String.raw`import\s+${reEscape(className)}\s*(?:,\s*(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?\s*from\s*['"\`]([^'"\`]+)['"\`]`,
-    ).exec(registering);
+    const defaultImport = defaultImportClause(className).exec(registering);
     if (defaultImport) {
       const target = resolveModule(defaultImport[1], registeringFile);
       if (!target) {
@@ -1286,9 +1361,7 @@ function selectorOf(className, registeringFile) {
      * for the registered component's real one. A silent wrong acceptance and a false rejection
      * from the same hole.
      */
-    for (const clause of registering.matchAll(
-      /import\s*(?:type\s*)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*['"`]([^'"`]+)['"`]/g,
-    )) {
+    for (const clause of registering.matchAll(namedImportClauses())) {
       const binding = parseBindings(clause[1]).find((b) => b.inner === className);
       if (!binding) continue;
       const target = resolveModule(clause[2], registeringFile);
