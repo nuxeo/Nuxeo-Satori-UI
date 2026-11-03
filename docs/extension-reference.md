@@ -251,21 +251,21 @@ that is not `true` or `false` is ignored, and a later fragment's value wins.
 A slot is a named, ordered list of descriptors. Thirteen exist for Beta, of which seven
 carry packaged entries.
 
-| Slot               | What it addresses                                  | Status in Beta                                                                       |
-| ------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `navbar`           | Primary platform navigation entries                | **Populated** — packaged entries in section 3                                        |
-| `bulk-actions`     | Actions over a multi-document selection            | **Populated** — packaged entries in section 5                                        |
-| `sidebar`          | Drawer content behind a navbar entry               | Resolves; **no packaged entries** — see section 6                                    |
-| `routes`           | Application routes                                 | Resolves; **no packaged entries** — see section 11                                   |
-| `toolbar`          | Document-detail toolbar and overflow menu          | **Populated** — 16 packaged actions, section 8                                       |
-| `contextMenu`      | The browse "More actions" menu                     | **Populated** — 4 packaged actions, section 10                                       |
-| `rowActions`       | The menu on each row of browse's list              | **Populated** — 5 packaged actions, section 10a                                      |
-| `tabs`             | Document-detail tab children                       | **Populated** — 6 packaged tabs, section 9                                           |
-| `documentList`     | Document list columns                              | **Populated** — 12 packaged columns, section 7                                       |
-| `documentView`     | The View tab body on document detail               | Resolves; **no packaged entries** — see section 9a                                   |
-| `documentMetadata` | A type's layout in the document-detail Properties  | Resolves; **no packaged entries** — see section 9c                                   |
-| `documentEdit`     | The form of the document-detail Edit dialog        | Resolves; **no packaged entries** — see section 9c                                   |
-| `documentCreate`   | The form filling in a new document of a given type | Resolves in the create form, which **no screen opens yet**; no packaged entries — 9c |
+| Slot               | What it addresses                                  | Status in Beta                                     |
+| ------------------ | -------------------------------------------------- | -------------------------------------------------- |
+| `navbar`           | Primary platform navigation entries                | **Populated** — packaged entries in section 3      |
+| `bulk-actions`     | Actions over a multi-document selection            | **Populated** — packaged entries in section 5      |
+| `sidebar`          | Drawer content behind a navbar entry               | Resolves; **no packaged entries** — see section 6  |
+| `routes`           | Application routes                                 | Resolves; **no packaged entries** — see section 11 |
+| `toolbar`          | Document-detail toolbar and overflow menu          | **Populated** — 16 packaged actions, section 8     |
+| `contextMenu`      | The browse "More actions" menu                     | **Populated** — 4 packaged actions, section 10     |
+| `rowActions`       | The menu on each row of browse's list              | **Populated** — 5 packaged actions, section 10a    |
+| `tabs`             | Document-detail tab children                       | **Populated** — 6 packaged tabs, section 9         |
+| `documentList`     | Document list columns                              | **Populated** — 12 packaged columns, section 7     |
+| `documentView`     | The View tab body on document detail               | Resolves; **no packaged entries** — see section 9a |
+| `documentMetadata` | A type's layout in the document-detail Properties  | Resolves; **no packaged entries** — see section 9c |
+| `documentEdit`     | The form of the document-detail Edit dialog        | Resolves; **no packaged entries** — see section 9c |
+| `documentCreate`   | The form filling in a new document of a given type | Resolves; **no packaged entries** — see section 9c |
 
 Read the three states precisely, because they are different promises:
 
@@ -1363,9 +1363,15 @@ modes:
 - **`edit`** — the form of the Edit dialog on document detail, beneath the Dublin Core fields the
   form always has (title, description, nature, subjects, coverage, expires). Saving sends only the
   properties the user changed.
-- **`create`** — the same form for a new document of the type. It is built and tested, but **no
-  screen opens it yet**: Browse's create dialog keeps its own fields until it moves onto this form
-  in a later change.
+- **`create`** — the same form for a new document of the type, in the Create tab of the Create /
+  Import dialog once a type is chosen — opened from Browse and from the dashboard's Add Content.
+  It opens empty, and Create sends only the fields the user filled in, as an edit sends only what
+  changed: every field left untouched — an unticked checkbox included — takes the type's server
+  default (`@emptyWithDefault`) when the document is created. A complex field is sent whole once
+  any of its sub-fields is filled in, so its untouched sub-fields go empty — `false` for a
+  checkbox — rather than to their server defaults. The dialog keeps what is not a property field:
+  the location, the main file of a File, Picture, Audio or Video, and a Note's format. The import
+  wizard's properties step is not this form.
 
 To replace the whole Properties section or form with a component of your own rather than a list
 of fields, use the `documentMetadata`, `documentEdit` and `documentCreate` slots, section 9c.
@@ -1380,7 +1386,11 @@ present are left out — `common`, `dublincore`, `uid`, `file`, `files`, `note`,
 subscribed to and given content — so a stock File or Note shows nothing new, a Claim shows its
 `claim` schema, and a schema you add to File appears on File. A type never falls back to its
 parent type's file, in any mode. Generated `edit` and `create` layouts leave out `blob` fields:
-files are added through the attachment and main-file actions, not typed into a form.
+files are added through the attachment and main-file actions, not typed into a form. They also
+leave out four stock schemas nobody types into — `collection` (a collection's members, which Add
+to collection writes) and `domain`, `webcontainer` and `publishing` (configuration the JSF UI kept
+on domains and workspaces) — so a stock Collection, Domain or Workspace form shows the Dublin Core
+fields alone, as Web UI's does. A layout file may still name their fields.
 
 **A schema a dynamic facet adds to one document gets a section on that document.** A facet added
 after creation (`Document.AddFacet`, or an integration such as HxAI's `Hxai`) brings schemas the
@@ -1518,6 +1528,7 @@ component that `<require>`s `org.nuxeo.agentic.ui.config.defaults`:
 <extension target="org.nuxeo.agentic.ui.config" point="configuration">
   <layout type="Claim" mode="metadata" src="agentic-ui-config/layouts/Claim/metadata.layout.json" />
   <layout type="Claim" mode="edit" src="agentic-ui-config/layouts/Claim/edit.layout.json" />
+  <layout type="Claim" mode="create" src="agentic-ui-config/layouts/Claim/create.layout.json" />
 </extension>
 ```
 
@@ -1528,19 +1539,45 @@ the Properties panel, and a type with only a `metadata` file gets a generated `e
 
 What a layout file does **not** do:
 
-- **Not `view`, and not `create` on screen yet.** The View tab body is the `documentView` slot,
-  section 9a; a `create` file is read by the create form, which no screen opens yet. A file for
-  any other mode is served but not rendered.
+- **Not `view`.** The View tab body is the `documentView` slot, section 9a. A file for a mode
+  other than `metadata`, `edit` and `create` is served but not rendered.
 - **Not the packaged rows above it.** Title, tags, description and the Dublin Core vocabularies are
   still the panel's own; a `dc:` field you list appears in your layout as well. In an `edit` or
   `create` form the Dublin Core fields are the form's own, so a `dc:` field you list is shown once,
-  in their place.
+  in their place — and its `"required": true` and its schema constraints apply there, so a file
+  can make Nature required.
 - **Not new controls.** The schema type picks the control; a file cannot name a widget, and a
   `blob` field it lists is shown, not edited.
 - **Folderish types.** Document detail redirects them to Browse, so their Properties panel is never
   shown.
 - **Like every configuration, it is not a security control.** A field left out of a layout is still
   returned by the REST API to anyone who may read the document.
+
+**The create form against Web UI `lts-2025`** (`nuxeo-document-create` and the stock
+`nuxeo-<type>-create-layout` elements), compared for NXSAT-630. The same: the fields a stock type
+offers — Title (required), Description, Nature, Subjects, Coverage and Expires, plus the main file
+of a File, Picture, Audio or Video and a Note's format; Create checks the fields first and focuses the first one to correct; a `validation_report` puts
+Nuxeo's message on its field. The differences:
+
+- **A type without a create layout.** Web UI needs a hand-written `nuxeo-<type>-create-layout`
+  element per type. Here the form is generated from the type's own schemas, one section per schema
+  below the Dublin Core fields, or replaced whole by `<Type>/create.layout.json`.
+- **Order.** Web UI puts the main file, or a Note's format, third, between Description and Nature.
+  Here they follow the form, because the form is one block whose fields a layout file controls.
+- **What is checked before Create.** Web UI's stock layouts check that Title is filled. Here every
+  required field and every `PatternConstraint`, `LengthConstraint` and `NumericIntervalConstraint`
+  is checked, with an error summary that counts the fields to correct.
+- **Nuxeo 2025's own refusal.** This server answers a constraint violation with HTTP 422 and an
+  `exception` naming the property, which Web UI reports as a generic failure; here its message goes
+  on the field it names, as for a `validation_report`.
+- **Server defaults.** Web UI's form opens on the type's `@emptyWithDefault` values and saves what
+  it shows, a cleared default included. Here the form opens empty and sends only what the user
+  filled in, so an untouched field takes its server default without showing it, and a default
+  cannot be cleared at creation, only by editing afterwards. Showing the defaults would need the
+  create to honour a cleared one, which needs `DocumentImportService` to send explicit nulls — its
+  published create methods drop empty values on purpose.
+- **Dates.** A picked day is written at UTC midnight, where Web UI writes local midnight — see
+  "A `date` field edits a calendar day" above.
 
 ---
 
@@ -1551,11 +1588,11 @@ one of these slots puts a component of your own where the layout would render, f
 or types its rule admits — when a list of fields cannot say what the type needs, such as a claim
 form whose fields depend on each other.
 
-| Slot               | Replaces                                                                                            | The component receives                         |
-| ------------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `documentMetadata` | the type's layout in the Properties panel. The packaged rows above it stay                          | `document`                                     |
-| `documentEdit`     | the whole form in the Edit dialog, Dublin Core fields included. The dialog's title and buttons stay | `document`, `showErrors`, `onChange`           |
-| `documentCreate`   | the whole form for a new document of the type. **No screen opens the create form yet** (section 9b) | `type`, `parentPath`, `showErrors`, `onChange` |
+| Slot               | Replaces                                                                                                                                                                 | The component receives                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| `documentMetadata` | the type's layout in the Properties panel. The packaged rows above it stay                                                                                               | `document`                                     |
+| `documentEdit`     | the whole form in the Edit dialog, Dublin Core fields included. The dialog's title and buttons stay                                                                      | `document`, `showErrors`, `onChange`           |
+| `documentCreate`   | the whole form for a new document of the type in the Create / Import dialog, Dublin Core fields included. The dialog's location, main file, Note format and buttons stay | `type`, `parentPath`, `showErrors`, `onChange` |
 
 The descriptor fields are those of `documentView` (section 9a): `componentId` (defaulting to the
 `id`), `rule` and static `inputs`. **Which entry wins** is decided the same way: entries whose rule

@@ -1,8 +1,17 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DateAdapter } from '@angular/material/core';
 import { enUS, fr, de, nl, ja, th, zhCN } from 'date-fns/locale';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ElementRef, provideZonelessChangeDetection } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  forwardRef,
+  input,
+  provideZonelessChangeDetection,
+  signal,
+} from '@angular/core';
+import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule, provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Subject, of, throwError, timer } from 'rxjs';
@@ -20,6 +29,8 @@ import {
   type L10nDirectoryEntry,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
+
+import { DocumentLayoutFormComponent } from '@agentic-ui/shared/document-layouts';
 
 import { CreateImportDialogComponent } from './create-import-dialog.component';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
@@ -102,6 +113,38 @@ async function flushAsync(): Promise<void> {
   await Promise.resolve();
 }
 
+/**
+ * Stands in for the create layout form, which has its own spec: the dialog finds it by the real
+ * component's token, so these tests decide what it holds, whether it passes, and when it is ready.
+ */
+@Component({
+  selector: 'lib-document-layout-form',
+  standalone: true,
+  template: '',
+  providers: [
+    { provide: DocumentLayoutFormComponent, useExisting: forwardRef(() => StubLayoutForm) },
+  ],
+})
+class StubLayoutForm {
+  readonly mode = input<string>('');
+  readonly type = input<string | null>(null);
+  readonly parentPath = input<string | null>(null);
+  readonly disabled = input(false);
+  readonly headingLevel = input(3);
+  readonly ready = signal(true);
+  properties: Record<string, unknown> = {};
+  valid = true;
+  readonly validate = vi.fn(() => this.valid);
+  readonly changedProperties = vi.fn(() => ({ ...this.properties }));
+  readonly showServerErrors = vi.fn((_errors: Readonly<Record<string, string>>): string[] => []);
+}
+
+const STUB_FORM = { imports: [StubLayoutForm], template: '<lib-document-layout-form />' };
+
+function stubForm(fixture: ComponentFixture<CreateImportDialogComponent>): StubLayoutForm {
+  return fixture.debugElement.query(By.directive(StubLayoutForm)).componentInstance;
+}
+
 describe('CreateImportDialogComponent (NXSAT-173)', () => {
   let component: CreateImportDialogComponent;
   let fixture: ComponentFixture<CreateImportDialogComponent>;
@@ -120,7 +163,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
       ],
     })
       .overrideComponent(CreateImportDialogComponent, {
-        set: { imports: [], template: '<div></div>' },
+        set: STUB_FORM,
       })
       .compileComponents();
 
@@ -197,11 +240,6 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
 
   it('blocks partial expiry input when datepicker parsing fails', () => {
     component.onExpiresInput({ target: { value: '01/15/' } } as unknown as Event);
-    component.expiresNgModel = {
-      errors: { matDatepickerParse: { text: '01/15/' } },
-      invalid: true,
-      control: { markAsDirty: vi.fn(), updateValueAndValidity: vi.fn() },
-    } as unknown as typeof component.expiresNgModel;
 
     expect(component.isExpiresValid()).toBe(false);
   });
@@ -223,7 +261,6 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     );
 
     component.startCreateFromType(pictureType());
-    component.docTitle = 'Photo';
     component.onMainFileInputChange({
       target: { files: [jpegFile()], value: '' },
     } as unknown as Event);
@@ -304,7 +341,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
       type: 'Collection',
       label: 'Collection',
     });
-    component.docTitle = 'My Collection';
+    stubForm(fixture).properties = { 'dc:title': 'My Collection' };
     component.createDocument();
     await flushAsync();
 
@@ -334,7 +371,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
       type: 'Collection',
       label: 'Collection',
     });
-    component.docTitle = 'Minimal Collection';
+    stubForm(fixture).properties = { 'dc:title': 'Minimal Collection' };
     component.createDocument();
     await flushAsync();
 
@@ -362,7 +399,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     mockImportService.createBlobHoldingDocumentReliable.mockReturnValue(of(created));
 
     component.startCreateFromType(pictureType());
-    component.docTitle = 'Photo';
+    stubForm(fixture).properties = { 'dc:title': 'Photo' };
     component.onMainFileInputChange({
       target: { files: [jpegFile()], value: '' },
     } as unknown as Event);
@@ -392,7 +429,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     );
 
     component.startCreateFromType(pictureType());
-    component.docTitle = 'Photo';
+    stubForm(fixture).properties = { 'dc:title': 'Photo' };
     component.onMainFileInputChange({
       target: { files: [jpegFile()], value: '' },
     } as unknown as Event);
@@ -411,7 +448,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     );
 
     component.startCreateFromType(pictureType());
-    component.docTitle = 'Photo';
+    stubForm(fixture).properties = { 'dc:title': 'Photo' };
     component.onMainFileInputChange({
       target: { files: [jpegFile()], value: '' },
     } as unknown as Event);
@@ -939,13 +976,56 @@ describe('CreateImportDialogComponent domain create (NXSAT-199)', () => {
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
       ],
-    }).compileComponents();
+    })
+      .overrideComponent(CreateImportDialogComponent, {
+        remove: { imports: [DocumentLayoutFormComponent] },
+        add: { imports: [StubLayoutForm] },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(CreateImportDialogComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
     await Promise.resolve();
   }
+
+  const createButton = (): HTMLButtonElement | undefined =>
+    Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        'mat-dialog-actions button',
+      ),
+    ).find((button) => button.textContent?.trim() === 'Create');
+
+  it("renders the chosen type's create form, for the folder, read-only while busy", async () => {
+    await createDialog();
+    component.startCreateFromType({ type: 'Domain', label: 'Domain' });
+    fixture.detectChanges();
+
+    const form = stubForm(fixture);
+    expect(form.mode()).toBe('create');
+    expect(form.type()).toBe('Domain');
+    expect(form.parentPath()).toBe('/');
+    expect(form.disabled()).toBe(false);
+    component.busy.set(true);
+    fixture.detectChanges();
+    expect(form.disabled()).toBe(true);
+  });
+
+  it('keeps Create disabled until the form is on screen', async () => {
+    await createDialog();
+    component.startCreateFromType({ type: 'Domain', label: 'Domain' });
+    fixture.detectChanges();
+    const form = stubForm(fixture);
+
+    form.ready.set(false);
+    fixture.detectChanges();
+    expect(component.createFormReady()).toBe(false);
+    expect(createButton()?.disabled).toBe(true);
+
+    form.ready.set(true);
+    fixture.detectChanges();
+    expect(createButton()?.disabled).toBe(false);
+  });
 
   it('createDocument at repository root delegates Domain create to DocumentImportService', async () => {
     const created: NuxeoDocument = {
@@ -962,7 +1042,8 @@ describe('CreateImportDialogComponent domain create (NXSAT-199)', () => {
     expect(component.parentPath()).toBe('/');
 
     component.startCreateFromType({ type: 'Domain', label: 'Domain' });
-    component.docTitle = 'Test Domain';
+    fixture.detectChanges();
+    stubForm(fixture).properties = { 'dc:title': 'Test Domain' };
     component.createDocument();
     await Promise.resolve();
 
@@ -1173,9 +1254,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
         },
       ],
     })
-      .overrideComponent(CreateImportDialogComponent, {
-        set: { imports: [], template: '<div></div>' },
-      })
+      .overrideComponent(CreateImportDialogComponent, { set: STUB_FORM })
       .compileComponents();
 
     fixture = TestBed.createComponent(CreateImportDialogComponent);
@@ -2034,6 +2113,15 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
   });
 
   describe('create form', () => {
+    const folder = (title = 'Reports'): NuxeoDocument => ({
+      uid: 'folder-1',
+      title,
+      type: 'Folder',
+      path: `${WS_PATH}/${title}`,
+      lastModified: '',
+      properties: {},
+    });
+
     it('writes the note body and mime type for a Note', async () => {
       await createDialog();
       m.createChildDocument.mockReturnValue(
@@ -2048,7 +2136,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       );
 
       component.startCreateFromType({ type: 'Note', label: 'Note' });
-      component.docTitle = 'Minutes';
+      stubForm(fixture).properties = { 'dc:title': 'Minutes' };
       component.noteFormat = 'text/html';
       component.createDocument();
       await flushAsync();
@@ -2062,10 +2150,82 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(m.toast.show).toHaveBeenCalledWith('Created Note “Minutes”');
     });
 
+    it('keeps a Note body the form filled in, and its own format', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Minutes')));
+      component.startCreateFromType({ type: 'Note', label: 'Note' });
+      component.noteFormat = 'text/html';
+      stubForm(fixture).properties = {
+        'dc:title': 'Minutes',
+        'note:note': '# Agenda',
+        'note:mime_type': 'text/x-web-markdown',
+      };
+
+      component.createDocument();
+      await flushAsync();
+
+      const [, , , properties] = m.createChildDocument.mock.calls[0];
+      expect(properties['note:note']).toBe('# Agenda');
+      expect(properties['note:mime_type']).toBe('text/x-web-markdown');
+    });
+
+    it('gives a Note body the form filled in the chosen format when the form names none', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Minutes')));
+      component.startCreateFromType({ type: 'Note', label: 'Note' });
+      component.noteFormat = 'text/plain';
+      stubForm(fixture).properties = { 'dc:title': 'Minutes', 'note:note': 'Agenda' };
+
+      component.createDocument();
+      await flushAsync();
+
+      const [, , , properties] = m.createChildDocument.mock.calls[0];
+      expect(properties['note:note']).toBe('Agenda');
+      expect(properties['note:mime_type']).toBe('text/plain');
+    });
+
+    it('writes the empty body when the form left the Note body blank', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Minutes')));
+      component.startCreateFromType({ type: 'Note', label: 'Note' });
+      component.noteFormat = 'text/html';
+      stubForm(fixture).properties = {
+        'dc:title': 'Minutes',
+        'note:note': '  ',
+        'note:mime_type': 'text/plain',
+      };
+
+      component.createDocument();
+      await flushAsync();
+
+      const [, , , properties] = m.createChildDocument.mock.calls[0];
+      expect(properties['note:note']).toBe('<p></p>');
+      expect(properties['note:mime_type']).toBe('text/html');
+    });
+
+    it("sends what the form holds, the type's own fields included, through createChildDocument", async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder()));
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
+      const values = {
+        'dc:title': '  Reports ',
+        'dc:expired': '2027-12-31T00:00:00.000Z',
+        'acme:region': 'EMEA',
+      };
+      stubForm(fixture).properties = values;
+
+      component.createDocument();
+      await flushAsync();
+
+      expect(stubForm(fixture).validate).toHaveBeenCalledTimes(1);
+      expect(m.createChildDocument).toHaveBeenCalledWith(WS_PATH, 'Reports', 'Folder', values);
+      expect(m.close).toHaveBeenCalledWith(expect.objectContaining({ refreshed: true }));
+    });
+
     it('refuses to create a blob type with no file attached', async () => {
       await createDialog();
       component.startCreateFromType(pictureType());
-      component.docTitle = 'Photo';
+      stubForm(fixture).properties = { 'dc:title': 'Photo' };
 
       component.createDocument();
 
@@ -2080,7 +2240,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       m.stageFileInBatch.mockReturnValue(stall.asObservable());
 
       component.startCreateFromType(pictureType());
-      component.docTitle = 'Photo';
+      stubForm(fixture).properties = { 'dc:title': 'Photo' };
       const input = inputWith('c:/photo.jpg', [jpegFile()]);
       component.onMainFileInputChange(changeEvent(input));
       expect(input.value).toBe('');
@@ -2092,58 +2252,105 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       stall.complete();
     });
 
-    it('does nothing without a title or a selected type', async () => {
+    it('does nothing without a selected type', async () => {
       await createDialog();
 
       component.createDocument();
-      expect(m.createChildDocument).not.toHaveBeenCalled();
 
-      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
-      component.docTitle = '   ';
-      component.createDocument();
+      expect(stubForm(fixture).validate).not.toHaveBeenCalled();
       expect(m.createChildDocument).not.toHaveBeenCalled();
     });
 
-    it('refuses to create while the expiry field is invalid', async () => {
+    it('sends nothing while the form is still being prepared', async () => {
       await createDialog();
       component.startCreateFromType({ type: 'Folder', label: 'Folder' });
-      component.docTitle = 'Reports';
-      component.onExpiresInput(changeEvent(inputWith('99/99/9999')));
+      stubForm(fixture).ready.set(false);
 
-      expect(component.showExpiresError()).toBe(true);
       component.createDocument();
 
+      expect(stubForm(fixture).validate).not.toHaveBeenCalled();
       expect(m.createChildDocument).not.toHaveBeenCalled();
     });
 
-    it('sends the expiry as an ISO date and clears the raw text once a date parses', async () => {
+    it('sends nothing when the form refuses its values, and clears the last error', async () => {
       await createDialog();
-      m.createChildDocument.mockReturnValue(
-        of({
-          uid: 'folder-1',
-          title: 'Reports',
-          type: 'Folder',
-          path: `${WS_PATH}/Reports`,
-          lastModified: '',
-          properties: {},
-        }),
-      );
-
       component.startCreateFromType({ type: 'Folder', label: 'Folder' });
-      component.docTitle = 'Reports';
-      component.onExpiresInput(changeEvent(inputWith('12/31/2027')));
-      // A day as the picker hands it over — local midnight — not a UTC instant. Seeding
-      // `new Date('2027-12-31T00:00:00.000Z')` made this assertion pass whichever way the day was
-      // anchored, because under the pinned +05:30 zone that instant's local day is the 31st too
-      // (NXSAT-727).
-      component.onExpiresChange(new Date(2027, 11, 31));
-      expect(component.expiresRawText).toBe('');
+      component.error.set('Name already used');
+      stubForm(fixture).valid = false;
+
+      component.createDocument();
+
+      expect(stubForm(fixture).validate).toHaveBeenCalledTimes(1);
+      expect(stubForm(fixture).changedProperties).not.toHaveBeenCalled();
+      expect(m.createChildDocument).not.toHaveBeenCalled();
+      expect(component.error()).toBeNull();
+    });
+
+    it('names the document after the type when a contributed form sends no title', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Folder')));
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
+      stubForm(fixture).properties = { 'acme:region': 'EMEA' };
 
       component.createDocument();
       await flushAsync();
 
-      const [, , , properties] = m.createChildDocument.mock.calls[0];
-      expect(properties['dc:expired']).toBe('2027-12-31T00:00:00.000Z');
+      expect(m.createChildDocument).toHaveBeenCalledWith(WS_PATH, 'untitled', 'Folder', {
+        'acme:region': 'EMEA',
+      });
+      expect(m.toast.show).toHaveBeenCalledWith('Created Folder “Folder”');
+    });
+
+    it("puts Nuxeo's constraint message on the field it names, and keeps the dialog open", async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 422,
+              error: {
+                'entity-type': 'exception',
+                message:
+                  "Constraint violation thrown on property acme:region: 'Pick a listed region.'",
+              },
+            }),
+        ),
+      );
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
+      stubForm(fixture).properties = { 'dc:title': 'Reports', 'acme:region': 'Mars' };
+
+      component.createDocument();
+      await flushAsync();
+
+      expect(stubForm(fixture).showServerErrors).toHaveBeenCalledWith({
+        'acme:region': 'Pick a listed region.',
+      });
+      expect(component.error()).toBeNull();
+      expect(component.busy()).toBe(false);
+      expect(m.close).not.toHaveBeenCalled();
+    });
+
+    it('reports above the form a constraint message the form has no field for', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(
+        throwError(() => ({
+          error: {
+            'entity-type': 'validation_report',
+            violations: [{ message: 'Too many documents here.', path: [] }],
+          },
+        })),
+      );
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
+      stubForm(fixture).properties = { 'dc:title': 'Reports' };
+      stubForm(fixture).showServerErrors.mockReturnValue(['Too many documents here.']);
+
+      component.createDocument();
+      await flushAsync();
+
+      expect(stubForm(fixture).showServerErrors).toHaveBeenCalledWith({
+        '': 'Too many documents here.',
+      });
+      expect(component.error()).toBe('Too many documents here.');
     });
 
     it('keeps the raw text when the datepicker could not parse what was typed', async () => {
@@ -2161,10 +2368,11 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       m.createChildDocument.mockReturnValue(throwError(() => ({ message: 'Name already used' })));
 
       component.startCreateFromType({ type: 'Folder', label: 'Folder' });
-      component.docTitle = 'Reports';
+      stubForm(fixture).properties = { 'dc:title': 'Reports' };
       component.createDocument();
       await flushAsync();
 
+      expect(stubForm(fixture).showServerErrors).not.toHaveBeenCalled();
       expect(component.error()).toBe('Name already used');
       expect(component.contentError()).toBeNull();
       expect(component.busy()).toBe(false);
@@ -2175,7 +2383,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       m.createChildDocument.mockReturnValue(throwError(() => ({})));
 
       component.startCreateFromType({ type: 'Folder', label: 'Folder' });
-      component.docTitle = 'Reports';
+      stubForm(fixture).properties = { 'dc:title': 'Reports' };
       component.createDocument();
       await flushAsync();
 
@@ -2502,7 +2710,7 @@ const dayOf = (date: Date | null) => date && [date.getFullYear(), date.getMonth(
 
 // Material keeps null for a partial date; a handler that stored anything else made [ngModel]
 // write back and erase the text mid-entry. Only a real template exercises that write-back.
-describe('CreateImportDialogComponent Expires typed into the real field', () => {
+describe('CreateImportDialogComponent with the real create form and Expires field', () => {
   async function render(): Promise<ComponentFixture<CreateImportDialogComponent>> {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
@@ -2515,25 +2723,159 @@ describe('CreateImportDialogComponent Expires typed into the real field', () => 
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
+        provideHttpClient(),
+        provideHttpClientTesting(),
       ],
     }).compileComponents();
+    vi.clearAllMocks();
     const fixture = TestBed.createComponent(CreateImportDialogComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     return fixture;
   }
 
-  it('keeps every partial entry on the create form', async () => {
-    const fixture = await render();
-    fixture.componentInstance.startCreateFromType(pictureType());
+  /** `/config/types/Folder` with a customer schema added, one field of it required. */
+  const FOLDER_TYPE = {
+    name: 'Folder',
+    schemas: [
+      {
+        name: 'dublincore',
+        '@prefix': 'dc',
+        fields: {
+          title: 'string',
+          description: 'string',
+          expired: 'date',
+          nature: {
+            type: 'string',
+            constraints: [{ name: 'directoryResolver', parameters: { directory: 'nature' } }],
+          },
+        },
+      },
+      {
+        name: 'acme',
+        '@prefix': 'acme',
+        fields: {
+          region: { type: 'string', constraints: [{ name: 'NotNullConstraint', parameters: {} }] },
+        },
+      },
+    ],
+  };
+
+  /**
+   * Opens Folder's create form and answers the reads its layout needs: generated, or the
+   * contributed `Folder/create` file `content` when one is given.
+   */
+  async function openFolderForm(
+    fixture: ComponentFixture<CreateImportDialogComponent>,
+    content?: object,
+  ) {
+    const http = TestBed.inject(HttpTestingController);
+    fixture.componentInstance.startCreateFromType({ type: 'Folder', label: 'Folder' });
     fixture.detectChanges();
     await fixture.whenStable();
-    const input = fixture.nativeElement.querySelector(
-      'nxs-date-input[name="expires"] input',
-    ) as HTMLInputElement;
+    const format = 'nuxeo-agentic-ui-config/1';
+    http.expectOne((request) => request.url.endsWith('/config/types/Folder')).flush(FOLDER_TYPE);
+    http
+      .expectOne((request) => request.url.endsWith('/layouts.json'))
+      .flush({
+        format,
+        layer: 'layouts',
+        layouts: content ? [{ type: 'Folder', mode: 'create', component: 'org.acme.config' }] : [],
+        diagnostics: [],
+      });
+    if (content) {
+      await fixture.whenStable();
+      http
+        .expectOne((request) => request.url.endsWith('/layouts/Folder/create.layout.json'))
+        .flush({ format, layer: 'layout', type: 'Folder', mode: 'create', content });
+    }
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return http;
+  }
 
-    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
-    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
+  const field = (fixture: ComponentFixture<unknown>, xpath: string) =>
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      `lib-document-layout-form [data-xpath="${xpath}"]`,
+    );
+
+  async function typeInto(fixture: ComponentFixture<unknown>, xpath: string, text: string) {
+    const input = field(fixture, xpath);
+    if (!input) throw new Error(`no field ${xpath}`);
+    input.value = text;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  it("creates through the type's generated create form, its own fields and Expires included", async () => {
+    const fixture = await render();
+    const http = await openFolderForm(fixture);
+    expect(fixture.componentInstance.createFormReady()).toBe(true);
+
+    await typeInto(fixture, 'dc:title', 'Reports');
+    await typeInto(fixture, 'acme:region', 'EMEA');
+    const expires = fixture.nativeElement.querySelector(
+      'nxs-date-input[data-xpath="dc:expired"] input',
+    ) as HTMLInputElement;
+    expect(await typeKeystrokes(fixture, expires, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+
+    mockImportService.createChildDocument.mockReturnValue(
+      of({ ...folderDoc, uid: 'f-1', type: 'Folder', title: 'Reports' }),
+    );
+    fixture.componentInstance.createDocument();
+    await fixture.whenStable();
+
+    expect(mockImportService.createChildDocument).toHaveBeenCalledWith(
+      PARENT_PATH,
+      'Reports',
+      'Folder',
+      expect.objectContaining({
+        'dc:title': 'Reports',
+        'acme:region': 'EMEA',
+        'dc:expired': '2027-12-31T00:00:00.000Z',
+      }),
+    );
+    http.verify();
+  });
+
+  it('sends nothing while a Dublin Core field the create file makes required is blank', async () => {
+    const fixture = await render();
+    await openFolderForm(fixture, {
+      version: 1,
+      sections: [{ id: 'classify', fields: [{ field: 'dc:nature', required: true }] }],
+    });
+    expect(
+      fixture.nativeElement
+        .querySelector('nxs-metadata-editor')
+        ?.getAttribute('data-layout-source'),
+    ).toBe('contributed');
+    await typeInto(fixture, 'dc:title', 'Reports');
+
+    fixture.componentInstance.createDocument();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(mockImportService.createChildDocument).not.toHaveBeenCalled();
+    expect(
+      fixture.nativeElement.querySelector('[data-xpath="dc:nature"] mat-error')?.textContent,
+    ).toContain('Required');
+  });
+
+  it('sends nothing while a required field of the type is blank, and says so on that field', async () => {
+    const fixture = await render();
+    await openFolderForm(fixture);
+    await typeInto(fixture, 'dc:title', 'Reports');
+
+    fixture.componentInstance.createDocument();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(mockImportService.createChildDocument).not.toHaveBeenCalled();
+    expect(
+      fixture.nativeElement.querySelector('lib-document-layout-form mat-error')?.textContent,
+    ).toContain('Region is required.');
   });
 
   it('keeps every partial entry on the import form', async () => {
