@@ -22,9 +22,12 @@
 export default async function run(page, h) {
   await h.step('A real non-administrator account is available to run as');
   const configured = Boolean(process.env.NUXEO_MEMBER_USER && process.env.NUXEO_MEMBER_PASS);
+  // Flip to true only when the sign-in-as-member assertions are written in this file.
+  const ASSERTIONS_WRITTEN = false;
+  h.note('the non-administrator assertions are not written yet, so no visibility claim is made here');
   h.requirePrecondition(
     'the non-administrator assertions exist and have a member account to run as',
-    false,
+    ASSERTIONS_WRITTEN && configured,
     configured
       ? 'member credentials are set, but the sign-in-as-member assertions are not written in this file yet'
       : 'no member account is configured (NUXEO_MEMBER_USER / NUXEO_MEMBER_PASS). This instance has only the ' +
