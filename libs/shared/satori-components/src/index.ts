@@ -237,6 +237,11 @@ export {
   type NxsPublishDialogResult,
   type NxsPublishRendition,
 } from './lib/publish-dialog/publish-dialog.component';
+export {
+  NXS_TASK_DETAIL_ID,
+  NxsTaskDetailComponent,
+  type NxsTaskOutcome,
+} from './lib/task-detail/task-detail.component';
 // satori:export:components — `satori-component` inserts above this line
 
 export { TranslatedDatepickerIntl } from './lib/date-input/translated-datepicker-intl';

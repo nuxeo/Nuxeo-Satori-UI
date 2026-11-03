@@ -33,11 +33,13 @@ import {
   NXS_ADMIN_USERS_GROUPS_PAGE_ID,
   NXS_PERMISSIONS_PANEL_ID,
   NXS_PUBLISH_DIALOG_ID,
+  NXS_TASK_DETAIL_ID,
   NxsAdminGroupDetailsPageComponent,
   NxsAdminUserDetailsPageComponent,
   NxsAdminUsersGroupsPageComponent,
   NxsPermissionsPanelComponent,
   NxsPublishDialogComponent,
+  NxsTaskDetailComponent,
 } from '@nuxeo/satori-platform/components';
 import { SelectionService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -186,6 +188,10 @@ function provideAppContributions(): EnvironmentProviders {
         // `app.bulkActions.publish` — through `nxsOpenPublishDialog`, so re-registering this ID
         // replaces it for both.
         [NXS_PUBLISH_DIALOG_ID]: NxsPublishDialogComponent,
+
+        // The task panel of the tasks page: reading a task and completing it. The page renders it
+        // through its ID, so a customer library can re-register it.
+        [NXS_TASK_DETAIL_ID]: NxsTaskDetailComponent,
       },
     };
   });

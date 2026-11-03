@@ -854,6 +854,7 @@ Components are referenced by ID and must already be compiled in. Contributing a 
 | `nxs.components.adminUserDetailsPage`  | One user at `/administration/users-groups/user/:userId`: profile, groups, and direct and group permissions                                               |
 | `nxs.components.adminGroupDetailsPage` | One group at `/administration/users-groups/group/:groupId`: members, nested groups, and permissions                                                      |
 | `nxs.components.publishDialog`         | The Publish dialog that `app.toolbar.publish` and `app.bulkActions.publish` both open                                                                    |
+| `nxs.components.taskDetail`            | The task panel of the Tasks page at `/tasks/:taskId`: a task's actions, abandon, delegate, reassign, workflow graph                                      |
 
 `app.page.contracts` is the first component registered for the **`routes`** slot rather than for a
 drawer, and it exists because that slot went live with **no component in the product able to serve
@@ -961,9 +962,9 @@ ID reaches it. The uses resolved by ID are these:
 | Component ID                 | Rendered on                                                                                                                                                                                         |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `nxs.primitives.avatar`      | browse (the history tab's users, the info panel's creator and contributor, activity), document detail (activity), the collection page (the history tab's users), the dashboard, `nxs-document-list` |
-| `nxs.primitives.tag`         | browse (a trashed child's type), search (a list row's type), document detail (the AI primary category, a publication's version), task detail, trash, `nxs-document-list`                            |
+| `nxs.primitives.tag`         | browse (a trashed child's type), search (a list row's type), document detail (the AI primary category, a publication's version), trash, `nxs-document-list`                                         |
 | `nxs.primitives.breadcrumbs` | browse, document detail, the collection page, the tasks page                                                                                                                                        |
-| `nxs.primitives.statusTag`   | browse, document detail, the collection page, task detail                                                                                                                                           |
+| `nxs.primitives.statusTag`   | browse, document detail, the collection page                                                                                                                                                        |
 | `nxs.primitives.card`        | browse's and search's card views, one per document; the card shows the type as its subheading                                                                                                       |
 | `nxs.primitives.tabs`        | document detail's tab strip (sections 8 and 9)                                                                                                                                                      |
 | `nxs.primitives.actionBar`   | document detail's header action row (sections 8 and 9)                                                                                                                                              |
@@ -1016,6 +1017,22 @@ places them: a manifest entry in that slot does, with `componentId` set to the I
 
 | Component ID | Element | For the slot |
 | ------------ | ------- | ------------ |
+
+**Empty, and correctly so — not emptied.** Nothing has been generated for `sidebar`, `tabs`,
+`documentView` or `routes` yet. Every `nxs.` ID the product registers is either a
+`nxs.primitives.*` placed by a screen that resolves it (section 6a) or one of the four
+`nxs.components.*` panels and pages in section 6.
+
+The `reference-drift` gate checks this table in both directions on every run: a row naming an ID
+that nothing outside specs registers to a component fails it, and an `nxs.<slot>.<name>`
+registration with no row here fails it too. Until 2026-11-02 neither could happen — the gate's row
+pattern could not match an ID containing dots, so no row in this table was ever read, and an empty
+table was indistinguishable from a correct one.
+
+What it checks is narrower than the sentence above it: it looks for a registry entry of the form
+`'<id>': SomeComponent` in non-spec TypeScript under `apps/` and `libs/`. A component registered
+by some other mechanism would not be found, and nothing here judges whether a row's _prose_ is
+accurate — only its ID, its element's selector and its slot name.
 
 ---
 

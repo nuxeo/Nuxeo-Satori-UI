@@ -87,8 +87,17 @@ never hardcode HAIP credentials.
 
 ```typescript
 // Service: libs/shared/ai-client/src/lib/ai-feature-flag.service.ts
-const AI_FEATURES_ENABLED = false;                      // the switch
-readonly aiEnabled: Signal<boolean> = this.state.asReadonly();  // read-only on purpose
+const AI_FEATURES_ENABLED = false;               // the switch
+const ALWAYS_OFF: Signal<boolean> = computed(() => false);
+
+// Declared, then sealed in the constructor — `readonly` is erased at runtime, so a field
+// initialiser would leave `service.aiEnabled = () => true` available at a console.
+declare readonly aiEnabled: Signal<boolean>;
+Object.defineProperty(this, 'aiEnabled', {
+  value: AI_FEATURES_ENABLED ? this.state.asReadonly() : ALWAYS_OFF,
+  writable: false,
+  configurable: false,
+});
 
 // In templates
 @if (aiFeatureFlag.aiEnabled()) {

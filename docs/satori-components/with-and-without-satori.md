@@ -884,6 +884,19 @@ Publishing a supplier contract at 1.2: the sections as a tree, Contracts chosen,
 
 The library defines its ID and our app registers it; `provideNxsComponents()` does not. Both publish actions open whatever the ID resolves to.
 
+### Task detail
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsTaskDetailComponent`         |
+| Registered ID   | `nxs.components.taskDetail`      |
+| With Satori     | Same component; theme only       |
+| Storybook story | `components-task-detail--review` |
+
+![Task detail: without Satori on the left, with Satori on the right](task-detail-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+One workflow task and what the user can do with it: its actions, abandon, delegate, reassign and the workflow graph. The same panel in both; the theme sets the type, the colours and the buttons.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -993,6 +1006,7 @@ The components in the library today:
 | User form dialog                | —                                                                                                                            | Same component; theme only   |
 | Group form dialog               | —                                                                                                                            | Same component; theme only   |
 | Publish dialog                  | `nxs.components.publishDialog` (the library defines the ID; our app registers it, `provideNxsComponents()` does not)         | Same component; theme only   |
+| Task detail                     | `nxs.components.taskDetail`                                                                                                  | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 
