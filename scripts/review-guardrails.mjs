@@ -12486,6 +12486,187 @@ function checkWorkflowRefGates() {
   }
 }
 
+/**
+ * The gate inventory in `documentation/30-engineering/08-dev-harness-and-gates.md` §2 must match
+ * `ALL_GATES` — every gate a row, every row a gate, in the same order, numbered `1..N`.
+ *
+ * ## Why this exists
+ *
+ * That page is the written record of what the harness checks, and it was maintained by hand with
+ * a dated verification log and nothing comparing it to the roster. When this check was written
+ * the table held 33 rows against an `ALL_GATES` of 38, and **two of the five missing rows were
+ * not new**: `sanitizer-recovery-selftest` and `storybook-assemble-selftest` had been absent
+ * since they were registered. The page's own §2 preamble records that it "listed 17 while
+ * `ALL_GATES` held 23", and §7's count has been wrong twice. A document whose job is to say what
+ * is enforced, with nothing enforcing it, is the shape of defect the rest of this file exists for.
+ *
+ * ## Whole tree, not the diff
+ *
+ * The same reason as `checkWorkflowRefGates`: when a gate is added to `verify-gate.mjs` and no row
+ * is added to the page, **the page does not change**. A diff-scoped check sees nothing on the
+ * commit that breaks it, and nothing on any commit afterwards. Both pre-existing gaps are
+ * evidence that this is the real failure mode and not a hypothetical one.
+ *
+ * ## What it does NOT check, stated because the distinction decides what the page can be trusted for
+ *
+ * Only the §2 inventory is bidirectional. For §7 ("What runs where") it checks **one direction**:
+ * every gate is named somewhere in that section. It does not check the reverse — §7 deliberately
+ * carries rows that are not gates (`**E2E**`, `Registry auth, cold cache`, the bundle size
+ * ceiling) — and it does not read the ✅/— columns at all, because whether a gate runs in CI is a
+ * fact about `ci.yml`, which invokes npm scripts whose names do not match gate ids. A wrong tick
+ * in §7 is still only as good as whoever last read it.
+ *
+ * It also says nothing about whether a row's prose is *accurate*. It compares identifiers.
+ */
+function checkGateInventory() {
+  const page = 'documentation/30-engineering/08-dev-harness-and-gates.md';
+  const runner = 'scripts/beta-harness/verify-gate.mjs';
+  for (const file of [page, runner]) {
+    if (!fileExists(file)) {
+      fail(
+        `${file} does not exist, but the gate-inventory check compares it. Reading nothing must not pass as finding nothing.`,
+      );
+      return;
+    }
+  }
+
+  /* `ALL_GATES` is read as text, not imported: `verify-gate.mjs` runs the gates on import. The
+   * block is bounded so an `id:` in a later unrelated object cannot be counted as a gate. */
+  const runnerSource = read(runner);
+  const open = runnerSource.indexOf('const ALL_GATES = [');
+  const close = runnerSource.indexOf('\n];', open);
+  if (open === -1 || close === -1) {
+    fail(
+      `${runner} has no \`const ALL_GATES = [ … ];\` block, so the gate roster cannot be read. ` +
+        'If it was renamed, rename it here too rather than leaving this check vacuous.',
+    );
+    return;
+  }
+  const roster = [...runnerSource.slice(open, close).matchAll(/\n\s+id: '([a-z0-9-]+)',/g)].map(
+    (match) => match[1],
+  );
+
+  const pageSource = read(page);
+
+  /**
+   * The body of one `## n.` section, or `null` with the reason reported.
+   *
+   * Written as a line-anchored search rather than `indexOf('\n## 2. …')`, which the controls in
+   * `review-guardrails.selftest.mjs` caught being wrong in two ways. A heading at offset 0 is not
+   * preceded by a newline, so it was not found at all — that one was fatal, and it made all
+   * fourteen controls report "no numbered gate rows". And a *missing* closing heading made
+   * `indexOf` return -1, which `slice(open, -1)` turns into "everything but the last character"
+   * rather than an error, so the section read would have been far wider than §2 with nothing
+   * saying so. Whether that second one changed a *verdict* is a different question, and the
+   * honest answer is: probably not, because the row pattern below needs a leading integer and a
+   * lowercase-hyphen id, which no other table on the page has. That is luck, not design, and the
+   * failure is reported now rather than relied on not to matter.
+   *
+   * Anchors on the §2 and §7 headings only. Renaming either is reported; renaming §3, which just
+   * widens §2's span, is not.
+   */
+  const section = (number, title) => {
+    const openMatch = new RegExp(`^## ${number}\\. ${title}$`, 'm').exec(pageSource);
+    if (!openMatch) {
+      fail(
+        `${page} has no \`## ${number}. ${title}\` heading, so that section cannot be compared. ` +
+          'If it was renamed, rename it here too rather than leaving this check reading nothing.',
+      );
+      return null;
+    }
+    const after = pageSource.slice(openMatch.index + openMatch[0].length);
+    const nextMatch = /^## \d+\./m.exec(after);
+    return nextMatch ? after.slice(0, nextMatch.index) : after;
+  };
+
+  const sectionTwo = section(2, 'The gates');
+  if (sectionTwo === null) return;
+  const rows = [...sectionTwo.matchAll(/^\|\s*(\d+)\s*\|\s*`([a-z0-9-]+)`\s*\|/gm)].map(
+    (match) => ({ number: Number(match[1]), id: match[2] }),
+  );
+
+  /* Both emptiness guards are load-bearing, and in opposite directions. An empty roster would
+   * make every row "a row with no gate"; an empty table would make every gate "a gate with no
+   * row". Either way the check would be red for the wrong reason, or — if the comparisons were
+   * written as set intersections — green having compared nothing. */
+  if (roster.length === 0) {
+    fail(`${runner} yielded no gate ids, so this check compared nothing.`);
+    return;
+  }
+  if (rows.length === 0) {
+    fail(`${page} §2 has no numbered gate rows, so this check compared nothing.`);
+    return;
+  }
+
+  const rowIds = rows.map((row) => row.id);
+  const duplicates = rowIds.filter((id, index) => rowIds.indexOf(id) !== index);
+  for (const id of new Set(duplicates)) {
+    fail(`${page} §2 lists \`${id}\` twice. A row must describe one gate.`);
+  }
+
+  for (const id of roster) {
+    if (!rowIds.includes(id)) {
+      fail(
+        `\`${id}\` is registered in ALL_GATES and has no row in §2 of ${page}.\n` +
+          '  A gate nobody can read about is a gate nobody knows ran.',
+      );
+    }
+  }
+  for (const id of rowIds) {
+    if (!roster.includes(id)) {
+      fail(
+        `${page} §2 has a row for \`${id}\`, which ALL_GATES does not register.\n` +
+          '  The page claims a check that does not run.',
+      );
+    }
+  }
+
+  /* Order and numbering, only once the sets agree — reporting "row 14 should be X" on top of five
+   * missing rows buries the finding that matters under its consequences. */
+  if (roster.length === rowIds.length && roster.every((id, index) => id === rowIds[index])) {
+    rows.forEach((row, index) => {
+      if (row.number !== index + 1) {
+        fail(
+          `${page} §2 numbers \`${row.id}\` as ${row.number}, but it is row ${index + 1}. ` +
+            'The banner and review comments refer to gates by these numbers.',
+        );
+      }
+    });
+  } else if (new Set(roster).size === new Set(rowIds).size && roster.length === rowIds.length) {
+    const firstDivergence = roster.findIndex((id, index) => id !== rowIds[index]);
+    fail(
+      `${page} §2 lists the gates in a different order from ALL_GATES: row ${firstDivergence + 1} ` +
+        `is \`${rowIds[firstDivergence]}\`, the roster has \`${roster[firstDivergence]}\`.\n` +
+        '  The table documents the order the gates run in, cheapest first, and that order is the\n' +
+        '  reason a failure is actionable.',
+    );
+  }
+
+  /* §7 forward only. The reverse direction is not checkable here: §7 carries rows that are
+   * deliberately not gates. */
+  const sectionSeven = section(7, 'What runs where');
+  if (sectionSeven === null) return;
+  if (sectionSeven.trim() === '') {
+    fail(`${page} §7 is empty, so the "what runs where" half of this check compared nothing.`);
+    return;
+  }
+  for (const id of roster) {
+    if (
+      !new RegExp(`(^|[\\s|,\`])${reEscapeForGuardrail(id)}([\\s|,\`]|$)`, 'm').test(sectionSeven)
+    ) {
+      fail(
+        `\`${id}\` is registered in ALL_GATES and is named nowhere in §7 of ${page}, so the page ` +
+          'does not say whether it runs in CI.',
+      );
+    }
+  }
+}
+
+/** Every regex metacharacter escaped. Gate ids are `[a-z0-9-]+`, but a hyphen in a character class is not the only trap a future id could bring. */
+function reEscapeForGuardrail(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const GUARDRAILS = [
   checkPackageToolLaunches,
   checkThemeTokens,
@@ -12543,6 +12724,7 @@ const GUARDRAILS = [
   checkSatoriPrimitivesRegisteredInOrder,
   checkAdoptedPatternsNotBypassed,
   checkWorkflowRefGates,
+  checkGateInventory,
 ];
 
 /**

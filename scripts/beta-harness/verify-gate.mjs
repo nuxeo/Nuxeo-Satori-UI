@@ -502,6 +502,69 @@ const ALL_GATES = [
     argv: ['scripts/storybook-assemble-site.selftest.mjs'],
     echoOnPass: true,
   },
+  // The published addresses this repository advertises, and the ones it records as dead.
+  //
+  // Next to `supply-chain` and `peer-installability` in kind: it needs the network, so it declares
+  // the same skip. Registered because two addresses went wrong in October and neither was noticed
+  // by anything here — `https://nuxeo.github.io/agentic-ui-poc/` has been 404 with no redirect
+  // since the 30 October rename, because GitHub redirects a renamed repository's URL and not its
+  // Pages site; and the public Storybook was five days stale, found only because a human opened
+  // the page. A liveness check alone would rot in the direction nobody looks, so the gate is
+  // two-directional: a recorded-dead address that starts answering fails it too.
+  {
+    id: 'published-links',
+    // HTTP status codes from GitHub. Nothing about it reads the filesystem.
+    platformSensitive: false,
+    label: 'Published links',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/published-links.mjs'],
+    mayNotRun: true,
+    // Which addresses were checked, and which are recorded dead and whose they are, is the point.
+    echoOnPass: true,
+  },
+  // Its negative controls, against a local HTTP server. The gate observes one state of the world
+  // at a time and today both of its lists are correct, so nothing about a real run tells a working
+  // check from one that returns pass unconditionally. Four of the eight controls are negative.
+  {
+    id: 'published-links-selftest',
+    platformSensitive: false,
+    label: 'Published links controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/published-links.selftest.mjs'],
+    echoOnPass: true,
+  },
+  // The controls for the weekly AGENTS/ staleness report, and for the workflow that files it.
+  //
+  // Registered rather than left as a script someone remembers to run, because the thing it covers
+  // is the least observable kind of defect this repository has: `staleness-check.yml` interpolated
+  // its own generated text into a shell body, failed on exit 127 for seven consecutive weeks from
+  // 14 September, and filed nothing. The issue step runs *only* when there is drift, so the job
+  // was green precisely when it had nothing to report — nobody had a reason to look.
+  //
+  // Two of its nine controls are negative in the strict sense: they run the OLD interpolated shell
+  // with a hostile value and require it to misbehave. Without them the suite would not distinguish
+  // a closed injection from a harmless fixture.
+  //
+  // In process, fixtures under `os.tmpdir()`, ~1 s.
+  {
+    id: 'staleness-report-selftest',
+    /* The workflow it covers runs on `ubuntu-latest` and nowhere else, and what is under test is
+     * a Node script's text handling plus the shape of a YAML `run:` body — neither of which a
+     * second operating system can say anything new about. The one `bash` control deliberately
+     * reproduces a Linux runner's shell, so running it under a different shell would weaken it
+     * rather than widen the coverage.
+     *
+     * Declared `false` after the Windows job proved the point from the other direction: two
+     * controls need a filename containing `>` or a newline, which Win32 cannot create, so they
+     * failed on the filesystem rather than on the subject. They are POSIX-gated and reported as
+     * SKIPPED now, so a Windows developer's full `beta:gate` is green and honest about what ran. */
+    platformSensitive: false,
+    label: 'AGENTS staleness report controls',
+    cmd: 'node',
+    argv: ['scripts/agents-staleness-report.selftest.mjs'],
+    // Which controls are negative is the evidence, so surface it on a pass too.
+    echoOnPass: true,
+  },
   // `.cursor/` is the source for the agent configuration and `.claude/` and `.agent/` are
   // generated copies, so three copies of every skill exist with nothing comparing them. That
   // is the shape of drift this repository keeps paying for, and it is worse here than usual:
