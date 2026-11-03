@@ -7620,7 +7620,9 @@ function proseStringConstants(sources) {
 /**
  * A catalogue value must be the text a user sees.
  *
- * Two defects this caught, both shipped:
+ * Three defects this caught. The first two had **shipped** before anything looked for them; the
+ * third was stopped in the pull request that introduced it, which is the only reason it is not a
+ * fourth entry in the shipped list:
  *
  * `"Back to Users &amp; Groups"` — the extraction codemod copied the HTML SOURCE of a text node into
  * JSON. In HTML the browser decodes `&amp;`; through `{{ … | translate }}` Angular sets
@@ -7631,10 +7633,104 @@ function proseStringConstants(sources) {
  * `"Choose file(s)"` — an `(s)` suffix assumes a language pluralises by appending one letter. This
  * branch removed that shape from three other places and then created a new one in the catalogue,
  * where nothing was looking.
+ *
+ * `"…la suivante\u00a0:"` — a **double-escaped** Unicode escape, so the value holds the six
+ * characters `\u00a0` rather than the non-breaking space they denote, and the user reads the
+ * escape. Twelve French values arrived this way in the 2 November 2026 Crowdin pull; `main` had
+ * none, and no other language in the same pull had any. It is the same mistake as `&amp;` in a
+ * different notation — source syntax stored where rendered text belongs — and it is the reason
+ * this arm exists rather than being folded into the entity arm: nothing was looking for it, so
+ * the strings were gate-green and would have shipped visibly broken.
+ *
+ * ## The rejected set is the `\u` forms only, and that is a deliberate retreat
+ *
+ * This arm first rejected every escape that denotes a character: `\xNN` and the single-letter
+ * `\n`, `\t`, `\r`, `\b`, `\f`, `\v`, `\0` as well. Review of #549 killed those, correctly. A
+ * Windows or UNC path begins a segment with an escape letter often enough to be ordinary —
+ * `C:\temp`, `C:\new`, `C:\var`, `\\nas\files`, `\\host\x64\bin` — and a catalogue value is
+ * allowed to contain a path, so the rule was flagging legitimate text and its diagnostic told the
+ * author to corrupt it.
+ *
+ * No regex over the value can separate the two: `"Ligne un\nLigne deux"` and `"C:\new"` are the
+ * same string shape, and the difference is intent. A heuristic guessing at it would be a rule
+ * whose real behaviour nobody could predict — the objection this file already makes to
+ * `common.date-mask` below.
+ *
+ * `\uXXXX` and `\u{…}` survive because the collision is not real for them: a path segment would
+ * have to begin with four hex digits after the `u`. `C:\users` does not match (`sers` is not
+ * hex), and the shapes that would are not directory names anyone writes. The braced form is
+ * safer still — the `u` before the brace is mandatory, so `C:\{abc}` never matched it — which is
+ * why its digit count is left open rather than capped. `\u{…}` permits leading zeros, and a cap
+ * of six read straight past `\u{00000a0}`, a plain spelling of a non-breaking space.
+ *
+ * **What that leaves uncovered, stated rather than implied:** a double-escaped `\n` or `\t` in a
+ * catalogue value now passes this gate. It is a real defect and nothing here catches it. The
+ * trade is deliberate — no catalogue has ever carried one, every observed instance of this class
+ * was `\uXXXX`, and a gate that corrupts valid paths to cover a hypothetical is the worse of the
+ * two failures.
+ *
+ * Which is also why the positive controls name `C:\temp` and `\\nas\files` specifically. The
+ * first pair were `C:\Users` and `\\server\share`, which passed only because `U` and `s` are not
+ * escape letters — two examples chosen by the author, generalised from, and green for a reason
+ * that had nothing to do with the rule being right.
+ *
+ * (No catalogue count in this docstring on purpose — it changes with every language that lands,
+ * so a figure written here would be wrong within a week.)
  */
 function checkCatalogueValuesAreRenderable() {
   const ENTITY = /&(?:[a-zA-Z]+|#\d+);/;
   const PLURAL_SUFFIX = /\(s\)/;
+  // A `\u` escape left undecoded. Only the `\u` forms, for a reason worth keeping: `\n`, `\t`,
+  // `\v`, `\f`, `\b`, `\0` and `\xNN` are indistinguishable from an ordinary Windows or UNC path
+  // segment — `C:\temp`, `C:\new`, `C:\var`, `\\nas\files`, `\\host\x64\bin` all begin a segment
+  // with an escape letter — and no regex over the value alone can tell `"Ligne un\nLigne deux"`
+  // from `"C:\new"`, because they are the same string shape. So those arms are out; see the
+  // docstring for what that leaves uncovered.
+  //
+  // The braced form takes **any** number of hex digits, not six: `\u{…}` permits leading zeros, so
+  // `\u{00000a0}` is a perfectly ordinary spelling of a non-breaking space and a `{1,6}` cap read
+  // straight past it (#549 review). Widening cannot cost a false positive, because the `u` before
+  // the brace is mandatory — a path like `C:\{abc}` has no `u` and never matched. The range check
+  // below is what keeps the open-ended digits safe.
+  const UNDECODED_ESCAPE = /\\u(?:\{[0-9a-fA-F]+\}|[0-9a-fA-F]{4})/;
+
+  const MAX_CODE_POINT = 0x10ffff;
+  const NOTABLE_CODE_POINTS = {
+    0x00a0: 'a non-breaking space (U+00A0)',
+    0x202f: 'a narrow no-break space (U+202F)',
+    0x2009: 'a thin space (U+2009)',
+  };
+
+  /**
+   * What the escape was meant to be, so the message says what to store instead.
+   *
+   * The range check is not defensive padding: the braced form takes any number of hex digits, far
+   * above Unicode's `U+10FFFF`, and `String.fromCodePoint` throws `RangeError` beyond it. That
+   * threw from inside the diagnostic, so one catalogue holding `\u{110000}` aborted the whole
+   * runner before it printed the failures it had already collected or ran the remaining checks — a
+   * reporting path that destroys the report (#549 review). Out of range is still an undecoded
+   * escape and still fails; it just says so instead of crashing.
+   *
+   * Enough digits overflow `parseInt` to `Infinity`, so the message is built from the digits as
+   * written rather than from the parsed number — `U+INFINITY` would be a nonsense diagnostic.
+   */
+  const decodeEscape = (escape) => {
+    const hex = /^\\u\{?([0-9a-fA-F]+)\}?$/.exec(escape);
+    if (!hex) return 'a character';
+    const code = parseInt(hex[1], 16);
+    if (!Number.isFinite(code) || code > MAX_CODE_POINT) {
+      // Elided because the digits are open-ended: a value could carry hundreds of them, and a
+      // diagnostic that pastes them all is unreadable at exactly the moment it is being read.
+      const digits = hex[1].toUpperCase();
+      const shown =
+        digits.length > 12 ? `${digits.slice(0, 12)}… (${digits.length} digits)` : digits;
+      return `a code point above Unicode's maximum (0x${shown}, max U+10FFFF), so it denotes nothing at all`;
+    }
+    return (
+      NOTABLE_CODE_POINTS[code] ??
+      `U+${code.toString(16).toUpperCase().padStart(4, '0')} ("${String.fromCodePoint(code)}")`
+    );
+  };
 
   const isCatalogue = (path) =>
     /(^|\/)i18n\/[a-z]{2}(-[A-Za-z]{2,4})?\.json$/.test(path) && !isGeneratedLocale(path);
@@ -7679,6 +7775,15 @@ function checkCatalogueValuesAreRenderable() {
           `${file} maps \`${key}\` to "${value}", which pluralises with an \`(s)\` suffix. That ` +
             'assumes a language forms its plural by appending one letter, and most do not. Use a ' +
             'key per grammatical number, chosen by a branch at the call site.',
+        );
+      }
+      const escape = UNDECODED_ESCAPE.exec(value);
+      if (escape) {
+        fail(
+          `${file} maps \`${key}\` to "${value}", which contains the literal characters ` +
+            `\`${escape[0]}\` rather than ${decodeEscape(escape[0])}. The value is already a ` +
+            'decoded JSON string, so an escape surviving into it was double-escaped at the ' +
+            'source and the user reads the escape itself. Store the character.',
         );
       }
     }
@@ -12486,6 +12591,309 @@ function checkWorkflowRefGates() {
   }
 }
 
+/**
+ * The gate inventory in `documentation/30-engineering/08-dev-harness-and-gates.md` §2 must match
+ * `ALL_GATES` — every gate a row, every row a gate, in the same order, numbered `1..N`.
+ *
+ * ## Why this exists
+ *
+ * That page is the written record of what the harness checks, and it was maintained by hand with
+ * a dated verification log and nothing comparing it to the roster. When this check was written
+ * the table held 33 rows against an `ALL_GATES` of 38, and **two of the five missing rows were
+ * not new**: `sanitizer-recovery-selftest` and `storybook-assemble-selftest` had been absent
+ * since they were registered. The page's own §2 preamble records that it "listed 17 while
+ * `ALL_GATES` held 23", and §7's count has been wrong twice. A document whose job is to say what
+ * is enforced, with nothing enforcing it, is the shape of defect the rest of this file exists for.
+ *
+ * ## Whole tree, not the diff
+ *
+ * The same reason as `checkWorkflowRefGates`: when a gate is added to `verify-gate.mjs` and no row
+ * is added to the page, **the page does not change**. A diff-scoped check sees nothing on the
+ * commit that breaks it, and nothing on any commit afterwards. Both pre-existing gaps are
+ * evidence that this is the real failure mode and not a hypothetical one.
+ *
+ * ## What it does NOT check, stated because the distinction decides what the page can be trusted for
+ *
+ * Only the §2 inventory is bidirectional. For §7 ("What runs where") it checks **one direction**:
+ * every gate is named somewhere in that section. It does not check the reverse — §7 deliberately
+ * carries rows that are not gates (`**E2E**`, `Registry auth, cold cache`, the bundle size
+ * ceiling) — and it does not read the ✅/— columns at all, because whether a gate runs in CI is a
+ * fact about `ci.yml`, which invokes npm scripts whose names do not match gate ids. A wrong tick
+ * in §7 is still only as good as whoever last read it.
+ *
+ * It also says nothing about whether a row's prose is *accurate*. It compares identifiers.
+ */
+function checkGateInventory() {
+  const page = 'documentation/30-engineering/08-dev-harness-and-gates.md';
+  const runner = 'scripts/beta-harness/verify-gate.mjs';
+  for (const file of [page, runner]) {
+    if (!fileExists(file)) {
+      fail(
+        `${file} does not exist, but the gate-inventory check compares it. Reading nothing must not pass as finding nothing.`,
+      );
+      return;
+    }
+  }
+
+  /* `ALL_GATES` is read as text, not imported: `verify-gate.mjs` runs the gates on import. The
+   * block is bounded so an `id:` in a later unrelated object cannot be counted as a gate. */
+  /**
+   * The roster, read from the **abstract syntax tree** rather than from the text.
+   *
+   * Three rounds of review landed on this one reader, and each fix left the next instance of the
+   * same class open, because every one of them was a pattern over source text:
+   *
+   * 1. `id: '…'` matched single quotes only, so a double-quoted id was skipped — and skipping
+   *    *under-reads* the roster, so the gate it belongs to has no row to be missing.
+   * 2. The "independent" count it was then cross-checked against was a second regex sharing the
+   *    first one's blind spots, so a member neither could see was omitted from both and they
+   *    agreed.
+   * 3. Both of them counted `id:` lines **inside block comments**, so commenting a gate out left
+   *    it in the roster and its documentation row passed the reverse check — the page claiming a
+   *    check that does not run. Reproduced: 37 gates in the runner, 38 rows in the page,
+   *    `checkGateInventory` exit 0 with no findings.
+   *
+   * A regex over source cannot distinguish code from prose about code, and this file already
+   * imports `typescript` and uses `ts.createSourceFile` in four other guardrails — so the honest
+   * fix, and the one review asked for, is to read the array elements as elements. Comments are
+   * not nodes; a string containing `id:` is not a property; and a `\n];` inside a comment cannot
+   * truncate the block, because there is no block to slice.
+   *
+   * 4. Reading the tree fixed *where* the ids are read from, but not *which* one. The first
+   *    property named `id` was taken, and JavaScript takes the last — so a trailing spread, a
+   *    duplicate key, a computed `['id']` or a `get id()` each registered one gate while this
+   *    read another. That is worse than under-reading: the roster holds an id nothing runs, which
+   *    has a row, and the id that does run has none, so *both* directions stay green.
+   *
+   * Every element must be an object literal, every member of it statically legible, and its
+   * last-written `id` a string literal. Anything else is a reported failure, not an element to
+   * skip: an element left out of the roster is a gate whose absent documentation row would go
+   * unreported, and an element read under the wrong id is worse, because it is compared — to the
+   * wrong row.
+   */
+  const runnerSource = read(runner);
+  const ast = ts.createSourceFile(runner, runnerSource, ts.ScriptTarget.Latest, true);
+
+  /** @type {ts.ArrayLiteralExpression | null} */
+  let gateArray = null;
+  const findRoster = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === 'ALL_GATES' &&
+      node.initializer &&
+      ts.isArrayLiteralExpression(node.initializer)
+    ) {
+      gateArray = node.initializer;
+      return;
+    }
+    ts.forEachChild(node, findRoster);
+  };
+  ts.forEachChild(ast, findRoster);
+
+  if (gateArray === null) {
+    fail(
+      `${runner} has no \`const ALL_GATES = [ … ]\` array declaration the parser can find, so the ` +
+        'gate roster cannot be read. If it was renamed or restructured, update this check rather ' +
+        'than leaving it vacuous.',
+    );
+    return;
+  }
+
+  const roster = [];
+  for (const element of gateArray.elements) {
+    const at = `${runner}:${ast.getLineAndCharacterOfPosition(element.getStart(ast)).line + 1}`;
+    if (!ts.isObjectLiteralExpression(element)) {
+      fail(
+        `${at} is an element of \`ALL_GATES\` that is not an object literal, so its gate id ` +
+          'cannot be read and the gate would be compared against nothing.',
+      );
+      return;
+    }
+    /* Reading the FIRST `id:` is reading a different gate from the one that runs. JavaScript
+     * resolves a key to its last writer, so `{ id: 'node', ...{ id: 'ghost' } }` registers
+     * `ghost` while the first property is the one a `find` returns — and the roster then holds an
+     * id nothing runs, which has a row, while the id that does run has none. Both inventory
+     * directions stay green. Four shapes did this, not just the spread that was reported: a
+     * trailing spread, a duplicate `id:`, a computed `['id']:`, and a `get id()`.
+     *
+     * So the whole element has to be statically legible before any key is trusted, exactly as
+     * `UPSTREAM_FOLDERS` above is read and for the same reason — a member that can supply or
+     * override `id` at run time makes the id read here not necessarily the id that registers.
+     * `staticPropertyKey` is `undefined` for precisely those members: a spread has no key, and a
+     * computed key is only a key when it computes to a string literal. */
+    const illegible = element.properties.find(
+      (property) => staticPropertyKey(property) === undefined,
+    );
+    if (illegible) {
+      fail(
+        `${at} is a gate in \`ALL_GATES\` with a member this check cannot read statically ` +
+          `(\`${illegible.getText().replace(/\s+/g, ' ').slice(0, 60)}\`). A spread or a computed ` +
+          'key can supply or override `id` at run time, so the id read here would not be the id ' +
+          'that registers, and the gate would be compared against the wrong row. Write every ' +
+          'member as a literal key.',
+      );
+      return;
+    }
+    /* `findLast`, because that is the one JavaScript keeps. It must also be a plain property
+     * assignment: a `get id()` or a method named `id` is the last writer too, and its value is
+     * not a literal this can read. */
+    const idProperty = element.properties.findLast(
+      (property) => staticPropertyKey(property) === 'id',
+    );
+    if (
+      !idProperty ||
+      !ts.isPropertyAssignment(idProperty) ||
+      !ts.isStringLiteralLike(idProperty.initializer)
+    ) {
+      fail(
+        `${at} is a gate in \`ALL_GATES\` with no string-literal \`id\`, so it cannot be matched ` +
+          'to a documentation row. An id this check cannot read is a gate whose absent row would ' +
+          'go unreported.',
+      );
+      return;
+    }
+    roster.push(idProperty.initializer.text);
+  }
+
+  const pageSource = read(page);
+
+  /**
+   * The body of one `## n.` section, or `null` with the reason reported.
+   *
+   * Written as a line-anchored search rather than `indexOf('\n## 2. …')`, which the controls in
+   * `review-guardrails.selftest.mjs` caught being wrong in two ways. A heading at offset 0 is not
+   * preceded by a newline, so it was not found at all — that one was fatal, and it made all
+   * fourteen controls report "no numbered gate rows". And a *missing* closing heading made
+   * `indexOf` return -1, which `slice(open, -1)` turns into "everything but the last character"
+   * rather than an error, so the section read would have been far wider than §2 with nothing
+   * saying so. Whether that second one changed a *verdict* is a different question, and the
+   * honest answer is: probably not, because the row pattern below needs a leading integer and a
+   * lowercase-hyphen id, which no other table on the page has. That is luck, not design, and the
+   * failure is reported now rather than relied on not to matter.
+   *
+   * Anchors on the §2 and §7 headings only. Renaming either is reported; renaming §3, which just
+   * widens §2's span, is not.
+   */
+  const section = (number, title) => {
+    const openMatch = new RegExp(`^## ${number}\\. ${title}$`, 'm').exec(pageSource);
+    if (!openMatch) {
+      fail(
+        `${page} has no \`## ${number}. ${title}\` heading, so that section cannot be compared. ` +
+          'If it was renamed, rename it here too rather than leaving this check reading nothing.',
+      );
+      return null;
+    }
+    const after = pageSource.slice(openMatch.index + openMatch[0].length);
+    const nextMatch = /^## \d+\./m.exec(after);
+    return nextMatch ? after.slice(0, nextMatch.index) : after;
+  };
+
+  const sectionTwo = section(2, 'The gates');
+  if (sectionTwo === null) return;
+  /* Same treatment as the roster above, for the same reason: a row this cannot parse would be
+   * absent from `rowIds`, so the gate it documents would read as "a gate with no row" — a real
+   * failure, but reported against the gate rather than against the malformed row, which sends the
+   * reader to the wrong file. Candidate rows are counted first and any shortfall named. */
+  const candidateRows = [...sectionTwo.matchAll(/^\|\s*\d+\s*\|.*\|/gm)].map((m) => m[0]);
+  const rows = [...sectionTwo.matchAll(/^\|\s*(\d+)\s*\|\s*`([^`]+)`\s*\|/gm)].map((match) => ({
+    number: Number(match[1]),
+    id: match[2],
+  }));
+  if (candidateRows.length !== rows.length) {
+    const unreadable = candidateRows.filter((line) => !/^\|\s*\d+\s*\|\s*`[^`]+`\s*\|/.test(line));
+    for (const line of unreadable) {
+      fail(
+        `${page} §2 has a numbered row whose gate cell is not a single backticked id:\n` +
+          `    ${line.trim().slice(0, 90)}\n` +
+          '  It cannot be compared to the roster, so it is a failure rather than a row to skip.',
+      );
+    }
+    return;
+  }
+
+  /* Both emptiness guards are load-bearing, and in opposite directions. An empty roster would
+   * make every row "a row with no gate"; an empty table would make every gate "a gate with no
+   * row". Either way the check would be red for the wrong reason, or — if the comparisons were
+   * written as set intersections — green having compared nothing. */
+  if (roster.length === 0) {
+    fail(`${runner} yielded no gate ids, so this check compared nothing.`);
+    return;
+  }
+  if (rows.length === 0) {
+    fail(`${page} §2 has no numbered gate rows, so this check compared nothing.`);
+    return;
+  }
+
+  const rowIds = rows.map((row) => row.id);
+  const duplicates = rowIds.filter((id, index) => rowIds.indexOf(id) !== index);
+  for (const id of new Set(duplicates)) {
+    fail(`${page} §2 lists \`${id}\` twice. A row must describe one gate.`);
+  }
+
+  for (const id of roster) {
+    if (!rowIds.includes(id)) {
+      fail(
+        `\`${id}\` is registered in ALL_GATES and has no row in §2 of ${page}.\n` +
+          '  A gate nobody can read about is a gate nobody knows ran.',
+      );
+    }
+  }
+  for (const id of rowIds) {
+    if (!roster.includes(id)) {
+      fail(
+        `${page} §2 has a row for \`${id}\`, which ALL_GATES does not register.\n` +
+          '  The page claims a check that does not run.',
+      );
+    }
+  }
+
+  /* Order and numbering, only once the sets agree — reporting "row 14 should be X" on top of five
+   * missing rows buries the finding that matters under its consequences. */
+  if (roster.length === rowIds.length && roster.every((id, index) => id === rowIds[index])) {
+    rows.forEach((row, index) => {
+      if (row.number !== index + 1) {
+        fail(
+          `${page} §2 numbers \`${row.id}\` as ${row.number}, but it is row ${index + 1}. ` +
+            'The banner and review comments refer to gates by these numbers.',
+        );
+      }
+    });
+  } else if (new Set(roster).size === new Set(rowIds).size && roster.length === rowIds.length) {
+    const firstDivergence = roster.findIndex((id, index) => id !== rowIds[index]);
+    fail(
+      `${page} §2 lists the gates in a different order from ALL_GATES: row ${firstDivergence + 1} ` +
+        `is \`${rowIds[firstDivergence]}\`, the roster has \`${roster[firstDivergence]}\`.\n` +
+        '  The table documents the order the gates run in, cheapest first, and that order is the\n' +
+        '  reason a failure is actionable.',
+    );
+  }
+
+  /* §7 forward only. The reverse direction is not checkable here: §7 carries rows that are
+   * deliberately not gates. */
+  const sectionSeven = section(7, 'What runs where');
+  if (sectionSeven === null) return;
+  if (sectionSeven.trim() === '') {
+    fail(`${page} §7 is empty, so the "what runs where" half of this check compared nothing.`);
+    return;
+  }
+  for (const id of roster) {
+    if (
+      !new RegExp(`(^|[\\s|,\`])${reEscapeForGuardrail(id)}([\\s|,\`]|$)`, 'm').test(sectionSeven)
+    ) {
+      fail(
+        `\`${id}\` is registered in ALL_GATES and is named nowhere in §7 of ${page}, so the page ` +
+          'does not say whether it runs in CI.',
+      );
+    }
+  }
+}
+
+/** Every regex metacharacter escaped. Gate ids are `[a-z0-9-]+`, but a hyphen in a character class is not the only trap a future id could bring. */
+function reEscapeForGuardrail(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const GUARDRAILS = [
   checkPackageToolLaunches,
   checkThemeTokens,
@@ -12543,6 +12951,7 @@ const GUARDRAILS = [
   checkSatoriPrimitivesRegisteredInOrder,
   checkAdoptedPatternsNotBypassed,
   checkWorkflowRefGates,
+  checkGateInventory,
 ];
 
 /**
