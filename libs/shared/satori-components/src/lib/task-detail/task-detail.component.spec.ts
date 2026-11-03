@@ -94,8 +94,8 @@ const CHOOSE: Partial<NuxeoTask> = {
   directive: 'wf.serialDocumentReview.pleaseSelect',
   taskInfo: {
     taskActions: [
-      { name: 'cancel', label: 'wf.serialDocumentReview.cancel' },
-      { name: 'start_review', label: 'wf.serialDocumentReview.startReview' },
+      { name: 'cancel', label: 'wf.serialDocumentReview.cancel', validate: false },
+      { name: 'start_review', label: 'wf.serialDocumentReview.startReview', validate: true },
     ],
   },
 };
@@ -401,6 +401,14 @@ describe('NxsTaskDetailComponent', () => {
       expect(tasks['completeTask']).not.toHaveBeenCalled();
       expect(toastError).toHaveBeenCalledWith('Choose at least one participant.');
       expect(button('Start Review')?.disabled).toBe(false);
+    });
+
+    it('cancels a participants step without choosing or sending participants', async () => {
+      username.set(null);
+      await render(makeTask(CHOOSE));
+      await click('Cancel');
+      expect(toastError).not.toHaveBeenCalled();
+      expect(tasks['completeTask']).toHaveBeenCalledWith('task-1', 'cancel', {}, undefined);
     });
 
     it('starts from the participants already stored on the task', async () => {

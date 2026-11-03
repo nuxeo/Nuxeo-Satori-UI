@@ -56,8 +56,8 @@ const CHOOSE_PARTICIPANTS: NuxeoTask = {
   comments: [],
   taskInfo: {
     taskActions: [
-      { name: 'cancel', label: 'wf.serialDocumentReview.cancel' },
-      { name: 'start_review', label: 'wf.serialDocumentReview.startReview' },
+      { name: 'cancel', label: 'wf.serialDocumentReview.cancel', validate: false },
+      { name: 'start_review', label: 'wf.serialDocumentReview.startReview', validate: true },
     ],
   },
 };

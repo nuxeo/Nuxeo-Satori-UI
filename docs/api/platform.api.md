@@ -4436,6 +4436,7 @@ interface NuxeoTask {
     name: string;
     label: string;
     url?: string;
+    validate?: boolean;
     }[];
     };
     targetDocTitle?: string;

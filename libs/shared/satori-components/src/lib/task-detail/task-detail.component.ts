@@ -48,6 +48,8 @@ export type NxsTaskOutcome = 'completed' | 'abandoned';
 interface TaskAction {
   readonly name: string;
   readonly label: string;
+  /** False for an action that skips the task's form, such as Cancel. */
+  readonly validate?: boolean;
 }
 
 /** A node of the workflow graph, as the panel lists it. */
@@ -220,7 +222,7 @@ export class NxsTaskDetailComponent {
   protected execute(action: TaskAction): void {
     const task = this.task();
     const variables: Record<string, unknown> = {};
-    if (this.choosesParticipants()) {
+    if (this.choosesParticipants() && action.validate !== false) {
       const chosen = this.participants().map((principal) => principal.prefixedId);
       const user = this.currentUsername();
       if (!chosen.length && !user) {
