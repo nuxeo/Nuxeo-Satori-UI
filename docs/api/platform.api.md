@@ -2784,7 +2784,7 @@ class NxsTrashListComponent {
     protected readonly pickerOpen: import("@angular/core").WritableSignal<boolean>;
     protected readonly requiredColumns: readonly string[];
     protected readonly defaultColumns: readonly string[];
-    protected readonly hasNextPage: import("@angular/core").Signal<boolean>;
+    protected readonly hasNextPage: import("@angular/core").WritableSignal<boolean>;
     protected readonly selectedCount: import("@angular/core").Signal<number>;
     protected readonly selected: import("@angular/core").Signal<Set<string>>;
     protected readonly selectionBusy: import("@angular/core").Signal<boolean>;
