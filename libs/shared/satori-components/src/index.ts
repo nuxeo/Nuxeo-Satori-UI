@@ -229,6 +229,11 @@ export {
 export { NxsSavedSearchActionsComponent } from './lib/saved-search-actions/saved-search-actions.component';
 export { NxsCardComponent } from './lib/card/card.component';
 export {
+  NXS_TASK_DETAIL_ID,
+  NxsTaskDetailComponent,
+  type NxsTaskOutcome,
+} from './lib/task-detail/task-detail.component';
+export {
   NXS_TRASH_LIST_ID,
   NxsTrashListComponent,
   type NxsTrashListResults,

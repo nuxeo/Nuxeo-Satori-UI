@@ -8,6 +8,15 @@ Read Part 0 and Part 6 before anything else. Part 6 is the list of things that d
 is the more useful half of this document, because the failure mode of a demo like this is
 confidently showing something that is not there.
 
+> **This is a presenter's runbook, not a customer's instructions.** It drives a local dev server,
+> so it needs the full contributor install and `SATORI_GH_READONLY_TOKEN` — without that token
+> `npm ci` fails and nothing in Part 0 past 0.1 can run. **Do not hand this document to a customer
+> as "how to customise it".** `npm run config:dev` is a dev-server shortcut that writes files
+> `nx serve` reads; it exists so a beat takes seconds instead of a package install, and it does not
+> exist on a real server. The same changes, done for real, are a configuration package:
+> [**CUSTOMISING.md**](../CUSTOMISING.md), which needs Node and nothing else. Every beat's JSON is
+> the same JSON either way — only the delivery differs.
+
 ---
 
 ## Part 0 — Pre-flight, 30 minutes before
@@ -300,6 +309,14 @@ adf-hx entirely. _Changed by NXSAT-638 (2026-10):_ adf-hx is no longer in the pr
 ## Part 4 — The demo script
 
 Timings are measured on a warm dev server.
+
+Beats 3 to 7 change the product by configuration. Each gives the JSON and applies it with
+`npm run config:dev`, which is the dev-server shortcut — it writes the files `nx serve` reads, and
+needs this repository installed. **If someone in the room asks how they would do it,** the answer
+is not that command: it is the same JSON in a `bootstrap` or `manifest` fragment of their own
+package, built with `node build.mjs` and installed with `nuxeoctl mp-install`, which needs Node and
+nothing else. [`CUSTOMISING.md`](../CUSTOMISING.md) is the page to send them, and Part 0.7 and
+Beat 12 show that route running.
 
 ### Beat 1 — The product as shipped (2 min)
 

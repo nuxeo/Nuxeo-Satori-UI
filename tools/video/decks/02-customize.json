@@ -3,7 +3,7 @@
   "slides": [
     {
       "kind": "title",
-      "eyebrow": "Nuxeo Satori Beta · 2 of 3",
+      "eyebrow": "Nuxeo Satori Beta · 1 of 2",
       "rule": true,
       "title": "How a customer customises it",
       "lede": "Four layers, ordered by what they cost you. The rule is: never fork to change something a layer already addresses."
@@ -47,10 +47,10 @@
       "blocks": [
         {
           "type": "code",
-          "code": "<span class=\"c\">// agentic-ui-config/bootstrap.json in YOUR configuration package</span>\n<span class=\"c\">// — a fragment contributed to org.nuxeo.agentic.ui.config</span>\n{\n  <b>\"branding\"</b>: {\n    <b>\"applicationTitle\"</b>: \"Acme Content\",\n    <b>\"documentTitle\"</b>: \"Acme Content\"\n  },\n  <b>\"defaultThemeId\"</b>: \"acme\",\n  <b>\"themes\"</b>: [{\n    \"id\": \"acme\", \"label\": \"Acme\", \"base\": \"nuxeo\",\n    <b>\"tokens\"</b>: { \"--shell-nav-bg\": \"#0f2b46\", \"--shell-nav-active\": \"#1f6feb\" }\n  }],\n  <b>\"nuxeoApiOrigin\"</b>: \"\"\n}"
+          "code": "<span class=\"c\">// agentic-ui-config/bootstrap.json in YOUR configuration package</span>\n<span class=\"c\">// — a fragment contributed to org.nuxeo.agentic.ui.config</span>\n{\n  <b>\"branding\"</b>: {\n    <b>\"applicationTitle\"</b>: \"Acme Content\",\n    <b>\"documentTitle\"</b>: \"Acme Content\"\n  },\n  <b>\"defaultThemeId\"</b>: \"acme\",\n  <b>\"themes\"</b>: [{\n    \"id\": \"acme\", \"label\": \"Acme\", \"base\": \"nuxeo\",\n    <b>\"tokens\"</b>: { \"--mat-sys-primary\": \"#1f6feb\", \"--mat-sys-surface\": \"#ffffff\" }\n  }],\n  <b>\"nuxeoApiOrigin\"</b>: \"\"\n}"
         }
       ],
-      "footnote": "Every key is optional. A key no package sets falls back to the value compiled in — so a server with only our package behaves exactly like no configuration at all. `AppConfigService.diagnostics()` reports which half loaded and which fell back, and why."
+      "footnote": "Every key is optional. A key no package sets falls back to the value compiled in — so a server with only our package behaves exactly like no configuration at all. `AppConfigService.diagnostics()` reports which half loaded and which fell back, and why. The product's tokens are the `--mat-sys-*` Material system properties; `base` names the compiled palette they layer over. An earlier cut of this slide showed `--shell-nav-*`, which only the forkable template defines — in the product those keys apply and nothing reads them."
     },
     {
       "eyebrow": "Layer 1 — the manifest",
@@ -66,35 +66,35 @@
     },
     {
       "eyebrow": "Layer 1 — the limits",
-      "title": "Read the three states precisely. They are different promises.",
+      "title": "Thirteen slots. Seven carry ours; six are empty and live.",
       "blocks": [
         {
           "type": "split",
           "panels": [
             {
               "series": "adfhx",
-              "title": "Populated — it works today",
-              "sub": "Packaged descriptors exist and the surface renders from them",
+              "title": "Populated — ours is in it, and you can change ours",
+              "sub": "Packaged descriptors exist and the surface renders from them — 7 of 13",
               "items": [
-                "`navbar` — 15 packaged entries, reorderable and hideable",
-                "`sidebar` — drawer panels, addressable by component ID",
-                "`bulk-actions` — 6 packaged actions"
+                "`navbar` — 14 packaged entries, reorderable and hideable",
+                "`toolbar` — 16 · `tabs` — 6 · `documentList` — 12 columns",
+                "`contextMenu` — 4 · `rowActions` — 5 · `bulk-actions` — 6"
               ]
             },
             {
               "series": "ours",
-              "title": "Declared — the ID is reserved, nothing resolves it yet",
-              "sub": "Contribute here and it has no effect in this release",
+              "title": "Resolves — live, but nothing of ours is in it",
+              "sub": "Contribute here and it takes effect; there is just nothing to override — 6 of 13, with one exception below",
               "items": [
-                "`routes` — a host must still map the path itself",
-                "`toolbar`, `contextMenu`, `tabs`, `documentList`",
-                "Documented as such in `docs/extension-reference.md`, rather than left to be discovered"
+                "`sidebar`, `routes`, `documentView` — a component of yours, placed",
+                "`documentMetadata`, `documentEdit` — **a component of yours** in place of the Properties panel or the Edit dialog form",
+                "**`documentCreate` is the exception** — it resolves, but no product screen opens the create form yet, so a contribution has no visible effect today"
               ]
             }
           ]
         }
       ],
-      "footnote": "This distinction is in the reference doc because getting it wrong is expensive: contributing to a declared-but-unresolved slot produces no error and no effect."
+      "footnote": "`docs/extension-reference.md` marks each slot _populated_, _resolves_ or _reserved and inert_, and those are three different promises. **No slot is reserved-and-inert today** — an earlier cut of this slide said five of them were, and that was still being shown after they went live. But _resolves_ is not the same as _usable_: `documentCreate` resolves into a create form no screen opens (`extension-reference.md:245`), so it is the one slot where contributing changes nothing a user sees. **And note what these three slots take: a component, not a list of fields.** Choosing which *fields* a type shows is a per-type **layout file**, which is not a slot and has no id (§9b); these slots put a component of yours where that layout would have rendered, for when a list of fields cannot express what the type needs (§9c). Read the reference rather than this slide if the two disagree."
     },
     {
       "eyebrow": "Layer 2 — your own code",
@@ -137,14 +137,13 @@
             {
               "value": "1",
               "label": "package to upgrade",
-              "sub": "`@nuxeo/satori-platform` — one version, one changelog, five entry points",
+              "sub": "`@nuxeo/satori-platform` — one version, one changelog, seven entry points",
               "series": "adfhx"
             },
             {
-              "value": "2026",
-              "unit": "lines",
-              "label": "of API surface, pinned",
-              "sub": "A gate fails if any published signature changes without a decision",
+              "value": "643",
+              "label": "exported declarations, pinned",
+              "sub": "Snapshotted in `docs/api/platform.api.md` (5,508 lines). The `api-surface` gate fails if any published signature changes without a decision",
               "series": "ours"
             }
           ]
