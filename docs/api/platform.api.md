@@ -475,6 +475,11 @@ class NxsAssetFacetsDrawerComponent {
     readonly action: import("@angular/core").OutputEmitterRef<NxsAssetFacetsAction>;
     protected readonly text: import("@angular/core").WritableSignal<string>;
     protected readonly expanded: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly ids: {
+    fulltext: string;
+    autoLabel: string;
+    group: (id: string) => string;
+    };
     protected readonly ownLabel: import("@angular/core").Signal<string>;
     protected readonly hasText: import("@angular/core").Signal<boolean>;
     protected isExpanded(id: string): boolean;
