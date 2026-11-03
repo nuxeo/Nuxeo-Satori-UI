@@ -869,6 +869,19 @@ The form an administrator uses to create a group or edit one, and to set its mem
 
 The dialog saves nothing itself: it closes with the values and the caller creates or updates the group. The group name is fixed once the group exists; the label and members can change.
 
+### Trash list
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsTrashListComponent`          |
+| Registered ID   | `nxs.components.trashList`       |
+| With Satori     | Same component; theme only       |
+| Storybook story | `components-trash-list--default` |
+
+![Trash list: without Satori on the left, with Satori on the right](trash-list-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The trash at `/trash`, as a table with a row menu for Restore and Delete permanently. The same component in both: the theme sets the type, the colours and the shape of the controls. Its cards and type tags render the `nxs.primitives.card` and `nxs.primitives.tag` registrations, which are Satori's own components where `components-satori` is provided.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -977,6 +990,7 @@ The components in the library today:
 | Confirm dialog                  | —                                                                                                                            | Same component; theme only   |
 | User form dialog                | —                                                                                                                            | Same component; theme only   |
 | Group form dialog               | —                                                                                                                            | Same component; theme only   |
+| Trash list                      | `nxs.components.trashList`                                                                                                   | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

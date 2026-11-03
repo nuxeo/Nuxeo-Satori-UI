@@ -228,6 +228,12 @@ export {
 } from './lib/saved-search-select/saved-search-select.component';
 export { NxsSavedSearchActionsComponent } from './lib/saved-search-actions/saved-search-actions.component';
 export { NxsCardComponent } from './lib/card/card.component';
+export {
+  NXS_TRASH_LIST_ID,
+  NxsTrashListComponent,
+  type NxsTrashListResults,
+  type NxsTrashListView,
+} from './lib/trash-list/trash-list.component';
 // satori:export:components — `satori-component` inserts above this line
 
 export { TranslatedDatepickerIntl } from './lib/date-input/translated-datepicker-intl';

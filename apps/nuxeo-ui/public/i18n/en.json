@@ -2562,6 +2562,54 @@
     },
     "vocabulary-select": {
       "failed": "Could not load the list. Open it again to try again."
+    },
+    "trash-list": {
+      "column": {
+        "title": "Title",
+        "type": "Type",
+        "modified": "Modified",
+        "last-contributor": "Last contributor",
+        "created": "Created",
+        "author": "Author"
+      },
+      "label": "Trashed documents",
+      "selection": "Selected trashed documents",
+      "selected-one": "{{count}} selected",
+      "selected-many": "{{count}} selected",
+      "clear-selection": "Clear selection",
+      "restore": "Restore",
+      "purge": "Delete permanently",
+      "restore-named": "Restore {{title}}",
+      "purge-named": "Delete {{title}} permanently",
+      "count-one": "{{count}} trashed document",
+      "count-many": "{{count}} trashed documents",
+      "sort-by": "Sort by",
+      "sorted-ascending": "Ascending order; reverse it",
+      "sorted-descending": "Descending order; reverse it",
+      "columns": "Choose columns",
+      "export-csv": "Export CSV",
+      "views": "View",
+      "view": {
+        "table": "Table view",
+        "grid": "Grid view",
+        "list": "List view"
+      },
+      "loading": "Loading the trash",
+      "load-failed": "The trash could not be loaded",
+      "empty": "The trash is empty",
+      "select-page": "Select all on this page",
+      "select": "Select {{title}}",
+      "confirm-purge-title": "Delete permanently",
+      "confirm-purge-one": "Delete \"{{title}}\" permanently? This cannot be undone.",
+      "confirm-purge-many": "Delete {{count}} documents permanently? This cannot be undone.",
+      "restored-one": "Restored \"{{title}}\".",
+      "restored-many": "Restored {{count}} documents.",
+      "restore-failed-one": "Could not restore \"{{title}}\".",
+      "restore-failed-many": "Could not restore {{failed}} of {{count}} documents.",
+      "purged-one": "Deleted \"{{title}}\" permanently.",
+      "purged-many": "Deleted {{count}} documents permanently.",
+      "purge-failed-one": "Could not delete \"{{title}}\".",
+      "purge-failed-many": "Could not delete {{failed}} of {{count}} documents."
     }
   },
   "search": {

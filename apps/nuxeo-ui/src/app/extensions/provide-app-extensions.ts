@@ -32,10 +32,12 @@ import {
   NXS_ADMIN_USER_DETAILS_PAGE_ID,
   NXS_ADMIN_USERS_GROUPS_PAGE_ID,
   NXS_PERMISSIONS_PANEL_ID,
+  NXS_TRASH_LIST_ID,
   NxsAdminGroupDetailsPageComponent,
   NxsAdminUserDetailsPageComponent,
   NxsAdminUsersGroupsPageComponent,
   NxsPermissionsPanelComponent,
+  NxsTrashListComponent,
 } from '@nuxeo/satori-platform/components';
 import { SelectionService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -179,6 +181,10 @@ function provideAppContributions(): EnvironmentProviders {
         [NXS_ADMIN_USERS_GROUPS_PAGE_ID]: NxsAdminUsersGroupsPageComponent,
         [NXS_ADMIN_USER_DETAILS_PAGE_ID]: NxsAdminUserDetailsPageComponent,
         [NXS_ADMIN_GROUP_DETAILS_PAGE_ID]: NxsAdminGroupDetailsPageComponent,
+
+        // The trash list. `/trash` renders it through this ID, so a customer library can replace
+        // it, and falls back to the packaged component when no registration resolves.
+        [NXS_TRASH_LIST_ID]: NxsTrashListComponent,
       },
     };
   });

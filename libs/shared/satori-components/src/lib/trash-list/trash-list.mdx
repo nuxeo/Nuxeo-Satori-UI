@@ -1,0 +1,105 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as TrashListStories from './trash-list.stories';
+
+<Meta of={TrashListStories} name="Overview" />
+
+# Trash list
+
+The trash list shows the documents moved to the trash, and restores them or deletes them for good,
+one at a time or as a selection. It lays them out as a table, a grid of cards or a list, a page at a
+time in the server's order. Use it as the body of a trash screen; the screen keeps its own heading
+and filters, and hands the filters in.
+
+## Key features
+
+- **Restore and delete permanently.** Each row, card and list item offers Restore, which puts the
+  document back where it was deleted from, and Delete permanently, which removes it for good.
+- **Selection actions.** Selecting documents shows a bar that restores or deletes the whole
+  selection. Deleting asks once, with the count.
+- **Asks before it deletes.** A permanent delete always asks first, and Cancel sends nothing.
+- **Failures stay in front of the user.** A document an action failed for stays listed and stays
+  selected, so it can be tried again, and the message says how many failed.
+- **Three layouts.** Table, grid and list, with server-side sorting in each and columns to choose in
+  the table. The table is `nxs-document-list`; each card renders what is registered under
+  `nxs.primitives.card`, and each list item's type what is registered under `nxs.primitives.tag`.
+- **CSV export.** Downloads the page shown, with the columns shown.
+- **It does not navigate.** Opening a document calls `openHandler`; the host routes to it.
+
+## Demo showcase
+
+<Canvas of={TrashListStories.Default} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsTrashListComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-trash-list [filters]="filters()" [openHandler]="openDocument" [resultsHandler]="showResults" />`}
+/>
+
+`filters` carries the full text, path, author and size ranges to search for; a new value goes back
+to the first page. `resultsHandler` is called with what is shown whenever it changes, so a host can
+mirror the results elsewhere. The component's words are translated under
+`satori-components.trash-list.*`.
+
+### By registered ID
+
+Its ID is `NXS_TRASH_LIST_ID`, `nxs.components.trashList`. The application's `/trash` route renders
+the list through that ID with `lib-extension-outlet`, and falls back to `nxs-trash-list` when nothing
+resolves, so registering your own component under the ID replaces the list there:
+
+export const registration = `provideSatoriExtensions({
+  components: { 'nxs.components.trashList': AcmeTrashListComponent },
+});`;
+
+<Source language="typescript" dark code={registration} />
+
+Your component receives the same three inputs. Callbacks are inputs because the outlet binds no
+outputs.
+
+## Where its data comes from
+
+`TrashService`: it searches with `searchTrash`, restores with `restoreDocument` (the
+`Document.Untrash` operation) and deletes with `permanentlyDelete` (a `DELETE` on the document).
+Nuxeo checks each permission on the request; a refusal is reported, not hidden. Thumbnails come from
+`DocumentDetailService`. The stories use an in-memory fake of `TrashService` that logs each call to
+the Actions panel.
+
+## Examples
+
+### Grid
+
+<Canvas of={TrashListStories.Grid} />
+
+### List
+
+<Canvas of={TrashListStories.List} />
+
+### Empty
+
+<Canvas of={TrashListStories.Empty} />
+
+### Could not load
+
+A server error shows the message and Retry. A refusal (401, 403) or a missing resource (404) keeps
+its own heading, so it never reads as a breakage.
+
+<Canvas of={TrashListStories.LoadFailed} />
+
+## Accessibility
+
+- **Named controls.** The table and the list are named "Trashed documents". Each list item's buttons
+  and each checkbox name the document they act on. The view buttons say which view is shown with
+  `aria-pressed`.
+- **Keyboard.** The table is `nxs-document-list`: one Tab stop, arrow keys between rows, and a row's
+  menu holds Restore and Delete permanently. Everything else is a native button or checkbox.
+- **Announcements.** The count is a status, and outcomes are toasts: a success is announced politely,
+  a failure assertively.
+- **The selection bar** is a named region, so it can be found by landmark navigation.
