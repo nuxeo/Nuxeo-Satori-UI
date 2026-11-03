@@ -1,4 +1,6 @@
+import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
+import { SpyLocation } from '@angular/common/testing';
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -144,9 +146,13 @@ describe('NxsPublishDialogComponent', () => {
         { provide: DocumentDetailService, useValue: documents },
         { provide: MAT_DIALOG_DATA, useValue: DATA },
         { provide: MatDialogRef, useValue: ref },
+        { provide: Location, useClass: SpyLocation },
       ],
     }).compileComponents();
   });
+
+  /** Browser Back/Forward, as Location reports it. */
+  const navigateBack = () => (TestBed.inject(Location) as SpyLocation).simulateUrlPop('/elsewhere');
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -389,6 +395,40 @@ describe('NxsPublishDialogComponent', () => {
       expect(publishButton().disabled).toBe(false);
       expect(ref.close).not.toHaveBeenCalled();
     });
+
+    it('closes on Back/Forward when no publication is in flight', () => {
+      navigateBack();
+      expect(ref.close).toHaveBeenCalledWith(undefined);
+    });
+
+    it('stays open on Back/Forward mid-publish, then closes with the publication', async () => {
+      const answer = new Subject<ReturnType<typeof doc>>();
+      documents.publishDocument.mockReturnValue(answer);
+      publishButton().click();
+      await settle();
+      navigateBack();
+      expect(ref.close).not.toHaveBeenCalled();
+
+      const proxy = doc({ uid: 'proxy-1', isProxy: true });
+      answer.next(proxy);
+      answer.complete();
+      await settle();
+      expect(shown).toHaveBeenCalledWith('"Quarterly report" published to News');
+      expect(ref.close).toHaveBeenCalledWith(proxy);
+    });
+
+    it('closes after reporting a failure that answers a publish Back/Forward interrupted', async () => {
+      const answer = new Subject<ReturnType<typeof doc>>();
+      documents.publishDocument.mockReturnValue(answer);
+      publishButton().click();
+      await settle();
+      navigateBack();
+
+      answer.error(new Error('500'));
+      await settle();
+      expect(failed).toHaveBeenCalledWith('The document could not be published.');
+      expect(ref.close).toHaveBeenCalledWith(undefined);
+    });
   });
 
   it('sends a rendition named "default" by its name, not as the default rendition', async () => {
@@ -446,6 +486,8 @@ describe('nxsOpenPublishDialog', () => {
     expect(dialog.open).toHaveBeenCalledWith(NxsPublishDialogComponent, {
       width: '600px',
       maxWidth: '95vw',
+      // Material's own close on navigation ignores disableClose; the dialog closes itself.
+      closeOnNavigation: false,
       data: DATA_IN,
     });
   });

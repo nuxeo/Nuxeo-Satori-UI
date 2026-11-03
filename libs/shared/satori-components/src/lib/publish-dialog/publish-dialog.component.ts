@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
@@ -80,6 +81,10 @@ export interface NxsOpenPublishDialogOptions {
  * A lazily registered replacement resolves later than the click, so the caller can pass
  * `stillWanted` to refuse a dialog for a document the user has since left; the promise then
  * resolves with `undefined`.
+ *
+ * The dialog is opened with `closeOnNavigation: false`, because Material's close on Back/Forward
+ * ignores `disableClose` and would drop a publication Nuxeo is still answering. The packaged
+ * dialog closes itself on navigation instead; a replacement should do the same.
  */
 export async function nxsOpenPublishDialog(
   dialog: MatDialog,
@@ -90,9 +95,9 @@ export async function nxsOpenPublishDialog(
   const component = (await components.resolve(NXS_PUBLISH_DIALOG_ID)) ?? NxsPublishDialogComponent;
   if (options.stillWanted && !options.stillWanted()) return undefined;
   return dialog.open<unknown, NxsPublishDialogData, NxsPublishDialogResult>(component, {
-    closeOnNavigation: false,
     width: '600px',
     maxWidth: '95vw',
+    closeOnNavigation: false,
     data,
   });
 }
@@ -134,6 +139,9 @@ export class NxsPublishDialogComponent {
   private readonly translate = inject(TranslateService);
   private readonly toast = inject(NxsToastService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly location = inject(Location);
+  /** Back/Forward arrived while publishing: close once Nuxeo answers, whatever it answers. */
+  private closeWhenSettled = false;
 
   protected readonly noRendition = NO_RENDITION;
   protected readonly defaultRendition = DEFAULT_RENDITION;
@@ -151,8 +159,18 @@ export class NxsPublishDialogComponent {
   protected readonly publishing = signal(false);
 
   constructor() {
+    const navigation = this.location.subscribe(() => this.onNavigation());
+    this.destroyRef.onDestroy(() => navigation.unsubscribe());
     this.loadSections();
     this.loadVersions();
+  }
+
+  private onNavigation(): void {
+    if (this.publishing()) {
+      this.closeWhenSettled = true;
+      return;
+    }
+    this.dialogRef.close(undefined);
   }
 
   protected loadSections(): void {
@@ -205,6 +223,7 @@ export class NxsPublishDialogComponent {
                 : 'satori-components.publish-dialog.failed',
             ),
           );
+          if (this.closeWhenSettled) this.dialogRef.close(undefined);
         },
       });
   }
