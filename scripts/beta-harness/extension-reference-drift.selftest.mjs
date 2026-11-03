@@ -60,6 +60,11 @@ function control(name, { negative }, fn) {
     controls.push({ name, ok: false, negative, why: error.message });
   }
 }
+/** A positive control stated as "this specific non-violation must NOT be flagged". */
+function falsePositive(name, fn) {
+  control(name, POSITIVE, fn);
+}
+
 function expect(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -482,6 +487,137 @@ control('a double-quoted selector is matched against its row', POSITIVE, () => {
     }),
   );
   expectExit(proc, 0, POSITIVE);
+});
+
+control('a four-backtick fence containing ``` lines stays fenced', NEGATIVE, () => {
+  /* Reported on PR #555. A boolean toggle treated the inner ``` as the outer fence's close, so
+   * everything after it — including a worked example of a slot table — became visible to
+   * `tableAfter()`. Driven with the real table deleted and only the fenced example left: the
+   * committed gate exited 0 reporting "all 13 slot-state claim(s) hold" from inside a code block. */
+  const fence4 = '`'.repeat(4);
+  const fence3 = '`'.repeat(3);
+  const example = [`${fence4}markdown`, fence3, slotTable(), fence3, fence4].join('\n');
+  const doc = referenceDoc().replace(slotTable(), example);
+  const proc = run(fixture({ doc }));
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /has no table between/.test(proc.output),
+    `a fenced example satisfied the slot-state check:\n${proc.output.slice(-500)}`,
+  );
+});
+
+control('a barrel aliasing the sought name elsewhere does not win the lookup', NEGATIVE, () => {
+  /* Reported on PR #555. The barrel exposes `FxCardComponent` from `./b`, and separately aliases
+   * a DIFFERENT `FxCardComponent` out of `./a` under another name. Matching `\bFxCardComponent\b`
+   * inside the braces hit the aliased clause first and resolved `./a` — so the gate accepted the
+   * wrong element and rejected the correct one, before ever reaching its ambiguity check.
+   *
+   * The row names `fx-card`, the selector of the class the barrel really exposes, so a correct
+   * row must pass; this control asserts the wrong one is rejected, and the positive twin below
+   * asserts the right one is accepted. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-other`', '`tabs`']] }),
+      sources: {
+        'libs/fx/src/a.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-other', template: '' })\n" +
+          'export class FxCardComponent {}\n',
+        'libs/fx/src/b.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-card', template: '' })\n" +
+          'export class FxCardComponent {}\n',
+        'libs/fx/src/index.ts':
+          "export { FxCardComponent as AlternateCardComponent } from './a';\n" +
+          "export { FxCardComponent } from './b';\n",
+        'libs/fx/src/registrar.ts':
+          "import { FxCardComponent } from './index';\n" +
+          "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+      },
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /declares `fx-card`/.test(proc.output),
+    `the aliased clause won the lookup:\n${proc.output.slice(-500)}`,
+  );
+});
+
+falsePositive('the same barrel accepts the element of the class it really exposes', () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-card`', '`tabs`']] }),
+      sources: {
+        'libs/fx/src/a.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-other', template: '' })\n" +
+          'export class FxCardComponent {}\n',
+        'libs/fx/src/b.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-card', template: '' })\n" +
+          'export class FxCardComponent {}\n',
+        'libs/fx/src/index.ts':
+          "export { FxCardComponent as AlternateCardComponent } from './a';\n" +
+          "export { FxCardComponent } from './b';\n",
+        'libs/fx/src/registrar.ts':
+          "import { FxCardComponent } from './index';\n" +
+          "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+      },
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+});
+
+control('a renamed re-export is followed, not resolved by global name', NEGATIVE, () => {
+  /* Reported on PR #555. The barrel exposes `FxCardComponent` but the class is really
+   * `OriginalCardComponent` in `./a`. Resolution used to look for `export class FxCardComponent`
+   * in the target, find nothing, and fall back to a global search — accepting the selector of an
+   * unrelated class that happened to carry that name. The unrelated class here declares
+   * `fx-unrelated`, so accepting it would pass this row; following the binding reaches
+   * `fx-original` and rejects it. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-unrelated`', '`tabs`']] }),
+      sources: {
+        'libs/fx/src/a.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-original', template: '' })\n" +
+          'export class OriginalCardComponent {}\n',
+        'apps/fx-app/src/unrelated.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-unrelated', template: '' })\n" +
+          'export class FxCardComponent {}\n',
+        'libs/fx/src/index.ts': "export { OriginalCardComponent as FxCardComponent } from './a';\n",
+        'libs/fx/src/registrar.ts':
+          "import { FxCardComponent } from './index';\n" +
+          "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+      },
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /declares `fx-original`/.test(proc.output),
+    `the unrelated global class was accepted as the identity:\n${proc.output.slice(-500)}`,
+  );
+});
+
+control('a binding whose module cannot be resolved is refused, not name-matched', NEGATIVE, () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-card`', '`tabs`']] }),
+      sources: {
+        ...componentSources(),
+        'libs/fx/src/registrar.ts':
+          "import { FxCardComponent } from './nowhere-at-all';\n" +
+          "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+      },
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /could not be resolved, so which component it refers to is unknown/.test(proc.output),
+    proc.output.slice(-400),
+  );
 });
 
 control('a fixture whose EXTENSION_SLOTS cannot be found is reported', NEGATIVE, () => {

@@ -297,13 +297,37 @@ if (undocumented.length) {
  */
 const linesOutsideFences = (() => {
   const lines = reference.split('\n');
-  let inFence = false;
+  /**
+   * The open fence's character and length, or `null` outside a fence.
+   *
+   * A boolean toggle was wrong, and in the direction that matters: CommonMark lets a four-backtick
+   * fence *contain* triple-backtick lines, so the inner ``` closed the outer fence and everything
+   * after it — including a worked example of a slot table — became visible to `tableAfter()`. A
+   * fenced example could then satisfy the slot-state check while the real table was missing or
+   * wrong, which is this gate's own defect class yet again. Raised in review on PR #555.
+   *
+   * A fence closes only on a run of the **same character** that is **at least as long** as the
+   * one that opened it, with nothing but whitespace after it — CommonMark's rule.
+   */
+  let open = null;
   return lines.map((line) => {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
+    const match = /^\s{0,3}(`{3,}|~{3,})\s*(.*)$/.exec(line);
+    if (match) {
+      const [, marker, rest] = match;
+      const char = marker[0];
+      if (open === null) {
+        // An opening fence may carry an info string; a closing one may not.
+        open = { char, length: marker.length };
+        return '';
+      }
+      if (char === open.char && marker.length >= open.length && rest.trim() === '') {
+        open = null;
+        return '';
+      }
+      // A shorter or different marker inside a fence is content, not a delimiter.
       return '';
     }
-    return inFence ? '' : line;
+    return open === null ? line : '';
   });
 })();
 
@@ -826,65 +850,119 @@ for (const row of componentRows) {
  * @param {string} className
  * @returns {string | null}
  */
+/**
+ * `{ a, b as c, type d }` as the bindings it declares, named from the clause's own point of view.
+ *
+ * `inner` is the name this file uses or exposes; `outer` is the name the other module provides.
+ * The mapping is the same for an import and for a re-export, which is why one parser serves both:
+ *
+ * - `import { X as Y } from 'm'` — this file uses `Y`, `m` provides `X`.
+ * - `export { X as Y } from 'm'` — this file exposes `Y`, `m` provides `X`.
+ *
+ * Parsed rather than substring-matched because substring matching was wrong in both directions,
+ * and both were reported on PR #555. For a barrel with
+ * `export { FxCardComponent as AlternateCardComponent } from './a'` and
+ * `export { FxCardComponent } from './b'`, a search for `\bFxCardComponent\b` inside the braces
+ * matched the **first** clause — the aliased one — and resolved to the wrong module, so the gate
+ * accepted the wrong element and rejected the correct one. And for
+ * `export { OriginalCardComponent as FxCardComponent } from './a'`, it resolved the module and
+ * then looked for `export class FxCardComponent` there, found nothing, and fell through to a
+ * global search that accepted an unrelated class of that name. A unique global name is not proof
+ * of identity.
+ */
+function parseBindings(clause) {
+  return clause
+    .split(',')
+    .map((part) =>
+      part
+        .trim()
+        .replace(/^type\s+/, '')
+        .trim(),
+    )
+    .filter(Boolean)
+    .map((part) => {
+      const renamed = /^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/.exec(part);
+      if (renamed) return { outer: renamed[1], inner: renamed[2] };
+      return /^[A-Za-z_$][\w$]*$/.test(part) ? { outer: part, inner: part } : null;
+    })
+    .filter(Boolean);
+}
+
+/**
+ * The selector of the component a given binding name refers to, in a given file.
+ *
+ * Follows renames: a re-export whose exposed name matches is followed under the name the target
+ * module actually provides. When a binding is known to come from elsewhere and that elsewhere
+ * cannot be resolved, it returns `null` so the caller refuses — it does **not** fall through to a
+ * name match, because the whole point of following the binding is that the name alone is not
+ * identity.
+ */
+function selectorOfBinding(name, file, depth = 0) {
+  const text = sources.get(file);
+  if (text === undefined) return null;
+
+  const declaration = new RegExp(String.raw`\bexport class ${reEscape(name)}\b`);
+  const classAt = text.search(declaration);
+  if (classAt !== -1) {
+    const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*['"`]([^'"`]+)['"`]/g)];
+    return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
+  }
+  // Two hops is a barrel re-exporting a barrel; beyond that, refuse rather than crawl.
+  if (depth >= 2) return null;
+
+  for (const clause of text.matchAll(
+    /export\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"`]([^'"`]+)['"`]/g,
+  )) {
+    const binding = parseBindings(clause[1]).find((b) => b.inner === name);
+    if (!binding) continue;
+    const target = resolveModule(clause[2], relative(ROOT, file));
+    // The binding was found and its module was not: refuse rather than guess.
+    return target ? selectorOfBinding(binding.outer, target, depth + 1) : null;
+  }
+
+  // `export * from './x'` — the name is unchanged, so try each and take the first that declares it.
+  for (const star of text.matchAll(/export\s*\*\s*from\s*['"`]([^'"`]+)['"`]/g)) {
+    const target = resolveModule(star[1], relative(ROOT, file));
+    const found = target && selectorOfBinding(name, target, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
 function selectorOf(className, registeringFile) {
   const declaration = new RegExp(String.raw`\bexport class ${reEscape(className)}\b`);
 
-  /**
-   * The selector immediately above the class declaration in one file, or `null`.
-   *
-   * Follows a **re-export** when the file does not declare the class itself, because that is what
-   * an alias import almost always lands on: `@nuxeo/satori-platform/components` maps to
-   * `libs/shared/satori-components/src/index.ts`, which re-exports `NxsCardComponent` from
-   * `./lib/card/card.component` and declares nothing. Without this, fixing the initialisation
-   * order alone would have left the reported case still failing — one step further on, which is
-   * the pattern this function has now produced three times.
-   *
-   * One level of indirection, then it gives up and lets the ambiguity check below refuse. A
-   * general resolver is not worth building here; refusing is.
-   */
-  const readFrom = (file, depth = 0) => {
-    const text = sources.get(file);
-    if (text === undefined) return null;
-    const classAt = text.search(declaration);
-    if (classAt !== -1) {
-      const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*['"`]([^'"`]+)['"`]/g)];
-      return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
-    }
-    if (depth > 0) return null;
-    const reExport = new RegExp(
-      String.raw`export\s*(?:type\s*)?\{[^}]*\b${reEscape(className)}\b[^}]*\}\s*from\s*['"\`]([^'"\`]+)['"\`]`,
-    ).exec(text);
-    if (reExport) {
-      const target = resolveModule(reExport[1], relative(ROOT, file));
-      if (target) return readFrom(target, depth + 1);
-    }
-    // `export * from './x'` — try each, and accept the first that declares the class.
-    for (const star of text.matchAll(/export\s*\*\s*from\s*['"`]([^'"`]+)['"`]/g)) {
-      const target = resolveModule(star[1], relative(ROOT, file));
-      const found = target && readFrom(target, depth + 1);
-      if (found) return found;
-    }
-    return null;
-  };
-
-  /* First choice: follow the import in the file that registers the ID. That is the only thing
-   * that identifies WHICH class of that name was registered, and it is what makes the answer
-   * correct rather than merely plausible. */
   const registering = sources.get(join(ROOT, registeringFile));
   if (registering !== undefined) {
-    const imported = new RegExp(
-      String.raw`import\s*(?:type\s*)?\{[^}]*\b${reEscape(className)}\b[^}]*\}\s*from\s*['"\`]([^'"\`]+)['"\`]`,
-    ).exec(registering);
-    if (imported) {
-      const resolved = resolveModule(imported[1], registeringFile);
-      if (resolved) {
-        const selector = readFrom(resolved);
-        if (selector) return selector;
-      }
-    }
-    // Declared in the same file it is registered in.
-    const own = readFrom(join(ROOT, registeringFile));
+    /* Declared in the file that registers it: no binding to follow. Checked first, because a
+     * local declaration is unambiguous and cheaper than resolving a module. */
+    const own = selectorOfBinding(className, join(ROOT, registeringFile));
     if (own) return own;
+
+    for (const clause of registering.matchAll(
+      /import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"`]([^'"`]+)['"`]/g,
+    )) {
+      const binding = parseBindings(clause[1]).find((b) => b.inner === className);
+      if (!binding) continue;
+      const target = resolveModule(clause[2], registeringFile);
+      if (!target) {
+        fail(
+          `\`${className}\` is imported into ${registeringFile} from \`${clause[2]}\`, which ` +
+            'could not be resolved, so which component it refers to is unknown. A class of that ' +
+            'name found elsewhere would not be proof of identity.',
+        );
+        return null;
+      }
+      const selector = selectorOfBinding(binding.outer, target);
+      if (selector) return selector;
+      fail(
+        `\`${className}\` is imported into ${registeringFile} from \`${clause[2]}\`` +
+          `${binding.outer === className ? '' : ` as \`${binding.outer}\``}, and no selector ` +
+          'could be read for it there. Following the binding is what identifies the component, ' +
+          'so this is reported rather than resolved by name.',
+      );
+      return null;
+    }
   }
 
   /* Fallback: a global search by class name — but **ambiguity is a refusal**, not a coin toss.
