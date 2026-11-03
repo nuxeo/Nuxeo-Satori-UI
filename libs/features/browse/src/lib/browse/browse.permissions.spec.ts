@@ -480,6 +480,24 @@ describe('BrowseComponent — permissions tab', () => {
     expect(component.aceTimeFrame(share)).toBe(`Until ${lastDay}`);
   });
 
+  it('reads only the end that way, so a start a second short of a quarter hour keeps its day', () => {
+    const share = ace({
+      id: 'x-3',
+      externalUser: true,
+      begin: '2030-01-01T00:14:59.000Z',
+      end: '2030-12-31T22:59:59.000Z',
+    });
+    const day = (iso: string) =>
+      new Date(iso).toLocaleDateString(component['locale'], {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+
+    expect(component.aceTimeFrame(share)).toBe(`${day('2030-01-01')} - ${day('2030-12-31')}`);
+  });
+
   it('shareWithExternal reloads the ACLs only when a share was created', () => {
     component.currentDoc.set(doc({ uid: 'ws-1' }));
     detail.getDocumentPermissions.mockReturnValue(of(withAcls([{ name: 'local', aces: [] }])));

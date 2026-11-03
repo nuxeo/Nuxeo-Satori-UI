@@ -402,8 +402,8 @@ export class NxsPermissionsPanelComponent {
   /** An ACE's time frame, from staged days or the server's instants alike. */
   protected timeFrame(begin: string | null, end: string | null): string {
     return formatAceDateRange(
-      instantToDay(begin),
-      instantToDay(end),
+      instantToDay(begin, 'begin'),
+      instantToDay(end, 'end'),
       (key, params) => this.translate.instant(key, params),
       this.locale,
     );
@@ -658,8 +658,8 @@ export class NxsPermissionsPanelComponent {
       principal: row.principal,
       principalLabel: row.principalLabel,
       permission: row.permission,
-      begin: instantToDay(row.begin),
-      end: instantToDay(row.end),
+      begin: instantToDay(row.begin, 'begin'),
+      end: instantToDay(row.end, 'end'),
       state: 'unchanged',
       granted: row.granted,
       lockedReason:
@@ -678,8 +678,8 @@ export class NxsPermissionsPanelComponent {
     const next = new Map(this.staged());
     const unchanged =
       permission === row.permission &&
-      begin === instantToDay(row.begin) &&
-      end === instantToDay(row.end);
+      begin === instantToDay(row.begin, 'begin') &&
+      end === instantToDay(row.end, 'end');
     if (unchanged) next.delete(key);
     else next.set(key, { kind: 'replace', target: row, permission, begin, end });
     this.staged.set(next);
@@ -698,7 +698,7 @@ export class NxsPermissionsPanelComponent {
 }
 
 function dateOf(day: string | null): Date | null {
-  return day ? dayToDate(`${day}T00:00:00.000Z`) : null;
+  return day ? dayToDate(`${day}T00:00:00.000Z`, 'begin') : null;
 }
 
 function classifyLoadError(error: unknown): LoadError {

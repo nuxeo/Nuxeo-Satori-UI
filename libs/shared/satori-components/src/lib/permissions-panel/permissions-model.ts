@@ -304,9 +304,9 @@ export function refusalsFor(
  * applied change unconfirmed on such a server. A tolerance either side would confirm a change to
  * the next day that the table still shows as the old one.
  */
-function sameDay(instant: string | null, day: string | null): boolean {
+function sameDay(instant: string | null, day: string | null, field: AceDateField): boolean {
   if (!instant || !day) return !instant && !day;
-  return instantToDay(instant) === day;
+  return instantToDay(instant, field) === day;
 }
 
 function holds(
@@ -321,8 +321,8 @@ function holds(
       row.granted &&
       row.principal === principal &&
       row.permission === permission &&
-      sameDay(row.begin, begin) &&
-      sameDay(row.end, end),
+      sameDay(row.begin, begin, 'begin') &&
+      sameDay(row.end, end, 'end'),
   );
 }
 
@@ -374,6 +374,9 @@ const MINUTE = 60 * SECOND;
 const QUARTER_HOUR = 15 * MINUTE;
 const DAY = 24 * 60 * MINUTE;
 
+/** Which of an ACE's two dates a value is: Web UI writes them differently, so they read differently. */
+export type AceDateField = 'begin' | 'end';
+
 /**
  * The calendar day an ACE date names, as a local `Date` for a date picker.
  *
@@ -388,14 +391,16 @@ const DAY = 24 * 60 * MINUTE;
  *
  * Web UI writes an end as the last second of its day instead (`endOf('day')`, 23:59:59 in the
  * browser's zone, with or without the millisecond). Every zone offset is a whole quarter hour, so
- * an instant one second or one millisecond short of a quarter hour is read as the day it closes,
- * not as the day the next midnight starts, which is one later than the writer picked.
+ * an `end` one second or one millisecond short of a quarter hour is read as the day it closes, not
+ * as the day the next midnight starts, which is one later than the writer picked. A `begin` never
+ * is: Web UI writes it as a midnight, and a start at 00:14:59 is still on its own day.
  */
-export function dayToDate(instant: string | null): Date | null {
+export function dayToDate(instant: string | null, field: AceDateField): Date | null {
   if (!instant) return null;
   const parsed = Date.parse(instant);
   if (Number.isNaN(parsed)) return null;
-  const toMidnight = [SECOND, 1].find((gap) => (parsed + gap) % QUARTER_HOUR === 0) ?? 0;
+  const toMidnight =
+    field === 'end' ? ([SECOND, 1].find((gap) => (parsed + gap) % QUARTER_HOUR === 0) ?? 0) : 0;
   const midnight = parsed + toMidnight;
   const wallClock = midnight - new Date(midnight).getTimezoneOffset() * MINUTE;
   const day = new Date(wallClock % DAY === 0 ? wallClock : midnight + DAY / 2);
@@ -403,8 +408,8 @@ export function dayToDate(instant: string | null): Date | null {
 }
 
 /** `instant` as a calendar day, the inverse of {@link dayToDate} for an unchanged date. */
-export function instantToDay(instant: string | null): string | null {
-  return toDay(dayToDate(instant));
+export function instantToDay(instant: string | null, field: AceDateField): string | null {
+  return toDay(dayToDate(instant, field));
 }
 
 /**
@@ -414,6 +419,10 @@ export function instantToDay(instant: string | null): string | null {
  * Writing the day back instead re-anchors it at the server's midnight, which for an entry written
  * from another zone moves it — measured, a CET entry's start moved 23 hours on a permission-only edit.
  */
-export function dateToWrite(day: string | null, original: string | null): string | null {
-  return day && original && instantToDay(original) === day ? original : day;
+export function dateToWrite(
+  day: string | null,
+  original: string | null,
+  field: AceDateField,
+): string | null {
+  return day && original && instantToDay(original, field) === day ? original : day;
 }

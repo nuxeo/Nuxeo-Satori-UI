@@ -447,6 +447,12 @@ describe('NxsUpdatePermissionDialogComponent', () => {
       expect(sent()).toMatchObject({ permission: 'ReadWrite', end });
     });
 
+    it('reads a start a second short of a quarter hour as its own day, not as an end', async () => {
+      await open(local({ begin: '2030-01-02T00:14:59.000Z', end: localMidnight(2030, 3, 4) }));
+
+      expect(dateBoxes()[0].value).toBe('2030-01-02');
+    });
+
     it('writes a typed date as the day it names', async () => {
       const begin = localMidnight(2030, 1, 2);
       await open(local({ begin, end: localMidnight(2030, 3, 4) }));
