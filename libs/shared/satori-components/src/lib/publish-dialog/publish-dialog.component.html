@@ -1,0 +1,136 @@
+<h2 mat-dialog-title>
+  {{ 'satori-components.publish-dialog.title' | translate: { document: data.documentTitle } }}
+</h2>
+
+<mat-dialog-content>
+  @switch (sectionsState()) {
+    @case ('loading') {
+      <div class="nxs-publish-dialog__status">
+        <nxs-spinner
+          diameter="28"
+          [label]="'satori-components.publish-dialog.loading' | translate"
+        />
+      </div>
+    }
+    @case ('failed') {
+      <div class="nxs-publish-dialog__status nxs-publish-dialog__status--failed">
+        <p role="alert">{{ 'satori-components.publish-dialog.sections-failed' | translate }}</p>
+        <button
+          mat-stroked-button
+          type="button"
+          class="nxs-publish-dialog__retry"
+          (click)="loadSections()"
+        >
+          {{ 'satori-components.publish-dialog.retry' | translate }}
+        </button>
+      </div>
+    }
+    @default {
+      @if (sections().length === 0) {
+        <output class="nxs-publish-dialog__empty">
+          {{ 'satori-components.publish-dialog.no-sections' | translate }}
+        </output>
+      } @else {
+        <mat-form-field class="nxs-publish-dialog__field">
+          <mat-label>{{ 'satori-components.publish-dialog.location' | translate }}</mat-label>
+          <mat-select
+            class="nxs-publish-dialog__section"
+            required
+            [value]="section()"
+            (valueChange)="section.set($event)"
+          >
+            @for (s of sections(); track s.uid) {
+              <mat-option [value]="s.uid">
+                <span
+                  class="nxs-publish-dialog__section-title"
+                  [style.padding-inline-start.px]="s.depth * 16"
+                  >{{ s.title }}</span
+                >
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <div class="nxs-publish-dialog__row">
+          <mat-form-field class="nxs-publish-dialog__field nxs-publish-dialog__field--narrow">
+            <mat-label>{{ 'satori-components.publish-dialog.version' | translate }}</mat-label>
+            <mat-select
+              class="nxs-publish-dialog__version"
+              [value]="version()"
+              (valueChange)="version.set($event)"
+            >
+              @for (v of versions(); track v.uid) {
+                <mat-option [value]="v.uid">{{ v.label }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          @if (showRenditions()) {
+            <mat-form-field class="nxs-publish-dialog__field nxs-publish-dialog__field--narrow">
+              <mat-label>{{ 'satori-components.publish-dialog.rendition' | translate }}</mat-label>
+              <mat-select
+                class="nxs-publish-dialog__rendition"
+                [value]="rendition()"
+                (valueChange)="rendition.set($event)"
+              >
+                <mat-option [value]="noRendition">{{
+                  'satori-components.publish-dialog.rendition-none' | translate
+                }}</mat-option>
+                <mat-option [value]="defaultRendition">{{
+                  'satori-components.publish-dialog.rendition-default' | translate
+                }}</mat-option>
+                @for (r of renditions; track r.name) {
+                  <mat-option [value]="r.name">{{ r.label }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          }
+        </div>
+
+        <div class="nxs-publish-dialog__options">
+          <mat-checkbox
+            class="nxs-publish-dialog__show-renditions"
+            [checked]="showRenditions()"
+            (change)="showRenditions.set($event.checked)"
+          >
+            {{ 'satori-components.publish-dialog.show-renditions' | translate }}
+          </mat-checkbox>
+          <mat-checkbox
+            class="nxs-publish-dialog__override"
+            [checked]="override()"
+            (change)="override.set($event.checked)"
+          >
+            {{ 'satori-components.publish-dialog.override' | translate }}
+          </mat-checkbox>
+        </div>
+      }
+    }
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions>
+  <button
+    mat-stroked-button
+    type="button"
+    class="nxs-publish-dialog__cancel"
+    [mat-dialog-close]="undefined"
+    [disabled]="publishing()"
+  >
+    {{ 'satori-components.publish-dialog.cancel' | translate }}
+  </button>
+  <span class="nxs-publish-dialog__spacer"></span>
+  <button
+    mat-flat-button
+    type="button"
+    class="nxs-publish-dialog__publish"
+    [disabled]="!section() || publishing()"
+    (click)="publish()"
+  >
+    @if (publishing()) {
+      <mat-icon class="nxs-spinning" aria-hidden="true" svgIcon="autorenew" />
+      {{ 'satori-components.publish-dialog.publishing' | translate }}
+    } @else {
+      {{ 'satori-components.publish-dialog.publish' | translate }}
+    }
+  </button>
+</mat-dialog-actions>

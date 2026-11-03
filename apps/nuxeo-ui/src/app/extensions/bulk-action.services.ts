@@ -8,7 +8,6 @@ import { catchError, forkJoin, of } from 'rxjs';
 import {
   BrowseContextService,
   DocumentDetailService,
-  NuxeoDocument,
   SelectionService,
   readClipboardDocs,
   writeClipboardDocs,
@@ -18,7 +17,11 @@ import {
   openDocumentCompareDialog,
   trashSelectedDocumentsConfirmData,
 } from '@nuxeo/satori-platform/ui';
-import type { ExtensionActionHandler } from '@nuxeo/satori-platform/extensions';
+import { nxsOpenPublishDialog } from '@nuxeo/satori-platform/components';
+import {
+  ExtensionComponentRegistry,
+  type ExtensionActionHandler,
+} from '@nuxeo/satori-platform/extensions';
 
 /**
  * The packaged bulk actions, one service per action.
@@ -87,15 +90,17 @@ export class BulkDeleteActionService implements ExtensionActionHandler {
   }
 }
 
-/** Open the publish dialog for the first selected document. */
+/**
+ * Open the publish dialog for the first selected document — whatever `NXS_PUBLISH_DIALOG_ID`
+ * resolves to, as the document page's Publish does.
+ */
 @Injectable({ providedIn: 'root' })
 export class BulkPublishActionService implements ExtensionActionHandler {
   private readonly selection = inject(SelectionService);
   private readonly translate = inject(TranslateService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
-  private readonly detail = inject(DocumentDetailService);
-  private readonly destroyRef = inject(DestroyRef);
+  private readonly components = inject(ExtensionComponentRegistry);
 
   execute(): void {
     const selected = this.selection.selectedItems();
@@ -112,35 +117,24 @@ export class BulkPublishActionService implements ExtensionActionHandler {
       );
     }
 
-    const openDialog = async (versions: NuxeoDocument[]) => {
-      const { PublishDialogComponent } = await import('@agentic-ui/feature-document-detail');
-      this.dialog.open(PublishDialogComponent, {
-        width: '620px',
-        panelClass: 'publish-dialog-panel',
-        data: {
-          documentUid: first.id,
-          documentTitle: first.name,
-          versionLabel: 'Current',
-          renditions: [
-            { name: 'thumbnail', labelKey: 'rendition.thumbnail', label: 'Thumbnail' },
-            { name: 'pdf', labelKey: 'rendition.pdf', label: 'PDF' },
-            { name: 'zipExport', labelKey: 'rendition.zip-export', label: 'ZIP Export' },
-            { name: 'xmlExport', labelKey: 'rendition.xml-export', label: 'XML Export' },
-          ],
-          versions,
-        },
-      });
-    };
-
-    this.detail
-      .getVersions(first.id)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (res) => void openDialog(res.entries ?? []),
-        error: () => void openDialog([]),
-      });
+    void nxsOpenPublishDialog(this.dialog, this.components, {
+      documentUid: first.id,
+      documentTitle: first.name,
+      renditions: STANDARD_RENDITIONS.map(({ name, labelKey }) => ({
+        name,
+        label: this.translate.instant(labelKey),
+      })),
+    });
   }
 }
+
+/** A selection carries no document's rendition list, so the bulk Publish offers the standard four. */
+const STANDARD_RENDITIONS = [
+  { name: 'thumbnail', labelKey: 'rendition.thumbnail' },
+  { name: 'pdf', labelKey: 'rendition.pdf' },
+  { name: 'zipExport', labelKey: 'rendition.zip-export' },
+  { name: 'xmlExport', labelKey: 'rendition.xml-export' },
+] as const;
 
 /** Add the selection to the local clipboard, skipping items already there. */
 @Injectable({ providedIn: 'root' })

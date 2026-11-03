@@ -536,8 +536,10 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       await settle();
 
       expect(toast.error).not.toHaveBeenCalled();
-      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-live');
-      expect(mockDialog.open.mock.calls.at(-1)?.[1]?.data).toMatchObject({ documentUid: 'v-0-1' });
+      expect(mockDialog.open.mock.calls.at(-1)?.[1]?.data).toMatchObject({
+        documentUid: 'v-0-1',
+        versionableUid: 'doc-live',
+      });
     });
 
     it('counts a version’s publications through its live document, as Web UI lists them', async () => {

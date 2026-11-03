@@ -1005,17 +1005,6 @@
   font-size: 11px;
 }
 
-// Publish dialog panel - remove default Material dialog padding
-/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
-::ng-deep .publish-dialog-panel .mat-mdc-dialog-container .mdc-dialog__surface {
-  padding: 0;
-}
-
-/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
-::ng-deep .publish-dialog-panel .mat-mdc-dialog-container .mdc-dialog__content {
-  padding: 0;
-}
-
 /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .preview-dialog-panel .mat-mdc-dialog-container .mdc-dialog__surface {
   padding: 0;

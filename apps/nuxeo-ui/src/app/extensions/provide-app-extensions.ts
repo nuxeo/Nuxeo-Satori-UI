@@ -32,12 +32,14 @@ import {
   NXS_ADMIN_USER_DETAILS_PAGE_ID,
   NXS_ADMIN_USERS_GROUPS_PAGE_ID,
   NXS_PERMISSIONS_PANEL_ID,
+  NXS_PUBLISH_DIALOG_ID,
   NXS_TASK_DETAIL_ID,
   NXS_TRASH_LIST_ID,
   NxsAdminGroupDetailsPageComponent,
   NxsAdminUserDetailsPageComponent,
   NxsAdminUsersGroupsPageComponent,
   NxsPermissionsPanelComponent,
+  NxsPublishDialogComponent,
   NxsTaskDetailComponent,
   NxsTrashListComponent,
 } from '@nuxeo/satori-platform/components';
@@ -183,6 +185,11 @@ function provideAppContributions(): EnvironmentProviders {
         [NXS_ADMIN_USERS_GROUPS_PAGE_ID]: NxsAdminUsersGroupsPageComponent,
         [NXS_ADMIN_USER_DETAILS_PAGE_ID]: NxsAdminUserDetailsPageComponent,
         [NXS_ADMIN_GROUP_DETAILS_PAGE_ID]: NxsAdminGroupDetailsPageComponent,
+
+        // The dialog both publish actions open — `app.toolbar.publish` and
+        // `app.bulkActions.publish` — through `nxsOpenPublishDialog`, so re-registering this ID
+        // replaces it for both.
+        [NXS_PUBLISH_DIALOG_ID]: NxsPublishDialogComponent,
 
         // The task panel of the tasks page: reading a task and completing it. The page renders it
         // through its ID, so a customer library can re-register it.

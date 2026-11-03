@@ -229,6 +229,15 @@ export {
 export { NxsSavedSearchActionsComponent } from './lib/saved-search-actions/saved-search-actions.component';
 export { NxsCardComponent } from './lib/card/card.component';
 export {
+  NXS_PUBLISH_DIALOG_ID,
+  NxsPublishDialogComponent,
+  nxsOpenPublishDialog,
+  type NxsOpenPublishDialogOptions,
+  type NxsPublishDialogData,
+  type NxsPublishDialogResult,
+  type NxsPublishRendition,
+} from './lib/publish-dialog/publish-dialog.component';
+export {
   NXS_TASK_DETAIL_ID,
   NxsTaskDetailComponent,
   type NxsTaskOutcome,
