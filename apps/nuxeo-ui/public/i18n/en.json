@@ -2597,6 +2597,7 @@
       "loading": "Loading the trash",
       "load-failed": "The trash could not be loaded",
       "empty": "The trash is empty",
+      "page-empty": "Nothing on this page",
       "select-page": "Select all on this page",
       "select": "Select {{title}}",
       "confirm-purge-title": "Delete permanently",

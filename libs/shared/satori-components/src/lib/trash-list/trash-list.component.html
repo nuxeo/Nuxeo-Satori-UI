@@ -151,7 +151,7 @@
       [loading]="loading()"
       [error]="error()"
       [errorHeading]="'satori-components.trash-list.load-failed' | translate"
-      [emptyHeading]="'satori-components.trash-list.empty' | translate"
+      [emptyHeading]="emptyHeading()"
       [rowActions]="rowActions()"
       (sortChange)="onSortChange($event)"
       (pageChange)="goToPage($event)"
@@ -172,7 +172,10 @@
     (retry)="reload()"
   />
 } @else if (documents().length === 0) {
-  <nxs-empty-state icon="trash" [heading]="'satori-components.trash-list.empty' | translate" />
+  <!-- An empty page past the first is not an empty trash: the pager below says there is nothing more. -->
+  @if (pageIndex() === 0) {
+    <nxs-empty-state icon="trash" [heading]="emptyHeading()" />
+  }
 } @else {
   <div class="nxs-trash-list__select-all">
     <mat-checkbox [checked]="allSelected()" (change)="toggleAll($event.checked)">
@@ -294,13 +297,18 @@
       }
     </ul>
   }
+}
 
+<!-- The table's pager is inside nxs-document-list. This one stays on an empty page and while loading,
+     so there is always a way back to the other pages. -->
+@if (view() !== 'table' && !error()) {
   <nxs-pager
     [pageIndex]="pageIndex()"
     [pageSize]="pageSize()"
     [itemCount]="documents().length"
     [totalSize]="totalSize()"
     [hasNextPage]="hasNextPage()"
+    [disabled]="loading()"
     (pageChange)="goToPage($event)"
   />
 }

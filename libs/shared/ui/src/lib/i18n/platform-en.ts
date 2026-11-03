@@ -693,6 +693,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "satori-components.trash-list.label": "Trashed documents",
   "satori-components.trash-list.load-failed": "The trash could not be loaded",
   "satori-components.trash-list.loading": "Loading the trash",
+  "satori-components.trash-list.page-empty": "Nothing on this page",
   "satori-components.trash-list.purge": "Delete permanently",
   "satori-components.trash-list.purge-failed-many": "Could not delete {{failed}} of {{count}} documents.",
   "satori-components.trash-list.purge-failed-one": "Could not delete \"{{title}}\".",

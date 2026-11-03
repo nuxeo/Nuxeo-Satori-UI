@@ -214,6 +214,15 @@ export class NxsTrashListComponent {
   /** Whether the server has another page: its own flag when it sends one, else from the count. */
   protected readonly hasNextPage = signal(false);
   protected readonly selectedCount = computed(() => this.selectedIds().length);
+  /** "The trash is empty", unless other pages hold documents — only this one has none. */
+  protected readonly emptyHeading = computed(() => {
+    this.translations();
+    return this.translate.instant(
+      this.hasNextPage() || this.pageIndex() > 0
+        ? 'satori-components.trash-list.page-empty'
+        : 'satori-components.trash-list.empty',
+    );
+  });
   protected readonly selected = computed(() => new Set(this.selectedIds()));
   /** Selection actions wait for any request on the selection, and for a page being fetched. */
   protected readonly selectionBusy = computed(

@@ -654,6 +654,41 @@ describe('NxsTrashListComponent', () => {
       );
     });
 
+    it('keeps the pager on an empty later page, with no empty-trash heading', async () => {
+      searchTrash.mockReturnValue(of({ ...page([], -1), totalSize: -1 }));
+      await create({ initialView: 'grid' });
+      internals().goToPage(2);
+      await render();
+      expect(el().querySelector('nxs-empty-state')).toBeNull();
+      const pager = el().querySelector('nxs-pager');
+      expect(pager).not.toBeNull();
+      const previous = pager?.querySelectorAll('button')[0] as HTMLButtonElement;
+      expect(previous.disabled).toBe(false);
+    });
+
+    it('says only this page is empty when other pages hold documents', async () => {
+      searchTrash.mockReturnValue(of({ ...page([], 10), isNextPageAvailable: true }));
+      for (const view of ['table', 'list'] as const) {
+        await create({ initialView: view });
+        expect(el().textContent).toContain('Nothing on this page');
+        expect(el().textContent).not.toContain('The trash is empty');
+      }
+    });
+
+    it('keeps the grid’s pager, disabled, while a page loads, and drops it on an error', async () => {
+      await create({ initialView: 'grid' });
+      const pending = new Subject<NuxeoDocumentList>();
+      searchTrash.mockReturnValue(pending);
+      internals().goToPage(1);
+      await render();
+      const buttons = [...el().querySelectorAll<HTMLButtonElement>('nxs-pager button')];
+      expect(buttons.length).toBeGreaterThan(0);
+      expect(buttons.every((button) => button.disabled)).toBe(true);
+      pending.error({ status: 500 });
+      await render();
+      expect(el().querySelector('nxs-pager')).toBeNull();
+    });
+
     it('pages the grid with the pager', async () => {
       searchTrash.mockReturnValue(of(page([doc(1)], 120)));
       await create({ initialView: 'grid' });
