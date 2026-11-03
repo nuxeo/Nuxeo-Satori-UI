@@ -1,36 +1,68 @@
 /**
- * Phase 2, non-administrator visibility — its own run. Not passing yet.
+ * Phase 2, non-administrator visibility.
  *
- * The claim: the Administration entry is not offered to a user without administration access, and
- * nothing else is removed along with it.
+ * The claim: a signed-in user without administration access is not offered the Administration entry,
+ * and nothing else is removed along with it.
  *
- * The assertions need a real non-administrator Nuxeo account and a sign-in as that account, neither
- * of which is set up here. A client-only member session was tried and rejected by the identity
- * guard: the stored credential stays the administrator's, so the requests would run as
- * Administrator while the page claimed to be a member.
+ * This run is signed in as a real non-administrator Nuxeo account (members group, not an
+ * administrator). The run's own user is that account, so the identity guard sees no change of
+ * identity. Set both variables to the member account and run it on its own:
  *
- * This file therefore never records a pass. Every run ends precondition-not-met, with the reason
- * below. It is not a check that passes when its inputs are missing.
+ *   NUXEO_USER=<member> NUXEO_PASS=<password> npm run beta:evidence -- phase-2-non-admin
  *
- * Creating a member account is a server change and needs approval.
+ * It says nothing about server-side authorisation. The client's Layer 1 gate is what is under test;
+ * Nuxeo enforces its own permissions regardless.
  */
+
+const ENVIRONMENTAL_ERRORS = [
+  /automation\/AI\./,
+  '/nuxeo/logout',
+  '/agentic-ui-config/bootstrap.json',
+  '/agentic-ui-config/manifest.json',
+];
+
+/** The navigation as rendered: `[nav id, label]` for each entry. */
+function readNav(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('a[sat-platform-nav-menu-item][data-nav-id]')].map((el) => [
+      el.getAttribute('data-nav-id'),
+      (el.textContent ?? '').trim(),
+    ]),
+  );
+}
 
 /**
  * @param {import('@playwright/test').Page} page
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
 export default async function run(page, h) {
-  await h.step('A real non-administrator account is available to run as');
-  const configured = Boolean(process.env.NUXEO_MEMBER_USER && process.env.NUXEO_MEMBER_PASS);
-  // Flip to true only when the sign-in-as-member assertions are written in this file.
-  const ASSERTIONS_WRITTEN = false;
-  h.note('the non-administrator assertions are not written yet, so no visibility claim is made here');
-  h.requirePrecondition(
-    'the non-administrator assertions exist and have a member account to run as',
-    ASSERTIONS_WRITTEN && configured,
-    configured
-      ? 'member credentials are set, but the sign-in-as-member assertions are not written in this file yet'
-      : 'no member account is configured (NUXEO_MEMBER_USER / NUXEO_MEMBER_PASS). This instance has only the ' +
-          'Administrator account, and a client-only member session is refused by the identity guard.',
+  await h.step('Signed in as a non-administrator');
+  await h.login();
+  await h.goTo('/#/browse');
+  await page.waitForTimeout(1500);
+  const me = await page.evaluate(() => JSON.parse(sessionStorage.getItem('agentic_ui_nuxeo_session') ?? '{}'));
+  h.check(
+    'the application holds a non-administrator session',
+    me.isAdministrator !== true && me.username !== 'Administrator',
+    `session: ${JSON.stringify({ username: me.username, isAdministrator: me.isAdministrator })}`,
   );
+
+  await h.step('A user without administration access is not offered Administration');
+  const nav = await readNav(page);
+  const ids = nav.map(([id]) => id);
+  h.check(
+    'Administration is absent for a user without access',
+    !ids.includes('app.navbar.administration'),
+    `rendered: ${JSON.stringify(ids)}`,
+  );
+  h.check(
+    'the rest of the navigation is still there',
+    ['app.navbar.dashboard', 'app.navbar.browse', 'app.navbar.search'].every((id) => ids.includes(id)),
+    `rendered: ${JSON.stringify(ids)}`,
+  );
+  await h.screenshot('non-admin-nav');
+
+  await h.step('Health');
+  h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
+  h.note('Client gate only. Server-side permissions are not tested here.');
 }

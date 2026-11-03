@@ -79,7 +79,8 @@
         "Shipped a `typecheck` target where the plan said `build`: Nx's module-boundary rule forbids a buildable library from importing a non-buildable one, and nothing in libs/ is buildable until Phase 4 adds ng-packagr.",
         "2026-11-02 (NXSAT-660): the packaged default is 13 enabled entries. Knowledge Discovery is registered but disabled, and the Browse id is app.navbar.browse. The non-administrator visibility check is not asserted in this run: it runs as a different user, and the identity guard refuses it at a step boundary. Re-captured on 319dc651c: 43 of 43.",
         "2026-11-02 (NXSAT-660): the sign-off gate report this phase cited (gates/latest:phase-2-closure) is recorded on the machine where it ran and is not on this one. The citation now points at the full gate run on 319dc651c, which covers this phase. The historical citation is kept here for the record.",
-        "2026-11-02 (NXSAT-660), review: the same unexplained /nuxeo/agentic-ui/ XHR as phase 1 (see there). In progress, not complete. Latest run on 9ba733864: 42 of 43."
+        "2026-11-02 (NXSAT-660), review: the same unexplained /nuxeo/agentic-ui/ XHR as phase 1 (see there). In progress, not complete. Latest run on 9ba733864: 42 of 43.",
+        "2026-11-03 (NXSAT-660): the non-administrator visibility check now runs as a real member account (members group, not an administrator) in its own run, phase-2-non-admin. Its newest run passes 5 of 5 (phase-2-non-admin/2026-11-03T07-29-17). It is a client gate check; server-side permissions are not tested."
       ],
       "notCovered": [
         "document-detail toolbar: 11 controls, 8 with dynamic state, still markup rather than descriptors",
