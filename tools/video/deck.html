@@ -168,7 +168,8 @@
                   // Name the slide, not just the block type. Nine slides of `04-walkthrough`
                   // emit the same `shot`/`shots` warning, so a message without the slide
                   // sends the reader searching the JSON to find which ones.
-                  const where = `slide ${slideIndex + 1}/${deck.slides.length}` +
+                  const where =
+                    `slide ${slideIndex + 1}/${deck.slides.length}` +
                     (s.title ? ` "${s.title}"` : '') +
                     (s.eyebrow ? ` (${s.eyebrow})` : '');
                   console.warn(

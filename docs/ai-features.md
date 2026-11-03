@@ -13,7 +13,7 @@ This document describes the AI capabilities integrated into the Nuxeo Angular UI
 > `AGENTS/10-ai-features.md` is the status of record.
 >
 > **One precision, because it is the half that is configuration rather than code.** The AI
-> *surfaces* are hidden by a rule, not removed: `app.tabs.aiInsights` carries
+> _surfaces_ are hidden by a rule, not removed: `app.tabs.aiInsights` carries
 > `rule: 'app.rules.isAiEnabled'` (`packaged-tabs.ts:30`), and a manifest override of
 > `{"rule": null}` clears a packaged rule (`extension-slot-registry.service.ts:178-180`), so a
 > configuration package can put an AI surface back on screen. It cannot make one work — the

@@ -31,13 +31,13 @@ Budget about two hours, most of which is Docker pulling Nuxeo.
 
 ## 1. Prerequisites
 
-| Requirement                | Version                           | Why this exact version                                                                                                         |
-| -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Requirement                | Version                           | Why this exact version                                                                                                                             |
+| -------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Node.js                    | **24.x**                          | Pinned in [`.nvmrc`](../../.nvmrc) (`24`) and `engines` in [`package.json`](../../package.json) (`^24.15.0`). Not optional — see the warning below |
-| npm                        | 11.x (ships with Node 24)         | The lockfile is `lockfileVersion` 3                                                                                            |
-| Docker + Docker Compose    | any current                       | Runs Nuxeo, OpenSearch, and optionally ARender and Mailpit                                                                     |
-| Java + Maven               | 17+, Maven 3.9+                   | Only if you need to build the marketplace package ([`pom.xml`](../../pom.xml))                                                 |
-| `SATORI_GH_READONLY_TOKEN` | a GitHub PAT with `read:packages` | Required to install the `@hylandsoftware` packages                                                                             |
+| npm                        | 11.x (ships with Node 24)         | The lockfile is `lockfileVersion` 3                                                                                                                |
+| Docker + Docker Compose    | any current                       | Runs Nuxeo, OpenSearch, and optionally ARender and Mailpit                                                                                         |
+| Java + Maven               | 17+, Maven 3.9+                   | Only if you need to build the marketplace package ([`pom.xml`](../../pom.xml))                                                                     |
+| `SATORI_GH_READONLY_TOKEN` | a GitHub PAT with `read:packages` | Required to install the `@hylandsoftware` packages                                                                                                 |
 
 ### The Node version will bite you
 
@@ -56,7 +56,7 @@ report would be uninterpretable"
 NXSAT-669; before it, the repo pinned 20.
 
 **The `localStorage` hazard is Node 25, not "22+".** Node moved `localStorage` from absent
-on 20, 22 and 24 to a global getter on 25 that *throws* unless `--localstorage-file` is
+on 20, 22 and 24 to a global getter on 25 that _throws_ unless `--localstorage-file` is
 given, and that global shadows jsdom's — so specs touching `localStorage` fail with
 `SecurityError` **on correct code** (`node-version.mjs:145-146`). The temptation is then to
 edit the failing spec, which damages working code. There is no hazard on Node 24, so if you
@@ -175,9 +175,9 @@ than hitting :8080 directly.
 
 ### Two apps, and they are different
 
-| App                     | Purpose                                                                                                                                       |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nuxeo-ui`              | The product. Every feature library, Material, and the Satori design system                                                                    |
+| App                     | Purpose                                                                                                                                                                                                                                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nuxeo-ui`              | The product. Every feature library, Material, and the Satori design system                                                                                                                                                                                                                                       |
 | `nuxeo-satori-template` | The **forkable customer template**. Built on plain Angular Material — a prebuilt theme at [`styles.scss:13`](../../apps/nuxeo-satori-template/src/styles.scss) — with **no Satori import of its own**, so a customer brings their own look (`libs/platform/AGENTS.md:278`). `npx nx serve nuxeo-satori-template` |
 
 ---
@@ -340,28 +340,28 @@ From [`CLAUDE.md`](../../CLAUDE.md), each one enforced or hard-won:
 
 ## 10. Common problems
 
-| Symptom                                                               | Cause                                                                                                  | Fix                                                                                                                                                                                |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SecurityError` on `localStorage` in specs                            | **Node 25** defines a throwing global `localStorage` that shadows jsdom's. Absent on 20, 22 and 24     | Use the pinned Node 24, or route every run through `npm run beta:gate`, which passes `--no-experimental-webstorage`. Do not edit the spec — the code is correct                     |
-| `npm ci` fails on CI, green locally                                   | A bare `npm install` pruned Linux-only optional entries                                                | Restore a known-good lock, merge new entries only                                                                                                                                  |
-| `E404` installing `@hylandsoftware/*`                                 | `SATORI_GH_READONLY_TOKEN` missing or lacks `read:packages` on the **Hyland** org                      | Set the token; it needs `read:packages` on the Hyland org                                                                                                                          |
-| `NG0201: No provider for …` from a library service                    | The service is `providedIn: 'root'` and resolves its dependency from the root injector                 | Provide it in the **root** injector, not on the component. (This row named adf-hx until NXSAT-308 removed it; the cited comment is gone and `app.config.ts:37` is now unrelated)    |
-| Components render raw translation keys instead of text                | An i18n catalogue is missing from the bundle; `AppTranslateLoader` catches the 404 and returns `{}` **silently** | `npm run beta:bundle` — it asserts both runtime catalogues are present, non-empty and not truncated (`no-test-libs-in-bundle.mjs:106-126`); a 0-byte file used to pass   |
-| HTTP 500 from an `AI.*` operation                                     | The AI backend is a **separate marketplace package not in this repo**                                  | Expected, not a client defect. See [Runtime AI Features](10-runtime-ai-features.md)                                                                                                |
-| Empty screens, intermittent 403 on `/nuxeo/api`                       | Session injected but XHRs unauthenticated                                                              | Both mechanisms are required — see the auth note in [Testing & Evidence](12-testing-and-evidence.md)                                                                               |
-| Evidence run passes suspiciously                                      | A capture that asserts nothing                                                                         | `npm run beta:audit` fails any assertion incapable of failing                                                                                                                      |
-| `beta:state` red after you added a gate                               | Every phase cites a re-gate with a smaller gate count                                                  | Re-run the full gate and re-cite. Do not relax the check — it has been right both times                                                                                            |
+| Symptom                                                | Cause                                                                                                            | Fix                                                                                                                                                                              |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SecurityError` on `localStorage` in specs             | **Node 25** defines a throwing global `localStorage` that shadows jsdom's. Absent on 20, 22 and 24               | Use the pinned Node 24, or route every run through `npm run beta:gate`, which passes `--no-experimental-webstorage`. Do not edit the spec — the code is correct                  |
+| `npm ci` fails on CI, green locally                    | A bare `npm install` pruned Linux-only optional entries                                                          | Restore a known-good lock, merge new entries only                                                                                                                                |
+| `E404` installing `@hylandsoftware/*`                  | `SATORI_GH_READONLY_TOKEN` missing or lacks `read:packages` on the **Hyland** org                                | Set the token; it needs `read:packages` on the Hyland org                                                                                                                        |
+| `NG0201: No provider for …` from a library service     | The service is `providedIn: 'root'` and resolves its dependency from the root injector                           | Provide it in the **root** injector, not on the component. (This row named adf-hx until NXSAT-308 removed it; the cited comment is gone and `app.config.ts:37` is now unrelated) |
+| Components render raw translation keys instead of text | An i18n catalogue is missing from the bundle; `AppTranslateLoader` catches the 404 and returns `{}` **silently** | `npm run beta:bundle` — it asserts both runtime catalogues are present, non-empty and not truncated (`no-test-libs-in-bundle.mjs:106-126`); a 0-byte file used to pass           |
+| HTTP 500 from an `AI.*` operation                      | The AI backend is a **separate marketplace package not in this repo**                                            | Expected, not a client defect. See [Runtime AI Features](10-runtime-ai-features.md)                                                                                              |
+| Empty screens, intermittent 403 on `/nuxeo/api`        | Session injected but XHRs unauthenticated                                                                        | Both mechanisms are required — see the auth note in [Testing & Evidence](12-testing-and-evidence.md)                                                                             |
+| Evidence run passes suspiciously                       | A capture that asserts nothing                                                                                   | `npm run beta:audit` fails any assertion incapable of failing                                                                                                                    |
+| `beta:state` red after you added a gate                | Every phase cites a re-gate with a smaller gate count                                                            | Re-run the full gate and re-cite. Do not relax the check — it has been right both times                                                                                          |
 
 ---
 
 ## 11. Extending the system
 
-| I want to…                           | Go to                                                                                                    |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Add a feature to the product         | [Code KT](11-code-kt.md) → "Where do I make this change?"                                                |
-| Make something customer-configurable | [Extensibility Contract](07-extensibility-contract.md)                                                   |
-| Add an extension point               | [`.cursor/skills/add-extension-point/SKILL.md`](../../.cursor/skills/add-extension-point/SKILL.md)       |
-| Add an `nxs-` component              | `npx nx g ./tools/satori-generators:satori-component` — rules in [`AGENTS/00-architecture.md`](../../AGENTS/00-architecture.md), "Adding a component"       |
-| Add a Nuxeo API call                 | [`AGENTS/02-nuxeo-apis.md`](../../AGENTS/02-nuxeo-apis.md)                                               |
-| Run a Beta phase end to end          | [`.cursor/skills/beta-phase/SKILL.md`](../../.cursor/skills/beta-phase/SKILL.md)                         |
-| Understand the AI tooling            | [Skills, Agents & Generators](09-skills-agents-generators.md)                                            |
+| I want to…                           | Go to                                                                                                                                                 |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add a feature to the product         | [Code KT](11-code-kt.md) → "Where do I make this change?"                                                                                             |
+| Make something customer-configurable | [Extensibility Contract](07-extensibility-contract.md)                                                                                                |
+| Add an extension point               | [`.cursor/skills/add-extension-point/SKILL.md`](../../.cursor/skills/add-extension-point/SKILL.md)                                                    |
+| Add an `nxs-` component              | `npx nx g ./tools/satori-generators:satori-component` — rules in [`AGENTS/00-architecture.md`](../../AGENTS/00-architecture.md), "Adding a component" |
+| Add a Nuxeo API call                 | [`AGENTS/02-nuxeo-apis.md`](../../AGENTS/02-nuxeo-apis.md)                                                                                            |
+| Run a Beta phase end to end          | [`.cursor/skills/beta-phase/SKILL.md`](../../.cursor/skills/beta-phase/SKILL.md)                                                                      |
+| Understand the AI tooling            | [Skills, Agents & Generators](09-skills-agents-generators.md)                                                                                         |

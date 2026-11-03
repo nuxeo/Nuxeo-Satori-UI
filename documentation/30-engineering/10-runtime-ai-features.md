@@ -76,9 +76,9 @@ removing the need for a user to think in filters.
 
 ## 3. Configuration and gating
 
-| Concern          | Mechanism                                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Backend location | `AI_BACKEND_URL` injection token, `libs/shared/ai-client/src/lib/ai.config.ts`                                                      |
+| Concern          | Mechanism                                                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Backend location | `AI_BACKEND_URL` injection token, `libs/shared/ai-client/src/lib/ai.config.ts`                                                     |
 | Feature flag     | `AiFeatureFlagService` — **`AI_FEATURES_ENABLED = false`** (`ai-feature-flag.service.ts:35`), off for every user since `a519ebd5d` |
 | Per-user toggle  | **None.** `toggle()` and `setEnabled()` return early while the flag is off, and the header menu entry is commented out             |
 

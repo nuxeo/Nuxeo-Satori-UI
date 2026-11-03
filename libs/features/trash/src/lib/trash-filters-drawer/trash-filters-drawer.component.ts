@@ -30,6 +30,7 @@ import {
   DocTypeLabelPipe,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
+import { NxsThumbnailComponent } from '@nuxeo/satori-platform/components';
 
 interface SizeOption {
   key: string;
@@ -75,6 +76,7 @@ const SIZE_LABELS: Record<string, string> = {
     MatCheckboxModule,
     MatDividerModule,
     MatTooltipModule,
+    NxsThumbnailComponent,
   ],
   templateUrl: './trash-filters-drawer.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,

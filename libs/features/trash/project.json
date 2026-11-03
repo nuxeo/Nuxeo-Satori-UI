@@ -6,6 +6,13 @@
   "projectType": "library",
   "tags": ["scope:features", "type:feature"],
   "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/features/trash"
+      }
+    },
     "lint": {
       "executor": "@nx/eslint:lint"
     }
