@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component, input, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import {
   vi,
   describe,
@@ -422,6 +422,106 @@ describe('TasksPageComponent', () => {
       component.selectTask(mockTask);
       // Document loading happens asynchronously
       expect(mockDocService.getById).toHaveBeenCalled();
+    });
+  });
+
+  describe('Superseded and partial responses', () => {
+    const otherTask: NuxeoTask = { ...mockTask, id: 'task-2', targetDocumentIds: [] };
+
+    it('shows the document the enricher returned while it fetches the full one', () => {
+      mockDocService.getById.mockReturnValue(new Subject<NuxeoDocument>());
+      component.selectTask({
+        ...mockTask,
+        targetDocumentIds: [
+          { uid: 'doc-9', title: 'Enriched', type: 'Note', path: '/ws/enriched' },
+        ],
+      });
+      expect(component.targetDoc()).toMatchObject({
+        uid: 'doc-9',
+        title: 'Enriched',
+        type: 'Note',
+      });
+      expect(mockDocService.getById).toHaveBeenCalledWith('doc-9');
+    });
+
+    it('stops loading when the target document cannot be fetched', () => {
+      mockDocService.getById.mockReturnValue(throwError(() => new Error('403')));
+      component.selectTask(mockTask);
+      expect(component.docLoading()).toBe(false);
+      expect(component.targetDoc()).toBeNull();
+    });
+
+    it('drops a document, or its failure, that lands for a superseded selection', () => {
+      const first = new Subject<NuxeoDocument>();
+      const second = new Subject<NuxeoDocument>();
+      mockDocService.getById.mockReturnValueOnce(first).mockReturnValueOnce(second);
+      component.selectTask(mockTask);
+      component.selectTask(otherTask);
+      first.next(mockDocument);
+      expect(component.targetDoc()).toBeNull();
+
+      component.selectTask(mockTask);
+      expect(component.docLoading()).toBe(true);
+      const third = new Subject<NuxeoDocument>();
+      mockDocService.getById.mockReturnValueOnce(third);
+      component.selectTask({ ...mockTask, id: 'task-3' });
+      second.error(new Error('late'));
+      expect(component.docLoading()).toBe(true);
+    });
+
+    it('fetches no preview for a document without a file', () => {
+      mockDocService.getById.mockReturnValue(of({ ...mockDocument, properties: {} }));
+      component.selectTask(mockTask);
+      expect(mockHttp.get).not.toHaveBeenCalled();
+      expect(component.rawPreviewUrl()).toBeNull();
+    });
+
+    it('drops a preview that lands for a superseded selection', () => {
+      const preview = new Subject<Blob>();
+      mockHttp.get.mockReturnValue(preview);
+      component.selectTask(mockTask);
+      component.selectTask(otherTask);
+      preview.next(new Blob(['late'], { type: 'application/pdf' }));
+      expect(component.rawPreviewUrl()).toBeNull();
+    });
+
+    it('keeps a newer routed fetch loading when an older one fails after it', () => {
+      const older = new Subject<NuxeoTask>();
+      mockActivatedRoute.snapshot.paramMap.get.mockReturnValue('task-99');
+      mockTaskService.getUserTasks.mockReturnValue(of([]));
+      mockTaskService.getTask.mockReturnValueOnce(older).mockReturnValueOnce(new Subject());
+      fixture.detectChanges();
+
+      component['loadAndSelectTask']('task-77');
+      older.error(new Error('gone'));
+      expect(component.taskLoading()).toBe(true);
+    });
+
+    it('fetches nothing when the panel reports a change with no task selected', () => {
+      mockTaskService.getUserTasks.mockReturnValue(of([]));
+      fixture.detectChanges();
+      component['onTaskChanged']();
+      expect(mockTaskService.getTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Download', () => {
+    it('opens the document file in a new tab', () => {
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      component.selectTask(mockTask);
+      component.download();
+      expect(open).toHaveBeenCalledWith(
+        'http://localhost:8080/nuxeo/api/v1/id/doc-1/@blob/file:content',
+        '_blank',
+      );
+      open.mockRestore();
+    });
+
+    it('opens nothing without a document', () => {
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      component.download();
+      expect(open).not.toHaveBeenCalled();
+      open.mockRestore();
     });
   });
 

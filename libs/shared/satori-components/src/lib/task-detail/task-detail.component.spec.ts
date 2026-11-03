@@ -202,7 +202,7 @@ describe('NxsTaskDetailComponent', () => {
       );
     });
 
-    it('offers one button per action, toned by what the action does', async () => {
+    it('offers one button per action, classed by its tone for a theme to style', async () => {
       await render();
       expect(button('Approve')?.classList).toContain('nxs-task-detail__action--primary');
       expect(button('Reject')?.classList).toContain('nxs-task-detail__action--warn');
