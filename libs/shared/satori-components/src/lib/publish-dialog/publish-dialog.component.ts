@@ -90,6 +90,7 @@ export async function nxsOpenPublishDialog(
   const component = (await components.resolve(NXS_PUBLISH_DIALOG_ID)) ?? NxsPublishDialogComponent;
   if (options.stillWanted && !options.stillWanted()) return undefined;
   return dialog.open<unknown, NxsPublishDialogData, NxsPublishDialogResult>(component, {
+    closeOnNavigation: false,
     width: '600px',
     maxWidth: '95vw',
     data,
