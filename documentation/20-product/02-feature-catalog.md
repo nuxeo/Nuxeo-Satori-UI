@@ -132,8 +132,12 @@ Gated by `adminGuard` → `hasAdministrationAccess()`, and by
 ## 7. Runtime AI features — 12 operations
 
 **All 12 depend on a backend package that is not in this repository.** Absent package ⇒
-HTTP 500, which is expected. Feature-flagged client-side
-(`ai-feature-flag.service`, `sessionStorage` key `ai-features-enabled`).
+HTTP 500, which is expected. **All 12 are also switched off for every user**, and no AI request can
+reach the backend from a current build: `AI_FEATURES_ENABLED = false` in
+`ai-feature-flag.service.ts:35` since `a519ebd5d`, with no runtime toggle, and `AiGatewayService`
+refuses every request on its own check. A configuration package can still unhide an AI *surface* —
+the rule gating it is clearable from a manifest — but not make it work. The statuses below describe
+the backend, not availability.
 
 | Operation           | Capability                                | Status             |
 | ------------------- | ----------------------------------------- | ------------------ |

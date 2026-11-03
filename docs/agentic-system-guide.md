@@ -162,7 +162,7 @@ The 10 patterns covered:
 | ----------------------- | --------------------------------------------------------------------------------------------------- |
 | **What it contains**    | All AI backend routes, HAIP configuration, the feature flag system, how to add a new AI endpoint    |
 | **When an AI reads it** | Any task involving the AI backend or AI features in the UI                                          |
-| **Key benefit**         | AI assistant knows the AI feature flag is on by default, still gated, and user opt-out is respected |
+| **Key benefit**         | AI assistant knows the AI feature flag is **off for every user** and not toggleable at runtime, so it does not document or build against an opt-out that no longer exists |
 
 ---
 
