@@ -29,6 +29,7 @@ import {
   merge,
   of,
   switchMap,
+  timer,
 } from 'rxjs';
 
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
@@ -119,6 +120,9 @@ const PURGE = 'purge';
  * reads the index, which still lists such a document as trashed for a moment after the request.
  */
 const HANDLED_TTL_MS = 30_000;
+/** How often, and how far apart, a refresh after an action tries again while its page is all hidden. */
+const SETTLE_ATTEMPTS = 3;
+const SETTLE_DELAY_MS = 1_500;
 
 /**
  * The trash: the documents moved to it, with restore and permanent delete for one document or for a
@@ -214,11 +218,14 @@ export class NxsTrashListComponent {
   /** Whether the server has another page: its own flag when it sends one, else from the count. */
   protected readonly hasNextPage = signal(false);
   protected readonly selectedCount = computed(() => this.selectedIds().length);
-  /** "The trash is empty", unless other pages hold documents — only this one has none. */
+  /**
+   * "The trash is empty", unless documents remain: on other pages, or counted but not shown yet
+   * while the index catches up. Then only this page has none.
+   */
   protected readonly emptyHeading = computed(() => {
     this.translations();
     return this.translate.instant(
-      this.hasNextPage() || this.pageIndex() > 0
+      this.hasNextPage() || this.pageIndex() > 0 || this.totalSize() > 0
         ? 'satori-components.trash-list.page-empty'
         : 'satori-components.trash-list.empty',
     );
@@ -287,6 +294,8 @@ export class NxsTrashListComponent {
   private readonly reload$ = new Subject<boolean>();
   /** Documents this list restored or deleted, by id, with when to stop hiding them. */
   private readonly handled = new Map<string, number>();
+  /** Refreshes left for a page emptied only by hidden documents to fill as the index catches up. */
+  private settleAttempts = 0;
   private readonly request = computed(() => ({
     filters: this.filters(),
     sort: this.sort(),
@@ -319,14 +328,24 @@ export class NxsTrashListComponent {
               currentPageIndex: request.pageIndex,
             })
             .pipe(
-              map((list) => ({ list, failure: null as NxsErrorStatus | null })),
-              catchError((error: unknown) => of({ list: null, failure: nxsErrorStatus(error) })),
+              map((list) => ({ list, failure: null as NxsErrorStatus | null, quiet })),
+              catchError((error: unknown) =>
+                of({ list: null, failure: nxsErrorStatus(error), quiet }),
+              ),
             );
         }),
         takeUntilDestroyed(),
       )
-      .subscribe(({ list, failure }) => {
+      .subscribe(({ list, failure, quiet }) => {
         this.loading.set(false);
+        if (!list && quiet) {
+          // A refresh after an action keeps what is shown, so a document an action failed for
+          // stays listed and selected to try again.
+          this.toast.error(this.translate.instant('satori-components.trash-list.refresh-failed'), {
+            retry: () => this.reload$.next(true),
+          });
+          return;
+        }
         if (!list) {
           this.documents.set([]);
           this.totalSize.set(0);
@@ -346,6 +365,13 @@ export class NxsTrashListComponent {
           counted === undefined
             ? -1
             : Math.max(entries.length, counted - (all.length - entries.length));
+        if (!quiet) this.settleAttempts = 0;
+        if (quiet && entries.length === 0 && all.length > 0 && this.settleAttempts > 0) {
+          this.settleAttempts -= 1;
+          timer(SETTLE_DELAY_MS)
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe(() => this.reload$.next(true));
+        }
         // A page past the end — its documents restored or deleted elsewhere since — shows the one
         // before it rather than an empty page.
         if (entries.length === 0 && this.pageIndex() > 0 && total > 0) {
@@ -600,7 +626,8 @@ export class NxsTrashListComponent {
    * Takes restored and deleted documents off the page at once, then fetches the page again without
    * the loader, so later documents move up and the pager stays right. The search reads the index,
    * which still lists them as trashed for a moment, so they stay hidden from this list's searches
-   * for a while.
+   * for a while, and a page they leave empty is fetched again a few times as the index catches up.
+   * If that refresh fails, what is shown stays and a toast offers to retry.
    */
   private remove(uids: ReadonlySet<string>): void {
     const until = Date.now() + HANDLED_TTL_MS;
@@ -610,6 +637,7 @@ export class NxsTrashListComponent {
     const gone = before - this.documents().length;
     if (this.totalSize() >= 0) this.totalSize.update((total) => Math.max(0, total - gone));
     this.report();
+    this.settleAttempts = SETTLE_ATTEMPTS;
     this.reload$.next(true);
   }
 

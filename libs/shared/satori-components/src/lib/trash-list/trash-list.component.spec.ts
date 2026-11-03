@@ -377,6 +377,74 @@ describe('NxsTrashListComponent', () => {
       );
     });
 
+    it('keeps the page and the failed selection when the refresh after an action fails', async () => {
+      restoreDocument.mockImplementation((uid) =>
+        uid === 'uid-1' ? throwError(() => ({ status: 403 })) : of({}),
+      );
+      await create();
+      internals().setSelected('uid-1', true);
+      internals().setSelected('uid-2', true);
+      searchTrash.mockReturnValue(throwError(() => ({ status: 500 })));
+      internals().restore([doc(1), doc(2)]);
+      await render();
+      expect(toastError).toHaveBeenCalledWith('The trash could not be refreshed.', {
+        retry: expect.any(Function),
+      });
+      expect(el().querySelector('nxs-error-state')).toBeNull();
+      expect(el().querySelectorAll('tr.nxs-document-list__row')).toHaveLength(2);
+      expect(internals().selectedIds()).toEqual(['uid-1']);
+
+      searchTrash.mockReturnValue(of(page([doc(1), doc(3)])));
+      const retry = toastError.mock.calls.at(-1)?.[1] as { retry: () => void };
+      retry.retry();
+      await render();
+      expect(el().querySelectorAll('tr.nxs-document-list__row')).toHaveLength(2);
+      expect(internals().selectedIds()).toEqual(['uid-1']);
+    });
+
+    it('fetches a page its own action emptied again, a few times, until the index catches up', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+      try {
+        searchTrash.mockReturnValue(of(page([doc(1), doc(2)], 12)));
+        await create();
+        const before = searchTrash.mock.calls.length;
+        internals().restore([doc(1), doc(2)]);
+        await vi.runOnlyPendingTimersAsync();
+        await render();
+        expect(el().textContent).toContain('Nothing on this page');
+
+        await vi.advanceTimersByTimeAsync(1_500);
+        await render();
+        searchTrash.mockReturnValue(of(page([doc(3)], 10)));
+        await vi.advanceTimersByTimeAsync(1_500);
+        await render();
+        expect(el().querySelectorAll('tr.nxs-document-list__row')).toHaveLength(1);
+        const settled = searchTrash.mock.calls.length;
+        expect(settled - before).toBeLessThanOrEqual(4);
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(searchTrash.mock.calls.length).toBe(settled);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('stops fetching an emptied page again after three tries', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+      try {
+        searchTrash.mockReturnValue(of(page([doc(1)], 12)));
+        await create();
+        const before = searchTrash.mock.calls.length;
+        internals().restore([doc(1)]);
+        await vi.advanceTimersByTimeAsync(20_000);
+        await render();
+        // The refresh straight after the action, then three more.
+        expect(searchTrash.mock.calls.length - before).toBe(4);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('lists a handled document again once it has been hidden long enough', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       try {

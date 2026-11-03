@@ -2596,6 +2596,7 @@
       },
       "loading": "Loading the trash",
       "load-failed": "The trash could not be loaded",
+      "refresh-failed": "The trash could not be refreshed.",
       "empty": "The trash is empty",
       "page-empty": "Nothing on this page",
       "select-page": "Select all on this page",

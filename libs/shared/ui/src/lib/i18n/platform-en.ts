@@ -700,6 +700,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "satori-components.trash-list.purge-named": "Delete {{title}} permanently",
   "satori-components.trash-list.purged-many": "Deleted {{count}} documents permanently.",
   "satori-components.trash-list.purged-one": "Deleted \"{{title}}\" permanently.",
+  "satori-components.trash-list.refresh-failed": "The trash could not be refreshed.",
   "satori-components.trash-list.restore": "Restore",
   "satori-components.trash-list.restore-failed-many": "Could not restore {{failed}} of {{count}} documents.",
   "satori-components.trash-list.restore-failed-one": "Could not restore \"{{title}}\".",

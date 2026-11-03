@@ -2674,6 +2674,7 @@
   "satori-components.trash-list.view.list": "Button that shows the trash as a list.",
   "satori-components.trash-list.loading": "Accessible name of the progress indicator while the trash loads.",
   "satori-components.trash-list.load-failed": "Heading shown in place of the trash when the server fails to return it.",
+  "satori-components.trash-list.refresh-failed": "Error after the trash failed to update itself following a restore or permanent delete; the list shown is kept and a Retry button follows.",
   "satori-components.trash-list.empty": "Heading shown in place of the trash when there is nothing in it, or nothing matching the filters.",
   "satori-components.trash-list.page-empty": "Heading shown in place of the trash on a page with no documents while other pages still have some, for example just after every document on it was restored.",
   "satori-components.trash-list.select-page": "Checkbox that selects every trashed document on the page shown.",
