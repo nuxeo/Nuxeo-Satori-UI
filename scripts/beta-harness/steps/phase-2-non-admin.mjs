@@ -4,16 +4,15 @@
  * The claim: the Administration entry is not offered to a user without administration access, and
  * nothing else is removed along with it.
  *
- * This run needs a real non-administrator Nuxeo account, passed in the environment. A client-only
- * member session was tried and rejected by the identity guard: the stored credential stays the
- * administrator's, so the requests would run as Administrator while the page claimed to be jdoe.
- * A result obtained that way is invalid, so the check is not attempted here.
+ * The assertions need a real non-administrator Nuxeo account and a sign-in as that account, neither
+ * of which is set up here. A client-only member session was tried and rejected by the identity
+ * guard: the stored credential stays the administrator's, so the requests would run as
+ * Administrator while the page claimed to be a member.
  *
- * Until such an account exists, this run reports precondition-not-met. Creating one is a server
- * change and needs approval.
+ * This file therefore never records a pass. Every run ends precondition-not-met, with the reason
+ * below. It is not a check that passes when its inputs are missing.
  *
- * Run (once the account exists):
- *   NUXEO_MEMBER_USER=<user> NUXEO_MEMBER_PASS=<password> npm run beta:evidence -- phase-2-non-admin
+ * Creating a member account is a server change and needs approval.
  */
 
 /**
@@ -22,11 +21,13 @@
  */
 export default async function run(page, h) {
   await h.step('A real non-administrator account is available to run as');
+  const configured = Boolean(process.env.NUXEO_MEMBER_USER && process.env.NUXEO_MEMBER_PASS);
   h.requirePrecondition(
-    'a non-administrator Nuxeo account is configured',
-    Boolean(process.env.NUXEO_MEMBER_USER && process.env.NUXEO_MEMBER_PASS),
-    'the environment has no NUXEO_MEMBER_USER / NUXEO_MEMBER_PASS, and this instance has only the ' +
-      'Administrator account. A client-only member session is refused by the identity guard, so ' +
-      'this check is not run as a substitute.',
+    'the non-administrator assertions exist and have a member account to run as',
+    false,
+    configured
+      ? 'member credentials are set, but the sign-in-as-member assertions are not written in this file yet'
+      : 'no member account is configured (NUXEO_MEMBER_USER / NUXEO_MEMBER_PASS). This instance has only the ' +
+          'Administrator account, and a client-only member session is refused by the identity guard.',
   );
 }
