@@ -165,25 +165,28 @@ export class TasksPageComponent implements OnInit {
     this.listError.set(null);
     const userId = this.currentUsername() ?? 'Administrator';
 
-    this.taskService.getUserTasks(userId, 50).subscribe({
-      next: (entries) => {
-        this.tasks.set(entries);
-        this.listLoading.set(false);
+    this.taskService
+      .getUserTasks(userId, 50)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (entries) => {
+          this.tasks.set(entries);
+          this.listLoading.set(false);
 
-        const taskId = this.route.snapshot.paramMap.get('taskId');
-        if (taskId) {
-          const found = entries.find((t) => t.id === taskId);
-          if (found) this.selectTask(found);
-          else this.loadAndSelectTask(taskId);
-        } else if (entries.length > 0) {
-          this.selectTask(entries[0]);
-        }
-      },
-      error: () => {
-        this.listError.set(this.translate.instant('tasks.message.failed-to-load-tasks'));
-        this.listLoading.set(false);
-      },
-    });
+          const taskId = this.route.snapshot.paramMap.get('taskId');
+          if (taskId) {
+            const found = entries.find((t) => t.id === taskId);
+            if (found) this.selectTask(found);
+            else this.loadAndSelectTask(taskId);
+          } else if (entries.length > 0) {
+            this.selectTask(entries[0]);
+          }
+        },
+        error: () => {
+          this.listError.set(this.translate.instant('tasks.message.failed-to-load-tasks'));
+          this.listLoading.set(false);
+        },
+      });
   }
 
   selectTask(task: NuxeoTask): void {
