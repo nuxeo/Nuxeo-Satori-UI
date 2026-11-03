@@ -81,6 +81,24 @@ describe('TrashComponent', () => {
     expect(element.querySelector('lib-replacement-trash-list')).not.toBeNull();
     expect(element.querySelector('nxs-trash-list')).toBeNull();
     expect(searchTrash).not.toHaveBeenCalled();
+
+    // The replacement is handed the same inputs, and they stay live.
+    const replacement = fixture.debugElement.query(
+      (node) => node.componentInstance instanceof ReplacementTrashListComponent,
+    ).componentInstance as ReplacementTrashListComponent;
+    const filters = TestBed.inject(TrashFilterService);
+    expect(replacement.filters()).toEqual(filters.filters());
+    filters.filters.set({ fullText: 'invoice', path: '/ws', author: '', sizeRanges: [] });
+    await render();
+    expect(replacement.filters()).toEqual(
+      expect.objectContaining({ fullText: 'invoice', path: '/ws' }),
+    );
+
+    replacement.openHandler()?.(NOTE);
+    expect(navigateByUrl).toHaveBeenCalledWith('/doc/uid-1');
+    replacement.resultsHandler()?.({ loading: false, documents: [NOTE], totalSize: 7 });
+    expect(filters.totalResults()).toBe(7);
+    expect(filters.results()).toEqual([{ uid: 'uid-1', title: 'Note 1', type: 'Note' }]);
   });
 
   it('searches the trash with the drawer’s filters', async () => {
