@@ -789,6 +789,118 @@ control('an anonymous default-exported class resolves to its own selector', NEGA
   expect(/declares `fx-anon`/.test(proc.output), proc.output.slice(-400));
 });
 
+/**
+ * `export default class Name {}` — the declaration and the default export in one statement.
+ *
+ * Reported on PR #555 against the commit that added default-import following. That commit's
+ * default branch recurses with the declared name, but the declaration lookup it recursed into
+ * only recognised `export class Name`, so this single-statement form resolved to nothing and a
+ * correctly documented component was rejected. Every control above uses the two-statement form
+ * (`export class X {}` then `export default X;`), which is why none of them could reach it.
+ *
+ * The namesake is kept in the fixture so that resolving by name rather than by binding still
+ * reaches the wrong answer, as in the controls above.
+ */
+const DEFAULT_CLASS_SOURCES = {
+  'libs/fx/src/actual.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-actual', template: '' })\n" +
+    'export default class ActualComponent {}\n',
+  'apps/other/src/namesake.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-namesake', template: '' })\n" +
+    'export class FxCardComponent {}\n',
+  'libs/fx/src/registrar.ts':
+    "import FxCardComponent from './actual';\n" +
+    "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+};
+
+falsePositive('a one-statement default-exported class resolves to its own selector', () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-actual`', '`tabs`']] }),
+      sources: DEFAULT_CLASS_SOURCES,
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
+control('a one-statement default-exported class still rejects a namesake', NEGATIVE, () => {
+  /* The negative twin, and the one that makes the pair discriminating in both directions: a
+   * lookup that recognised neither form refuses this row too, but for the wrong reason, so the
+   * assertion is on the message naming the real selector rather than on the exit code alone. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-namesake`', '`tabs`']] }),
+      sources: DEFAULT_CLASS_SOURCES,
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /declares `fx-actual`/.test(proc.output),
+    `the unrelated namesake's selector was accepted:\n${proc.output.slice(-500)}`,
+  );
+});
+
+/**
+ * The ambiguity counter, which carried the same blind spot one function later.
+ *
+ * Not reported — found by re-deriving the fix above across the file, as the narrow pattern had
+ * been written twice. Here the consequence is worse than a rejection: a class declared
+ * `export default class X {}` in one file and `export class X {}` in another counted as one
+ * declarer, so the refusal below never fired and the second file's selector was accepted as the
+ * first's identity. Both files declare the name; neither is proof of which one is registered.
+ */
+const TWO_FORMS_SOURCES = {
+  'libs/fx/src/default.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-default', template: '' })\n" +
+    'export default class FxCardComponent {}\n',
+  'apps/fx-app/src/named.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-named', template: '' })\n" +
+    'export class FxCardComponent {}\n',
+  /* No import clause, the only shape that still reaches the global fallback — the same reason
+   * given on the ambiguity control above. */
+  'libs/fx/src/registrar.ts': "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+};
+
+control('two declaration forms of one name are ambiguous, not one declarer', NEGATIVE, () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-named`', '`tabs`']] }),
+      sources: TWO_FORMS_SOURCES,
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /is declared in 2 non-spec files/.test(proc.output),
+    `the default-exported declaration was not counted, so ambiguity was resolved by ` +
+      `guessing:\n${proc.output.slice(-500)}`,
+  );
+});
+
+falsePositive('a uniquely default-exported class resolves through the fallback', () => {
+  /* The other direction of the same count: with one declarer and no import to follow, the
+   * fallback must resolve it rather than report that nothing declares it. A fix that only made
+   * the counter stricter would satisfy the control above and fail this one. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-card`', '`tabs`']] }),
+      sources: {
+        'libs/fx/src/default.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-card', template: '' })\n" +
+          'export default class FxCardComponent {}\n',
+        'libs/fx/src/registrar.ts': "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+      },
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
 control('a fixture whose EXTENSION_SLOTS cannot be found is reported', NEGATIVE, () => {
   const root = fixture();
   rmSync(join(root, 'libs/shared/extensions/src/lib/extension-slots.ts'));

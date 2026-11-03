@@ -996,7 +996,12 @@ function selectorOfBinding(name, file, depth = 0) {
     return null;
   }
 
-  const declaration = new RegExp(String.raw`\bexport class ${reEscape(name)}\b`);
+  /* `export default class Name {}` as well as `export class Name {}`. The default-export branch
+   * above recurses with the declared name, and without the optional modifier this pattern missed
+   * that form and rejected a correctly documented, default-imported component. Reported on
+   * PR #555 against the branch added minutes earlier; my own control for it used the two-statement
+   * form (`export class X {}` then `export default X;`) and so could not reach it. */
+  const declaration = new RegExp(String.raw`\bexport\s+(?:default\s+)?class\s+${reEscape(name)}\b`);
   const classAt = text.search(declaration);
   if (classAt !== -1) {
     const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*['"`]([^'"`]+)['"`]/g)];
@@ -1025,7 +1030,15 @@ function selectorOfBinding(name, file, depth = 0) {
 }
 
 function selectorOf(className, registeringFile) {
-  const declaration = new RegExp(String.raw`\bexport class ${reEscape(className)}\b`);
+  /* The same optional `default` modifier as the declaration lookup above, because the review that
+   * found it there named one site and this is the second. It counts declarers for the ambiguity
+   * refusal below, where missing a declaration is the more dangerous direction of the two: a class
+   * declared `export default class X {}` in one file and `export class X {}` in another counted as
+   * **one**, so the refusal never fired and the second file's selector was accepted as the first's
+   * identity — exactly what that refusal exists to prevent. */
+  const declaration = new RegExp(
+    String.raw`\bexport\s+(?:default\s+)?class\s+${reEscape(className)}\b`,
+  );
 
   const registering = sources.get(join(ROOT, registeringFile));
   if (registering !== undefined) {
