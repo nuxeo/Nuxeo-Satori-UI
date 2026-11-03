@@ -646,6 +646,52 @@ control('a renamed re-export is followed, not resolved by global name', NEGATIVE
   );
 });
 
+/**
+ * The unique-class fallback, in both directions.
+ *
+ * Reported on PR #555: this path is reached by a **default** import — which the named-import
+ * matcher cannot see — of a class no other file declares, and the line that handles it still
+ * called a closure the resolution rewrite had removed. It threw
+ * `ReferenceError: readFrom is not defined` and rejected a valid component. The existing
+ * ambiguity control only covered *multiple* matches, so nothing exercised the single-match side.
+ *
+ * `expectExit` asserts no stack trace, which is what that failure was.
+ */
+const DEFAULT_IMPORT_SOURCES = {
+  'libs/fx/src/card.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-card', template: '' })\n" +
+    'export class FxUniqueCardComponent {}\n' +
+    'export default FxUniqueCardComponent;\n',
+  'libs/fx/src/registrar.ts':
+    "import FxUniqueCardComponent from './card';\n" +
+    "export const REG = { 'nxs.tabs.fxCard': FxUniqueCardComponent };\n",
+};
+
+falsePositive('the unique-class fallback resolves a default-imported component', () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-card`', '`tabs`']] }),
+      sources: DEFAULT_IMPORT_SOURCES,
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
+control('the unique-class fallback still rejects a wrong element', NEGATIVE, () => {
+  /* The negative twin. A fallback that resolved nothing would also "pass" the control above by
+   * never disagreeing, so the fallback has to be shown disagreeing too. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-wrong`', '`tabs`']] }),
+      sources: DEFAULT_IMPORT_SOURCES,
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(/declares `fx-card`/.test(proc.output), proc.output.slice(-400));
+});
+
 control('a binding whose module cannot be resolved is refused, not name-matched', NEGATIVE, () => {
   const proc = run(
     fixture({

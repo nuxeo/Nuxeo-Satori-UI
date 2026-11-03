@@ -1041,7 +1041,14 @@ function selectorOf(className, registeringFile) {
     );
     return null;
   }
-  return declaring.length === 1 ? readFrom(declaring[0]) : null;
+  /* `selectorOfBinding`, not the `readFrom` closure this used to call — that closure was replaced
+   * when the resolution chain was rewritten and this line was left pointing at it, so the one path
+   * that reaches the fallback with a unique name threw `ReferenceError: readFrom is not defined`
+   * and rejected a valid component. The path is narrow (a default import, which the named-import
+   * matcher cannot see, of a class no other file declares) which is why nothing else hit it.
+   * Reported on PR #555; reproduced before fixing, and the positive control for this fallback is
+   * what the existing ambiguity control did not cover. */
+  return declaring.length === 1 ? selectorOfBinding(className, declaring[0]) : null;
 }
 
 /**
