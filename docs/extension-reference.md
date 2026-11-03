@@ -848,6 +848,7 @@ Components are referenced by ID and must already be compiled in. Contributing a 
 | `nxs.components.adminUsersGroupsPage`  | The users and groups administration screen at `/administration/users-groups`: search, recently created, and create, edit and delete for users and groups |
 | `nxs.components.adminUserDetailsPage`  | One user at `/administration/users-groups/user/:userId`: profile, groups, and direct and group permissions                                               |
 | `nxs.components.adminGroupDetailsPage` | One group at `/administration/users-groups/group/:groupId`: members, nested groups, and permissions                                                      |
+| `nxs.components.taskDetail`            | The task panel of the Tasks page at `/tasks/:taskId`: a task's actions, abandon, delegate, reassign, workflow graph                                      |
 
 `app.page.contracts` is the first component registered for the **`routes`** slot rather than for a
 drawer, and it exists because that slot went live with **no component in the product able to serve
@@ -955,9 +956,9 @@ ID reaches it. The uses resolved by ID are these:
 | Component ID                 | Rendered on                                                                                                                                                                                         |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `nxs.primitives.avatar`      | browse (the history tab's users, the info panel's creator and contributor, activity), document detail (activity), the collection page (the history tab's users), the dashboard, `nxs-document-list` |
-| `nxs.primitives.tag`         | browse (a trashed child's type), search (a list row's type), document detail (the AI primary category, a publication's version), task detail, trash, `nxs-document-list`                            |
+| `nxs.primitives.tag`         | browse (a trashed child's type), search (a list row's type), document detail (the AI primary category, a publication's version), trash, `nxs-document-list`                                         |
 | `nxs.primitives.breadcrumbs` | browse, document detail, the collection page, the tasks page                                                                                                                                        |
-| `nxs.primitives.statusTag`   | browse, document detail, the collection page, task detail                                                                                                                                           |
+| `nxs.primitives.statusTag`   | browse, document detail, the collection page                                                                                                                                                        |
 | `nxs.primitives.card`        | browse's and search's card views, one per document; the card shows the type as its subheading                                                                                                       |
 | `nxs.primitives.tabs`        | document detail's tab strip (sections 8 and 9)                                                                                                                                                      |
 | `nxs.primitives.actionBar`   | document detail's header action row (sections 8 and 9)                                                                                                                                              |
