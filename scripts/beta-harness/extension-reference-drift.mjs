@@ -532,6 +532,52 @@ function tableAfter(anchor, what) {
  * the document is a failure, so no parsing accident can reduce the work to nothing: it can only
  * turn the run red.
  */
+/**
+ * The top-level members of an object literal body, split on commas that are not nested.
+ *
+ * Deliberately structural rather than line- or pattern-based: it is the independent reading that
+ * `declaredSlots()` needs, and a second regex sharing the first one's blind spots was not
+ * independent at all (PR #555). Comments are already gone — `sources` holds `stripComments()`
+ * output — so only nesting and string state have to be tracked.
+ */
+function objectMembers(inner) {
+  const members = [];
+  let depth = 0;
+  let quote = null;
+  let current = '';
+  for (let i = 0; i < inner.length; i += 1) {
+    const ch = inner[i];
+    if (quote !== null) {
+      current += ch;
+      if (ch === '\\') {
+        current += inner[i + 1] ?? '';
+        i += 1;
+      } else if (ch === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === '(' || ch === '[' || ch === '{') depth += 1;
+    if (ch === ')' || ch === ']' || ch === '}') {
+      if (depth === 0) break; // the object's own closing brace
+      depth -= 1;
+    }
+    if (ch === ',' && depth === 0) {
+      members.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  members.push(current);
+  return members.map((m) => m.trim()).filter(Boolean);
+}
+
 function declaredSlots() {
   const file = [...sources.keys()].find((path) => path.endsWith(`${sep}extension-slots.ts`));
   if (!file) {
@@ -563,23 +609,36 @@ function declaredSlots() {
    * under-read a roster and hid a missing row; here it under-read the expected set and made the
    * coverage assertion itself vacuous.
    *
-   * Any quote style now, and the count is cross-checked against the entries the block actually
-   * contains, so a key shape no pattern anticipates is reported rather than silently dropped.
+   * Any quote style now — and the members are found **structurally**, not by a line pattern.
+   *
+   * The first fix for this counted "entries" with a second line-anchored regex and compared the
+   * two. That cross-check was not independent: both patterns shared the same blind spots, so a
+   * member neither could see — a spread, a computed key, or a second entry on the same line — was
+   * omitted from *both* counts, they agreed, and the coverage claim was false again. Reported on
+   * PR #555, one round after the version it was meant to fix.
+   *
+   * `objectMembers()` splits the object body on top-level commas, tracking nesting and string
+   * state, so it sees every member whatever its shape. A member it cannot read as
+   * `key: 'string'` is a **reported failure**, not a member to skip — that is what makes the set
+   * complete rather than merely large.
    */
   const block = body.slice(open, close);
-  const slots = [
-    ...block.matchAll(/^\s*(?:['"`]([^'"`]+)['"`]|([A-Za-z_$][\w$]*))\s*:\s*['"`]/gm),
-  ].map((m) => m[1] ?? m[2]);
-  // Every entry of the object, whatever its value looks like: `key:` or `'key':` at line start.
-  const entries = [...block.matchAll(/^\s*(?:['"`][^'"`]+['"`]|[A-Za-z_$][\w$]*)\s*:/gm)].length;
-  if (slots.length !== entries) {
-    fail(
-      `${relative(ROOT, file)} has ${entries} entr(y/ies) in \`EXTENSION_SLOTS\` but ` +
-        `${slots.length} readable slot name(s), so the expected set was read only partially.\n` +
-        '  A slot missing from that set is a slot whose absent documentation row would go ' +
-        'unreported, which is exactly what this check exists to prevent.',
+  const inner = block.slice(block.indexOf('{') + 1);
+  const slots = [];
+  for (const member of objectMembers(inner)) {
+    const parsed = /^(?:['"`]([^'"`]+)['"`]|([A-Za-z_$][\w$]*))\s*:\s*['"`]([^'"`]+)['"`]$/s.exec(
+      member,
     );
-    return [];
+    if (!parsed) {
+      fail(
+        `${relative(ROOT, file)} has an \`EXTENSION_SLOTS\` member this gate cannot read as ` +
+          `\`key: 'value'\`:\n    ${member.replace(/\s+/g, ' ').slice(0, 90)}\n` +
+          '  A member left out of the expected set is a slot whose absent documentation row would ' +
+          'go unreported, so an unreadable one is a failure rather than something to skip.',
+      );
+      return [];
+    }
+    slots.push(parsed[1] ?? parsed[2]);
   }
   if (slots.length === 0) {
     fail(`${relative(ROOT, file)} yielded no slot names, so the table was compared to nothing.`);

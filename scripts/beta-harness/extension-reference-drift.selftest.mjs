@@ -465,12 +465,57 @@ control('an EXTENSION_SLOTS entry no pattern can read is reported, not dropped',
   const proc = run(fixture({ sources }));
   expectExit(proc, 1, NEGATIVE);
   expect(
-    /entr\(y\/ies\) in `EXTENSION_SLOTS` but .* readable slot name\(s\), so the expected set was read only partially/s.test(
-      proc.output,
-    ),
+    /member this gate cannot read as `key: 'value'`/.test(proc.output),
     proc.output.slice(-400),
   );
 });
+
+/**
+ * Members no line pattern can see: a spread, a computed key, and two entries on one line.
+ *
+ * Reported on PR #555 against the *first* fix for this, which counted "entries" with a second
+ * line-anchored regex and compared the two counts. That cross-check shared the first pattern's
+ * blind spots, so a member neither could see was omitted from both counts, they agreed, and the
+ * coverage claim was false again. `objectMembers()` splits on top-level commas instead, so each
+ * of these is a member it finds and cannot read — a reported failure, not a silent omission.
+ *
+ * The documentation row for a slot is removed in each case, so a control that merely checked
+ * "does it still pass" would be satisfied by the bug; these require the gate to say which member
+ * it could not read.
+ */
+for (const [label, member, undocumented, alsoDocument] of [
+  ['a spread member', '...OTHER_SLOTS', 'navbar', []],
+  ['a computed key', "[SOME_KEY]: 'navbar'", 'navbar', []],
+  /* Isolating the second-entry-on-a-line case took two attempts, and the first two were not
+   * discriminating — worth recording, because a control that passes either way is the thing this
+   * whole pull request is about.
+   *
+   * The old line-anchored reader sees the FIRST entry on a line and not the second. So: `extra`
+   * is first and IS documented, `navbar` is second and is NOT. Under the old reader the expected
+   * set holds `extra` (documented, fine) and never contains `navbar`, so its absent row goes
+   * unreported and the gate passes. Under the structural walk both are members, `navbar` has no
+   * row, and it fails. */
+  ['two entries on one line', "extra: 'extra', navbar: 'navbar'", 'navbar', ['extra']],
+]) {
+  control(`an EXTENSION_SLOTS ${label} is reported, not omitted`, NEGATIVE, () => {
+    const sources = slotSources();
+    const key = 'libs/shared/extensions/src/lib/extension-slots.ts';
+    sources[key] = sources[key].replace("  navbar: 'navbar',", `  ${member},`);
+    const rows = [...SLOTS.filter((s) => s !== undocumented), ...alsoDocument].map((s) => [
+      `\`${s}\``,
+      'what it addresses',
+      'Resolves',
+    ]);
+    const proc = run(fixture({ doc: referenceDoc({ section2: slotTable(rows) }), sources }));
+    expectExit(proc, 1, NEGATIVE);
+    expect(
+      /member this gate cannot read as `key: 'value'`|has no readable state claim/.test(
+        proc.output,
+      ),
+      `the member was omitted from the expected set in silence:\n${proc.output.slice(-500)}`,
+    );
+  });
+}
 
 // A double-quoted component selector must still match its row, not fall through to a refusal.
 control('a double-quoted selector is matched against its row', POSITIVE, () => {
