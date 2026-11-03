@@ -187,13 +187,13 @@
   </div>
 }
 
-@if (task().dueDate) {
+@if (dueLabel(); as due) {
   <div class="nxs-task-detail__section">
     <span class="nxs-task-detail__label">{{
       'satori-components.task-detail.due' | translate
     }}</span>
     <span class="nxs-task-detail__due" [class.nxs-task-detail__due--overdue]="overdue()">
-      {{ dueLabel() }}
+      {{ due.key | translate: { count: due.count } }}
     </span>
   </div>
 }

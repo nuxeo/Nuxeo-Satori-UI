@@ -17,12 +17,16 @@ the document a task is about, as the Tasks page does.
   completes the task with the comment typed, and the panel hands the task back to the host.
 - **Choosing participants.** A "choose participants" step adds a field that finds users and groups
   as the user types, and a choice between a simple review and a validation. With nobody chosen, the
-  signed-in user is assigned.
+  signed-in user is assigned; when the application does not know who is signed in, the panel asks
+  for a participant instead.
 - **Delegate and reassign.** Delegating shares the task with more people; reassigning gives it to
   others instead. Both take an optional comment.
 - **The workflow graph.** The workflow's steps, with the task's own step marked as current.
 - **Outcomes are announced.** Each outcome is a toast. When Nuxeo refuses, its reason is shown, the
   task stays, and the actions are enabled again.
+- **Late answers stay with their task.** If the host shows another task while a request is
+  running, its outcome is still announced, but it does not close the new task's panel or call the
+  callbacks for it.
 - **It does not navigate.** `taskDone` is called once the task has left the inbox, and
   `taskChanged` after its assignees changed; the host decides what comes next.
 - **Replaceable by ID.** It is registered as `nxs.components.taskDetail`, so your own panel can

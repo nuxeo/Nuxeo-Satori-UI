@@ -2583,6 +2583,7 @@
       "delegated-to": "Delegated to:",
       "due": "Due",
       "participants": "Participants",
+      "participants-required": "Choose at least one participant.",
       "review-type": "Review Type",
       "simple-review": "Simple Review",
       "validation": "Validation",

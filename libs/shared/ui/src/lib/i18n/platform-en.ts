@@ -700,6 +700,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "satori-components.task-detail.overdue-hours-many": "{{ count }} hours overdue",
   "satori-components.task-detail.overdue-less-than-an-hour": "less than an hour overdue",
   "satori-components.task-detail.participants": "Participants",
+  "satori-components.task-detail.participants-required": "Choose at least one participant.",
   "satori-components.task-detail.reassign": "Reassign",
   "satori-components.task-detail.reassign-failed": "Failed to reassign task.",
   "satori-components.task-detail.reassign-hint": "Select new assignees. The current assignees will be removed from this task.",

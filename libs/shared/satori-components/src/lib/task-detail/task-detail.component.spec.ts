@@ -54,6 +54,7 @@ const ENGLISH: Record<string, string> = {
   [`${P}.delegate-failed`]: 'Failed to delegate task.',
   [`${P}.task-reassigned`]: 'Task reassigned successfully.',
   [`${P}.reassign-failed`]: 'Failed to reassign task.',
+  [`${P}.participants-required`]: 'Choose at least one participant.',
 };
 
 const HOUR = 3_600_000;
@@ -393,13 +394,13 @@ describe('NxsTaskDetailComponent', () => {
       expect(days).toBeLessThan(5.1);
     });
 
-    it('assigns Administrator when no user is signed in and no participant was chosen', async () => {
+    it('refuses, and says why, when nobody is chosen and nobody is signed in', async () => {
       username.set(null);
       await render(makeTask(CHOOSE));
       await click('Start Review');
-      expect(
-        (tasks['completeTask'].mock.calls[0][2] as Record<string, string[]>)['participants'],
-      ).toEqual(['user:Administrator']);
+      expect(tasks['completeTask']).not.toHaveBeenCalled();
+      expect(toastError).toHaveBeenCalledWith('Choose at least one participant.');
+      expect(button('Start Review')?.disabled).toBe(false);
     });
 
     it('starts from the participants already stored on the task', async () => {
@@ -437,6 +438,61 @@ describe('NxsTaskDetailComponent', () => {
       await render(makeTask({ ...CHOOSE, id: 'task-2' }));
       expect(instance.comment()).toBe('');
       expect(pickers()[0].value()).toEqual([]);
+    });
+  });
+
+  describe('a write that lands after the host shows another task', () => {
+    it('announces the completion but leaves the new task and the selection alone', async () => {
+      const response = new Subject<NuxeoTask>();
+      tasks['completeTask'].mockReturnValue(response);
+      await render();
+      await click('Approve');
+      await render(makeTask({ id: 'task-2' }));
+      expect(button('Approve')?.disabled).toBe(false);
+
+      response.next(makeTask());
+      fixture.detectChanges();
+      expect(toastShow).toHaveBeenCalledWith('Task completed successfully.');
+      expect(tasks['notifyTasksChanged']).toHaveBeenCalled();
+      expect(taskDone).not.toHaveBeenCalled();
+    });
+
+    it("keeps the new task's busy state and open panel when an old delegation lands", async () => {
+      const response = new Subject<void>();
+      tasks['delegateTask'].mockReturnValue(response);
+      await render();
+      await click('Delegate');
+      pickers()[0].value.set([principal('user', 'asmith')]);
+      fixture.detectChanges();
+      (el().querySelector('.nxs-task-detail__confirm') as HTMLButtonElement).click();
+
+      await render(makeTask({ id: 'task-2' }));
+      await click('Reassign');
+      const slow = new Subject<NuxeoTask>();
+      tasks['completeTask'].mockReturnValue(slow);
+      await click('Approve');
+      response.next();
+      response.error(new Error('ignored after next'));
+      fixture.detectChanges();
+
+      expect(el().querySelector('[data-panel="reassign"]')).toBeTruthy();
+      expect(button('Approve')?.disabled).toBe(true);
+      expect(taskChanged).not.toHaveBeenCalled();
+      expect(toastShow).toHaveBeenCalledWith('Task delegated successfully.');
+    });
+
+    it("drops an old failure's effect on the new task's busy state", async () => {
+      const response = new Subject<void>();
+      workflows['cancelWorkflow'].mockReturnValue(response);
+      await render();
+      await click('Abandon Workflow');
+      await render(makeTask({ id: 'task-2' }));
+      tasks['completeTask'].mockReturnValue(new Subject<NuxeoTask>());
+      await click('Approve');
+      response.error(new Error('403'));
+      fixture.detectChanges();
+      expect(toastError).toHaveBeenCalledWith('Failed to abandon workflow.');
+      expect(button('Approve')?.disabled).toBe(true);
     });
   });
 
@@ -660,6 +716,45 @@ describe('NxsTaskDetailComponent', () => {
       fixture.destroy();
       expect(response.observed).toBe(false);
     });
+  });
+
+  it('crosses the deadline on screen while the same task stays open', async () => {
+    // A tick schedules change detection for every attached view, the suite's own fixture included.
+    fixture.componentRef.setInput('task', makeTask());
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-11-03T10:00:00.000Z'));
+      const clocked = TestBed.createComponent(NxsTaskDetailComponent);
+      clocked.componentRef.setInput('task', makeTask({ dueDate: '2026-11-03T10:00:30.000Z' }));
+      clocked.detectChanges();
+      const due = (): Element | null =>
+        (clocked.nativeElement as HTMLElement).querySelector('.nxs-task-detail__due');
+      expect(due()?.textContent?.trim()).toBe('Due in less than an hour');
+      expect(due()?.classList).not.toContain('nxs-task-detail__due--overdue');
+
+      vi.advanceTimersByTime(60_000);
+      clocked.detectChanges();
+      expect(due()?.textContent?.trim()).toBe('less than an hour overdue');
+      expect(due()?.classList).toContain('nxs-task-detail__due--overdue');
+      clocked.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says the due line in the language the user switches to', async () => {
+    await render();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      ...ENGLISH,
+      [`${P}.due-in-days-many`]: 'Échéance dans {{ count }} jours',
+    });
+    translate.use('fr');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el().querySelector('.nxs-task-detail__due')?.textContent?.trim()).toBe(
+      'Échéance dans 3 jours',
+    );
   });
 
   it('caps the panel headings at level six', async () => {

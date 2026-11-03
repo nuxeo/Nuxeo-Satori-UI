@@ -6,11 +6,10 @@ import {
   inject,
   input,
   linkedSignal,
-  signal,
   untracked,
   type InputSignal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
@@ -21,7 +20,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import type { Observable, Subscription } from 'rxjs';
+import { interval, map, type Observable, type Subscription } from 'rxjs';
 
 import {
   CURRENT_USERNAME,
@@ -160,14 +159,19 @@ export class NxsTaskDetailComponent {
     (this.task().delegatedActors ?? []).map((actor) => actor.id),
   );
   protected readonly comments = computed(() => (this.task().comments ?? []).map(toComment));
+  /** The time, a minute at a time, so a task left open crosses its deadline on screen. */
+  private readonly now = toSignal(interval(60_000).pipe(map(() => Date.now())), {
+    initialValue: Date.now(),
+  });
   protected readonly overdue = computed(() => {
     const due = this.task().dueDate;
-    return !!due && new Date(due).getTime() < Date.now();
+    return !!due && new Date(due).getTime() < this.now();
   });
-  protected readonly dueLabel = computed<string>(() => {
+  /** The key and count of the due line, translated by the template so it follows the language. */
+  protected readonly dueLabel = computed<{ key: string; count: number } | null>(() => {
     const due = this.task().dueDate;
-    if (!due) return '';
-    const { due: ahead, unit, count } = taskDueDistance(due);
+    if (!due) return null;
+    const { due: ahead, unit, count } = taskDueDistance(due, this.now());
     const keys = ahead ? DUE_KEYS.due : DUE_KEYS.overdue;
     const key =
       unit === 'days'
@@ -177,7 +181,7 @@ export class NxsTaskDetailComponent {
         : unit === 'hours'
           ? keys.hours
           : keys.underTwoHours;
-    return this.translate.instant(key, { count });
+    return { key, count };
   });
 
   // Everything the user types belongs to one task, and starts again when the host shows another.
@@ -204,7 +208,7 @@ export class NxsTaskDetailComponent {
     computation: () => null,
   });
 
-  protected readonly submitting = signal(false);
+  protected readonly submitting = linkedSignal({ source: this.taskId, computation: () => false });
 
   private graphRequest?: Subscription;
 
@@ -218,9 +222,14 @@ export class NxsTaskDetailComponent {
     const variables: Record<string, unknown> = {};
     if (this.choosesParticipants()) {
       const chosen = this.participants().map((principal) => principal.prefixedId);
-      variables['participants'] = chosen.length
-        ? chosen
-        : [`user:${this.currentUsername() ?? 'Administrator'}`];
+      const user = this.currentUsername();
+      if (!chosen.length && !user) {
+        this.toast.error(
+          this.translate.instant('satori-components.task-detail.participants-required'),
+        );
+        return;
+      }
+      variables['participants'] = chosen.length ? chosen : [`user:${user}`];
       variables['end_date'] = endDate(task).toISOString();
       variables['validationOrReview'] = this.reviewType();
     }
@@ -229,10 +238,10 @@ export class NxsTaskDetailComponent {
 
     this.submit(
       this.taskService.completeTask(task.id, action.name, variables, comment || undefined),
-      () => {
+      (current) => {
         this.toast.show(this.translate.instant('satori-components.task-detail.task-completed'));
         this.taskService.notifyTasksChanged();
-        this.taskDone()(task, 'completed');
+        if (current) this.taskDone()(task, 'completed');
       },
       (err) =>
         this.toast.error(
@@ -248,10 +257,10 @@ export class NxsTaskDetailComponent {
     if (!task.workflowInstanceId) return;
     this.submit(
       this.workflowService.cancelWorkflow(task.workflowInstanceId),
-      () => {
+      (current) => {
         this.toast.show(this.translate.instant('satori-components.task-detail.workflow-abandoned'));
         this.taskService.notifyTasksChanged();
-        this.taskDone()(task, 'abandoned');
+        if (current) this.taskDone()(task, 'abandoned');
       },
       () =>
         this.toast.error(this.translate.instant('satori-components.task-detail.abandon-failed')),
@@ -290,7 +299,7 @@ export class NxsTaskDetailComponent {
       delegate
         ? this.taskService.delegateTask(task.id, actors, comment)
         : this.taskService.reassignTask(task.id, actors, comment),
-      () => {
+      (current) => {
         this.toast.show(
           this.translate.instant(
             delegate
@@ -298,8 +307,9 @@ export class NxsTaskDetailComponent {
               : 'satori-components.task-detail.task-reassigned',
           ),
         );
-        this.closePanel();
         this.taskService.notifyTasksChanged();
+        if (!current) return;
+        this.closePanel();
         this.taskChanged()(task);
       },
       (err) =>
@@ -371,19 +381,27 @@ export class NxsTaskDetailComponent {
     return this.principalLabel(id).charAt(0).toUpperCase();
   }
 
+  /**
+   * Sends a write and reports how it went. `current` is false when the host has shown another task
+   * meanwhile: the outcome is still announced, but it must not touch the panel or the selection the
+   * user has moved on to.
+   */
   private submit<T>(
     request: Observable<T>,
-    done: () => void,
+    done: (current: boolean) => void,
     failed: (err: unknown) => void,
   ): void {
+    const id = this.taskId();
     this.submitting.set(true);
+    const settle = (): boolean => {
+      const current = this.taskId() === id;
+      if (current) this.submitting.set(false);
+      return current;
+    };
     request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
-        this.submitting.set(false);
-        done();
-      },
+      next: () => done(settle()),
       error: (err: unknown) => {
-        this.submitting.set(false);
+        settle();
         failed(err);
       },
     });

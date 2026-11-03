@@ -2665,6 +2665,7 @@
   "satori-components.task-detail.delegated-to": "Label above the list of users and groups the task was delegated to, in the task panel of the Tasks page (nxs-task-detail).",
   "satori-components.task-detail.due": "Label in the task panel of the Tasks page (nxs-task-detail) before the time left until the task is due. NOUN/ADJECTIVE: the deadline, not a payment.",
   "satori-components.task-detail.participants": "Label of the field in the task panel of the Tasks page (nxs-task-detail) where the user chooses who takes part in the review the task starts.",
+  "satori-components.task-detail.participants-required": "Error shown when the user starts a review with nobody chosen and the application does not know who is signed in, in the task panel of the Tasks page (nxs-task-detail).",
   "satori-components.task-detail.review-type": "Label of the choice between a simple review and a validation, in the task panel of the Tasks page (nxs-task-detail).",
   "satori-components.task-detail.simple-review": "Option of the review type in the task panel of the Tasks page (nxs-task-detail): reviewers give an opinion only.",
   "satori-components.task-detail.validation": "Option of the review type in the task panel of the Tasks page (nxs-task-detail): reviewers approve or reject.",

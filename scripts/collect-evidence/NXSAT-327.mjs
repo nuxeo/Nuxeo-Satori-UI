@@ -186,11 +186,15 @@ export const scenes = [
           .catch(() => {});
         h.check('the page left the completed task', !page.url().includes(taskId));
       }
-      const after = await (await page.request.get(api(`/task/${taskId}`))).json().catch(() => ({}));
+      // Done means Nuxeo no longer has it: gone (404), or returned with a state other than opened.
+      // Any other status, or a body that names no state, is a failed lookup, not a completion.
+      const lookup = await page.request.get(api(`/task/${taskId}`));
+      const body = lookup.status() === 200 ? await lookup.json().catch(() => null) : null;
+      const state = typeof body?.state === 'string' ? body.state : '';
       h.check(
         'the server no longer has the task open',
-        after?.state !== 'opened',
-        `state ${after?.state}`,
+        lookup.status() === 404 || (lookup.status() === 200 && state !== '' && state !== 'opened'),
+        `HTTP ${lookup.status()}, state ${state || '(none)'}`,
       );
       await h.shot('05-completed', { highlight: PANEL, label: 'After completion' });
     },

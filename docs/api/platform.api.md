@@ -2717,7 +2717,10 @@ class NxsTaskDetailComponent {
     protected readonly delegatedActors: import("@angular/core").Signal<string[]>;
     protected readonly comments: import("@angular/core").Signal<TaskComment[]>;
     protected readonly overdue: import("@angular/core").Signal<boolean>;
-    protected readonly dueLabel: import("@angular/core").Signal<string>;
+    protected readonly dueLabel: import("@angular/core").Signal<{
+    key: string;
+    count: number;
+    } | null>;
     protected readonly comment: import("@angular/core").WritableSignal<string>;
     protected readonly participants: import("@angular/core").WritableSignal<readonly NxsPrincipal[]>;
     protected readonly reviewType: import("@angular/core").WritableSignal<string>;
