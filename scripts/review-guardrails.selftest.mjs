@@ -4276,6 +4276,86 @@ expectGreen('an ampersand stored as itself', 'checkCatalogueValuesAreRenderable'
   'apps/nuxeo-ui/public/i18n/en.json': '{\n  "a": "Users & Groups"\n}\n',
 });
 
+// The undecoded-escape arm. Twelve French values arrived double-escaped in the 2 November 2026
+// Crowdin pull, so the catalogue held the characters `\u00a0` where a non-breaking space belonged.
+//
+// These fixtures are built with `JSON.stringify` rather than written as raw JSON text, unlike
+// their neighbours above. The arm tests the PARSED value, and the difference between a passing and
+// a failing fixture here is one backslash inside a JSON string inside a JS string literal — three
+// levels of escaping where a miscount silently produces the other case and the control still goes
+// the expected colour for the wrong reason. Stating the parsed value and letting `stringify` do
+// the encoding removes the arithmetic.
+const catalogue = (value) => JSON.stringify({ a: value }, null, 2) + '\n';
+
+expectRed(
+  'a double-escaped Unicode escape in a catalogue value',
+  'checkCatalogueValuesAreRenderable',
+  APP,
+  // `'\\u00a0'` in this JS literal is a backslash followed by `u00a0` — the defect, not a NBSP.
+  (write) => write('apps/nuxeo-ui/public/i18n/en.json', catalogue('la suivante\\u00a0:')),
+  /literal characters `\\u00a0` rather than a non-breaking space/,
+);
+
+// `\u{1,6}` hex digits reach U+FFFFFF, above Unicode's U+10FFFF, and `String.fromCodePoint` throws
+// `RangeError` past it — from inside the diagnostic, so one such value aborted the runner before it
+// printed the failures already collected. A reporting path that destroys the report. Found by
+// review of #549. The control asserts the ordinary failure, which is what proves it no longer
+// throws: a `RangeError` kills the process and `expectRed` never sees its message.
+expectRed(
+  'a Unicode escape above the maximum code point',
+  'checkCatalogueValuesAreRenderable',
+  APP,
+  (write) => write('apps/nuxeo-ui/public/i18n/en.json', catalogue('cassé \\u{110000} ici')),
+  /above Unicode's maximum/,
+);
+
+// `\u{…}` permits leading zeros, so `\u{00000a0}` is an ordinary spelling of a non-breaking space.
+// The pattern capped the braced form at six hex digits and read straight past seven, which let a
+// value displaying broken text pass the arm. Found by review of #549. The digit count is open
+// now, and the control uses the spelling the cap missed rather than a short one that would have
+// passed either way.
+expectRed(
+  'a braced Unicode escape with leading zeros past the old six-digit cap',
+  'checkCatalogueValuesAreRenderable',
+  APP,
+  (write) => write('apps/nuxeo-ui/public/i18n/en.json', catalogue('la suivante\\u{00000a0}:')),
+  /literal characters `\\u\{00000a0\}` rather than a non-breaking space/,
+);
+
+// Windows and UNC paths, which the first version of this arm rejected. `\t` in `C:\temp` and `\n`
+// in `\\nas\files` are path separators followed by an ordinary letter, not escapes, and the
+// diagnostic told the author to "store the character" — that is, to corrupt the path.
+//
+// These exact strings are the point. The original controls were `C:\Users` and `\\server\share`,
+// which passed only because `U` and `s` are not escape letters: two examples chosen by the author,
+// generalised from, and green for a reason unrelated to the rule being right. Review of #549 found
+// it. Every escape letter that can begin a real path segment belongs here.
+falsePositiveControls += 1;
+expectGreen('Windows and UNC paths in a catalogue value', 'checkCatalogueValuesAreRenderable', {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json': catalogue(
+    'Copy from C:\\temp, C:\\new, C:\\var, C:\\bin, C:\\files or \\\\nas\\x64\\reports',
+  ),
+});
+
+// The gap the retreat leaves, asserted on purpose rather than left to be discovered. A
+// double-escaped `\n` passes this gate: it is indistinguishable from `C:\new` by any test over the
+// value, so covering it would mean rejecting valid paths. If someone later makes this control go
+// red, that is the trade being reversed and the docstring is where the reasoning lives.
+falsePositiveControls += 1;
+expectGreen('a literal \\n, which this arm knowingly allows', 'checkCatalogueValuesAreRenderable', {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json': catalogue('Ligne un\\nLigne deux'),
+});
+
+// The same string the red control uses, holding the character instead of its escape: this is what
+// proves the arm reads the escape rather than the surrounding words.
+falsePositiveControls += 1;
+expectGreen('a non-breaking space stored as itself', 'checkCatalogueValuesAreRenderable', {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json': catalogue('la suivante\u00a0:'),
+});
+
 /* ---------------- a date format pattern is not a translatable string ---------------- */
 
 // NXSAT-628. Both arms need controls, and so does the exemption: a rule with a named escape
