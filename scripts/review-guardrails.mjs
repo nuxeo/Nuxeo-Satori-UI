@@ -12637,45 +12637,86 @@ function checkGateInventory() {
 
   /* `ALL_GATES` is read as text, not imported: `verify-gate.mjs` runs the gates on import. The
    * block is bounded so an `id:` in a later unrelated object cannot be counted as a gate. */
+  /**
+   * The roster, read from the **abstract syntax tree** rather than from the text.
+   *
+   * Three rounds of review landed on this one reader, and each fix left the next instance of the
+   * same class open, because every one of them was a pattern over source text:
+   *
+   * 1. `id: '…'` matched single quotes only, so a double-quoted id was skipped — and skipping
+   *    *under-reads* the roster, so the gate it belongs to has no row to be missing.
+   * 2. The "independent" count it was then cross-checked against was a second regex sharing the
+   *    first one's blind spots, so a member neither could see was omitted from both and they
+   *    agreed.
+   * 3. Both of them counted `id:` lines **inside block comments**, so commenting a gate out left
+   *    it in the roster and its documentation row passed the reverse check — the page claiming a
+   *    check that does not run. Reproduced: 37 gates in the runner, 38 rows in the page,
+   *    `checkGateInventory` exit 0 with no findings.
+   *
+   * A regex over source cannot distinguish code from prose about code, and this file already
+   * imports `typescript` and uses `ts.createSourceFile` in four other guardrails — so the honest
+   * fix, and the one review asked for, is to read the array elements as elements. Comments are
+   * not nodes; a string containing `id:` is not a property; and a `\n];` inside a comment cannot
+   * truncate the block, because there is no block to slice.
+   *
+   * Every element must be an object literal with a string-literal `id`. Anything else is a
+   * reported failure, not an element to skip: an element left out of the roster is a gate whose
+   * absent documentation row would go unreported, which is what this check exists to prevent.
+   */
   const runnerSource = read(runner);
-  const open = runnerSource.indexOf('const ALL_GATES = [');
-  const close = runnerSource.indexOf('\n];', open);
-  if (open === -1 || close === -1) {
+  const ast = ts.createSourceFile(runner, runnerSource, ts.ScriptTarget.Latest, true);
+
+  /** @type {ts.ArrayLiteralExpression | null} */
+  let gateArray = null;
+  const findRoster = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === 'ALL_GATES' &&
+      node.initializer &&
+      ts.isArrayLiteralExpression(node.initializer)
+    ) {
+      gateArray = node.initializer;
+      return;
+    }
+    ts.forEachChild(node, findRoster);
+  };
+  ts.forEachChild(ast, findRoster);
+
+  if (gateArray === null) {
     fail(
-      `${runner} has no \`const ALL_GATES = [ … ];\` block, so the gate roster cannot be read. ` +
-        'If it was renamed, rename it here too rather than leaving this check vacuous.',
+      `${runner} has no \`const ALL_GATES = [ … ]\` array declaration the parser can find, so the ` +
+        'gate roster cannot be read. If it was renamed or restructured, update this check rather ' +
+        'than leaving it vacuous.',
     );
     return;
   }
-  /**
-   * The roster, read so that an entry this cannot parse is **impossible to miss**.
-   *
-   * The pattern was `/\n\s+id: '([a-z0-9-]+)',/` — single quotes, lower-case and hyphens only.
-   * Every gate happens to be written that way, so it read all 38 and looked correct. It is not:
-   * `id: "undocumented-gate",` is valid JavaScript and was skipped, and skipping *under-reads*
-   * the roster, so the gate it belongs to has no row to be missing and **both** inventory
-   * directions stay green. Reported in review on PR #554.
-   *
-   * Widening the quote class alone would have fixed that instance and left the class — an id with
-   * an underscore, or a descriptor written on one line, would still vanish. So the count is
-   * cross-checked against something the pattern cannot influence: `verify-gate.mjs` **refuses to
-   * run at all** unless every gate declares `platformSensitive`, so the number of those
-   * declarations is an independent count of the gates. If the two disagree, the roster was read
-   * partially and this check says so instead of comparing a subset.
-   */
-  const gateBlock = runnerSource.slice(open, close);
-  const roster = [...gateBlock.matchAll(/\bid:\s*['"`]([^'"`]+)['"`]/g)].map((match) => match[1]);
-  const declarations = [...gateBlock.matchAll(/\bplatformSensitive:\s*(?:true|false)\b/g)].length;
-  if (roster.length !== declarations) {
-    fail(
-      `${runner} yielded ${roster.length} gate id(s) but ${declarations} ` +
-        '`platformSensitive` declaration(s), so the roster was read only partially and this ' +
-        'check would compare a subset of the gates against the whole table.\n' +
-        '  Every gate declares `platformSensitive` — the runner refuses to start otherwise — so ' +
-        'the two counts must agree. A gate written in a shape the id pattern does not match is ' +
-        'the likely cause.',
+
+  const roster = [];
+  for (const element of gateArray.elements) {
+    const at = `${runner}:${ast.getLineAndCharacterOfPosition(element.getStart(ast)).line + 1}`;
+    if (!ts.isObjectLiteralExpression(element)) {
+      fail(
+        `${at} is an element of \`ALL_GATES\` that is not an object literal, so its gate id ` +
+          'cannot be read and the gate would be compared against nothing.',
+      );
+      return;
+    }
+    const idProperty = element.properties.find(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        ((ts.isIdentifier(property.name) && property.name.text === 'id') ||
+          (ts.isStringLiteral(property.name) && property.name.text === 'id')),
     );
-    return;
+    if (!idProperty || !ts.isStringLiteralLike(idProperty.initializer)) {
+      fail(
+        `${at} is a gate in \`ALL_GATES\` with no string-literal \`id\`, so it cannot be matched ` +
+          'to a documentation row. An id this check cannot read is a gate whose absent row would ' +
+          'go unreported.',
+      );
+      return;
+    }
+    roster.push(idProperty.initializer.text);
   }
 
   const pageSource = read(page);

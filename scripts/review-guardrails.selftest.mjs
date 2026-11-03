@@ -12864,7 +12864,7 @@ expectRed(
         '    id: ["agent", "mirror"].join("-"),',
       ),
     ),
-  /yielded 2 gate id\(s\) but 3 `platformSensitive` declaration\(s\), so the roster was read only partially/,
+  /is a gate in `ALL_GATES` with no string-literal `id`/,
 );
 
 expectRed(
@@ -12904,6 +12904,60 @@ expectGreen('a roster written with mixed quote styles is read in full', 'checkGa
 });
 
 expectRed(
+  'a COMMENTED-OUT gate still documented is caught: the page claims a check that does not run',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    /* Reported on PR #554, and the third instance of one class in this reader: a regex over source
+     * text cannot tell code from prose about code, so `id:` lines inside a block comment were
+     * counted. Commenting a gate out left it in the roster, its documentation row passed the
+     * reverse check, and the page went on claiming a check that no longer ran. Reproduced on the
+     * real tree: 37 gates in the runner, 38 rows in the page, exit 0 with no findings. */
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        /  \{\n    id: 'agent-mirror',[\s\S]*?\n  \},/,
+        (descriptor) => `  /*\n${descriptor}\n  */`,
+      ),
+    ),
+  /§2 has a row for `agent-mirror`, which ALL_GATES does not register/,
+);
+
+expectRed(
+  'an element of ALL_GATES that is not an object literal is reported',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "  {\n    id: 'agent-mirror',",
+        "  ...EXTRA_GATES,\n  {\n    id: 'agent-mirror',",
+      ),
+    ),
+  /is an element of `ALL_GATES` that is not an object literal/,
+);
+
+falsePositiveControls += 1;
+expectGreen('a string that merely mentions an id is not counted as a gate', 'checkGateInventory', {
+  /* The other half of "prose is not code". A regex counted this; the parser does not, because a
+   * string literal is not a property assignment. Without this control the fix could regress into
+   * a stricter regex and still look right. */
+  [INVENTORY_RUNNER]: gateRoster(['node', 'lint', 'agent-mirror']).replace(
+    "    label: 'agent-mirror',",
+    `    label: "a label mentioning id: 'ghost-gate' in prose",`,
+  ),
+  [INVENTORY_PAGE]: inventoryPage({
+    rows: [
+      { number: 1, id: 'node' },
+      { number: 2, id: 'lint' },
+      { number: 3, id: 'agent-mirror' },
+    ],
+    sevenNames: ['node', 'lint, agent-mirror'],
+  }),
+});
+
+expectRed(
   'the roster block renamed: reading nothing must not pass as finding nothing',
   'checkGateInventory',
   INVENTORY_OK,
@@ -12912,7 +12966,7 @@ expectRed(
       INVENTORY_RUNNER,
       gateRoster(['node', 'lint', 'agent-mirror']).replace('ALL_GATES', 'EVERY_GATE'),
     ),
-  /has no `const ALL_GATES = \[ … \];` block, so the gate roster cannot be read/,
+  /has no `const ALL_GATES = \[ … \]` array declaration the parser can find/,
 );
 
 expectRed(
