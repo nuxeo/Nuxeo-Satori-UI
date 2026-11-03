@@ -1251,6 +1251,22 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(mockDialog.open).not.toHaveBeenCalled();
     });
 
+    it('does not open a lazily resolved dialog once the user has left the document page', async () => {
+      await build(publishable());
+      let resolve!: (c: typeof CustomPublishDialogComponent) => void;
+      TestBed.inject(ExtensionComponentRegistry).register({
+        [NXS_PUBLISH_DIALOG_ID]: () => new Promise((r) => (resolve = r)),
+      });
+      mockDialog.open.mockClear();
+
+      component.openPublishDialog();
+      fixture.destroy();
+      resolve(CustomPublishDialogComponent);
+      await new Promise((r) => setTimeout(r));
+
+      expect(mockDialog.open).not.toHaveBeenCalled();
+    });
+
     it('publishes a version as it is, as Web UI does, listing its live document’s versions', async () => {
       await build(
         publishable({

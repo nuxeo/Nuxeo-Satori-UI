@@ -3458,7 +3458,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const requestedFor = this.docUid;
     const generation = this.documentLoadGeneration;
     const stillHere = () =>
-      requestedFor === this.docUid && generation === this.documentLoadGeneration;
+      !this.destroyRef.destroyed &&
+      requestedFor === this.docUid &&
+      generation === this.documentLoadGeneration;
     void nxsOpenPublishDialog(
       this.dialog,
       this.componentRegistry,
