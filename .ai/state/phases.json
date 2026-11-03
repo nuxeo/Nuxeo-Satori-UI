@@ -34,7 +34,7 @@
       "evidence": {
         "manifest": "phase-0-baseline/2026-11-03T05-48-18",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-03T08-26-14-nxsat-660-candidate-skipcs"
+        "regate": "gates/2026-11-03T09-17-51-nxsat-660-final-pr"
       },
       "deviations": [
         "2026-11-02 (NXSAT-660): rewritten against the Satori browse page. The adf-hx POC checks were removed with the POC route (NXSAT-635, NXSAT-637). The baseline is re-captured on commit 319dc651c: 12 of 12 checks.",
@@ -53,7 +53,7 @@
       "evidence": {
         "manifest": "phase-1-config/2026-11-02T13-54-41",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-03T08-26-14-nxsat-660-candidate-skipcs"
+        "regate": "gates/2026-11-03T09-17-51-nxsat-660-final-pr"
       },
       "deviations": [
         "Declared complete once with the config path wrong by one segment; remediated after independent review. Risk R7 was dropped to Low on the strength of the wrong path and has been withdrawn.",
@@ -73,7 +73,7 @@
       "evidence": {
         "manifest": "phase-2-registry/2026-11-02T13-49-56",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-03T08-26-14-nxsat-660-candidate-skipcs"
+        "regate": "gates/2026-11-03T09-17-51-nxsat-660-final-pr"
       },
       "deviations": [
         "Shipped a `typecheck` target where the plan said `build`: Nx's module-boundary rule forbids a buildable library from importing a non-buildable one, and nothing in libs/ is buildable until Phase 4 adds ng-packagr.",
@@ -102,7 +102,7 @@
         "manifest": "phase-3-adf-hx/2026-11-03T05-49-10",
         "searchManifest": "phase-3-search/2026-08-24T02-58-00",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-03T08-26-14-nxsat-660-candidate-skipcs"
+        "regate": "gates/2026-11-03T09-17-51-nxsat-660-final-pr"
       },
       "deviations": [
         "2026-09-23, after sign-off: the adopted breadcrumb is now upstream's inner HxpUiBreadcrumbComponent, fed the ancestors plus the current folder, rather than HxpBreadcrumbComponent, which never showed the current folder. The capture's 'links target browse-adf-hx' check had passed while every crumb but Home linked to browse-adf-hx%3Fpath%3D… — NuxeoDocumentRouterService.urlFor returned a string, and [routerLink] escapes a string's '?'. urlFor now returns a UrlTree, and the check requires the query to survive.",
@@ -213,7 +213,7 @@
       "evidence": {
         "manifest": "phase-4-platform/2026-11-02T12-46-51",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-03T08-26-14-nxsat-660-candidate-skipcs"
+        "regate": "gates/2026-11-03T09-17-51-nxsat-660-final-pr"
       },
       "deviations": [
         "Merged from two duplicate entries. `phase-4-layer2` and `phase-4-platform` both carried the title \"Layer 2 — publishable platform\"; the latter was a stub whose notCovered read \"everything\". Kept the id the gate reports and the evidence directory use.",
@@ -249,7 +249,7 @@
       "evidence": {
         "manifest": "phase-5-harness/2026-11-02T12-46-57",
         "gate": "gates/2026-11-02T13-26-53-nxsat-660-pr",
-        "regate": "gates/2026-11-03T08-26-14-nxsat-660-candidate-skipcs"
+        "regate": "gates/2026-11-03T09-17-51-nxsat-660-final-pr"
       },
       "deviations": [
         "Departed from the plan's wording deliberately, and measured first. The plan said 'split the AGENTS/ knowledge base'; 50 files carry 185 references to AGENTS/ paths, and .github/workflows/staleness-check.yml asserts AGENTS/01-services.md and AGENTS/${i}-*.md exist — so a split breaks CI and every skill. Measuring the content settled it too: 3,177 lines, of which only 3 of 13 files mention extensions, slots or the Layers. libs/platform/AGENTS.md is therefore authored for the audience, not extracted.",
