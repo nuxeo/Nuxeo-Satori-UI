@@ -40,11 +40,16 @@ export default async function run(page, h) {
   await h.login();
   await h.goTo('/#/browse');
   await page.waitForTimeout(1500);
-  const me = await page.evaluate(() => JSON.parse(sessionStorage.getItem('agentic_ui_nuxeo_session') ?? '{}'));
+
+  // The groups come from the server, as this account, not from the client session. Any group that
+  // grants administration access fails the check: `AuthService.hasAdministrationAccess` also counts
+  // power users, so the membership is what decides, not a flag the client can hold.
+  const me = await page.request.get(`${h.baseUrl}/nuxeo/api/v1/me`).then((r) => r.json());
+  const groups = me?.properties?.groups ?? [];
   h.check(
-    'the application holds a non-administrator session',
-    me.isAdministrator !== true && me.username !== 'Administrator',
-    `session: ${JSON.stringify({ username: me.username, isAdministrator: me.isAdministrator })}`,
+    'the account is a member and holds no administration group',
+    groups.includes('members') && !groups.includes('administrators') && !groups.includes('powerusers'),
+    `groups ${JSON.stringify(groups)}`,
   );
 
   await h.step('A user without administration access is not offered Administration');
@@ -55,9 +60,16 @@ export default async function run(page, h) {
     !ids.includes('app.navbar.administration'),
     `rendered: ${JSON.stringify(ids)}`,
   );
+  // Exactly the packaged enabled entries, in order, minus Administration. Any entry that goes missing
+  // for a member fails here, not only the four spot-checked above.
+  const expected = [
+    'app.navbar.dashboard', 'app.navbar.browse', 'app.navbar.recentlyViewed', 'app.navbar.search',
+    'app.navbar.expiredQueue', 'app.navbar.assets', 'app.navbar.tasks', 'app.navbar.favorites',
+    'app.navbar.collections', 'app.navbar.personalSpace', 'app.navbar.clipboard', 'app.navbar.trash',
+  ];
   h.check(
-    'the rest of the navigation is still there',
-    ['app.navbar.dashboard', 'app.navbar.browse', 'app.navbar.search'].every((id) => ids.includes(id)),
+    'nothing else is removed: the rest of the packaged navigation is exactly as expected',
+    JSON.stringify(ids) === JSON.stringify(expected),
     `rendered: ${JSON.stringify(ids)}`,
   );
   await h.screenshot('non-admin-nav');
