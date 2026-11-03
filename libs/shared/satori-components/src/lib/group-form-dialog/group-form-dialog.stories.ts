@@ -2,7 +2,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { of } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { UserService, type NuxeoGroup, type NuxeoUser } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -12,6 +12,8 @@ import {
   NxsGroupFormDialogComponent,
   type NxsGroupFormDialogData,
 } from './group-form-dialog.component';
+
+const closeDialog = fn(action('dialogRef.close'));
 
 const USERS = {
   entries: [
@@ -31,7 +33,7 @@ const withDirectory = (data: NxsGroupFormDialogData) =>
   applicationConfig({
     providers: [
       { provide: MAT_DIALOG_DATA, useValue: data },
-      { provide: MatDialogRef, useValue: { close: action('dialogRef.close') } },
+      { provide: MatDialogRef, useValue: { close: closeDialog } },
       { provide: UserService, useValue: { searchUsersPaged: () => of(USERS) } },
     ],
   });
@@ -77,5 +79,17 @@ export const Editing: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('textbox', { name: 'Group name' })).toBeDisabled();
     await expect(canvas.getByRole('button', { name: 'Save' })).toBeEnabled();
+  },
+};
+
+/** The preview stays mounted; this asserts the dialog's close request. */
+export const KeyboardCancellation: Story = {
+  ...Creating,
+  play: async ({ canvasElement }) => {
+    closeDialog.mockClear();
+    const cancel = await within(canvasElement).findByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(closeDialog).toHaveBeenCalledTimes(1);
   },
 };

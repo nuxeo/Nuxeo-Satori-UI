@@ -416,9 +416,11 @@ This level of domain-specific instruction was key to getting reliable output —
 
 ### AI feature flag
 
-AI features are enabled by default (controlled in `libs/shared/ai-client/src/lib/ai-feature-flag.service.ts`). Users can explicitly disable them via the toggle in the app header, and that opt-out is persisted in local storage.
+AI features are **disabled for every user** and cannot be switched on at runtime. `AI_FEATURES_ENABLED` is `false` at `libs/shared/ai-client/src/lib/ai-feature-flag.service.ts:35`, set by `a519ebd5d` ("disable AI features for all users behind a non-bypassable kill switch", 2026-10-16).
 
-Default-on assumes the Nuxeo AI operations and HAIP key are configured in the target environment. To prevent AI calls in development, use the app header toggle to disable AI features for that browser profile, or remove the HAIP key from the local Nuxeo configuration.
+There is no longer a header toggle — the Settings menu entry is commented out (`apps/nuxeo-ui/src/app/shell/app-shell.component.html:213`) and `toggle()` returns early while the flag is off. The old `localStorage` opt-out was described here as the control; it is not one. `aiEnabled` is a module-level `computed(() => false)` sealed onto the service with `writable: false, configurable: false`, so it cannot be replaced from a devtools console, and both stored keys (`ai-features-enabled`, `ai-features-default-enabled-v1`) are deleted on construction. `AiGatewayService` refuses to issue the request independently (`ai-gateway.service.ts:64`), so no AI traffic reaches the wire even from a caller that skips the flag.
+
+Nothing in a deployment switches this back on: re-enabling is a code change to that constant plus restoring the menu entry, and then a release. The feature code, its components and its tests were all left in place for that path.
 
 ---
 

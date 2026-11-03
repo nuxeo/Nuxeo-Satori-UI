@@ -762,7 +762,7 @@ It follows Web UI's audit search: every filter and the sort go to the server, so
 
 One document in a folder's card view, rendered by `nxs.primitives.card` as browse and search render each card: the same title, type, thumbnail frame and selection checkbox in both, from the same inputs. The layouts differ because the components do — Satori's card stacks its title above its content, where the built-in card frames the thumbnail on top and puts the text under it, with the checkbox over the corner.
 
-What a click does is the same in both: the heading opens the item, so does a click anywhere on the card that is not on another control, and the checkbox and any button passed for the corner or the footer do not. A provider that registers its own card under the ID replaces every card in browse's and search's card views. The page passes the card its open and selection handlers and the templates for its thumbnail and actions, so a replacement gets them too.
+What a click does is the same in both: the heading opens the item, so does a click anywhere on the card that is not on another control, and the checkbox and any button passed for the corner or the footer do not. A provider that registers its own card under the ID replaces every card in browse's, search's and the trash's card views. The page passes the card its open and selection handlers and the templates for its thumbnail and actions, so a replacement gets them too.
 
 ### Users and groups page
 
@@ -869,6 +869,47 @@ The form an administrator uses to create a group or edit one, and to set its mem
 
 The dialog saves nothing itself: it closes with the values and the caller creates or updates the group. The group name is fixed once the group exists; the label and members can change.
 
+### Publish dialog
+
+| Field           | Value                               |
+| --------------- | ----------------------------------- |
+| Component       | `NxsPublishDialogComponent`         |
+| Registered ID   | `nxs.components.publishDialog`      |
+| With Satori     | Same component; theme only          |
+| Storybook story | `dialogs-publish--choose-a-section` |
+
+![Publish dialog: without Satori on the left, with Satori on the right](publish-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+Publishing a supplier contract at 1.2: the sections as a tree, Contracts chosen, and the version to publish. The same dialog in both; the theme sets the type, the fields and the button styles.
+
+The library defines its ID and our app registers it; `provideNxsComponents()` does not. Both publish actions open whatever the ID resolves to.
+
+### Task detail
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsTaskDetailComponent`         |
+| Registered ID   | `nxs.components.taskDetail`      |
+| With Satori     | Same component; theme only       |
+| Storybook story | `components-task-detail--review` |
+
+![Task detail: without Satori on the left, with Satori on the right](task-detail-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+One workflow task and what the user can do with it: its actions, abandon, delegate, reassign and the workflow graph. The same panel in both; the theme sets the type, the colours and the buttons.
+
+### Trash list
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsTrashListComponent`          |
+| Registered ID   | `nxs.components.trashList`       |
+| With Satori     | Same component; theme only       |
+| Storybook story | `components-trash-list--default` |
+
+![Trash list: without Satori on the left, with Satori on the right](trash-list-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The trash at `/trash`, as a table with a row menu for Restore and Delete permanently. The same component in both: the theme sets the type, the colours and the shape of the controls. Its cards and type tags render the `nxs.primitives.card` and `nxs.primitives.tag` registrations, which are Satori's own components where `components-satori` is provided.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -898,7 +939,7 @@ The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Sa
 
 ## How our own app uses this
 
-The app registers both entry points, so anything rendered by an ID that has a Satori variant shows Satori. The screens resolve each avatar, category tag, status tag and breadcrumb trail of their own by ID, and document detail its tab strip and its header's action row — `docs/extension-reference.md` §6a lists where — so there the app shows Satori's, and a component registered later under the same ID, with `provideSatoriExtensions({ components })`, replaces it; no JSON manifest entry selects a component for these IDs. Browse's and search's card views render each card by ID too, so there the app shows Satori's interactive card, and a component registered under its ID replaces it the same way. Library components nested in a screen, such as the comments, history and properties panel on document detail, still draw the built-in avatar and tag directly; a registration does not reach them until they render by ID.
+The app registers both entry points, so anything rendered by an ID that has a Satori variant shows Satori. The screens resolve each avatar, category tag, status tag and breadcrumb trail of their own by ID, and document detail its tab strip and its header's action row — `docs/extension-reference.md` §6a lists where — so there the app shows Satori's, and a component registered later under the same ID, with `provideSatoriExtensions({ components })`, replaces it; no JSON manifest entry selects a component for these IDs. Browse's, search's and the trash's card views render each card by ID too, so there the app shows Satori's interactive card, and a component registered under its ID replaces it the same way. Library components nested in a screen, such as the comments, history and properties panel on document detail, still draw the built-in avatar and tag directly; a registration does not reach them until they render by ID.
 
 Only things rendered by ID — these screens, and customer extensions — go through the choice.
 
@@ -977,6 +1018,9 @@ The components in the library today:
 | Confirm dialog                  | —                                                                                                                            | Same component; theme only   |
 | User form dialog                | —                                                                                                                            | Same component; theme only   |
 | Group form dialog               | —                                                                                                                            | Same component; theme only   |
+| Publish dialog                  | `nxs.components.publishDialog` (the library defines the ID; our app registers it, `provideNxsComponents()` does not)         | Same component; theme only   |
+| Task detail                     | `nxs.components.taskDetail`                                                                                                  | Same component; theme only   |
+| Trash list                      | `nxs.components.trashList`                                                                                                   | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

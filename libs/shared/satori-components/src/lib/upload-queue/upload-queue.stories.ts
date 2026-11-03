@@ -93,7 +93,8 @@ export const Refused: Story = {
   args: { items: at('failed') },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Retry Adjuster report.pdf' }));
+    canvas.getByRole('button', { name: 'Retry Adjuster report.pdf' }).focus();
+    await userEvent.keyboard('{Enter}');
     await expect(args.retry).toHaveBeenCalled();
   },
 };

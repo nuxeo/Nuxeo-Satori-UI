@@ -1,6 +1,7 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of, throwError, type Observable } from 'rxjs';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -59,3 +60,19 @@ export const Refused: Story = {
 };
 
 export const Disabled: Story = { args: { disabled: true } };
+
+export const KeyboardContract: Story = {
+  args: { changed: fn() },
+  play: async ({ args, canvasElement }) => {
+    const toggle = within(canvasElement).getByRole('button');
+    toggle.focus();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-pressed', 'true'));
+    await expect(args.changed).toHaveBeenLastCalledWith(true);
+    await userEvent.keyboard(' ');
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-pressed', 'false'));
+    await expect(args.changed).toHaveBeenLastCalledWith(false);
+    await expect(toggle).toHaveFocus();
+  },
+};

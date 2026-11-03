@@ -2,7 +2,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { of, throwError } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { UserService, type NuxeoUser } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -12,6 +12,8 @@ import {
   NxsUserFormDialogComponent,
   type NxsUserFormDialogData,
 } from './user-form-dialog.component';
+
+const closeDialog = fn(action('dialogRef.close'));
 
 const GROUPS = {
   entries: [
@@ -36,7 +38,7 @@ const withServer = (data: NxsUserFormDialogData, createAnswer = () => of({})) =>
   applicationConfig({
     providers: [
       { provide: MAT_DIALOG_DATA, useValue: data },
-      { provide: MatDialogRef, useValue: { close: action('dialogRef.close') } },
+      { provide: MatDialogRef, useValue: { close: closeDialog } },
       {
         provide: UserService,
         useValue: {
@@ -108,5 +110,17 @@ export const Refused: Story = {
     await userEvent.type(canvas.getByRole('textbox', { name: 'Email' }), 'jdoe@acme.test');
     await userEvent.click(canvas.getByRole('button', { name: 'Create' }));
     await expect(await canvas.findByRole('alert')).toHaveTextContent('already exists');
+  },
+};
+
+/** The preview stays mounted; this asserts the dialog's close request. */
+export const KeyboardCancellation: Story = {
+  ...Creating,
+  play: async ({ canvasElement }) => {
+    closeDialog.mockClear();
+    const cancel = await within(canvasElement).findByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(closeDialog).toHaveBeenCalledTimes(1);
   },
 };

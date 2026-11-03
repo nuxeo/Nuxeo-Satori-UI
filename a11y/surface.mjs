@@ -49,9 +49,9 @@ export const ERROR_STATE_CLASSES = [
   'kd-banner--error',
   'kd-citation-dialog__state--error',
   'kd-content-lake-upload__error',
-  'gd-error',
-  'ud-error',
-  'ug-error',
+  'nxs-gdp__error',
+  'nxs-udp__error',
+  'nxs-ugp__error',
   'nxql-error',
   'compare-error',
   'cpd-error',
@@ -84,6 +84,10 @@ export const ERROR_STATE_SELECTOR = ERROR_STATE_CLASSES.map((c) => `.${c}`).join
  * worth scanning. A **data state** describes the content, not the load.
  */
 export const NOT_A_SURFACE_ERROR = {
+  'nxs-gdp__status--error': 'Group mutation failed; the loaded group remains rendered.',
+  'nxs-udp__status--error': 'User mutation failed; the loaded user remains rendered.',
+  'nxs-ugp__status--error': 'Administration action failed; the users/groups page remains rendered.',
+  'nxs-user-form-dialog__failure': 'Save error inside the user dialog; the page rendered.',
   'ai-error': 'AI: the search page rendered; its AI panel did not.',
   'ai-error-banner': 'AI: document detail rendered; its AI panel did not.',
   'ai-chat-error': 'AI: the shell rendered; the chat drawer did not.',

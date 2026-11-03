@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { defer, NEVER, of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, waitFor, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import {
   ADMIN_ACCESS_CHECKS,
@@ -252,7 +252,12 @@ export const Thread: Story = {
     await expect(
       await canvas.findAllByRole('button', { name: /^Actions for the comment by/ }),
     ).toHaveLength(1);
-    await expect(await canvas.findByRole('button', { name: /2 replies/ })).toBeVisible();
+    const replies = await canvas.findByRole('button', { name: /2 replies/ });
+    await expect(replies).toHaveAttribute('aria-expanded', 'false');
+    replies.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(await canvas.findByText('Checked — they match the ledger.')).toBeVisible();
+    await expect(await canvas.findByText('Thanks!')).toBeVisible();
   },
 };
 

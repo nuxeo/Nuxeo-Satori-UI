@@ -13,9 +13,10 @@
       /**
        * Slide renderer for the Beta screencasts.
        *
-       * A renderer plus JSON decks rather than hand-written HTML per slide, so the
-       * three decks share one set of mark specs and one validated palette. The
-       * recorder drives it through `window.deck`.
+       * A renderer plus JSON decks rather than hand-written HTML per slide, so every
+       * deck shares one set of mark specs and one validated palette. The recorder
+       * drives it through `window.deck`. Decks are fetched by name from `decks/`, so
+       * adding or removing one needs no change here.
        *
        * Every bar and stack segment is direct-labelled. That is not decoration: the
        * validated palette's worst adjacent CVD separation is 8.4, which sits in the
@@ -148,8 +149,38 @@
       function build(deck) {
         const host = document.getElementById('slides');
         host.innerHTML = deck.slides
-          .map((s) => {
-            const body = (s.blocks ?? []).map((b) => RENDER[b.type]?.(b) ?? '').join('');
+          .map((s, slideIndex) => {
+            /**
+             * An unknown block type renders as nothing, and said nothing about it until
+             * 2026-11-02. `docs/demo-deck-plan.md` documents two further block types,
+             * `shot` and `shots`, as having been added here — they were not, and neither
+             * is the `.shot` CSS the same document describes. Nine of the twenty-three
+             * slides in `04-walkthrough.json` are built from them, so each renders its
+             * heading and footnote around an empty body, and the export photographs that
+             * without complaint. Keep the fallback so one bad block cannot take a deck
+             * down, but say so: a slide silently missing its content is the exact
+             * "registered but nothing renders" failure this programme keeps hitting.
+             */
+            const body = (s.blocks ?? [])
+              .map((b) => {
+                const render = RENDER[b.type];
+                if (!render) {
+                  // Name the slide, not just the block type. Nine slides of `04-walkthrough`
+                  // emit the same `shot`/`shots` warning, so a message without the slide
+                  // sends the reader searching the JSON to find which ones.
+                  const where =
+                    `slide ${slideIndex + 1}/${deck.slides.length}` +
+                    (s.title ? ` "${s.title}"` : '') +
+                    (s.eyebrow ? ` (${s.eyebrow})` : '');
+                  console.warn(
+                    `deck: no renderer for block type "${b.type}" on ${where} — that slide will ` +
+                      `have an empty body. Known: ${Object.keys(RENDER).join(', ')}`,
+                  );
+                  return '';
+                }
+                return render(b);
+              })
+              .join('');
             return (
               `<section class="slide ${s.kind === 'title' ? 'slide--title' : ''}">` +
               head(s) +

@@ -895,9 +895,19 @@ consequence of Automation's flat parameter model.
 RAG happens **server-side**. There is no client-side streaming: no `EventSource`, no chunked reads.
 Each chat turn is a single POST with the history replayed.
 
-Feature flag: `AiFeatureFlagService` is a signal backed by `localStorage['ai-features-enabled']`,
-**default on** with an explicit user opt-out, surfaced to the manifest as rule
-`app.rules.isAiEnabled`, which gates the `app.tabs.aiInsights` tab.
+Feature flag: `AiFeatureFlagService.aiEnabled` is **`false` for every user and not toggleable at
+runtime** — `AI_FEATURES_ENABLED = false` at `ai-feature-flag.service.ts:35` since `a519ebd5d`. It
+does not read `localStorage` while off; both stored keys are purged on construction. The flag is
+still surfaced to the manifest as rule `app.rules.isAiEnabled` (`surface-rules.ts:30`), which gates
+the `app.tabs.aiInsights` tab (`packaged-tabs.ts:30`), so the tab is **hidden by default**.
+
+**Hidden by default is not the same as unreachable, and the difference is worth knowing.** A
+manifest override of `{"rule": null}` clears a packaged rule rather than being ignored
+(`extension-slot-registry.service.ts:178-180`), and the tab body has no second flag check of its
+own (`document-detail.html:725`), so a manifest can put that tab back on screen. What it cannot do
+is make it work: `AiGatewayService` checks the flag itself (`ai-gateway.service.ts:64`) and refuses
+every request, so an unhidden tab renders its errors and no AI traffic reaches the wire. **The
+network block is unconditional; the UI gate is configuration.**
 
 Concepts to learn: prompt/response contracts, RAG at a conceptual level, why a UI must treat every
 AI response as untrusted content (the `AiMarkdownPipe` renders through DOMPurify), and graceful

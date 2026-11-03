@@ -127,10 +127,12 @@ export const WithAnAction: StoryObj<{ readonly undo: () => void }> = {
     template: `<button mat-stroked-button type="button" (click)="remove()">Move to trash</button>`,
   }),
   play: async ({ args, canvas, canvasElement, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Move to trash' }));
+    canvas.getByRole('button', { name: 'Move to trash' }).focus();
+    await userEvent.keyboard('{Enter}');
     await announced(canvasElement, 'Moved to trash');
     const toast = page(canvasElement);
-    await userEvent.click(toast.getByRole('button', { name: 'Undo' }));
+    toast.getByRole('button', { name: 'Undo' }).focus();
+    await userEvent.keyboard('{Enter}');
     await expect(args.undo).toHaveBeenCalledOnce();
     await waitFor(() => expect(toast.queryByText('Moved to trash')).toBeNull());
   },

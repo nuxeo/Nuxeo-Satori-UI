@@ -1,7 +1,7 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of, throwError, type Observable } from 'rxjs';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import {
   SearchService,
@@ -138,6 +138,19 @@ export const NothingChosen: Story = {};
  * and can still be cleared.
  */
 export const WithChoices: Story = { args: { filters: SELECTED } };
+
+export const KeyboardContract: Story = {
+  args: { filters: SELECTED },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const reset = canvas.getByRole('button', { name: 'Reset' });
+    reset.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.filtersReset).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(reset).toBeDisabled());
+    await expect(canvas.getByRole('button', { name: 'Save As' })).toBeDisabled();
+  },
+};
 
 /** The server returned no aggregates: each terms group says there is nothing to choose. */
 export const NoAggregates: Story = { args: { aggregations: {} } };

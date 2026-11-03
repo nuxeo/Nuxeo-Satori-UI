@@ -1,0 +1,294 @@
+@let level = headingLevel();
+@let panelLevel = panelHeadingLevel();
+
+<div class="nxs-task-detail__header">
+  <div class="nxs-task-detail__title" role="heading" [attr.aria-level]="level">
+    {{ title() }}
+  </div>
+  <div class="nxs-task-detail__header-actions">
+    <button
+      type="button"
+      class="nxs-task-detail__link"
+      [attr.aria-expanded]="panel() === 'delegate'"
+      [disabled]="submitting()"
+      (click)="openPanel('delegate')"
+    >
+      {{ 'satori-components.task-detail.delegate' | translate }}
+    </button>
+    <button
+      type="button"
+      class="nxs-task-detail__link"
+      [attr.aria-expanded]="panel() === 'reassign'"
+      [disabled]="submitting()"
+      (click)="openPanel('reassign')"
+    >
+      {{ 'satori-components.task-detail.reassign' | translate }}
+    </button>
+  </div>
+</div>
+
+@if (task().workflowInstanceId) {
+  <button
+    type="button"
+    class="nxs-task-detail__link nxs-task-detail__graph-link"
+    [attr.aria-expanded]="graph() !== null"
+    (click)="openGraph()"
+  >
+    {{ 'satori-components.task-detail.view-graph' | translate }}
+  </button>
+}
+
+@if (panel(); as open) {
+  <section class="nxs-task-detail__panel" [attr.data-panel]="open">
+    <div class="nxs-task-detail__panel-header">
+      <div class="nxs-task-detail__panel-title" role="heading" [attr.aria-level]="panelLevel">
+        {{
+          (open === 'delegate'
+            ? 'satori-components.task-detail.delegate-task'
+            : 'satori-components.task-detail.reassign-task'
+          ) | translate
+        }}
+      </div>
+      <button
+        mat-icon-button
+        type="button"
+        (click)="closePanel()"
+        [matTooltip]="'satori-components.task-detail.close' | translate"
+        [attr.aria-label]="'satori-components.task-detail.close' | translate"
+      >
+        <mat-icon svgIcon="x_large" />
+      </button>
+    </div>
+    <p class="nxs-task-detail__hint">
+      {{
+        (open === 'delegate'
+          ? 'satori-components.task-detail.delegate-hint'
+          : 'satori-components.task-detail.reassign-hint'
+        ) | translate
+      }}
+    </p>
+    <nxs-user-group-picker
+      class="nxs-task-detail__field"
+      multiple
+      [label]="'satori-components.task-detail.users-or-groups' | translate"
+      [value]="assignees()"
+      (valueChange)="setAssignees($event)"
+    />
+    <mat-form-field appearance="outline" class="nxs-task-detail__field">
+      <mat-label>{{ 'satori-components.task-detail.comment-optional' | translate }}</mat-label>
+      <textarea matInput rows="3" [(ngModel)]="panelComment"></textarea>
+    </mat-form-field>
+    <div class="nxs-task-detail__panel-actions">
+      <button mat-stroked-button type="button" (click)="closePanel()">
+        {{ 'satori-components.task-detail.cancel' | translate }}
+      </button>
+      <button
+        mat-flat-button
+        type="button"
+        class="nxs-task-detail__confirm"
+        [disabled]="assignees().length === 0 || submitting()"
+        (click)="confirmPanel()"
+      >
+        {{
+          (open === 'delegate'
+            ? 'satori-components.task-detail.delegate'
+            : 'satori-components.task-detail.reassign'
+          ) | translate
+        }}
+      </button>
+    </div>
+  </section>
+}
+
+@if (graph(); as shown) {
+  <section class="nxs-task-detail__panel" data-panel="graph">
+    <div class="nxs-task-detail__panel-header">
+      <div class="nxs-task-detail__panel-title" role="heading" [attr.aria-level]="panelLevel">
+        {{ 'satori-components.task-detail.workflow-graph' | translate }}
+      </div>
+      <button
+        mat-icon-button
+        type="button"
+        (click)="closeGraph()"
+        [matTooltip]="'satori-components.task-detail.close' | translate"
+        [attr.aria-label]="'satori-components.task-detail.close' | translate"
+      >
+        <mat-icon svgIcon="x_large" />
+      </button>
+    </div>
+    @switch (shown.status) {
+      @case ('loading') {
+        <div class="nxs-task-detail__graph-state" role="status">
+          <mat-spinner
+            diameter="24"
+            [attr.aria-label]="'satori-components.task-detail.loading' | translate"
+          />
+        </div>
+      }
+      @case ('failed') {
+        <p class="nxs-task-detail__graph-state" role="alert">
+          {{ 'satori-components.task-detail.graph-failed' | translate }}
+        </p>
+      }
+      @default {
+        @if (shown.status === 'loaded' && shown.nodes.length > 0) {
+          <ol class="nxs-task-detail__graph">
+            @for (node of shown.nodes; track node.id || $index) {
+              <li
+                class="nxs-task-detail__graph-node"
+                [class.nxs-task-detail__graph-node--current]="node.isCurrent"
+                [class.nxs-task-detail__graph-node--done]="node.state === 'done'"
+                [attr.aria-current]="node.isCurrent ? 'step' : null"
+              >
+                <mat-icon
+                  class="nxs-task-detail__graph-marker"
+                  aria-hidden="true"
+                  [svgIcon]="node.state === 'done' ? 'circle_check' : 'radio_button'"
+                />
+                {{ node.title }}
+              </li>
+            }
+          </ol>
+        } @else {
+          <p class="nxs-task-detail__graph-state">
+            {{ 'satori-components.task-detail.no-graph-data' | translate }}
+          </p>
+        }
+      }
+    }
+  </section>
+}
+
+<div class="nxs-task-detail__section">
+  <span class="nxs-task-detail__label">{{
+    'satori-components.task-detail.actors' | translate
+  }}</span>
+  <ul class="nxs-task-detail__actors">
+    @for (actor of actors(); track actor) {
+      <li class="nxs-task-detail__actor">
+        <nxs-avatar [initials]="initial(actor)" color="red" size="24" />
+        {{ principalLabel(actor) }}
+      </li>
+    }
+  </ul>
+</div>
+
+@if (delegatedActors().length > 0) {
+  <div class="nxs-task-detail__section">
+    <span class="nxs-task-detail__label">{{
+      'satori-components.task-detail.delegated-to' | translate
+    }}</span>
+    <ul class="nxs-task-detail__actors">
+      @for (actor of delegatedActors(); track actor) {
+        <li class="nxs-task-detail__actor">
+          <nxs-avatar [initials]="initial(actor)" color="blue" size="24" />
+          {{ principalLabel(actor) }}
+        </li>
+      }
+    </ul>
+  </div>
+}
+
+@if (dueLabel(); as due) {
+  <div class="nxs-task-detail__section">
+    <span class="nxs-task-detail__label">{{
+      'satori-components.task-detail.due' | translate
+    }}</span>
+    <span class="nxs-task-detail__due" [class.nxs-task-detail__due--overdue]="overdue()">
+      {{ due.key | translate: { count: due.count } }}
+    </span>
+  </div>
+}
+
+@if (choosesParticipants()) {
+  <nxs-user-group-picker
+    class="nxs-task-detail__field nxs-task-detail__participants"
+    multiple
+    [label]="'satori-components.task-detail.participants' | translate"
+    [value]="participants()"
+    (valueChange)="setParticipants($event)"
+  />
+  <mat-form-field appearance="outline" class="nxs-task-detail__field">
+    <mat-label>{{ 'satori-components.task-detail.review-type' | translate }}</mat-label>
+    <mat-select [(ngModel)]="reviewType">
+      <mat-option value="simpleReview">{{
+        'satori-components.task-detail.simple-review' | translate
+      }}</mat-option>
+      <mat-option value="validation">{{
+        'satori-components.task-detail.validation' | translate
+      }}</mat-option>
+    </mat-select>
+  </mat-form-field>
+}
+
+<mat-form-field appearance="outline" class="nxs-task-detail__field">
+  <mat-label>{{ 'satori-components.task-detail.comment' | translate }}</mat-label>
+  <input matInput [(ngModel)]="comment" />
+</mat-form-field>
+
+<div class="nxs-task-detail__actions">
+  @for (action of actions(); track action.name) {
+    @let tone = actionTone(action);
+    <button
+      type="button"
+      class="nxs-task-detail__action"
+      [class.nxs-task-detail__action--primary]="tone === 'primary'"
+      [class.nxs-task-detail__action--warn]="tone === 'warn'"
+      [disabled]="submitting()"
+      (click)="execute(action)"
+    >
+      {{ actionLabel(action) }}
+    </button>
+  }
+  @if (submitting()) {
+    <mat-spinner
+      diameter="20"
+      role="status"
+      [attr.aria-label]="'satori-components.task-detail.loading' | translate"
+    />
+  }
+</div>
+
+@if (task().workflowInstanceId) {
+  <div class="nxs-task-detail__section nxs-task-detail__abandon">
+    <mat-divider />
+    <button
+      type="button"
+      class="nxs-task-detail__action nxs-task-detail__action--outline-warn"
+      [disabled]="submitting()"
+      (click)="abandon()"
+    >
+      <mat-icon svgIcon="circle_x" aria-hidden="true" />
+      {{ 'satori-components.task-detail.abandon-workflow' | translate }}
+    </button>
+  </div>
+}
+
+@if (comments().length > 0) {
+  <div class="nxs-task-detail__section nxs-task-detail__comments">
+    <mat-divider />
+    <span class="nxs-task-detail__label">{{
+      'satori-components.task-detail.comments' | translate
+    }}</span>
+    <ul class="nxs-task-detail__comment-list">
+      @for (entry of comments(); track $index) {
+        <li class="nxs-task-detail__comment">
+          @if (entry.author || entry.date) {
+            <div class="nxs-task-detail__comment-header">
+              @if (entry.author) {
+                <span class="nxs-task-detail__comment-author">
+                  <nxs-avatar [initials]="initial(entry.author)" color="red" size="18" />
+                  {{ entry.author }}
+                </span>
+              }
+              @if (entry.date) {
+                <span class="nxs-task-detail__comment-date">{{ entry.date }}</span>
+              }
+            </div>
+          }
+          <p class="nxs-task-detail__comment-text">{{ entry.text }}</p>
+        </li>
+      }
+    </ul>
+  </div>
+}

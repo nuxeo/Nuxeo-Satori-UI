@@ -162,19 +162,24 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   await h.step('Layer 0 branding reaches the DOM and the document title');
 
+  // Read from the same file the template loads, so the expectation cannot drift from the
+  // configuration it asserts against.
+  const { applicationTitle, documentTitle } = JSON.parse(
+    readFileSync(join(ROOT, 'apps', 'nuxeo-satori-template', 'public', 'agentic-ui-config', 'bootstrap.json'), 'utf8'),
+  ).fragments[0].content.branding;
+
   const heading = (await page.textContent('h1'))?.trim();
   h.check(
     'branding.applicationTitle from bootstrap.json renders as the heading',
-    heading === 'Acme Content',
-    `expected "Acme Content", got "${heading}"`,
+    heading === applicationTitle,
+    `expected "${applicationTitle}", got "${heading}"`,
   );
 
   const title = await page.title();
   h.check(
     'branding.documentTitle is applied to document.title',
-    title === 'Acme Content',
-    `expected "Acme Content", got "${title}". provideAppInitializer callbacks run ` +
-      'concurrently — a one-shot read of bootstrap() races config.load() and loses.',
+    title === documentTitle,
+    `expected "${documentTitle}", got "${title}"`,
   );
 
   // ---------------------------------------------------------------------------
@@ -227,81 +232,41 @@ export default async function run(page, h) {
   await h.step('The navbar is resolved from the extension registry');
 
   const nav = await readNav(page);
+  // Signed out, the template shows only its public entries. The rest are rule-gated on
+  // `template.rules.isSignedIn`, and signing in needs Nuxeo, which this file does not require.
   h.check(
-    'the template’s own two registered entries render',
-    nav.includes('Home') && nav.includes('Reports'),
+    'the public template entries render',
+    ['Statistics', 'UI Components', 'Diagnostics'].every((label) => nav.includes(label)),
+    `rendered: [${nav.join(', ')}]`,
+  );
+  h.check(
+    'signed out, the gated entries are hidden',
+    !nav.some((label) =>
+      ['Documents', 'Search', 'Case File', 'Reports', 'AcmeExtensions'].includes(label),
+    ),
     `rendered: [${nav.join(', ')}]`,
   );
 
   // ---------------------------------------------------------------------------
   await h.step('A generated extension library contributes with zero platform edits');
 
-  h.check(
-    'the generated library’s nav entry renders alongside the template’s',
-    nav.includes('AcmeExtensions'),
-    `rendered: [${nav.join(', ')}]. libs/extensions/acme-extensions was produced by ` +
-      'the generator and integrated by one line in the template app.config.ts; if its ' +
-      'registration were inert this entry would be absent.',
+  // Not asserted here: the library's entry is gated on `acme.rules.canUseAcme`, which needs a
+  // signed-in user, and this file does not require Nuxeo. The gated-entry check above proves the
+  // gate is applied; a signed-in run is needed to prove the library's entry renders.
+  h.note(
+    "the generated library's nav entry is rule-gated and is not rendered signed out, so its " +
+      'rendering is not covered by this file',
   );
 
-  // Following the link is the part that matters. The entry pointed at
-  // `/acme-extensions` while nothing routed there, so it fell through the wildcard
-  // back to `/home` — a nav entry that goes nowhere. Asserting the URL *and* the
-  // panel's own markup, because a redirect to home would still leave a rendered page.
-  await page.click('.shell__nav-link:has-text("AcmeExtensions")');
-  await page.waitForLoadState('networkidle');
-  const url = page.url();
-  h.check(
-    'following the entry lands on its own route rather than redirecting to home',
-    url.endsWith('/acme-extensions'),
-    `url after click: ${url} — a wildcard redirect to /home means the path is unrouted`,
-  );
-
-  const panel = await page.$('.acme-panel');
-  h.check(
-    'the panel the library registered by ID renders there',
-    Boolean(panel),
-    'ExtensionOutletComponent resolved nothing for `acme.panel.acmeExtensions`. The ' +
-      'host maps the path; the component comes from the registry, because the ' +
-      'library deliberately does not export the class.',
-  );
-  await h.screenshot('generated-library-panel-on-its-own-route');
-
-  await page.goBack();
-  await page.waitForSelector('.shell__nav-link');
+  // Following the link needs the signed-in entry, which is not rendered signed out. Not covered by
+  // this file; a signed-in run is needed for the route and the panel.
 
   // ---------------------------------------------------------------------------
-  await h.step('inventory() lists the generated library’s registered ids');
+  // The inventory and the configuration diagnostics are on the home page, which renders only
+  // once signed in. Not covered signed out; a signed-in run is needed to assert them.
+  await h.step('Inventory and configuration diagnostics');
+  h.note('registered-ID inventory and configuration-source diagnostics: signed-in only, not covered here');
 
-  const inventoryText = (await page.textContent('.home__panel:last-of-type')) ?? '';
-  for (const id of [
-    'acme.navbar.acmeExtensions',
-    'acme.rules.canUseAcme',
-    'template.rules.isSignedIn',
-  ]) {
-    h.check(`inventory() lists ${id}`, inventoryText.includes(id), 'not present in the panel');
-  }
-
-  // ---------------------------------------------------------------------------
-  await h.step('Configuration diagnostics report where configuration came from (negative check)');
-
-  const diagnostics = (await page.textContent('.home__panel')) ?? '';
-  h.check(
-    'both halves were loaded from the configuration response, not packaged defaults',
-    /Bootstrap\s*configuration-service\s*Manifest\s*configuration-service/.test(diagnostics),
-    `diagnostics panel read: ${diagnostics.slice(0, 200)}`,
-  );
-  h.check(
-    'the manifest is reported as naming no package',
-    /Manifest packages\s*none/.test(diagnostics),
-    'The template serves a manifest with no fragments, so this is the expected path. This ' +
-      'check proves the source is surfaced rather than assumed — not that a manifest works.',
-  );
-  // Scrolled to the inventory panel, so this image shows the registered-ID list rather
-  // than repeating the same above-the-fold viewport as the first shot.
-  await h.screenshot('registered-ids-and-config-sources', page.locator('.home__panel').last());
-
-  // ---------------------------------------------------------------------------
   await h.step('The published declarations carry nullable types');
 
   const extensionsDts = readFileSync(entryTypes(DIST, './extensions'), 'utf8');

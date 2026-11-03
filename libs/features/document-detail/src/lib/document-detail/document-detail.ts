@@ -150,7 +150,6 @@ import {
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
 import { AddToCollectionDialogComponent } from '../add-to-collection-dialog/add-to-collection-dialog';
-import { PublishDialogComponent, PublishDialogData } from '../publish-dialog/publish-dialog';
 import { AttachmentPreviewDialogComponent } from '../attachment-preview-dialog/attachment-preview-dialog';
 import { ReplaceAttachmentDialogComponent } from '../replace-attachment-dialog/replace-attachment-dialog';
 import { RemoveAttachmentDialogComponent } from '../remove-attachment-dialog/remove-attachment-dialog';
@@ -161,6 +160,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   NXS_PERMISSIONS_PANEL_ID,
+  nxsOpenPublishDialog,
   NxsCommentExtraDirective,
   NXS_PRIMITIVE_IDS,
   NxsAvatarComponent,
@@ -3446,7 +3446,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   /**
    * Web UI's `isPublishable`, so a version is published as it is: `Document.PublishToSection`
-   * runs on the document on screen, and the dialog lists the live document's versions.
+   * runs on the document on screen, and the dialog lists the live document's versions. Opens
+   * whatever `NXS_PUBLISH_DIALOG_ID` resolves to, as the bulk Publish does.
    */
   openPublishDialog(): void {
     const doc = this.doc();
@@ -3456,35 +3457,31 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     }
     const requestedFor = this.docUid;
     const generation = this.documentLoadGeneration;
-    const openDialog = (versions: NuxeoDocument[]) => {
-      if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
-      this.dialog
-        .open(PublishDialogComponent, {
-          width: '620px',
-          panelClass: 'publish-dialog-panel',
-          data: {
-            documentUid: doc.uid,
-            documentTitle: doc.title,
-            versionLabel: this.versionLabel(),
-            renditions: this.buildRenditionOptions(),
-            versions,
-          } satisfies PublishDialogData,
-        })
-        .afterClosed()
+    const stillHere = () =>
+      !this.destroyRef.destroyed &&
+      requestedFor === this.docUid &&
+      generation === this.documentLoadGeneration;
+    void nxsOpenPublishDialog(
+      this.dialog,
+      this.componentRegistry,
+      {
+        documentUid: doc.uid,
+        documentTitle: doc.title,
+        versionLabel: this.versionLabel(),
+        versionableUid: this.liveDocumentUid(),
+        renditions: this.buildRenditionOptions(),
+      },
+      { stillWanted: stillHere },
+    ).then((ref) =>
+      ref
+        ?.afterClosed()
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe((published) => {
-          if (!published) return;
+          if (!published || !stillHere()) return;
           this.publishTabLoaded = false;
           this.refreshPublishedDocs();
-        });
-    };
-    this.detailService
-      .getVersionsDirect(this.liveDocumentUid())
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (versions) => openDialog(versions),
-        error: () => openDialog([]),
-      });
+        }),
+    );
   }
 
   private buildRenditionOptions(): { name: string; label: string }[] {

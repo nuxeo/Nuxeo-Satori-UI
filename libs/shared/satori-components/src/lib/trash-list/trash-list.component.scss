@@ -1,0 +1,181 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-trash-list__selection {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+.nxs-trash-list__selection-count {
+  font: var(--mat-sys-label-large);
+}
+
+.nxs-trash-list__spacer {
+  flex: 1;
+}
+
+.nxs-trash-list__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nxs-trash-list__count {
+  font: var(--mat-sys-title-small);
+}
+
+// A native group for the view buttons, without the fieldset's box.
+.nxs-trash-list__views {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.nxs-trash-list__tools,
+.nxs-trash-list__views {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nxs-trash-list__sort {
+  width: 180px;
+}
+
+.nxs-trash-list__view--active {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.nxs-trash-list__table {
+  position: relative;
+}
+
+.nxs-trash-list__state {
+  display: flex;
+  justify-content: center;
+  padding: 32px;
+}
+
+.nxs-trash-list__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.nxs-trash-list__card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nxs-trash-list__card-media,
+.nxs-trash-list__list-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-trash-list__card-media {
+  height: 120px;
+}
+
+.nxs-trash-list__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+}
+
+.nxs-trash-list__list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+
+  & + & {
+    border-top: 1px solid var(--mat-sys-outline-variant);
+  }
+}
+
+.nxs-trash-list__list-item--selected {
+  background: var(--mat-sys-surface-container);
+}
+
+.nxs-trash-list__list-media {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+.nxs-trash-list__list-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nxs-trash-list__list-title {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: var(--mat-sys-body-large);
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.nxs-trash-list__list-title {
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  // The `:focus` twin is what IBM Equal Access reads (AGENTS/08, pattern 17).
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}
+
+.nxs-trash-list__list-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.nxs-trash-list__list-actions {
+  display: flex;
+  flex: none;
+}

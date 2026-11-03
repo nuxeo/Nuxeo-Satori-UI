@@ -195,7 +195,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-166 exported symbol(s).
+180 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -221,8 +221,11 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly upload: "nxs.primitives.upload";
     }>;
 }
+const NXS_PUBLISH_DIALOG_ID = "nxs.components.publishDialog";
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
+const NXS_TASK_DETAIL_ID = "nxs.components.taskDetail";
 const NXS_TOAST_DURATION = 4000;
+const NXS_TRASH_LIST_ID = "nxs.components.trashList";
 interface NxsActionBarInputs {
     readonly actions: InputSignal<readonly NxsToolbarAction[]>;
     readonly label: InputSignal<string>;
@@ -1950,6 +1953,10 @@ class NxsMetadataEditorComponent {
     }, never, never, true, never>;
     }
 }
+interface NxsOpenPublishDialogOptions {
+    readonly stillWanted?: () => boolean;
+    }
+}
 class NxsPagerComponent {
     readonly pageIndex: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
@@ -2176,6 +2183,41 @@ class NxsPropertiesPanelComponent {
     }, {
     "publicationsSelected": "publicationsSelected";
     }, never, ["[nxsVersion]", "[nxsTags]", "*"], true, never>;
+    }
+}
+class NxsPublishDialogComponent {
+    protected readonly data: NxsPublishDialogData;
+    protected readonly noRendition: symbol;
+    protected readonly defaultRendition: symbol;
+    protected readonly renditions: readonly NxsPublishRendition[];
+    protected readonly sectionsState: import("@angular/core").WritableSignal<"failed" | "loading" | "ready">;
+    protected readonly sections: import("@angular/core").WritableSignal<readonly SectionOption[]>;
+    protected readonly versions: import("@angular/core").WritableSignal<readonly VersionOption[]>;
+    protected readonly section: import("@angular/core").WritableSignal<string>;
+    protected readonly version: import("@angular/core").WritableSignal<string>;
+    protected readonly showRenditions: import("@angular/core").WritableSignal<boolean>;
+    protected readonly rendition: import("@angular/core").WritableSignal<RenditionChoice>;
+    protected readonly override: import("@angular/core").WritableSignal<boolean>;
+    protected readonly publishing: import("@angular/core").WritableSignal<boolean>;
+    constructor();
+    protected loadSections(): void;
+    protected publish(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsPublishDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsPublishDialogComponent, "nxs-publish-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsPublishDialogData {
+    readonly documentUid: string;
+    readonly documentTitle: string;
+    readonly versionLabel?: string;
+    readonly versionableUid?: string;
+    readonly renditions?: readonly NxsPublishRendition[];
+    }
+}
+type NxsPublishDialogResult = NuxeoDocument | undefined;
+interface NxsPublishRendition {
+    readonly name: string;
+    readonly label: string;
     }
 }
 interface NxsRecentPrincipalRow {
@@ -2704,6 +2746,71 @@ interface NxsTagInputs {
     }
 }
 type NxsTagStatus = 'important' | 'important-loud' | 'info' | 'neutral' | 'neutral-quiet' | 'success' | 'warning';
+class NxsTaskDetailComponent {
+    readonly task: InputSignal<NuxeoTask>;
+    readonly taskDone: InputSignal<(task: NuxeoTask, outcome: NxsTaskOutcome) => void>;
+    readonly taskChanged: InputSignal<(task: NuxeoTask) => void>;
+    readonly headingLevel: InputSignal<NxsHeadingLevel>;
+    protected readonly panelHeadingLevel: import("@angular/core").Signal<number>;
+    protected readonly actions: import("@angular/core").Signal<readonly TaskAction[]>;
+    protected readonly choosesParticipants: import("@angular/core").Signal<boolean>;
+    protected readonly actors: import("@angular/core").Signal<string[]>;
+    protected readonly delegatedActors: import("@angular/core").Signal<string[]>;
+    protected readonly comments: import("@angular/core").Signal<TaskComment[]>;
+    protected readonly overdue: import("@angular/core").Signal<boolean>;
+    protected readonly dueLabel: import("@angular/core").Signal<{
+    key: string;
+    count: number;
+    } | null>;
+    protected readonly comment: import("@angular/core").WritableSignal<string>;
+    protected readonly participants: import("@angular/core").WritableSignal<readonly NxsPrincipal[]>;
+    protected readonly reviewType: import("@angular/core").WritableSignal<string>;
+    protected readonly panel: import("@angular/core").WritableSignal<Panel>;
+    protected readonly assignees: import("@angular/core").WritableSignal<readonly NxsPrincipal[]>;
+    protected readonly panelComment: import("@angular/core").WritableSignal<string>;
+    protected readonly graph: import("@angular/core").WritableSignal<Graph | null>;
+    protected readonly submitting: import("@angular/core").WritableSignal<boolean>;
+    constructor();
+    protected execute(action: TaskAction): void;
+    protected abandon(): void;
+    protected openPanel(panel: Exclude<Panel, null>): void;
+    protected closePanel(): void;
+    protected setParticipants(value: NxsPrincipal | readonly NxsPrincipal[] | null): void;
+    protected setAssignees(value: NxsPrincipal | readonly NxsPrincipal[] | null): void;
+    protected confirmPanel(): void;
+    protected openGraph(): void;
+    protected closeGraph(): void;
+    protected title(): string;
+    protected actionLabel(action: TaskAction): string;
+    protected actionTone(action: TaskAction): '' | 'primary' | 'warn';
+    protected principalLabel(id: string): string;
+    protected initial(id: string): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTaskDetailComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTaskDetailComponent, "nxs-task-detail", never, {
+    "task": {
+    "alias": "task";
+    "required": true;
+    "isSignal": true;
+    };
+    "taskDone": {
+    "alias": "taskDone";
+    "required": false;
+    "isSignal": true;
+    };
+    "taskChanged": {
+    "alias": "taskChanged";
+    "required": false;
+    "isSignal": true;
+    };
+    "headingLevel": {
+    "alias": "headingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+type NxsTaskOutcome = 'abandoned' | 'completed';
 class NxsThumbnailComponent {
     readonly documentId: import("@angular/core").InputSignal<string>;
     readonly alt: import("@angular/core").InputSignal<string>;
@@ -2756,6 +2863,107 @@ interface NxsToolbarAction {
     readonly overflow?: boolean;
     }
 }
+class NxsTrashListComponent {
+    readonly filters: import("@angular/core").InputSignal<TrashFilters>;
+    readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly initialView: import("@angular/core").InputSignal<NxsTrashListView>;
+    readonly openHandler: import("@angular/core").InputSignal<((document: NuxeoDocument) => void) | null>;
+    readonly resultsHandler: import("@angular/core").InputSignal<((results: NxsTrashListResults) => void) | null>;
+    protected readonly tagId: "nxs.primitives.tag";
+    protected readonly cardId: "nxs.primitives.card";
+    protected readonly views: readonly NxsTrashListView[];
+    protected readonly sortChoices: {
+    key: string;
+    field: string | null;
+    labelKey: string;
+    }[];
+    protected readonly view: import("@angular/core").WritableSignal<NxsTrashListView>;
+    protected readonly sort: import("@angular/core").WritableSignal<NxsDocumentListSort>;
+    protected readonly pageIndex: import("@angular/core").WritableSignal<number>;
+    protected readonly documents: import("@angular/core").WritableSignal<readonly NuxeoDocument[]>;
+    protected readonly totalSize: import("@angular/core").WritableSignal<number>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly error: import("@angular/core").WritableSignal<NxsErrorStatus | null>;
+    protected readonly selectedIds: import("@angular/core").WritableSignal<readonly string[]>;
+    protected readonly busy: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly visibleColumns: import("@angular/core").WritableSignal<readonly string[]>;
+    protected readonly pickerOpen: import("@angular/core").WritableSignal<boolean>;
+    protected readonly requiredColumns: readonly string[];
+    protected readonly defaultColumns: readonly string[];
+    protected readonly hasNextPage: import("@angular/core").WritableSignal<boolean>;
+    protected readonly selectedCount: import("@angular/core").Signal<number>;
+    protected readonly emptyHeading: import("@angular/core").Signal<any>;
+    protected readonly selected: import("@angular/core").Signal<Set<string>>;
+    protected readonly selectionBusy: import("@angular/core").Signal<boolean>;
+    protected readonly columns: import("@angular/core").Signal<readonly NxsDocumentListColumn[]>;
+    protected readonly pickerColumns: import("@angular/core").Signal<readonly NxsPickableColumn[]>;
+    protected readonly rowActions: import("@angular/core").Signal<Record<string, readonly NxsMenuAction[]>>;
+    protected readonly cardHandlers: import("@angular/core").Signal<Map<string, {
+    open: (() => void) | null;
+    select: (on: boolean) => void;
+    }>>;
+    constructor();
+    reload(): void;
+    protected setView(view: NxsTrashListView): void;
+    protected viewLabel(view: NxsTrashListView): string;
+    protected viewIcon(view: NxsTrashListView): string;
+    protected onSortChange(sort: NxsDocumentListSort | null): void;
+    protected onSortKey(key: string): void;
+    protected toggleDirection(): void;
+    protected goToPage(index: number): void;
+    protected applyColumns(keys: readonly string[]): void;
+    protected open(doc: NuxeoDocument): void;
+    protected title(doc: NuxeoDocument): string;
+    protected icon(doc: NuxeoDocument): string;
+    protected isSelected(uid: string): boolean;
+    protected setSelected(uid: string, on: boolean): void;
+    protected allSelected(): boolean;
+    protected toggleAll(on: boolean): void;
+    protected clearSelection(): void;
+    protected onRowAction({ action, document }: NxsDocumentListRowAction): void;
+    protected restoreSelected(): void;
+    protected purgeSelected(): void;
+    protected restore(docs: readonly NuxeoDocument[]): void;
+    protected purge(docs: readonly NuxeoDocument[]): void;
+    protected exportCsv(): void;
+    protected cellText(doc: NuxeoDocument, key: string): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTrashListComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTrashListComponent, "nxs-trash-list", never, {
+    "filters": {
+    "alias": "filters";
+    "required": false;
+    "isSignal": true;
+    };
+    "pageSize": {
+    "alias": "pageSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "initialView": {
+    "alias": "initialView";
+    "required": false;
+    "isSignal": true;
+    };
+    "openHandler": {
+    "alias": "openHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "resultsHandler": {
+    "alias": "resultsHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsTrashListResults {
+    readonly loading: boolean;
+    readonly documents: readonly NuxeoDocument[];
+    readonly totalSize: number;
+    }
+}
+type NxsTrashListView = 'grid' | 'list' | 'table';
 class NxsUpdatePermissionDialogComponent {
     protected datesValid(): boolean;
     protected readonly id: string;
@@ -3090,6 +3298,7 @@ function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
 function nxsInitials(text: string | null | undefined, count: number): string;
 function nxsOfferedRights(visible: readonly string[] | null | undefined, current?: string): readonly string[];
+function nxsOpenPublishDialog(dialog: MatDialog, components: ExtensionComponentRegistry, data: NxsPublishDialogData, options?: NxsOpenPublishDialogOptions): Promise<MatDialogRef<unknown, NxsPublishDialogResult> | undefined>;
 function nxsPropertyText(value: unknown): string;
 function nxsRangeOptions(ranges: readonly string[], aggregation: AggregateResult | undefined): NxsFacetOption[];
 function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): boolean;
@@ -4370,6 +4579,7 @@ interface NuxeoTask {
     name: string;
     label: string;
     url?: string;
+    validate?: boolean;
     }[];
     };
     targetDocTitle?: string;

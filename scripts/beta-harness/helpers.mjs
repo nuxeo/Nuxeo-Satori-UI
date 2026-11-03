@@ -607,7 +607,7 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      */
     async goTo(route) {
       const url = route.startsWith('http') ? route : `${this.baseUrl}${route}`;
-      await page.goto(url, { waitUntil: 'networkidle' });
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 120000 });
       await page.waitForTimeout(1200);
     },
 
@@ -785,7 +785,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       // checks the interval before `expectApp` restarts the window.
       if (!replacing) identity?.sessionInstalled();
 
-      await page.reload({ waitUntil: 'networkidle' });
+      // The default 30s is shorter than this instance takes to go idle after a restart. Longer, not
+      // unbounded: a page that never settles still fails.
+      await page.reload({ waitUntil: 'networkidle', timeout: 120000 });
       await page.waitForTimeout(1200);
     },
   };
