@@ -383,9 +383,11 @@ control('FINDING 5: an ambiguous class name is refused, not guessed', NEGATIVE, 
           "import { Component } from '@angular/core';\n" +
           "@Component({ selector: 'app-card', template: '' })\n" +
           'export class FxCardComponent {}\n',
-        'libs/fx/src/registrar.ts':
-          "import FxCardComponent from './card';\n" +
-          "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+        /* No import clause at all for this identifier — the only shape that still reaches the
+         * global fallback now that default imports are followed too. With a default import this
+         * fixture is refused one step earlier, for the more precise reason that a default import
+         * has no exported name; that is covered by the unique-class fallback controls below. */
+        'libs/fx/src/registrar.ts': "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
       },
     }),
   );
@@ -709,6 +711,82 @@ control('a binding whose module cannot be resolved is refused, not name-matched'
     /could not be resolved, so which component it refers to is unknown/.test(proc.output),
     proc.output.slice(-400),
   );
+});
+
+/**
+ * A default import whose module default-exports a **differently named** class.
+ *
+ * Reported on PR #555. A default import carries no exported name — `import X from 'm'` says
+ * nothing about what `m` calls it — so the named-import matcher could not see the clause,
+ * resolution fell to the global search, and an unrelated class of that name had its selector
+ * accepted. Reproduced: the module default-exports `ActualComponent` (`fx-actual`), an unrelated
+ * `FxCardComponent` elsewhere declares `fx-namesake`, and the gate accepted `fx-namesake`.
+ *
+ * The earlier fallback controls use a default import whose class name *matches* its declaration,
+ * so they could not reach this — which is the gap review named.
+ */
+const RENAMED_DEFAULT_SOURCES = {
+  'libs/fx/src/actual.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-actual', template: '' })\n" +
+    'export class ActualComponent {}\n' +
+    'export default ActualComponent;\n',
+  'apps/other/src/namesake.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-namesake', template: '' })\n" +
+    'export class FxCardComponent {}\n',
+  'libs/fx/src/registrar.ts':
+    "import FxCardComponent from './actual';\n" +
+    "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+};
+
+control('a renamed default export is followed, not matched to a namesake', NEGATIVE, () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-namesake`', '`tabs`']] }),
+      sources: RENAMED_DEFAULT_SOURCES,
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /declares `fx-actual`/.test(proc.output),
+    `the unrelated namesake's selector was accepted:\n${proc.output.slice(-500)}`,
+  );
+});
+
+falsePositive('the same renamed default export accepts its real element', () => {
+  /* The positive twin. A fix that refused every default import would satisfy the control above
+   * and break every correct one — which is the shape the previous fallback controls were added
+   * to catch, one round ago. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-actual`', '`tabs`']] }),
+      sources: RENAMED_DEFAULT_SOURCES,
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
+control('an anonymous default-exported class resolves to its own selector', NEGATIVE, () => {
+  /* `export default class { … }` has no name anywhere, so neither the import site nor the
+   * declaration can be matched by name at all. The selector above it is the only identity. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-wrong`', '`tabs`']] }),
+      sources: {
+        'libs/fx/src/anon.ts':
+          "import { Component } from '@angular/core';\n" +
+          "@Component({ selector: 'fx-anon', template: '' })\n" +
+          'export default class {}\n',
+        'libs/fx/src/registrar.ts':
+          "import FxCardComponent from './anon';\n" +
+          "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+      },
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(/declares `fx-anon`/.test(proc.output), proc.output.slice(-400));
 });
 
 control('a fixture whose EXTENSION_SLOTS cannot be found is reported', NEGATIVE, () => {

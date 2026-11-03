@@ -174,6 +174,25 @@ function stripComments(text) {
 }
 
 /**
+ * The pseudo-name used for a module's default export while following a binding.
+ *
+ * A default import has no exported name at the import site — `import X from 'm'` says nothing
+ * about what `m` calls it — so a default-imported class cannot be identified by name at all. That
+ * was the hole: the named-import matcher could not see the clause, resolution fell through to a
+ * global search, and an unrelated class of the same name had its selector accepted. Reported on
+ * PR #555; reproduced with a module default-exporting `ActualComponent` while an unrelated
+ * `FxCardComponent` elsewhere declared a different selector, and the gate accepted the unrelated
+ * one.
+ *
+ * Declared here with the other module constants, not beside the function that uses it — the same
+ * placement `TSCONFIG_PATHS` below needed, and for the same reason. Put next to `parseBindings()`
+ * it sat in its own temporal dead zone relative to the section-6b loop that reaches it, and threw
+ * `ReferenceError: Cannot access 'DEFAULT_BINDING' before initialization`. Caught by running this
+ * gate's own controls before replying, which is the only reason it is not in the diff.
+ */
+const DEFAULT_BINDING = Symbol('default export');
+
+/**
  * `compilerOptions.paths` from `tsconfig.base.json`, for resolving a path-alias import.
  *
  * Declared **here**, with the other module constants, and not beside the function that uses it.
@@ -960,6 +979,23 @@ function selectorOfBinding(name, file, depth = 0) {
   const text = sources.get(file);
   if (text === undefined) return null;
 
+  /* A module's `export default`, reached by a default import. `DEFAULT` is the pseudo-name the
+   * caller passes for it, because a default export has no name of its own at the import site —
+   * which is exactly why a default import cannot be resolved by name and must be followed. */
+  if (name === DEFAULT_BINDING) {
+    const declared = /export\s+default\s+class\s+([A-Za-z_$][\w$]*)/.exec(text);
+    if (declared) return selectorOfBinding(declared[1], file, depth);
+    const reexported = /export\s+default\s+([A-Za-z_$][\w$]*)\s*;/.exec(text);
+    if (reexported) return selectorOfBinding(reexported[1], file, depth);
+    // `export default class { … }` with its decorator above it: read the nearest selector.
+    const anonymous = text.search(/export\s+default\s+class\s*[{<]/);
+    if (anonymous !== -1) {
+      const selectors = [...text.slice(0, anonymous).matchAll(/selector:\s*['"`]([^'"`]+)['"`]/g)];
+      return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
+    }
+    return null;
+  }
+
   const declaration = new RegExp(String.raw`\bexport class ${reEscape(name)}\b`);
   const classAt = text.search(declaration);
   if (classAt !== -1) {
@@ -997,6 +1033,32 @@ function selectorOf(className, registeringFile) {
      * local declaration is unambiguous and cheaper than resolving a module. */
     const own = selectorOfBinding(className, join(ROOT, registeringFile));
     if (own) return own;
+
+    /* A default import of this class: `import ClassName from 'm'`, with no braces. Matched before
+     * the named clauses because the two are different bindings that can coexist in one file. */
+    const defaultImport = new RegExp(
+      String.raw`import\s+${reEscape(className)}\s*(?:,\s*\{[^}]*\})?\s*from\s*['"\`]([^'"\`]+)['"\`]`,
+    ).exec(registering);
+    if (defaultImport) {
+      const target = resolveModule(defaultImport[1], registeringFile);
+      if (!target) {
+        fail(
+          `\`${className}\` is default-imported into ${registeringFile} from ` +
+            `\`${defaultImport[1]}\`, which could not be resolved, so which component it refers ` +
+            'to is unknown. A class of that name found elsewhere would not be proof of identity.',
+        );
+        return null;
+      }
+      const selector = selectorOfBinding(DEFAULT_BINDING, target);
+      if (selector) return selector;
+      fail(
+        `\`${className}\` is default-imported into ${registeringFile} from ` +
+          `\`${defaultImport[1]}\`, and no selector could be read for that module's default ` +
+          'export. A default import has no exported name, so it cannot be resolved by name — ' +
+          'this is reported rather than guessed.',
+      );
+      return null;
+    }
 
     for (const clause of registering.matchAll(
       /import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"`]([^'"`]+)['"`]/g,
