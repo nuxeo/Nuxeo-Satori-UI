@@ -277,6 +277,17 @@ jobs:
           # The gate runner's own counting: a gate that reports NOT RUN is never counted green,
           # and a run containing one is `pass-incomplete`, not `pass`.
           npm run beta:gate-selftest
+          # The AGENTS/ staleness report's controls, and the published-links controls. Named here
+          # as well as registered in `ALL_GATES`, for the reason the `beta:sanitizers-recovery`
+          # step below gives: this job runs npm scripts, not the gate list, so a gate added to
+          # `ALL_GATES` alone never runs in CI (NXSAT-751). Both are hermetic — fixtures under
+          # `os.tmpdir()`, a local HTTP server, no network — and together ~1 s.
+          #
+          # `published-links` ITSELF is deliberately not here: it probes the live web, so a
+          # third-party outage would turn every pull request red for something no commit caused.
+          # Its natural home is a scheduled run.
+          npm run beta:staleness-selftest
+          npm run beta:published-links-selftest
           # The Storybook publication gate's controls: each Satori fingerprint must fail it.
           npm run storybook:publication-gate-selftest
           # The root ESLint config against a deleted `@hylandsoftware` scope, which is the state
