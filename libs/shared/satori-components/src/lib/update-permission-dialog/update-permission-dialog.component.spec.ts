@@ -435,6 +435,18 @@ describe('NxsUpdatePermissionDialogComponent', () => {
       expect(sent()).toMatchObject({ permission: 'ReadWrite', begin, end });
     });
 
+    it('shows the last day of a share Nuxeo Web UI wrote, and keeps its end when it is kept', async () => {
+      // Web UI's `endOf('day')` in the user's own zone: one second before 5 March starts.
+      const end = new Date(new Date(2030, 2, 5).getTime() - 1000).toISOString();
+      await open(external({ end }));
+      expect(dateBoxes()[1].value).toBe('2030-03-04');
+      await pick('Edit');
+
+      await save();
+
+      expect(sent()).toMatchObject({ permission: 'ReadWrite', end });
+    });
+
     it('writes a typed date as the day it names', async () => {
       const begin = localMidnight(2030, 1, 2);
       await open(local({ begin, end: localMidnight(2030, 3, 4) }));

@@ -467,6 +467,19 @@ describe('BrowseComponent — permissions tab', () => {
     expect(component.aceTimeFrame(share)).toBe(`Until ${fifteenth}`);
   });
 
+  it('shows a share Nuxeo Web UI wrote as ending on the last day picked, not the next', () => {
+    // Web UI writes an end as the last second of the day in its browser's zone — CET here.
+    const share = ace({ id: 'x-2', externalUser: true, end: '2030-12-31T22:59:59.000Z' });
+    const lastDay = new Date('2030-12-31').toLocaleDateString(component['locale'], {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+
+    expect(component.aceTimeFrame(share)).toBe(`Until ${lastDay}`);
+  });
+
   it('shareWithExternal reloads the ACLs only when a share was created', () => {
     component.currentDoc.set(doc({ uid: 'ws-1' }));
     detail.getDocumentPermissions.mockReturnValue(of(withAcls([{ name: 'local', aces: [] }])));

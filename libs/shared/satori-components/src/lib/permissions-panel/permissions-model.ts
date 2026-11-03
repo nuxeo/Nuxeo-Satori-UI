@@ -369,7 +369,9 @@ export function toDay(date: Date | null): string | null {
   return `${date.getFullYear()}-${m}-${d}`;
 }
 
-const MINUTE = 60 * 1000;
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+const QUARTER_HOUR = 15 * MINUTE;
 const DAY = 24 * 60 * MINUTE;
 
 /**
@@ -383,14 +385,21 @@ const DAY = 24 * 60 * MINUTE;
  * UTC+12. Reading the UTC date alone gives the day before east of UTC; `new Date(iso)` alone would
  * be wrong west of UTC instead. Two zones 24 hours apart share their midnights, so between them the
  * day is genuinely ambiguous and the user's own is chosen.
+ *
+ * Web UI writes an end as the last second of its day instead (`endOf('day')`, 23:59:59 in the
+ * browser's zone, with or without the millisecond). Every zone offset is a whole quarter hour, so
+ * an instant one second or one millisecond short of a quarter hour is read as the day it closes,
+ * not as the day the next midnight starts, which is one later than the writer picked.
  */
 export function dayToDate(instant: string | null): Date | null {
   if (!instant) return null;
   const parsed = Date.parse(instant);
   if (Number.isNaN(parsed)) return null;
-  const wallClock = parsed - new Date(parsed).getTimezoneOffset() * MINUTE;
-  const day = new Date(wallClock % DAY === 0 ? wallClock : parsed + DAY / 2);
-  return new Date(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate());
+  const toMidnight = [SECOND, 1].find((gap) => (parsed + gap) % QUARTER_HOUR === 0) ?? 0;
+  const midnight = parsed + toMidnight;
+  const wallClock = midnight - new Date(midnight).getTimezoneOffset() * MINUTE;
+  const day = new Date(wallClock % DAY === 0 ? wallClock : midnight + DAY / 2);
+  return new Date(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() - (toMidnight ? 1 : 0));
 }
 
 /** `instant` as a calendar day, the inverse of {@link dayToDate} for an unchanged date. */

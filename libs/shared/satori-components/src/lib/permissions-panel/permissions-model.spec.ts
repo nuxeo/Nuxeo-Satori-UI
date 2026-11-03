@@ -645,6 +645,36 @@ describe('calendar days', () => {
       expect(instantToDay('2030-01-01T11:00:00.000Z')).toBe('2030-01-02');
     });
   });
+
+  describe('an end Nuxeo Web UI wrote', () => {
+    // nuxeo-popup-permission sends `moment(end).endOf('day').format()`: 23:59:59 in its browser's
+    // zone, one second before the next day starts.
+    it.each([
+      ['UTC', 0, '2030-12-31T23:59:59.000Z'],
+      ['CET', -60, '2030-12-31T22:59:59.000Z'],
+      ['UTC−5', 300, '2031-01-01T04:59:59.000Z'],
+      ['UTC+5:30', -330, '2030-12-31T18:29:59.000Z'],
+      ['UTC+14', -840, '2030-12-31T09:59:59.000Z'],
+    ])('reads one written at %s as the last day picked, not the next', (_zone, offset, end) => {
+      userIn(offset);
+      expect(instantToDay(end)).toBe('2030-12-31');
+      expect(dateToWrite('2030-12-31', end)).toBe(end);
+    });
+
+    it('reads one written from another zone, or with milliseconds, as that day too', () => {
+      userIn(0);
+      expect(instantToDay('2030-12-31T22:59:59.000Z')).toBe('2030-12-31');
+      expect(instantToDay('2031-01-01T04:59:59.000Z')).toBe('2030-12-31');
+      expect(instantToDay('2030-12-31T23:59:59.999Z')).toBe('2030-12-31');
+    });
+
+    it('still reads the midnight one second later, and any other second, as before', () => {
+      userIn(0);
+      expect(instantToDay('2031-01-01T00:00:00.000Z')).toBe('2031-01-01');
+      expect(instantToDay('2030-12-31T23:59:58.000Z')).toBe('2031-01-01');
+      expect(instantToDay('2030-12-31T22:59:00.000Z')).toBe('2031-01-01');
+    });
+  });
 });
 
 describe('dateToWrite', () => {
