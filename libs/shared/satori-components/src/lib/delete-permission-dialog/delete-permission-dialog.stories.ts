@@ -1,3 +1,4 @@
+import { expect, fn, userEvent, within } from 'storybook/test';
 import type { Provider } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
@@ -17,6 +18,8 @@ import {
   NxsDeletePermissionDialogComponent,
   type NxsDeletePermissionDialogData,
 } from './delete-permission-dialog.component';
+
+const closeDialog = fn(action('dialogRef.close'));
 
 /** Logs each call in the Actions panel under `name`, then lets the fake answer it. */
 function logged<A extends unknown[], R>(
@@ -50,7 +53,7 @@ const withDialog = (
     removePermissionById: logged('removePermissionById', removePermissionById),
   };
   const dialogRef: Pick<MatDialogRef<NxsDeletePermissionDialogComponent>, 'close'> = {
-    close: logged('dialogRef.close', () => undefined),
+    close: closeDialog,
   };
   const data: NxsDeletePermissionDialogData = { documentUid: 'story-doc', ace };
   const providers: Provider[] = [
@@ -124,4 +127,16 @@ export const Refused: Story = {
   decorators: [
     withDialog(EXTERNAL, () => throwError(() => new HttpErrorResponse({ status: 403 }))),
   ],
+};
+
+/** The preview stays mounted; this asserts the dialog's close request. */
+export const KeyboardCancellation: Story = {
+  ...ExternalShare,
+  play: async ({ canvasElement }) => {
+    closeDialog.mockClear();
+    const cancel = await within(canvasElement).findByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(closeDialog).toHaveBeenCalledTimes(1);
+  },
 };

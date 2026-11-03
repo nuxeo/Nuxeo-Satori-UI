@@ -1,6 +1,6 @@
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { of } from 'rxjs';
-import { expect, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import {
   DocumentDetailService,
@@ -93,10 +93,14 @@ type Story = StoryObj<NxsAdminGroupDetailsPageComponent>;
 
 /** A group with two members, one nested group and a permission. */
 export const Profile: Story = {
-  play: async ({ canvasElement }) => {
+  args: { userChosen: fn() },
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
       await canvas.findByRole('heading', { name: 'Editors', level: 1 }),
     ).toBeInTheDocument();
+    canvas.getByRole('button', { name: 'jdoe' }).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.userChosen).toHaveBeenCalledWith('jdoe');
   },
 };

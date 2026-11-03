@@ -1,7 +1,7 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of, type Observable } from 'rxjs';
-import { fn } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { SearchService, type SavedSearchOption } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -66,6 +66,23 @@ type Story = StoryObj<NxsSavedSearchSelectComponent>;
 
 /** None open: the box shows its placeholder. Focus it to list the saved searches. */
 export const NoneOpen: Story = {};
+
+export const KeyboardContract: Story = {
+  play: async ({ args, canvasElement }) => {
+    const field = within(canvasElement).getByRole('combobox');
+    field.focus();
+    await userEvent.type(field, 'Contracts', { skipClick: true });
+    const option = await within(canvasElement.ownerDocument.body).findByRole('option', {
+      name: 'Contracts this month',
+    });
+    fireEvent.keyDown(field, { key: 'ArrowDown', keyCode: 40 });
+    await waitFor(() => expect(field).toHaveAttribute('aria-activedescendant', option.id));
+    fireEvent.keyDown(field, { key: 'Enter', keyCode: 13 });
+    await waitFor(() => expect(args.selectedChange).toHaveBeenCalledWith(SEARCHES[0]));
+    await expect(field).toHaveFocus();
+    await expect(field).toHaveAttribute('aria-expanded', 'false');
+  },
+};
 
 /** One open: its title is in the box. Typing narrows the list. */
 export const OneOpen: Story = {

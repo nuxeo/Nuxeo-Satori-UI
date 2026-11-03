@@ -86,6 +86,19 @@ export const SelectedFromTheKeyboard: Story = {
         'true',
       ),
     );
-    await expect(args.selectedTabChange).toHaveBeenCalled();
+    await expect(args.selectedTabChange).toHaveBeenCalledWith(FILE_TABS[1]);
+    await expect(args.selectHandler).toHaveBeenCalledWith(FILE_TABS[1], 1);
+    const panelId = permissions.getAttribute('aria-controls');
+    const panel = canvasElement.ownerDocument.getElementById(panelId ?? '');
+    await expect(panel).toHaveAttribute('role', 'tabpanel');
+    await expect(panel).toHaveTextContent('app.tabs.permissions');
+    fireEvent.keyDown(permissions, { key: 'End', code: 'End', keyCode: 35 });
+    const claims = canvas.getByRole('tab', { name: /Claims/ });
+    await waitFor(() => expect(claims).toHaveFocus());
+    await expect(permissions).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(claims, { key: 'Home', code: 'Home', keyCode: 36 });
+    await waitFor(() => expect(view).toHaveFocus());
+    fireEvent.keyDown(view, { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37 });
+    await waitFor(() => expect(claims).toHaveFocus());
   },
 };

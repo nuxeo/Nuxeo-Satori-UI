@@ -1,7 +1,7 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of, throwError } from 'rxjs';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 
 import {
   DirectoryService,
@@ -107,6 +107,32 @@ type Story = StoryObj<NxsVocabularySelectComponent>;
 
 /** Focus the field: the whole vocabulary is listed, and typing narrows it. */
 export const Default: Story = {};
+
+export const KeyboardContract: Story = {
+  play: async ({ canvasElement }) => {
+    const field = within(canvasElement).getByRole('combobox', { name: 'Nature' });
+    field.focus();
+    await userEvent.type(field, 'con', { skipClick: true });
+    const option = await within(canvasElement.ownerDocument.body).findByRole('option', {
+      name: 'Contract',
+    });
+    await waitFor(() => expect(option).toBeVisible());
+    await expect(field).toHaveAttribute('aria-expanded', 'true');
+    // CDK resets its active item in a deferred task after the async options render.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    fireEvent.keyDown(field, { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 });
+    await waitFor(() => expect(field).toHaveAttribute('aria-activedescendant', option.id));
+    fireEvent.keyDown(field, { key: 'Enter', code: 'Enter', keyCode: 13 });
+    await waitFor(() => expect(field).toHaveValue('Contract'));
+    await waitFor(() =>
+      expect(canvasElement.querySelector('output')).toHaveTextContent('contract'),
+    );
+    await expect(field).toHaveAttribute('aria-expanded', 'false');
+    await expect(field).toHaveFocus();
+  },
+};
 
 /** Typing `con` narrows Nature to Contract; choosing it sets the value to its id. */
 export const ChoosingAnEntry: Story = {

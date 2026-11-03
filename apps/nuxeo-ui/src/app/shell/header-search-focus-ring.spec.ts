@@ -34,7 +34,8 @@
  *
  * What these tests do NOT cover: the numeric contrast in each packaged theme. The
  * fixture below is a synthetic DOM with no header behind it, so it can only measure against
- * the surface it does have. The theme × colour-scheme combinations were measured against the
+ * an explicit Canvas surface in both light and dark schemes. Transparent ancestors must not
+ * fall back to white when the browser is using a dark canvas. The packaged themes were measured against the
  * running app and recorded in the evidence folder; what is pinned here is the invariant that
  * makes them hold — the ring resolves through the theme token and does not pin its scheme.
  */
@@ -104,7 +105,7 @@ describe('header global search — keyboard focus indicator', () => {
   /**
    * The nearest ancestor background that is not transparent — which is what a ring painted
    * outside the field is actually drawn on top of. In the running app that is the header; in
-   * this fixture it is whatever the global theme puts on `<body>`/`<html>`. Either way it is
+   * this fixture the contrast examples paint Canvas on the host in the tested scheme. Either way it is
    * a themed surface, and it is the right *kind* of comparison.
    */
   function surfaceBehindTheRing(): string {
@@ -144,27 +145,32 @@ describe('header global search — keyboard focus indicator', () => {
     expect(getComputedStyle(input).outlineStyle).toBe('solid');
   });
 
-  it('meets the 3:1 non-text contrast of SC 1.4.11 against the surface the ring touches', () => {
-    input.focus();
-    const style = getComputedStyle(input);
+  for (const scheme of ['light', 'dark']) {
+    it(`meets 3:1 focus contrast against the ${scheme} fixture surface`, () => {
+      // A transparent document uses the browser canvas, which is not always white.
+      fixture.nativeElement.style.colorScheme = scheme;
+      fixture.nativeElement.style.backgroundColor = 'Canvas';
+      input.focus();
+      const style = getComputedStyle(input);
 
-    // Measure the ring only once there is one. `outline-color` computes to `currentColor`
-    // even when `outline-style` is `none`, and on this field that is the near-black text
-    // colour — so without this guard the assertion below passed at 15:1 against the
-    // *unfixed* stylesheet, where no ring is drawn at all. Verified by reverting the SCSS
-    // and watching this spec stay green while the two above it went red.
-    expect(style.outlineStyle).not.toBe('none');
-    expect(parseFloat(style.outlineWidth)).toBeGreaterThan(0);
+      // Measure the ring only once there is one. `outline-color` computes to `currentColor`
+      // even when `outline-style` is `none`, and on this field that is the near-black text
+      // colour — so without this guard the assertion below passed at 15:1 against the
+      // *unfixed* stylesheet, where no ring is drawn at all. Verified by reverting the SCSS
+      // and watching this spec stay green while the two above it went red.
+      expect(style.outlineStyle).not.toBe('none');
+      expect(parseFloat(style.outlineWidth)).toBeGreaterThan(0);
 
-    // A positive `outline-offset` paints the ring outside the field's border box, with the
-    // gap showing what is behind it — so the field's own background is NOT what the ring
-    // contrasts against, and comparing the two was measuring a surface it never touches.
-    expect(parseFloat(style.outlineOffset)).toBeGreaterThan(0);
+      // A positive `outline-offset` paints the ring outside the field's border box, with the
+      // gap showing what is behind it — so the field's own background is NOT what the ring
+      // contrasts against, and comparing the two was measuring a surface it never touches.
+      expect(parseFloat(style.outlineOffset)).toBeGreaterThan(0);
 
-    expect(
-      contrastRatio(rgb(style.outlineColor), rgb(surfaceBehindTheRing())),
-    ).toBeGreaterThanOrEqual(3);
-  });
+      expect(
+        contrastRatio(rgb(style.outlineColor), rgb(surfaceBehindTheRing())),
+      ).toBeGreaterThanOrEqual(3);
+    });
+  }
 
   it('declares at least one standalone :focus rule that IBM can read', () => {
     // Regression 2 above. The rendered cascade cannot distinguish `&:focus` from

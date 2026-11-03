@@ -3,11 +3,13 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateService } from '@ngx-translate/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { action } from 'storybook/actions';
-import { userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { dialogPreview } from '../../../.storybook/dialog-preview';
 
 import { NxsConfirmDialogComponent, type NxsConfirmDialogData } from './confirm-dialog.component';
+
+const close = fn(action('dialogRef.close'));
 
 /** The words come from the catalogue, as a caller's do: the story shows what a translator would ship. */
 const withDialog = () =>
@@ -27,7 +29,7 @@ const withDialog = () =>
           };
         },
       },
-      { provide: MatDialogRef, useValue: { close: action('dialogRef.close') } },
+      { provide: MatDialogRef, useValue: { close } },
     ],
   });
 
@@ -59,6 +61,12 @@ type Story = StoryObj<NxsConfirmDialogComponent>;
 /** The question as the caller wrote it: confirming closes with true. */
 export const Asking: Story = {
   play: async ({ canvasElement }) => {
-    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Delete' }));
+    close.mockClear();
+    const canvas = within(canvasElement);
+    canvas.getByRole('button', { name: 'Cancel' }).focus();
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Delete' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect(close).toHaveBeenCalledWith(true);
   },
 };

@@ -1,7 +1,7 @@
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { of, throwError } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { UserService, type NuxeoGroup, type NuxeoUser } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -96,10 +96,14 @@ type Story = StoryObj<NxsAdminUsersGroupsPageComponent>;
 
 /** Both lists, with users on the first tab and the recently created table above. */
 export const Populated: Story = {
+  args: { userChosen: fn() },
   decorators: [withDirectory()],
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(await canvas.findByRole('button', { name: 'jdoe' })).toBeInTheDocument();
+    const user = await canvas.findByRole('button', { name: 'jdoe' });
+    user.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.userChosen).toHaveBeenCalledWith('jdoe');
   },
 };
 

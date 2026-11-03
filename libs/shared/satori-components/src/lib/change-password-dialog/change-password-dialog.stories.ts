@@ -1,11 +1,13 @@
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { action } from 'storybook/actions';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { dialogPreview } from '../../../.storybook/dialog-preview';
 
 import { NxsChangePasswordDialogComponent } from './change-password-dialog.component';
+
+const closeDialog = fn(action('dialogRef.close'));
 
 const DATA = { username: 'jdoe' };
 
@@ -14,7 +16,7 @@ const withDialog = () =>
   applicationConfig({
     providers: [
       { provide: MAT_DIALOG_DATA, useValue: DATA },
-      { provide: MatDialogRef, useValue: { close: action('dialogRef.close') } },
+      { provide: MatDialogRef, useValue: { close: closeDialog } },
     ],
   });
 
@@ -63,5 +65,17 @@ export const Mismatch: Story = {
     await userEvent.type(second, 'correct-horse-8');
     await expect(await canvas.findByRole('alert')).toHaveTextContent('do not match');
     await expect(canvas.getByRole('button', { name: 'Set password' })).toBeDisabled();
+  },
+};
+
+/** The preview stays mounted; this asserts the dialog's close request. */
+export const KeyboardCancellation: Story = {
+  ...Matching,
+  play: async ({ canvasElement }) => {
+    closeDialog.mockClear();
+    const cancel = await within(canvasElement).findByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(closeDialog).toHaveBeenCalledTimes(1);
   },
 };

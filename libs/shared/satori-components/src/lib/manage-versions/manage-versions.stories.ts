@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -128,6 +128,27 @@ export const CheckedOut: Story = {
       expect(menu.getByRole('menuitemradio', { name: /^1\.2 Modified/ })).toBeVisible(),
     );
     await expect(await menu.findByRole('menuitem', { name: 'Create Version' })).toBeVisible();
+  },
+};
+
+export const KeyboardContract: Story = {
+  args: { versionSelected: fn() },
+  decorators: [withVersions()],
+  play: async ({ args, canvasElement }) => {
+    (await within(canvasElement).findByRole('button', { name: 'Version 1.2+' })).focus();
+    await userEvent.keyboard('{Enter}');
+    const menu = within(canvasElement.ownerDocument.body);
+    await waitFor(() =>
+      expect(menu.getByRole('menuitemradio', { name: /^1\.2 Modified/ })).toBeVisible(),
+    );
+    await expect(await menu.findByRole('menuitem', { name: 'Create Version' })).toBeVisible();
+    const entry = menu.getByRole('menuitemradio', { name: /^1\.2 Modified/ });
+    await expect(entry).toHaveAttribute('aria-checked', 'false');
+    entry.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.versionSelected).toHaveBeenCalledWith(
+      expect.objectContaining({ isVersion: true }),
+    );
   },
 };
 

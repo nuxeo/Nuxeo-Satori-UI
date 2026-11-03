@@ -4,7 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { NEVER, of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -14,6 +14,8 @@ import {
   NxsCreateVersionDialogComponent,
   type NxsCreateVersionDialogData,
 } from './create-version-dialog.component';
+
+const closeDialog = fn(action('dialogRef.close'));
 
 /** Logs each call in the Actions panel under `name`, then lets the fake answer it. */
 function logged<A extends unknown[], R>(
@@ -40,7 +42,7 @@ const withDialog = (
     createVersion: logged('createVersion', createVersion),
   };
   const dialogRef: Pick<MatDialogRef<NxsCreateVersionDialogComponent>, 'close'> = {
-    close: logged('dialogRef.close', () => undefined),
+    close: closeDialog,
   };
   const providers: Provider[] = [
     { provide: DocumentDetailService, useValue: detail },
@@ -105,4 +107,16 @@ export const Creating: Story = {
 /** Nuxeo refuses (403): the toast says so, and the dialog stays open. */
 export const Refused: Story = {
   decorators: [withDialog(() => throwError(() => new HttpErrorResponse({ status: 403 })))],
+};
+
+/** The preview stays mounted; this asserts the dialog's close request. */
+export const KeyboardCancellation: Story = {
+  ...MajorChosen,
+  play: async ({ canvasElement }) => {
+    closeDialog.mockClear();
+    const cancel = await within(canvasElement).findByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(closeDialog).toHaveBeenCalledTimes(1);
+  },
 };
