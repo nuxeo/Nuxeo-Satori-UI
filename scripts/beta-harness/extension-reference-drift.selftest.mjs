@@ -938,6 +938,180 @@ control('--root is validated rather than crashing', NEGATIVE, () => {
   expect(!/^\s+at /m.test(output), 'it threw a stack trace instead of refusing');
 });
 
+/* ── PR #555 review round: the slot id, and three forms the binding readers could not see ────
+ *
+ * All four were reproduced against a fixture before anything was changed. Two of them were
+ * silent passes and two rejected a correct row, which is the pair of directions this gate's
+ * findings keep arriving in.
+ */
+
+/** `EXTENSION_SLOTS` built from explicit `[key, value]` pairs, so a control can diverge them. */
+const slotsFileFrom = (pairs) =>
+  'export const EXTENSION_SLOTS = {\n' +
+  pairs
+    .map(([key, value]) =>
+      /^[a-z][a-zA-Z]*$/.test(key) ? `  ${key}: '${value}',` : `  '${key}': '${value}',`,
+    )
+    .join('\n') +
+  '\n} as const;\n';
+
+const SLOT_PAIRS = SLOTS.map((s) => [s, s]);
+const slotsFixture = (pairs) =>
+  fixture({
+    sources: { 'libs/shared/extensions/src/lib/extension-slots.ts': slotsFileFrom(pairs) },
+  });
+
+control('a slot whose value alone is renamed is reported, not read as its key', NEGATIVE, () => {
+  /* Only the value moves. The key, the `resolve()` in the host and the documentation row all
+   * still say `navbar`, and the registry — which keys slots by the value — now resolves
+   * `renamedNavbar`. Reading the key and discarding the value, the gate exited 0 and still
+   * claimed it "cover[ed] every slot EXTENSION_SLOTS declares": the coverage assertion, which
+   * the gate documents as the one that cannot be defeated, defeated. */
+  const proc = run(
+    slotsFixture(SLOT_PAIRS.map(([k, v]) => (k === 'navbar' ? [k, 'renamedNavbar'] : [k, v]))),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /member `navbar` with the slot id `renamedNavbar`/.test(proc.output),
+    `the renamed slot id was not reported:\n${proc.output.slice(-500)}`,
+  );
+});
+
+control('a duplicate `EXTENSION_SLOTS` key is reported, not counted twice', NEGATIVE, () => {
+  /* Key and value agree in both entries, so this isolates the duplicate from the check above.
+   * JavaScript keeps the last writer, so the shadowed entry is not a slot at all — but both were
+   * pushed into the expected set and both found the one row, so the gate passed having compared
+   * a documented slot against a declaration that does not survive. PR #554's roster finding, one
+   * reader along, closed here rather than left for the round that would have reported it. */
+  const proc = run(slotsFixture([...SLOT_PAIRS, ['navbar', 'navbar']]));
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /declares the `EXTENSION_SLOTS` key `navbar` twice/.test(proc.output),
+    `the duplicate key was accepted:\n${proc.output.slice(-500)}`,
+  );
+});
+
+/** A decorated class never marked `export`, published only by a separate `export default`. */
+const BARE_DEFAULT_SOURCES = {
+  'libs/fx/src/actual.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-actual', template: '' })\n" +
+    'class ActualComponent {}\n' +
+    'export default ActualComponent;\n',
+  'libs/fx/src/registrar.ts':
+    "import FxCardComponent from './actual';\n" +
+    "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+};
+
+falsePositive('a default export of a class never marked `export` resolves', () => {
+  /* The declaration lookup required the `export` modifier, so the default-export branch recursed
+   * with `ActualComponent`, found no `export class ActualComponent`, and the gate rejected this
+   * correct row reporting that it could read no selector for the module's default export. The
+   * existing control for the neighbouring fix used `export class X {}` + `export default X;` and
+   * so could not reach the form without the modifier. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-actual`', '`tabs`']] }),
+      sources: BARE_DEFAULT_SOURCES,
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
+control('the same bare declaration still rejects a wrong element', NEGATIVE, () => {
+  /* The negative twin: a fix that resolved every bare declaration to nothing would satisfy the
+   * control above by never disagreeing. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-wrong`', '`tabs`']] }),
+      sources: BARE_DEFAULT_SOURCES,
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(/declares `fx-actual`/.test(proc.output), proc.output.slice(-400));
+});
+
+/** The sought class arrives in the braces of a clause that also binds a default. */
+const COMBINED_CLAUSE_SOURCES = {
+  'libs/fx/src/actual.ts':
+    "import { Component } from '@angular/core';\n" +
+    'export default class Helper {}\n' +
+    "@Component({ selector: 'fx-actual', template: '' })\n" +
+    'export class ActualComponent {}\n',
+  'apps/other/src/namesake.ts':
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'fx-namesake', template: '' })\n" +
+    'export class FxCardComponent {}\n',
+  'libs/fx/src/registrar.ts':
+    "import Helper, { ActualComponent as FxCardComponent } from './actual';\n" +
+    "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+};
+
+control('a combined default-and-named clause is followed, not left to a namesake', NEGATIVE, () => {
+  /* The named matcher required the brace to follow `import` directly, so a clause binding a
+   * default first was invisible to it — and invisible to the default matcher too, which is
+   * looking for the sought name in the default position. Resolution fell through to the global
+   * fallback and took an unrelated exported namesake: this fixture exited 0 for `fx-namesake`. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-namesake`', '`tabs`']] }),
+      sources: COMBINED_CLAUSE_SOURCES,
+    }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /declares `fx-actual`/.test(proc.output),
+    `the unrelated namesake's selector was accepted:\n${proc.output.slice(-500)}`,
+  );
+});
+
+falsePositive('the same combined clause accepts the real element', () => {
+  /* The other direction of the same hole, and the reason it is serious rather than merely
+   * incomplete: with the row naming the registered component's real selector, the gate exited 1. */
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-actual`', '`tabs`']] }),
+      sources: COMBINED_CLAUSE_SOURCES,
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+  expect(/1 row\(s\) in section 6b/.test(proc.stdout), proc.stdout.slice(-300));
+});
+
+control(
+  'a default binding before a namespace clause is followed, not left to a namesake',
+  NEGATIVE,
+  () => {
+    /* The mirror of the combined clause, in the other binding position: `import D, * as ns from`.
+     * Not reported — found by enumerating the clause forms the grammar allows while fixing the one
+     * that was — and it fails the same way, by falling through to a namesake. */
+    const proc = run(
+      fixture({
+        doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-namesake`', '`tabs`']] }),
+        sources: {
+          'libs/fx/src/actual.ts':
+            "import { Component } from '@angular/core';\n" +
+            "@Component({ selector: 'fx-actual', template: '' })\n" +
+            'export default class ActualComponent {}\n',
+          'apps/other/src/namesake.ts':
+            "import { Component } from '@angular/core';\n" +
+            "@Component({ selector: 'fx-namesake', template: '' })\n" +
+            'export class FxCardComponent {}\n',
+          'libs/fx/src/registrar.ts':
+            "import FxCardComponent, * as helpers from './actual';\n" +
+            "export const REG = { 'nxs.tabs.fxCard': FxCardComponent };\n",
+        },
+      }),
+    );
+    expectExit(proc, 1, NEGATIVE);
+    expect(
+      /declares `fx-actual`/.test(proc.output),
+      `the unrelated namesake's selector was accepted:\n${proc.output.slice(-500)}`,
+    );
+  },
+);
+
 /* ── report ──────────────────────────────────────────────────────────────────────────────────── */
 
 rmSync(workspace, { recursive: true, force: true });

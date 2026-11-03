@@ -102,6 +102,38 @@ function reEscape(s) {
 }
 
 /**
+ * The declaration of a class by name, in any form this repository can reach it through.
+ *
+ * **One definition, used by both lookups**, because they are the same question and keeping two
+ * copies is what produced two of the findings on this gate: the `default` modifier was added to
+ * the lookup in `selectorOfBinding` and not to the declarer search in `selectorOf`, and the
+ * second site then counted `export default class X {}` as "not a declaration" — under-counting
+ * declarers, which is the direction that disables the ambiguity refusal rather than firing it.
+ *
+ * **Every modifier is optional, including `export` itself.** Requiring it assumed that a class
+ * worth resolving is always exported at its declaration, and three forms break that:
+ *
+ *   - `class X {}` with a separate `export default X;` — reported on PR #555, and it rejected a
+ *     *correct* row: the default-export branch recursed with the declared name, found no
+ *     `export class X`, and the gate reported it could read no selector for the module's default.
+ *   - `class X {}` with a separate `export { X };`.
+ *   - a class declared and registered in the same file, which never needs to be exported at all.
+ *
+ * Matching a bare `class X` also means a non-exported local class elsewhere now counts as a
+ * declarer in the global fallback. That is deliberate and it is the safe direction: an extra
+ * declarer can only make the ambiguity refusal fire, which is a loud, investigable refusal to
+ * guess, whereas a missed one lets an unrelated namesake's selector be accepted as identity.
+ *
+ * @param {string} name
+ * @returns {RegExp}
+ */
+function classDeclaration(name) {
+  return new RegExp(
+    String.raw`\b(?:export\s+(?:default\s+)?)?(?:abstract\s+)?class\s+${reEscape(name)}\b`,
+  );
+}
+
+/**
  * Every non-spec TypeScript file under the source roots.
  *
  * A source root that cannot be listed is a **reported gap**, not a root to skip. `walk()` called
@@ -644,6 +676,8 @@ function declaredSlots() {
   const block = body.slice(open, close);
   const inner = block.slice(block.indexOf('{') + 1);
   const slots = [];
+  /** Key to the member that declared it, so a duplicate can name both. */
+  const declaredAt = new Map();
   for (const member of objectMembers(inner)) {
     const parsed = /^(?:['"`]([^'"`]+)['"`]|([A-Za-z_$][\w$]*))\s*:\s*['"`]([^'"`]+)['"`]$/s.exec(
       member,
@@ -657,7 +691,60 @@ function declaredSlots() {
       );
       return [];
     }
-    slots.push(parsed[1] ?? parsed[2]);
+    const key = parsed[1] ?? parsed[2];
+    const id = parsed[3];
+    /**
+     * The key and the value are two different identities, and this gate uses both.
+     *
+     * The **value** is the slot id: `ExtensionSlotRegistry` keys slots by plain string, so
+     * `resolve(EXTENSION_SLOTS.navbar)` resolves `'navbar'` — the value — and that is also what a
+     * customer writes in a manifest. The **key** is only how source code spells the reference,
+     * and it is what `SLOT_CONST` below greps for when it decides whether a slot is resolved or
+     * registered into.
+     *
+     * While they agree, one name serves both. When they differ, every use of the name is wrong
+     * for one of the two purposes, so the gate cannot simply pick one: the documentation row
+     * would have to name the value and the resolve/register check would have to grep the key.
+     *
+     * Only the key was read, and the value discarded. Reported on PR #555 and reproduced before
+     * fixing: renaming `navbar: 'navbar'` to `navbar: 'renamedNavbar'` left the gate exiting 0,
+     * still claiming it "cover[ed] every slot EXTENSION_SLOTS declares", while the slot the host
+     * actually resolves had no row at all. That is the coverage assertion — the one assertion
+     * documented as undefeatable — defeated.
+     *
+     * Reported rather than silently reconciled. All thirteen slots agree today and the file's own
+     * comment calls the constants "documentation and typo protection", so divergence is a typo
+     * until someone decides otherwise; if it is ever deliberate, this message says exactly which
+     * two things have to be taught the difference.
+     */
+    if (key !== id) {
+      fail(
+        `${relative(ROOT, file)} declares \`EXTENSION_SLOTS\` member \`${key}\` with the slot id ` +
+          `\`${id}\`.\n` +
+          `  The registry keys slots by the value, so the host resolves \`${id}\` and a manifest ` +
+          `addresses \`${id}\`, but source spells the reference \`EXTENSION_SLOTS.${key}\` and ` +
+          "this gate greps for that spelling to decide the slot's state.\n" +
+          '  While the two differ one of those is always wrong, so make them agree, or teach the ' +
+          'documentation row to use the value and the resolve/register check to use the key.',
+      );
+      return [];
+    }
+    /* JavaScript keeps the LAST writer of a duplicate key, so `{ navbar: 'navbar', navbar: 'x' }`
+     * registers `x` while a reader — and the expected set built here — sees `navbar` twice and
+     * finds its row present. The gate would then pass having compared the documented slot against
+     * a slot nothing resolves. The same class as PR #554's roster finding, which is why it is
+     * closed here rather than left for the round that would have reported it. */
+    if (declaredAt.has(key)) {
+      fail(
+        `${relative(ROOT, file)} declares the \`EXTENSION_SLOTS\` key \`${key}\` twice.\n` +
+          '  JavaScript keeps the last one, so the slot this gate checks is not necessarily the ' +
+          'slot the host resolves, and the documentation row for the shadowed one would pass ' +
+          'against a slot that no longer exists.',
+      );
+      return [];
+    }
+    declaredAt.set(key, id);
+    slots.push(id);
   }
   if (slots.length === 0) {
     fail(`${relative(ROOT, file)} yielded no slot names, so the table was compared to nothing.`);
@@ -996,13 +1083,10 @@ function selectorOfBinding(name, file, depth = 0) {
     return null;
   }
 
-  /* `export default class Name {}` as well as `export class Name {}`. The default-export branch
-   * above recurses with the declared name, and without the optional modifier this pattern missed
-   * that form and rejected a correctly documented, default-imported component. Reported on
-   * PR #555 against the branch added minutes earlier; my own control for it used the two-statement
-   * form (`export class X {}` then `export default X;`) and so could not reach it. */
-  const declaration = new RegExp(String.raw`\bexport\s+(?:default\s+)?class\s+${reEscape(name)}\b`);
-  const classAt = text.search(declaration);
+  /* Any declaration form, exported at the declaration or not — see `classDeclaration`. Reached
+   * from the default-export branch above, which recurses with the declared name, and from a
+   * re-export clause, both of which can land on a class the file never marks `export`. */
+  const classAt = text.search(classDeclaration(name));
   if (classAt !== -1) {
     const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*['"`]([^'"`]+)['"`]/g)];
     return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
@@ -1030,15 +1114,11 @@ function selectorOfBinding(name, file, depth = 0) {
 }
 
 function selectorOf(className, registeringFile) {
-  /* The same optional `default` modifier as the declaration lookup above, because the review that
-   * found it there named one site and this is the second. It counts declarers for the ambiguity
-   * refusal below, where missing a declaration is the more dangerous direction of the two: a class
-   * declared `export default class X {}` in one file and `export class X {}` in another counted as
-   * **one**, so the refusal never fired and the second file's selector was accepted as the first's
-   * identity — exactly what that refusal exists to prevent. */
-  const declaration = new RegExp(
-    String.raw`\bexport\s+(?:default\s+)?class\s+${reEscape(className)}\b`,
-  );
+  /* The same definition the binding lookup uses, for the reason `classDeclaration` records: this
+   * site counts declarers for the ambiguity refusal below, where missing a declaration is the
+   * more dangerous direction of the two — a class the pattern cannot see is a declarer that does
+   * not count, so the refusal never fires and another file's selector is accepted as identity. */
+  const declaration = classDeclaration(className);
 
   const registering = sources.get(join(ROOT, registeringFile));
   if (registering !== undefined) {
@@ -1047,10 +1127,16 @@ function selectorOf(className, registeringFile) {
     const own = selectorOfBinding(className, join(ROOT, registeringFile));
     if (own) return own;
 
-    /* A default import of this class: `import ClassName from 'm'`, with no braces. Matched before
-     * the named clauses because the two are different bindings that can coexist in one file. */
+    /* A default import of this class: `import ClassName from 'm'`. Matched before the named
+     * clauses because the two are different bindings that can coexist in one file.
+     *
+     * The companion clause after the comma is skipped rather than parsed, and it is either form
+     * the grammar allows — `, { … }` or `, * as ns` — because the sought name is the default
+     * binding here and what accompanies it changes nothing. The namespace alternative is the
+     * mirror of the combined-clause hole found in the named matcher below: the same statement
+     * shape, the other binding position. */
     const defaultImport = new RegExp(
-      String.raw`import\s+${reEscape(className)}\s*(?:,\s*\{[^}]*\})?\s*from\s*['"\`]([^'"\`]+)['"\`]`,
+      String.raw`import\s+${reEscape(className)}\s*(?:,\s*(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?\s*from\s*['"\`]([^'"\`]+)['"\`]`,
     ).exec(registering);
     if (defaultImport) {
       const target = resolveModule(defaultImport[1], registeringFile);
@@ -1073,8 +1159,22 @@ function selectorOf(className, registeringFile) {
       return null;
     }
 
+    /**
+     * The named clause, after an optional default binding.
+     *
+     * `import Helper, { ActualComponent as FxCardComponent } from './actual'` is one clause with
+     * two bindings, and the pattern required the brace to follow `import` directly, so the whole
+     * clause was invisible. Neither matcher saw it — the default matcher above is looking for the
+     * sought name in the default position, and here it is in the braces — so resolution fell
+     * through to the global fallback and matched an unrelated exported namesake.
+     *
+     * Reported on PR #555 and reproduced in both directions before fixing, which is the part that
+     * makes it serious: the fixture exited **0** for the namesake's wrong selector and exited 1
+     * for the registered component's real one. A silent wrong acceptance and a false rejection
+     * from the same hole.
+     */
     for (const clause of registering.matchAll(
-      /import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"`]([^'"`]+)['"`]/g,
+      /import\s*(?:type\s*)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*['"`]([^'"`]+)['"`]/g,
     )) {
       const binding = parseBindings(clause[1]).find((b) => b.inner === className);
       if (!binding) continue;
