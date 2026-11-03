@@ -158,7 +158,8 @@
 .nxs-task-detail__due {
   font: var(--mat-sys-body-medium);
   font-weight: 500;
-  color: var(--mat-sys-on-surface);
+  // Tertiary is the library's success colour.
+  color: var(--mat-sys-tertiary);
 }
 
 .nxs-task-detail__due--overdue {
