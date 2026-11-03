@@ -12659,9 +12659,17 @@ function checkGateInventory() {
    * not nodes; a string containing `id:` is not a property; and a `\n];` inside a comment cannot
    * truncate the block, because there is no block to slice.
    *
-   * Every element must be an object literal with a string-literal `id`. Anything else is a
-   * reported failure, not an element to skip: an element left out of the roster is a gate whose
-   * absent documentation row would go unreported, which is what this check exists to prevent.
+   * 4. Reading the tree fixed *where* the ids are read from, but not *which* one. The first
+   *    property named `id` was taken, and JavaScript takes the last — so a trailing spread, a
+   *    duplicate key, a computed `['id']` or a `get id()` each registered one gate while this
+   *    read another. That is worse than under-reading: the roster holds an id nothing runs, which
+   *    has a row, and the id that does run has none, so *both* directions stay green.
+   *
+   * Every element must be an object literal, every member of it statically legible, and its
+   * last-written `id` a string literal. Anything else is a reported failure, not an element to
+   * skip: an element left out of the roster is a gate whose absent documentation row would go
+   * unreported, and an element read under the wrong id is worse, because it is compared — to the
+   * wrong row.
    */
   const runnerSource = read(runner);
   const ast = ts.createSourceFile(runner, runnerSource, ts.ScriptTarget.Latest, true);
@@ -12702,13 +12710,42 @@ function checkGateInventory() {
       );
       return;
     }
-    const idProperty = element.properties.find(
-      (property) =>
-        ts.isPropertyAssignment(property) &&
-        ((ts.isIdentifier(property.name) && property.name.text === 'id') ||
-          (ts.isStringLiteral(property.name) && property.name.text === 'id')),
+    /* Reading the FIRST `id:` is reading a different gate from the one that runs. JavaScript
+     * resolves a key to its last writer, so `{ id: 'node', ...{ id: 'ghost' } }` registers
+     * `ghost` while the first property is the one a `find` returns — and the roster then holds an
+     * id nothing runs, which has a row, while the id that does run has none. Both inventory
+     * directions stay green. Four shapes did this, not just the spread that was reported: a
+     * trailing spread, a duplicate `id:`, a computed `['id']:`, and a `get id()`.
+     *
+     * So the whole element has to be statically legible before any key is trusted, exactly as
+     * `UPSTREAM_FOLDERS` above is read and for the same reason — a member that can supply or
+     * override `id` at run time makes the id read here not necessarily the id that registers.
+     * `staticPropertyKey` is `undefined` for precisely those members: a spread has no key, and a
+     * computed key is only a key when it computes to a string literal. */
+    const illegible = element.properties.find(
+      (property) => staticPropertyKey(property) === undefined,
     );
-    if (!idProperty || !ts.isStringLiteralLike(idProperty.initializer)) {
+    if (illegible) {
+      fail(
+        `${at} is a gate in \`ALL_GATES\` with a member this check cannot read statically ` +
+          `(\`${illegible.getText().replace(/\s+/g, ' ').slice(0, 60)}\`). A spread or a computed ` +
+          'key can supply or override `id` at run time, so the id read here would not be the id ' +
+          'that registers, and the gate would be compared against the wrong row. Write every ' +
+          'member as a literal key.',
+      );
+      return;
+    }
+    /* `findLast`, because that is the one JavaScript keeps. It must also be a plain property
+     * assignment: a `get id()` or a method named `id` is the last writer too, and its value is
+     * not a literal this can read. */
+    const idProperty = element.properties.findLast(
+      (property) => staticPropertyKey(property) === 'id',
+    );
+    if (
+      !idProperty ||
+      !ts.isPropertyAssignment(idProperty) ||
+      !ts.isStringLiteralLike(idProperty.initializer)
+    ) {
       fail(
         `${at} is a gate in \`ALL_GATES\` with no string-literal \`id\`, so it cannot be matched ` +
           'to a documentation row. An id this check cannot read is a gate whose absent row would ' +

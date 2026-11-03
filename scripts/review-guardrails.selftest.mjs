@@ -12938,6 +12938,87 @@ expectRed(
   /is an element of `ALL_GATES` that is not an object literal/,
 );
 
+/*
+ * The last writer wins, and reading the first one reads a different gate from the one that runs.
+ *
+ * Reported on PR #554 as the trailing spread. Driving the reader's assumptions rather than that
+ * one case found four shapes, each registering `ghost` while the check read `node`:
+ * `...{ id: 'ghost' }`, a duplicate `id:`, `['id']: 'ghost'` and `get id()`. All four were green
+ * before the fix, and this is worse than the under-reading of the earlier rounds — the roster
+ * holds an id nothing runs, which has a row, and the id that does run has none, so neither
+ * inventory direction has anything to report.
+ */
+expectRed(
+  'a trailing spread overrides the id that was read, and the gate that runs has no row',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "    id: 'agent-mirror',",
+        "    id: 'agent-mirror',\n    ...{ id: 'undocumented-gate' },",
+      ),
+    ),
+  /with a member this check cannot read statically/,
+);
+
+expectRed(
+  'a duplicated id is read as the one JavaScript keeps, not the one written first',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    /* The message must name `undocumented-gate`. Naming `agent-mirror` would mean the reader
+     * still disagrees with the runtime, which is the whole defect. */
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "    id: 'agent-mirror',",
+        "    id: 'agent-mirror',\n    id: 'undocumented-gate',",
+      ),
+    ),
+  /`undocumented-gate` is registered in ALL_GATES and has no row in §2/,
+);
+
+expectRed(
+  'an accessor named id is the last writer too, and its value is not a literal',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "    id: 'agent-mirror',",
+        "    id: 'agent-mirror',\n    get id() { return 'undocumented-gate'; },",
+      ),
+    ),
+  /is a gate in `ALL_GATES` with no string-literal `id`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a computed key that is a string literal is the key it computes to',
+  'checkGateInventory',
+  {
+    /* The positive half, and it was a real false positive before the fix: `['id']: 'node'`
+     * registers `node`, but the reader matched only identifier and string-literal keys, so a
+     * correct roster was refused. Rejecting everything unreadable is not the same as reading it,
+     * and without this control the fix could over-correct into refusing valid rosters. */
+    [INVENTORY_RUNNER]: gateRoster(['node', 'lint', 'agent-mirror']).replace(
+      "    id: 'agent-mirror',",
+      "    ['id']: 'agent-mirror',",
+    ),
+    [INVENTORY_PAGE]: inventoryPage({
+      rows: [
+        { number: 1, id: 'node' },
+        { number: 2, id: 'lint' },
+        { number: 3, id: 'agent-mirror' },
+      ],
+      sevenNames: ['node', 'lint, agent-mirror'],
+    }),
+  },
+);
+
 falsePositiveControls += 1;
 expectGreen('a string that merely mentions an id is not counted as a gate', 'checkGateInventory', {
   /* The other half of "prose is not code". A regex counted this; the parser does not, because a
