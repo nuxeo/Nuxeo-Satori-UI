@@ -42,10 +42,45 @@
  *   node scripts/beta-harness/extension-reference-drift.mjs
  */
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative, resolve, sep } from 'node:path';
 
-const ROOT = resolve(import.meta.dirname, '..', '..');
+/**
+ * The repository to inspect. `--root <dir>` overrides it, following `dependency-tree.mjs`.
+ *
+ * It exists so this gate can have negative controls at all. Every defect found in it so far — a
+ * table helper that scanned past its section, a header/separator pair taken on trust, rows
+ * silently skipped, a class name resolved to the wrong component, a temporal dead zone on the
+ * alias path — was found by a human reading the diff, because the gate could only ever be run
+ * against the one repository it lives in, and that repository is correct. With `--root`, a control
+ * can build a miniature repository that is wrong on purpose and watch the gate go red.
+ *
+ * Validated rather than trusted, for the reason `--ledger` on `published-links.mjs` was: a flag
+ * whose misuse surfaces as a Node stack trace reads as a defect in the gate.
+ */
+const ROOT = (() => {
+  const at = process.argv.indexOf('--root');
+  if (at === -1) return resolve(import.meta.dirname, '..', '..');
+  const given = process.argv[at + 1];
+  const refuse = (why) => {
+    console.error(
+      `extension-reference-drift: --root ${why}\n` +
+        '  Usage: node scripts/beta-harness/extension-reference-drift.mjs [--root <dir>]\n' +
+        '  The directory must contain docs/extension-reference.md and at least one of apps/ or libs/.',
+    );
+    process.exit(1);
+  };
+  if (given === undefined || given.startsWith('--')) {
+    refuse(`needs a directory, and was given ${given === undefined ? 'nothing' : `\`${given}\``}.`);
+  }
+  const root = resolve(given);
+  if (!existsSync(root) || !statSync(root).isDirectory())
+    refuse(`\`${given}\` is not a directory.`);
+  if (!existsSync(join(root, 'docs', 'extension-reference.md'))) {
+    refuse(`\`${given}\` has no docs/extension-reference.md, so there is nothing to check.`);
+  }
+  return root;
+})();
 const REFERENCE = join(ROOT, 'docs', 'extension-reference.md');
 const SOURCE_ROOTS = ['libs', 'apps'];
 
@@ -66,8 +101,31 @@ function reEscape(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Every non-spec TypeScript file under the source roots.
+ *
+ * A source root that cannot be listed is a **reported gap**, not a root to skip. `walk()` called
+ * `readdirSync` unconditionally, so a repository without an `apps/` directory crashed the gate
+ * with an ENOENT stack trace — found by this gate's own new controls on their first run, because
+ * a fixture repository legitimately has only the directories its control needs.
+ *
+ * Reported rather than skipped, because skipping is the direction that goes quiet: every
+ * registered ID lives under these roots, so a root this gate cannot read is a run whose "all
+ * registered IDs are documented" verdict covers less than it says. That is the same policy
+ * `dependency-tree.mjs` applies to a scan root it cannot inspect.
+ */
 function sourceFiles() {
   const found = [];
+  for (const root of SOURCE_ROOTS) {
+    const dir = join(ROOT, root);
+    if (!existsSync(dir)) {
+      fail(
+        `${root}/ does not exist under ${ROOT}, so this gate cannot see the IDs registered there ` +
+          'and its verdict would cover less than it claims.',
+      );
+      return [];
+    }
+  }
   const walk = (dir) => {
     for (const entry of readdirSync(dir)) {
       if (entry === 'node_modules' || entry.startsWith('.')) continue;
@@ -114,6 +172,30 @@ function sourceFiles() {
 function stripComments(text) {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
+
+/**
+ * `compilerOptions.paths` from `tsconfig.base.json`, for resolving a path-alias import.
+ *
+ * Declared **here**, with the other module constants, and not beside the function that uses it.
+ * It was declared at the bottom of the file, after the section-6b validation loop that reaches it
+ * through `selectorOf()` → `resolveModule()` — and a `const` is in its temporal dead zone until
+ * its own line runs. So the first 6b row whose component is imported through an alias crashed the
+ * gate with `ReferenceError: Cannot access 'TSCONFIG_PATHS' before initialization`, rejecting a
+ * valid registered-and-documented component. The empty table hid it. Found by review on PR #544
+ * and reproduced before fixing.
+ *
+ * `null` rather than `{}` when it cannot be read, so `resolveModule` can tell "no aliases are
+ * configured" from "I could not find out" and report the second instead of silently losing alias
+ * resolution.
+ */
+const TSCONFIG_PATHS = (() => {
+  try {
+    const raw = readFileSync(join(ROOT, 'tsconfig.base.json'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
+    return JSON.parse(raw).compilerOptions?.paths ?? {};
+  } catch {
+    return null;
+  }
+})();
 
 const files = sourceFiles();
 const sources = new Map(files.map((f) => [f, stripComments(readFileSync(f, 'utf8'))]));
@@ -177,16 +259,310 @@ if (undocumented.length) {
 }
 
 /**
- * The slot-state table.
+ * The contiguous Markdown table that follows `anchor`, as its data rows.
+ *
+ * Every table check below was a regex over the **whole document**, which is how the slot-state
+ * check came to be the only reader of a table it was not about: its first-cell pattern was
+ * `` `[a-zA-Z-]+` ``, a component ID contains dots, so no row of the `nxs-` component table could
+ * ever match it. The table has no rows, so nothing looked wrong — a gate that cannot tell
+ * "correctly empty" from "silently emptied".
+ *
+ * Anchoring each check to its own table is the fix for the class rather than the instance: the
+ * first-cell pattern can now accept a dotted ID without a row from some other table being
+ * classified by accident, which is what widening the document-wide regex would have risked.
+ *
+ * ## The scan is bounded by the next heading, and an absent table is a failure
+ *
+ * Neither was true at first, and the two together were the worst defect in this gate. The search
+ * for the table ran to the end of the document, so **deleting the table left the anchor pointing
+ * at an unrelated one further down**. Driven on the real document: removing all thirteen rows of
+ * the section-2 slot table made `tableAfter` latch onto the next table it could find, whose rows
+ * the slot-claim pattern does not match, so `slotClaims()` returned zero claims, the `rows.length
+ * === 0` guard never fired — `rows` was four — and the gate printed
+ * *"every slot-state claim holds"* and exited 0 with the entire slot-state half gone.
+ *
+ * That is the precise failure this gate exists to catch, committed by the gate. Found by review
+ * on PR #544, reproduced before fixing.
+ *
+ * @param {string} anchor a literal line, or the first line that contains it
+ * @returns {string[]} the rows after the header and its `---` separator
+ */
+/**
+ * The document's lines with fenced code blocks blanked out, positions preserved.
+ *
+ * A ```` ``` ```` block in this document contains JSON and shell examples, and some of those
+ * contain `|`. Locating a table by "the next line starting with a pipe" would read one out of a
+ * code sample. Blanked rather than removed so every index below still refers to a real line
+ * number in the file.
+ */
+const linesOutsideFences = (() => {
+  const lines = reference.split('\n');
+  let inFence = false;
+  return lines.map((line) => {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      return '';
+    }
+    return inFence ? '' : line;
+  });
+})();
+
+/** Split a table row into cells on unescaped pipes that are not inside inline code. */
+function splitRow(line) {
+  const cells = [];
+  let cell = '';
+  let inCode = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '\\' && i + 1 < line.length) {
+      // An escaped pipe is content, not a delimiter.
+      cell += line[i + 1];
+      i += 1;
+      continue;
+    }
+    if (ch === '`') {
+      inCode = !inCode;
+      cell += ch;
+      continue;
+    }
+    if (ch === '|' && !inCode) {
+      cells.push(cell);
+      cell = '';
+      continue;
+    }
+    cell += ch;
+  }
+  cells.push(cell);
+  // A GitHub table row is written with a leading and a trailing pipe, so the first and last
+  // fragments are empty and are not cells.
+  if (cells.length >= 2 && cells[0].trim() === '' && cells[cells.length - 1].trim() === '') {
+    return cells.slice(1, -1).map((c) => c.trim());
+  }
+  return cells.map((c) => c.trim());
+}
+
+/**
+ * The data rows of the table that follows `anchor`, as `{ lineNumber, cells, line }`.
+ *
+ * ## Every structural assumption is now checked, because three review rounds landed here
+ *
+ * This function has been the subject of three consecutive review rounds on PR #544 — it scanned
+ * past its own section, then trusted the header/separator pair, then let `slotClaims()` skip rows
+ * it could not parse. Each fix closed the reported case and left an adjacent one open, so the
+ * assumptions are enumerated and checked rather than discovered one review at a time:
+ *
+ * | Assumption | If violated |
+ * | --- | --- |
+ * | the anchor exists | fail |
+ * | the anchor is unambiguous | fail — `findIndex` silently took the first of several |
+ * | the anchor is not inside a code fence | not found there at all; fences are blanked |
+ * | no heading between the anchor and the table | fail |
+ * | no setext heading or thematic break between them | fail |
+ * | the first pipe line is not inside a code fence | fences are blanked, so it cannot be |
+ * | at least a header and a separator | fail |
+ * | line two is the `\| --- \|` separator | fail |
+ * | the separator's column count equals the header's | fail |
+ * | every data row has the header's column count | fail |
+ * | pipes inside inline code or escaped are content | handled by `splitRow` |
+ *
+ * **The assumption that is no longer load-bearing at all is the one that caused the harm.** Each
+ * caller now declares how many rows it expects, from the code rather than from this document, so
+ * no parsing failure here can reduce the work to zero and leave a check reporting success. See
+ * `slotClaims()`.
+ *
+ * @param {string} anchor a literal line, or the first line that contains it
+ * @param {string} what the caller's name for this table, used in diagnostics
+ * @returns {{ lineNumber: number, cells: string[], line: string }[]}
+ */
+function tableAfter(anchor, what) {
+  const lines = linesOutsideFences;
+  const occurrences = lines.reduce(
+    (acc, line, index) => (line.includes(anchor) ? [...acc, index] : acc),
+    [],
+  );
+  if (occurrences.length === 0) {
+    fail(
+      `docs/extension-reference.md no longer contains \`${anchor}\` outside a code fence, so ` +
+        `${what} is unchecked. Restore the anchor, or delete the check that depends on it.`,
+    );
+    return [];
+  }
+  /* More than one match and `findIndex` would silently pick the first, which may introduce a
+   * different table entirely. Ambiguity is a failure, not a coin toss. */
+  if (occurrences.length > 1) {
+    fail(
+      `docs/extension-reference.md contains \`${anchor}\` ${occurrences.length} times (lines ` +
+        `${occurrences.map((i) => i + 1).join(', ')}), so which table anchors ${what} is ` +
+        'ambiguous. Make the anchor unique.',
+    );
+    return [];
+  }
+  const at = occurrences[0];
+
+  /* A heading ends the anchor's own section. `#`-style, the setext underlines `===` and `---`,
+   * and a thematic break — all three separate sections, and only the first was recognised. */
+  const terminator = (index) => {
+    const line = lines[index].trimStart();
+    if (/^#{1,6}\s/.test(line)) return `heading \`${line.trim()}\``;
+    if (/^(\*\s*){3,}$|^(-\s*){3,}$|^(_\s*){3,}$/.test(line)) return 'a thematic break';
+    // Setext: an underline under a non-blank line is a heading for that line.
+    if (/^(=+|-+)\s*$/.test(line) && index > 0 && lines[index - 1].trim() !== '') {
+      return `setext heading \`${lines[index - 1].trim()}\``;
+    }
+    return null;
+  };
+
+  let start = at + 1;
+  while (start < lines.length && !lines[start].trimStart().startsWith('|')) {
+    const why = terminator(start);
+    if (why !== null) {
+      fail(
+        `docs/extension-reference.md has no table between \`${anchor}\` and ${why}, so ${what} ` +
+          'would check nothing.\n' +
+          '  An absent table is not an empty one: restore it, or delete the check.',
+      );
+      return [];
+    }
+    start += 1;
+  }
+  if (start >= lines.length) {
+    fail(
+      `docs/extension-reference.md has no table after \`${anchor}\` at all, so ${what} would check nothing.`,
+    );
+    return [];
+  }
+
+  let end = start;
+  while (end < lines.length && lines[end].trimStart().startsWith('|')) end += 1;
+  // A header and a separator and nothing else is a legitimately empty table — section 6b is one.
+  // Fewer than two lines is not a table at all.
+  if (end - start < 2) {
+    fail(
+      `docs/extension-reference.md has no table header after \`${anchor}\`, only ` +
+        `${end - start} line(s) beginning with a pipe, so ${what} would check nothing.`,
+    );
+    return [];
+  }
+
+  /* Line two must BE the separator before two lines are dropped as "the header and its
+   * separator". Without this, deleting the header and separator promoted the first two DATA rows
+   * into their place and their claims vanished silently — reproduced on the real document. One
+   * check covers all three ways the pair can be damaged, because in each case line two is not a
+   * separator. */
+  const header = splitRow(lines[start]);
+  const separatorLine = lines[start + 1].trim();
+  if (!/^\|(\s*:?-{3,}:?\s*\|)+$/.test(separatorLine)) {
+    fail(
+      `docs/extension-reference.md has a table for ${what} whose second line is not a Markdown ` +
+        `separator:\n    ${separatorLine.slice(0, 90)}\n` +
+        '  Two lines are dropped as the header and its separator, so without that row a data row ' +
+        'would be discarded as one and its claim would go unchecked.',
+    );
+    return [];
+  }
+  const separatorCells = splitRow(lines[start + 1]);
+  if (separatorCells.length !== header.length) {
+    fail(
+      `docs/extension-reference.md has a table for ${what} whose separator has ` +
+        `${separatorCells.length} column(s) and whose header has ${header.length}. A column ` +
+        'added to one and not the other shifts every cell this gate reads.',
+    );
+    return [];
+  }
+
+  const rows = [];
+  for (let index = start + 2; index < end; index += 1) {
+    const cells = splitRow(lines[index]);
+    if (cells.length !== header.length) {
+      fail(
+        `docs/extension-reference.md:${index + 1} is a row of ${what} with ${cells.length} ` +
+          `column(s) where the header has ${header.length}:\n    ${lines[index].trim().slice(0, 90)}\n` +
+          '  A short or long row shifts the columns this gate reads, so it is a failure rather ' +
+          'than a row to skip.',
+      );
+      continue;
+    }
+    rows.push({ lineNumber: index + 1, cells, line: lines[index] });
+  }
+  return rows;
+}
+
+/**
+ * The slot-state table in section 2.
  *
  * Rows read `| \`slot\` | description | state |`. The state column is prose, so it is
  * classified by the phrases the document itself defines in its "Read the three states
  * precisely" section rather than by a strict enum.
  */
+/**
+ * Every slot name the **code** declares, read from `EXTENSION_SLOTS`.
+ *
+ * This is the fix for the class, and it is worth being explicit about why it matters more than
+ * any of the parsing above. Until now the gate derived its workload from the document: it read
+ * whatever rows it could parse and checked those. A document that lost its table, lost its
+ * header, or whose rows stopped matching the row pattern therefore produced **zero** claims and
+ * zero findings, and the gate printed "every slot-state claim holds" — three separate review
+ * findings, all the same shape.
+ *
+ * The expected set now comes from the source. A slot declared in code with no readable claim in
+ * the document is a failure, so no parsing accident can reduce the work to nothing: it can only
+ * turn the run red.
+ */
+function declaredSlots() {
+  const file = [...sources.keys()].find((path) => path.endsWith(`${sep}extension-slots.ts`));
+  if (!file) {
+    fail(
+      'Could not find `extension-slots.ts` in non-spec source, so the slot-state table was ' +
+        'checked against no expected set. Reading nothing must not pass as finding nothing.',
+    );
+    return [];
+  }
+  const body = sources.get(file);
+  const open = body.indexOf('export const EXTENSION_SLOTS = {');
+  const close = body.indexOf('\n}', open);
+  if (open === -1 || close === -1) {
+    fail(`${relative(ROOT, file)} has no \`export const EXTENSION_SLOTS = { … }\` block.`);
+    return [];
+  }
+  const slots = [
+    ...body.slice(open, close).matchAll(/^\s*(?:'([^']+)'|([a-zA-Z][a-zA-Z0-9]*))\s*:\s*'/gm),
+  ].map((m) => m[1] ?? m[2]);
+  if (slots.length === 0) {
+    fail(`${relative(ROOT, file)} yielded no slot names, so the table was compared to nothing.`);
+  }
+  return slots;
+}
+
+/**
+ * The slot-state table in section 2.
+ *
+ * Rows read `| \`slot\` | description | state |`. The state column is prose, so it is classified
+ * by the phrases the document itself defines in its "Read the three states precisely" section
+ * rather than by a strict enum.
+ *
+ * **Nothing is skipped.** A row whose slot cell is not a backticked name, and a row whose state
+ * prose matches none of the three documented states, are each a failure naming the line. Both
+ * used to be dropped silently by `matchAll`, which is how removing the backticks from thirteen
+ * slot names left thirteen rows, zero claims and zero findings.
+ */
 function slotClaims() {
   const claims = [];
-  for (const row of reference.matchAll(/^\|\s*`([a-zA-Z-]+)`\s*\|([^|]*)\|([^|]*)\|/gm)) {
-    const [, slot, , stateText] = row;
+  const rows = tableAfter(
+    'A slot is a named, ordered list of descriptors.',
+    'the slot-state table in section 2',
+  );
+  for (const { lineNumber, cells, line } of rows) {
+    const slotCell = cells[0];
+    const stateText = cells[cells.length - 1];
+    const named = /^`([^`]+)`$/.exec(slotCell);
+    if (!named) {
+      fail(
+        `docs/extension-reference.md:${lineNumber} is a slot-state row whose first cell is not a ` +
+          `backticked slot name:\n    ${line.trim().slice(0, 90)}\n` +
+          '  The row cannot be read, so it is a failure rather than a row to skip.',
+      );
+      continue;
+    }
     const state = /nothing resolves it/i.test(stateText)
       ? 'inert'
       : /resolves/i.test(stateText)
@@ -194,7 +570,36 @@ function slotClaims() {
         : /populated/i.test(stateText)
           ? 'populated'
           : null;
-    if (state) claims.push({ slot, state, stateText: stateText.trim() });
+    if (state === null) {
+      fail(
+        `docs/extension-reference.md:${lineNumber} says slot \`${named[1]}\` is ` +
+          `"${stateText.slice(0, 70)}", which is none of the three states the document defines ` +
+          '("Populated", "Resolves", "nothing resolves it").\n' +
+          '  An unclassifiable state was silently dropped before, so the slot went unchecked.',
+      );
+      continue;
+    }
+    claims.push({ slot: named[1], state, stateText, lineNumber });
+  }
+
+  /* Coverage, from the code. The one assertion that cannot be defeated by anything above. */
+  const expected = declaredSlots();
+  for (const slot of expected) {
+    if (!claims.some((claim) => claim.slot === slot)) {
+      fail(
+        `\`EXTENSION_SLOTS\` declares the slot \`${slot}\` and section 2 of ` +
+          'docs/extension-reference.md has no readable state claim for it.\n' +
+          '  A customer reading the table would not know the surface exists.',
+      );
+    }
+  }
+  for (const claim of claims) {
+    if (expected.length > 0 && !expected.includes(claim.slot)) {
+      fail(
+        `docs/extension-reference.md:${claim.lineNumber} claims a state for \`${claim.slot}\`, ` +
+          'which `EXTENSION_SLOTS` does not declare. The table documents a slot that does not exist.',
+      );
+    }
   }
   return claims;
 }
@@ -202,7 +607,9 @@ function slotClaims() {
 const SLOT_CONST = (slot) =>
   /^[a-z][a-zA-Z]*$/.test(slot) ? `EXTENSION_SLOTS.${slot}` : `EXTENSION_SLOTS['${slot}']`;
 
-for (const claim of slotClaims()) {
+const CLAIMS = slotClaims();
+
+for (const claim of CLAIMS) {
   const token = SLOT_CONST(claim.slot);
   // Registered: the slot appears as a key in a `slots:` contribution or a
   // `register(<slot>, …)` call. Resolved: it appears inside a `resolve(` call.
@@ -237,6 +644,302 @@ for (const claim of slotClaims()) {
   }
 }
 
+/**
+ * Section 6b: the `nxs-` components registered for a slot.
+ *
+ * Three cells — the registered ID, the element, and the slot a manifest entry places it in — and
+ * `npx nx g ./tools/satori-generators:satori-component` appends one per component it adds. Until
+ * now **no row could be read at all**: the only regex that looked at this table required a
+ * first cell of `` `[a-zA-Z-]+` `` and every ID in it has dots. With zero rows that was invisible.
+ *
+ * The slot names come out of the generator rather than being listed again here. A fifth slot added
+ * there and not here would make every row naming it fail, which is the wrong failure: the document
+ * would be red for being correct.
+ */
+const GENERATOR = join(
+  ROOT,
+  'tools',
+  'satori-generators',
+  'src',
+  'satori-component',
+  'generator.ts',
+);
+const generatorSource = stripComments(readFileSync(GENERATOR, 'utf8'));
+const slotNames = (
+  generatorSource.match(/const SLOTS: readonly SatoriComponentSlot\[\] = \[([^\]]*)\]/)?.[1] ?? ''
+)
+  .split(',')
+  .map((s) => s.trim().replace(/^'|'$/g, ''))
+  .filter(Boolean);
+if (slotNames.length === 0) {
+  fail(
+    'Could not read `SLOTS` out of the satori-component generator, so the component table was ' +
+      'checked against no slot names at all. Reading nothing must not pass as finding nothing.',
+  );
+}
+
+/**
+ * Every `nxs.<slot>.<name>` ID registered in non-spec source, with the class and the file.
+ *
+ * Scanned across **all** non-spec source, not only `provideNxsComponents()`.
+ *
+ * The first version read that one provider, because it is the file the generator writes into and
+ * the one this section's prose names. Two things were wrong with that, and only the second is
+ * what it looked like:
+ *
+ * 1. The verdict line claimed "no `nxs.<slot>.*` ID is registered" while having looked at one
+ *    file — a statement wider than its evidence, which is this gate's own defect class one level
+ *    up. Registration is not confined to that provider: the four `nxs.components.*` IDs live in
+ *    `apps/nuxeo-ui/src/app/extensions/provide-app-extensions.ts`.
+ * 2. **The consequence was a false positive, not a missed gap** — the opposite of what I assumed
+ *    when widening it. Driven both ways against a real tree: registering `nxs.tabs.claimSummary`
+ *    in `provide-app-extensions.ts` with no row made the narrow version go red anyway, through
+ *    the ID-level "registered but absent from the reference" check above. But registering it
+ *    there *and* adding its row made the narrow version fail a **correct** tree, reporting
+ *    "`provideNxsComponents()` registers no such ID" about an ID that is registered — telling
+ *    the author to add a registration that already existed. The widened scan is green on that
+ *    tree and red on the genuine gap.
+ *
+ * `slotNames` comes from the generator, so a fifth slot widens this with it.
+ */
+const slotIdPattern = String.raw`nxs\.(?:${slotNames.map(reEscape).join('|')})\.[a-zA-Z0-9]+`;
+/** @type {Map<string, { className: string, file: string }>} */
+const slotRegistered = new Map();
+for (const [file, text] of sources) {
+  // `'<id>': SomeComponent` — a registry entry. A bare mention of an ID is not a registration.
+  for (const match of text.matchAll(
+    new RegExp(String.raw`['"\`](${slotIdPattern})['"\`]\s*:\s*(\w+)`, 'g'),
+  )) {
+    slotRegistered.set(match[1], { className: match[2], file: relative(ROOT, file) });
+  }
+}
+
+const componentRows = tableAfter(
+  'satori:register:nxs-components',
+  'the nxs- component table in section 6b',
+).map(({ lineNumber, cells, line }) => {
+  const unquote = (cell) => (cell ?? '').replace(/^`|`$/g, '');
+  return {
+    line,
+    lineNumber,
+    id: unquote(cells[0]),
+    element: unquote(cells[1]),
+    slot: unquote(cells[2]),
+  };
+});
+
+for (const row of componentRows) {
+  if (!/^nxs\.[a-zA-Z0-9]+\.[a-zA-Z0-9]+$/.test(row.id ?? '')) {
+    fail(
+      `Section 6b has a row whose first cell is not an \`nxs.<slot>.<name>\` ID: ${row.line.trim()}`,
+    );
+    continue;
+  }
+  if (!slotRegistered.has(row.id)) {
+    fail(
+      `Section 6b lists \`${row.id}\` as registered for a slot, but nothing outside specs ` +
+        'registers that ID to a component.\n' +
+        '  A customer placing it in a manifest would place nothing.',
+    );
+  }
+  if (!slotNames.includes(row.slot)) {
+    fail(
+      `Section 6b says \`${row.id}\` is for the slot \`${row.slot}\`, which is not one of the ` +
+        `slots whose descriptors name a component: ${slotNames.join(', ')}.`,
+    );
+  }
+  /* The element must be the selector of **the class registered for this row's ID**, not merely a
+   * selector that exists somewhere.
+   *
+   * It used to be the latter — `selector: '<element>'` tested against all source — and that
+   * accepted any row whose element named any component in the repository. My own break test for
+   * this gate proved it and I did not notice: the row
+   * `| nxs.tabs.claimSummary | nxs-card | nonsenseSlot |` produced exactly one finding, about the
+   * slot, while `nxs-card` belonged to a completely different component. Review named it on
+   * PR #544. The element column is how a reader knows what to put in their template, so a wrong
+   * one that passes is a documented lie. */
+  const registration = slotRegistered.get(row.id);
+  if (registration) {
+    /* The file that REGISTERS the ID usually only imports the class; the `@Component` decorator
+     * is wherever the class is declared. Looking in the registering file found nothing and failed
+     * both the wrong-element case and the correct one — a false positive I caught by requiring
+     * the positive control to pass before replying to the review. */
+    const selector = selectorOf(registration.className, registration.file);
+    if (!selector) {
+      fail(
+        `Section 6b gives \`${row.id}\` the element \`${row.element}\`, and no non-spec source ` +
+          `declares \`${registration.className}\` with a selector, so the element column is ` +
+          'unverified. Do not leave it asserted-but-unchecked.',
+      );
+    } else if (selector !== row.element) {
+      fail(
+        `Section 6b gives \`${row.id}\` the element \`${row.element}\`, but the component ` +
+          `registered for it — \`${registration.className}\` in ${registration.file} — declares ` +
+          `\`${selector}\`.\n` +
+          '  A reader copying that element into a template would write the wrong tag.',
+      );
+    }
+  }
+}
+
+/**
+ * The `selector` of one component class, found wherever that class is declared.
+ *
+ * Searches every non-spec source for `export class <className>`, because the file that registers
+ * an ID is rarely the file that declares the component. Angular puts
+ * `@Component({ selector: '…' })` immediately above the class, so the selector wanted is the last
+ * one declared before it.
+ *
+ * Returns `null` when it cannot be read, and the caller **fails** rather than passing: an
+ * unreadable selector is an unverified column, not a matching one.
+ *
+ * @param {string} className
+ * @returns {string | null}
+ */
+function selectorOf(className, registeringFile) {
+  const declaration = new RegExp(String.raw`\bexport class ${reEscape(className)}\b`);
+
+  /**
+   * The selector immediately above the class declaration in one file, or `null`.
+   *
+   * Follows a **re-export** when the file does not declare the class itself, because that is what
+   * an alias import almost always lands on: `@nuxeo/satori-platform/components` maps to
+   * `libs/shared/satori-components/src/index.ts`, which re-exports `NxsCardComponent` from
+   * `./lib/card/card.component` and declares nothing. Without this, fixing the initialisation
+   * order alone would have left the reported case still failing — one step further on, which is
+   * the pattern this function has now produced three times.
+   *
+   * One level of indirection, then it gives up and lets the ambiguity check below refuse. A
+   * general resolver is not worth building here; refusing is.
+   */
+  const readFrom = (file, depth = 0) => {
+    const text = sources.get(file);
+    if (text === undefined) return null;
+    const classAt = text.search(declaration);
+    if (classAt !== -1) {
+      const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*'([^']+)'/g)];
+      return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
+    }
+    if (depth > 0) return null;
+    const reExport = new RegExp(
+      String.raw`export\s*(?:type\s*)?\{[^}]*\b${reEscape(className)}\b[^}]*\}\s*from\s*'([^']+)'`,
+    ).exec(text);
+    if (reExport) {
+      const target = resolveModule(reExport[1], relative(ROOT, file));
+      if (target) return readFrom(target, depth + 1);
+    }
+    // `export * from './x'` — try each, and accept the first that declares the class.
+    for (const star of text.matchAll(/export\s*\*\s*from\s*'([^']+)'/g)) {
+      const target = resolveModule(star[1], relative(ROOT, file));
+      const found = target && readFrom(target, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  /* First choice: follow the import in the file that registers the ID. That is the only thing
+   * that identifies WHICH class of that name was registered, and it is what makes the answer
+   * correct rather than merely plausible. */
+  const registering = sources.get(join(ROOT, registeringFile));
+  if (registering !== undefined) {
+    const imported = new RegExp(
+      String.raw`import\s*(?:type\s*)?\{[^}]*\b${reEscape(className)}\b[^}]*\}\s*from\s*'([^']+)'`,
+    ).exec(registering);
+    if (imported) {
+      const resolved = resolveModule(imported[1], registeringFile);
+      if (resolved) {
+        const selector = readFrom(resolved);
+        if (selector) return selector;
+      }
+    }
+    // Declared in the same file it is registered in.
+    const own = readFrom(join(ROOT, registeringFile));
+    if (own) return own;
+  }
+
+  /* Fallback: a global search by class name — but **ambiguity is a refusal**, not a coin toss.
+   *
+   * Class names are not unique across this repository: `SearchComponent` is declared twice, as
+   * `app-search` in `apps/nuxeo-satori-template` and `lib-search` in `libs/features/search`.
+   * Taking the first match returned `lib-search`, so a row correctly naming `app-search` would
+   * have been rejected and a row wrongly naming `lib-search` accepted. Found by review on
+   * PR #544; the two declarations and the first-match result were both confirmed before fixing. */
+  const declaring = [...sources.keys()].filter((file) => declaration.test(sources.get(file)));
+  if (declaring.length > 1) {
+    fail(
+      `\`${className}\` is declared in ${declaring.length} non-spec files — ` +
+        `${declaring.map((f) => relative(ROOT, f)).join(', ')} — and the import in ` +
+        `${registeringFile} could not be resolved, so which component's selector to compare is ` +
+        'ambiguous. An ambiguous answer is not a verified one.',
+    );
+    return null;
+  }
+  return declaring.length === 1 ? readFrom(declaring[0]) : null;
+}
+
+/**
+ * A module specifier resolved to a file this gate has already read, or `null`.
+ *
+ * Handles a relative path and a `tsconfig.base.json` path alias, with `.ts` and `/index.ts`
+ * tried in that order. Deliberately not a general module resolver: anything it cannot resolve
+ * falls through to the ambiguity check above, which refuses rather than guessing.
+ */
+function resolveModule(specifier, fromFile) {
+  const candidates = [];
+  if (specifier.startsWith('.')) {
+    const base = resolve(ROOT, fromFile, '..', specifier);
+    candidates.push(`${base}.ts`, join(base, 'index.ts'));
+  } else {
+    /* An alias specifier with no readable `paths` map is reported, not shrugged off. Returning
+     * `{}` on an unreadable `tsconfig.base.json` would have made alias resolution quietly stop
+     * working and every aliased component fall through to the ambiguity refusal — a capability
+     * lost in silence, which is the defect class this whole gate exists for. */
+    if (TSCONFIG_PATHS === null) {
+      fail(
+        `Could not read \`compilerOptions.paths\` from tsconfig.base.json, so the import ` +
+          `\`${specifier}\` in ${fromFile} cannot be resolved and the component's selector is ` +
+          'unverified. Fix the tsconfig rather than letting alias resolution fail quietly.',
+      );
+      return null;
+    }
+    for (const [alias, targets] of Object.entries(TSCONFIG_PATHS)) {
+      const prefix = alias.replace(/\*$/, '');
+      if (!specifier.startsWith(prefix)) continue;
+      const rest = specifier.slice(prefix.length);
+      for (const target of targets) {
+        const base = resolve(ROOT, target.replace(/\*$/, '') + rest);
+        candidates.push(base, `${base}.ts`, join(base, 'index.ts'));
+      }
+    }
+  }
+  return candidates.find((candidate) => sources.has(candidate)) ?? null;
+}
+
+for (const [id, { className, file }] of slotRegistered) {
+  if (!componentRows.some((row) => row.id === id)) {
+    fail(
+      `\`${id}\` (${className}, registered in ${file}) is registered for a slot and has no row ` +
+        'in section 6b.\n' +
+        '  An addressable component a customer cannot discover is not addressable.',
+    );
+  }
+}
+
+/**
+ * The empty case, stated rather than assumed.
+ *
+ * The table is empty today and that is **correct**: every `nxs.` ID the product registers is a
+ * `nxs.primitives.*` placed by a host that resolves it, or one of the four `nxs.components.*`
+ * panels and pages that section 6 lists; nothing has yet been generated for `sidebar`, `tabs`,
+ * `documentView` or `routes`. The distinction this gate could not previously draw is between that
+ * and a table somebody emptied, so the empty case now asserts the reason instead of passing by
+ * having found no rows to check.
+ */
+const emptyTableNote =
+  componentRows.length === 0
+    ? `section 6b is empty, and no \`nxs.{${slotNames.join(',')}}.*\` ID is registered, so it is correctly empty`
+    : `${componentRows.length} row(s) in section 6b, each registered and placeable`;
+
 if (failures.length) {
   console.error(`\nextension-reference-drift: FAIL — ${failures.length} problem(s)\n`);
   for (const message of failures) console.error(`- ${message}\n`);
@@ -249,5 +952,7 @@ if (failures.length) {
 
 console.log(
   `extension-reference-drift: pass — ${documented.size} documented ID(s) all registered, ` +
-    `${registered.size} registered ID(s) all documented, and every slot-state claim holds.`,
+    `${registered.size} registered ID(s) all documented, all ${CLAIMS.length} slot-state ` +
+    `claim(s) hold and cover every slot EXTENSION_SLOTS declares, and ` +
+    `${emptyTableNote}.`,
 );

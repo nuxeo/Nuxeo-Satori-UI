@@ -456,6 +456,21 @@ const ALL_GATES = [
     cmd: 'node',
     argv: ['scripts/beta-harness/extension-reference-drift.mjs'],
   },
+  // Its negative controls, and the reason this gate had six review findings against it on #544,
+  // every one found by a human reading the diff: until `--root` existed it could only be run
+  // against the one repository it lives in, and that repository is correct. There was nothing to
+  // run it against. Each control builds a miniature repository that is wrong on purpose, under
+  // `os.tmpdir()`, so nothing tracked is touched and this is safe beside anything.
+  {
+    id: 'reference-drift-selftest',
+    // Fixture repositories and string comparison; no path semantics that differ by OS.
+    platformSensitive: false,
+    label: 'Extension reference drift controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/extension-reference-drift.selftest.mjs'],
+    // Which of the six findings each control pins is the evidence, so surface it on a pass too.
+    echoOnPass: true,
+  },
   // The same question for the page that shows each `nxs-` component with and without Satori: it
   // lives on Confluence, so a component added without a section there is missed in review. Fails
   // on a barrel component with no section, a section with no component, and a section whose ID,
