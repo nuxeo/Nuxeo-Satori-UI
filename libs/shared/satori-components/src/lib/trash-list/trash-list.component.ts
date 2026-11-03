@@ -10,7 +10,7 @@ import {
   numberAttribute,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
@@ -80,7 +80,7 @@ export interface NxsTrashListResults {
   readonly loading: boolean;
   /** The page on screen. Empty while loading and after a failure. */
   readonly documents: readonly NuxeoDocument[];
-  /** Every trashed document matching the filters, across pages. */
+  /** Every trashed document matching the filters, across pages, or `-1` when the server did not count them. */
   readonly totalSize: number;
 }
 
@@ -114,6 +114,11 @@ const REQUIRED_COLUMNS: readonly string[] = ['title'];
 const DEFAULT_SORT: NxsDocumentListSort = { key: 'created', direction: 'desc' };
 const RESTORE = 'restore';
 const PURGE = 'purge';
+/**
+ * How long a document this list restored or deleted stays hidden from its searches. The trash search
+ * reads the index, which still lists such a document as trashed for a moment after the request.
+ */
+const HANDLED_TTL_MS = 30_000;
 
 /**
  * The trash: the documents moved to it, with restore and permanent delete for one document or for a
@@ -165,6 +170,11 @@ export class NxsTrashListComponent {
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly document = inject(DOCUMENT);
+  /** Changes with the language or the catalogue, so labels read through `instant()` follow it. */
+  private readonly translations = toSignal(
+    merge(this.translate.onLangChange, this.translate.onTranslationChange),
+    { initialValue: null },
+  );
 
   /** What to search the trash for. A new value goes back to the first page. */
   readonly filters = input<TrashFilters>(NO_FILTERS);
@@ -201,29 +211,32 @@ export class NxsTrashListComponent {
   protected readonly requiredColumns = REQUIRED_COLUMNS;
   protected readonly defaultColumns = DEFAULT_COLUMNS;
 
-  protected readonly hasNextPage = computed(
-    () => (this.pageIndex() + 1) * this.pageSize() < this.totalSize(),
-  );
+  /** Whether the server has another page: its own flag when it sends one, else from the count. */
+  protected readonly hasNextPage = signal(false);
   protected readonly selectedCount = computed(() => this.selectedIds().length);
   protected readonly selected = computed(() => new Set(this.selectedIds()));
-  protected readonly selectionBusy = computed(() =>
-    this.selectedIds().some((id) => this.busy().has(id)),
+  /** Selection actions wait for any request on the selection, and for a page being fetched. */
+  protected readonly selectionBusy = computed(
+    () => this.loading() || this.selectedIds().some((id) => this.busy().has(id)),
   );
-  protected readonly columns = computed<readonly NxsDocumentListColumn[]>(() =>
-    COLUMNS.filter((column) => this.visibleColumns().includes(column.key)).map((column) => ({
+  protected readonly columns = computed<readonly NxsDocumentListColumn[]>(() => {
+    this.translations();
+    return COLUMNS.filter((column) => this.visibleColumns().includes(column.key)).map((column) => ({
       key: column.key,
       label: this.translate.instant(column.labelKey),
       sortable: column.field !== null,
-    })),
-  );
-  protected readonly pickerColumns = computed<readonly NxsPickableColumn[]>(() =>
-    COLUMNS.map((column) => ({
+    }));
+  });
+  protected readonly pickerColumns = computed<readonly NxsPickableColumn[]>(() => {
+    this.translations();
+    return COLUMNS.map((column) => ({
       key: column.key,
       label: this.translate.instant(column.labelKey),
       visible: this.visibleColumns().includes(column.key),
-    })),
-  );
+    }));
+  });
   protected readonly rowActions = computed(() => {
+    this.translations();
     const busy = this.busy();
     const actions: Record<string, readonly NxsMenuAction[]> = {};
     for (const doc of this.documents()) {
@@ -261,7 +274,10 @@ export class NxsTrashListComponent {
     return handlers;
   });
 
-  private readonly reload$ = new Subject<void>();
+  /** `true` searches again without the loader, after an action, so the rows do not flash. */
+  private readonly reload$ = new Subject<boolean>();
+  /** Documents this list restored or deleted, by id, with when to stop hiding them. */
+  private readonly handled = new Map<string, number>();
   private readonly request = computed(() => ({
     filters: this.filters(),
     sort: this.sort(),
@@ -270,12 +286,17 @@ export class NxsTrashListComponent {
   }));
 
   constructor() {
-    merge(toObservable(this.request), this.reload$.pipe(map(() => this.request())))
+    merge(
+      toObservable(this.request).pipe(map((request) => ({ request, quiet: false }))),
+      this.reload$.pipe(map((quiet) => ({ request: this.request(), quiet }))),
+    )
       .pipe(
-        switchMap((request) => {
-          this.loading.set(true);
-          this.error.set(null);
-          this.report();
+        switchMap(({ request, quiet }) => {
+          if (!quiet) {
+            this.loading.set(true);
+            this.error.set(null);
+            this.report();
+          }
           const field = COLUMNS.find((column) => column.key === request.sort.key)?.field;
           return this.trash
             .searchTrash({
@@ -300,20 +321,37 @@ export class NxsTrashListComponent {
         if (!list) {
           this.documents.set([]);
           this.totalSize.set(0);
+          this.hasNextPage.set(false);
+          this.selectedIds.set([]);
           this.error.set(failure);
           this.report();
           return;
         }
-        const entries = list.entries ?? [];
-        const total = list.resultsCount ?? entries.length;
+        const hidden = this.stillHandled();
+        const all = list.entries ?? [];
+        const entries = all.filter((doc) => !hidden.has(doc.uid));
+        const counted = [list.resultsCount, list.totalSize].find(
+          (count): count is number => typeof count === 'number' && count >= 0,
+        );
+        const total =
+          counted === undefined
+            ? -1
+            : Math.max(entries.length, counted - (all.length - entries.length));
         // A page past the end — its documents restored or deleted elsewhere since — shows the one
         // before it rather than an empty page.
         if (entries.length === 0 && this.pageIndex() > 0 && total > 0) {
           this.pageIndex.update((index) => index - 1);
           return;
         }
+        this.error.set(null);
         this.documents.set(entries);
         this.totalSize.set(total);
+        this.hasNextPage.set(
+          list.isNextPageAvailable ??
+            (total >= 0
+              ? (this.pageIndex() + 1) * this.pageSize() < total
+              : all.length >= this.pageSize()),
+        );
         const shown = new Set(entries.map((doc) => doc.uid));
         this.selectedIds.update((ids) => ids.filter((id) => shown.has(id)));
         this.report();
@@ -322,7 +360,7 @@ export class NxsTrashListComponent {
 
   /** Fetches the page on screen again. */
   reload(): void {
-    this.reload$.next();
+    this.reload$.next(false);
   }
 
   protected setView(view: NxsTrashListView): void {
@@ -550,26 +588,34 @@ export class NxsTrashListComponent {
   }
 
   /**
-   * Takes restored and deleted documents off the page without searching again: the trash search
-   * reads the index, which still lists a document as trashed for a moment after it is restored, so
-   * an immediate search would put it back. A page left empty fetches the one before it, or the
-   * first page again.
+   * Takes restored and deleted documents off the page at once, then fetches the page again without
+   * the loader, so later documents move up and the pager stays right. The search reads the index,
+   * which still lists them as trashed for a moment, so they stay hidden from this list's searches
+   * for a while.
    */
   private remove(uids: ReadonlySet<string>): void {
+    const until = Date.now() + HANDLED_TTL_MS;
+    for (const uid of uids) this.handled.set(uid, until);
     const before = this.documents().length;
     this.documents.update((docs) => docs.filter((doc) => !uids.has(doc.uid)));
     const gone = before - this.documents().length;
-    this.totalSize.update((total) => Math.max(0, total - gone));
+    if (this.totalSize() >= 0) this.totalSize.update((total) => Math.max(0, total - gone));
     this.report();
-    if (this.documents().length > 0 || this.totalSize() === 0) return;
-    if (this.pageIndex() > 0) this.pageIndex.update((index) => index - 1);
-    else this.reload();
+    this.reload$.next(true);
+  }
+
+  /** The handled documents still to hide; forgets the ones whose time is up. */
+  private stillHandled(): ReadonlySet<string> {
+    const now = Date.now();
+    for (const [uid, until] of this.handled) if (until <= now) this.handled.delete(uid);
+    return new Set(this.handled.keys());
   }
 
   private report(): void {
+    const loading = this.loading();
     this.resultsHandler()?.({
-      loading: this.loading(),
-      documents: this.documents(),
+      loading,
+      documents: loading ? [] : this.documents(),
       totalSize: this.totalSize(),
     });
   }

@@ -39,7 +39,7 @@
 
 <div class="nxs-trash-list__toolbar">
   <span class="nxs-trash-list__count" role="status">
-    @if (!loading() && !error()) {
+    @if (!loading() && !error() && totalSize() >= 0) {
       {{
         (totalSize() === 1
           ? 'satori-components.trash-list.count-one'
@@ -202,18 +202,21 @@
             headerAction: null,
             actions: null,
           };
-        <lib-extension-outlet #cardOutlet [componentId]="cardId" [componentInputs]="cardInputs" />
-        @if (cardOutlet.unresolved()) {
-          <nxs-card
-            [heading]="cardInputs.heading"
-            [subheading]="cardInputs.subheading"
-            [selected]="cardInputs.selected"
-            [selectionLabel]="cardInputs.selectionLabel"
-            [selectionHandler]="cardInputs.selectionHandler"
-            [openHandler]="cardInputs.openHandler"
-            [media]="cardInputs.media"
-          />
-        }
+        <!-- One grid cell per document, so the outlet and its fallback never take a cell each. -->
+        <div class="nxs-trash-list__card">
+          <lib-extension-outlet #cardOutlet [componentId]="cardId" [componentInputs]="cardInputs" />
+          @if (cardOutlet.unresolved()) {
+            <nxs-card
+              [heading]="cardInputs.heading"
+              [subheading]="cardInputs.subheading"
+              [selected]="cardInputs.selected"
+              [selectionLabel]="cardInputs.selectionLabel"
+              [selectionHandler]="cardInputs.selectionHandler"
+              [openHandler]="cardInputs.openHandler"
+              [media]="cardInputs.media"
+            />
+          }
+        </div>
       }
     </div>
   } @else {

@@ -72,6 +72,12 @@
   gap: 16px;
 }
 
+.nxs-trash-list__card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .nxs-trash-list__card-media,
 .nxs-trash-list__list-media {
   display: flex;

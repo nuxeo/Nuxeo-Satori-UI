@@ -34,18 +34,15 @@
     </div>
   </sat-header-bar>
 
-  <lib-extension-outlet
-    #list
-    class="trash-list"
-    [componentId]="listId"
-    [componentInputs]="listInputs()"
-  />
-  @if (list.unresolved()) {
-    <nxs-trash-list
-      class="trash-list"
-      [filters]="listInputs().filters"
-      [openHandler]="listInputs().openHandler"
-      [resultsHandler]="listInputs().resultsHandler"
-    />
-  }
+  <!-- One sized box for the outlet and its fallback, so an unresolved outlet takes no height. -->
+  <div class="trash-list">
+    <lib-extension-outlet #list [componentId]="listId" [componentInputs]="listInputs()" />
+    @if (list.unresolved()) {
+      <nxs-trash-list
+        [filters]="listInputs().filters"
+        [openHandler]="listInputs().openHandler"
+        [resultsHandler]="listInputs().resultsHandler"
+      />
+    }
+  </div>
 </div>

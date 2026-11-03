@@ -9,6 +9,7 @@ import {
   type TrashFilters,
   type TrashSearchParams,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import { TranslateService } from '@ngx-translate/core';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -70,7 +71,11 @@ type Internals = {
   selectedIds(): readonly string[];
   busy(): ReadonlySet<string>;
   pageIndex(): number;
+  hasNextPage(): boolean;
+  selectionBusy(): boolean;
   columns(): readonly { key: string }[];
+  rowActions(): Record<string, readonly { label: string }[]>;
+  pickerColumns(): readonly { label: string }[];
   cardHandlers(): Map<string, { open: (() => void) | null; select: (on: boolean) => void }>;
 };
 
@@ -218,6 +223,46 @@ describe('NxsTrashListComponent', () => {
       pending.next(page([doc(1)], 12));
       await render();
       expect(reports.at(-1)).toEqual({ loading: false, documents: [doc(1)], totalSize: 12 });
+
+      // The next search reports an empty page while it loads, as `NxsTrashListResults` says.
+      fixture.componentRef.setInput('filters', {
+        fullText: 'q',
+        path: '/',
+        author: '',
+        sizeRanges: [],
+      });
+      await render();
+      expect(reports.at(-1)).toEqual({ loading: true, documents: [], totalSize: 12 });
+    });
+
+    it('reads the total from totalSize when resultsCount is missing', async () => {
+      searchTrash.mockReturnValue(of({ ...page([doc(1)], 120), resultsCount: undefined }));
+      await create();
+      expect(el().querySelector('.nxs-trash-list__count')?.textContent).toContain(
+        '120 trashed documents',
+      );
+      expect(el().querySelector('nxs-pager button[disabled]')).not.toBeNull();
+    });
+
+    it('treats a negative count as unknown and pages by the server’s own flag', async () => {
+      searchTrash.mockReturnValue(
+        of({ ...page([doc(1)], -1), totalSize: -1, isNextPageAvailable: true }),
+      );
+      const reports: NxsTrashListResults[] = [];
+      await create({
+        initialView: 'list',
+        resultsHandler: (results: NxsTrashListResults) => reports.push(results),
+      });
+      expect(el().querySelector('.nxs-trash-list__count')?.textContent?.trim()).toBe('');
+      expect(reports.at(-1)?.totalSize).toBe(-1);
+      expect(internals().hasNextPage()).toBe(true);
+    });
+
+    it('guesses another page from a full page when the server neither counts nor says', async () => {
+      const full = Array.from({ length: 50 }, (_, i) => doc(i + 1));
+      searchTrash.mockReturnValue(of({ ...page(full, -1), totalSize: -1 }));
+      await create({ initialView: 'list' });
+      expect(internals().hasNextPage()).toBe(true);
     });
 
     it('shows the server error with a retry that searches again, and reports nothing listed', async () => {
@@ -269,20 +314,23 @@ describe('NxsTrashListComponent', () => {
 
   describe('restoring', () => {
     // The trash search reads the index, which still lists a restored document as trashed for a
-    // moment, so searching again straight away would put the row back.
-    it('restores one document from its row, says so, and takes it off the page without searching again', async () => {
+    // moment, so the search that follows the action still returns it.
+    it('restores one document from its row, says so, and keeps it off the page while the index catches up', async () => {
       const reports: NxsTrashListResults[] = [];
       await create({ resultsHandler: (results: NxsTrashListResults) => reports.push(results) });
       const before = searchTrash.mock.calls.length;
+      const reported = reports.length;
       internals().onRowAction({ action: { id: 'restore', label: 'Restore' }, document: doc(2) });
       await render();
       expect(restoreDocument).toHaveBeenCalledWith('uid-2');
       expect(toastShow).toHaveBeenCalledWith('Restored "Note 2".');
-      expect(searchTrash.mock.calls.length).toBe(before);
+      expect(searchTrash.mock.calls.length).toBe(before + 1);
       expect(el().querySelectorAll('tr.nxs-document-list__row')).toHaveLength(2);
       expect(el().querySelector('.nxs-trash-list__count')?.textContent).toContain(
         '2 trashed documents',
       );
+      // Searched again without the loader, so the rows never flash.
+      expect(reports.slice(reported).every((r) => !r.loading)).toBe(true);
       expect(reports.at(-1)).toEqual({
         loading: false,
         documents: [doc(1), doc(3)],
@@ -290,15 +338,18 @@ describe('NxsTrashListComponent', () => {
       });
     });
 
-    it('fetches the first page again when an action empties it and more remain', async () => {
+    it('shows the documents that move up once an action empties the page', async () => {
       searchTrash.mockReturnValue(of(page([doc(1)], 60)));
       await create();
-      const before = searchTrash.mock.calls.length;
+      searchTrash.mockReturnValue(of(page([doc(2)], 59)));
       internals().restore([doc(1)]);
       await render();
-      expect(searchTrash.mock.calls.length).toBe(before + 1);
       expect(searchTrash).toHaveBeenLastCalledWith(
         expect.objectContaining({ currentPageIndex: 0 }),
+      );
+      expect(el().querySelectorAll('tr.nxs-document-list__row')).toHaveLength(1);
+      expect(el().querySelector('.nxs-trash-list__count')?.textContent).toContain(
+        '59 trashed documents',
       );
     });
 
@@ -315,14 +366,31 @@ describe('NxsTrashListComponent', () => {
       );
     });
 
-    it('does not search again when the last trashed document leaves', async () => {
+    it('shows the trash empty once its last document leaves, though the index still lists it', async () => {
       searchTrash.mockReturnValue(of(page([doc(1)])));
       await create();
-      const before = searchTrash.mock.calls.length;
       internals().restore([doc(1)]);
       await render();
-      expect(searchTrash.mock.calls.length).toBe(before);
       expect(el().textContent).toContain('The trash is empty');
+      expect(el().querySelector('.nxs-trash-list__count')?.textContent).toContain(
+        '0 trashed documents',
+      );
+    });
+
+    it('lists a handled document again once it has been hidden long enough', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        await create();
+        internals().restore([doc(2)]);
+        await render();
+        expect(el().querySelectorAll('tr.nxs-document-list__row')).toHaveLength(2);
+        vi.setSystemTime(Date.now() + 31_000);
+        fixture.componentInstance.reload();
+        await render();
+        expect(el().querySelectorAll('tr.nxs-document-list__row')).toHaveLength(3);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('reports a refused restore and keeps the document listed', async () => {
@@ -467,6 +535,32 @@ describe('NxsTrashListComponent', () => {
       expect(internals().selectedIds()).toEqual([]);
     });
 
+    it('clears the selection when a search fails, so no bar acts on rows no longer shown', async () => {
+      await create();
+      internals().toggleAll(true);
+      searchTrash.mockReturnValue(throwError(() => ({ status: 500 })));
+      fixture.componentInstance.reload();
+      await render();
+      expect(internals().selectedIds()).toEqual([]);
+      expect(el().querySelector('.nxs-trash-list__selection')).toBeNull();
+    });
+
+    it('holds the selection actions while a page is being fetched', async () => {
+      await create();
+      internals().setSelected('uid-1', true);
+      await render();
+      const pending = new Subject<NuxeoDocumentList>();
+      searchTrash.mockReturnValue(pending);
+      internals().goToPage(1);
+      await render();
+      expect(internals().selectionBusy()).toBe(true);
+      const restore = el().querySelector('.nxs-trash-list__restore-selected') as HTMLButtonElement;
+      expect(restore.disabled).toBe(true);
+      pending.next(page([doc(1)], 60));
+      await render();
+      expect(internals().selectionBusy()).toBe(false);
+    });
+
     it('does not offer select all on an empty page', async () => {
       searchTrash.mockReturnValue(of(page([])));
       await create({ initialView: 'list' });
@@ -484,7 +578,10 @@ describe('NxsTrashListComponent', () => {
       button('grid').click();
       await render();
       expect(button('grid').getAttribute('aria-pressed')).toBe('true');
-      expect(el().querySelectorAll('.nxs-trash-list__grid nxs-card')).toHaveLength(3);
+      const cells = el().querySelectorAll('.nxs-trash-list__grid > .nxs-trash-list__card');
+      expect(cells).toHaveLength(3);
+      expect(el().querySelectorAll('.nxs-trash-list__grid > *')).toHaveLength(3);
+      expect([...cells].every((cell) => cell.querySelector('nxs-card'))).toBe(true);
       expect(el().querySelector('nxs-document-list')).toBeNull();
 
       button('list').click();
@@ -575,6 +672,23 @@ describe('NxsTrashListComponent', () => {
       expect(el().querySelector('table')?.getAttribute('aria-label')).toBe('Trashed documents');
       (el().querySelector('tr.nxs-document-list__row') as HTMLElement).click();
       expect(opened).toEqual(['uid-1']);
+    });
+
+    it('relabels its columns and row actions when the translations change', async () => {
+      await create();
+      TestBed.inject(TranslateService).setTranslation(
+        'en',
+        {
+          'satori-components': {
+            'trash-list': { column: { title: 'Name' }, restore: 'Undelete' },
+          },
+        },
+        true,
+      );
+      await render();
+      expect(internals().columns()[0]).toEqual(expect.objectContaining({ label: 'Name' }));
+      expect(internals().rowActions()['uid-1'][0].label).toBe('Undelete');
+      expect(internals().pickerColumns()[0].label).toBe('Name');
     });
 
     it('ignores a row action it does not know', async () => {
