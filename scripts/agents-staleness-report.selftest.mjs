@@ -273,6 +273,44 @@ control('NEGATIVE: the workflow no longer interpolates a step output into any sh
   );
 });
 
+control('NEGATIVE: the workflow creates the label it files under before using it', () => {
+  /* `agents-stale` does not exist on the repository and the workflow never created it, so the
+   * shell-injection fix alone would have moved the failure rather than removed it — the first run
+   * with drift to report would have reached `gh issue create` and stopped. Raised in review on
+   * PR #544.
+   *
+   * Checked as a shape, like the interpolation control above: the label this workflow invents must
+   * be created before any command that requires it to exist. Ordering is asserted by offset,
+   * because creating it *after* `gh issue create` would read as present and fix nothing. */
+  const yaml = readFileSync(WORKFLOW, 'utf8');
+  /* Comment lines are dropped first. The first version of this control searched the whole file
+   * and matched `gh issue create` inside the explanatory comment above the fix — which sits
+   * before the label creation, so the control failed on a correct workflow. It was reading prose
+   * about a command instead of the command, which is the defect class it exists to catch. */
+  const commands = yaml
+    .split('\n')
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => !/^\s*#/.test(line));
+  const lineOf = (needle) => commands.find(({ line }) => line.includes(needle))?.index ?? -1;
+
+  const created = lineOf('gh label create agents-stale --force');
+  expect(created !== -1, 'the workflow does not create `agents-stale`, so filing will be refused');
+  for (const consumer of ['gh issue list --label "agents-stale"', 'gh issue create \\']) {
+    const at = lineOf(consumer);
+    expect(at !== -1, `the workflow no longer runs \`${consumer.trim()}\``);
+    expect(
+      created < at,
+      `\`${consumer.trim()}\` runs before the label is created, so the label would not exist yet`,
+    );
+  }
+  /* And the shared label is not force-created, because `gh label create --force` with no
+   * `--color` picks one at random and would recolour a label other people use. */
+  expect(
+    lineOf('gh label create documentation') === -1,
+    'the workflow force-creates the shared `documentation` label, which would recolour it at random',
+  );
+});
+
 rmSync(workspace, { recursive: true, force: true });
 
 for (const c of controls) {
@@ -282,10 +320,16 @@ for (const c of controls) {
 const failed = controls.filter((c) => !c.ok && !c.skipped).length;
 const skipped = controls.filter((c) => c.skipped).length;
 const ran = controls.length - skipped;
+/* Counted from the list, never written in by hand. This summary said "2 negative" while three
+ * controls carried the prefix — the same defect review found in `published-links.selftest.mjs`
+ * one round earlier, in the sibling file, which is how little a number in prose is worth. The
+ * `NEGATIVE:` prefix is this file's marker for "runs the broken form and requires it to
+ * misbehave". */
+const negative = controls.filter((c) => c.name.startsWith('NEGATIVE:')).length;
 console.log(
   failed
     ? `\nagents-staleness-report selftest: FAIL — ${failed} of ${ran} control(s) failed.`
     : `\nagents-staleness-report selftest: pass — ${ran} of ${controls.length} control(s), ` +
-        `2 negative${skipped ? `, ${skipped} SKIPPED on ${process.platform}` : ''}.`,
+        `${negative} negative${skipped ? `, ${skipped} SKIPPED on ${process.platform}` : ''}.`,
 );
 process.exit(failed ? 1 : 0);

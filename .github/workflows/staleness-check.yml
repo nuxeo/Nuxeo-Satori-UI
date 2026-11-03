@@ -47,6 +47,29 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+
+          # The `agents-stale` label does not exist on this repository and this workflow never
+          # created it, so the shell-injection fix alone would have moved the failure rather than
+          # removed it: the first run with drift to report would have got as far as `gh issue
+          # create` and stopped there. Raised in review on PR #544, and the label list confirms it.
+          #
+          # `--force` makes this idempotent, so it is safe on every run and needs no "does it
+          # exist" branch.
+          #
+          # Only `agents-stale` is created: it is this workflow's own label. `documentation` is a
+          # shared repository label that already exists, and `gh label create --force` with no
+          # `--color` picks a colour AT RANDOM — so forcing it would silently recolour a label
+          # other people use. Its absence is checked instead, and reported.
+          gh label create agents-stale --force \
+            --color BFD4F2 \
+            --description "AGENTS/ documentation has drifted from the code"
+          if ! gh label list --limit 200 --json name --jq '.[].name' | grep -qx documentation; then
+            echo "The 'documentation' label is gone; filing without it rather than failing."
+            LABELS="agents-stale"
+          else
+            LABELS="agents-stale,documentation"
+          fi
+
           EXISTING=$(gh issue list --label "agents-stale" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
           if [ -n "$EXISTING" ]; then
             echo "Issue #${EXISTING} is already open for this; not filing a second one."
@@ -55,7 +78,7 @@ jobs:
           gh issue create \
             --title "AGENTS/ is out of date — $(date +%Y-%m-%d)" \
             --body-file "$RUNNER_TEMP/issue-body.md" \
-            --label "agents-stale,documentation"
+            --label "$LABELS"
 
       - name: Log no drift
         if: steps.check.outputs.drift_detected == 'false'
