@@ -188,12 +188,24 @@
 
 <ng-template #chips let-field="field" let-values="values" let-titleKey="titleKey">
   @if (values.length > 0) {
-    <nxs-chip-set
-      class="nxs-search-filters__chips"
-      [label]="titleKey | translate"
-      [items]="chipItems(field, values)"
-      (removed)="removeChoice(field, $event.id)"
-    />
+    <div class="nxs-search-filters__chips">
+      <lib-extension-outlet
+        #chipsOutlet
+        [componentId]="chipSetId"
+        [componentInputs]="{
+          items: chipItems(field, values),
+          label: titleKey | translate,
+          removeHandler: chipRemover(field),
+        }"
+      />
+      @if (chipsOutlet.unresolved()) {
+        <nxs-chip-set
+          [label]="titleKey | translate"
+          [items]="chipItems(field, values)"
+          [removeHandler]="chipRemover(field)"
+        />
+      }
+    </div>
   }
 </ng-template>
 

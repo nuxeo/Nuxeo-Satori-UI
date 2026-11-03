@@ -124,15 +124,40 @@ export class AppConfigService {
     const config = this.bootstrapConfig();
     const logo = config.branding.logo;
     if (!logo) return null;
+    const url = this.resolveBrandingImage(logo.src);
+    if (url === null || url === this.failedLogoUrl()) return null;
+    return { url, alt: logo.alt };
+  });
+
+  /**
+   * The URL the `<link rel="icon">` may load, or `null` to keep the icon `index.html` ships.
+   *
+   * The logo's resolver, unchanged, because the rules are the same ones: an icon is fetched from
+   * the application's own origin and a `src` that could name a Nuxeo endpoint there is refused
+   * for the reason a logo's is.
+   *
+   * Unlike {@link brandingLogo} this has no load-failure channel. A `<link rel="icon">` fires no
+   * usable `error` event — browsers fetch favicons outside the document's normal resource
+   * pipeline — so there is nothing for a surface to report back, and the browser already falls
+   * back to showing no icon on its own. The absence is the honest state rather than a gap:
+   * {@link reportBrandingLogoUnavailable} exists because an `<img>` *can* tell us, not because
+   * every image ought to.
+   */
+  readonly brandingFavicon = computed<string | null>(() => {
+    const favicon = this.bootstrapConfig().branding.favicon;
+    return favicon ? this.resolveBrandingImage(favicon.src) : null;
+  });
+
+  /** The URL an element may load for a configured branding image, or `null` when it may not. */
+  private resolveBrandingImage(src: string): string | null {
+    const config = this.bootstrapConfig();
     const baseUri = this.document.baseURI;
     // Guarded for the same reason as the diagnostic pass: a malformed `APP_BOOTSTRAP_CONFIG_URL`
     // override would otherwise throw out of this computed, from whichever template read it.
     const configUrl = parseUrlOrNull(this.bootstrapUrl, baseUri)?.href;
     if (configUrl === undefined) return null;
-    const url = resolveBrandingLogoUrl(logo.src, configUrl, nuxeoOriginsOf(config, baseUri));
-    if (url === null || url === this.failedLogoUrl()) return null;
-    return { url, alt: logo.alt };
-  });
+    return resolveBrandingLogoUrl(src, configUrl, nuxeoOriginsOf(config, baseUri));
+  }
 
   /**
    * A configured logo the browser could not show, so the brand surfaces fall back to the packaged
@@ -274,8 +299,12 @@ export class AppConfigService {
   }
 
   /**
-   * Report every contributed `branding.logo.src` the checks refuse, naming the value, where it came
-   * from and the reason.
+   * Report every contributed `branding.logo.src` and `branding.favicon.src` the checks refuse,
+   * naming the key, the value, where it came from and the reason.
+   *
+   * Both keys, in one pass, because they go through one set of rules: reporting only the logo
+   * would make a refused favicon exactly as silent as a refused logo was before NXSAT-724. The
+   * key is in the message, so an administrator who set both is told which one was refused.
    *
    * Read from the contributions rather than from the merged configuration, because a refused `src`
    * is dropped during the merge: by the time the configuration is assembled the bad value is gone.
@@ -310,14 +339,16 @@ export class AppConfigService {
     const nuxeoOrigins = nuxeoOriginsOf(config, baseUri);
 
     for (const { label, content } of contributedSources(fragments, preset)) {
-      // `null` is "declares none"; `''` is "declares a blank value", which `readLogo` refuses and
-      // which used to be passed over here as if nothing had been written.
-      const src = configuredLogoSrc(content);
-      if (src === null) continue;
+      for (const key of BRANDING_IMAGE_KEYS) {
+        // `null` is "declares none"; `''` is "declares a blank value", which `readLogo` refuses
+        // and which used to be passed over here as if nothing had been written.
+        const src = configuredBrandingImageSrc(content, key);
+        if (src === null) continue;
 
-      const reason = describeBrandingLogoRefusal(src, configUrl, nuxeoOrigins);
-      if (reason) {
-        this.note(`branding.logo "${src}" from ${label} was refused — ${reason}`);
+        const reason = describeBrandingLogoRefusal(src, configUrl, nuxeoOrigins);
+        if (reason) {
+          this.note(`branding.${key} "${src}" from ${label} was refused — ${reason}`);
+        }
       }
     }
   }
@@ -419,8 +450,11 @@ function describe(error: unknown): string {
   return typeof message === 'string' ? message : 'request failed';
 }
 
+/** The `branding` keys that hold a configured image address, and so share the logo's rules. */
+const BRANDING_IMAGE_KEYS = ['logo', 'favicon'] as const;
+
 /**
- * The `branding.logo.src` a contribution declares, trimmed, or `null` when it declares none.
+ * The `branding.<key>.src` a contribution declares, trimmed, or `null` when it declares none.
  *
  * Reads the raw contribution rather than the parsed configuration, so a value the merge is about
  * to discard is still visible to report on.
@@ -429,13 +463,16 @@ function describe(error: unknown): string {
  * written as `""` made the blank — which `readLogo` refuses — indistinguishable from a
  * contribution that sets no logo, and so silent (review of PR 512).
  */
-function configuredLogoSrc(content: unknown): string | null {
+function configuredBrandingImageSrc(
+  content: unknown,
+  key: (typeof BRANDING_IMAGE_KEYS)[number],
+): string | null {
   if (!isPlainRecord(content)) return null;
   const branding = content['branding'];
   if (!isPlainRecord(branding)) return null;
-  const logo = branding['logo'];
-  if (!isPlainRecord(logo)) return null;
-  const src = logo['src'];
+  const image = branding[key];
+  if (!isPlainRecord(image)) return null;
+  const src = image['src'];
   return typeof src === 'string' ? src.trim() : null;
 }
 

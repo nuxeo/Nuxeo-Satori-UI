@@ -86,8 +86,9 @@ Nuxeo's `/config/types` describes it with `fetch-schema: fields`: `type`, and op
 `directory`, `fields` for a complex field, `required` and `constraints`. A layout from
 `@agentic-ui/shared/document-layouts` maps onto it directly.
 
-A field Dublin Core already has is not repeated in a section. Turn `dublinCore` off for a type with
-no `dublincore` schema.
+A field Dublin Core already has is not repeated in a section: the Dublin Core field takes its
+`required` flag and constraints instead, so a layout that makes `dc:nature` required makes Nature
+required. Turn `dublinCore` off for a type with no `dublincore` schema.
 
 ## Examples
 

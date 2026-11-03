@@ -420,6 +420,26 @@ getEventCategories(): Observable<DirectoryEntry[]>
 
 ---
 
+## ContentModelService (`content-model.service.ts`)
+
+Nuxeo's content model — document types, facets and schemas — read from `/config/types`,
+`/config/facets` and `/config/schemas` in one `forkJoin`.
+
+```typescript
+getContentModel(): Observable<NuxeoContentModel>
+```
+
+Read-only: Nuxeo exposes no REST write path for the content model, so there is no `set`
+counterpart. The three reads are cached for the lifetime of the application with
+`shareReplay({ bufferSize: 1, refCount: false })`. That is not an optimisation — the model is
+server-side configuration that changes only when a package is installed, and the consumer builds
+its observable in a constructor, so `refCount: true` would issue three requests every time a
+metadata panel opened. `facets` and `schemas` are coerced to `[]` when the server answers with an
+empty body, because an `undefined` becomes a crash inside the caller's `DocumentModel` rather than
+an empty property list.
+
+---
+
 ## PrincipalPermissionsService (`principal-permissions.service.ts`)
 
 ACL management for documents.
@@ -499,9 +519,10 @@ component's `providers`. In a spec, `TestBed.overrideProvider(NxsToastService, {
 
 ## DocumentLayoutService (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)
 
-Per-type layouts (NXSAT-311). Internal: `@agentic-ui/shared/document-layouts` exports only the
-`<lib-document-layout [document] mode>` component that uses it, and no `@nuxeo/satori-platform`
-entry point re-exports the library.
+Per-type layouts (NXSAT-311). Internal: `@agentic-ui/shared/document-layouts` exports
+the `<lib-document-layout>` and `<lib-document-layout-form>` components that use it, and
+`readValidationFailure` — not the service — and no `@nuxeo/satori-platform` entry point
+re-exports the library.
 
 | Member                                                                                                                              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

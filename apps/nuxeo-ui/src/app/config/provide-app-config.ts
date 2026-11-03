@@ -381,6 +381,57 @@ export function syncDocumentTitle(
   );
 }
 
+/**
+ * Keeps the browser tab icon equal to Layer 0 `branding.favicon` (NXSAT-313, plan item F1).
+ *
+ * The tab *title* has been configurable since NXSAT-722 and the icon beside it was not, so a
+ * demo branded for a prospect showed their name next to the Nuxeo mark. Every other branding
+ * surface — header logo, login logo, both titles, the whole theme token map — was already
+ * configurable, which is what made this the one real gap.
+ *
+ * ## Why the packaged href is captured rather than re-derived
+ *
+ * `link.href` is read once, before anything is written to it, and that value is what a
+ * configuration with no favicon — or one whose value was refused — falls back to. Reading it
+ * inside the effect would read back whatever the last run wrote, so clearing the key would
+ * leave the previous customer's icon in place; re-deriving it from a constant would be a second
+ * copy of what `index.html` ships, free to drift from it.
+ *
+ * ## Why `type` is removed for a configured icon
+ *
+ * `index.html` declares `type="image/x-icon"`, which is true of the packaged `.ico` and false of
+ * the `.svg` or `.png` a customer is most likely to contribute. The attribute is a hint a
+ * browser may use to skip a format it cannot render, so leaving a stale one on is a way for a
+ * valid favicon to be ignored. Removed rather than recomputed from the extension: that would be
+ * a content-type guesser, which is `ConfigSnapshot.contentType`'s job on the server, and the
+ * server already sends the right `Content-Type` with the bytes.
+ *
+ * An `effect` at application scope, for the reasons {@link syncDocumentTitle} gives: the load is
+ * asynchronous, and the sign-in page is a route the shell never mounts on.
+ */
+export function syncDocumentFavicon(
+  config: Pick<AppConfigService, 'brandingFavicon'>,
+  document: Document,
+  injector: Injector,
+): void {
+  const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  // Nothing to swap. A host application that ships no icon link keeps showing whatever the
+  // browser defaults to, which is what it did before this existed.
+  if (!link) return;
+  const packagedHref = link.href;
+  const packagedType = link.getAttribute('type');
+
+  effect(
+    () => {
+      const favicon = config.brandingFavicon();
+      link.href = favicon ?? packagedHref;
+      if (favicon) link.removeAttribute('type');
+      else if (packagedType !== null) link.setAttribute('type', packagedType);
+    },
+    { injector },
+  );
+}
+
 // `EnvironmentProviders` in the union because `provideAppInitializer` returns that rather than a
 // `Provider`. `ApplicationConfig.providers` accepts both, and the spec that picks out the
 // `LOCALE_ID` provider keys on a `provide` property, which an `EnvironmentProviders` does not have.
@@ -415,6 +466,11 @@ export function provideAppConfig(): (Provider | EnvironmentProviders)[] {
     // need sequencing against the other initializers.
     provideAppInitializer(() =>
       syncDocumentTitle(inject(AppConfigService), inject(DOCUMENT), inject(Injector)),
+    ),
+    // Beside the title, because they are the two halves of what a browser tab shows and a demo
+    // branded in one and not the other is the gap this closes (NXSAT-313).
+    provideAppInitializer(() =>
+      syncDocumentFavicon(inject(AppConfigService), inject(DOCUMENT), inject(Injector)),
     ),
     /*
      * Angular's OWN formatting locale, which is a different mechanism from the string language.

@@ -119,12 +119,24 @@
               }
             </div>
             @if (locationRestricted()) {
-              <nxs-banner
-                class="location-hint"
-                tone="error"
-                announce="alert"
-                [message]="importLocationHint() | translate"
-              />
+              <div class="location-hint">
+                <lib-extension-outlet
+                  #createHintOutlet
+                  [componentId]="bannerId"
+                  [componentInputs]="{
+                    message: importLocationHint() | translate,
+                    tone: 'error',
+                    announce: 'alert',
+                  }"
+                />
+                @if (createHintOutlet.unresolved()) {
+                  <nxs-banner
+                    tone="error"
+                    announce="alert"
+                    [message]="importLocationHint() | translate"
+                  />
+                }
+              </div>
             }
           </div>
 
@@ -343,24 +355,35 @@
                   }
                 </div>
                 @if (locationRestricted()) {
-                  <nxs-banner
-                    class="location-hint"
-                    tone="error"
-                    announce="alert"
-                    [message]="importLocationHint() | translate"
-                  />
+                  <div class="location-hint">
+                    <lib-extension-outlet
+                      #importHintOutlet
+                      [componentId]="bannerId"
+                      [componentInputs]="{
+                        message: importLocationHint() | translate,
+                        tone: 'error',
+                        announce: 'alert',
+                      }"
+                    />
+                    @if (importHintOutlet.unresolved()) {
+                      <nxs-banner
+                        tone="error"
+                        announce="alert"
+                        [message]="importLocationHint() | translate"
+                      />
+                    }
+                  </div>
                 }
               </div>
 
-              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
-                <mat-label>{{ 'browse.create-import-dialog.title' | translate }}</mat-label>
-                <input matInput [(ngModel)]="docTitle" required />
-              </mat-form-field>
-
-              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
-                <mat-label>{{ 'browse.create-import-dialog.description' | translate }}</mat-label>
-                <input matInput [(ngModel)]="description" />
-              </mat-form-field>
+              <lib-document-layout-form
+                class="full-width"
+                mode="create"
+                [type]="dt.type"
+                [parentPath]="parentPath()"
+                [disabled]="busy()"
+                [headingLevel]="2"
+              />
 
               @if (hasContentField()) {
                 <div class="field-label">
@@ -446,129 +469,6 @@
                   </mat-select>
                 </mat-form-field>
               }
-
-              <mat-form-field
-                appearance="outline"
-                subscriptSizing="dynamic"
-                class="full-width vocab-field"
-              >
-                <mat-label>{{ 'browse.create-import-dialog.nature' | translate }}</mat-label>
-                <mat-select
-                  #natureSelect
-                  [(ngModel)]="nature"
-                  panelClass="vocab-select-panel"
-                  (openedChange)="onNaturePanelOpen($event)"
-                  (selectionChange)="natureSelect.close()"
-                >
-                  <mat-select-trigger>
-                    <ng-container *ngTemplateOutlet="natureChip" />
-                  </mat-select-trigger>
-                  <div class="vocab-panel__search">
-                    <input
-                      type="text"
-                      [placeholder]="'browse.create-import-dialog.search' | translate"
-                      [(ngModel)]="naturePanelSearch"
-                      [ngModelOptions]="{ standalone: true }"
-                      (click)="$event.stopPropagation()"
-                      (keydown)="$event.stopPropagation()"
-                    />
-                  </div>
-                  <div class="vocab-panel__list">
-                    @for (entry of filteredNatureOptions(); track entry.id) {
-                      <mat-option [value]="entry.id">{{ directoryPickerLabel(entry) }}</mat-option>
-                    }
-                  </div>
-                </mat-select>
-              </mat-form-field>
-
-              <mat-form-field
-                appearance="outline"
-                subscriptSizing="dynamic"
-                class="full-width vocab-field subjects-field"
-              >
-                <mat-label>{{ 'browse.create-import-dialog.subjects' | translate }}</mat-label>
-                <mat-select
-                  multiple
-                  [(ngModel)]="subjects"
-                  panelClass="vocab-select-panel vocab-grouped-select-panel subjects-select-panel"
-                  (openedChange)="onSubjectsPanelOpen($event)"
-                >
-                  <mat-select-trigger>
-                    <ng-container *ngTemplateOutlet="subjectsChip" />
-                  </mat-select-trigger>
-                  <div class="vocab-panel__search">
-                    <input
-                      type="text"
-                      [placeholder]="'browse.create-import-dialog.search' | translate"
-                      [(ngModel)]="subjectsPanelSearch"
-                      [ngModelOptions]="{ standalone: true }"
-                      (click)="$event.stopPropagation()"
-                      (keydown)="$event.stopPropagation()"
-                    />
-                  </div>
-                  <div class="vocab-panel__list">
-                    @for (group of groupedSubjectOptions(); track group.parentLabel) {
-                      <mat-optgroup [label]="group.parentLabel">
-                        @for (entry of group.entries; track entry.id) {
-                          <mat-option [value]="entry.id">{{
-                            entry.properties.label_en ?? entry.id
-                          }}</mat-option>
-                        }
-                      </mat-optgroup>
-                    }
-                  </div>
-                </mat-select>
-              </mat-form-field>
-
-              <mat-form-field
-                appearance="outline"
-                subscriptSizing="dynamic"
-                class="full-width vocab-field"
-              >
-                <mat-label>{{ 'browse.create-import-dialog.coverage' | translate }}</mat-label>
-                <mat-select
-                  #coverageSelect
-                  [(ngModel)]="coverage"
-                  panelClass="vocab-select-panel vocab-grouped-select-panel"
-                  (openedChange)="onCoveragePanelOpen($event)"
-                  (selectionChange)="coverageSelect.close()"
-                >
-                  <mat-select-trigger>
-                    <ng-container *ngTemplateOutlet="coverageChip" />
-                  </mat-select-trigger>
-                  <div class="vocab-panel__search">
-                    <input
-                      type="text"
-                      [placeholder]="'browse.create-import-dialog.search' | translate"
-                      [(ngModel)]="coveragePanelSearch"
-                      [ngModelOptions]="{ standalone: true }"
-                      (click)="$event.stopPropagation()"
-                      (keydown)="$event.stopPropagation()"
-                    />
-                  </div>
-                  <div class="vocab-panel__list">
-                    @for (group of groupedCoverageOptions(); track group.parentLabel) {
-                      <mat-optgroup [label]="group.parentLabel">
-                        @for (entry of group.entries; track entry.id) {
-                          <mat-option [value]="entry.id">{{
-                            entry.properties.label_en ?? entry.id
-                          }}</mat-option>
-                        }
-                      </mat-optgroup>
-                    }
-                  </div>
-                </mat-select>
-              </mat-form-field>
-
-              <nxs-date-input
-                class="full-width"
-                [label]="'browse.create-import-dialog.expires' | translate"
-                name="expires"
-                [ngModel]="expires"
-                (ngModelChange)="onExpiresChange($event)"
-                (input)="onExpiresInput($event)"
-                #expiresInput="ngModel"
-              />
             </div>
           }
         }
@@ -859,11 +759,10 @@
           type="button"
           [disabled]="
             busy() ||
-            !docTitle.trim() ||
+            !createFormReady() ||
             locationRestricted() ||
             createMissingMainFile() ||
-            mainFileUploadPending() ||
-            !isExpiresValid()
+            mainFileUploadPending()
           "
           (click)="createDocument()"
         >
@@ -947,28 +846,43 @@
 
 <ng-template #natureChip>
   @if (nature) {
-    <nxs-chip-set
-      class="subjects-trigger-chips"
-      [items]="natureChips()"
-      (removed)="clearNature()"
-    />
+    <div class="subjects-trigger-chips">
+      <lib-extension-outlet
+        #natureChipOutlet
+        [componentId]="chipSetId"
+        [componentInputs]="{ items: natureChips(), removeHandler: removeNatureChip }"
+      />
+      @if (natureChipOutlet.unresolved()) {
+        <nxs-chip-set [items]="natureChips()" [removeHandler]="removeNatureChip" />
+      }
+    </div>
   }
 </ng-template>
 
 <ng-template #coverageChip>
   @if (coverage) {
-    <nxs-chip-set
-      class="subjects-trigger-chips"
-      [items]="coverageChips()"
-      (removed)="clearCoverage()"
-    />
+    <div class="subjects-trigger-chips">
+      <lib-extension-outlet
+        #coverageChipOutlet
+        [componentId]="chipSetId"
+        [componentInputs]="{ items: coverageChips(), removeHandler: removeCoverageChip }"
+      />
+      @if (coverageChipOutlet.unresolved()) {
+        <nxs-chip-set [items]="coverageChips()" [removeHandler]="removeCoverageChip" />
+      }
+    </div>
   }
 </ng-template>
 
 <ng-template #subjectsChip>
-  <nxs-chip-set
-    class="subjects-trigger-chips"
-    [items]="subjectChips()"
-    (removed)="removeSubject($event.id)"
-  />
+  <div class="subjects-trigger-chips">
+    <lib-extension-outlet
+      #subjectsChipOutlet
+      [componentId]="chipSetId"
+      [componentInputs]="{ items: subjectChips(), removeHandler: removeSubjectChip }"
+    />
+    @if (subjectsChipOutlet.unresolved()) {
+      <nxs-chip-set [items]="subjectChips()" [removeHandler]="removeSubjectChip" />
+    }
+  </div>
 </ng-template>

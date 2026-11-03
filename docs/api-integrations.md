@@ -1480,9 +1480,11 @@ prefers `dc:source` (rarely auto-filled) and falls back to `dc:rights` when
 | ------------ | -------------------------------- |
 | **Endpoint** | `/nuxeo/api/v1/path{parentPath}` |
 
-**Request body:** Merged document entity from `@emptyWithDefault` with user overrides applied (`mergeCreateDocumentBody`). Null/empty optional Dublin Core fields are omitted so server defaults (e.g. Domain schema fields) are preserved.
+**Request body:** Merged document entity from `@emptyWithDefault` with user overrides applied (`mergeCreateDocumentBody`). Null or empty values the form sends are omitted so server defaults (e.g. Domain schema fields) are preserved.
 
-**Usage:** Dashboard Add Content (+) → Create tab → Domain at repository root `/` (`CreateImportDialogComponent` → `createChildDocument`).
+**Usage:** Create / Import → Create tab, in Browse and from the dashboard's Add Content (+), Domain at repository root `/` included (`CreateImportDialogComponent` → `createChildDocument`). The properties are those of the type's create form (`lib-document-layout-form mode="create"`, NXSAT-630): its Dublin Core fields and its create layout — generated from the type's schemas, or a contributed `<Type>/create.layout.json` — plus the Note body and format for a Note. Blob-holding types send the same form's properties to the same path endpoint with the staged main file (`createBlobHoldingDocumentReliable`).
+
+The create form opens empty and sends only the fields the user filled in, so every untouched field — an unticked checkbox included — takes its server default from Step 1, and a default cannot be cleared at creation (NXSAT-630).
 
 ---
 

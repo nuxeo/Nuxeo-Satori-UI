@@ -68,6 +68,45 @@ export interface AppBrandingConfig {
   readonly documentTitle: string;
   /** `null` keeps the Satori marks. */
   readonly logo: AppBrandingLogo | null;
+  /**
+   * The browser tab icon. Absent or `null` keeps the one `index.html` ships (NXSAT-313, plan
+   * item F1).
+   *
+   * **Optional, unlike its sibling {@link logo}, and the difference is release history rather
+   * than semantics.** `logo` was in the first released shape of this interface, so every object
+   * ever constructed against it already writes the key. `favicon` was added to it, and a
+   * required member added to an exported interface breaks every caller that *constructs* one —
+   * which the API snapshot cannot see, because it reports removals and signature changes and a
+   * new member is neither (review of PR 546).
+   *
+   * Optional is not unconditionally the safer direction, and claiming so would be wrong: it
+   * widens the type for readers, so code annotating `const f: AppBrandingLogo | null =
+   * branding.favicon` stops compiling. What settles it here is that **this member is new in the
+   * change that introduces it** — it is absent from the previously released interface — so there
+   * is no existing reader to widen under, and there are existing constructors to break. With one
+   * side populated and the other empty, optional is what lets this ship as a minor.
+   *
+   * Absent and `null` are the same state to every reader, which is what makes the optionality
+   * free of a third case to handle: {@link readLogo} returns the base it was given, so an absent
+   * key stays absent rather than being normalised; `AppConfigService.brandingFavicon` tests the
+   * value for truth; and `syncDocumentFavicon` writes the href `index.html` shipped for anything
+   * falsy. A configuration that predates this key therefore renders exactly what it rendered
+   * before it existed, with nothing logged.
+   *
+   * The same shape and the same reader as `logo`, deliberately: a favicon is a configured
+   * image address with exactly the logo's hazards, so it goes through `readLogo`,
+   * `describeLogoSrcForm` and `resolveBrandingLogoUrl` unchanged. A second validator for the
+   * same rules is a second validator to keep in step, and the logo's has been corrected four
+   * times — for `..`, for IPv4-in-IPv6 hosts, for Tomcat's `;` path parameters, for the
+   * `*.localhost` suffix — none of which a fresh one would have had. Optional does not mean
+   * unvalidated: a key that *is* supplied is checked and refused exactly as a logo's is.
+   *
+   * `alt` is accepted and not used. A favicon has no accessible name to carry: it is decorative
+   * chrome the browser draws beside the tab title, which `documentTitle` already names. Sharing
+   * the type is worth one ignored field; the alternative is a near-duplicate type whose only
+   * difference is the absence of a string.
+   */
+  readonly favicon?: AppBrandingLogo | null;
 }
 
 /**
@@ -215,6 +254,11 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
     applicationTitle: 'Hyland Nuxeo',
     documentTitle: 'Nuxeo Platform',
     logo: null,
+    // `null` is "the icon `index.html` ships", which is what every deployment showed before
+    // this key existed — including a branded demo, which is the gap it closes. Written out
+    // rather than omitted even though the key is optional: this object is the documented
+    // starting point a customer spreads, so it should show every key that can be set.
+    favicon: null,
   },
   defaultThemeId: 'nuxeo',
   themes: DEFAULT_APP_THEMES,
@@ -653,6 +697,9 @@ function describeLogoSrcForm(src: string): string | null {
 /**
  * `null` clears a logo an earlier layer set; anything unusable keeps `base`.
  *
+ * Reads both `branding.logo` and `branding.favicon`, which are the same thing to every rule
+ * below — a configured image address — and differ only in where the result is rendered.
+ *
  * **What a refusal falls back to depends on which of the two layers refused it**, and saying
  * "the packaged marks" for both is wrong — which this comment used to do, and the log message
  * used to repeat (review of PR 512):
@@ -668,8 +715,20 @@ function describeLogoSrcForm(src: string): string | null {
  *
  * So a value this function retains can still end up not displayed, and the two layers report
  * themselves differently for exactly that reason.
+ *
+ * Generic in the base only so that an **absent** key survives the merge: `favicon` is optional
+ * and `logo` is not, and "keep what the base had" has to mean `undefined` for the one and `null`
+ * for the other. Every rule below is the same for both, and the body does not read `T` — this
+ * returns `base` on each unusable input, so the absence propagates on its own rather than being
+ * normalised to a `null` the caller's base never had.
+ *
+ * `null` is in the return type independently of `T` because an explicit `null` in the patch
+ * clears the key whatever the base held, which is the one result that does not come from `base`.
  */
-function readLogo(value: unknown, base: AppBrandingLogo | null): AppBrandingLogo | null {
+function readLogo<T extends AppBrandingLogo | null | undefined>(
+  value: unknown,
+  base: T,
+): AppBrandingLogo | T | null {
   if (value === null) return null;
   if (!isRecord(value)) return base;
   const src = typeof value['src'] === 'string' ? value['src'].trim() : '';
@@ -983,6 +1042,7 @@ export function mergeBootstrapConfig(base: AppBootstrapConfig, patch: unknown): 
       ),
       documentTitle: readNonBlankString(branding, 'documentTitle', base.branding.documentTitle),
       logo: readLogo(branding['logo'], base.branding.logo),
+      favicon: readLogo(branding['favicon'], base.branding.favicon),
     },
     defaultThemeId: readString(patch, 'defaultThemeId', base.defaultThemeId),
     themes: mergeThemes(base.themes, patch['themes']),

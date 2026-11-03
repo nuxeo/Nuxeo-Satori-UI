@@ -81,7 +81,6 @@ publish. Change the Markdown.
 | A capability becoming available or blocked | [Feature Catalog](../20-product/02-feature-catalog.md), [Customer Benefits](../20-product/05-customer-benefits.md)             |
 | A phase completing                         | `.ai/state/phases.json`, `docs/beta-delivery-record.md`, the plan's Programme status                                           |
 | A new risk, or one resolved                | [Risks & Opportunities](../10-leadership/07-risks-and-opportunities.md)                                                        |
-| An adf-hx workaround                       | A marker at the code **and** a row in `docs/adf-hx-workarounds.md` (**gated both ways**)                                       |
 | A new cost driver                          | [Cost & TCO](../10-leadership/03-cost-and-tco.md)                                                                              |
 | **A measurement finally taken**            | Wherever it currently says "not measured". These are the highest-value updates this set can receive                            |
 
@@ -108,7 +107,6 @@ Documentation gates that exist today — worth knowing, because they are unusual
 | `npm run beta:reference`                        | Every documented extension ID is registered **and** every registered ID is documented. Fails in **both** directions |
 | `npm run beta:api`                              | The published API matches its 2,221-line snapshot                                                                   |
 | `staleness-check.yml`                           | `AGENTS/01-services.md` still matches the code                                                                      |
-| `review:guardrails` → `checkAdfHxWorkaroundIds` | A workaround marker has a register row, and vice versa                                                              |
 | `review:guardrails` → `checkDocsNumbering`      | No duplicate section numbers in `docs/`                                                                             |
 | `npm run beta:state`                            | No phase claims more than its evidence supports                                                                     |
 | `npm run beta:audit`                            | No evidence assertion is incapable of failing                                                                       |

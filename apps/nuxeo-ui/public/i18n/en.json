@@ -773,6 +773,7 @@
       "nature": "Nature",
       "new-of-type": "New {{ type }}",
       "no-document-types-can-be-created": "No document types can be created at this location. Open Sections, Templates, or Workspaces, then create content inside those folders.",
+      "not-accepted": "Nuxeo did not accept this value.",
       "ok": "OK",
       "receive-the-import-report-by-email": "Receive the import report by email.",
       "remove-csv-file": "Remove CSV file",

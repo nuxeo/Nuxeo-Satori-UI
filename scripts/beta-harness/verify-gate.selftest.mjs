@@ -378,6 +378,155 @@ control('--require-complete stays strict about a scoped run', () => {
   expect(run.status === 1, `expected exit 1 for a partial scope, got ${run.status}`);
 });
 
+/* The scope resolution (G3). `--print-scope` prints the gates' own `argv` arrays, so these read
+ * the command that would run rather than a second derivation of the decision. Each asserts the
+ * mode it does NOT expect is absent as well: `affected` and `run-many` both contain the target
+ * name, so matching only the one you want passes under either. */
+function printScope(baseRef) {
+  const run = spawnSync(
+    process.execPath,
+    [join(here, 'verify-gate.mjs'), '--base', baseRef, '--print-scope'],
+    { cwd: repoRoot, encoding: 'utf8', env },
+  );
+  expect(
+    run.status === 0,
+    `--print-scope exited ${run.status}: ${run.stderr.trim().slice(0, 200)}`,
+  );
+  return run.stdout;
+}
+
+const SCOPED = ['lint', 'test', 'build', 'typecheck'];
+
+control('a base that resolves to HEAD runs run-many --all, not affected', () => {
+  /* The defect: on `main`, `base` is `origin/main` is HEAD, so `nx affected` matched zero
+   * projects and lint/test/build/typecheck passed in seconds having checked nothing. */
+  const out = printScope('HEAD');
+  expect(/^scope all$/m.test(out), `scope line was not "all":\n${out}`);
+  for (const target of SCOPED) {
+    expect(
+      new RegExp(`^${target} npx nx run-many -t ${target} --all$`, 'm').test(out),
+      `${target} is not scoped to the whole workspace:\n${out}`,
+    );
+  }
+  expect(!/nx affected/.test(out), `a gate is still on affected with the base at HEAD:\n${out}`);
+});
+
+control('a base that differs from HEAD still runs affected', () => {
+  /* The other half, and the one that keeps the inner loop fast. Without it the control above
+   * would pass with `scoped()` wired to `--all` unconditionally, which would make every branch
+   * gate a full-workspace run. */
+  const parent = spawnSync('git', ['rev-parse', 'HEAD~1'], { cwd: repoRoot, encoding: 'utf8' });
+  expect(parent.status === 0, 'no HEAD~1 in this clone, so this control cannot run');
+  const sha = parent.stdout.trim();
+  const out = printScope(sha);
+  expect(/^scope affected$/m.test(out), `scope line was not "affected":\n${out}`);
+  for (const target of SCOPED) {
+    expect(
+      new RegExp(`^${target} npx nx affected -t ${target} --base=${sha}$`, 'm').test(out),
+      `${target} is not scoped to the diff:\n${out}`,
+    );
+  }
+  expect(!/run-many/.test(out), `a gate widened to the workspace off HEAD:\n${out}`);
+});
+
+control('the scope is decided by resolved SHA, not by the ref name', () => {
+  /* `--base=main` on `main` and `--base=origin/main` on a freshly pulled `main` are the same
+   * situation as `--base=HEAD`, and only a SHA comparison sees that. Driven through the SHA of
+   * HEAD, which is a different string from "HEAD" and must reach the same verdict. */
+  const sha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' });
+  expect(sha.status === 0, 'git rev-parse HEAD failed');
+  const out = printScope(sha.stdout.trim());
+  expect(/^scope all$/m.test(out), `an explicit HEAD SHA read as a diff:\n${out}`);
+  /* The commands too, not only the `scope` line. `scope` is computed beside the argv rather than
+   * from it, so asserting the line alone passes with the gates still wired to `affected` — which
+   * it did, when this control was first written that way. */
+  expect(
+    SCOPED.every((t) => new RegExp(`^${t} npx nx run-many -t ${t} --all$`, 'm').test(out)),
+    `the scope line said "all" while a gate stayed on the diff:\n${out}`,
+  );
+});
+
+control('an annotated tag on HEAD is recognised as HEAD, not as a diff', () => {
+  /* `git rev-parse <annotated-tag>` returns the TAG OBJECT's SHA, not the commit's, so comparing
+   * unpeeled made `--base=<tag-at-HEAD>` take the `affected` path — and Nx, which peels the ref
+   * itself, then diffed HEAD against HEAD and ran zero projects. The vacuous pass, reachable
+   * through a valid base ref. Review found it on PR #544.
+   *
+   * Driven against a real annotated tag, because the behaviour under test is git's and a fixture
+   * that fakes `rev-parse` would prove nothing.
+   *
+   * A throwaway repository with one commit, not a clone of this one: `--print-scope` makes exactly
+   * two git calls, both `rev-parse`, so that is all the subject needs. The runner is THIS working
+   * tree's script, run with its cwd inside the fixture — a clone would carry whatever is
+   * committed, which is how the first version of this control failed against its own fix. */
+  const dir = mkdtempSync(join(tmpdir(), 'verify-gate-tag-'));
+  try {
+    const run = (args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+    for (const args of [
+      ['init', '--quiet', '--initial-branch=main'],
+      ['config', 'user.email', 'selftest@example.invalid'],
+      ['config', 'user.name', 'Verify Gate Selftest'],
+      ['config', 'commit.gpgsign', 'false'],
+    ]) {
+      expect(run(args).status === 0, `git ${args[0]} failed in the fixture`);
+    }
+    writeFileSync(join(dir, 'f.txt'), 'x');
+    expect(run(['add', '-A']).status === 0, 'git add failed in the fixture');
+    expect(
+      run(['commit', '--quiet', '-m', 'one']).status === 0,
+      'git commit failed in the fixture',
+    );
+    const tagged = run(['tag', '-a', 'vg-selftest-tag', '-m', 'at HEAD']);
+    expect(tagged.status === 0, `tag failed: ${tagged.stderr.trim().slice(0, 200)}`);
+
+    // The premise: unpeeled, the tag does NOT look like HEAD. If git ever changed that, this
+    // control would be asserting nothing, so it is checked rather than assumed.
+    const unpeeled = run(['rev-parse', 'vg-selftest-tag']).stdout.trim();
+    const head = run(['rev-parse', 'HEAD']).stdout.trim();
+    expect(
+      unpeeled !== head,
+      'rev-parse on an annotated tag already returns the commit, so this control has no subject',
+    );
+
+    const scope = spawnSync(
+      process.execPath,
+      [join(here, 'verify-gate.mjs'), '--base', 'vg-selftest-tag', '--print-scope'],
+      { cwd: dir, encoding: 'utf8', env },
+    );
+    expect(
+      scope.status === 0,
+      `--print-scope exited ${scope.status}: ${scope.stderr.slice(0, 200)}`,
+    );
+    expect(/^scope all$/m.test(scope.stdout), `a tag on HEAD was read as a diff:\n${scope.stdout}`);
+    expect(
+      !/nx affected/.test(scope.stdout),
+      `a gate stayed on affected with the base peeling to HEAD:\n${scope.stdout}`,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+control('every gate built on the affected set declares itself scoped', () => {
+  /* The anti-drift property. A fifth `nx affected` gate added without `scoped: true` would be
+   * vacuous on `main` exactly as these four were, and `--print-scope` would not show it — so the
+   * controls above would stay green while the hole reopened. */
+  const scopedIds = [...gateBlock.matchAll(/\n\s+id: '([a-z0-9-]+)',[\s\S]*?\n\s{2}\},/g)]
+    .filter((m) => /scoped: true/.test(m[0]))
+    .map((m) => m[1]);
+  expect(
+    scopedIds.join(',') === SCOPED.join(','),
+    `gates declaring \`scoped: true\` are ${JSON.stringify(scopedIds)}, expected ${JSON.stringify(SCOPED)}`,
+  );
+  const nxGates = [...gateBlock.matchAll(/\n\s+id: '([a-z0-9-]+)',[\s\S]*?\n\s{2}\},/g)]
+    .filter((m) => /argv: \[\s*'nx',/.test(m[0]) || /argv: scoped\(/.test(m[0]))
+    .map((m) => m[1]);
+  expect(
+    nxGates.join(',') === SCOPED.join(','),
+    `gate(s) run Nx without declaring their scope: ${nxGates.filter((id) => !SCOPED.includes(id))}`,
+  );
+});
+
 control('the cross-platform selection keeps the gate that waits for CodeQL', () => {
   /* `code-scanning` is not platform-sensitive and says so. It is still selected, because this is
    * the only job that waits for CodeQL on the revision — dropping it would remove CI's only
