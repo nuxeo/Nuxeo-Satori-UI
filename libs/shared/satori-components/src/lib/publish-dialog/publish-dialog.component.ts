@@ -59,8 +59,11 @@ interface VersionOption {
   readonly label: string;
 }
 
-const NO_RENDITION = 'none';
-const DEFAULT_RENDITION = 'default';
+// Symbols, not strings: a rendition is chosen by its name, and a server may name one `none` or
+// `default`.
+const NO_RENDITION: unique symbol = Symbol('no rendition');
+const DEFAULT_RENDITION: unique symbol = Symbol('default rendition');
+type RenditionChoice = typeof NO_RENDITION | typeof DEFAULT_RENDITION | string;
 
 /** When to give up on opening: the page the dialog was asked for may be gone once it resolves. */
 export interface NxsOpenPublishDialogOptions {
@@ -142,7 +145,7 @@ export class NxsPublishDialogComponent {
   protected readonly section = signal('');
   protected readonly version = signal(this.data.documentUid);
   protected readonly showRenditions = signal(false);
-  protected readonly rendition = signal(NO_RENDITION);
+  protected readonly rendition = signal<RenditionChoice>(NO_RENDITION);
   protected readonly override = signal(false);
   protected readonly publishing = signal(false);
 
@@ -172,12 +175,11 @@ export class NxsPublishDialogComponent {
     // Closing mid-request would unsubscribe from a publication Nuxeo may already have made, and
     // drop both its toast and the result the page refreshes on.
     this.dialogRef.disableClose = true;
-    const rendition = this.showRenditions() ? this.rendition() : NO_RENDITION;
+    const rendition: RenditionChoice = this.showRenditions() ? this.rendition() : NO_RENDITION;
     this.documents
       .publishDocument(this.version(), target.uid, {
         override: this.override(),
-        renditionName:
-          rendition === NO_RENDITION || rendition === DEFAULT_RENDITION ? undefined : rendition,
+        renditionName: typeof rendition === 'string' ? rendition : undefined,
         defaultRendition: rendition === DEFAULT_RENDITION,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))

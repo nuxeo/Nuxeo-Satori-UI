@@ -391,6 +391,25 @@ describe('NxsPublishDialogComponent', () => {
     });
   });
 
+  it('sends a rendition named "default" by its name, not as the default rendition', async () => {
+    await create({
+      ...DATA,
+      renditions: [
+        { name: 'default', label: 'Server default' },
+        { name: 'none', label: 'Server none' },
+      ],
+    });
+    await choose('nxs-publish-dialog__section', 'News');
+    (el().querySelector('.nxs-publish-dialog__show-renditions input') as HTMLInputElement).click();
+    await settle();
+    await choose('nxs-publish-dialog__rendition', 'Server default');
+    publishButton().click();
+    expect(documents.publishDocument.mock.calls[0][2]).toMatchObject({
+      renditionName: 'default',
+      defaultRendition: false,
+    });
+  });
+
   it('closes with undefined on Cancel, the result its type promises for a cancel', async () => {
     await create();
     (el().querySelector('.nxs-publish-dialog__cancel') as HTMLButtonElement).click();

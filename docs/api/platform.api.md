@@ -2185,8 +2185,8 @@ class NxsPropertiesPanelComponent {
 }
 class NxsPublishDialogComponent {
     protected readonly data: NxsPublishDialogData;
-    protected readonly noRendition = "none";
-    protected readonly defaultRendition = "default";
+    protected readonly noRendition: symbol;
+    protected readonly defaultRendition: symbol;
     protected readonly renditions: readonly NxsPublishRendition[];
     protected readonly sectionsState: import("@angular/core").WritableSignal<"failed" | "loading" | "ready">;
     protected readonly sections: import("@angular/core").WritableSignal<readonly SectionOption[]>;
@@ -2194,7 +2194,7 @@ class NxsPublishDialogComponent {
     protected readonly section: import("@angular/core").WritableSignal<string>;
     protected readonly version: import("@angular/core").WritableSignal<string>;
     protected readonly showRenditions: import("@angular/core").WritableSignal<boolean>;
-    protected readonly rendition: import("@angular/core").WritableSignal<string>;
+    protected readonly rendition: import("@angular/core").WritableSignal<RenditionChoice>;
     protected readonly override: import("@angular/core").WritableSignal<boolean>;
     protected readonly publishing: import("@angular/core").WritableSignal<boolean>;
     constructor();
