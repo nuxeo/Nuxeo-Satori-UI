@@ -12591,6 +12591,538 @@ expectGreen(
   },
 );
 
+/* ---------------- checkGateInventory ---------------- */
+
+/**
+ * Controls for the gate-inventory check.
+ *
+ * The check compares `ALL_GATES` in `verify-gate.mjs` against the §2 table of
+ * `documentation/30-engineering/08-dev-harness-and-gates.md`. On the real tree it is green, and a
+ * green run on one correct tree cannot tell a working comparison from one that returns pass — so
+ * every finding it can produce is driven here against a fixture.
+ *
+ * The two it exists for are the first two: a gate with no row, and a row with no gate. It was
+ * written because the page had been missing `sanitizer-recovery-selftest` and
+ * `storybook-assemble-selftest` since those gates were registered, with nothing able to say so.
+ */
+const INVENTORY_PAGE = 'documentation/30-engineering/08-dev-harness-and-gates.md';
+const INVENTORY_RUNNER = 'scripts/beta-harness/verify-gate.mjs';
+
+/** A gate roster, in the shape the check parses out of `verify-gate.mjs`. */
+const gateRoster = (ids) =>
+  `const ALL_GATES = [\n${ids
+    .map(
+      (id) =>
+        `  {\n    id: '${id}',\n    platformSensitive: false,\n    label: '${id}',\n    cmd: 'node',\n    argv: ['x.mjs'],\n  },`,
+    )
+    .join('\n')}\n];\n`;
+
+/**
+ * A page with §2, §3, §7 and §8, since the check slices between those headings.
+ *
+ * `sevenNames` is separate from `rows` on purpose: §7's coverage is checked independently, so a
+ * control can hold §2 correct while breaking §7 and see which finding appears.
+ */
+const inventoryPage = ({ rows, sevenNames }) =>
+  [
+    '## 2. The gates',
+    '',
+    '| #   | Gate | Asserts | Why it exists |',
+    '| --- | ---- | ------- | ------------- |',
+    ...rows.map(({ number, id }) => `| ${number}   | \`${id}\` | something | a reason |`),
+    '',
+    '## 3. The commit-time guardrails',
+    '',
+    'Not read by this check.',
+    '',
+    '## 7. What runs where',
+    '',
+    '| Gate | Local gate | PR CI | Notes |',
+    '| ---- | :--------: | :---: | ----- |',
+    ...sevenNames.map((name) => `| ${name} |     ✅     |  ✅   | a note |`),
+    '| **E2E** |     ✅     |  ❌   | deliberately not a gate |',
+    '',
+    '## 8. GitHub Actions',
+    '',
+    'Not read by this check.',
+    '',
+  ].join('\n');
+
+/** The correct pair: three gates, three rows in order, all three named in §7. */
+const INVENTORY_OK = {
+  [INVENTORY_RUNNER]: gateRoster(['node', 'lint', 'agent-mirror']),
+  [INVENTORY_PAGE]: inventoryPage({
+    rows: [
+      { number: 1, id: 'node' },
+      { number: 2, id: 'lint' },
+      { number: 3, id: 'agent-mirror' },
+    ],
+    sevenNames: ['node', 'lint, agent-mirror'],
+  }),
+};
+
+expectGreen('a table that matches ALL_GATES in id, order and numbering', 'checkGateInventory', {
+  ...INVENTORY_OK,
+});
+
+expectRed(
+  'the defect this exists for: a gate is registered and the table has no row for it',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(INVENTORY_RUNNER, gateRoster(['node', 'lint', 'published-links', 'agent-mirror'])),
+  /`published-links` is registered in ALL_GATES and has no row in §2 of/,
+);
+
+expectRed(
+  'the other direction: the table claims a gate ALL_GATES does not register',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'node' },
+          { number: 2, id: 'lint' },
+          { number: 3, id: 'agent-mirror' },
+          { number: 4, id: 'imaginary-gate' },
+        ],
+        sevenNames: ['node', 'lint, agent-mirror', 'imaginary-gate'],
+      }),
+    ),
+  /has a row for `imaginary-gate`, which ALL_GATES does not register/,
+);
+
+expectRed(
+  'a true row deleted — the same shape as the five that were missing when this was written',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'node' },
+          { number: 2, id: 'agent-mirror' },
+        ],
+        sevenNames: ['node', 'lint, agent-mirror'],
+      }),
+    ),
+  /`lint` is registered in ALL_GATES and has no row in §2 of/,
+);
+
+expectRed(
+  'the same set in a different order: the table documents the order the gates run in',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'lint' },
+          { number: 2, id: 'node' },
+          { number: 3, id: 'agent-mirror' },
+        ],
+        sevenNames: ['node', 'lint, agent-mirror'],
+      }),
+    ),
+  /lists the gates in a different order from ALL_GATES: row 1 is `lint`, the roster has `node`/,
+);
+
+expectRed(
+  'right ids, right order, wrong numbering — the numbers are how gates are referred to',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'node' },
+          { number: 3, id: 'lint' },
+          { number: 4, id: 'agent-mirror' },
+        ],
+        sevenNames: ['node', 'lint, agent-mirror'],
+      }),
+    ),
+  /numbers `lint` as 3, but it is row 2/,
+);
+
+expectRed(
+  'a row twice: a row must describe one gate',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'node' },
+          { number: 2, id: 'lint' },
+          { number: 3, id: 'lint' },
+          { number: 4, id: 'agent-mirror' },
+        ],
+        sevenNames: ['node', 'lint, agent-mirror'],
+      }),
+    ),
+  /lists `lint` twice/,
+);
+
+expectRed(
+  '§2 correct and §7 silent about a gate — the forward half of the §7 check',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'node' },
+          { number: 2, id: 'lint' },
+          { number: 3, id: 'agent-mirror' },
+        ],
+        sevenNames: ['node', 'lint'],
+      }),
+    ),
+  /`agent-mirror` is registered in ALL_GATES and is named nowhere in §7 of/,
+);
+
+falsePositiveControls += 1;
+expectGreen('§7 naming a gate inside a comma-separated cell is naming it', 'checkGateInventory', {
+  /* The §7 matcher allows `|`, a comma, whitespace and a backtick as boundaries, because the
+   * real section groups gates per row — `lint, test, build, typecheck`. Matched as a substring
+   * instead, `lint` would also be "found" inside `published-links`, and a gate named nowhere
+   * would read as covered. */
+  [INVENTORY_RUNNER]: gateRoster(['lint', 'test', 'build']),
+  [INVENTORY_PAGE]: inventoryPage({
+    rows: [
+      { number: 1, id: 'lint' },
+      { number: 2, id: 'test' },
+      { number: 3, id: 'build' },
+    ],
+    sevenNames: ['lint, test, build'],
+  }),
+});
+
+expectRed(
+  'a gate id that is a substring of another gate still has to be named in §7 on its own',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) => {
+    /* The control for the boundary above, from the failing side. `published-links` appears in §7
+     * only *inside* `published-links-selftest`, which does not name it. A substring matcher
+     * would pass this, and a gate whose CI status the page never states would look documented. */
+    write(INVENTORY_RUNNER, gateRoster(['published-links', 'published-links-selftest']));
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'published-links' },
+          { number: 2, id: 'published-links-selftest' },
+        ],
+        sevenNames: ['published-links-selftest'],
+      }),
+    );
+  },
+  /`published-links` is registered in ALL_GATES and is named nowhere in §7 of/,
+);
+
+expectRed(
+  'a double-quoted gate id with no row is caught, not skipped',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_RUNNER,
+      /* Reported on PR #554. The id pattern was single-quote-only, so this entry was skipped —
+       * and skipping *under-reads* the roster, so the gate it belongs to has no row to be
+       * missing and both inventory directions stayed green. */
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "    id: 'agent-mirror',",
+        '    id: "undocumented-gate",\n    platformSensitive: false,\n    label: "x",\n    cmd: "node",\n    argv: ["x.mjs"],\n  },\n  {\n    id: \'agent-mirror\',',
+      ),
+    ),
+  /`undocumented-gate` is registered in ALL_GATES and has no row in §2/,
+);
+
+expectRed(
+  'a partially read roster is refused rather than compared as a subset',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    /* The class behind the finding above, covered by a count the id pattern cannot influence:
+     * `verify-gate.mjs` refuses to start unless every gate declares `platformSensitive`, so the
+     * number of declarations is an independent count of the gates. An id in a shape no pattern
+     * matches — computed, templated, whatever a future gate does — must not read as "fewer
+     * gates", because fewer gates means fewer rows to be missing. */
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "    id: 'agent-mirror',",
+        '    id: ["agent", "mirror"].join("-"),',
+      ),
+    ),
+  /is a gate in `ALL_GATES` with no string-literal `id`/,
+);
+
+expectRed(
+  'a §2 row whose gate cell is not a backticked id is reported, not skipped',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'node' },
+          { number: 2, id: 'lint' },
+          { number: 3, id: 'agent-mirror' },
+        ],
+        sevenNames: ['node', 'lint, agent-mirror'],
+      }).replace('| 2   | `lint` |', '| 2   | lint |'),
+    ),
+  /§2 has a numbered row whose gate cell is not a single backticked id/,
+);
+
+falsePositiveControls += 1;
+expectGreen('a roster written with mixed quote styles is read in full', 'checkGateInventory', {
+  /* The positive half of the first control: once the pattern accepts any quote style, a roster
+   * that mixes them must read as complete rather than as a partial read. */
+  [INVENTORY_RUNNER]: gateRoster(['node', 'lint', 'agent-mirror'])
+    .replace("id: 'lint'", 'id: "lint"')
+    .replace("id: 'agent-mirror'", 'id: `agent-mirror`'),
+  [INVENTORY_PAGE]: inventoryPage({
+    rows: [
+      { number: 1, id: 'node' },
+      { number: 2, id: 'lint' },
+      { number: 3, id: 'agent-mirror' },
+    ],
+    sevenNames: ['node', 'lint, agent-mirror'],
+  }),
+});
+
+expectRed(
+  'a COMMENTED-OUT gate still documented is caught: the page claims a check that does not run',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    /* Reported on PR #554, and the third instance of one class in this reader: a regex over source
+     * text cannot tell code from prose about code, so `id:` lines inside a block comment were
+     * counted. Commenting a gate out left it in the roster, its documentation row passed the
+     * reverse check, and the page went on claiming a check that no longer ran. Reproduced on the
+     * real tree: 37 gates in the runner, 38 rows in the page, exit 0 with no findings. */
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        /  \{\n    id: 'agent-mirror',[\s\S]*?\n  \},/,
+        (descriptor) => `  /*\n${descriptor}\n  */`,
+      ),
+    ),
+  /§2 has a row for `agent-mirror`, which ALL_GATES does not register/,
+);
+
+expectRed(
+  'an element of ALL_GATES that is not an object literal is reported',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "  {\n    id: 'agent-mirror',",
+        "  ...EXTRA_GATES,\n  {\n    id: 'agent-mirror',",
+      ),
+    ),
+  /is an element of `ALL_GATES` that is not an object literal/,
+);
+
+/*
+ * The last writer wins, and reading the first one reads a different gate from the one that runs.
+ *
+ * Reported on PR #554 as the trailing spread. Driving the reader's assumptions rather than that
+ * one case found four shapes, each registering `ghost` while the check read `node`:
+ * `...{ id: 'ghost' }`, a duplicate `id:`, `['id']: 'ghost'` and `get id()`. All four were green
+ * before the fix, and this is worse than the under-reading of the earlier rounds — the roster
+ * holds an id nothing runs, which has a row, and the id that does run has none, so neither
+ * inventory direction has anything to report.
+ */
+expectRed(
+  'a trailing spread overrides the id that was read, and the gate that runs has no row',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "    id: 'agent-mirror',",
+        "    id: 'agent-mirror',\n    ...{ id: 'undocumented-gate' },",
+      ),
+    ),
+  /with a member this check cannot read statically/,
+);
+
+expectRed(
+  'a duplicated id is read as the one JavaScript keeps, not the one written first',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    /* The message must name `undocumented-gate`. Naming `agent-mirror` would mean the reader
+     * still disagrees with the runtime, which is the whole defect. */
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "    id: 'agent-mirror',",
+        "    id: 'agent-mirror',\n    id: 'undocumented-gate',",
+      ),
+    ),
+  /`undocumented-gate` is registered in ALL_GATES and has no row in §2/,
+);
+
+expectRed(
+  'an accessor named id is the last writer too, and its value is not a literal',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace(
+        "    id: 'agent-mirror',",
+        "    id: 'agent-mirror',\n    get id() { return 'undocumented-gate'; },",
+      ),
+    ),
+  /is a gate in `ALL_GATES` with no string-literal `id`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a computed key that is a string literal is the key it computes to',
+  'checkGateInventory',
+  {
+    /* The positive half, and it was a real false positive before the fix: `['id']: 'node'`
+     * registers `node`, but the reader matched only identifier and string-literal keys, so a
+     * correct roster was refused. Rejecting everything unreadable is not the same as reading it,
+     * and without this control the fix could over-correct into refusing valid rosters. */
+    [INVENTORY_RUNNER]: gateRoster(['node', 'lint', 'agent-mirror']).replace(
+      "    id: 'agent-mirror',",
+      "    ['id']: 'agent-mirror',",
+    ),
+    [INVENTORY_PAGE]: inventoryPage({
+      rows: [
+        { number: 1, id: 'node' },
+        { number: 2, id: 'lint' },
+        { number: 3, id: 'agent-mirror' },
+      ],
+      sevenNames: ['node', 'lint, agent-mirror'],
+    }),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen('a string that merely mentions an id is not counted as a gate', 'checkGateInventory', {
+  /* The other half of "prose is not code". A regex counted this; the parser does not, because a
+   * string literal is not a property assignment. Without this control the fix could regress into
+   * a stricter regex and still look right. */
+  [INVENTORY_RUNNER]: gateRoster(['node', 'lint', 'agent-mirror']).replace(
+    "    label: 'agent-mirror',",
+    `    label: "a label mentioning id: 'ghost-gate' in prose",`,
+  ),
+  [INVENTORY_PAGE]: inventoryPage({
+    rows: [
+      { number: 1, id: 'node' },
+      { number: 2, id: 'lint' },
+      { number: 3, id: 'agent-mirror' },
+    ],
+    sevenNames: ['node', 'lint, agent-mirror'],
+  }),
+});
+
+expectRed(
+  'the roster block renamed: reading nothing must not pass as finding nothing',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_RUNNER,
+      gateRoster(['node', 'lint', 'agent-mirror']).replace('ALL_GATES', 'EVERY_GATE'),
+    ),
+  /has no `const ALL_GATES = \[ … \]` array declaration the parser can find/,
+);
+
+expectRed(
+  'the §2 table emptied: a comparison against nothing is not a pass',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) => write(INVENTORY_PAGE, inventoryPage({ rows: [], sevenNames: ['node'] })),
+  /§2 has no numbered gate rows, so this check compared nothing/,
+);
+
+expectRed(
+  'the roster emptied: the mirror of the control above',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) => write(INVENTORY_RUNNER, 'const ALL_GATES = [\n];\n'),
+  /yielded no gate ids, so this check compared nothing/,
+);
+
+expectRed(
+  'the page deleted entirely',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write, git) => git(['rm', '--quiet', INVENTORY_PAGE]),
+  /does not exist, but the gate-inventory check compares it/,
+);
+
+expectRed(
+  'the §2 heading renamed: the section is reported missing, not silently read as something else',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'node' },
+          { number: 2, id: 'lint' },
+          { number: 3, id: 'agent-mirror' },
+        ],
+        sevenNames: ['node', 'lint, agent-mirror'],
+      }).replace('## 2. The gates', '## 2. The quality gates'),
+    ),
+  /has no `## 2\. The gates` heading, so that section cannot be compared/,
+);
+
+expectRed(
+  'the §7 heading renamed: the same, for the half that checks what runs where',
+  'checkGateInventory',
+  INVENTORY_OK,
+  (write) =>
+    write(
+      INVENTORY_PAGE,
+      inventoryPage({
+        rows: [
+          { number: 1, id: 'node' },
+          { number: 2, id: 'lint' },
+          { number: 3, id: 'agent-mirror' },
+        ],
+        sevenNames: ['node', 'lint, agent-mirror'],
+      }).replace('## 7. What runs where', '## 7. Where things run'),
+    ),
+  /has no `## 7\. What runs where` heading/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a §2 heading at the very start of the file is still found',
+  'checkGateInventory',
+  /* Not a contrived case — it is what every fixture here is, and the first version of this check
+   * located sections with `indexOf('\n## 2. …')`, which cannot match a heading at offset 0. It
+   * reported "no numbered gate rows" for all fourteen controls: a check that had never read a
+   * fixture, with its own controls unable to tell me so until they ran. */
+  { ...INVENTORY_OK },
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;
