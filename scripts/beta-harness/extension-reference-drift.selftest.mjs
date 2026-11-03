@@ -427,6 +427,63 @@ control('an unreadable tsconfig is reported when an alias needs it', NEGATIVE, (
 
 /* ── reading nothing must not pass as finding nothing ────────────────────────────────────────── */
 
+control('a slot declared with a double-quoted value is still in the expected set', NEGATIVE, () => {
+  /* Carried across from PR #554's roster finding rather than waiting for it to be reported here.
+   * The pattern required the slot's VALUE to be single-quoted, so `navbar: "navbar"` was invisible
+   * — and this set is the whole anti-vacuity mechanism, so an invisible slot is one whose missing
+   * documentation row goes unreported. Driven on a fixture before fixing: the gate exited 0
+   * claiming it covered "every slot EXTENSION_SLOTS declares" while one was neither read nor
+   * documented. Worse than the sibling's version of the same class, which only hid a row. */
+  const sources = slotSources();
+  const key = 'libs/shared/extensions/src/lib/extension-slots.ts';
+  sources[key] = sources[key].replace("  navbar: 'navbar',", '  navbar: "navbar",');
+  const rows = SLOTS.filter((s) => s !== 'navbar').map((s) => [
+    `\`${s}\``,
+    'what it addresses',
+    'Resolves',
+  ]);
+  const proc = run(fixture({ doc: referenceDoc({ section2: slotTable(rows) }), sources }));
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /declares the slot `navbar` and section 2 .* has no readable state claim/s.test(proc.output),
+    `the double-quoted slot was dropped from the expected set:\n${proc.output.slice(-400)}`,
+  );
+});
+
+control('an EXTENSION_SLOTS entry no pattern can read is reported, not dropped', NEGATIVE, () => {
+  /* The class behind the control above, closed by a count the name pattern cannot influence: the
+   * entries of the object are counted separately, so a key shape nobody anticipated is a reported
+   * partial read rather than a quietly smaller expected set. */
+  const sources = slotSources();
+  const key = 'libs/shared/extensions/src/lib/extension-slots.ts';
+  sources[key] = sources[key].replace("  navbar: 'navbar',", "  navbar: ['nav', 'bar'].join(''),");
+  const proc = run(fixture({ sources }));
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /entr\(y\/ies\) in `EXTENSION_SLOTS` but .* readable slot name\(s\), so the expected set was read only partially/s.test(
+      proc.output,
+    ),
+    proc.output.slice(-400),
+  );
+});
+
+// A double-quoted component selector must still match its row, not fall through to a refusal.
+control('a double-quoted selector is matched against its row', POSITIVE, () => {
+  const proc = run(
+    fixture({
+      doc: referenceDoc({ section6b: [['`nxs.tabs.fxCard`', '`fx-card`', '`tabs`']] }),
+      sources: {
+        ...componentSources(),
+        'libs/fx/src/card.ts':
+          "import { Component } from '@angular/core';\n" +
+          '@Component({ selector: "fx-card", template: "" })\n' +
+          'export class FxCardComponent {}\n',
+      },
+    }),
+  );
+  expectExit(proc, 0, POSITIVE);
+});
+
 control('a fixture whose EXTENSION_SLOTS cannot be found is reported', NEGATIVE, () => {
   const root = fixture();
   rmSync(join(root, 'libs/shared/extensions/src/lib/extension-slots.ts'));

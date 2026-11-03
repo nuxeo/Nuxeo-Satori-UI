@@ -524,9 +524,39 @@ function declaredSlots() {
     fail(`${relative(ROOT, file)} has no \`export const EXTENSION_SLOTS = { … }\` block.`);
     return [];
   }
+  /**
+   * The slot names, read so that an entry this cannot parse cannot shrink the expected set.
+   *
+   * The pattern required the **value** to be single-quoted — `navbar: 'navbar'` matched,
+   * `navbar: "navbar"` did not. That is not cosmetic here: this set is the whole anti-vacuity
+   * mechanism, so a slot it misses is a slot whose missing documentation row goes unreported, and
+   * the verdict still reads *"cover every slot EXTENSION_SLOTS declares"*. Driven against a
+   * fixture: one slot written with a double-quoted value and its row deleted, and the gate exited
+   * 0 claiming it covered all of them.
+   *
+   * Found by applying PR #554's roster finding across the split rather than waiting for it to be
+   * reported here — the same class, in the sibling PR, with a worse consequence: there it
+   * under-read a roster and hid a missing row; here it under-read the expected set and made the
+   * coverage assertion itself vacuous.
+   *
+   * Any quote style now, and the count is cross-checked against the entries the block actually
+   * contains, so a key shape no pattern anticipates is reported rather than silently dropped.
+   */
+  const block = body.slice(open, close);
   const slots = [
-    ...body.slice(open, close).matchAll(/^\s*(?:'([^']+)'|([a-zA-Z][a-zA-Z0-9]*))\s*:\s*'/gm),
+    ...block.matchAll(/^\s*(?:['"`]([^'"`]+)['"`]|([A-Za-z_$][\w$]*))\s*:\s*['"`]/gm),
   ].map((m) => m[1] ?? m[2]);
+  // Every entry of the object, whatever its value looks like: `key:` or `'key':` at line start.
+  const entries = [...block.matchAll(/^\s*(?:['"`][^'"`]+['"`]|[A-Za-z_$][\w$]*)\s*:/gm)].length;
+  if (slots.length !== entries) {
+    fail(
+      `${relative(ROOT, file)} has ${entries} entr(y/ies) in \`EXTENSION_SLOTS\` but ` +
+        `${slots.length} readable slot name(s), so the expected set was read only partially.\n` +
+        '  A slot missing from that set is a slot whose absent documentation row would go ' +
+        'unreported, which is exactly what this check exists to prevent.',
+    );
+    return [];
+  }
   if (slots.length === 0) {
     fail(`${relative(ROOT, file)} yielded no slot names, so the table was compared to nothing.`);
   }
@@ -817,19 +847,19 @@ function selectorOf(className, registeringFile) {
     if (text === undefined) return null;
     const classAt = text.search(declaration);
     if (classAt !== -1) {
-      const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*'([^']+)'/g)];
+      const selectors = [...text.slice(0, classAt).matchAll(/selector:\s*['"`]([^'"`]+)['"`]/g)];
       return selectors.length === 0 ? null : selectors[selectors.length - 1][1];
     }
     if (depth > 0) return null;
     const reExport = new RegExp(
-      String.raw`export\s*(?:type\s*)?\{[^}]*\b${reEscape(className)}\b[^}]*\}\s*from\s*'([^']+)'`,
+      String.raw`export\s*(?:type\s*)?\{[^}]*\b${reEscape(className)}\b[^}]*\}\s*from\s*['"\`]([^'"\`]+)['"\`]`,
     ).exec(text);
     if (reExport) {
       const target = resolveModule(reExport[1], relative(ROOT, file));
       if (target) return readFrom(target, depth + 1);
     }
     // `export * from './x'` — try each, and accept the first that declares the class.
-    for (const star of text.matchAll(/export\s*\*\s*from\s*'([^']+)'/g)) {
+    for (const star of text.matchAll(/export\s*\*\s*from\s*['"`]([^'"`]+)['"`]/g)) {
       const target = resolveModule(star[1], relative(ROOT, file));
       const found = target && readFrom(target, depth + 1);
       if (found) return found;
@@ -843,7 +873,7 @@ function selectorOf(className, registeringFile) {
   const registering = sources.get(join(ROOT, registeringFile));
   if (registering !== undefined) {
     const imported = new RegExp(
-      String.raw`import\s*(?:type\s*)?\{[^}]*\b${reEscape(className)}\b[^}]*\}\s*from\s*'([^']+)'`,
+      String.raw`import\s*(?:type\s*)?\{[^}]*\b${reEscape(className)}\b[^}]*\}\s*from\s*['"\`]([^'"\`]+)['"\`]`,
     ).exec(registering);
     if (imported) {
       const resolved = resolveModule(imported[1], registeringFile);
