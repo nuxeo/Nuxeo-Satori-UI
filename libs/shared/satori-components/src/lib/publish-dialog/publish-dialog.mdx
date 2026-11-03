@@ -33,16 +33,22 @@ Publish both open.
 export const usageTs = `import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';
 import { nxsOpenPublishDialog } from '@nuxeo/satori-platform/components';
 
-const ref = await nxsOpenPublishDialog(this.dialog, inject(ExtensionComponentRegistry), {
-  documentUid: doc.uid,
-  documentTitle: doc.title,
-  versionLabel: '1.2',
-  versionableUid: liveUid,
-  renditions: [{ name: 'pdf', label: this.translate.instant('rendition.pdf') }],
-});
-ref?.afterClosed().subscribe((publication) => {
-  if (publication) this.reloadPublications();
-});`;
+// Fields: inject() runs in the injection context, not in the click handler.
+private readonly dialog = inject(MatDialog);
+private readonly components = inject(ExtensionComponentRegistry);
+
+async publish(doc: NuxeoDocument, liveUid: string): Promise<void> {
+  const ref = await nxsOpenPublishDialog(this.dialog, this.components, {
+    documentUid: doc.uid,
+    documentTitle: doc.title,
+    versionLabel: '1.2',
+    versionableUid: liveUid,
+    renditions: [{ name: 'pdf', label: this.translate.instant('rendition.pdf') }],
+  });
+  ref?.afterClosed().subscribe((publication) => {
+    if (publication) this.reloadPublications();
+  });
+}`;
 
 <Source language="typescript" dark code={usageTs} />
 
