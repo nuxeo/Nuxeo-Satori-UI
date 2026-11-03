@@ -7620,7 +7620,9 @@ function proseStringConstants(sources) {
 /**
  * A catalogue value must be the text a user sees.
  *
- * Two defects this caught, both shipped:
+ * Three defects this caught. The first two had **shipped** before anything looked for them; the
+ * third was stopped in the pull request that introduced it, which is the only reason it is not a
+ * fourth entry in the shipped list:
  *
  * `"Back to Users &amp; Groups"` — the extraction codemod copied the HTML SOURCE of a text node into
  * JSON. In HTML the browser decodes `&amp;`; through `{{ … | translate }}` Angular sets
@@ -7631,10 +7633,104 @@ function proseStringConstants(sources) {
  * `"Choose file(s)"` — an `(s)` suffix assumes a language pluralises by appending one letter. This
  * branch removed that shape from three other places and then created a new one in the catalogue,
  * where nothing was looking.
+ *
+ * `"…la suivante\u00a0:"` — a **double-escaped** Unicode escape, so the value holds the six
+ * characters `\u00a0` rather than the non-breaking space they denote, and the user reads the
+ * escape. Twelve French values arrived this way in the 2 November 2026 Crowdin pull; `main` had
+ * none, and no other language in the same pull had any. It is the same mistake as `&amp;` in a
+ * different notation — source syntax stored where rendered text belongs — and it is the reason
+ * this arm exists rather than being folded into the entity arm: nothing was looking for it, so
+ * the strings were gate-green and would have shipped visibly broken.
+ *
+ * ## The rejected set is the `\u` forms only, and that is a deliberate retreat
+ *
+ * This arm first rejected every escape that denotes a character: `\xNN` and the single-letter
+ * `\n`, `\t`, `\r`, `\b`, `\f`, `\v`, `\0` as well. Review of #549 killed those, correctly. A
+ * Windows or UNC path begins a segment with an escape letter often enough to be ordinary —
+ * `C:\temp`, `C:\new`, `C:\var`, `\\nas\files`, `\\host\x64\bin` — and a catalogue value is
+ * allowed to contain a path, so the rule was flagging legitimate text and its diagnostic told the
+ * author to corrupt it.
+ *
+ * No regex over the value can separate the two: `"Ligne un\nLigne deux"` and `"C:\new"` are the
+ * same string shape, and the difference is intent. A heuristic guessing at it would be a rule
+ * whose real behaviour nobody could predict — the objection this file already makes to
+ * `common.date-mask` below.
+ *
+ * `\uXXXX` and `\u{…}` survive because the collision is not real for them: a path segment would
+ * have to begin with four hex digits after the `u`. `C:\users` does not match (`sers` is not
+ * hex), and the shapes that would are not directory names anyone writes. The braced form is
+ * safer still — the `u` before the brace is mandatory, so `C:\{abc}` never matched it — which is
+ * why its digit count is left open rather than capped. `\u{…}` permits leading zeros, and a cap
+ * of six read straight past `\u{00000a0}`, a plain spelling of a non-breaking space.
+ *
+ * **What that leaves uncovered, stated rather than implied:** a double-escaped `\n` or `\t` in a
+ * catalogue value now passes this gate. It is a real defect and nothing here catches it. The
+ * trade is deliberate — no catalogue has ever carried one, every observed instance of this class
+ * was `\uXXXX`, and a gate that corrupts valid paths to cover a hypothetical is the worse of the
+ * two failures.
+ *
+ * Which is also why the positive controls name `C:\temp` and `\\nas\files` specifically. The
+ * first pair were `C:\Users` and `\\server\share`, which passed only because `U` and `s` are not
+ * escape letters — two examples chosen by the author, generalised from, and green for a reason
+ * that had nothing to do with the rule being right.
+ *
+ * (No catalogue count in this docstring on purpose — it changes with every language that lands,
+ * so a figure written here would be wrong within a week.)
  */
 function checkCatalogueValuesAreRenderable() {
   const ENTITY = /&(?:[a-zA-Z]+|#\d+);/;
   const PLURAL_SUFFIX = /\(s\)/;
+  // A `\u` escape left undecoded. Only the `\u` forms, for a reason worth keeping: `\n`, `\t`,
+  // `\v`, `\f`, `\b`, `\0` and `\xNN` are indistinguishable from an ordinary Windows or UNC path
+  // segment — `C:\temp`, `C:\new`, `C:\var`, `\\nas\files`, `\\host\x64\bin` all begin a segment
+  // with an escape letter — and no regex over the value alone can tell `"Ligne un\nLigne deux"`
+  // from `"C:\new"`, because they are the same string shape. So those arms are out; see the
+  // docstring for what that leaves uncovered.
+  //
+  // The braced form takes **any** number of hex digits, not six: `\u{…}` permits leading zeros, so
+  // `\u{00000a0}` is a perfectly ordinary spelling of a non-breaking space and a `{1,6}` cap read
+  // straight past it (#549 review). Widening cannot cost a false positive, because the `u` before
+  // the brace is mandatory — a path like `C:\{abc}` has no `u` and never matched. The range check
+  // below is what keeps the open-ended digits safe.
+  const UNDECODED_ESCAPE = /\\u(?:\{[0-9a-fA-F]+\}|[0-9a-fA-F]{4})/;
+
+  const MAX_CODE_POINT = 0x10ffff;
+  const NOTABLE_CODE_POINTS = {
+    0x00a0: 'a non-breaking space (U+00A0)',
+    0x202f: 'a narrow no-break space (U+202F)',
+    0x2009: 'a thin space (U+2009)',
+  };
+
+  /**
+   * What the escape was meant to be, so the message says what to store instead.
+   *
+   * The range check is not defensive padding: the braced form takes any number of hex digits, far
+   * above Unicode's `U+10FFFF`, and `String.fromCodePoint` throws `RangeError` beyond it. That
+   * threw from inside the diagnostic, so one catalogue holding `\u{110000}` aborted the whole
+   * runner before it printed the failures it had already collected or ran the remaining checks — a
+   * reporting path that destroys the report (#549 review). Out of range is still an undecoded
+   * escape and still fails; it just says so instead of crashing.
+   *
+   * Enough digits overflow `parseInt` to `Infinity`, so the message is built from the digits as
+   * written rather than from the parsed number — `U+INFINITY` would be a nonsense diagnostic.
+   */
+  const decodeEscape = (escape) => {
+    const hex = /^\\u\{?([0-9a-fA-F]+)\}?$/.exec(escape);
+    if (!hex) return 'a character';
+    const code = parseInt(hex[1], 16);
+    if (!Number.isFinite(code) || code > MAX_CODE_POINT) {
+      // Elided because the digits are open-ended: a value could carry hundreds of them, and a
+      // diagnostic that pastes them all is unreadable at exactly the moment it is being read.
+      const digits = hex[1].toUpperCase();
+      const shown =
+        digits.length > 12 ? `${digits.slice(0, 12)}… (${digits.length} digits)` : digits;
+      return `a code point above Unicode's maximum (0x${shown}, max U+10FFFF), so it denotes nothing at all`;
+    }
+    return (
+      NOTABLE_CODE_POINTS[code] ??
+      `U+${code.toString(16).toUpperCase().padStart(4, '0')} ("${String.fromCodePoint(code)}")`
+    );
+  };
 
   const isCatalogue = (path) =>
     /(^|\/)i18n\/[a-z]{2}(-[A-Za-z]{2,4})?\.json$/.test(path) && !isGeneratedLocale(path);
@@ -7679,6 +7775,15 @@ function checkCatalogueValuesAreRenderable() {
           `${file} maps \`${key}\` to "${value}", which pluralises with an \`(s)\` suffix. That ` +
             'assumes a language forms its plural by appending one letter, and most do not. Use a ' +
             'key per grammatical number, chosen by a branch at the call site.',
+        );
+      }
+      const escape = UNDECODED_ESCAPE.exec(value);
+      if (escape) {
+        fail(
+          `${file} maps \`${key}\` to "${value}", which contains the literal characters ` +
+            `\`${escape[0]}\` rather than ${decodeEscape(escape[0])}. The value is already a ` +
+            'decoded JSON string, so an escape surviving into it was double-escaped at the ' +
+            'source and the user reads the escape itself. Store the character.',
         );
       }
     }
