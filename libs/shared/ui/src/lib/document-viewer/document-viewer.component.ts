@@ -17,7 +17,14 @@ import { CdkAriaLive } from '@angular/cdk/a11y';
 // divergence between them would be a bypass.
 import { mediaTypeEssence } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
-import { NxsSpinnerComponent } from '@nuxeo/satori-platform/components';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
+import {
+  NXS_STORYBOARD_ID,
+  NxsStoryboardComponent,
+  NxsSpinnerComponent,
+  nxsFormatTimecode,
+  type NxsStoryboardItem,
+} from '@nuxeo/satori-platform/components';
 
 export interface VideoSource {
   /**
@@ -30,11 +37,21 @@ export interface VideoSource {
   label?: string;
 }
 
-export interface StoryboardItem {
-  timecode: number;
-  thumbnailUrl: string | null;
-  label: string;
-}
+/**
+ * One frame of a video's storyboard.
+ *
+ * Derived from the storyboard component's own `NxsStoryboardItem`, not a second copy of it: the
+ * viewer passes these straight through to `nxs-storyboard`, and two structurally identical
+ * declarations are two things to keep in step for no benefit. Kept under this name because it is
+ * part of this package's published surface.
+ *
+ * The fields are stripped of `readonly` rather than aliased straight through. This name was
+ * published with writable fields, and a consumer that fills in a frame's `thumbnailUrl` after
+ * fetching the blob — which is exactly what `document-detail` does with the objects it builds —
+ * would stop compiling if the alias made them readonly. A mutable object still satisfies the
+ * component's `readonly NxsStoryboardItem[]` input, so nothing is lost by keeping the promise.
+ */
+export type StoryboardItem = { -readonly [K in keyof NxsStoryboardItem]: NxsStoryboardItem[K] };
 
 export interface PictureInfo {
   width: number;
@@ -101,7 +118,9 @@ export interface VideoInfo {
   selector: 'lib-document-viewer',
   standalone: true,
   imports: [
+    ExtensionOutletComponent,
     NxsSpinnerComponent,
+    NxsStoryboardComponent,
     TranslatePipe,
     MatIconModule,
     MatButtonModule,
@@ -280,6 +299,19 @@ export class DocumentViewerComponent {
       this.contentType() === 'video' &&
       this.storyboard().length > 0,
   );
+
+  /** The ID the storyboard strip is rendered under, so a customer library can replace it. */
+  protected readonly storyboardId = NXS_STORYBOARD_ID;
+  /**
+   * What a storyboard registered under that ID is given. `seekHandler` rather than a `seek` binding
+   * because `lib-extension-outlet` sets inputs only and cannot bind an output.
+   */
+  protected readonly storyboardInputs = computed(() => ({
+    items: this.storyboard(),
+    seekHandler: this.seekToTimecode,
+  }));
+
+  private readonly seekToTimecode = (timecode: number): void => this.seekTo(timecode);
   readonly showPictureCards = computed(
     () =>
       !this.annotationsTab() &&
@@ -369,10 +401,13 @@ export class DocumentViewerComponent {
     this.storyboardSeek.emit(timecode);
   }
 
+  /**
+   * `m:ss`. The storyboard strip formats its own timecodes now, so this is kept for callers that
+   * label a video moment elsewhere, and it delegates rather than keeping a second implementation
+   * of the same arithmetic.
+   */
   formatTimecode(seconds: number): string {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    return nxsFormatTimecode(seconds);
   }
 
   formatDuration(seconds: number): string {

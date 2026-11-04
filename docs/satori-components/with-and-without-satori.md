@@ -910,6 +910,45 @@ One workflow task and what the user can do with it: its actions, abandon, delega
 
 The trash at `/trash`, as a table with a row menu for Restore and Delete permanently. The same component in both: the theme sets the type, the colours and the shape of the controls. Its cards and type tags render the `nxs.primitives.card` and `nxs.primitives.tag` registrations, which are Satori's own components where `components-satori` is provided.
 
+### Storyboard
+
+| Field           | Value                                |
+| --------------- | ------------------------------------ |
+| Component       | `NxsStoryboardComponent`             |
+| Registered ID   | `nxs.components.storyboard`          |
+| With Satori     | Same component; theme only           |
+| Storybook story | `media-storyboard--video-storyboard` |
+
+![Storyboard: without Satori on the left, with Satori on the right](storyboard-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The strip of frames under a video that seeks it, one button per frame with its timecode. The same component in both: the theme sets the type and the focus ring, and the strip takes the inverse surface either way, because it sits under a video. A frame whose thumbnail has not arrived shows a placeholder rather than a broken image, in both.
+
+### Asset grid
+
+| Field           | Value                               |
+| --------------- | ----------------------------------- |
+| Component       | `NxsAssetGridComponent`             |
+| Registered ID   | `nxs.components.assetGrid`          |
+| With Satori     | Same component; theme only          |
+| Storybook story | `tables-asset-grid--search-results` |
+
+![Asset grid: without Satori on the left, with Satori on the right](asset-grid-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The grid view of the asset search screen: a thumbnail, the document's name and its type as a pill, with a checkbox that appears on hover, on focus and while selected. The same component in both: the theme sets the type, the card's shape and the checkbox's style.
+
+### Asset facets drawer
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsAssetFacetsDrawerComponent`             |
+| Registered ID   | `nxs.components.assetFacetsDrawer`          |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `search-asset-facets-drawer--asset-filters` |
+
+![Asset facets drawer: without Satori on the left, with Satori on the right](asset-facets-drawer-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The faceted filter panel inside the assets drawer: a full-text box, a collapsible group per facet with its result counts, and a footer that resets, saves the search or runs it. The same component in both; the theme sets the type, the switch and the buttons.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -1021,6 +1060,9 @@ The components in the library today:
 | Publish dialog                  | `nxs.components.publishDialog` (the library defines the ID; our app registers it, `provideNxsComponents()` does not)         | Same component; theme only   |
 | Task detail                     | `nxs.components.taskDetail`                                                                                                  | Same component; theme only   |
 | Trash list                      | `nxs.components.trashList`                                                                                                   | Same component; theme only   |
+| Storyboard                      | `nxs.components.storyboard`                                                                                                  | Same component; theme only   |
+| Asset grid                      | `nxs.components.assetGrid`                                                                                                   | Same component; theme only   |
+| Asset facets drawer             | `nxs.components.assetFacetsDrawer`                                                                                           | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

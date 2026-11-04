@@ -247,161 +247,49 @@
   }
 }
 
-.filters-section {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 0;
-}
-
-.filters-heading {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #999;
-  padding: 4px 16px 8px;
-  margin: 0;
-}
-
-.filter-group {
-  border-bottom: 1px solid #f5f5f5;
-  padding: 10px 16px 12px;
-}
-
-.filter-title {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #333;
-}
-
-.filter-input-wrap {
-  position: relative;
-}
-
-.filter-input {
-  width: 100%;
-  border: none;
-  border-bottom: 1px solid #4c4b67;
-  background: transparent;
-  font-size: 14px;
-  color: #333;
-  padding: 0 28px 8px 0;
-  outline: none;
-  box-sizing: border-box;
-
-  &::placeholder {
-    color: #aaa;
-  }
-
-  &:focus {
-    border-bottom-color: #3f51b5;
-  }
-}
-
-.clear-btn {
-  position: absolute;
-  right: 0;
-  bottom: 4px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  padding: 0;
-
-  mat-icon {
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
-    color: #999;
-  }
-}
-
-.filter-btn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 2px 0 4px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: #333;
-
-  &:hover {
-    background: #f5f5f5;
-  }
-}
-
-.filter-btn-label {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.filter-btn-icon {
-  font-size: 20px;
-  width: 20px;
-  height: 20px;
-  color: #666;
-  flex-shrink: 0;
-}
-
-.filter-options {
-  display: flex;
-  flex-direction: column;
-  padding: 4px 0 0;
-  gap: 4px;
-}
-
-.filter-checkbox {
-  display: block;
-}
-
-.filter-no-results {
-  font-size: 12px;
-  color: #aaa;
-  padding: 4px 0;
-  display: block;
-}
-
-.drawer-footer {
-  flex-shrink: 0;
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.footer-toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.footer-toggle-label {
-  font-size: 13px;
-  color: #444;
-  font-weight: 500;
-}
-
-.footer-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.footer-btn {
-  flex: 1;
-}
-
 .reset-btn {
   flex: 1;
 }
 
 .save-as-btn {
   background: var(--mat-sys-primary, #3f51b5);
-  color: #fff;
+  /* Paired with the `primary` background above, so it has to follow a customer's primary into
+     whatever contrasts with it. Hardcoded white went unnoticed while the default primary was dark;
+     a light one leaves this label unreadable. */
+  color: var(--mat-sys-on-primary, #fff);
 }
 
 .search-btn {
   flex: 1;
+}
+
+/* The facets themselves are `nxs-asset-facets-drawer`, rendered through
+   `nxs.components.assetFacetsDrawer`. This is the box it fills: the panel lays its own filters out,
+   the drawer decides how much room they get. */
+.facets-host {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+/* The panel is hidden rather than destroyed while the queue is showing, so that which group is open
+   survives the toggle. `display: flex` above is an author rule and the `hidden` attribute's
+   `display: none` is a user-agent one, so without this the attribute would do nothing at all. */
+.facets-host[hidden] {
+  display: none;
+}
+
+/* The constrained column has to reach the panel itself, not stop at this box. The panel scrolls its
+   filters with `overflow-y: auto`, which does nothing unless something above it caps the height —
+   and the drawer around this box is `overflow: hidden`, so without the cap enough open groups push
+   Search and Reset past the bottom edge and out of reach rather than scrolling.
+
+   `display: contents` rather than `flex: 1` on the outlet, because the outlet element is in the
+   template whether or not it resolved: given a share of the height it would claim one while empty,
+   and the packaged fallback beside it would get the rest. With `contents` the outlet has no box at
+   all — nothing when it renders nothing, and the component it renders becomes the flex item here,
+   sized by its own `:host`, exactly as the fallback element is. */
+.facets-host > lib-extension-outlet {
+  display: contents;
 }

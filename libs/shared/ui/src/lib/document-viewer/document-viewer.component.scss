@@ -296,50 +296,6 @@
   }
 }
 
-/* ─── Storyboard ─── */
-.viewer-storyboard {
-  display: flex;
-  gap: 8px;
-  padding: 8px 12px;
-  overflow-x: auto;
-  background: #1a1a1a;
-  flex-shrink: 0;
-  scrollbar-width: thin;
-  scrollbar-color: #555 #1a1a1a;
-}
-
-.storyboard-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  border: 2px solid transparent;
-  border-radius: 4px;
-  padding: 4px;
-  background: none;
-  transition: border-color 0.15s;
-  flex-shrink: 0;
-
-  &:hover {
-    border-color: #0073e6;
-  }
-}
-
-.storyboard-thumb {
-  width: 120px;
-  height: 68px;
-  object-fit: cover;
-  border-radius: 2px;
-  background: #333;
-}
-
-.storyboard-time {
-  font-size: 11px;
-  color: #aaa;
-  font-family: monospace;
-}
-
 /* ─── Image toolbar ─── */
 .viewer-toolbar {
   display: flex;

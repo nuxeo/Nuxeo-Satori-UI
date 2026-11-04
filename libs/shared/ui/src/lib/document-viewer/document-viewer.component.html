@@ -104,21 +104,17 @@
     }
   </div>
 
-  <!-- Video storyboard -->
+  <!-- Video storyboard. Rendered through its ID so a customer library can replace the strip; the
+       packaged component follows when nothing is registered. -->
   @if (showVideoStoryboard()) {
-    <div class="viewer-storyboard">
-      @for (item of storyboard(); track item.timecode) {
-        <button
-          type="button"
-          class="storyboard-item"
-          [matTooltip]="item.label || formatTimecode(item.timecode)"
-          (click)="seekTo(item.timecode)"
-        >
-          <img [src]="item.thumbnailUrl" [alt]="item.label" class="storyboard-thumb" />
-          <span class="storyboard-time">{{ formatTimecode(item.timecode) }}</span>
-        </button>
-      }
-    </div>
+    <lib-extension-outlet
+      #storyboardOutlet
+      [componentId]="storyboardId"
+      [componentInputs]="storyboardInputs()"
+    />
+    @if (storyboardOutlet.unresolved()) {
+      <nxs-storyboard [items]="storyboard()" (seek)="seekTo($event)" />
+    }
   }
 
   <!-- Image toolbar (zoom/rotate) -->

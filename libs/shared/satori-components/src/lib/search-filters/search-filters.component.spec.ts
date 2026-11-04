@@ -212,6 +212,9 @@ describe('NxsSearchFiltersComponent', () => {
       const nature = toggle('Nature');
       expect(nature.getAttribute('aria-expanded')).toBe('false');
       expect(checkboxes('Nature')).toHaveLength(0);
+      // The options element exists only while the group is open, so `aria-controls` has to go with
+      // it rather than naming an element that is not in the document.
+      expect(nature.hasAttribute('aria-controls')).toBe(false);
 
       nature.click();
       await render();
@@ -227,6 +230,7 @@ describe('NxsSearchFiltersComponent', () => {
       nature.click();
       await render();
       expect(checkboxes('Nature')).toHaveLength(0);
+      expect(nature.hasAttribute('aria-controls')).toBe(false);
     });
 
     it('says a terms group has nothing to choose when the server returned no bucket', async () => {

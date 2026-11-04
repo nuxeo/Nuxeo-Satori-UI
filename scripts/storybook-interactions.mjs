@@ -43,7 +43,7 @@
  *
  * Usage:
  *   node scripts/storybook-interactions.mjs [--dir dist/storybook/satori-components]
- *     [--port 6231] [--story-timeout 20000] [--budget 600000] [--only <id-part>] [--json <file>]
+ *     [--port 6231] [--story-timeout 20000] [--budget 900000] [--only <id-part>] [--json <file>]
  *
  * Exit 0 all stories passed, 1 a story failed or the budget ran out, 2 nothing could be run.
  */
@@ -68,7 +68,10 @@ const ROOT = resolve(import.meta.dirname, '..');
 const dir = resolve(ROOT, option('--dir', 'dist/storybook/satori-components'));
 const port = Number(option('--port', process.env.STORYBOOK_INTERACTIONS_PORT ?? '6231'));
 const storyTimeout = Number(option('--story-timeout', '20000'));
-const budget = Number(option('--budget', '600000'));
+// A wall clock over a suite that grows with the library: every story added tightens it. Raised
+// from 600000 by NXSAT-331, when `main` ran 300 stories in 582.2 s and eighteen new ones stranded
+// 61 behind it. At that run's 1.94 s per story this is reached at roughly 464. See ci.yml.
+const budget = Number(option('--budget', '900000'));
 const only = option('--only', null);
 const jsonOut = option('--json', null);
 

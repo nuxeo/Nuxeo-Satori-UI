@@ -80,107 +80,34 @@
 
 <mat-divider />
 
-@if (viewMode() === 'filter') {
-  <div class="filters-section">
-    <p class="filters-heading">{{ 'assets.assets-drawer.filters' | translate }}</p>
+<!-- The facets themselves are `nxs-asset-facets-drawer`, rendered through
+     `nxs.components.assetFacetsDrawer` so a customer library can replace the panel without
+     reimplementing the saved searches and the queue around it. The packaged component follows when
+     nothing is registered.
 
-    <div class="filter-group">
-      <p class="filter-title">{{ 'assets.assets-drawer.full-text' | translate }}</p>
-      <div class="filter-input-wrap">
-        <input
-          class="filter-input"
-          type="text"
-          [placeholder]="'assets.assets-drawer.search-for-something' | translate"
-          [value]="secondarySearchInput()"
-          (input)="onSecondarySearchInput($any($event.target).value)"
-          (keydown.enter)="onSecondarySearchEnter()"
-        />
-        @if (secondarySearchInput().trim()) {
-          <button class="clear-btn" type="button" (click)="onSecondarySearchClear()">
-            <mat-icon svgIcon="x_large" />
-          </button>
-        }
-      </div>
-    </div>
-
-    @for (group of filterGroups(); track group.id) {
-      <div class="filter-group">
-        <button class="filter-btn" type="button" (click)="toggleFilter(group.id)">
-          <span class="filter-btn-label">{{ group | descriptorLabel }}</span>
-          <mat-icon
-            class="filter-btn-icon"
-            [svgIcon]="isExpanded(group.id) ? 'chevron_up' : 'chevron_down'"
-          />
-        </button>
-
-        @if (isExpanded(group.id)) {
-          <div class="filter-options">
-            @if (dynamicGroups.has(group.id) && group.options.length === 0) {
-              <span class="filter-no-results">{{
-                'assets.assets-drawer.no-available-results' | translate
-              }}</span>
-            } @else {
-              @for (option of group.options; track option.value) {
-                <mat-checkbox
-                  [checked]="option.selected"
-                  (change)="toggleOption(group.id, option.value)"
-                  class="filter-checkbox"
-                >
-                  {{ option | descriptorLabel }}{{ getCountText(group.id, option.aggKey) }}
-                </mat-checkbox>
-              }
-            }
-          </div>
-        }
-      </div>
-    }
-  </div>
-
-  <mat-divider />
-
-  <div class="drawer-footer">
-    <div class="footer-toggle-row">
-      <span class="footer-toggle-label">{{ 'assets.assets-drawer.auto-search' | translate }}</span>
-      <mat-slide-toggle
-        [checked]="autoSearch()"
-        (change)="autoSearch.set($event.checked)"
-        color="primary"
-      />
-    </div>
-
-    <div class="footer-actions">
-      <button
-        mat-stroked-button
-        class="footer-btn reset-btn"
-        type="button"
-        (click)="resetFilters()"
-      >
-        {{ 'assets.assets-drawer.reset' | translate }}
-      </button>
-      <button
-        mat-flat-button
-        color="primary"
-        class="footer-btn save-as-btn"
-        type="button"
-        [disabled]="!hasActiveFilters()"
-        (click)="openSaveAsDialog()"
-      >
-        {{ 'assets.assets-drawer.save-as' | translate }}
-      </button>
-      @if (!autoSearch()) {
-        <button
-          mat-flat-button
-          color="primary"
-          class="footer-btn search-btn"
-          type="button"
-          (click)="applySearch()"
-        >
-          {{ 'assets.assets-drawer.search-2' | translate }}
-        </button>
-      }
-    </div>
-  </div>
-}
+     Hidden rather than removed while the queue is showing. Which group is open is the panel's own
+     state, so an `@if` here would destroy the panel on every toggle and reseed it from
+     `initiallyExpandedGroupIds` — a user who collapsed everything, glanced at the queue and came
+     back would find Asset Type open again. `[hidden]` keeps the one instance, and its state, alive.
+     `.facets-host[hidden]` restates `display: none`, because the author `display: flex` beside it
+     would otherwise beat the attribute's user-agent rule. -->
+<div class="facets-host" [hidden]="viewMode() !== 'filter'">
+  <lib-extension-outlet #facetsOutlet [componentId]="facetsId" [componentInputs]="facetsInputs()" />
+  @if (facetsOutlet.unresolved()) {
+    <nxs-asset-facets-drawer
+      [groups]="facetsInputs().groups"
+      [fullText]="facetsInputs().fullText"
+      [autoSearch]="facetsInputs().autoSearch"
+      [canSaveAs]="facetsInputs().canSaveAs"
+      [initiallyExpandedGroupIds]="facetsInputs().initiallyExpandedGroupIds"
+      (fullTextChange)="onSecondarySearchInput($event)"
+      (fullTextSubmit)="onSecondarySearchEnter($event)"
+      (optionToggle)="toggleOption($event.groupId, $event.value)"
+      (autoSearchChange)="autoSearch.set($event)"
+      (action)="onFacetsAction($event)"
+    />
+  }
+</div>
 
 @if (viewMode() === 'queue') {
   <lib-assets-queue
