@@ -50,6 +50,24 @@ passes straight in — or a list. The grid's own words, its name and each checkb
 translated under `satori-components.asset-grid.*`, and `providePlatformEnglishFallback()` supplies
 the English when your catalogue does not.
 
+### By registered ID
+
+Its ID is `NXS_ASSET_GRID_ID`, `nxs.components.assetGrid`. The asset search screen renders the grid
+through that ID with `lib-extension-outlet` and falls back to `nxs-asset-grid` when nothing resolves,
+so registering your own component replaces the cards without reimplementing the query, the selection
+or the saved searches around them:
+
+export const registration = `provideSatoriExtensions({
+  components: { 'nxs.components.assetGrid': AcmeAssetGridComponent },
+});`;
+
+<Source language="typescript" dark code={registration} />
+
+Your component receives the same inputs, and the two events as `openHandler` and
+`selectionToggleHandler` callback inputs instead, because the outlet binds inputs only and can bind
+no output. `selectedIds` still arrives from the screen's `SelectionService`, so report a toggle and
+the new set comes back — a grid that keeps its own selection will disagree with the selection bar.
+
 ## Where its data comes from
 
 Nothing. Build an `NxsAssetCard` per document from a search result: `id` from `uid`, `name` from

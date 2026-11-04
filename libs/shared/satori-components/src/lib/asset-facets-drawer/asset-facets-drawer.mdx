@@ -45,17 +45,47 @@ export const usageHtml = `<nxs-asset-facets-drawer
   [fullText]="fullText()"
   [autoSearch]="autoSearch()"
   [canSaveAs]="hasActiveFilters()"
+  (fullTextChange)="fullText.set($event)"
+  (fullTextSubmit)="search($event)"
   (optionToggle)="toggle($event.groupId, $event.value)"
+  (autoSearchChange)="autoSearch.set($event)"
   (action)="run($event)"
 />`;
 
 <Source language="html" dark code={usageHtml} />
 
-Every input is optional. The panel's own words are translated under
+Every input is optional, but **the events are not, once you bind the input they report.** The panel
+owns no query and no mode: `autoSearch` is read straight from its input, and `fullText` seeds the box
+and is then the panel's to display. So binding `[autoSearch]` without listening to
+`autoSearchChange` leaves a switch that moves, reports, and is redrawn from the unchanged input —
+announcing `aria-checked="false"` while every facet change still searches at once. Binding
+`[fullText]` without listening to `fullTextSubmit` leaves a box that types and never searches,
+because Enter and Clear report a submission nobody acts on.
+
+The panel's own words are translated under
 `satori-components.asset-facets-drawer.*`, and `providePlatformEnglishFallback()` supplies the
 English when your catalogue does not. **The facet labels are not**: they arrive already translated,
 because only the host knows whether a choice is a vocabulary entry to look up, a MIME type to show
 as-is, or a range with a name of its own.
+
+### By registered ID
+
+Its ID is `NXS_ASSET_FACETS_DRAWER_ID`, `nxs.components.assetFacetsDrawer`. The assets drawer renders
+the panel through that ID with `lib-extension-outlet` and falls back to `nxs-asset-facets-drawer`
+when nothing resolves, so registering your own component replaces the facets without reimplementing
+the saved searches above them or the upload queue beside them:
+
+export const registration = `provideSatoriExtensions({
+  components: { 'nxs.components.assetFacetsDrawer': AcmeFacetsComponent },
+});`;
+
+<Source language="typescript" dark code={registration} />
+
+Your component receives the same inputs, and the five events as callback inputs instead —
+`fullTextChangeHandler`, `fullTextSubmitHandler`, `optionToggleHandler`, `autoSearchChangeHandler`
+and `actionHandler` — because the outlet binds inputs only and can bind no output. The packaged panel
+does both on every interaction, so neither path is the special case. `fullTextSubmitHandler` is
+passed the submitted text, so a panel that buffers edits until Enter needs no preceding change call.
 
 ## Where its data comes from
 

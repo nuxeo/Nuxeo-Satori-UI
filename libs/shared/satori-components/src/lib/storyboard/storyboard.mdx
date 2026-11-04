@@ -40,6 +40,24 @@ Every input is optional. The component's own words — the list's name and each 
 translated with ngx-translate under `satori-components.storyboard.*`, and
 `providePlatformEnglishFallback()` supplies the English when your catalogue does not.
 
+### By registered ID
+
+Its ID is `NXS_STORYBOARD_ID`, `nxs.components.storyboard`. The document viewer renders the strip
+through that ID with `lib-extension-outlet` and falls back to `nxs-storyboard` when nothing resolves,
+so registering your own component replaces it wherever the viewer shows a video:
+
+export const registration = `provideSatoriExtensions({
+  components: { 'nxs.components.storyboard': AcmeStoryboardComponent },
+});`;
+
+<Source language="typescript" dark code={registration} />
+
+Your component receives `items`, and `seek` as a `seekHandler` callback input instead, because the
+outlet binds inputs only and can bind no output. **That callback is the only way the viewer seeks**:
+a replacement that takes `items` but ignores `seekHandler` draws frames that click and do nothing.
+The viewer passes no `activeTimecode`, so no frame is marked current there — the input is for hosts
+that track the player's position themselves.
+
 ## Where its data comes from
 
 The storyboard reads nothing and fetches nothing. Pass it the frames you already have.
