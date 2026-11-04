@@ -159,6 +159,19 @@ jobs:
       - name: Publication gate, on the Material build
         run: node scripts/storybook-publication-gate.mjs "$MATERIAL_DIR"
 
+      # On BOTH builds, unlike the gate above: this one is about the catalogue going stale against
+      # the bundle that reads it, which has nothing to do with Satori and everything to do with
+      # being published. `/satori` is ungated for redistribution on purpose; it is not exempt from
+      # serving its own readers untranslated chrome.
+      #
+      # Here rather than only in ci.yml because this is the workflow that publishes. The defect it
+      # refuses is invisible in any single build and only appears once a deploy lands on top of a
+      # previous one — see the script's header for the 2026-11-04 instance.
+      - name: Catalogue cannot be served stale, on both builds
+        run: |
+          node scripts/storybook-catalogue-cache.mjs "$MATERIAL_DIR"
+          node scripts/storybook-catalogue-cache.mjs "$SATORI_DIR"
+
       # Refuses a missing or empty build, so a renamed outputDir cannot publish a blank site, and
       # writes nothing at all unless both builds pass. Controls: `storybook-assemble-selftest`.
       - name: Assemble the site

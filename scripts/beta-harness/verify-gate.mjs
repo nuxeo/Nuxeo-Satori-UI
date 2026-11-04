@@ -565,6 +565,17 @@ const ALL_GATES = [
     argv: ['scripts/storybook-publication-gate.selftest.mjs'],
     echoOnPass: true,
   },
+  // The controls of the gate that stops a published catalogue being served stale to the bundle
+  // that reads it. Same shape as the one above: the gate itself needs a Storybook build, so it
+  // runs in CI and in storybook-pages.yml, and only its controls run here.
+  {
+    id: 'storybook-catalogue-cache-selftest',
+    platformSensitive: true,
+    label: 'Storybook catalogue cache controls',
+    cmd: 'node',
+    argv: ['scripts/storybook-catalogue-cache.selftest.mjs'],
+    echoOnPass: true,
+  },
   // The controls of the script that lays the published site out. It runs on real Storybook builds
   // in storybook-pages.yml, so like the gate above only its controls run here — they drive it
   // through stub builds instead, because what is under test is the laying-out, not the building.
