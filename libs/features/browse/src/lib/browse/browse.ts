@@ -1054,6 +1054,11 @@ export class BrowseComponent {
           // actions in the header, its count, nor the end of the trail. The same folder failing
           // on another page or order keeps them.
           if (payload.nuxeoPath !== this.openedPath) {
+            // Including a permissions read still in flight for it. A Permissions tab opened while
+            // this listing was on its way read the folder the user had left, and an answer that
+            // outlived the failure would hand that folder's ACL and rights back under an address
+            // that never opened.
+            this.invalidatePermissions();
             this.openedPath = null;
             this.currentDoc.set(null);
             this.entries.set([]);
@@ -2593,8 +2598,7 @@ export class BrowseComponent {
       .subscribe({
         next: (updated) => {
           if (request !== this.permissionsRequest) return;
-          this.applyPermissionsDoc(updated);
-          this.permissionsLoaded.set(true);
+          this.permissionsLoaded.set(this.applyPermissionsDoc(updated));
           this.permissionsLoading.set(false);
         },
         error: () => {
@@ -2605,17 +2609,20 @@ export class BrowseComponent {
       });
   }
 
-  private applyPermissionsDoc(updated: NuxeoDocument): void {
+  /** Merges a permissions read into the folder on screen. Returns false if there is none left. */
+  private applyPermissionsDoc(updated: NuxeoDocument): boolean {
+    const existing = this.currentDoc();
+    // Every outcome that takes a folder off screen invalidates its permissions read, so a read
+    // that is still current always has a document to merge into. Dropping rather than installing
+    // keeps that true the next time an outcome is added: the cost of forgetting is a panel with
+    // no permissions in it, not the folder the user left reappearing under another one's address.
+    if (!existing) return false;
     const visible = updated.contextParameters?.['userVisiblePermissions'];
     this.typeRights.set(
       Array.isArray(visible) ? { uid: updated.uid, permissions: visible as string[] } : null,
     );
-    const existing = this.currentDoc();
-    if (!existing) {
-      this.currentDoc.set(updated);
-      return;
-    }
     this.currentDoc.set(mergeDocumentPermissionsContext(existing, updated));
+    return true;
   }
 
   private reloadPermissions(): void {

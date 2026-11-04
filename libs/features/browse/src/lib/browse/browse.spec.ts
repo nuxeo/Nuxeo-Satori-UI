@@ -6,7 +6,7 @@ import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { vi } from 'vitest';
-import { EMPTY, of, throwError } from 'rxjs';
+import { EMPTY, of, Subject, throwError } from 'rxjs';
 import { BrowseComponent } from './browse';
 import {
   BrowseService,
@@ -917,5 +917,64 @@ describe('BrowseComponent', () => {
     expect(mockDocumentDetailService.getDocumentPermissions).toHaveBeenCalledTimes(2);
     expect(component.permissionsLoaded()).toBe(true);
     expect(component.permissionsLoading()).toBe(false);
+  });
+
+  it('discards a permissions read for the folder left behind when the next listing fails', () => {
+    // Folder A is open: its listing succeeded, so it is on screen and it is `openedPath`.
+    const folderA = doc({ uid: 'folder-a', title: 'Folder A', path: '/default-domain/folder-a' });
+    mockBrowseService.getBrowseFolderContents.mockReturnValue(
+      of({ folder: folderA, entries: [], totalSize: 0 }),
+    );
+    mockBrowseService.getFolderContext.mockReturnValue(of(folderA));
+    component['currentNuxeoPath'] = '/default-domain/folder-a';
+    component.loadContent();
+    expect(component.currentDoc()?.uid).toBe('folder-a');
+
+    // The user opens Permissions. Nothing has replaced A yet, so the read it issues is A's.
+    const permissionsA = new Subject<NuxeoDocument>();
+    mockDocumentDetailService.getDocumentPermissions.mockReturnValue(permissionsA);
+    component.onTabChange(1);
+    expect(mockDocumentDetailService.getDocumentPermissions).toHaveBeenCalledWith('folder-a');
+
+    // They navigate to B while that read is still in flight, and B's listing fails, which takes A
+    // off screen. Moving `currentNuxeoPath` is what the `NavigationEnd` handler does; the router
+    // itself has no routes here, since the suite shallow-renders the component.
+    component['currentNuxeoPath'] = '/default-domain/folder-b';
+    mockBrowseService.getBrowseFolderContents.mockReturnValue(
+      throwError(() => new Error('failed to list')),
+    );
+    component.loadContent();
+    expect(component.currentDoc()).toBeNull();
+
+    // A's permissions arrive afterwards. They must not put A back under B's address, where its
+    // title, its actions and its ACL would all read as B's.
+    permissionsA.next(
+      doc({
+        uid: 'folder-a',
+        contextParameters: {
+          acls: [{ name: 'local', aces: [] }],
+          userVisiblePermissions: ['Read', 'Write', 'Everything'],
+        },
+      }),
+    );
+
+    expect(component.currentDoc()).toBeNull();
+    expect(component.permissionsLoaded()).toBe(false);
+    expect(component.permissionsLoading()).toBe(false);
+  });
+
+  it('applyPermissionsDoc drops a read with no folder on screen instead of installing it', () => {
+    // Every outcome that takes a folder off screen now invalidates its permissions read, so the
+    // test above is the only way in and it no longer gets here. This asserts the guard that keeps
+    // that true: the cost of a future outcome forgetting to invalidate must be a panel with no
+    // permissions in it, not the folder the user left reappearing under another one's address.
+    component.currentDoc.set(null);
+
+    const applied = component['applyPermissionsDoc'](
+      doc({ uid: 'folder-a', contextParameters: { acls: [{ name: 'local', aces: [] }] } }),
+    );
+
+    expect(applied).toBe(false);
+    expect(component.currentDoc()).toBeNull();
   });
 });
