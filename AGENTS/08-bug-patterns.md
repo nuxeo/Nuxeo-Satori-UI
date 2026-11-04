@@ -1124,7 +1124,8 @@ who reads it is not always the user who wrote it.
 
 **Do not "recover" the day with a rounding heuristic** in general-purpose code. `dayToDate` in
 `permissions-model.ts` snaps an instant to the nearest UTC midnight and is correct _there_, because
-an ACE date really is midnight in some zone. Applied to a field that renders arbitrary `date`
+an ACE date really is midnight in some zone — or, for an end Nuxeo Web UI wrote, the last second
+before one, which it reads as the day that second closes. Applied to a field that renders arbitrary `date`
 properties it is wrong for every timestamp after 12:00 UTC, which it reports as the next day.
 Narrow correctness does not generalise; check what the values actually are.
 
