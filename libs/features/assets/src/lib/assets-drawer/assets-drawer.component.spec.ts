@@ -51,6 +51,7 @@ class CustomFacetsPanelComponent {
   readonly optionToggleHandler = input<((selection: NxsFacetSelection) => void) | null>(null);
   readonly actionHandler = input<((action: NxsAssetFacetsAction) => void) | null>(null);
   readonly fullTextChangeHandler = input<((value: string) => void) | null>(null);
+  readonly fullTextSubmitHandler = input<((value: string) => void) | null>(null);
 
   constructor() {
     CustomFacetsPanelComponent.lastInstance = this;
@@ -233,6 +234,20 @@ describe('AssetsDrawerComponent — the facets panel it renders by ID', () => {
     panel?.fullTextChangeHandler()?.('invoices');
     await render();
     expect(component.secondarySearchInput()).toBe('invoices');
+
+    // `fullTextSubmitHandler` alone, with no `fullTextChangeHandler` call before it — the shape a
+    // panel that buffers edits until Enter has. The drawer used to ignore the submitted value and
+    // search whatever the change callback had last stored, so this searched 'invoices'.
+    navigate.mockClear();
+    panel?.fullTextSubmitHandler()?.('receipts');
+    await render();
+    expect(component.secondarySearchInput()).toBe('receipts');
+    expect(navigate).toHaveBeenCalledWith(
+      ['/documents'],
+      expect.objectContaining({
+        queryParams: expect.objectContaining({ ecm_fulltext: 'receipts' }),
+      }),
+    );
 
     panel?.optionToggleHandler()?.({ groupId: 'asset-width', value: 'to_500_px' });
     await render();

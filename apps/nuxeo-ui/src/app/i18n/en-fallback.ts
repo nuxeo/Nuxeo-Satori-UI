@@ -376,6 +376,16 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'satori-components.asset-facets-drawer.label': 'Asset filters',
   'satori-components.asset-facets-drawer.clear': 'Clear the search text',
   'satori-components.asset-facets-drawer.search-placeholder': 'Search for something',
+  // The five below name controls that `checkAccessibleNameFallbacks` structurally cannot see:
+  // `full-text` is a visible `<label [for]>` (the gate reads only the global search's), `auto-search`
+  // is the `aria-labelledby` target of the switch, and the three footer buttons are named by their
+  // text content. The heading and the empty-state message are deliberately NOT here — they are
+  // visible prose, which this map leaves to ngx-translate's key passthrough.
+  'satori-components.asset-facets-drawer.full-text': 'Full text',
+  'satori-components.asset-facets-drawer.auto-search': 'Auto search',
+  'satori-components.asset-facets-drawer.reset': 'Reset',
+  'satori-components.asset-facets-drawer.save-as': 'Save as',
+  'satori-components.asset-facets-drawer.search': 'Search',
   'satori-components.permission-dialogs.delete.deleting': 'Deleting the permission',
   'satori-components.permission-dialogs.share.saving': 'Sharing the document',
   'satori-components.permission-dialogs.update.saving': 'Updating the permission',

@@ -209,7 +209,8 @@ export class AssetsDrawerComponent {
   private readonly onFacetFullTextChange = (value: string): void =>
     this.onSecondarySearchInput(value);
 
-  private readonly onFacetFullTextSubmit = (): void => this.onSecondarySearchEnter();
+  private readonly onFacetFullTextSubmit = (value: string): void =>
+    this.onSecondarySearchEnter(value);
 
   private readonly onFacetOptionToggle = (selection: NxsFacetSelection): void =>
     this.toggleOption(selection.groupId, selection.value);
@@ -505,8 +506,18 @@ export class AssetsDrawerComponent {
     this.secondarySearchInput.set(value);
   }
 
-  onSecondarySearchEnter(): void {
-    const value = this.secondarySearchInput().trim();
+  /**
+   * Search for what was submitted, not for what the box last reported.
+   *
+   * The submitted text is applied before the search runs. The packaged panel reports every
+   * keystroke through `fullTextChange` first, so reading the stored value happened to be right
+   * for it — but `fullTextSubmitHandler` is documented as passing the submitted text, and a
+   * replacement panel that buffers edits until Enter fires only this one. That panel would have
+   * searched the text as it stood before the edit.
+   */
+  onSecondarySearchEnter(submitted: string): void {
+    this.secondarySearchInput.set(submitted);
+    const value = submitted.trim();
     void this.router.navigate(['/documents'], {
       queryParams: {
         ecm_fulltext: value ? value : null,

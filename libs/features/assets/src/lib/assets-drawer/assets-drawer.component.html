@@ -101,7 +101,7 @@
       [canSaveAs]="facetsInputs().canSaveAs"
       [initiallyExpandedGroupIds]="facetsInputs().initiallyExpandedGroupIds"
       (fullTextChange)="onSecondarySearchInput($event)"
-      (fullTextSubmit)="onSecondarySearchEnter()"
+      (fullTextSubmit)="onSecondarySearchEnter($event)"
       (optionToggle)="toggleOption($event.groupId, $event.value)"
       (autoSearchChange)="autoSearch.set($event)"
       (action)="onFacetsAction($event)"
