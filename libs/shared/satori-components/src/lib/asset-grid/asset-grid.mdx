@@ -76,9 +76,12 @@ Nothing. Build an `NxsAssetCard` per document from a search result: `id` from `u
 `thumbnailUrl` is an **object URL the host owns**. Fetch the thumbnail rendition through the
 authenticated client and pass `createObjectURL()`'s result; the grid never makes or revokes one, so
 revoke yours when the results change and on destroy. A Nuxeo URL does not work: the browser loads
-an image with no credentials, so the request is unauthenticated and nothing appears. A host that
-would rather not own URLs at all can pass `null` for every card and place `nxs-thumbnail`, which
-fetches and caches its own.
+an image with no credentials, so the request is unauthenticated and nothing appears.
+
+There is no way to hand the grid a thumbnail component instead. It projects no content and takes no
+template, so a card with `null` draws its `icon` and nothing else — that is the icon fallback, not a
+slot. A host that would rather not own URLs at all registers its own component under the ID above
+and places `nxs-thumbnail` there, which fetches and revokes its own.
 
 ## Examples
 
