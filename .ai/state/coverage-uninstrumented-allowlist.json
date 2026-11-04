@@ -22,14 +22,6 @@
     "report older than the sources it describes, so that cannot recur silently."
   ],
   "files": {
-    "libs/features/assets/src/lib/asset-search-results/asset-search-results.component.ts": {
-      "until": "2027-06-30",
-      "reason": "Untested asset search results component (995 lines). Assets feature is out of Beta scope per coverage-gate.mjs. Component sits in report with empty statement map."
-    },
-    "libs/features/assets/src/lib/assets-drawer/assets-drawer.component.ts": {
-      "until": "2027-06-30",
-      "reason": "Untested assets drawer component (649 lines). Assets feature is out of Beta scope per coverage-gate.mjs. Component sits in report with empty statement map."
-    },
     "libs/shared/nuxeo-client/src/lib/constants/folderish-types.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."

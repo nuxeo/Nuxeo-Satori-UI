@@ -1471,7 +1471,7 @@ for (const [id, { className, file }] of slotRegistered) {
  * The empty case, stated rather than assumed.
  *
  * The table is empty today and that is **correct**: every `nxs.` ID the product registers is a
- * `nxs.primitives.*` placed by a host that resolves it, or one of the four `nxs.components.*`
+ * `nxs.primitives.*` placed by a host that resolves it, or one of the ten `nxs.components.*`
  * panels and pages that section 6 lists; nothing has yet been generated for `sidebar`, `tabs`,
  * `documentView` or `routes`. The distinction this gate could not previously draw is between that
  * and a table somebody emptied, so the empty case now asserts the reason instead of passing by
