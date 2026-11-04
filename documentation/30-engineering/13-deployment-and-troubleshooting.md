@@ -123,6 +123,11 @@ or `npx nx g @nuxeo/satori-platform:config-package …` from the published packa
 `npx nx build <name>` runs the same `build.mjs`. `config-packages/presales-demo` is the demo
 package presales installs.
 
+The [Admin Center configuration-package rehearsal](../../docs/admin-center-config-package-rehearsal.md)
+records the disposable LTS-2025 environment, installed package versions and verified provisioning
+checks for NXSAT-680. It also records the missing package lifecycle controls in the available
+administration UIs; the install, upgrade and removal protocol remains separate from those checks.
+
 ### How the application loads it
 
 At startup, before anything renders and before anyone signs in, the application fetches
