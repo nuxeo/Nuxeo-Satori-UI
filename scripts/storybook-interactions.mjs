@@ -20,6 +20,13 @@
  * - An untranslated `satori-components.*` or `shared-ui.*` key left on screen once the story
  *   finished. The preview loads the catalogue before the first story renders (`preview.ts`), so a
  *   play function never races the translations; a key still showing is a missing translation.
+ * - The same key left on screen on a **docs page**, which is the surface a reader actually opens:
+ *   `?path=/docs/<component>--overview`. Every `type: 'docs'` entry in the index is opened and
+ *   its previews are read once it reports `docsRendered`. This is separate coverage, not a
+ *   duplicate of the story check: a docs page renders several stories into one document with no
+ *   play function, and an Overview is MDX that can put a key on the page itself. NXSAT-331's
+ *   components shipped raw keys on their Overview pages while every story run was green, because
+ *   nothing here had ever opened a docs page.
  * - A `Dialogs/` story whose preview is not laid out as MatDialog lays the dialog out in the
  *   application, at 1280 px or on a fresh page at 320 px: an element outside the surface or its
  *   rounded corners, title, content or buttons closer to the edge than Material's spacing, a field
@@ -70,13 +77,31 @@ const port = Number(option('--port', process.env.STORYBOOK_INTERACTIONS_PORT ?? 
 const storyTimeout = Number(option('--story-timeout', '20000'));
 // A wall clock over a suite that grows with the library: every story added tightens it. Raised
 // from 600000 by NXSAT-331, when `main` ran 300 stories in 582.2 s and eighteen new ones stranded
-// 61 behind it. At that run's 1.94 s per story this is reached at roughly 464. See ci.yml.
-const budget = Number(option('--budget', '900000'));
+// 61 behind it. Raised again to 1200000 when the docs pages were added below: a green local run
+// was 480.4 s for 318 stories and 249.8 s for 127 docs pages, which scaled to a runner's measured
+// pace is about 937 s — past the whole of the previous cap. See ci.yml for the arithmetic and for
+// the rule on when to raise it next.
+const budget = Number(option('--budget', '1200000'));
 const only = option('--only', null);
 const jsonOut = option('--json', null);
 
 /** Events after which a story has said all it will. */
 const TERMINAL = ['storyFinished', 'storyErrored', 'storyMissing', 'storyThrewException'];
+/**
+ * Events after which a docs page has said all it will. `docsRendered` is emitted once the page
+ * and every preview on it have rendered, so there is no settling guess to make.
+ */
+const DOCS_TERMINAL = ['docsRendered', 'storyErrored', 'storyMissing', 'storyThrewException'];
+/**
+ * Events after which one preview *on* a docs page has rendered or given up. `docsRendered` covers
+ * the document, not the Angular previews inside it, and the previews are what this reads.
+ */
+const DOCS_PREVIEW_DONE = [
+  'storyRendered',
+  'storyErrored',
+  'storyMissing',
+  'storyThrewException',
+];
 /** Events that fail a story whatever `storyFinished` says. */
 const FAILING = [
   'playFunctionThrewException',
@@ -160,12 +185,17 @@ async function main() {
     );
   }
   const index = JSON.parse(readFileSync(indexFile, 'utf8'));
-  const stories = Object.values(index.entries ?? {})
-    .filter((entry) => entry.type === 'story')
-    .filter((entry) => !only || entry.id.includes(only))
-    .sort((a, b) => a.id.localeCompare(b.id));
+  const chosen = (type) =>
+    Object.values(index.entries ?? {})
+      .filter((entry) => entry.type === type)
+      .filter((entry) => !only || entry.id.includes(only))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  const stories = chosen('story');
+  const docsPages = chosen('docs');
   if (stories.length === 0)
     refuse(`${indexFile} lists no story${only ? ` matching "${only}"` : ''}.`);
+  // Not a refusal: a build can legitimately have no docs page, and `--only` often selects none.
+  // It is reported either way below, so "0 of 0" is visible rather than silently skipped.
 
   let chromium;
   try {
@@ -192,9 +222,13 @@ async function main() {
   const started = Date.now();
   const browser = await chromium.launch();
   const results = [];
+  const docsResults = [];
+  let storiesSeconds = 0;
   try {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-    await context.addInitScript(recordChannel, [...new Set([...TERMINAL, ...FAILING])]);
+    await context.addInitScript(recordChannel, [
+      ...new Set([...TERMINAL, ...DOCS_TERMINAL, ...DOCS_PREVIEW_DONE, ...FAILING]),
+    ]);
     for (const story of stories) {
       if (Date.now() - started > budget) {
         results.push({
@@ -206,6 +240,17 @@ async function main() {
         continue;
       }
       results.push(await runStory(context, story));
+    }
+    storiesSeconds = (Date.now() - started) / 1000;
+    // After the stories, so a budget that runs out costs the cheaper check rather than the one
+    // that runs play functions. Each docs page is one navigation; the stories on it have already
+    // been run individually above, so what this adds is the document they are rendered into.
+    for (const page of docsPages) {
+      if (Date.now() - started > budget) {
+        docsResults.push({ id: page.id, failures: [`budget of ${budget} ms spent before it ran`] });
+        continue;
+      }
+      docsResults.push(await runDocsPage(context, page));
     }
   } finally {
     await browser.close();
@@ -219,14 +264,32 @@ async function main() {
   const laidOut = dialogs.filter((result) =>
     Object.values(result.layout).every((problems) => problems.length === 0),
   );
-  for (const result of failed) {
+  const docsPreviews = docsResults.reduce((n, result) => n + (result.previews ?? 0), 0);
+  const docsRead = docsResults.reduce((n, result) => n + (result.read ?? 0), 0);
+  // The raw-key check reads mounted previews, so with nothing read it has inspected nothing and
+  // would pass whatever shipped. One page may have no preview and one preview may have no text;
+  // across every docs page in the build, neither is survivable.
+  if (docsResults.length && !(docsPreviews && docsRead)) {
+    docsResults[0].failures.push(
+      `${docsPreviews} previews and ${docsRead} characters were read across ${docsResults.length} ` +
+        'docs pages, so the untranslated-key check inspected nothing. Has the markup changed?',
+    );
+  }
+  const docsFailed = docsResults.filter((result) => result.failures.length);
+  for (const result of [...failed, ...docsFailed]) {
     console.error(`FAIL ${result.id}`);
     for (const failure of result.failures) console.error(`     ${failure}`);
   }
   const seconds = ((Date.now() - started) / 1000).toFixed(1);
   console.log(
     `storybook-interactions: ${results.length - failed.length} of ${results.length} stories passed ` +
-      `(${plays.length} with a play function) in ${seconds}s.`,
+      `(${plays.length} with a play function) in ${storiesSeconds.toFixed(1)}s.`,
+  );
+  console.log(
+    `storybook-interactions: ${docsResults.length - docsFailed.length} of ${docsResults.length} ` +
+      `docs pages rendered with no untranslated key on them ` +
+      `(${docsPreviews} previews, ${docsRead} characters read) in ` +
+      `${(Number(seconds) - storiesSeconds).toFixed(1)}s.`,
   );
   console.log(
     `storybook-interactions: dialog layout at ${DIALOG_LAYOUT_WIDTHS.join(' and ')} px: ` +
@@ -239,10 +302,10 @@ async function main() {
   if (jsonOut) {
     writeFileSync(
       resolve(jsonOut),
-      `${JSON.stringify({ seconds: Number(seconds), results }, null, 2)}\n`,
+      `${JSON.stringify({ seconds: Number(seconds), results, docs: docsResults }, null, 2)}\n`,
     );
   }
-  process.exit(failed.length ? 1 : 0);
+  process.exit(failed.length || docsFailed.length ? 1 : 0);
 }
 
 async function runStory(context, story) {
@@ -277,6 +340,104 @@ async function runStory(context, story) {
   } finally {
     await page.close();
   }
+}
+
+/**
+ * Opens a docs page the way a reader does and fails it on an untranslated key.
+ *
+ * Read from the rendered previews alone, not from `document.body.innerText`: a docs page prints
+ * each story's **source** beneath it, and an Overview's prose names key namespaces on purpose —
+ * `search-asset-facets-drawer--overview` has `satori-components.asset-facets-drawer.` in its text
+ * today. Scanning the whole frame would fail on documentation that is doing its job. What a
+ * reader sees rendered is what is checked.
+ */
+async function runDocsPage(context, entry) {
+  const page = await context.newPage();
+  const failures = [];
+  page.on('pageerror', (error) => failures.push(`uncaught on the page: ${error.message}`));
+  try {
+    await page.goto(
+      `http://127.0.0.1:${port}/iframe.html?id=${encodeURIComponent(entry.id)}&viewMode=docs`,
+    );
+    try {
+      await page.waitForFunction(
+        (terminal) => window.__nxsStoryEvents?.some((event) => terminal.includes(event.name)),
+        DOCS_TERMINAL,
+        { timeout: storyTimeout },
+      );
+    } catch {
+      failures.push(`no docsRendered, storyErrored or storyMissing within ${storyTimeout} ms`);
+    }
+    const events = await page.evaluate(() => window.__nxsStoryEvents ?? []);
+    for (const event of events.filter((e) => FAILING.includes(e.name))) {
+      failures.push(`${event.name}: ${describe(event.payload)}`);
+    }
+    const { text, previews } = await readPreviews(page, failures);
+    const raw = RAW_KEY.exec(text);
+    if (raw) failures.push(`an untranslated key is on the docs page: ${raw[0]}`);
+    // Neither count is failed on here: a page may legitimately have no preview, and a preview
+    // may legitimately render no text. `main()` fails instead when *nothing* was read across the
+    // whole run, which is the case where this check would pass whatever was on the pages.
+    return { id: entry.id, previews, read: text.length, failures };
+  } finally {
+    await page.close();
+  }
+}
+
+/** How long a docs page with no preview yet is given to create one before it counts as prose. */
+const DOCS_PREVIEW_GRACE = 3000;
+
+/**
+ * The text of every preview on a docs page, once each has reported that it rendered.
+ *
+ * Waiting for the right thing here is the whole check, and two earlier attempts were wrong in the
+ * same direction — they read before the text existed, so the scan found no untranslated key and
+ * the page passed whatever was on it:
+ *
+ * 1. Reading on `docsRendered`. That event reports the **document**; the `.docs-story` blocks
+ *    exist and are empty when it fires. Both a clean build and a build carrying the shipped bug
+ *    reported "no untranslated key".
+ * 2. Waiting for each block to contain an element. Storybook inserts `#story--<id>-inner` before
+ *    Angular fills it, so this returned almost as early — 263 previews across the library yielded
+ *    219 characters between them.
+ *
+ * Waiting for text instead is not the answer either: a spinner and a loading skeleton are correct
+ * with no text at all, and that attempt failed thirteen docs pages that were fine.
+ *
+ * A docs page emits one `storyRendered` per preview, so the previews are counted and waited for
+ * directly. Across the whole library that reads the same 263 previews as (2) did, and 25 630
+ * characters rather than 219 — which is the difference between a check and a formality.
+ */
+async function readPreviews(page, failures) {
+  const read = () =>
+    page.evaluate((done) => {
+      const blocks = [...document.querySelectorAll('.docs-story')];
+      const rendered = (window.__nxsStoryEvents ?? []).filter((event) =>
+        done.includes(event.name),
+      ).length;
+      return {
+        total: blocks.length,
+        rendered,
+        text: blocks.map((block) => block.innerText).join('\n'),
+        previews: Math.min(rendered, blocks.length),
+      };
+    }, DOCS_PREVIEW_DONE);
+  const deadline = Date.now() + storyTimeout;
+  const grace = Date.now() + DOCS_PREVIEW_GRACE;
+  let seen = await read();
+  while (Date.now() < deadline) {
+    if (seen.total > 0 && seen.rendered >= seen.total) return seen;
+    // A page that still has no preview once the grace is up is prose with nothing to render.
+    if (seen.total === 0 && Date.now() > grace) return seen;
+    await page.waitForTimeout(100);
+    seen = await read();
+  }
+  if (seen.total > seen.rendered) {
+    failures.push(
+      `${seen.total - seen.rendered} of ${seen.total} previews had not rendered after ${storyTimeout} ms`,
+    );
+  }
+  return seen;
 }
 
 /** Opens a story's iframe, waits for it to finish and records the events that fail it. */

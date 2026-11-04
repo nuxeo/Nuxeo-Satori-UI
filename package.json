@@ -68,6 +68,8 @@
     "storybook:interactions": "node scripts/storybook-interactions.mjs",
     "storybook:publication-gate": "node scripts/storybook-publication-gate.mjs",
     "storybook:publication-gate-selftest": "node scripts/storybook-publication-gate.selftest.mjs",
+    "storybook:catalogue-cache": "node scripts/storybook-catalogue-cache.mjs",
+    "storybook:catalogue-cache-selftest": "node scripts/storybook-catalogue-cache.selftest.mjs",
     "lint:config-selftest": "node scripts/eslint-config-satori-lint.selftest.mjs",
     "lint": "nx run-many -t lint",
     "lint:affected": "nx affected -t lint",
