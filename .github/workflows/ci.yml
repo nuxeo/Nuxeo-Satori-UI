@@ -821,14 +821,12 @@ jobs:
       # catches a suite that slows down rather than one that merely grew. Re-measure and raise it
       # again — do not delete it — when a green run on `main` comes within 15% of the cap.
       #
-      # That rule is why it is 1200000 now. Adding the docs pages spends the rest of 900000: a
-      # green local run was 480.4 s for 318 stories and 249.8 s for 127 docs pages, and this
-      # machine runs the stories at 1.51 s against the 1.94 s of run 41637854927, so the same
-      # suite on a runner is about 617 s + 320 s = 937 s — past the old cap outright. 1200000
-      # leaves roughly a fifth, which is above the 15% trigger above but not by much, and the
-      # 1.28x scaling is an estimate rather than a measurement on a runner. Read the first green
-      # run of this job on `main` and re-measure against it. The docs half scales with components
-      # rather than with stories, so both terms move independently from here.
+      # That rule is why it is 1200000 now: adding the docs pages spends the rest of 900000.
+      # Measured on a runner, in this job on #563 — 636.0 s for 318 stories and 304.5 s for 127
+      # docs pages, 940.5 s together, past the old cap outright. Against 1200000 that is 78%
+      # spent and 21.6% headroom: above the 15% trigger, but one more component group crosses it.
+      # The two halves now scale on different things — stories with stories, docs pages with
+      # components — so re-measure both terms rather than extrapolating either.
       - name: Storybook interactions (satori-components)
         if: steps.scope.outputs.interactions == 'true'
         shell: bash
