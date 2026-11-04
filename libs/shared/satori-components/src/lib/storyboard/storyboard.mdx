@@ -159,9 +159,12 @@ accent along with it.
   `label`, so a screen reader announces what the run of buttons is — and how many frames there are
   — before reading them. Native elements rather than `role="list"`, and no `list-style: none`,
   which is what makes VoiceOver drop the list role.
-- **Named frames.** Each button is named "Seek to &lt;label&gt;", falling back to "Seek to 0:15" when
-  the frame has no label. The image is decorative (`alt=""`) and the visible timecode is
-  `aria-hidden`, so the name is said once rather than three times.
+- **Named frames.** Each button is named "Seek to &lt;label&gt; 0:15", falling back to "Seek to 0:15"
+  when the frame has no label. The timecode is in the name even when there is a label, because it is
+  the only text drawn on the button: a name of the label alone would leave a speech-input user with
+  nothing to say that matches what they see (WCAG 2.5.3). The image is decorative (`alt=""`) and the
+  visible timecode is `aria-hidden`, so it is said once rather than twice.
+- **The tooltip is the label alone**, since the timecode is already under the frame.
 - **The playing frame.** `aria-current="true"` marks it, as well as the outline.
 - **Keyboard.** Every frame is an ordinary button: **Tab** reaches it, **Enter** or **Space** presses
   it. The focus ring is drawn on `:focus` as well as `:focus-visible`.

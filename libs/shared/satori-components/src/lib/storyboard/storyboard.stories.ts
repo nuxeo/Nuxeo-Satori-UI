@@ -57,7 +57,9 @@ export const VideoStoryboard: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('list', { name: 'Video storyboard' })).toBeVisible();
     await expect(canvas.getAllByRole('listitem')).toHaveLength(5);
-    await userEvent.click(canvas.getByRole('button', { name: 'Seek to The interview begins' }));
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Seek to The interview begins 1:15' }),
+    );
     await expect(args.seek).toHaveBeenCalledWith(75);
   },
 };
@@ -87,7 +89,7 @@ export const NoFrames: Story = {
 export const KeyboardContract: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    const first = canvas.getByRole('button', { name: 'Seek to Opening titles' });
+    const first = canvas.getByRole('button', { name: 'Seek to Opening titles 0:00' });
     first.focus();
     await userEvent.keyboard('{Enter}');
     await expect(args.seek).toHaveBeenLastCalledWith(0);

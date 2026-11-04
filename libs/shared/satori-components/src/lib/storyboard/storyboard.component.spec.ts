@@ -5,6 +5,8 @@ import {
   signal,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MatTooltip } from '@angular/material/tooltip';
+import { By } from '@angular/platform-browser';
 
 import {
   NxsStoryboardComponent,
@@ -109,11 +111,37 @@ describe('NxsStoryboardComponent', () => {
     expect(strip()?.getAttribute('aria-label')).toBe('Video storyboard');
   });
 
-  it('names a frame after its label, and after its timecode when it has none', async () => {
+  it('names a frame after its label and its timecode, and after the timecode alone when it has no label', async () => {
     host.items.set([frame(30, 'Opening titles'), frame(90)]);
     await render();
-    expect(frames()[0].getAttribute('aria-label')).toBe('Seek to Opening titles');
+    expect(frames()[0].getAttribute('aria-label')).toBe('Seek to Opening titles 0:30');
     expect(frames()[1].getAttribute('aria-label')).toBe('Seek to 1:30');
+  });
+
+  // WCAG 2.5.3: the timecode is the only text drawn on the button, so a name that omits it leaves a
+  // speech-input user saying "0:30" at a control that does not answer to it.
+  it('keeps every frame\u2019s visible timecode inside its accessible name', async () => {
+    host.items.set([frame(30, 'Opening titles'), frame(90, 'Interview'), frame(0)]);
+    await render();
+    const pairs = frames().map((button) => ({
+      name: button.getAttribute('aria-label') ?? '',
+      visible: button.querySelector('.nxs-storyboard__time')?.textContent?.trim() ?? '',
+    }));
+    expect(pairs.map((p) => p.visible)).toEqual(['0:30', '1:30', '0:00']);
+    for (const { name, visible } of pairs) {
+      expect(name).toContain(visible);
+    }
+  });
+
+  // The tooltip stays the caption alone, not the accessible name: the timecode is already drawn
+  // under the frame, and putting it in the tooltip too would show it twice to a mouse user.
+  it('puts the caption alone in the tooltip', async () => {
+    host.items.set([frame(30, 'Opening titles'), frame(90)]);
+    await render();
+    const messages = fixture.debugElement
+      .queryAll(By.directive(MatTooltip))
+      .map((node) => node.injector.get(MatTooltip).message);
+    expect(messages).toEqual(['Opening titles', '1:30']);
   });
 
   it('hides the image from assistive technology, because the button is already named', async () => {

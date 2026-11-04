@@ -18,7 +18,7 @@
           [attr.aria-label]="
             'satori-components.storyboard.seek-to' | translate: { frame: frame.name }
           "
-          [matTooltip]="frame.name"
+          [matTooltip]="frame.caption"
           (click)="select(frame.item)"
         >
           @if (frame.item.thumbnailUrl; as url) {

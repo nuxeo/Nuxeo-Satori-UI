@@ -81,9 +81,15 @@ export class NxsStoryboardComponent {
   protected readonly ownLabel = computed(() => nxsVisibleText(this.label()));
 
   /**
-   * The frames with the text each one needs worked out once: the button's accessible name and the
-   * timecode under it. Done here rather than in the template so the name is one string a test can
-   * read, instead of whatever the browser concatenates out of the image and the caption.
+   * The frames with the text each one needs worked out once: the button's accessible name, the
+   * timecode under it and its tooltip. Done here rather than in the template so the name is one
+   * string a test can read, instead of whatever the browser concatenates out of the image and the
+   * caption.
+   *
+   * `name` keeps the timecode even when the frame has a caption, because the timecode is the only
+   * text drawn on the button — the image is decorative. A name of the caption alone leaves a
+   * speech-input user with nothing to say that matches what they can see (WCAG 2.5.3), which is the
+   * `label-content-name-mismatch` this library already tracks elsewhere.
    */
   protected readonly frames = computed(() =>
     this.items().map((item) => {
@@ -92,7 +98,8 @@ export class NxsStoryboardComponent {
       return {
         item,
         timecode,
-        name: label || timecode,
+        caption: label || timecode,
+        name: label ? `${label} ${timecode}` : timecode,
         active: this.activeTimecode() === item.timecode,
       };
     }),

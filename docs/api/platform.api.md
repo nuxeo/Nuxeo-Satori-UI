@@ -2739,6 +2739,7 @@ class NxsStoryboardComponent {
     protected readonly frames: import("@angular/core").Signal<{
     item: NxsStoryboardItem;
     timecode: string;
+    caption: string;
     name: string;
     active: boolean;
     }[]>;
