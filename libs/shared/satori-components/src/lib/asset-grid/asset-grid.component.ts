@@ -33,8 +33,11 @@ export interface NxsAssetCard {
    * **The host owns this URL.** The grid only reads it, and never makes or revokes one, so a host
    * that made it with `createObjectURL()` revokes it itself. A Nuxeo URL does not work here: the
    * browser loads an image without credentials, so the request is unauthenticated and nothing
-   * appears — fetch the blob through the authenticated client and pass the object URL. A host with
-   * no thumbnails of its own can pass `null` and place `nxs-thumbnail` instead.
+   * appears — fetch the blob through the authenticated client and pass the object URL.
+   *
+   * `null` is the icon fallback, not a slot: the grid projects no content and takes no template, so
+   * there is nowhere to put an `nxs-thumbnail`. A host that would rather not own URLs registers its
+   * own component under {@link NXS_ASSET_GRID_ID} and places one there.
    */
   readonly thumbnailUrl: string | null;
 }
