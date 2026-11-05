@@ -73,6 +73,88 @@ describe('document type rules', () => {
     });
   });
 
+  describe('app.rules.hasMimeType', () => {
+    const matches = (content: unknown, parameters: unknown[] = ['application/pdf']) =>
+      registry.evaluate(
+        { type: 'app.rules.hasMimeType', parameters },
+        on({
+          ...doc('File'),
+          properties: { 'file:content': content },
+        }),
+      );
+
+    it('matches any exact type, ignoring case, whitespace and MIME parameters', () => {
+      expect(matches({ 'mime-type': ' Application/PDF; version=1.7 ' })).toBe(true);
+      expect(
+        matches({ 'mime-type': 'image/vnd.adobe.photoshop' }, [
+          'message/rfc822',
+          'IMAGE/VND.ADOBE.PHOTOSHOP',
+        ]),
+      ).toBe(true);
+      expect(matches({ 'mime-type': 'application/pdf-extra' })).toBe(false);
+    });
+
+    it('matches only the requested MIME family', () => {
+      expect(matches({ 'mime-type': 'image/png' }, ['image/*'])).toBe(true);
+      expect(matches({ 'mime-type': 'video/mp4' }, ['image/*'])).toBe(false);
+      expect(matches({ 'mime-type': 'image/png' }, ['image*', '*/*', '*'])).toBe(false);
+    });
+
+    it.each([
+      null,
+      undefined,
+      [],
+      'application/pdf',
+      {},
+      { 'mime-type': 42 },
+      { 'mime-type': '' },
+      { 'mime-type': 'pdf' },
+    ])('rejects missing or malformed content %j', (content) => {
+      expect(matches(content)).toBe(false);
+    });
+
+    it('ignores malformed parameters and denies absent documents or parameters', () => {
+      expect(matches({ 'mime-type': 'application/pdf' }, [42, null, {}, 'application/pdf'])).toBe(
+        true,
+      );
+      expect(matches({ 'mime-type': 'application/pdf' }, [])).toBe(false);
+      expect(registry.evaluate('app.rules.hasMimeType', on(doc('File')))).toBe(false);
+      expect(
+        registry.evaluate({ type: 'app.rules.hasMimeType', parameters: ['image/*'] }, on(null)),
+      ).toBe(false);
+      expect(
+        registry.evaluate(notAList('app.rules.hasMimeType', 'application/pdf'), on(doc('File'))),
+      ).toBe(false);
+    });
+
+    it('does not select a picture from a rendition MIME type or infer a Note MIME type', () => {
+      const rule = { type: 'app.rules.hasMimeType', parameters: ['image/*', 'text/plain'] };
+      expect(
+        registry.evaluate(
+          rule,
+          on({
+            ...doc('Picture'),
+            properties: {
+              'picture:views': [{ content: { 'mime-type': 'image/jpeg' } }],
+            },
+          }),
+        ),
+      ).toBe(false);
+      expect(
+        registry.evaluate(
+          rule,
+          on({
+            ...doc('Note'),
+            properties: {
+              'note:mime_type': 'text/plain',
+              'note:note': 'hello',
+            },
+          }),
+        ),
+      ).toBe(false);
+    });
+  });
+
   describe('app.rules.hasFacet', () => {
     it('is true when the document carries any listed facet', () => {
       expect(

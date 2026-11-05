@@ -24,7 +24,7 @@ import {
   withDisabledInitialNavigation,
 } from '@angular/router';
 // testTranslateModule() removed - no longer exported in ngx-translate 18
-import { Observable, of } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { vi, type Mock } from 'vitest';
 import { resolve } from 'node:path';
 import { compile } from 'sass';
@@ -303,6 +303,10 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     components: Readonly<Record<string, Type<unknown>>> = {},
     /** After the page's own, as the app lists `provideNxsComponents()` and its Satori follow-up. */
     registrations: EnvironmentProviders[] = [],
+    nev: { available: boolean; url: string | null; error?: boolean } = {
+      available: false,
+      url: null,
+    },
   ): Promise<void> {
     manifest.set({ extensionLayers: [extensions] });
     mockDetailService.getFullDocument.mockReturnValue(of(focused));
@@ -334,7 +338,12 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         },
         {
           provide: ARenderService,
-          useValue: { isAvailable: vi.fn(() => of(false)), getPreviewerUrl: vi.fn(() => of(null)) },
+          useValue: {
+            isAvailable: vi.fn(() => of(nev.available)),
+            getPreviewerUrl: vi.fn(() =>
+              nev.error ? throwError(() => new Error('preview failed')) : of(nev.url),
+            ),
+          },
         },
         { provide: TagService, useValue: { searchTags: vi.fn(() => of([])) } },
         {
@@ -1039,6 +1048,146 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(run).toHaveBeenCalledWith(expect.objectContaining({ id: 'app.toolbar.edit' }));
       expect(fixture.nativeElement.querySelector('nxs-tabs, nxs-document-toolbar')).toBeNull();
     });
+  });
+
+  describe('NEV in the packaged View tab', () => {
+    async function settle(): Promise<void> {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+    const url = 'https://nev.example.test/?documentId=pdf-1';
+    const pdf = () =>
+      doc({
+        properties: {
+          'file:content': {
+            name: 'test.pdf',
+            'mime-type': 'application/pdf',
+            digest: 'digest',
+            data: '/blob',
+          },
+        },
+      });
+    const optIn = (preferARender: unknown = 'core.true') => ({
+      slots: { tabs: [{ id: 'app.tabs.view', preferARender }] },
+    });
+    const body = (): HTMLElement => fixture.nativeElement.querySelector('.mat-mdc-tab-body-active');
+    const viewer = (): DocumentViewerComponent =>
+      fixture.debugElement.query(By.directive(DocumentViewerComponent)).componentInstance;
+
+    it('keeps the built-in viewer by default even with NEV available', async () => {
+      await render({}, pdf(), {}, [], { available: true, url });
+      expect(viewer().preferARender()).toBe(false);
+      expect(body().querySelector('.arender-frame')).toBeNull();
+      expect(body().querySelector('.footer-remove-btn')).toBeTruthy();
+      expect(body().querySelector('button[aria-label="Open with Nuxeo Drive"]')).toBeTruthy();
+    });
+
+    it('renders NEV from a manifest rule and restores the built-in controls when disabled', async () => {
+      await render(optIn(), pdf(), {}, [], { available: true, url });
+      expect(body().querySelector('iframe.arender-frame')?.getAttribute('src')).toBe(url);
+      expect(body().querySelector('.footer-remove-btn')).toBeNull();
+      expect(body().querySelector('button[aria-label="Open with Nuxeo Drive"]')).toBeNull();
+      manifest.set({ extensionLayers: [optIn('core.false')] });
+      await settle();
+      expect(body().querySelector('.arender-frame')).toBeNull();
+      expect(body().querySelector('.footer-remove-btn')).toBeTruthy();
+      expect(body().querySelector('button[aria-label="Open with Nuxeo Drive"]')).toBeTruthy();
+    });
+
+    it.each([
+      { available: false, url: null },
+      { available: true, url: null },
+      { available: true, url: 'javascript:alert(1)' },
+      { available: true, url: null, error: true },
+    ])('falls back to the built-in PDF for unavailable NEV %j', async (nev) => {
+      mockDetailService.fetchBlob.mockReturnValueOnce(
+        of(new Blob(['pdf'], { type: 'application/pdf' })),
+      );
+      await render(optIn(), pdf(), {}, [], nev);
+      expect(viewer().preferARender()).toBe(true);
+      expect(body().querySelector('.arender-frame')).toBeNull();
+      expect(body().querySelector('iframe.viewer-iframe')).toBeTruthy();
+      expect(body().querySelector('.viewer-placeholder')).toBeNull();
+      expect(body().querySelector('.footer-remove-btn')).toBeTruthy();
+    });
+
+    it('keeps the existing no-blob placeholder and never requests a NEV URL', async () => {
+      await render(optIn(), doc(), {}, [], { available: true, url });
+      expect(body().querySelector('.arender-frame')).toBeNull();
+      expect(body().querySelector('.viewer-placeholder')).toBeTruthy();
+      expect(TestBed.inject(ARenderService).getPreviewerUrl).not.toHaveBeenCalled();
+    });
+
+    it('reevaluates a MIME rule when the focused document changes', async () => {
+      await render(
+        optIn({ type: 'app.rules.hasMimeType', parameters: ['application/pdf'] }),
+        pdf(),
+        {},
+        [],
+        { available: true, url },
+      );
+      expect(body().querySelector('.arender-frame')).toBeTruthy();
+      fixture.componentInstance.doc.set(
+        doc({
+          uid: 'other',
+          properties: {
+            'file:content': { 'mime-type': 'image/png' },
+          },
+        }),
+      );
+      await settle();
+      expect(viewer().preferARender()).toBe(false);
+      expect(body().querySelector('.arender-frame')).toBeNull();
+      fixture.componentInstance.doc.set(pdf());
+      await settle();
+      expect(body().querySelector('.arender-frame')).toBeTruthy();
+    });
+
+    it('keeps Notes in their editor even when every document opts in', async () => {
+      await render(
+        optIn(),
+        doc({
+          type: 'Note',
+          properties: {
+            'note:note': 'hello',
+            'note:mime_type': 'text/plain',
+          },
+        }),
+        {},
+        [],
+        { available: true, url },
+      );
+      expect(body().querySelector('lib-note-editor')).toBeTruthy();
+      expect(body().querySelector('lib-document-viewer')).toBeNull();
+      expect(TestBed.inject(ARenderService).getPreviewerUrl).not.toHaveBeenCalled();
+    });
+
+    it('leaves a contributed custom View ahead of the packaged NEV preference', async () => {
+      await render(
+        {
+          slots: {
+            ...optIn().slots,
+            documentView: [{ id: 'custom', componentId: 'acme.views.claim' }],
+          },
+        },
+        pdf(),
+        {},
+        [],
+        { available: true, url },
+      );
+      expect(body().querySelector('.claim-view')).toBeTruthy();
+      expect(body().querySelector('lib-document-viewer')).toBeNull();
+    });
+
+    it.each([null, false, 42, {}, [], { type: false }])(
+      'ignores a malformed opt-in %j',
+      async (rule) => {
+        await render(optIn(rule), pdf(), {}, [], { available: true, url });
+        expect(viewer().preferARender()).toBe(false);
+        expect(body().querySelector('.arender-frame')).toBeNull();
+      },
+    );
   });
 
   describe('documentView', () => {

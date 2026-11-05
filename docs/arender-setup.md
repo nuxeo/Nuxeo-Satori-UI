@@ -324,3 +324,11 @@ bootstrap fragment uses `"viewerOrigin": "http://localhost:9080"`.
 | `.env.arender.example`       | Template for the above — the file that is in git        |
 | `.env.arender`               | ARender image version and Nuxeo credential (gitignored) |
 | `nginx-arender-proxy.conf`   | Nginx config that injects Basic Auth for Nuxeo          |
+
+### Opt into NEV on the View tab
+
+Setting `viewerOrigin` enables the existing Annotations integration. The View tab still uses
+the built-in viewer by default. A deployment can select NEV using the `preferARender` rule on
+`extensions.slots.tabs` entry `app.tabs.view`; see [the extension reference](extension-reference.md#select-nev-for-the-packaged-view-tab-nxsat-698)
+for the manifest and MIME rules. Null previewer URLs fall back to built-in content; Notes keep
+their editor. This does not require a registered NEV `documentView` component.
