@@ -402,6 +402,26 @@ jobs:
       - name: Typecheck affected projects
         run: npx nx affected -t typecheck --base=$NX_BASE --head=$NX_HEAD
 
+      # The step above reads each project's `tsconfig.lib.json`, which excludes `*.spec.ts` by
+      # construction, and 19 of 27 projects have no `typecheck` target for it to run at all.
+      # So between them `lint`, `build`, `test` and `typecheck` type-check no spec file
+      # anywhere, and `spec-types` was registered in `ALL_GATES` but reached by no step here —
+      # local-only, exactly the "registered as a gate is not the same as running it" trap the
+      # sanitizer pair fell into above.
+      #
+      # NXSAT-631 is what that costs. A `querySelector<HTMLElement>` on the `any`-typed
+      # `fixture.nativeElement` sat on `main` for four days: measured on 2026-11-05 with the
+      # error reintroduced, `ui:lint` and `ui:test` both exited 0, `ui` has neither a `build`
+      # nor a `typecheck` target, and this script was the only check in the repository that
+      # went red. Every PR check was green while `main` could not pass its own gate.
+      #
+      # Not `nx affected`: the script discovers every `tsconfig.spec.json` from disk, so a new
+      # library is covered the moment it has specs rather than when someone remembers a target.
+      # That costs a flat ~110 s locally regardless of the affected set, which keeps this job
+      # under the `sanitizer-gates` critical path rather than extending the wall clock.
+      - name: Typecheck spec files (all projects)
+        run: node scripts/beta-harness/spec-typecheck.mjs
+
       # The three checks that guard the published package. Run unconditionally rather
       # than only when affected: they are ~30s in total, and they are the checks that
       # catch the expensive class of defect — both of the ones below were configuration
