@@ -2684,7 +2684,8 @@
     },
     "asset-grid": {
       "label": "Assets",
-      "select": "Select {{name}}"
+      "select": "Select {{name}}",
+      "name-and-type": "{{name}} \u2014 {{type}}"
     },
     "asset-facets-drawer": {
       "label": "Asset filters",
