@@ -206,6 +206,8 @@ export class DocumentViewerComponent {
    * matching Nuxeo Web UI’s Annotations tab.
    */
   readonly annotationsTab = input(false);
+  /** Prefer NEV in the View tab, falling back to built-in content when no URL is available. */
+  readonly preferARender = input(false);
 
   /** When true, show Replace / Remove actions for the primary blob in the footer toolbar. */
   readonly showMainFileControls = input(false);
@@ -286,8 +288,10 @@ export class DocumentViewerComponent {
     return 'none';
   });
 
-  /** ARender appears only on the Annotations tab (View tab uses the built-in preview). */
-  readonly showARenderViewer = computed(() => this.annotationsTab() && this.arenderUrl() !== null);
+  /** Annotations always uses NEV; the View tab opts in only when a usable URL exists. */
+  readonly showARenderViewer = computed(
+    () => (this.annotationsTab() || this.preferARender()) && this.arenderUrl() !== null,
+  );
 
   readonly showImageToolbar = computed(
     () => !this.annotationsTab() && !this.showARenderViewer() && this.contentType() === 'image',

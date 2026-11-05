@@ -3798,6 +3798,7 @@ class ExtensionSlotRegistry {
     }
 }
 interface ExtensionTabDescriptor extends ExtensionElement {
+    readonly preferARender?: ExtensionRule;
     readonly label: string;
     readonly labelKey?: string;
     readonly icon?: string;
@@ -5491,6 +5492,7 @@ class DocumentViewerComponent {
     readonly arenderReloadId: import("@angular/core").InputSignal<number>;
     readonly viewerDocUid: import("@angular/core").InputSignal<string>;
     readonly annotationsTab: import("@angular/core").InputSignal<boolean>;
+    readonly preferARender: import("@angular/core").InputSignal<boolean>;
     readonly showMainFileControls: import("@angular/core").InputSignal<boolean>;
     readonly mainFileActionInProgress: import("@angular/core").InputSignal<string | null>;
     readonly downloadClicked: import("@angular/core").OutputEmitterRef<void>;
@@ -5648,6 +5650,11 @@ class DocumentViewerComponent {
     };
     "annotationsTab": {
     "alias": "annotationsTab";
+    "required": false;
+    "isSignal": true;
+    };
+    "preferARender": {
+    "alias": "preferARender";
     "required": false;
     "isSignal": true;
     };

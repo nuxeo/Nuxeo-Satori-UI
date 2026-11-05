@@ -606,19 +606,20 @@ breaking the slot it sits in.
 Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicates in
 `libs/shared/nuxeo-client/src/lib/utils/document-permissions.ts` — the permission logic is unchanged.
 
-| ID                               | True when                                                         |
-| -------------------------------- | ----------------------------------------------------------------- |
-| `app.rules.canWrite`             | The user has `Write` or `WriteProperties` on the focused document |
-| `app.rules.canRemove`            | The user has `Remove`                                             |
-| `app.rules.canAddChildren`       | The user has `AddChildren`                                        |
-| `app.rules.canManagePermissions` | The user has `WriteSecurity` or `Everything`                      |
-| `app.rules.canPublish`           | Web UI's `isPublishable`: see below                               |
-| `app.rules.hasDocument`          | A document is in focus                                            |
-| `app.rules.isType`               | The focused document's type is one of the `parameters`            |
-| `app.rules.hasFacet`             | The focused document carries at least one facet in `parameters`   |
-| `app.rules.hasFile`              | The focused document holds a main file (`file:content`)           |
-| `app.rules.isTrashed`            | The focused document is in the trash                              |
-| `app.rules.isNotTrashed`         | A document is in focus and is not in the trash                    |
+| ID                               | True when                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| `app.rules.canWrite`             | The user has `Write` or `WriteProperties` on the focused document                    |
+| `app.rules.canRemove`            | The user has `Remove`                                                                |
+| `app.rules.canAddChildren`       | The user has `AddChildren`                                                           |
+| `app.rules.canManagePermissions` | The user has `WriteSecurity` or `Everything`                                         |
+| `app.rules.canPublish`           | Web UI's `isPublishable`: see below                                                  |
+| `app.rules.hasDocument`          | A document is in focus                                                               |
+| `app.rules.isType`               | The focused document's type is one of the `parameters`                               |
+| `app.rules.hasFacet`             | The focused document carries at least one facet in `parameters`                      |
+| `app.rules.hasMimeType`          | The main file MIME type matches any exact type or family (`image/*`) in `parameters` |
+| `app.rules.hasFile`              | The focused document holds a main file (`file:content`)                              |
+| `app.rules.isTrashed`            | The focused document is in the trash                                                 |
+| `app.rules.isNotTrashed`         | A document is in focus and is not in the trash                                       |
 
 `app.rules.canPublish` is Nuxeo Web UI's `isPublishable`: the focused document is not a proxy, a
 record or in the trash, carries the `Publishable` facet, and the user has `WriteVersion`. It is
@@ -1267,6 +1268,52 @@ renders an empty body rather than throwing, so the manifest can precede the
 library.
 
 ---
+
+### Select NEV for the packaged View tab (NXSAT-698)
+
+The built-in viewer remains the default. To prefer NEV 2026 without rebuilding, configure
+`integrations.arender.viewerOrigin` in the Layer 0 bootstrap and contribute this Layer 1
+manifest fragment:
+
+```json
+{
+  "extensions": {
+    "slots": {
+      "tabs": [
+        {
+          "id": "app.tabs.view",
+          "preferARender": {
+            "type": "app.rules.hasMimeType",
+            "parameters": ["application/pdf", "message/rfc822", "image/vnd.adobe.photoshop"]
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+Use `"preferARender": "core.true"` for all documents, or `"core.false"` to disable it.
+Contribute the field through `slots.tabs` using the packaged ID, **not** `overrides`, whose
+accepted fields are limited to visibility, order, label and rule. Omitting the field keeps the
+built-in viewer. A malformed field is ignored; valid references use the ordinary rule resolver,
+including its documented unknown-ID behavior. Nested `core.every`, `core.some` and `core.not`
+can combine MIME, type and facet rules. Later manifest layers may change the selection.
+
+`app.rules.hasMimeType` reads only `file:content['mime-type']`. Matching ignores case,
+surrounding whitespace and semicolon parameters. It accepts exact types and family patterns
+such as `image/*`; arbitrary globs and `*/*` are not supported. Missing content, missing MIME,
+empty parameters and non-string parameters do not match. There is no `picture:views` fallback:
+a JPEG rendition must not determine whether an original PSD uses NEV. Note MIME metadata is
+not used by this rule.
+
+NEV renders only when the existing URL service supplies a usable URL. Unconfigured NEV,
+missing addon, denied Read permission, rejected URL or missing blob leaves the existing built-in
+content (or its existing no-preview state) in place. Its image/video controls and main-file
+actions return on fallback. Notes retain their editor; Annotations retains its existing behavior.
+A successfully loaded custom `documentView` component still takes precedence. This preference
+is part of the packaged viewer, not a registered NEV component or a new `documentView` entry.
+A valid frame URL whose remote viewer later fails is not detectable by this null-URL fallback.
 
 ## 9a. `documentView` — a different View per document type
 

@@ -103,6 +103,7 @@ describe('DocumentViewerComponent — MIME dispatch and viewer state', () => {
     storyboard: StoryboardItem[];
     hasPdfRendition: boolean;
     annotationsTab: boolean;
+    preferARender: boolean;
     arenderUrl: SafeResourceUrl | null;
     pictureInfo: PictureInfo | null;
     videoInfo: VideoInfo | null;
@@ -126,6 +127,7 @@ describe('DocumentViewerComponent — MIME dispatch and viewer state', () => {
     storyboard: [],
     hasPdfRendition: false,
     annotationsTab: false,
+    preferARender: false,
     arenderUrl: null,
     pictureInfo: null,
     videoInfo: null,
@@ -446,6 +448,43 @@ describe('DocumentViewerComponent — MIME dispatch and viewer state', () => {
     it('does not show the ARender viewer on the Annotations tab without a URL', () => {
       setInputs({ arenderUrl: null, annotationsTab: true });
       expect(component.showARenderViewer()).toBe(false);
+    });
+
+    it('opts the View tab into NEV only while a URL is available', () => {
+      setInputs({ preferARender: true, arenderUrl, blobUrl, mimeType: 'image/png' });
+      expect(component.showARenderViewer()).toBe(true);
+      expect(component.showImageToolbar()).toBe(false);
+
+      setInputs({ preferARender: true, arenderUrl: null, blobUrl, mimeType: 'image/png' });
+      expect(component.showARenderViewer()).toBe(false);
+      expect(component.contentType()).toBe('image');
+      expect(component.showImageToolbar()).toBe(true);
+
+      setInputs({ arenderUrl, preferARender: false });
+      expect(component.showARenderViewer()).toBe(false);
+    });
+
+    it('suppresses video metadata and storyboard for an opted-in View tab', () => {
+      setInputs({
+        preferARender: true,
+        arenderUrl,
+        blobUrl,
+        mimeType: 'video/mp4',
+        storyboard: [storyboardItem()],
+        videoInfo: videoInfo(),
+      });
+      expect(component.showVideoStoryboard()).toBe(false);
+      expect(component.showVideoInfoCard()).toBe(false);
+      setInputs({
+        preferARender: true,
+        arenderUrl: null,
+        blobUrl,
+        mimeType: 'video/mp4',
+        storyboard: [storyboardItem()],
+        videoInfo: videoInfo(),
+      });
+      expect(component.showVideoStoryboard()).toBe(true);
+      expect(component.showVideoInfoCard()).toBe(true);
     });
 
     it('suppresses the image toolbar and the picture cards on the Annotations tab', () => {
