@@ -809,11 +809,13 @@ const entries = [];
 for (const file of bundleIsLink || !existsSync(BUNDLE) ? [] : filesUnder(BUNDLE).sort()) {
   if (!isPackaged(file)) continue;
   const name = relative(BUNDLE, file).split(sep).join('/');
+  // A contribution's JSON contract also applies when its src names the JAR manifest.
+  // Validate bodies before choosing a file-specific packaging transform.
   const data =
-    name === MANIFEST_ENTRY
-      ? packageManifest(manifest)
-      : file.endsWith('.json') || jsonBodies.has(file)
-        ? checkJson(file)
+    file.endsWith('.json') || jsonBodies.has(file)
+      ? checkJson(file)
+      : name === MANIFEST_ENTRY
+        ? packageManifest(manifest)
         : readFileSync(file);
   if (data) entries.push({ name, data });
 }

@@ -676,6 +676,19 @@ describe('the generated build.mjs', () => {
   });
 
   describe('a fragment or layout body', () => {
+    it.each([
+      ['fragment', '<fragment name="manifest-body" layer="manifest" src="META-INF/MANIFEST.MF" />'],
+      ['layout', '<layout type="File" mode="view" src="META-INF/MANIFEST.MF" />'],
+    ])('rejects the JAR manifest used as a %s JSON body', async (_kind, element) => {
+      await generate();
+      contribute(element);
+      const { status, output, zip } = build();
+      expect(status).toBe(1);
+      expect(output).toContain('bundle/META-INF/MANIFEST.MF:');
+      expect(output).toContain('not built');
+      expect(zip).toBeUndefined();
+    });
+
     it('is checked when its file is not called .json, and packaged compact', async () => {
       await generate();
       write('bundle/agentic-ui-config/labels.txt', '{\n  "labels": {}\n}\n');
