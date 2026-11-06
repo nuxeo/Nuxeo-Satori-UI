@@ -77,6 +77,24 @@ A later fragment with the same name and layer replaces the earlier one in place;
 with the same type and mode replaces the file whole; `enabled="false"` removes either. The full
 contract is in [`docs/extension-reference.md`](../../docs/extension-reference.md).
 
+### Authentication mapping for the UI
+
+The bundle's `OSGI-INF/deployment-fragment.xml` contributes `NuxeoAuthenticationFilter` on
+`/agentic-ui/*` for `REQUEST` and `FORWARD` dispatches through `web#FILTER-MAPPING`. The suffix
+names the `%{FILTER-MAPPING}%` marker in Nuxeo's web template; a file path such as
+`web#WEB-INF/web.xml` does not reach that marker (NXSAT-681).
+
+After installing or upgrading the bundle, restart Nuxeo so it regenerates
+`nxserver/nuxeo.war/WEB-INF/web.xml`. Check that this file contains the authentication filter
+mapping for `/agentic-ui/*` and both dispatchers. Then request `/nuxeo/agentic-ui/` without a
+session and verify that the configured authentication provider handles the request; with a
+valid session the UI should load. The configuration servlet below remains a separate public
+path, `/agentic-ui-config/*`.
+
+The Java regression test checks the shipped fragment's template-marker contract:
+`mvn -pl nuxeo-agentic-core -am test -Dtest=DeploymentFragmentTest -Dsurefire.failIfNoSpecifiedTests=false`.
+It does not replace the generated-file and live authentication checks.
+
 ### What the servlet serves
 
 `AgenticUiConfigServlet` is mapped at `/agentic-ui-config/*` by the bundle's deployment fragment
