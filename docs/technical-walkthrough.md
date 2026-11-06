@@ -446,7 +446,7 @@ mvn package -pl nuxeo-agentic-ui-package -am  (triggered by GitHub Actions on ma
 
 **OSGi contributions in `nuxeo-agentic-core`:**
 
-- `deployment-fragment.xml` — tells Nuxeo to pass all requests under `/agentic-ui/*` through `NuxeoAuthenticationFilter`, enabling SSO/SAML to work seamlessly
+- `deployment-fragment.xml` — contributes the `/agentic-ui/*` mapping for `NuxeoAuthenticationFilter` to the `web#FILTER-MAPPING` template marker, for `REQUEST` and `FORWARD` dispatches. Nuxeo writes it into `nxserver/nuxeo.war/WEB-INF/web.xml` during configuration; authentication follows the server's configured providers.
 - `auth-config-agentic.xml` — authentication configuration for the agentic UI path
 - `login-startup-page-agentic-contrib.xml` — registers the UI as a valid start URL
 - `agentic-notification-doc-url-contrib.xml` + `AgenticNotificationDocumentIdCodec` — permission notification emails link to `agentic-ui/#/doc/{uid}`
@@ -477,7 +477,7 @@ mvn package -pl nuxeo-agentic-ui-package -am  (triggered by GitHub Actions on ma
 
 **Q: How does auth work when it's embedded in Nuxeo?**
 
-> The OSGi `deployment-fragment.xml` tells Nuxeo to apply `NuxeoAuthenticationFilter` to the `/agentic-ui/*` path. When a user visits the UI, Nuxeo handles SSO/SAML transparently before Angular loads. The Angular interceptor then sends `withCredentials: true` so Nuxeo session cookies are included on every API call.
+> The OSGi `deployment-fragment.xml` contributes `NuxeoAuthenticationFilter` on `/agentic-ui/*` through `web#FILTER-MAPPING`. The target must name the template marker: `web#WEB-INF/web.xml` is a file path and does not insert the mapping. After installing or upgrading the bundle, restart Nuxeo and verify the mapping in its generated `nxserver/nuxeo.war/WEB-INF/web.xml`. Authentication uses the server's configured providers, including SSO/SAML when configured. The Angular interceptor sends `withCredentials: true` so Nuxeo session cookies are included on API calls.
 
 **Q: How was the AI backend secured?**
 
