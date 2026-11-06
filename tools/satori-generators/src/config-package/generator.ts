@@ -79,7 +79,8 @@ function isWindowsDeviceName(segment: string): boolean {
  *
  * ## What it generates, and why each part is there
  *
- * - `package/package.xml` depends on `nuxeo-agentic-ui`, which orders **installation**: Nuxeo
+ * - `package/package.xml` depends on `nuxeo-agentic-ui:2026.0.2`, a minimum version with no maximum.
+ *   This orders **installation** and excludes builds without the configuration service: Nuxeo
  *   refuses the package on a server without ours, and reinstalls it around an upgrade of ours.
  * - `bundle/OSGI-INF/<name>-config.xml` `<require>`s `org.nuxeo.agentic.ui.config.defaults`,
  *   which orders **contributions**, so every fragment here is applied after our defaults. Both
@@ -95,10 +96,6 @@ function isWindowsDeviceName(segment: string): boolean {
  * same bytes.
  *
  * ## What it deliberately does not do
- *
- * It declares no minimum version of `nuxeo-agentic-ui`: every published build is currently
- * `2026.0.1-<timestamp>`, so there is no version that separates a build with the configuration
- * service from one without it. The README says what that means for the customer.
  *
  * It does not run Prettier over what it writes. `create.mjs` cannot, and Prettier's output depends
  * on the input — it rewrites `*Claims*` in a title as `_Claims_` and breaks a long `outputs` path
