@@ -4,8 +4,9 @@ Status: **server provisioned and CLI package lifecycle verified locally. The Adm
 lifecycle is NOT RUN: the installed LTS-2025 administration UIs expose no package lifecycle controls.**
 
 [NXSAT-680](https://hyland.atlassian.net/browse/NXSAT-680) requires an Admin Center
-install, upgrade and removal of a configuration package, with recorded evidence. Its prerequisite
-is [NXSAT-679](https://hyland.atlassian.net/browse/NXSAT-679), merged into `main`.
+install, upgrade and removal of a configuration package, with recorded evidence. Final acceptance
+requires [NXSAT-679](https://hyland.atlassian.net/browse/NXSAT-679) to be merged into `main`;
+that merge has not yet been verified.
 The existing `nuxeoctl mp-install` rehearsal does not validate this UI path.
 
 ## Initial preparation record — 2026-11-04, before provisioning
