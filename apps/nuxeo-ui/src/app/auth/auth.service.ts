@@ -16,6 +16,7 @@ import {
 import {
   AUTH_TOKEN_HEADER,
   readShareTokenFromBrowserUrl,
+  rememberSharedDocumentLanding,
   stripShareTokenFromBrowserUrl,
 } from './share-token.util';
 import { NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
@@ -515,6 +516,7 @@ export class AuthService {
   private runHydration(): Observable<void> {
     const shareToken = readShareTokenFromBrowserUrl();
     if (shareToken) {
+      rememberSharedDocumentLanding();
       stripShareTokenFromBrowserUrl();
       return this.authenticateWithShareToken(shareToken).pipe(
         switchMap(() => (this.isAuthenticated() ? of(undefined) : this.runHydration())),

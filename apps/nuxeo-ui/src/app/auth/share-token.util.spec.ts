@@ -1,4 +1,9 @@
-import { readShareTokenFromBrowserUrl, stripShareTokenFromBrowserUrl } from './share-token.util';
+import {
+  SHARED_DOCUMENT_STORAGE_KEY,
+  readShareTokenFromBrowserUrl,
+  rememberSharedDocumentLanding,
+  stripShareTokenFromBrowserUrl,
+} from './share-token.util';
 
 describe('share-token.util', () => {
   it('reads token from search query before hash', () => {
@@ -40,5 +45,28 @@ describe('share-token.util', () => {
     } finally {
       window.history.replaceState = original;
     }
+  });
+});
+
+describe('rememberSharedDocumentLanding', () => {
+  afterEach(() => window.sessionStorage.removeItem(SHARED_DOCUMENT_STORAGE_KEY));
+
+  it('keeps the hash route the share link opened, without the token', () => {
+    rememberSharedDocumentLanding(
+      'https://host/nuxeo/agentic-ui/#/browse/default-domain/workspaces/ws-1/doc?token=abc123',
+    );
+    expect(window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY)).toBe(
+      '/browse/default-domain/workspaces/ws-1/doc',
+    );
+  });
+
+  it('keeps nothing for a link with no in-app route', () => {
+    rememberSharedDocumentLanding('https://host/nuxeo/agentic-ui/?token=abc123');
+    expect(window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY)).toBeNull();
+  });
+
+  it('keeps nothing for the bare root, which a recipient cannot use either', () => {
+    rememberSharedDocumentLanding('https://host/nuxeo/agentic-ui/#/?token=abc123');
+    expect(window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY)).toBeNull();
   });
 });

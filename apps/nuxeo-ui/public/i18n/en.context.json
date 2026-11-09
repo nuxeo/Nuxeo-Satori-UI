@@ -592,6 +592,7 @@
   "browse.browse.tags": "Visible text in browse. Rendered in libs/features/browse/src/lib/browse/browse.html.",
   "browse.browse.the-document-is-not-shared-with": "Visible text in browse. Rendered in libs/features/browse/src/lib/browse/browse.html.",
   "browse.browse.there-are-no-local-permissions": "Visible text in browse. Rendered in libs/features/browse/src/lib/browse/browse.html.",
+  "browse.browse.back-to-shared-document": "Link in the refusal state, shown to an external recipient who opened a shared document and then a folder they cannot read. Returns them to the document they were sent.",
   "browse.browse.this-folder-is-empty": "Visible text in browse. Rendered in libs/features/browse/src/lib/browse/browse.html.",
   "browse.browse.time-frame": "Visible text in browse. Rendered in libs/features/browse/src/lib/browse/browse.html.",
   "browse.browse.title": "Visible text in browse. Rendered in libs/features/browse/src/lib/browse/browse.html.",

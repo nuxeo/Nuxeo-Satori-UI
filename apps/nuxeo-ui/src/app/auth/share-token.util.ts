@@ -55,3 +55,34 @@ export function stripShareTokenFromBrowserUrl(
     // ignore malformed URLs
   }
 }
+
+/**
+ * Session-storage key for the route a share link landed on. Read by the browse feature (a library,
+ * which cannot import the app) under the same literal; keep the two in step.
+ */
+export const SHARED_DOCUMENT_STORAGE_KEY = 'nxs.sharedDocumentPath';
+
+/**
+ * Remembers the in-app route the share link opened, so a recipient who later clicks outside the
+ * document can be sent back to it. Must run before the token is stripped from the address. Only a
+ * hash route with a real path is kept; anything else is ignored, and the action simply is not offered.
+ */
+export function rememberSharedDocumentLanding(
+  href = typeof window !== 'undefined' ? window.location.href : '',
+): void {
+  if (!href || typeof window === 'undefined') {
+    return;
+  }
+  try {
+    const hash = new URL(href).hash;
+    if (!hash.startsWith('#/')) {
+      return;
+    }
+    const path = hash.slice(1).split('?')[0];
+    if (path.length > 1) {
+      window.sessionStorage.setItem(SHARED_DOCUMENT_STORAGE_KEY, path);
+    }
+  } catch {
+    // Storage can be blocked or the URL malformed; the back action is then not offered.
+  }
+}
