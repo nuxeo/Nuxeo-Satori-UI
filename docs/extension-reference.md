@@ -1293,7 +1293,10 @@ manifest fragment:
 }
 ```
 
-Use `"preferARender": "core.true"` for all documents, or `"core.false"` to disable it.
+Use `"preferARender": { "type": "core.true" }` for all documents, or
+`"preferARender": { "type": "core.false" }` to disable it. These object forms also override
+an earlier layer's MIME rule. A bare string does not replace an existing object-valued rule
+during layer merging; use the object form when changing an earlier selection.
 Contribute the field through `slots.tabs` using the packaged ID, **not** `overrides`, whose
 accepted fields are limited to visibility, order, label and rule. Omitting the field keeps the
 built-in viewer. A malformed field is ignored; valid references use the ordinary rule resolver,

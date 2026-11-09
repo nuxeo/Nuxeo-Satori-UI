@@ -1095,6 +1095,23 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(body().querySelector('button[aria-label="Open with Nuxeo Drive"]')).toBeTruthy();
     });
 
+    it.each([
+      { rule: 'core.false', mime: 'application/pdf', expected: false },
+      { rule: 'core.true', mime: 'image/png', expected: true },
+    ])(
+      'overrides an earlier MIME rule with a later $rule rule',
+      async ({ rule, mime, expected }) => {
+        const earlier = optIn({ type: 'app.rules.hasMimeType', parameters: [mime] });
+        await render(earlier, pdf(), {}, [], { available: true, url });
+        expect(viewer().preferARender()).toBe(!expected);
+        manifest.set({ extensionLayers: [earlier, optIn({ type: rule })] });
+        await settle();
+        expect(viewer().preferARender()).toBe(expected);
+        expect(!!body().querySelector('.arender-frame')).toBe(expected);
+        expect(!!body().querySelector('.footer-remove-btn')).toBe(!expected);
+      },
+    );
+
     it('renders a ready NEV frame while the fallback blob is pending, then restores fallback loading', async () => {
       const blob = new Subject<Blob>();
       mockDetailService.fetchBlob.mockReturnValueOnce(blob);
