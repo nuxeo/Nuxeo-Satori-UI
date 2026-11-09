@@ -113,22 +113,36 @@ export const TheWholeCardOpens: Story = {
     const canvas = within(canvasElement);
     const card = canvas.getAllByRole('listitem')[0];
     const name = canvas.getByRole('button', { name: 'Spring campaign hero.jpg' });
-    const pill = card.querySelector('.nxs-asset-grid__type');
-    await expect(pill).not.toBeNull();
 
     const hit = (element: Element): Element | null => {
       const box = element.getBoundingClientRect();
       return document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
     };
 
+    /* The button itself, or anything inside it, is a real hit: a click there runs the handler, on
+       the button or by bubbling up to it. An ANCESTOR of the button is not, and must not be
+       accepted — clicks do not travel downwards. Containment tested both ways would accept one,
+       and that is the dead zone this story exists to catch rather than a hypothetical: with the
+       overlay stopping short of the type row, the hit at the pill's centre lands on
+       `div.nxs-asset-grid__body`, which contains the button but carries no handler. Measured in
+       Chromium — a real `mouse.click()` at that point reaches the button 0 times, while a check
+       that allowed ancestors stayed green over it. */
+    const reached = (landed: Element | null): string => {
+      if (landed === name || name.contains(landed)) return 'the name button';
+      if (landed === null) return 'nothing';
+      const classes = String(landed.className).trim().split(/\s+/).filter(Boolean).join('.');
+      return `${landed.tagName.toLowerCase()}${classes ? `.${classes}` : ''}`;
+    };
+
     // The checkbox is the one region that must NOT open the document — it is its own control.
     for (const region of ['.nxs-asset-grid__thumbnail', '.nxs-asset-grid__type'] as const) {
       const target = card.querySelector(region);
       await expect(target).not.toBeNull();
-      const landed = hit(target as Element);
-      await expect(
-        landed === name || name.contains(landed) || (landed as Element | null)?.contains(name),
-      ).toBe(true);
+      // Asserted as a string, not a boolean: a failure then names the element the pointer would
+      // have reached instead, which `expected false to be true` cannot.
+      await expect(`${region} hits ${reached(hit(target as Element))}`).toBe(
+        `${region} hits the name button`,
+      );
     }
   },
 };
