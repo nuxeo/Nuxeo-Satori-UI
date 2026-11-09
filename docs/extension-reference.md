@@ -678,11 +678,12 @@ Do not reference those two yet.
 These three **fail closed**: if one is referenced before it is registered, it
 denies rather than permits.
 
-| ID                                  | True when                       |
-| ----------------------------------- | ------------------------------- |
-| `app.rules.isAdministrator`         | The user is in `administrators` |
-| `app.rules.isPowerUser`             | The user is in `powerusers`     |
-| `app.rules.hasAdministrationAccess` | Either of the above             |
+| ID                                  | True when                                                                                                            |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `app.rules.isAdministrator`         | The user is in `administrators`                                                                                      |
+| `app.rules.isPowerUser`             | The user is in `powerusers`                                                                                          |
+| `app.rules.hasAdministrationAccess` | Either of the above                                                                                                  |
+| `app.rules.isExternalUser`          | The user is an external share recipient (`transient/`), who can open none of Browse, Favorites, Collections or Trash |
 
 `rule: null` in an override still clears the gate, so a customer who genuinely
 wants an entry ungated has a Layer 1 route to it. Fail-closed is about the
