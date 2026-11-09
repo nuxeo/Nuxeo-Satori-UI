@@ -66,7 +66,10 @@ test('dashboard Create or import button meets WCAG 1.4.11 non-text contrast', as
       glyph: icon ? getComputedStyle(icon).color : style.color,
     };
   });
-  const pageBackground = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  // The dashboard paints its backdrop on its own host element, not on <body>.
+  const pageBackground = await page
+    .locator('app-dashboard-page')
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
   const cardBackground = await card.evaluate(
     (element) => getComputedStyle(element).backgroundColor,
   );
