@@ -1,5 +1,7 @@
 import {
   SHARED_DOCUMENT_STORAGE_KEY,
+  clearSharedDocumentLanding,
+  readLandingPathFromBrowserUrl,
   readShareTokenFromBrowserUrl,
   rememberSharedDocumentLanding,
   stripShareTokenFromBrowserUrl,
@@ -48,25 +50,47 @@ describe('share-token.util', () => {
   });
 });
 
-describe('rememberSharedDocumentLanding', () => {
-  afterEach(() => window.sessionStorage.removeItem(SHARED_DOCUMENT_STORAGE_KEY));
+describe('shared document landing', () => {
+  const KEY = SHARED_DOCUMENT_STORAGE_KEY;
+  afterEach(() => window.sessionStorage.removeItem(KEY));
 
-  it('keeps the hash route the share link opened, without the token', () => {
-    rememberSharedDocumentLanding(
-      'https://host/nuxeo/agentic-ui/#/browse/default-domain/workspaces/ws-1/doc?token=abc123',
-    );
-    expect(window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY)).toBe(
-      '/browse/default-domain/workspaces/ws-1/doc',
-    );
+  it('reads the hash route, without its query, as the landing', () => {
+    expect(
+      readLandingPathFromBrowserUrl(
+        'https://host/nuxeo/agentic-ui/#/browse/default-domain/workspaces/ws-1/doc?token=abc123',
+      ),
+    ).toBe('/browse/default-domain/workspaces/ws-1/doc');
   });
 
-  it('keeps nothing for a link with no in-app route', () => {
-    rememberSharedDocumentLanding('https://host/nuxeo/agentic-ui/?token=abc123');
-    expect(window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY)).toBeNull();
+  it('reads no landing from a link with no in-app route, or only the root', () => {
+    expect(readLandingPathFromBrowserUrl('https://host/nuxeo/agentic-ui/?token=abc123')).toBeNull();
+    expect(
+      readLandingPathFromBrowserUrl('https://host/nuxeo/agentic-ui/#/?token=abc123'),
+    ).toBeNull();
   });
 
-  it('keeps nothing for the bare root, which a recipient cannot use either', () => {
-    rememberSharedDocumentLanding('https://host/nuxeo/agentic-ui/#/?token=abc123');
-    expect(window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY)).toBeNull();
+  it('remembers the landing for the principal it was issued to', () => {
+    rememberSharedDocumentLanding('/browse/default-domain/doc', 'transient/a@example.invalid');
+    expect(JSON.parse(window.sessionStorage.getItem(KEY) ?? 'null')).toEqual({
+      user: 'transient/a@example.invalid',
+      path: '/browse/default-domain/doc',
+    });
+  });
+
+  it('forgets a previous landing when a second share link does not give one', () => {
+    rememberSharedDocumentLanding('/browse/default-domain/first', 'transient/a@example.invalid');
+    rememberSharedDocumentLanding(null, 'transient/b@example.invalid');
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('remembers nothing when the exchange did not sign anyone in', () => {
+    rememberSharedDocumentLanding('/browse/default-domain/doc', null);
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('clears what was remembered when asked to forget it', () => {
+    rememberSharedDocumentLanding('/browse/default-domain/doc', 'transient/a@example.invalid');
+    clearSharedDocumentLanding();
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
   });
 });

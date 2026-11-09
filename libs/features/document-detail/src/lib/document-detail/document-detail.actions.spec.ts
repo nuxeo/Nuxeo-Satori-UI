@@ -137,6 +137,9 @@ interface DialogRefLike {
   afterClosed: () => Observable<unknown>;
 }
 
+/** The signed-in username the component sees; a test can make it an external share recipient. */
+let currentUsername = 'tester';
+
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument> => of(doc())),
   fetchBlob: vi.fn((): Observable<Blob> => of(new Blob(['x'], { type: 'text/plain' }))),
@@ -331,7 +334,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         { provide: AiChatService, useValue: { openPanel: vi.fn() } },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(false) } },
         { provide: NuxeoApiBase, useValue: { nxqlSearch: vi.fn(() => of({ entries: [] })) } },
-        { provide: CURRENT_USERNAME, useValue: () => 'tester' },
+        { provide: CURRENT_USERNAME, useValue: () => currentUsername },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {
@@ -1577,6 +1580,21 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.detailsPanelToggleLabelKey()).toBe('document-detail.show-details');
       component.openPropertiesPanel();
       expect(component.detailsPanelToggleLabelKey()).toBe('document-detail.hide-details');
+    });
+
+    it('shows an external share recipient the ancestor folders as text, not links', async () => {
+      currentUsername = 'transient/recipient@example.invalid';
+      try {
+        await build(doc({ path: '/default-domain/workspaces/ws/report', title: 'Report' }));
+
+        expect(component.breadcrumbItems()).toEqual([
+          { label: 'default-domain' },
+          { label: 'workspaces' },
+          { label: 'ws' },
+        ]);
+      } finally {
+        currentUsername = 'tester';
+      }
     });
 
     it('builds router links for every ancestor folder but not the document itself', async () => {

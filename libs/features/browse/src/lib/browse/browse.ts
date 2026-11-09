@@ -56,7 +56,7 @@ import {
   untracked,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { NavigationEnd, Router, RouterLink } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, UrlTree } from '@angular/router';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -953,14 +953,20 @@ export class BrowseComponent {
   }
 
   /**
-   * Where the share link the recipient came in by landed, for the "back to shared document" action.
-   * Written to session storage by the app shell when the share token is exchanged. Null when it is
-   * not there (another tab, cleared storage) — the action is then simply not offered.
+   * Where the share link the recipient came in by landed, as a route to navigate to, for the "back to
+   * shared document" action. Written by the app shell when the share token is exchanged, together with
+   * the principal it was issued to: offered only to that same principal, and never as a raw string, so
+   * an encoded path resolves once. Null when it is not there or was issued to someone else.
    */
-  sharedDocumentLink(): string | null {
+  sharedDocumentLink(): UrlTree | null {
     try {
-      const link = window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY);
-      return link && link.startsWith('/') ? link : null;
+      const raw = window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY);
+      if (!raw) return null;
+      const stored = JSON.parse(raw) as { user?: unknown; path?: unknown };
+      if (typeof stored.user !== 'string' || typeof stored.path !== 'string') return null;
+      if (stored.user !== this.currentUsername()) return null;
+      if (!stored.path.startsWith('/')) return null;
+      return this.router.parseUrl(stored.path);
     } catch {
       return null;
     }

@@ -57,32 +57,61 @@ export function stripShareTokenFromBrowserUrl(
 }
 
 /**
- * Session-storage key for the route a share link landed on. Read by the browse feature (a library,
- * which cannot import the app) under the same literal; keep the two in step.
+ * Session-storage key for the route a share link landed on, with the principal it was issued to:
+ * `{"user":"transient/…","path":"/browse/…"}`. Read by the browse feature (a library, which cannot
+ * import the app) under the same literal; keep the two in step.
  */
 export const SHARED_DOCUMENT_STORAGE_KEY = 'nxs.sharedDocumentPath';
 
 /**
- * Remembers the in-app route the share link opened, so a recipient who later clicks outside the
- * document can be sent back to it. Must run before the token is stripped from the address. Only a
- * hash route with a real path is kept; anything else is ignored, and the action simply is not offered.
+ * The in-app route the address bar points at, as a hash route, with no query: what a share link
+ * opened. Null for anything that is not a real route (the bare root is not one a recipient can use).
  */
-export function rememberSharedDocumentLanding(
+export function readLandingPathFromBrowserUrl(
   href = typeof window !== 'undefined' ? window.location.href : '',
-): void {
+): string | null {
   if (!href || typeof window === 'undefined') {
-    return;
+    return null;
   }
   try {
     const hash = new URL(href).hash;
     if (!hash.startsWith('#/')) {
-      return;
+      return null;
     }
     const path = hash.slice(1).split('?')[0];
-    if (path.length > 1) {
-      window.sessionStorage.setItem(SHARED_DOCUMENT_STORAGE_KEY, path);
-    }
+    return path.length > 1 ? path : null;
   } catch {
-    // Storage can be blocked or the URL malformed; the back action is then not offered.
+    return null;
+  }
+}
+
+/** Forgets any remembered share landing. Called on every share exchange, sign-in and sign-out. */
+export function clearSharedDocumentLanding(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    window.sessionStorage.removeItem(SHARED_DOCUMENT_STORAGE_KEY);
+  } catch {
+    // Storage can be blocked; there is then nothing to forget.
+  }
+}
+
+/**
+ * Remembers the landing route for the principal the share was exchanged for. Always clears first, so
+ * a second share link, or one that did not sign anyone in, cannot leave the previous document behind.
+ */
+export function rememberSharedDocumentLanding(path: string | null, username: string | null): void {
+  clearSharedDocumentLanding();
+  if (!path || !username || typeof window === 'undefined') {
+    return;
+  }
+  try {
+    window.sessionStorage.setItem(
+      SHARED_DOCUMENT_STORAGE_KEY,
+      JSON.stringify({ user: username, path }),
+    );
+  } catch {
+    // Storage can be blocked; the back action is then not offered.
   }
 }

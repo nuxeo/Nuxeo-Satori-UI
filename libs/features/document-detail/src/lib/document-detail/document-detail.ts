@@ -712,7 +712,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     if (!d) return [];
 
     const path = d.path ?? '';
-    const cacheKey = `${path}\0${d.title}`;
+    // An external share recipient can open none of the ancestors (NXSAT-211): they are text for them.
+    const external = (this.currentUsername() ?? '').startsWith('transient/');
+    const cacheKey = `${path}\0${d.title}\0${external}`;
     if (cacheKey === this.breadcrumbPathCache) {
       return this.breadcrumbItemsCache;
     }
@@ -723,10 +725,14 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     // Router links, not hrefs: whichever component `nxs.primitives.breadcrumbs` resolves to routes
     // them itself — the folded ones too, which Material's trail lists in a menu outside its host.
     // One command per segment, so the router encodes each exactly once.
-    this.breadcrumbItemsCache = parts.map((s, index) => ({
-      label: decodeNuxeoPathSegment(s),
-      routerLink: ['/browse', ...parts.slice(0, index + 1)],
-    }));
+    this.breadcrumbItemsCache = parts.map((s, index) =>
+      external
+        ? { label: decodeNuxeoPathSegment(s) }
+        : {
+            label: decodeNuxeoPathSegment(s),
+            routerLink: ['/browse', ...parts.slice(0, index + 1)],
+          },
+    );
     return this.breadcrumbItemsCache;
   });
 

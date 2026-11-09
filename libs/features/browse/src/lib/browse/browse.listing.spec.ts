@@ -645,8 +645,11 @@ describe('BrowseComponent — rendered document list', () => {
 
     afterEach(() => window.sessionStorage.removeItem('nxs.sharedDocumentPath'));
 
+    const remembered = (user: string, path: string) =>
+      window.sessionStorage.setItem('nxs.sharedDocumentPath', JSON.stringify({ user, path }));
+
     it('is offered a way back to the document they were sent, from a folder they cannot read', async () => {
-      window.sessionStorage.setItem('nxs.sharedDocumentPath', sharedLink);
+      remembered('transient/recipient@example.invalid', sharedLink);
       browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
 
       await render([transient]);
@@ -654,6 +657,30 @@ describe('BrowseComponent — rendered document list', () => {
       const back = query('nxs-error-state a');
       expect(back?.textContent?.trim()).toBe('Back to shared document');
       expect(back?.getAttribute('href')).toBe(sharedLink);
+    });
+
+    it('resolves an encoded path once, so a folder with a space is reached, not a doubly encoded one', async () => {
+      remembered(
+        'transient/recipient@example.invalid',
+        '/browse/default-domain/workspaces/Shared%20Folder/doc',
+      );
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      await render([transient]);
+
+      expect(query('nxs-error-state a')?.getAttribute('href')).toBe(
+        '/browse/default-domain/workspaces/Shared%20Folder/doc',
+      );
+    });
+
+    it('is not offered a landing that was issued to someone else', async () => {
+      remembered('transient/someone-else@example.invalid', sharedLink);
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      await render([transient]);
+
+      expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+      expect(query('nxs-error-state a')).toBeNull();
     });
 
     it('gets no way back when the landing was not remembered', async () => {
