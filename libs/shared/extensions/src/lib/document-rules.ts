@@ -80,7 +80,7 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
     const value = (content as Record<string, unknown>)['mime-type'];
     if (typeof value !== 'string') return false;
     const mime = mediaTypeEssence(value);
-    if (!mime || !mime.includes('/')) return false;
+    if (!mime.includes('/')) return false;
     return stringParameters(parameters).some((parameter) => {
       const pattern = mediaTypeEssence(parameter);
       return pattern.endsWith('/*')

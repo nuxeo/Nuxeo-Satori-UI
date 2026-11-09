@@ -1311,6 +1311,8 @@ NEV renders only when the existing URL service supplies a usable URL. Unconfigur
 missing addon, denied Read permission, rejected URL or missing blob leaves the existing built-in
 content (or its existing no-preview state) in place. Its image/video controls and main-file
 actions return on fallback. Notes retain their editor; Annotations retains its existing behavior.
+A ready NEV URL renders without waiting for the fallback blob download. Document loading still
+blocks the View; if the URL becomes unavailable, the built-in viewer resumes its normal loading state.
 A successfully loaded custom `documentView` component still takes precedence. This preference
 is part of the packaged viewer, not a registered NEV component or a new `documentView` entry.
 A valid frame URL whose remote viewer later fails is not detectable by this null-URL fallback.

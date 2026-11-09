@@ -299,7 +299,7 @@
                 [mimeType]="mimeType()"
                 [fileName]="fileName()"
                 [fileSize]="fileSize()"
-                [loading]="viewerLoading()"
+                [loading]="preferARender() && arenderUrl() !== null ? loading() : viewerLoading()"
                 [noteContent]="noteContent()"
                 [noteHtml]="noteHtml()"
                 [videoSources]="videoSources()"

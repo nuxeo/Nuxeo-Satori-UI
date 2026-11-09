@@ -24,7 +24,7 @@ import {
   withDisabledInitialNavigation,
 } from '@angular/router';
 // testTranslateModule() removed - no longer exported in ngx-translate 18
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { vi, type Mock } from 'vitest';
 import { resolve } from 'node:path';
 import { compile } from 'sass';
@@ -1094,6 +1094,65 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(body().querySelector('.footer-remove-btn')).toBeTruthy();
       expect(body().querySelector('button[aria-label="Open with Nuxeo Drive"]')).toBeTruthy();
     });
+
+    it('renders a ready NEV frame while the fallback blob is pending, then restores fallback loading', async () => {
+      const blob = new Subject<Blob>();
+      mockDetailService.fetchBlob.mockReturnValueOnce(blob);
+      await render(optIn(), pdf(), {}, [], { available: true, url });
+      const page = fixture.componentInstance;
+      expect(page.blobLoading()).toBe(true);
+      expect(page.blobUrl()).toBeNull();
+      expect(page.viewerLoading()).toBe(true);
+      expect(body().querySelector('iframe.arender-frame')?.getAttribute('src')).toBe(url);
+      expect(body().querySelector('.viewer-loading')).toBeNull();
+
+      page.loading.set(true);
+      await settle();
+      expect(fixture.nativeElement.querySelector('.detail-loading')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.arender-frame')).toBeNull();
+      page.loading.set(false);
+      page.arenderUrl.set(null);
+      await settle();
+      expect(body().querySelector('.viewer-loading')).toBeTruthy();
+      expect(body().querySelector('.arender-frame')).toBeNull();
+
+      blob.next(new Blob(['pdf'], { type: 'application/pdf' }));
+      blob.complete();
+      await settle();
+      expect(body().querySelector('.viewer-loading')).toBeNull();
+      expect(body().querySelector('iframe.viewer-iframe')).toBeTruthy();
+    });
+
+    it('keeps the built-in loading state when NEV is available without an opt-in', async () => {
+      const blob = new Subject<Blob>();
+      mockDetailService.fetchBlob.mockReturnValueOnce(blob);
+      await render({}, pdf(), {}, [], { available: true, url });
+      expect(body().querySelector('.viewer-loading')).toBeTruthy();
+      expect(body().querySelector('.arender-frame')).toBeNull();
+      blob.next(new Blob(['pdf'], { type: 'application/pdf' }));
+      blob.complete();
+      await settle();
+      expect(body().querySelector('.viewer-loading')).toBeNull();
+      expect(body().querySelector('iframe.viewer-iframe')).toBeTruthy();
+    });
+
+    it.each(['core.true', 'core.false'])(
+      'preserves Annotations main-file controls with View preference %s',
+      async (rule) => {
+        await render(optIn(rule), pdf(), {}, [], { available: true, url });
+        const page = fixture.componentInstance;
+        page.onTabChange(page.detailTabs().findIndex((tab) => tab.id === 'app.tabs.annotations'));
+        await settle();
+        expect(body().querySelector('iframe.arender-frame')?.getAttribute('src')).toBe(url);
+        expect(body().querySelector('.footer-remove-btn')).toBeTruthy();
+        expect(body().querySelector('button[aria-label="Replace main file"]')).toBeTruthy();
+        const remove = vi
+          .spyOn(page, 'openRemoveMainFileDialog')
+          .mockImplementation(() => undefined);
+        body().querySelector<HTMLButtonElement>('.footer-remove-btn')!.click();
+        expect(remove).toHaveBeenCalledOnce();
+      },
+    );
 
     it.each([
       { available: false, url: null },
