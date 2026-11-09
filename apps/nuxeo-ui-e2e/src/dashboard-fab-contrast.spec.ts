@@ -8,21 +8,31 @@ import { expect, test } from './fixtures';
  *
  * Three pairs are checked, all against the colours the button actually sits on:
  *   - fill vs the page background,
- *   - fill vs the white card it overlaps,
+ *   - fill vs the rendered dashboard card (a `.widget` from `lib-widget-container`) it overlaps,
  *   - the `+` glyph vs the fill.
+ *
+ * Every colour must be fully opaque. A translucent colour depends on what is behind it, and
+ * dropping its alpha would let a transparent fill measure as opaque, so the test fails instead.
  */
 
 const FAB = 'button.dashboard-create-fab';
+const CARD = 'lib-widget-container .widget';
 const WCAG_NON_TEXT_MIN = 3;
 
 type Rgb = [number, number, number];
 
-function parseRgb(value: string): Rgb {
-  const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+/** Parses a computed `rgb()`/`rgba()` value. Throws on any alpha below 1. */
+function parseOpaqueRgb(value: string): Rgb {
+  const match = value.match(/rgba?\(([^)]+)\)/);
   if (!match) {
     throw new Error(`not an rgb() colour: ${value}`);
   }
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+  const parts = match[1].split(',').map((part) => Number(part.trim()));
+  const [r, g, b, alpha = 1] = parts;
+  if (alpha !== 1) {
+    throw new Error(`translucent colour ${value}: composite it over its backdrop before measuring`);
+  }
+  return [r, g, b];
 }
 
 function relativeLuminance([r, g, b]: Rgb): number {
@@ -45,23 +55,26 @@ test('dashboard Create or import button meets WCAG 1.4.11 non-text contrast', as
 
   const fab = page.locator(FAB).filter({ hasText: 'Create or import' });
   await expect(fab).toBeVisible();
+  const card = page.locator(CARD).first();
+  await expect(card).toBeVisible();
 
   const colours = await fab.evaluate((element) => {
     const style = getComputedStyle(element);
     const icon = element.querySelector('mat-icon');
-    const pageBackground = getComputedStyle(document.body).backgroundColor;
     return {
       fill: style.backgroundColor,
       glyph: icon ? getComputedStyle(icon).color : style.color,
-      pageBackground,
-      cardWhite: 'rgb(255, 255, 255)',
     };
   });
+  const pageBackground = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const cardBackground = await card.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
 
-  const fillRgb = parseRgb(colours.fill);
-  const glyphRgb = parseRgb(colours.glyph);
-  const pageRgb = parseRgb(colours.pageBackground);
-  const cardRgb = parseRgb(colours.cardWhite);
+  const fillRgb = parseOpaqueRgb(colours.fill);
+  const glyphRgb = parseOpaqueRgb(colours.glyph);
+  const pageRgb = parseOpaqueRgb(pageBackground);
+  const cardRgb = parseOpaqueRgb(cardBackground);
 
   const ratios = {
     fillVsPage: contrastRatio(fillRgb, pageRgb),
@@ -70,10 +83,10 @@ test('dashboard Create or import button meets WCAG 1.4.11 non-text contrast', as
   };
 
   expect
-    .soft(ratios.fillVsPage, `fill ${colours.fill} vs page ${colours.pageBackground}`)
+    .soft(ratios.fillVsPage, `fill ${colours.fill} vs page ${pageBackground}`)
     .toBeGreaterThanOrEqual(WCAG_NON_TEXT_MIN);
   expect
-    .soft(ratios.fillVsCard, `fill ${colours.fill} vs card white`)
+    .soft(ratios.fillVsCard, `fill ${colours.fill} vs card ${cardBackground}`)
     .toBeGreaterThanOrEqual(WCAG_NON_TEXT_MIN);
   expect
     .soft(ratios.glyphVsFill, `glyph ${colours.glyph} vs fill ${colours.fill}`)
