@@ -314,18 +314,43 @@ describe('NxsAdminUsersGroupsPageComponent', () => {
     expect(page()['recentLoading']()).toBe(false);
   });
 
-  it('lists an account once when the audit reports it created twice (NXSAT-285)', async () => {
-    const created = {
+  it('keeps the newest creation of a re-created account, with a group and an unrelated account (NXSAT-285)', async () => {
+    // The provider lists newest first. The older creation of 'ssomise' has different metadata, so
+    // the assertion shows which entry survived. A group sharing the identifier must not be merged.
+    const newestUser = {
       uid: 'ssomise',
       type: 'user',
       properties: {
         'user:firstName': 'Sai Charan',
         'user:lastName': 'Somisetty',
-        'user:email': 'ssomise@example.invalid',
+        'user:email': 'new@example.invalid',
+      },
+    };
+    const sameIdGroup = {
+      uid: 'ssomise',
+      type: 'group',
+      properties: { 'group:grouplabel': 'Editors' },
+    };
+    const olderUser = {
+      uid: 'ssomise',
+      type: 'user',
+      properties: {
+        'user:firstName': 'Old',
+        'user:lastName': 'Name',
+        'user:email': 'old@example.invalid',
+      },
+    };
+    const unrelated = {
+      uid: 'jdoe',
+      type: 'user',
+      properties: {
+        'user:firstName': 'Jane',
+        'user:lastName': 'Doe',
+        'user:email': 'jdoe@example.invalid',
       },
     };
     userService['getRecentlyCreatedUsersAndGroups'].mockReturnValueOnce(
-      of({ entries: [created, { ...created }] }),
+      of({ entries: [newestUser, sameIdGroup, olderUser, unrelated] }),
     );
     page()['loadRecent']();
     await render();
@@ -334,7 +359,14 @@ describe('NxsAdminUsersGroupsPageComponent', () => {
         kind: 'user',
         name: 'Sai Charan Somisetty',
         identifier: 'ssomise',
-        email: 'ssomise@example.invalid',
+        email: 'new@example.invalid',
+      },
+      { kind: 'group', name: 'Editors', identifier: 'ssomise', email: '' },
+      {
+        kind: 'user',
+        name: 'Jane Doe',
+        identifier: 'jdoe',
+        email: 'jdoe@example.invalid',
       },
     ]);
   });
