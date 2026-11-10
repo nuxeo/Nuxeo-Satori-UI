@@ -314,6 +314,31 @@ describe('NxsAdminUsersGroupsPageComponent', () => {
     expect(page()['recentLoading']()).toBe(false);
   });
 
+  it('lists an account once when the audit reports it created twice (NXSAT-285)', async () => {
+    const created = {
+      uid: 'ssomise',
+      type: 'user',
+      properties: {
+        'user:firstName': 'Sai Charan',
+        'user:lastName': 'Somisetty',
+        'user:email': 'ssomise@example.invalid',
+      },
+    };
+    userService['getRecentlyCreatedUsersAndGroups'].mockReturnValueOnce(
+      of({ entries: [created, { ...created }] }),
+    );
+    page()['loadRecent']();
+    await render();
+    expect(page()['recent']()).toEqual([
+      {
+        kind: 'user',
+        name: 'Sai Charan Somisetty',
+        identifier: 'ssomise',
+        email: 'ssomise@example.invalid',
+      },
+    ]);
+  });
+
   it('routes a recent user or group to its callback', () => {
     const userChosen = vi.fn();
     const groupChosen = vi.fn();
