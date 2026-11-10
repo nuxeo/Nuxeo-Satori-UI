@@ -3,11 +3,11 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { generatorFilesDir } from './generator-files-dir';
+import { filesDirFrom, generatorFilesDir } from './generator-files-dir';
 
 /**
- * The generators that ship templates. Asserted against the directory listing below, so a new
- * generator with a `files/` directory cannot be added without this list naming it.
+ * The generators that ship templates. Asserted against the directory listing in the last test,
+ * so a new generator with a `files/` directory cannot be added without this list naming it.
  */
 const WITH_TEMPLATES = [
   'config-package',
@@ -18,40 +18,73 @@ const WITH_TEMPLATES = [
 
 const SRC = join(workspaceRoot, 'tools', 'satori-generators', 'src');
 
-describe('generatorFilesDir', () => {
-  // Vitest defines `__dirname`, and so does the CommonJS that
-  // `scripts/build-platform-generators.mjs` emits — the branch the published package takes.
-  it.each(WITH_TEMPLATES)('resolves %s from this module’s own directory', (generator) => {
-    const dir = generatorFilesDir(generator, __dirname);
-    expect(dir).toBe(join(SRC, generator, 'files'));
+/**
+ * Both branches resolve to the same directory *in this repository*, so a test that merely
+ * compares their output to the same expected path cannot tell which one ran — and the first
+ * version of this spec did exactly that, passing `undefined` to a default parameter that then
+ * supplied `__dirname` anyway. Hence `withAForeignDirectory` below: only the CommonJS branch
+ * derives its answer from `here`, so a fake `here` is what distinguishes them.
+ */
+describe('filesDirFrom', () => {
+  // The ESM branch: no module directory at all, which is what Nx's native type stripping leaves.
+  it.each(WITH_TEMPLATES)('resolves %s from the workspace when there is no module dir', (name) => {
+    const dir = filesDirFrom(undefined, name);
+    expect(dir).toBe(join(SRC, name, 'files'));
     expect(existsSync(dir)).toBe(true);
   });
 
-  // The branch Nx takes: native type stripping loads the source as ESM, where `__dirname` is
-  // not defined at all. No unit test reaches this through the real global — vitest always
-  // defines it — which is why `here` is a parameter, and why the CLI run is recorded in the
-  // NXSAT-795 evidence rather than asserted here.
-  it.each(WITH_TEMPLATES)('resolves %s with no __dirname at all', (generator) => {
-    const dir = generatorFilesDir(generator, undefined);
-    expect(dir).toBe(join(SRC, generator, 'files'));
+  // The CommonJS branch, in this repository's layout.
+  it.each(WITH_TEMPLATES)('resolves %s from this module’s own directory', (name) => {
+    const dir = filesDirFrom(join(SRC, 'util'), name);
+    expect(dir).toBe(join(SRC, name, 'files'));
     expect(existsSync(dir)).toBe(true);
   });
 
-  it('resolves both branches to the same directory', () => {
-    for (const generator of WITH_TEMPLATES) {
-      expect(generatorFilesDir(generator, undefined)).toBe(generatorFilesDir(generator, __dirname));
+  // The discriminator. A `here` that is nowhere near this workspace must still be honoured —
+  // that is the published layout, `generators/util` beside `generators/<name>` inside
+  // `@nuxeo/satori-platform`. If the CommonJS branch ever stopped using `here`, every other
+  // assertion here would still pass and this one would fail.
+  it('withAForeignDirectory, derives the path from it and not from the workspace', () => {
+    const foreign = join('/fake', 'package', 'generators', 'util');
+    const dir = filesDirFrom(foreign, 'config-package');
+    expect(dir).toBe(join('/fake', 'package', 'generators', 'config-package', 'files'));
+    expect(dir.startsWith(workspaceRoot)).toBe(false);
+  });
+
+  it('resolves both branches to the same directory in this repository', () => {
+    for (const name of WITH_TEMPLATES) {
+      expect(filesDirFrom(undefined, name)).toBe(filesDirFrom(join(SRC, 'util'), name));
     }
   });
+});
 
-  // The two branches agree only while this module stays one level below the generators. Reading
-  // the tree rather than trusting the list keeps that assumption asserted: move this file, or
-  // add a generator with templates, and this fails rather than resolving to a directory that is
-  // silently absent.
+describe('generatorFilesDir', () => {
+  // Vitest defines `__dirname`, so this takes the CommonJS branch — the same one the published
+  // package takes, and the only one reachable from a test: `__dirname` is a module-scoped
+  // binding, not a property of `globalThis`, so it cannot be stubbed away. The ESM branch is
+  // covered above through `filesDirFrom`, and end to end by the Nx command-line runs recorded on
+  // PR #575, where `__dirname` genuinely does not exist.
+  it.each(WITH_TEMPLATES)('resolves %s', (name) => {
+    const dir = generatorFilesDir(name);
+    expect(dir).toBe(join(SRC, name, 'files'));
+    expect(existsSync(dir)).toBe(true);
+  });
+});
+
+// The two branches agree only while the resolver stays one level below the generators. Reading
+// the tree rather than trusting the list keeps that assumption asserted: move the resolver, or
+// add a generator with templates, and this fails rather than resolving to a directory that is
+// silently absent.
+describe('the layout both branches assume', () => {
   it('names every generator directory that has a files/ directory', () => {
     const onDisk = readdirSync(SRC, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && existsSync(join(SRC, entry.name, 'files')))
       .map((entry) => entry.name)
       .sort();
     expect(onDisk).toEqual([...WITH_TEMPLATES].sort());
+  });
+
+  it('keeps the resolver one level below the generators', () => {
+    expect(existsSync(join(SRC, 'util', 'generator-files-dir.ts'))).toBe(true);
   });
 });

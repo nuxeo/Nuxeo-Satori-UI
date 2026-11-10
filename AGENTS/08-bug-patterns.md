@@ -1332,6 +1332,28 @@ through `create.mjs` (a subprocess), the Nx generator through vitest (in-process
 published compiled copy — three ways, none of them the Nx command line on the TypeScript source.
 Count the ways a thing can be invoked before reporting that it was exercised.
 
+**A default parameter cannot be overridden with `undefined`, so it cannot be used to reach the
+branch it hides.** The first fix for this had the shape below, and its "no `__dirname`" tests all
+ran the CommonJS branch — the default is applied whether the argument was omitted or passed as
+`undefined`. They passed, because both branches resolve to the same directory here. Measured, not
+argued: with the ESM branch deliberately returning a wrong path, all ten tests stayed green.
+
+```typescript
+// BAD ❌ — `f('x', undefined)` runs the default, so the `here === undefined` branch is unreachable.
+function f(generator: string, here = typeof __dirname === 'undefined' ? undefined : __dirname) {}
+
+// GOOD ✅ — a pure function taking the value, and a thin wrapper that supplies it.
+export function filesDirFrom(here: string | undefined, generator: string) {}
+export function generatorFilesDir(generator: string) {
+  return filesDirFrom(moduleDir(), generator);
+}
+```
+
+`__dirname` cannot be stubbed to reach the branch either: in CommonJS it is a module-scoped
+binding, not a property of `globalThis`. And when both branches return the same value, assert one
+that **cannot** — give the CommonJS branch a directory outside the workspace and check the answer
+came from it. Without that case, a branch that stops reading its input still passes.
+
 ---
 
 ## Copilot Flags These on PRs
