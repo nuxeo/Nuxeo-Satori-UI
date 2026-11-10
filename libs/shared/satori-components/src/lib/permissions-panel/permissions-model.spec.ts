@@ -603,23 +603,23 @@ describe('calendar days', () => {
   });
 
   it('reads an ACE date as its calendar day, not as an instant in the user zone', () => {
-    const date = dayToDate('2030-01-01T00:00:00.000Z');
+    const date = dayToDate('2030-01-01T00:00:00.000Z', 'begin');
     expect([date?.getFullYear(), date?.getMonth(), date?.getDate()]).toEqual([2030, 0, 1]);
-    expect(dayToDate(null)).toBeNull();
-    expect(dayToDate('garbage')).toBeNull();
-    expect(instantToDay('2030-01-01T00:00:00.000Z')).toBe('2030-01-01');
-    expect(instantToDay(null)).toBeNull();
+    expect(dayToDate(null, 'begin')).toBeNull();
+    expect(dayToDate('garbage', 'begin')).toBeNull();
+    expect(instantToDay('2030-01-01T00:00:00.000Z', 'begin')).toBe('2030-01-01');
+    expect(instantToDay(null, 'begin')).toBeNull();
   });
 
   it('reads midnight in a zone east or west of UTC as that day', () => {
     userIn(0);
     // Measured on 2025.26.16: an ACE written as 2030-01-01T00:00:00+01:00, as Nuxeo Web UI sends
     // from a CET browser, is read back as 2029-12-31T23:00:00.000Z.
-    expect(instantToDay('2029-12-31T23:00:00.000Z')).toBe('2030-01-01');
-    expect(instantToDay('2029-12-31T12:00:00.000Z')).toBe('2030-01-01');
-    expect(instantToDay('2030-01-01T05:00:00.000Z')).toBe('2030-01-01');
-    expect(instantToDay('2030-01-01T11:00:00.000Z')).toBe('2030-01-01');
-    expect(instantToDay('2030-01-01')).toBe('2030-01-01');
+    expect(instantToDay('2029-12-31T23:00:00.000Z', 'begin')).toBe('2030-01-01');
+    expect(instantToDay('2029-12-31T12:00:00.000Z', 'begin')).toBe('2030-01-01');
+    expect(instantToDay('2030-01-01T05:00:00.000Z', 'begin')).toBe('2030-01-01');
+    expect(instantToDay('2030-01-01T11:00:00.000Z', 'begin')).toBe('2030-01-01');
+    expect(instantToDay('2030-01-01', 'begin')).toBe('2030-01-01');
   });
 
   describe('for a user beyond UTC+12 or at UTC−12', () => {
@@ -629,20 +629,58 @@ describe('calendar days', () => {
       ['UTC−12', 720, '2030-01-01T12:00:00.000Z'],
     ])('reads a day picked at %s as that day', (_zone, offset, midnight) => {
       userIn(offset);
-      expect(instantToDay(midnight)).toBe('2030-01-01');
-      expect(dateToWrite('2030-01-01', midnight)).toBe(midnight);
+      expect(instantToDay(midnight, 'begin')).toBe('2030-01-01');
+      expect(dateToWrite('2030-01-01', midnight, 'begin')).toBe(midnight);
     });
 
     it('still reads an entry from another zone by its nearest UTC midnight', () => {
       userIn(-840);
-      expect(instantToDay('2029-12-31T23:00:00.000Z')).toBe('2030-01-01');
-      expect(instantToDay('2030-01-01T05:00:00.000Z')).toBe('2030-01-01');
+      expect(instantToDay('2029-12-31T23:00:00.000Z', 'begin')).toBe('2030-01-01');
+      expect(instantToDay('2030-01-01T05:00:00.000Z', 'begin')).toBe('2030-01-01');
     });
 
     it("reads a midnight two zones 24 hours apart share as the user's own day", () => {
       // 11:00Z is midnight on Jan 1 at UTC−11 and on Jan 2 at UTC+13; the zone is not stored.
       userIn(-780);
-      expect(instantToDay('2030-01-01T11:00:00.000Z')).toBe('2030-01-02');
+      expect(instantToDay('2030-01-01T11:00:00.000Z', 'begin')).toBe('2030-01-02');
+    });
+  });
+
+  describe('an end Nuxeo Web UI wrote', () => {
+    // nuxeo-popup-permission sends `moment(end).endOf('day').format()`: 23:59:59 in its browser's
+    // zone, one second before the next day starts.
+    it.each([
+      ['UTC', 0, '2030-12-31T23:59:59.000Z'],
+      ['CET', -60, '2030-12-31T22:59:59.000Z'],
+      ['UTC−5', 300, '2031-01-01T04:59:59.000Z'],
+      ['UTC+5:30', -330, '2030-12-31T18:29:59.000Z'],
+      ['UTC+14', -840, '2030-12-31T09:59:59.000Z'],
+    ])('reads one written at %s as the last day picked, not the next', (_zone, offset, end) => {
+      userIn(offset);
+      expect(instantToDay(end, 'end')).toBe('2030-12-31');
+      expect(dateToWrite('2030-12-31', end, 'end')).toBe(end);
+    });
+
+    it('reads one written from another zone, or with milliseconds, as that day too', () => {
+      userIn(0);
+      expect(instantToDay('2030-12-31T22:59:59.000Z', 'end')).toBe('2030-12-31');
+      expect(instantToDay('2031-01-01T04:59:59.000Z', 'end')).toBe('2030-12-31');
+      expect(instantToDay('2030-12-31T23:59:59.999Z', 'end')).toBe('2030-12-31');
+    });
+
+    it('still reads the midnight one second later, and any other second, as before', () => {
+      userIn(0);
+      expect(instantToDay('2031-01-01T00:00:00.000Z', 'end')).toBe('2031-01-01');
+      expect(instantToDay('2030-12-31T23:59:58.000Z', 'end')).toBe('2031-01-01');
+      expect(instantToDay('2030-12-31T22:59:00.000Z', 'end')).toBe('2031-01-01');
+    });
+
+    it('never reads a start that way: Web UI writes a start as a midnight', () => {
+      userIn(0);
+      const start = '2030-01-01T00:14:59.000Z';
+      expect(instantToDay(start, 'begin')).toBe('2030-01-01');
+      expect(instantToDay('2030-12-31T23:59:59.000Z', 'begin')).toBe('2031-01-01');
+      expect(dateToWrite('2030-01-01', start, 'begin')).toBe(start);
     });
   });
 });
@@ -652,13 +690,13 @@ describe('dateToWrite', () => {
 
   it("sends the server's own instant back when the day is unchanged", () => {
     // Sending the day instead moved this entry's start 23 hours earlier, measured.
-    expect(dateToWrite('2030-01-01', cetMidnight)).toBe(cetMidnight);
+    expect(dateToWrite('2030-01-01', cetMidnight, 'begin')).toBe(cetMidnight);
   });
 
   it('sends the day the user picked when it changed, was added or was cleared', () => {
-    expect(dateToWrite('2030-01-02', cetMidnight)).toBe('2030-01-02');
-    expect(dateToWrite('2030-01-02', null)).toBe('2030-01-02');
-    expect(dateToWrite(null, cetMidnight)).toBeNull();
-    expect(dateToWrite(null, null)).toBeNull();
+    expect(dateToWrite('2030-01-02', cetMidnight, 'begin')).toBe('2030-01-02');
+    expect(dateToWrite('2030-01-02', null, 'begin')).toBe('2030-01-02');
+    expect(dateToWrite(null, cetMidnight, 'begin')).toBeNull();
+    expect(dateToWrite(null, null, 'begin')).toBeNull();
   });
 });

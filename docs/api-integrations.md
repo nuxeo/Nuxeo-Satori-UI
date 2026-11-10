@@ -1725,6 +1725,8 @@ writes lasts through its last day and one written here ends as that day starts.
 
 Every date is shown as the calendar day its writer picked (`nxsAceTimeFrame`), not the UTC date
 Nuxeo returns, so the Permissions tab's card, the panel and all three dialogs show the same day.
+That includes an end Web UI wrote: `moment(end).endOf('day').format()` is 23:59:59 in the browser's
+zone, one second before the next day starts, and is shown as its last day rather than the next.
 
 **Usage:** the external-shares card on document detail's Permissions tab. The manifest's
 `featureToggles["permissions.externalUsers"]` hides the card and its share action when `false`.
