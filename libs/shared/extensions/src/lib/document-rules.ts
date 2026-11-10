@@ -91,6 +91,11 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
   'app.rules.hasSingleSelection': (context) => context.selectionCount === 1,
   'app.rules.hasMultipleSelection': (context) => context.selectionCount > 1,
   'app.rules.isAdministrator': (context) => context.user.isAdministrator,
+  /**
+   * An external share recipient: the `transient/` principal Nuxeo gives them. Hides navigation they
+   * cannot use. Presentation only; the server refuses those paths to them regardless.
+   */
+  'app.rules.isExternalUser': (context) => (context.user.username ?? '').startsWith('transient/'),
   /** Every selected document is writable — the bulk counterpart of `canWrite`. */
   'app.rules.canWriteSelection': (context) =>
     context.selection.length > 0 && context.selection.every(canWriteDocument),

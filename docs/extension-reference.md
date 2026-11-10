@@ -532,22 +532,30 @@ Entries dropped for an unreachable `path` are reported the same way, on
 
 Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.ts`.
 
-| ID                              | Label               | Path                   | Order | Rule                                | Notes    |
-| ------------------------------- | ------------------- | ---------------------- | ----- | ----------------------------------- | -------- |
-| `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                   | Disabled |
-| `app.navbar.dashboard`          | Dashboard           | `/dashboard`           | 20    | —                                   | —        |
-| `app.navbar.browse`             | Browse              | `/browse`              | 30    | —                                   | —        |
-| `app.navbar.recentlyViewed`     | Recently viewed     | `/recently-viewed`     | 50    | —                                   | —        |
-| `app.navbar.search`             | Search filters      | `/search`              | 60    | —                                   | —        |
-| `app.navbar.expiredQueue`       | Expired Queue       | `/expired-queue`       | 70    | —                                   | —        |
-| `app.navbar.assets`             | Assets              | `/documents`           | 80    | —                                   | —        |
-| `app.navbar.tasks`              | Tasks               | `/tasks`               | 90    | —                                   | —        |
-| `app.navbar.favorites`          | Favorites           | `/favorites`           | 100   | —                                   | —        |
-| `app.navbar.collections`        | Collections         | `/collections`         | 110   | —                                   | —        |
-| `app.navbar.personalSpace`      | Personal Space      | `/personal-space`      | 120   | —                                   | —        |
-| `app.navbar.clipboard`          | Clipboard           | `/clipboard`           | 130   | —                                   | —        |
-| `app.navbar.trash`              | Trash               | `/trash`               | 140   | —                                   | —        |
-| `app.navbar.administration`     | Administration      | `/administration`      | 150   | `app.rules.hasAdministrationAccess` | —        |
+| ID                              | Label               | Path                   | Order | Rule                                 | Notes    |
+| ------------------------------- | ------------------- | ---------------------- | ----- | ------------------------------------ | -------- |
+| `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                    | Disabled |
+| `app.navbar.dashboard`          | Dashboard           | `/dashboard`           | 20    | —                                    | —        |
+| `app.navbar.browse`             | Browse              | `/browse`              | 30    | `core.not(app.rules.isExternalUser)` | —        |
+| `app.navbar.recentlyViewed`     | Recently viewed     | `/recently-viewed`     | 50    | —                                    | —        |
+| `app.navbar.search`             | Search filters      | `/search`              | 60    | —                                    | —        |
+| `app.navbar.expiredQueue`       | Expired Queue       | `/expired-queue`       | 70    | —                                    | —        |
+| `app.navbar.assets`             | Assets              | `/documents`           | 80    | —                                    | —        |
+| `app.navbar.tasks`              | Tasks               | `/tasks`               | 90    | —                                    | —        |
+| `app.navbar.favorites`          | Favorites           | `/favorites`           | 100   | `core.not(app.rules.isExternalUser)` | —        |
+| `app.navbar.collections`        | Collections         | `/collections`         | 110   | `core.not(app.rules.isExternalUser)` | —        |
+| `app.navbar.personalSpace`      | Personal Space      | `/personal-space`      | 120   | —                                    | —        |
+| `app.navbar.clipboard`          | Clipboard           | `/clipboard`           | 130   | —                                    | —        |
+| `app.navbar.trash`              | Trash               | `/trash`               | 140   | `core.not(app.rules.isExternalUser)` | —        |
+| `app.navbar.administration`     | Administration      | `/administration`      | 150   | `app.rules.hasAdministrationAccess`  | —        |
+
+A share recipient, a `transient/` user, gets Browse, Favorites, Collections and Trash hidden by
+default through `app.rules.isExternalUser`. This is presentation only: the server still refuses those
+paths. A manifest that wants one of them shown to recipients too clears its rule:
+
+```json
+{ "overrides": { "app.navbar.favorites": { "rule": null } } }
+```
 
 `app.navbar.browse` is the one browse entry, at `/browse`. The adf-hx proof of concept's entry,
 app.navbar.browseAdfHx at `/browse-adf-hx`, is **retired** with its route — written here without
@@ -678,11 +686,12 @@ Do not reference those two yet.
 These three **fail closed**: if one is referenced before it is registered, it
 denies rather than permits.
 
-| ID                                  | True when                       |
-| ----------------------------------- | ------------------------------- |
-| `app.rules.isAdministrator`         | The user is in `administrators` |
-| `app.rules.isPowerUser`             | The user is in `powerusers`     |
-| `app.rules.hasAdministrationAccess` | Either of the above             |
+| ID                                  | True when                                                                                                            |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `app.rules.isAdministrator`         | The user is in `administrators`                                                                                      |
+| `app.rules.isPowerUser`             | The user is in `powerusers`                                                                                          |
+| `app.rules.hasAdministrationAccess` | Either of the above                                                                                                  |
+| `app.rules.isExternalUser`          | The user is an external share recipient (`transient/`), who can open none of Browse, Favorites, Collections or Trash |
 
 `rule: null` in an override still clears the gate, so a customer who genuinely
 wants an entry ungated has a Layer 1 route to it. Fail-closed is about the

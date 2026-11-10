@@ -16,6 +16,9 @@ import {
 import {
   AUTH_TOKEN_HEADER,
   readShareTokenFromBrowserUrl,
+  clearSharedDocumentLanding,
+  readLandingPathFromBrowserUrl,
+  rememberSharedDocumentLanding,
   stripShareTokenFromBrowserUrl,
 } from './share-token.util';
 import { NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
@@ -515,8 +518,12 @@ export class AuthService {
   private runHydration(): Observable<void> {
     const shareToken = readShareTokenFromBrowserUrl();
     if (shareToken) {
+      const landing = readLandingPathFromBrowserUrl();
       stripShareTokenFromBrowserUrl();
       return this.authenticateWithShareToken(shareToken).pipe(
+        // After the exchange, so the principal is the one the link was issued to. A failed exchange
+        // reaches here with no username and so remembers nothing.
+        tap(() => rememberSharedDocumentLanding(landing, this.username())),
         switchMap(() => (this.isAuthenticated() ? of(undefined) : this.runHydration())),
       );
     }
@@ -752,6 +759,7 @@ export class AuthService {
 
   private clearShareAuth(): void {
     this.shareAuthTokenValue = null;
+    clearSharedDocumentLanding();
   }
 
   private clearUserScopedUiState(): void {

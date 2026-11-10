@@ -56,7 +56,7 @@ import {
   untracked,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { NavigationEnd, Router } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, UrlTree } from '@angular/router';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -217,6 +217,13 @@ const SORT_FIELDS: Readonly<Record<string, string>> = {
 const PAGE_SIZE = 50;
 
 /**
+ * Session-storage key the app shell writes the share link's landing path under. Duplicated as a
+ * literal in apps/nuxeo-ui/src/app/auth/share-token.util.ts because a feature library cannot import the
+ * app; keep the two in step.
+ */
+const SHARED_DOCUMENT_STORAGE_KEY = 'nxs.sharedDocumentPath';
+
+/**
  * How long a changed filter waits before the listing reloads.
  *
  * The filters run on the server now, so each keystroke would otherwise be a request. The loader's
@@ -260,6 +267,7 @@ export const FILTER_DEBOUNCE_MS = 250;
     MatIconModule,
     MatProgressSpinnerModule,
     MatButtonModule,
+    RouterLink,
     MatTabsModule,
     MatTableModule,
     MatSortModule,
@@ -886,7 +894,20 @@ export class BrowseComponent {
     })),
   );
 
+  /**
+   * The trail as the signed-in user may use it. A transient user (an external recipient of a share)
+   * can open none of the ancestors, so they are shown as plain text and only the current item stays
+   * as it is. Presentation only: the server still refuses those paths to the same user.
+   */
   readonly breadcrumbs = computed<NxsBreadcrumbItem[]>(() => {
+    const trail = this.fullTrail();
+    if (!this.isExternalUser()) return trail;
+    return trail.map((crumb, index) =>
+      index === trail.length - 1 ? crumb : { label: crumb.label },
+    );
+  });
+
+  private readonly fullTrail = computed<NxsBreadcrumbItem[]>(() => {
     this.currentLang();
     const doc = this.currentDoc();
     // A folder that could not be opened has no document, so its trail comes from the address and
@@ -919,6 +940,37 @@ export class BrowseComponent {
     }
     return crumbs;
   });
+
+  /**
+   * A folder the user may not read. Shown by the browse-level error state rather than the list, so
+   * the "back to shared document" action can sit in it; other failures keep the list's own state.
+   */
+  readonly isForbidden = computed(() => this.error() !== null && this.errorStatus() === 403);
+
+  /** A transient user: the `transient/` principal Nuxeo gives an external share recipient. */
+  isExternalUser(): boolean {
+    return (this.currentUsername() ?? '').startsWith('transient/');
+  }
+
+  /**
+   * Where the share link the recipient came in by landed, as a route to navigate to, for the "back to
+   * shared document" action. Written by the app shell when the share token is exchanged, together with
+   * the principal it was issued to: offered only to that same principal, and never as a raw string, so
+   * an encoded path resolves once. Null when it is not there or was issued to someone else.
+   */
+  sharedDocumentLink(): UrlTree | null {
+    try {
+      const raw = window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY);
+      if (!raw) return null;
+      const stored = JSON.parse(raw) as { user?: unknown; path?: unknown };
+      if (typeof stored.user !== 'string' || typeof stored.path !== 'string') return null;
+      if (stored.user !== this.currentUsername()) return null;
+      if (!stored.path.startsWith('/')) return null;
+      return this.router.parseUrl(stored.path);
+    } catch {
+      return null;
+    }
+  }
 
   readonly showBreadcrumbs = computed(() => {
     const doc = this.currentDoc();

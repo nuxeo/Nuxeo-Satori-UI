@@ -106,6 +106,8 @@ export const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[] = [
     icon: 'folder',
     order: 30,
     hasDrawer: true,
+    // Hidden from an external share recipient, who can open none of these (NXSAT-211).
+    rule: { type: 'core.not', parameters: ['app.rules.isExternalUser'] },
   },
   {
     id: 'app.navbar.recentlyViewed',
@@ -160,6 +162,8 @@ export const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[] = [
     icon: 'star',
     order: 100,
     hasDrawer: true,
+    // Hidden from an external share recipient, who can open none of these (NXSAT-211).
+    rule: { type: 'core.not', parameters: ['app.rules.isExternalUser'] },
   },
   {
     id: 'app.navbar.collections',
@@ -169,6 +173,8 @@ export const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[] = [
     icon: 'bookmark',
     order: 110,
     hasDrawer: true,
+    // Hidden from an external share recipient, who can open none of these (NXSAT-211).
+    rule: { type: 'core.not', parameters: ['app.rules.isExternalUser'] },
   },
   {
     id: 'app.navbar.personalSpace',
@@ -196,6 +202,8 @@ export const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[] = [
     icon: 'trash',
     order: 140,
     hasDrawer: true,
+    // Hidden from an external share recipient, who can open none of these (NXSAT-211).
+    rule: { type: 'core.not', parameters: ['app.rules.isExternalUser'] },
   },
   {
     id: 'app.navbar.administration',
