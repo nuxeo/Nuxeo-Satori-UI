@@ -417,6 +417,7 @@ class NxsAdminUsersGroupsPageComponent implements OnInit {
     protected readonly selectedTab: import("@angular/core").WritableSignal<number>;
     protected readonly status: import("@angular/core").WritableSignal<Status$2 | null>;
     ngOnInit(): void;
+    protected onQueryChange(value: string): void;
     protected runSearch(): void;
     protected loadRecent(): void;
     protected onUsersPage(event: PageEvent): void;

@@ -262,6 +262,39 @@ describe('NxsAdminUsersGroupsPageComponent', () => {
     expect(text()).toContain('Could not load users.');
   });
 
+  it('restores the full listing when the search field is cleared after a search that found nothing', async () => {
+    userService['searchUsersPaged'].mockImplementation((query: string) =>
+      of(
+        query === 'ssomise'
+          ? { 'entity-type': 'users', entries: [], totalSize: 0 }
+          : { 'entity-type': 'users', entries: [USER], totalSize: 1 },
+      ),
+    );
+    userService['searchGroupsPaged'].mockImplementation((query: string) =>
+      of(
+        query === 'ssomise'
+          ? { 'entity-type': 'groups', entries: [], totalSize: 0 }
+          : { 'entity-type': 'groups', entries: [GROUP], totalSize: 1 },
+      ),
+    );
+    // Type through the input, as the admin does, then submit the form.
+    const input = el().querySelector('input[name="query"]') as HTMLInputElement;
+    input.value = 'ssomise';
+    input.dispatchEvent(new Event('input'));
+    el().querySelector('form')!.dispatchEvent(new Event('submit'));
+    await render();
+    expect(text()).toContain('No users match this search.');
+
+    // Clearing the field is the only input: no submit, no reload.
+    input.value = '';
+    input.dispatchEvent(new Event('input'));
+    await render();
+
+    expect(userService['searchUsersPaged']).toHaveBeenLastCalledWith('', 20, 0);
+    expect(text()).toContain('jdoe');
+    expect(text()).not.toContain('No users match this search.');
+  });
+
   it('moves a search that found only groups to the Groups tab', async () => {
     userService['searchUsersPaged'].mockReturnValue(
       of({ 'entity-type': 'users', entries: [], totalSize: 0 }),
