@@ -1474,6 +1474,33 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.visibleWorkflows()).toEqual([second]);
     });
 
+    it('shows a dismissed banner again when the route leaves the document and comes back', async () => {
+      // Angular reuses this component when only the route param changes, so the reset on
+      // document change has to run on the reused instance, not on a fresh one.
+      const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-1' }));
+      TestBed.overrideProvider(ActivatedRoute, {
+        useValue: {
+          paramMap: route,
+          queryParamMap: of(convertToParamMap({})),
+          snapshot: { queryParamMap: convertToParamMap({}) },
+        },
+      });
+      const wf = workflow();
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([wf]));
+      await build();
+      component.dismissWorkflowBanner(wf);
+      expect(component.visibleWorkflows()).toEqual([]);
+
+      mockDetailService.getFullDocument.mockReturnValue(of(doc({ uid: 'doc-2' })));
+      route.next(convertToParamMap({ uid: 'doc-2' }));
+      await fixture.whenStable();
+      mockDetailService.getFullDocument.mockReturnValue(of(doc()));
+      route.next(convertToParamMap({ uid: 'doc-1' }));
+      await fixture.whenStable();
+
+      expect(component.visibleWorkflows()).toEqual([wf]);
+    });
+
     it('turns an i18n task key into a readable label', async () => {
       await build();
 
