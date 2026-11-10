@@ -2217,8 +2217,6 @@
   "settings.cloud-services.load-failed": "Error shown in place of the connected-accounts list when the request fails. A full SENTENCE with its full stop.",
   "settings.cloud-services.title": "Heading of the Cloud Services settings page. A NOUN phrase naming what the page lists.",
   "settings.hide-password": "Rendered from an Angular binding in change-password-dialog.component.html — usually one branch of a two-state control, so its opposite is a sibling key. Keep it as short as the English.",
-  "settings.profile.group-permissions-heading": "Heading above the permissions a group grants. {{ group }} is the GROUP NAME, server data, never translated.",
-  "settings.profile.loading-group-permissions": "Shown while a group's permissions load. {{ group }} is the GROUP NAME. Keep the ellipsis character.",
   "settings.profile.local-permissions": "Accessible name of the table listing a user's directly granted permissions. A NOUN phrase; announced by a screen reader, never shown.",
   "settings.profile.no-local-permissions": "Shown in place of the local-permissions table when a user has none. A full SENTENCE with its full stop.",
   "settings.profile.unknown-user": "Shown on the user's Profile page in place of the username when the signed-in user's name is not available.",

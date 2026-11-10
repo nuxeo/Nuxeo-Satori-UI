@@ -104,45 +104,6 @@
         />
       }
     </article>
-
-    @for (g of groups(); track g.identifier) {
-      <article
-        class="profile-card"
-        [libGroupPermLazyLoad]="g.identifier"
-        (visible)="onGroupPermSectionVisible($event)"
-      >
-        <div class="profile-card__section-title" role="heading" aria-level="3">
-          {{ 'settings.profile.group-permissions-heading' | translate: { group: g.label } }}
-        </div>
-
-        @if (isGroupPermLoading(g.identifier)) {
-          <p class="profile-card__text">
-            {{ 'settings.profile.loading-group-permissions' | translate: { group: g.label } }}
-          </p>
-        } @else if (hasGroupPermLoaded(g.identifier)) {
-          <ng-container
-            *ngTemplateOutlet="
-              permissionTableBody;
-              context: {
-                rows: groupPermRows(g.identifier),
-                emptyMessage: g.label + ' does not have permissions.',
-                tableLabel: g.label + ' permissions',
-              }
-            "
-          />
-          <ng-container
-            *ngTemplateOutlet="
-              permissionPagination;
-              context: {
-                totalPages: groupPermTotalPages(g.identifier),
-                currentPage: groupPermCurrentPage(g.identifier),
-                groupId: g.identifier,
-              }
-            "
-          />
-        }
-      </article>
-    }
   </div>
 </section>
 
@@ -207,35 +168,4 @@
       </tbody>
     </table>
   </div>
-</ng-template>
-
-<ng-template
-  #permissionPagination
-  let-totalPages="totalPages"
-  let-currentPage="currentPage"
-  let-groupId="groupId"
->
-  @if (totalPages > 1) {
-    <div class="profile-card__pagination">
-      <button
-        mat-icon-button
-        type="button"
-        [disabled]="currentPage === 0"
-        (click)="groupPermPrev(groupId)"
-        [attr.aria-label]="'app.profile-page.previous-page' | translate"
-      >
-        <mat-icon svgIcon="chevron_left" />
-      </button>
-      <span class="profile-card__pagination-label">{{ currentPage + 1 }} / {{ totalPages }}</span>
-      <button
-        mat-icon-button
-        type="button"
-        [disabled]="currentPage === totalPages - 1"
-        (click)="groupPermNext(groupId)"
-        [attr.aria-label]="'app.profile-page.next-page' | translate"
-      >
-        <mat-icon svgIcon="chevron_right" />
-      </button>
-    </div>
-  }
 </ng-template>
