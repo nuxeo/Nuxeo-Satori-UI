@@ -202,6 +202,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-detail.document-detail.close-start-process-dialog': 'Close start process dialog',
   'document-detail.document-detail.comment-actions': 'Comment actions',
   'document-detail.document-detail.delete-permission': 'Delete permission',
+  'document-detail.document-detail.select-a-process': 'Select a process...',
   'document-detail.document-detail.document-properties': 'Document properties',
   'document-detail.document-detail.document-tags': 'Document tags',
   'document-detail.document-detail.download': 'Download',

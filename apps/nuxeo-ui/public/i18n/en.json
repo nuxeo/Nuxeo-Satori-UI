@@ -1270,6 +1270,7 @@
       "running": "Running",
       "save": "Save",
       "scanning-archive": "Scanning Archive...",
+      "select-a-process": "Select a process...",
       "select-a-section-below-to-publish": "Select a section below to publish this document. Published documents will appear in the selected section and will be accessible to users with read access.",
       "select-event-actions": "Select event actions",
       "select-event-category": "Select event category",
