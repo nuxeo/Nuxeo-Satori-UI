@@ -88,8 +88,10 @@ const jsonOut = option('--json', null);
 /** Events after which a story has said all it will. */
 const TERMINAL = ['storyFinished', 'storyErrored', 'storyMissing', 'storyThrewException'];
 /**
- * Events after which a docs page has said all it will. `docsRendered` is emitted once the page
- * and every preview on it have rendered, so there is no settling guess to make.
+ * Events after which a docs page's **document** has said all it will. `docsRendered` reports the
+ * document only: the `.docs-story` blocks exist and are empty when it fires, so it is the start of
+ * waiting for the previews rather than the end of it. `readPreviews` does that waiting, on
+ * `DOCS_PREVIEW_DONE` below — do not read preview content on this event.
  */
 const DOCS_TERMINAL = ['docsRendered', 'storyErrored', 'storyMissing', 'storyThrewException'];
 /**
@@ -418,7 +420,17 @@ async function readPreviews(page, failures) {
       return {
         total: blocks.length,
         rendered,
-        text: blocks.map((block) => block.innerText).join('\n'),
+        // Empty previews are dropped before the join, not after: `['', ''].join('\n')` is one
+        // character, so `read: text.length` would report content a reader cannot see. Across a
+        // library that is enough to satisfy `main()`'s vacuity guard on separators alone — 127
+        // docs pages with two empty previews each reported 127 characters read, and the
+        // untranslated-key scan passed having inspected nothing, which is the one outcome that
+        // guard exists to refuse. Filtering keeps the separators between previews that do have
+        // text without letting a separator count as text.
+        text: blocks
+          .map((block) => block.innerText)
+          .filter((preview) => preview.trim() !== '')
+          .join('\n'),
         previews: Math.min(rendered, blocks.length),
       };
     }, DOCS_PREVIEW_DONE);

@@ -104,6 +104,43 @@ const NEGATIVE = [
     { 'main.abc123.iframe.bundle.js': 'console.log("no catalogue here");' },
     /no script in the build requests a catalogue/,
   ],
+  // The four below are the #563 review's case: a path built by concatenation, which
+  // `CATALOGUE_REQUEST` cannot see. `one bundle stamped and another not` above already covers a
+  // mixed build, but its unstamped request is a literal the gate can read.
+  //
+  // The first three keep the clean fixture's correctly stamped bundle, so `stamped` is 1 and the
+  // build-wide `no script ... requests a catalogue` guard stays quiet. Those three exited **0
+  // with "all stamped"** before `CATALOGUE_LITERAL_START`, and they are what makes this a defect.
+  //
+  // The fourth is weaker on purpose and should not be read as a missed build: with no stamped
+  // request anywhere, the old guard already refused it — just as "requests a catalogue at all",
+  // which does not say that a path was built and not read. It pins the diagnosis, not the
+  // refusal. Reverting the gate turns all four red, but only three of them from a pass.
+  [
+    'a concatenated catalogue path, alongside a correctly stamped one',
+    { 'runtime.def456.iframe.bundle.js': 'fetch("i18n/"+lang+".json");' },
+    /cannot read in full/,
+  ],
+  [
+    'a concatenated catalogue path built with .concat, as a downlevelled template literal is',
+    { 'runtime.def456.iframe.bundle.js': 'fetch("i18n/".concat(lang, ".json"));' },
+    /cannot read in full/,
+  ],
+  [
+    'a concatenated path that carries a stamp but cannot be read as one request',
+    {
+      'runtime.def456.iframe.bundle.js': `fetch("i18n/"+lang+".json?v=${CLEAN_STAMP}");`,
+    },
+    /cannot read in full/,
+  ],
+  [
+    'a concatenated path as the only catalogue request in the build',
+    {
+      'main.abc123.iframe.bundle.js': 'fetch("i18n/"+lang+".json");',
+      'runtime.def456.iframe.bundle.js': 'console.log("runtime");',
+    },
+    /cannot read in full/,
+  ],
   [
     'staticDirs stopped copying the catalogues in',
     { 'i18n/en.json': null, 'i18n/fr.json': null },
@@ -128,6 +165,24 @@ const POSITIVE = [
   [
     'a catalogue named in prose, which is not a request',
     { 'extra.0a0a0a.iframe.bundle.js': 'const doc="the catalogue lives at i18n/<lang>.json";' },
+  ],
+  // These three keep `CATALOGUE_LITERAL_START` from being something to work around rather than
+  // satisfy. The prose control above is the one that matters most: its `i18n/` follows a space,
+  // not a quote, so a mention mid-sentence is not read as a path the gate failed to resolve.
+  [
+    'a request written relative, so the path follows a slash rather than opening the literal',
+    { 'runtime.def456.iframe.bundle.js': `fetch("./i18n/en.json?v=${CLEAN_STAMP}");` },
+  ],
+  [
+    'two stamped requests in one bundle, so every resolved offset is accounted for, not just the first',
+    {
+      'runtime.def456.iframe.bundle.js':
+        `fetch("i18n/en.json?v=${CLEAN_STAMP}");fetch("i18n/fr.json?v=${CLEAN_STAMP}");`,
+    },
+  ],
+  [
+    'concatenation that builds something other than a catalogue path',
+    { 'extra.0a0a0a.iframe.bundle.js': 'fetch("assets/"+name+".png");' },
   ],
 ];
 

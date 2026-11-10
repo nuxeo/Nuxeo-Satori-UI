@@ -26,6 +26,10 @@
  *    requests it without one. A single un-stamped request is enough to reintroduce the defect.
  * 2. Every stamp found is the same one.
  * 3. That stamp equals a hash of the `i18n/*.json` the build actually shipped.
+ * 4. No bundle builds a catalogue path the gate cannot read in full. (1) can only judge a path
+ *    written as one string literal; a concatenated one is invisible to it, and because (1) is
+ *    build-wide, a single recognisable stamped request elsewhere was enough to report such a
+ *    build "all stamped". Found in review on #563.
  *
  * (3) is the load-bearing check. (1) alone passes a hard-coded stamp that never changes, which
  * would cache the *first* catalogue ever published forever — strictly worse than the defect.
@@ -53,6 +57,29 @@ export const CATALOGUE_DIR = 'i18n';
  * it would make the gate something to work around rather than satisfy.
  */
 const CATALOGUE_REQUEST = /(?<=["'`/])i18n\/[^"'`\s]{0,40}?\.json(\?v=([0-9a-f]+))?/g;
+
+/**
+ * A catalogue path that *begins* a string literal, whether or not a whole request follows it.
+ *
+ * `CATALOGUE_REQUEST` can only see a path that is one literal end to end. A path built by
+ * concatenation is invisible to it — `fetch('i18n/' + lang + '.json')` compiles to
+ * `"i18n/"+l+".json"`, and the `"` after the slash ends the character class before `.json` is
+ * reached, as does the `"` in `"i18n/".concat(l, ".json")`. Recognising those would mean parsing
+ * the expression, so this fails closed instead: any literal that starts a catalogue path and is
+ * not the start of a request the gate could read in full is reported, because a path the gate
+ * cannot resolve is a path it cannot certify as stamped.
+ *
+ * That matters because the `!stamped && !unstamped` guard below is build-wide: one recognisable
+ * stamped request anywhere was enough to report a build "all stamped" while another bundle still
+ * fetched an unversioned catalogue. The selftest's `one bundle stamped and another not` control
+ * did not catch it — its unstamped request is a literal, which the gate can see.
+ *
+ * Only a quote opens a literal here, deliberately not the `/` that `CATALOGUE_REQUEST` also
+ * accepts: `"assets/i18n/en.json"` is read in full by that pattern and is not a loose end, and
+ * the prose in `getting-started.mdx` — "the catalogue lives at i18n/<lang>.json" — follows a
+ * space, so it is not a string start and stays exempt.
+ */
+const CATALOGUE_LITERAL_START = /(?<=["'`])i18n\//g;
 
 /**
  * The stamp a build's catalogues should carry — the same hash `main.ts` computes, over the files
@@ -100,9 +127,15 @@ export function checkCatalogueCache(dir) {
   const stamps = new Set();
   let stamped = 0;
   let unstamped = 0;
+  let unresolved = 0;
   for (const script of scripts(dir)) {
     const source = readFileSync(script, 'utf8');
-    for (const [request, , stamp] of source.matchAll(CATALOGUE_REQUEST)) {
+    // Where a request the gate could read end to end begins, so a literal starting at the same
+    // offset is accounted for rather than reported as a loose end.
+    const resolved = new Set();
+    for (const match of source.matchAll(CATALOGUE_REQUEST)) {
+      const [request, , stamp] = match;
+      resolved.add(match.index);
       if (!stamp) {
         unstamped += 1;
         if (unstamped <= 3) {
@@ -116,8 +149,20 @@ export function checkCatalogueCache(dir) {
       stamped += 1;
       stamps.add(stamp);
     }
+    for (const match of source.matchAll(CATALOGUE_LITERAL_START)) {
+      if (resolved.has(match.index)) continue;
+      unresolved += 1;
+      if (unresolved <= 3) {
+        problems.push(
+          `${script.slice(dir.length + 1)} builds a catalogue path this gate cannot read in full ` +
+            `(near \`${source.slice(match.index, match.index + 32).split('\n')[0]}\`), so it ` +
+            'cannot certify the path as stamped. Request the catalogue from one string literal ' +
+            'including its `?v=` stamp.',
+        );
+      }
+    }
   }
-  if (!stamped && !unstamped) {
+  if (!stamped && !unstamped && !unresolved) {
     problems.push(
       'no script in the build requests a catalogue at all. Either `preview.ts` stopped fetching ' +
         'one, or the URL it builds is no longer recognisable here — this check would then pass ' +
