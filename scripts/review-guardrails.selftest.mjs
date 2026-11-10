@@ -9775,6 +9775,60 @@ expectGreen(
   },
 );
 
+/* ---------------- checkGeneratorsEsmSafe (NXSAT-795) ---------------- */
+
+const GENERATOR = 'tools/satori-generators/src/config-package/generator.ts';
+
+for (const [label, body] of [
+  ['__dirname', "import { join } from 'node:path';\nexport const d = join(__dirname, 'files');"],
+  ['__filename', 'export const f = __filename;'],
+  ['require', "export const d = require('node:path').join('a', 'b');"],
+  // The shape the bug actually had: inside a call, several lines in.
+  [
+    '__dirname in a generateFiles call',
+    "import { generateFiles } from '@nx/devkit';\n" +
+      "import { join } from 'node:path';\n" +
+      'export default function g(tree, options) {\n' +
+      "  generateFiles(tree, join(__dirname, 'files'), options.root, {});\n" +
+      '}',
+  ],
+])
+  expectRed(
+    `${label} in a generator source`,
+    'checkGeneratorsEsmSafe',
+    { [GENERATOR]: body },
+    null,
+    /generator\.ts:\d+ names `(__dirname|__filename|require)`, which exists only in CommonJS/,
+  );
+
+expectGreen('generator sources that name none of them', 'checkGeneratorsEsmSafe', {
+  [GENERATOR]:
+    "import { generateFiles } from '@nx/devkit';\n" +
+    "import { generatorFilesDir } from '../util/generator-files-dir';\n" +
+    'export default function g(tree, options) {\n' +
+    "  generateFiles(tree, generatorFilesDir('config-package'), options.root, {});\n" +
+    '}',
+  // The resolver itself: the one file allowed to name `__dirname` unguarded, because it exists
+  // to resolve the difference.
+  'tools/satori-generators/src/util/generator-files-dir.ts':
+    "import { workspaceRoot } from '@nx/devkit';\n" +
+    "import { join } from 'node:path';\n" +
+    'export function generatorFilesDir(generator, here = typeof __dirname === "undefined" ? undefined : __dirname) {\n' +
+    "  return here === undefined ? join(workspaceRoot, 'tools', generator) : join(here, '..', generator);\n" +
+    '}',
+  // A spec may: vitest defines all three.
+  'tools/satori-generators/src/config-package/generator.spec.ts':
+    "import { join } from 'node:path';\nconst workspace = join(__dirname, '../../../..');",
+  // A member name is not a reference to the global.
+  'tools/satori-generators/src/util/options.ts':
+    'export const read = (o) => o.require;\n' +
+    'export const make = () => ({ __dirname: "not the global" });\n' +
+    'export interface Shape {\n  require: string;\n}',
+  // `typeof` is the guarded form, allowed anywhere.
+  'tools/satori-generators/src/util/guarded.ts':
+    'export const isCjs = typeof __dirname !== "undefined";',
+});
+
 /* ---------------- checkAdoptedPatternsNotBypassed (NXSAT-676) ---------------- */
 
 /**

@@ -1294,6 +1294,68 @@ rule to the behaviour it claims, rather than testing a proxy for it
 
 ---
 
+## 32. One source, two module systems, and a test that only ever sees the forgiving one
+
+```typescript
+// BAD ❌ — works in the compiled CommonJS every customer runs, and in vitest. Throws
+// `ReferenceError: __dirname is not defined` in the one place the documentation sends people:
+// Nx loads this .ts with Node's native type stripping, so the module is ESM.
+generateFiles(tree, join(__dirname, 'files'), projectRoot, substitutions);
+
+// GOOD ✅ — one resolver, both module systems, and both branches asserted.
+generateFiles(tree, generatorFilesDir('config-package'), projectRoot, substitutions);
+```
+
+NXSAT-795: all four generators that write templates used `join(__dirname, 'files')`.
+`scripts/build-platform-generators.mjs` compiles them to CommonJS for `@nuxeo/satori-platform`,
+where `__dirname` exists, and vitest defines it too — so 187 tests, 34 gates and a QA pass of
+NXSAT-729 were all green while `npx nx g ./tools/satori-generators:config-package …`, the command
+in `docs/extension-reference.md`, `docs/beta-demo-runbook.md` and `libs/platform/AGENTS.md`, had
+never once worked on Node ≥ 22.6. QA found it by running the documented command.
+
+**A file loaded two ways needs the harsher way tested, and tests run the forgiving one.** Nx 23's
+`loadTsFile` prefers Node's native type stripping and falls back to swc only when stripping
+_fails_; stripping does not transform module syntax, so a `.ts` with `import` statements is ESM
+and nothing in CJS is defined. Vitest and `tsc --module commonjs` both give you the CJS globals,
+so no unit test and no build can see this. `NX_PREFER_NODE_STRIP_TYPES=false` restores the old
+behaviour — useful to confirm a diagnosis, not a fix, because a documented command must not need
+an environment variable.
+
+**Reach for a static check when no runtime test can see the gap.** `checkGeneratorsEsmSafe` in
+`scripts/review-guardrails.mjs` fails on `__dirname`, `__filename` or `require` anywhere under
+`tools/satori-generators/src` except the one resolver that guards with `typeof`, with specs
+exempt. That is what would have caught this; a test could not, because the test harness is the
+forgiving environment.
+
+**Ask which paths your evidence actually covered.** NXSAT-729's own verification ran the generator
+through `create.mjs` (a subprocess), the Nx generator through vitest (in-process) and the
+published compiled copy — three ways, none of them the Nx command line on the TypeScript source.
+Count the ways a thing can be invoked before reporting that it was exercised.
+
+**A default parameter cannot be overridden with `undefined`, so it cannot be used to reach the
+branch it hides.** The first fix for this had the shape below, and its "no `__dirname`" tests all
+ran the CommonJS branch — the default is applied whether the argument was omitted or passed as
+`undefined`. They passed, because both branches resolve to the same directory here. Measured, not
+argued: with the ESM branch deliberately returning a wrong path, all ten tests stayed green.
+
+```typescript
+// BAD ❌ — `f('x', undefined)` runs the default, so the `here === undefined` branch is unreachable.
+function f(generator: string, here = typeof __dirname === 'undefined' ? undefined : __dirname) {}
+
+// GOOD ✅ — a pure function taking the value, and a thin wrapper that supplies it.
+export function filesDirFrom(here: string | undefined, generator: string) {}
+export function generatorFilesDir(generator: string) {
+  return filesDirFrom(moduleDir(), generator);
+}
+```
+
+`__dirname` cannot be stubbed to reach the branch either: in CommonJS it is a module-scoped
+binding, not a property of `globalThis`. And when both branches return the same value, assert one
+that **cannot** — give the CommonJS branch a directory outside the workspace and check the answer
+came from it. Without that case, a branch that stops reading its input still passes.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
