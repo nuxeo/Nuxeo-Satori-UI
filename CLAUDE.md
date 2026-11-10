@@ -55,6 +55,16 @@ copies with nothing comparing them is how a wrong half survives unread.
 | `capture-phase-evidence/SKILL.md` | Producing evidence that proves something           |
 | `add-extension-point/SKILL.md`    | Making something manifest-addressable              |
 | `batch-bug-fixes/SKILL.md`        | Many bug fixes at once, one subagent per ticket    |
+| `satori-developer/SKILL.md`       | Which Satori component fits, its import and API    |
+
+`satori-developer` is vendored unchanged from
+[`HylandSoftware/satori-skills`](https://github.com/HylandSoftware/satori-skills) (commit `ceaa31cb`).
+It is a reference for Satori's own components, not for our layering: imports of
+`@hylandsoftware/satori-ui` stay inside the two satori-components libraries
+(`checkAdoptedPatternsNotBypassed`), and a feature uses the `nxs-` wrapper. Its sibling
+`satori-setup` is deliberately **not** installed — it rewrites `.npmrc` to the Cloudsmith registry,
+and this repo installs from GitHub Packages (see the lockfile rules above). To refresh, re-copy the
+folder from upstream, then `npm run mirror:agents`.
 
 `implement-api-port` and `adopt-adf-hx-component` are kept as a record only: the adf-hx API
 ports and components they describe were removed with adf-hx (NXSAT-635, NXSAT-637). A new
