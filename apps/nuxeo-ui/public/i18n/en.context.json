@@ -1103,6 +1103,7 @@
   "document-detail.document-detail.running": "Visible text in document-detail. Rendered in libs/features/document-detail/src/lib/document-detail/document-detail.html.",
   "document-detail.document-detail.save": "Accessible name (aria-label) of a control in document-detail. Rendered in libs/features/document-detail/src/lib/document-detail/document-detail.html.",
   "document-detail.document-detail.scanning-archive": "Visible text in document-detail. Rendered in libs/features/document-detail/src/lib/document-detail/document-detail.html.",
+  "document-detail.document-detail.select-a-process": "The placeholder of the Start Process dialog's process dropdown, shown while no process is chosen. Rendered in libs/features/document-detail/src/lib/document-detail/document-detail.html.",
   "document-detail.document-detail.select-a-section-below-to-publish": "Visible text in document-detail. Rendered in libs/features/document-detail/src/lib/document-detail/document-detail.html.",
   "document-detail.document-detail.select-event-actions": "Visible text in document-detail. Rendered in libs/features/document-detail/src/lib/document-detail/document-detail.html.",
   "document-detail.document-detail.select-event-category": "Visible text in document-detail. Rendered in libs/features/document-detail/src/lib/document-detail/document-detail.html.",

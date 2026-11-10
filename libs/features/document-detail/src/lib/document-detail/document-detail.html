@@ -178,6 +178,7 @@
           }}</mat-label>
           <mat-select
             [value]="selectedWorkflowModel()"
+            [placeholder]="'document-detail.document-detail.select-a-process' | translate"
             (selectionChange)="selectedWorkflowModel.set($event.value)"
           >
             @for (wf of availableWorkflows(); track wf.name) {
