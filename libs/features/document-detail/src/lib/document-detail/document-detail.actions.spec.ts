@@ -1447,6 +1447,33 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(toast.error).toHaveBeenCalledWith('Failed to abandon workflow.');
     });
 
+    it('hides a workflow banner the user dismisses, and leaves the workflow running', async () => {
+      const wf = workflow();
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([wf]));
+      await build();
+      expect(component.visibleWorkflows()).toEqual([wf]);
+
+      component.dismissWorkflowBanner(wf);
+
+      expect(component.visibleWorkflows()).toEqual([]);
+      expect(component.documentWorkflows()).toEqual([wf]);
+      expect(mockWorkflowService.cancelWorkflow).not.toHaveBeenCalled();
+    });
+
+    it('shows the banner again for a workflow started after one was dismissed', async () => {
+      const first = workflow({ id: 'wf-1' });
+      const second = workflow({ id: 'wf-2' });
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([first]));
+      await build();
+      component.dismissWorkflowBanner(first);
+
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([first, second]));
+      component.selectedWorkflowModel.set('SerialDocumentReview');
+      component.startProcess();
+
+      expect(component.visibleWorkflows()).toEqual([second]);
+    });
+
     it('turns an i18n task key into a readable label', async () => {
       await build();
 
