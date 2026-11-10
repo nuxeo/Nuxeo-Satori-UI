@@ -107,7 +107,7 @@
   }
 
   <!-- Workflow info banner — one per running workflow -->
-  @for (wf of documentWorkflows(); track wf.id) {
+  @for (wf of visibleWorkflows(); track wf.id) {
     <sat-banner variant="warning" [border]="true">
       <sat-banner-message>{{
         'document-detail.workflow-started-on-document'
@@ -120,6 +120,14 @@
         (click)="abandonWorkflow(wf)"
       >
         {{ 'document-detail.document-detail.abandon' | translate }}
+      </button>
+      <button
+        mat-icon-button
+        satBannerDismissButton
+        type="button"
+        (click)="dismissWorkflowBanner(wf)"
+      >
+        <mat-icon aria-hidden="true" svgIcon="x_large" />
       </button>
     </sat-banner>
   }

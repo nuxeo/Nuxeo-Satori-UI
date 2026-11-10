@@ -624,6 +624,13 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly documentTasks = signal<NuxeoTask[]>([]);
   readonly documentTasksLoading = signal(false);
   readonly documentWorkflows = signal<NuxeoWorkflow[]>([]);
+  /** Ids of workflows whose banner the user dismissed on this document; the workflow keeps running. */
+  readonly dismissedWorkflowIds = signal<ReadonlySet<string>>(new Set());
+  /** The running workflows whose banner is still on screen. */
+  readonly visibleWorkflows = computed(() => {
+    const dismissed = this.dismissedWorkflowIds();
+    return this.documentWorkflows().filter((wf) => !dismissed.has(wf.id));
+  });
   readonly abandoningWorkflow = signal(false);
   readonly availableWorkflows = signal<NuxeoWorkflowModel[]>([]);
   readonly workflowsLoading = signal(false);
@@ -1115,6 +1122,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.showStartProcessPanel.set(false);
     this.documentTasks.set([]);
     this.documentWorkflows.set([]);
+    this.dismissedWorkflowIds.set(new Set());
     this.panelSubTab.set('properties');
     this.permissionsTabLoaded = false;
     this.publishTabLoaded = false;
@@ -1370,6 +1378,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
         }
       },
     });
+  }
+
+  /** Hides this workflow's banner for the document on screen. The workflow itself is untouched. */
+  dismissWorkflowBanner(wf: NuxeoWorkflow): void {
+    this.dismissedWorkflowIds.update((ids) => new Set(ids).add(wf.id));
   }
 
   abandonWorkflow(wf: NuxeoWorkflow): void {
