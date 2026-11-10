@@ -2827,6 +2827,8 @@
     },
     "hide-password": "Hide password",
     "profile": {
+      "group-permissions-heading": "{{ group }} permissions",
+      "loading-group-permissions": "Loading {{ group }} permissions…",
       "local-permissions": "Local permissions",
       "no-local-permissions": "No local permissions found.",
       "unknown-user": "Unknown user"
