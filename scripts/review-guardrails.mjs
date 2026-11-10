@@ -10721,6 +10721,61 @@ function checkSatoriPrimitivesRegisteredInOrder() {
   }
 }
 
+/**
+ * The generator sources must not name a CommonJS-only global.
+ *
+ * `scripts/build-platform-generators.mjs` compiles them to CommonJS for `@nuxeo/satori-platform`,
+ * where `__dirname`, `__filename` and `require` all exist — the copy every customer runs. Nx
+ * loads the same sources a different way: since Nx 23, `loadTsFile` prefers Node's native type
+ * stripping, which gives the module ESM semantics and none of the three. So one of them here
+ * works for every customer and throws `ReferenceError` for everyone who runs the command the
+ * documentation gives, `npx nx g ./tools/satori-generators:<generator>`. That asymmetry is how
+ * NXSAT-795 survived a green suite, a green gate and a QA pass of NXSAT-729: nothing in CI runs
+ * a generator through the Nx command line.
+ *
+ * `typeof __dirname` is allowed — the guarded form `util/generator-files-dir.ts` uses to serve
+ * both module systems. Specs are exempt: vitest defines all three.
+ */
+function checkGeneratorsEsmSafe() {
+  // The one file that may name them unguarded. It exists to resolve this difference, and
+  // `generator-files-dir.spec.ts` asserts both of its branches resolve to the same directory.
+  const resolver = 'tools/satori-generators/src/util/generator-files-dir.ts';
+  const cjsOnly = new Set(['__dirname', '__filename', 'require']);
+  const files = walk(
+    'tools/satori-generators/src',
+    (file) => /\.ts$/.test(file) && !/\.spec\.ts$/.test(file) && file !== resolver,
+  );
+  for (const file of files) {
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+    const visit = (node) => {
+      if (ts.isIdentifier(node) && cjsOnly.has(node.text)) {
+        const parent = node.parent;
+        // A member or property *name* is not a reference to the global: `options.require`,
+        // `{ __dirname: x }`, `{ require: r }` in a destructure, `interface { require: T }`.
+        const isName =
+          parent &&
+          ((ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+            (ts.isPropertyAssignment(parent) && parent.name === node) ||
+            (ts.isPropertySignature(parent) && parent.name === node) ||
+            (ts.isBindingElement(parent) && parent.propertyName === node));
+        if (!isName && !(parent && ts.isTypeOfExpression(parent))) {
+          const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+          fail(
+            `${file}:${line + 1} names \`${node.text}\`, which exists only in CommonJS. Nx loads ` +
+              'this source with Node\'s native type stripping, where the module is ESM and it is ' +
+              'not defined, so `npx nx g ./tools/satori-generators:<generator>` throws while the ' +
+              'compiled copy in `@nuxeo/satori-platform` works (NXSAT-795). For a template ' +
+              'directory use `generatorFilesDir()` from `util/generator-files-dir.ts`; otherwise ' +
+              'guard with `typeof`.',
+          );
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+}
+
 /** Package-tool shims cannot be executed directly on Windows. Inspect syntax, not comments. */
 function checkPackageToolLaunches() {
   const files = ['scripts', 'tools'].flatMap((dir) =>
@@ -12895,6 +12950,7 @@ function reEscapeForGuardrail(value) {
 }
 
 const GUARDRAILS = [
+  checkGeneratorsEsmSafe,
   checkPackageToolLaunches,
   checkThemeTokens,
   checkDocsNumbering,

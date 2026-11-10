@@ -269,6 +269,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "satori-components.asset-facets-drawer.search": "Search",
   "satori-components.asset-facets-drawer.search-placeholder": "Search for something",
   "satori-components.asset-grid.label": "Assets",
+  "satori-components.asset-grid.name-and-type": "{{name}} — {{type}}",
   "satori-components.asset-grid.select": "Select {{name}}",
   "satori-components.breadcrumbs.show-more": "Show more breadcrumbs",
   "satori-components.change-password-dialog.cancel": "Cancel",

@@ -19,7 +19,16 @@ view is one, and `nxs-document-list` is the table equivalent.
   document-type icon and keeps exactly the same shape, so a page does not reflow as thumbnails land.
 - **The whole card opens the document** — without the card being a control. A card holding a
   checkbox and a button cannot itself be a button (`nested-interactive`, WCAG 4.1.2), so the name is
-  the control and its hit area is stretched over the card.
+  the control and an `::after` overlay stretches its hit area over the card. The card's content
+  sits below that overlay in paint order, so it intercepts nothing; the type pill also carries
+  `pointer-events: none`, because it is the one part that had been lifted above the overlay and
+  that rule keeps it click-through even if it is lifted again. The checkbox is the one thing
+  deliberately above the overlay, at `z-index: 2`, because it is its own control.
+  `TheWholeCardOpens` holds this with `elementFromPoint` rather than a synthetic click, which would
+  report a hit on a point no pointer could reach.
+- **One tooltip, on the card.** Both the title and the type are clipped with an ellipsis, so the
+  name button's `title` carries both in full and the overlay serves it from anywhere on the card.
+  The pill has no tooltip of its own — it could not have one and stay click-through.
 - **Nothing for no cards.** With an empty `assets` it renders nothing, leaving the empty state to
   the screen, which is the only place that knows whether the list is empty because of a filter,
   because of an error, or because nothing is there.
