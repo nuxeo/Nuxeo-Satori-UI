@@ -6,7 +6,8 @@ import {
   type ProjectConfiguration,
   type Tree,
 } from '@nx/devkit';
-import { join } from 'node:path';
+
+import { generatorFilesDir } from '../util/generator-files-dir';
 
 export interface ConfigPackageSchema {
   name: string;
@@ -123,7 +124,7 @@ export default async function configPackageGenerator(tree: Tree, options: Config
   const reservedSegment = segments.find(isWindowsDeviceName);
   if (reservedSegment !== undefined) {
     throw new Error(
-      `--directory "${parentDirectory}" has the segment "${reservedSegment}", a device name Windows reserves; a directory of that name cannot be created there.`,
+      `--directory "${parentDirectory}" has the segment "${reservedSegment}", a device name Windows reserves; a directory of that name cannot be used there.`,
     );
   }
   if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(options.name)) {
@@ -146,7 +147,7 @@ export default async function configPackageGenerator(tree: Tree, options: Config
   }
   if (isWindowsDeviceName(options.name)) {
     throw new Error(
-      `"${options.name}" is a device name Windows reserves; a directory of that name cannot be created there. Choose another name, e.g. acme-config.`,
+      `"${options.name}" is a device name Windows reserves; a directory of that name cannot be used there. Choose another name, e.g. acme-config.`,
     );
   }
   // The schema says the same, but only the CLI applies it; a caller of this function would not.
@@ -205,7 +206,7 @@ export default async function configPackageGenerator(tree: Tree, options: Config
   };
   configure(tree, name.fileName, config);
 
-  generateFiles(tree, join(__dirname, 'files'), projectRoot, substitutions);
+  generateFiles(tree, generatorFilesDir('config-package'), projectRoot, substitutions);
 
   return () => {
     console.log(`

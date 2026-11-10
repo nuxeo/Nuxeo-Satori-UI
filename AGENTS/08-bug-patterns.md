@@ -1294,6 +1294,46 @@ rule to the behaviour it claims, rather than testing a proxy for it
 
 ---
 
+## 32. One source, two module systems, and a test that only ever sees the forgiving one
+
+```typescript
+// BAD ❌ — works in the compiled CommonJS every customer runs, and in vitest. Throws
+// `ReferenceError: __dirname is not defined` in the one place the documentation sends people:
+// Nx loads this .ts with Node's native type stripping, so the module is ESM.
+generateFiles(tree, join(__dirname, 'files'), projectRoot, substitutions);
+
+// GOOD ✅ — one resolver, both module systems, and both branches asserted.
+generateFiles(tree, generatorFilesDir('config-package'), projectRoot, substitutions);
+```
+
+NXSAT-795: all four generators that write templates used `join(__dirname, 'files')`.
+`scripts/build-platform-generators.mjs` compiles them to CommonJS for `@nuxeo/satori-platform`,
+where `__dirname` exists, and vitest defines it too — so 187 tests, 34 gates and a QA pass of
+NXSAT-729 were all green while `npx nx g ./tools/satori-generators:config-package …`, the command
+in `docs/extension-reference.md`, `docs/beta-demo-runbook.md` and `libs/platform/AGENTS.md`, had
+never once worked on Node ≥ 22.6. QA found it by running the documented command.
+
+**A file loaded two ways needs the harsher way tested, and tests run the forgiving one.** Nx 23's
+`loadTsFile` prefers Node's native type stripping and falls back to swc only when stripping
+_fails_; stripping does not transform module syntax, so a `.ts` with `import` statements is ESM
+and nothing in CJS is defined. Vitest and `tsc --module commonjs` both give you the CJS globals,
+so no unit test and no build can see this. `NX_PREFER_NODE_STRIP_TYPES=false` restores the old
+behaviour — useful to confirm a diagnosis, not a fix, because a documented command must not need
+an environment variable.
+
+**Reach for a static check when no runtime test can see the gap.** `checkGeneratorsEsmSafe` in
+`scripts/review-guardrails.mjs` fails on `__dirname`, `__filename` or `require` anywhere under
+`tools/satori-generators/src` except the one resolver that guards with `typeof`, with specs
+exempt. That is what would have caught this; a test could not, because the test harness is the
+forgiving environment.
+
+**Ask which paths your evidence actually covered.** NXSAT-729's own verification ran the generator
+through `create.mjs` (a subprocess), the Nx generator through vitest (in-process) and the
+published compiled copy — three ways, none of them the Nx command line on the TypeScript source.
+Count the ways a thing can be invoked before reporting that it was exercised.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
