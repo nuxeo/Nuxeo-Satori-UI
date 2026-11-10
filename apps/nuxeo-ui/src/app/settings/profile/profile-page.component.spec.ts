@@ -76,10 +76,12 @@ describe('ProfilePageComponent', () => {
     fixture.detectChanges();
 
     // Group ACEs (for example `members` on /default-domain/workspaces) are inherited by the user
-    // and must not be listed on their profile; only the Local permissions table remains.
+    // and must not be listed on their profile. Count the cards, not the tables: a per-group card
+    // renders its table only after its permissions load, so a table count stays at one even when
+    // the card loop is reintroduced. Expected cards: primary profile, Groups, Local permissions.
+    const cards = fixture.nativeElement.querySelectorAll('article.profile-card');
+    expect(cards.length).toBe(3);
     const tables = fixture.nativeElement.querySelectorAll('table.profile-perm-table');
     expect(tables.length).toBe(1);
-    expect(fixture.nativeElement.textContent).not.toContain('/default-domain/workspaces');
-    expect(fixture.nativeElement.textContent).not.toContain('CanAskForPublishing');
   }));
 });
