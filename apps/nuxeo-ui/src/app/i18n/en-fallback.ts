@@ -372,6 +372,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'satori-components.storyboard.label': 'Video storyboard',
   'satori-components.storyboard.seek-to': 'Seek to {{frame}}',
   'satori-components.asset-grid.label': 'Assets',
+  'satori-components.asset-grid.name-and-type': '{{name}} — {{type}}',
   'satori-components.asset-grid.select': 'Select {{name}}',
   'satori-components.asset-facets-drawer.label': 'Asset filters',
   'satori-components.asset-facets-drawer.clear': 'Clear the search text',
