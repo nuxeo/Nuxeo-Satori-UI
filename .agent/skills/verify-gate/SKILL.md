@@ -28,7 +28,7 @@ Every gate in `ALL_GATES`, cheapest first: `node`, `lockfile`, `lockfile-selftes
 `dependency-tree`, `dependency-tree-selftest`, `supply-chain`, `code-scanning`,
 `guardrails`, `guardrails-selftest`, `crowdin-selftest`, `sanitizer-audit`,
 `sanitizer-selftest`, `assertions`, then affected `lint`, `test`, `build`, `typecheck`,
-then `spec-types`, `bundle`, `api-surface`, `publishability`, `peer-installability`, `fork-simulation`,
+then `spec-types`, the `stories-types` pair, `bundle`, `api-surface`, `publishability`, `peer-installability`, `fork-simulation`,
 `upgrade-rehearsal`, `reference-drift`, `nxs-comparison`, `nxs-comparison-selftest`,
 `storybook-publication-selftest`, `agent-mirror` and `customer-guardrails`. Stops at
 the first failure and prints only its output tail. Reports land in

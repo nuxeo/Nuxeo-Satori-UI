@@ -422,6 +422,34 @@ jobs:
       - name: Typecheck spec files (all projects)
         run: node scripts/beta-harness/spec-typecheck.mjs
 
+      # And the same hole one tsconfig over. `tsconfig.lib.json` excludes `**/*.stories.ts` as
+      # explicitly as it excludes `*.spec.ts`, and `tsconfig.spec.json` includes only specs, so
+      # neither step above reads a stories file; `lint` catches no type error and Vitest never
+      # loads one. The only tsconfig that includes them is `.storybook/tsconfig.json`, and until
+      # this step nothing ran `tsc` against it — 65 stories files checked by nothing.
+      #
+      # They carry assertions, not decoration: `play` functions are executed as a gate by
+      # `storybook:interactions`, so a type error there is an assertion that may never have
+      # asserted. Demonstrated on a one-character change to a story arg — `lint`, `test`,
+      # `typecheck` and `spec-types` all exited 0, and this was the only check that went red.
+      #
+      # Registered here in the same commit as in `ALL_GATES`, which is the lesson of the step
+      # above: `spec-types` was a gate locally and reached by no step here, and a spec type error
+      # sat on `main` for four days with every PR check green.
+      #
+      # Needs the GitHub Packages token, which this job already has: it covers
+      # `satori-components-satori` too, whose stories import `@hylandsoftware/satori-ui`. Unlike
+      # `storybook:interactions`, which refuses that project to stay token-free, this step
+      # type-checks rather than builds and runs a browser, so skipping it would leave the one
+      # `.satori.stories.ts` in the repository checked by nothing.
+      - name: Typecheck Storybook stories (all projects)
+        run: |
+          set -euo pipefail
+          node scripts/beta-harness/stories-typecheck.mjs
+          # The controls, because the gate above is green against this repository and always was:
+          # it closed no backlog, so no real run distinguishes it from a check that cannot fail.
+          node scripts/beta-harness/stories-typecheck.selftest.mjs
+
       # The three checks that guard the published package. Run unconditionally rather
       # than only when affected: they are ~30s in total, and they are the checks that
       # catch the expensive class of defect — both of the ones below were configuration

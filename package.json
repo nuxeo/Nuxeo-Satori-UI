@@ -36,6 +36,8 @@
     "beta:installable": "node scripts/beta-harness/peer-installability.mjs",
     "beta:reference": "node scripts/beta-harness/extension-reference-drift.mjs",
     "beta:reference-selftest": "node scripts/beta-harness/extension-reference-drift.selftest.mjs",
+    "beta:stories-types": "node scripts/beta-harness/stories-typecheck.mjs",
+    "beta:stories-types-selftest": "node scripts/beta-harness/stories-typecheck.selftest.mjs",
     "beta:published-links": "node scripts/beta-harness/published-links.mjs",
     "beta:published-links-selftest": "node scripts/beta-harness/published-links.selftest.mjs",
     "beta:staleness-selftest": "node scripts/agents-staleness-report.selftest.mjs",
