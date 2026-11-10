@@ -1,6 +1,6 @@
 import { formatFiles, generateFiles, names, type Tree } from '@nx/devkit';
-import { join } from 'node:path';
 
+import { generatorFilesDir } from '../util/generator-files-dir';
 import { libraryContext } from '../util/library-context';
 import { assertIdAbsent, insertAboveMarker } from '../util/splice';
 
@@ -38,7 +38,7 @@ export default async function extensionComponentGenerator(
     throw new Error(`${dir} already exists. Choose another name, or delete the directory.`);
   }
 
-  generateFiles(tree, join(__dirname, 'files'), dir, {
+  generateFiles(tree, generatorFilesDir('extension-component'), dir, {
     ...name,
     owner: context.owner,
     componentId,

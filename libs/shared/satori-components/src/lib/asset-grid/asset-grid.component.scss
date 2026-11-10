@@ -150,13 +150,15 @@
   outline-offset: 2px;
 }
 
-/* `position: relative` and `z-index` put the pill above the name button's overlay, so it is not a
-   second way to open the document. `z-index` needs a positioned element to act on, hence
-   `relative` — `.nxs-asset-grid__select` already carries both, so it must not be restated there or
-   its `absolute` would be overridden. */
+/* `pointer-events: none` so the pill does not punch a hole in the name button's overlay. It used
+   to be lifted above that overlay by `position: relative; z-index: 2`, justified as stopping the
+   pill being "a second way to open the document" — but the pill is a `<span>` and has no
+   activation behaviour, so there was never a second way to stop. The rule only blocked the first
+   one, leaving a dead zone in the middle of a card `asset-grid.mdx` promises opens anywhere. The
+   full type moved to the name button's `title`, which the overlay now serves across the whole
+   card, so it is readable from more of the card than the pill's own tooltip ever was. */
 .nxs-asset-grid__type {
-  position: relative;
-  z-index: 2;
+  pointer-events: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
