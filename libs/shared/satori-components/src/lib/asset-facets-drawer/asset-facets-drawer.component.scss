@@ -165,9 +165,13 @@
 
 .nxs-asset-facets-drawer__actions {
   // Equal-width columns, so the Reset / Save As pair shares one box. Content-sized
-  // flex items left them 11px apart in English (NXSAT-214). A third button wraps
-  // into a column of the same width.
+  // flex items left them 11px apart in English (NXSAT-214). The optional third
+  // button (Search, shown when auto-search is off) takes its own full-width row.
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
   gap: 8px;
+
+  > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
 }
