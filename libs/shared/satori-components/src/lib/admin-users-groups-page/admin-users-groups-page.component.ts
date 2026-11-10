@@ -147,6 +147,16 @@ export class NxsAdminUsersGroupsPageComponent implements OnInit {
     this.loadRecent();
   }
 
+  /**
+   * Records what the admin types. Emptying the field after a search is the way back to the full
+   * listing, and it sends no submit, so it must run the search itself: otherwise the last result,
+   * such as "No users match this search.", stays on screen for an empty field.
+   */
+  protected onQueryChange(value: string): void {
+    this.query.set(value);
+    if (!value.trim() && this.committedQuery.trim()) this.runSearch();
+  }
+
   /** Searches users and groups together, from the first page of each. */
   protected runSearch(): void {
     this.cancelRequests();

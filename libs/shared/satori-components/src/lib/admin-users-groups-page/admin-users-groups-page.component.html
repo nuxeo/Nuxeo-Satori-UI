@@ -19,7 +19,7 @@
 <form class="nxs-ugp__search" role="search" (ngSubmit)="runSearch()">
   <mat-form-field appearance="outline" subscriptSizing="dynamic" class="nxs-ugp__search-field">
     <mat-label>{{ 'satori-components.admin-users-groups-page.search' | translate }}</mat-label>
-    <input matInput name="query" [ngModel]="query()" (ngModelChange)="query.set($event)" />
+    <input matInput name="query" [ngModel]="query()" (ngModelChange)="onQueryChange($event)" />
     <button
       mat-icon-button
       matSuffix
