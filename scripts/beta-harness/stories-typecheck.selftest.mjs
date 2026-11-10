@@ -40,6 +40,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import { ensureGeneratedInputs } from './generated-inputs.mjs';
+import { parseShownConfig } from './tsc-shown-config.mjs';
 
 const GATE = resolve(import.meta.dirname, 'stories-typecheck.mjs');
 const workspace = mkdtempSync(join(tmpdir(), 'stories-typecheck-selftest-'));
@@ -237,6 +238,56 @@ control('a stories file excluded from the config that should cover it fails', NE
     /legacy[/\\]old\.stories\.ts/.test(proc.output),
     `the excluded file was not named:\n${proc.output.slice(-700)}`,
   );
+});
+
+/* ── controls: reading `--showConfig`, the defect CI found ───────────────────────────────────── */
+
+/* The coverage check stands entirely on `parseShownConfig`, and the first version of it parsed
+ * `stdout + stderr` as JSON. Locally `tsc`'s stderr is empty, so the concatenation was valid JSON
+ * and all fifteen controls here passed; on the CI runner `npx` writes notices to stderr, the parse
+ * threw, both configs were reported unresolvable and all 65 stories files were declared uncovered.
+ *
+ * It was invisible to every control because they all drove the real `tsc`, whose stderr on this
+ * machine is empty. These hand the parser the output directly, so the channel separation is
+ * asserted rather than inherited from one machine's luck. */
+
+const SHOWN = JSON.stringify({ files: ['../src/a.stories.ts', './preview.ts'] }, null, 2);
+
+control('stderr noise beside valid stdout JSON does not break the parse', NEGATIVE, () => {
+  const shown = parseShownConfig({
+    status: 0,
+    stdout: SHOWN,
+    stderr: 'npm warn exec The following package was not found and will be installed: tsc\n',
+  });
+  expect(shown.ok === true, `the parse failed on stderr noise: ${shown.why}`);
+  expect(
+    shown.files.join(',') === '../src/a.stories.ts,./preview.ts',
+    `files came back as ${JSON.stringify(shown.files)}`,
+  );
+});
+
+falsePositive('stdout that is not JSON is refused, naming both channels', () => {
+  const shown = parseShownConfig({ status: 0, stdout: 'not json at all', stderr: 'a notice' });
+  expect(shown.ok === false, 'non-JSON stdout was accepted');
+  expect(/stdout: not json at all/.test(shown.why), `stdout not quoted: ${shown.why}`);
+  expect(/stderr: a notice/.test(shown.why), `stderr not quoted: ${shown.why}`);
+});
+
+falsePositive('a non-zero exit is refused with whichever channel carried the reason', () => {
+  const onStdout = parseShownConfig({ status: 1, stdout: 'error TS18003: No inputs', stderr: '' });
+  expect(onStdout.ok === false && /TS18003/.test(onStdout.why), JSON.stringify(onStdout));
+  const onStderr = parseShownConfig({ status: 1, stdout: '', stderr: 'error TS5083: cannot read' });
+  expect(onStderr.ok === false && /TS5083/.test(onStderr.why), JSON.stringify(onStderr));
+  const silent = parseShownConfig({ status: 2, stdout: '', stderr: '' });
+  expect(silent.ok === false && /said nothing/.test(silent.why), JSON.stringify(silent));
+});
+
+falsePositive('a config resolving to no files parses as an empty list, not an error', () => {
+  // `tsc --noEmit` reports that as TS18003 and a non-zero exit, so the compile is what refuses it.
+  // Calling it a parse error here would attribute it to the wrong thing.
+  const shown = parseShownConfig({ status: 0, stdout: '{"compilerOptions":{}}', stderr: '' });
+  expect(shown.ok === true, `an absent \`files\` was treated as a failure: ${shown.why}`);
+  expect(shown.files.length === 0, `files came back as ${JSON.stringify(shown.files)}`);
 });
 
 /* `tsc` prints a handful of errors with NO leading `file(line,col):` prefix, so

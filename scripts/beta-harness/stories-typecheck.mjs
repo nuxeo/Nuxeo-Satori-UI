@@ -63,6 +63,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 import { NO_PROGRESS, ensureGeneratedInputs } from './generated-inputs.mjs';
 import { spawnToolSync } from './package-command.mjs';
+import { parseShownConfig } from './tsc-shown-config.mjs';
 
 const GATE = 'stories-typecheck';
 
@@ -192,19 +193,20 @@ if (!prep.ok) {
 const tsc = (args) =>
   spawnToolSync('npx', ['tsc', ...args], { cwd: HARNESS_ROOT, encoding: 'utf8' });
 
-/** The files a config resolves to, from `--showConfig`: the `include` globs already expanded. */
+/**
+ * The files a config resolves to, from `--showConfig`: the `include` globs already expanded.
+ *
+ * `tsc` prints them relative to the config's own directory, so they are resolved against that —
+ * not against `cwd`, which is `HARNESS_ROOT` and unrelated to where the config lives.
+ *
+ * The parse itself is in `tsc-shown-config.mjs`, where it has controls that hand it a non-empty
+ * stderr; doing it inline is how the first version came to parse `stdout + stderr` as JSON and
+ * pass every local control while failing on CI.
+ */
 function resolvedFiles(config) {
-  const proc = tsc(['-p', config, '--showConfig']);
-  const output = `${proc.stdout ?? ''}${proc.stderr ?? ''}`;
-  if (proc.status !== 0) return { ok: false, why: output.trim() || `tsc exited ${proc.status}` };
-  let parsed;
-  try {
-    parsed = JSON.parse(output);
-  } catch {
-    return { ok: false, why: `--showConfig did not emit JSON:\n${output.slice(0, 400)}` };
-  }
-  const files = (parsed.files ?? []).map((file) => resolve(dirname(config), file));
-  return { ok: true, files };
+  const shown = parseShownConfig(tsc(['-p', config, '--showConfig']));
+  if (!shown.ok) return shown;
+  return { ok: true, files: shown.files.map((file) => resolve(dirname(config), file)) };
 }
 
 const results = [];
