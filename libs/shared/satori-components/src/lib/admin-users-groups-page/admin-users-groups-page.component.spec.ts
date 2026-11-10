@@ -347,6 +347,63 @@ describe('NxsAdminUsersGroupsPageComponent', () => {
     expect(page()['recentLoading']()).toBe(false);
   });
 
+  it('keeps the newest creation of a re-created account, with a group and an unrelated account (NXSAT-285)', async () => {
+    // The provider lists newest first. The older creation of 'ssomise' has different metadata, so
+    // the assertion shows which entry survived. A group sharing the identifier must not be merged.
+    const newestUser = {
+      uid: 'ssomise',
+      type: 'user',
+      properties: {
+        'user:firstName': 'Sai Charan',
+        'user:lastName': 'Somisetty',
+        'user:email': 'new@example.invalid',
+      },
+    };
+    const sameIdGroup = {
+      uid: 'ssomise',
+      type: 'group',
+      properties: { 'group:grouplabel': 'Editors' },
+    };
+    const olderUser = {
+      uid: 'ssomise',
+      type: 'user',
+      properties: {
+        'user:firstName': 'Old',
+        'user:lastName': 'Name',
+        'user:email': 'old@example.invalid',
+      },
+    };
+    const unrelated = {
+      uid: 'jdoe',
+      type: 'user',
+      properties: {
+        'user:firstName': 'Jane',
+        'user:lastName': 'Doe',
+        'user:email': 'jdoe@example.invalid',
+      },
+    };
+    userService['getRecentlyCreatedUsersAndGroups'].mockReturnValueOnce(
+      of({ entries: [newestUser, sameIdGroup, olderUser, unrelated] }),
+    );
+    page()['loadRecent']();
+    await render();
+    expect(page()['recent']()).toEqual([
+      {
+        kind: 'user',
+        name: 'Sai Charan Somisetty',
+        identifier: 'ssomise',
+        email: 'new@example.invalid',
+      },
+      { kind: 'group', name: 'Editors', identifier: 'ssomise', email: '' },
+      {
+        kind: 'user',
+        name: 'Jane Doe',
+        identifier: 'jdoe',
+        email: 'jdoe@example.invalid',
+      },
+    ]);
+  });
+
   it('routes a recent user or group to its callback', () => {
     const userChosen = vi.fn();
     const groupChosen = vi.fn();
