@@ -680,6 +680,62 @@ const ALL_GATES = [
     argv: ['run', '--silent', 'beta:customer-guardrails'],
     echoOnPass: true,
   },
+  // The nx commands THIS runner does not use. Every gate above that touches nx builds
+  // `nx affected -t <target> --base=<base>` or `nx run-many -t <target> --all`, and neither
+  // passes `--exclude` or a project pattern — so `findMatchingProjects`, which is where nx turns
+  // a pattern into a regex, is reached by nothing here. CI's `test` job does pass
+  // `--exclude=browse,document-detail,knowledge-discovery,search`, and that is how a tree where
+  // nx cannot compile a pattern at all was green through every local gate while CI's affected
+  // leg died (run 42932394850): a `minimatch@^10` override reached nx's exact `10.2.5` pin, and
+  // minimatch 11.0.1 had removed the `makeRe` nx calls.
+  //
+  // Last rather than early on purpose, and it is a real cost: on a broken tree `lint`, `test`,
+  // `build` and `typecheck` all pass first, because none of them walks that path, so the red
+  // arrives minutes late. The alternative was renumbering 36 rows of the §2 inventory for a
+  // CI-only fix. If this gate ever fires in anger, moving it next to `lockfile` — where it
+  // belongs by cost and by subject — is the right follow-up.
+  {
+    id: 'nx-project-matching',
+    // Spawns nx and walks `node_modules/nx/dist`, so a Windows run can tell you something a
+    // macOS run cannot: whether the probes' directory patterns still match a project root there.
+    platformSensitive: true,
+    label: 'Nx project-pattern matching',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/nx-project-matching.mjs'],
+    // The subject, the two patterns and the minimatch version it checked are the evidence that
+    // the probes ran against something real, so surface them on a pass too.
+    echoOnPass: true,
+  },
+  // And its controls, because the gate above shipped wrong in exactly the way this repository
+  // keeps paying for: check C accepted a scanned `minimatch` member under EITHER access path,
+  // which is green against the break it was written for — 11.0.1 dropped `makeRe` from both — and
+  // green against half of it. A minimatch keeping the named export and dropping the function
+  // property satisfies "either" while every `minimatch_1.minimatch.makeRe(…)` call still throws.
+  // Review (#586) found it by reading the code, because the gate had no controls at all.
+  //
+  // The second round of review found the worse end of the same class: the gate's main-module guard
+  // compared `import.meta.url` against `new URL('file://' + process.argv[1])`, so a checkout path
+  // containing `#` or `?` had its tail read as a fragment or a query, `main()` never ran, and the
+  // gate exited **0 having checked nothing**. A silent pass is worse than a wrong failure —
+  // nothing in the log tells it apart from a healthy run. Two controls now invoke the gate for
+  // real through exactly those paths and require exit 2.
+  //
+  // Fixtures under `os.tmpdir()` and no tracked file touched. The gathering half past the first
+  // step (`createRequire` against nx's tree, `statSync` on `nx/dist/src`) is the class of verdict
+  // these controls cannot reach, and both files say so rather than leaving a reader to infer it.
+  {
+    id: 'nx-project-matching-selftest',
+    // It builds symlinks, spawns the gate, and compares file URLs — `#` is a legal filename
+    // character on Windows and `?` is not, Windows needs a permission for symlinks at all, and
+    // path canonicalisation is the thing under test. A Windows run can tell you what macOS cannot.
+    platformSensitive: true,
+    label: 'Nx project-pattern matching controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/nx-project-matching.selftest.mjs'],
+    // The negative/positive split is the evidence, not noise: "37 controls passed" says nothing
+    // about whether any of them could have failed.
+    echoOnPass: true,
+  },
 ];
 
 /* Every gate must say whether its VERDICT can differ by operating system. Not whether it is

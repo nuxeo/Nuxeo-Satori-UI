@@ -24,6 +24,8 @@
     "beta:customer-guardrails": "node libs/platform/guardrails/check-extension-library.mjs libs/extensions/acme-extensions && node scripts/check-extension-library.selftest.mjs",
     "beta:dependency-tree": "node scripts/beta-harness/dependency-tree.mjs",
     "beta:dependency-tree-selftest": "node scripts/beta-harness/dependency-tree.selftest.mjs",
+    "beta:nx-matching": "node scripts/beta-harness/nx-project-matching.mjs",
+    "beta:nx-matching-selftest": "node scripts/beta-harness/nx-project-matching.selftest.mjs",
     "beta:evidence": "node scripts/beta-harness/phase-runner.mjs",
     "beta:fork": "node scripts/beta-harness/fork-simulation.mjs",
     "beta:gate": "node scripts/beta-harness/verify-gate.mjs",
