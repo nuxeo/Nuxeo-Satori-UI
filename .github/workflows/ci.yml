@@ -549,6 +549,24 @@ jobs:
           base: ${{ needs.base.outputs.base }}
           head: ${{ needs.base.outputs.head }}
 
+      # BEFORE the tests, because this is the step that fails when the affected leg below cannot
+      # run at all. The `--exclude` on that leg reaches nx's project-pattern matcher, which no
+      # gate in `verify-gate.mjs` reaches — every nx gate there is `affected --base` or
+      # `run-many --all`, neither of which passes a pattern. A `minimatch@^10` override landed on
+      # nx's exact `10.2.5` pin, minimatch 11.0.1 had dropped the `makeRe` nx calls, and the
+      # affected leg died with `minimatch_1.minimatch.makeRe is not a function` (run 42932394850)
+      # AFTER all four named projects had printed green. So the job was red, looked like a test
+      # failure, and every project in the tail — `@nuxeo-satori/generators` among them — silently
+      # ran no tests.
+      #
+      # Watching the leg's exit code would not have been enough: nx tries an exclude pattern as a
+      # project name first and only falls through to the directory matcher when that misses, so
+      # the crash needed an affected set that excluded one of the four. The run before it had
+      # touched the root `package.json`, every project was affected, and it passed. This step's
+      # probes construct the fall-through deliberately, so they do not depend on the day's diff.
+      - name: Check nx can still match project patterns
+        run: npm run beta:nx-matching
+
       # `--parallel=1` is kept deliberately (f7ab1f78a): the Vitest and Karma projects
       # intermittently exited under runner contention with no useful failure output when run
       # concurrently with each other. This job having a runner to itself does not change that —

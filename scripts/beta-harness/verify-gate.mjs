@@ -680,6 +680,32 @@ const ALL_GATES = [
     argv: ['run', '--silent', 'beta:customer-guardrails'],
     echoOnPass: true,
   },
+  // The nx commands THIS runner does not use. Every gate above that touches nx builds
+  // `nx affected -t <target> --base=<base>` or `nx run-many -t <target> --all`, and neither
+  // passes `--exclude` or a project pattern — so `findMatchingProjects`, which is where nx turns
+  // a pattern into a regex, is reached by nothing here. CI's `test` job does pass
+  // `--exclude=browse,document-detail,knowledge-discovery,search`, and that is how a tree where
+  // nx cannot compile a pattern at all was green through every local gate while CI's affected
+  // leg died (run 42932394850): a `minimatch@^10` override reached nx's exact `10.2.5` pin, and
+  // minimatch 11.0.1 had removed the `makeRe` nx calls.
+  //
+  // Last rather than early on purpose, and it is a real cost: on a broken tree `lint`, `test`,
+  // `build` and `typecheck` all pass first, because none of them walks that path, so the red
+  // arrives minutes late. The alternative was renumbering 36 rows of the §2 inventory for a
+  // CI-only fix. If this gate ever fires in anger, moving it next to `lockfile` — where it
+  // belongs by cost and by subject — is the right follow-up.
+  {
+    id: 'nx-project-matching',
+    // Spawns nx and walks `node_modules/nx/dist`, so a Windows run can tell you something a
+    // macOS run cannot: whether the probes' directory patterns still match a project root there.
+    platformSensitive: true,
+    label: 'Nx project-pattern matching',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/nx-project-matching.mjs'],
+    // The subject, the two patterns and the minimatch version it checked are the evidence that
+    // the probes ran against something real, so surface them on a pass too.
+    echoOnPass: true,
+  },
 ];
 
 /* Every gate must say whether its VERDICT can differ by operating system. Not whether it is
