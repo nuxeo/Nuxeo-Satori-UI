@@ -141,6 +141,10 @@
         "knowledgeDiscoveryOperations": {
           "type": "object",
           "additionalProperties": { "type": "string" }
+        },
+        "knowledgeEnrichmentOperations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
         }
       }
     },

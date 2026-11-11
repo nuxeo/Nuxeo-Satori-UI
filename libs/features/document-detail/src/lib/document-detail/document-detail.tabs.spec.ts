@@ -18,6 +18,7 @@ import {
   ARenderService,
   BrowseService,
   CURRENT_USERNAME,
+  ContentLakeIngestService,
   DirectoryService,
   DocumentDetailService,
   NuxeoApiBase,
@@ -30,11 +31,13 @@ import {
   type NuxeoComment,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   AiChatService,
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
+import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
@@ -131,6 +134,11 @@ function directoryEntry(id: string, displayLabel: string): DirectoryEntry {
   return { id, label: displayLabel, displayLabel, ordering: 0, obsolete: 0, directoryName: 'd' };
 }
 
+/** A complete enrichment result; a test supplies only the action it is exercising. */
+function keResult(over: Partial<KeEnrichmentResult> = {}): KeEnrichmentResult {
+  return { inProgress: false, generalProcessingErrors: [], raw: null, ...over };
+}
+
 interface DialogRefLike {
   afterClosed: () => Observable<unknown>;
 }
@@ -190,6 +198,28 @@ const mockAiGateway = {
   analyzeSentiment: vi.fn(
     (): Observable<{ sentiments: Array<{ id: string }>; threadSummary: string | null }> =>
       of({ sentiments: [], threadSummary: null }),
+  ),
+};
+
+const mockKeClient = {
+  enrich: vi.fn((): Observable<KeEnrichmentResult> => of(keResult())),
+};
+
+const mockIngestService = {
+  startIngest: vi.fn((): Observable<{ commandId: string }> => of({ commandId: 'cmd-1' })),
+  waitUntilComplete: vi.fn(
+    (): Observable<{
+      commandId: string;
+      state: string;
+      processed: number;
+      error: boolean;
+      errorCount: number;
+    }> => of({ commandId: 'cmd-1', state: 'COMPLETED', processed: 1, error: false, errorCount: 0 }),
+  ),
+  markIngested: vi.fn((): Observable<NuxeoDocument[]> => of([])),
+  backfillIngestMarkerIfNeeded: vi.fn(
+    (): Observable<{ doc: NuxeoDocument | null; presentInContentLake: boolean }> =>
+      of({ doc: null, presentInContentLake: false }),
   ),
 };
 
@@ -275,6 +305,15 @@ describe('DocumentDetailComponent — tab surfaces', () => {
     mockAiGateway.classify.mockReturnValue(of({ category: 'Invoice' }));
     mockAiGateway.findSimilar.mockReturnValue(of({ documents: [] }));
     mockAiGateway.analyzeSentiment.mockReturnValue(of({ sentiments: [], threadSummary: null }));
+    mockKeClient.enrich.mockReturnValue(of(keResult()));
+    mockIngestService.startIngest.mockReturnValue(of({ commandId: 'cmd-1' }));
+    mockIngestService.waitUntilComplete.mockReturnValue(
+      of({ commandId: 'cmd-1', state: 'COMPLETED', processed: 1, error: false, errorCount: 0 }),
+    );
+    mockIngestService.markIngested.mockReturnValue(of([]));
+    mockIngestService.backfillIngestMarkerIfNeeded.mockReturnValue(
+      of({ doc: null, presentInContentLake: false }),
+    );
     mockNuxeoApi.nxqlSearch.mockReturnValue(of({ entries: [] }));
     mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
   }
@@ -304,6 +343,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: BrowseService, useValue: { updateDocument: vi.fn(() => of(doc())) } },
         { provide: DirectoryService, useValue: mockDirectoryService },
+        { provide: KeClientService, useValue: mockKeClient },
         { provide: TaskService, useValue: { getDocumentTasks: vi.fn(() => of([])) } },
         {
           provide: WorkflowService,
@@ -322,6 +362,8 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         { provide: AiChatService, useValue: { openPanel: vi.fn() } },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(true) } },
         { provide: NuxeoApiBase, useValue: mockNuxeoApi },
+        { provide: ContentLakeIngestService, useValue: mockIngestService },
+        { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({

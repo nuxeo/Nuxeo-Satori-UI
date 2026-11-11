@@ -22,6 +22,7 @@ import { GENERATED_AUDIT_LOCALES, SHIPPED_CATALOGUE_LANGUAGES } from '../i18n/sh
 import { firstValueFrom } from 'rxjs';
 import { AI_BACKEND_URL } from '@agentic-ui/shared/ai-client';
 import { DEFAULT_KD_CIC_OPERATIONS, KD_CIC_OPERATIONS } from '@agentic-ui/shared/kd-client';
+import { DEFAULT_KE_CIC_OPERATIONS, KE_CIC_OPERATIONS } from '@agentic-ui/shared/ke-client';
 import {
   ARENDER_CONFIG,
   NUXEO_API_ORIGIN,
@@ -532,6 +533,13 @@ export function provideAppConfig(): (Provider | EnvironmentProviders)[] {
       useFactory: () => ({
         ...DEFAULT_KD_CIC_OPERATIONS,
         ...inject(AppConfigService).bootstrap().integrations.knowledgeDiscoveryOperations,
+      }),
+    },
+    {
+      provide: KE_CIC_OPERATIONS,
+      useFactory: () => ({
+        ...DEFAULT_KE_CIC_OPERATIONS,
+        ...inject(AppConfigService).bootstrap().integrations.knowledgeEnrichmentOperations,
       }),
     },
     {

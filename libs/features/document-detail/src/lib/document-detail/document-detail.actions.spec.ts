@@ -20,6 +20,7 @@ import {
   BrowseService,
   CURRENT_USERNAME,
   CLIPBOARD_STORAGE_KEY,
+  ContentLakeIngestService,
   DirectoryService,
   DocumentDetailService,
   NuxeoApiBase,
@@ -31,11 +32,13 @@ import {
   type NuxeoTask,
   type NuxeoWorkflow,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   AiChatService,
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
+import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
 import {
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
@@ -139,6 +142,8 @@ interface DialogRefLike {
 
 /** The signed-in username the component sees; a test can make it an external share recipient. */
 let currentUsername = 'tester';
+const emptyKe = (): Observable<KeEnrichmentResult> =>
+  of({ textClassification: { result: '' } } as KeEnrichmentResult);
 
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument> => of(doc())),
@@ -307,6 +312,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
             getAllL10nEntries: vi.fn(() => of([])),
           },
         },
+        { provide: KeClientService, useValue: { enrich: emptyKe } },
         { provide: TaskService, useValue: { getDocumentTasks: vi.fn(() => of([])) } },
         { provide: WorkflowService, useValue: mockWorkflowService },
         {
@@ -335,6 +341,18 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(false) } },
         { provide: NuxeoApiBase, useValue: { nxqlSearch: vi.fn(() => of({ entries: [] })) } },
         { provide: CURRENT_USERNAME, useValue: () => currentUsername },
+        {
+          provide: ContentLakeIngestService,
+          useValue: {
+            startIngest: vi.fn(() => of({ commandId: 'c1' })),
+            waitUntilComplete: vi.fn(() => of({})),
+            markIngested: vi.fn(() => of([])),
+            backfillIngestMarkerIfNeeded: vi.fn(() =>
+              of({ doc: null, presentInContentLake: false }),
+            ),
+          },
+        },
+        { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {
