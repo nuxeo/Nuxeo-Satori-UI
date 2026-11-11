@@ -13,6 +13,9 @@ const config: StorybookConfig = {
       from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n',
       to: 'i18n/@hylandsoftware/satori-ui',
     },
+    // `provideSatori()` loads this sprite at startup (satori-ui >= alpha.201); without it the
+    // Satori SVG icons render blank.
+    { from: '../../../../node_modules/@hylandsoftware/satori-icons', to: 'satori-icons' },
   ],
   addons: [],
   framework: {
