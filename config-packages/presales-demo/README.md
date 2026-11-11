@@ -37,6 +37,12 @@ Run it in this directory. `build.mjs` needs only Node 20 — nothing to install,
 In this repository, `npx nx build presales-demo` runs the same script and writes the zip to
 `dist/config-packages/presales-demo/` at the workspace root instead.
 
+One limit of the build rather than of the server: a body nested close to the 1000 levels the server
+allows can use up the stack of the Node running the build, which on Windows with Node 20 happens
+from about 993. The build refuses it naming the file and the depth, and says that the depth itself
+was fine — it does not write a package. Node 22 and newer reach 1000 on every platform we test, so
+that is the fix if you ever see it; nothing nested less than about 900 deep is affected anywhere.
+
 `build.mjs` refuses — with the file and the reason — what the server would
 leave out: a fragment or layout body, in a file or inline, that does not parse, is not an object,
 repeats a key, or exceeds 1 MiB; an asset over 2 MiB or not named as a plain image file; an entry

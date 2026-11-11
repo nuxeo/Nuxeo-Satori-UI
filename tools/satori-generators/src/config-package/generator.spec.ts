@@ -12,6 +12,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
 
 import { readProjectConfiguration, type Tree } from '@nx/devkit';
@@ -288,7 +289,15 @@ describe('the generated build.mjs', () => {
     }
   }
 
-  function build(env: NodeJS.ProcessEnv = process.env): {
+  /**
+   * `nodeArgs` go to Node rather than to the script — `--stack-size` to run the build with less
+   * stack than the machine really has, which is how a platform that overflows on a document the
+   * server accepts is reproduced here (NXSAT-730).
+   */
+  function build(
+    env: NodeJS.ProcessEnv = process.env,
+    nodeArgs: string[] = [],
+  ): {
     status: number;
     output: string;
     zip?: Buffer;
@@ -296,7 +305,7 @@ describe('the generated build.mjs', () => {
     try {
       const output = execFileSync(
         process.execPath,
-        [join(dir, 'build.mjs'), '--out', join(dir, 'out')],
+        [...nodeArgs, join(dir, 'build.mjs'), '--out', join(dir, 'out')],
         {
           encoding: 'utf8',
           env,
@@ -494,6 +503,94 @@ describe('the generated build.mjs', () => {
       expect(output).toMatch(
         /inline JSON of fragment "deep" in manifest: nested 1001 deep; the server’s JSON parser refuses/,
       );
+    });
+
+    // NXSAT-730, found in QA. Inside the band the server accepts, how deep the build can actually
+    // go is a property of the machine rather than of the document: both the recursive tokeniser in
+    // `rejectDuplicateKeys` and `JSON.stringify` walk the whole thing. Which one runs out first
+    // flips by platform — on Linux and macOS the tokeniser, on Windows with Node 20
+    // `JSON.stringify`, from about depth 993 — and `JSON.stringify` was the one call outside a
+    // `try`, so there the build died with a raw RangeError trace. Both now say the same thing, and
+    // say whose limit it was: a reader given the bare words "Maximum call stack size exceeded"
+    // cannot tell a file the server would refuse from one their Node could not carry.
+    describe('a document the server accepts but this machine cannot walk', () => {
+      // Far below any platform's threshold for depth 1000: Windows with Node 20 overflows there
+      // with about 1 MB. Small enough to be certain, large enough that Node still starts and a
+      // normal package still builds — which the control below holds it to.
+      const SMALL_STACK = ['--stack-size=150'];
+
+      /**
+       * A preload that makes the packaging step throw, which is how Windows with Node 20 fails:
+       * past the tokeniser, then out of stack in `JSON.stringify`. Fires only for the deep
+       * document written below — it is the only one with a top-level `a` — so the build's other
+       * JSON files are packaged normally and the refusal names one file.
+       */
+      const injectPackagingFailure = (message: string) => {
+        write(
+          'inject.mjs',
+          `const real = JSON.stringify;\n` +
+            `JSON.stringify = function (value, ...rest) {\n` +
+            `  if (value !== null && typeof value === 'object' &&\n` +
+            `      Object.prototype.hasOwnProperty.call(value, 'a')) {\n` +
+            `    throw new RangeError(${JSON.stringify(message)});\n` +
+            `  }\n` +
+            `  return real.call(this, value, ...rest);\n` +
+            `};\n`,
+        );
+        return [`--import=${pathToFileURL(join(dir, 'inject.mjs')).href}`];
+      };
+
+      it('still builds a normal package on a stack that small', async () => {
+        await generate();
+        expect(build(process.env, SMALL_STACK).status).toBe(0);
+      });
+
+      it('refuses it naming the depth and whose limit it was, not the bare V8 words', async () => {
+        await generate();
+        write(fragment, nested(1000));
+        const { status, output } = build(process.env, SMALL_STACK);
+        expect(status).toBe(1);
+        expect(output).toContain('bundle/agentic-ui-config/bootstrap.json');
+        expect(output).toMatch(
+          /nested 1000 deep; the server accepts this depth but this Node ran out of stack walking it\. Build with Node 22 or newer\./,
+        );
+        expect(output).not.toMatch(/Maximum call stack size exceeded/);
+        expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+      });
+
+      // The Windows-with-Node-20 site specifically. It cannot be reached by shrinking the stack on
+      // Linux or macOS — the tokeniser always gives out first there, whatever the stack size, so
+      // the guard around `JSON.stringify` would never be exercised — hence the injection.
+      it('reports the same thing when it is the packaging step that runs out', async () => {
+        await generate();
+        write(fragment, nested(1000));
+        const { status, output } = build(
+          process.env,
+          injectPackagingFailure('Maximum call stack size exceeded'),
+        );
+        expect(status).toBe(1);
+        expect(output).toContain('bundle/agentic-ui-config/bootstrap.json');
+        expect(output).toMatch(
+          /nested 1000 deep; the server accepts this depth but this Node ran out of stack walking it\./,
+        );
+        expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+      });
+
+      // A RangeError that is not the stack must not be dressed up as one: "Invalid string length"
+      // is what packaging a file too big for a V8 string raises, and telling that reader to change
+      // Node would send them after the wrong thing.
+      it('does not blame the stack for a RangeError that is not the stack', async () => {
+        await generate();
+        write(fragment, nested(1000));
+        const { status, output } = build(
+          process.env,
+          injectPackagingFailure('Invalid string length'),
+        );
+        expect(status).toBe(1);
+        expect(output).toContain('bundle/agentic-ui-config/bootstrap.json: Invalid string length');
+        expect(output).not.toMatch(/ran out of stack/);
+        expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+      });
     });
   });
 

@@ -546,6 +546,26 @@ function nestingDepth(text) {
 }
 
 /**
+ * Whether `error` is V8 running out of stack, rather than anything about the document. Both
+ * depth-sensitive steps below report it this way — the recursive tokeniser in
+ * `rejectDuplicateKeys` and `JSON.stringify` — and which of them reaches it first is a property of
+ * the platform and the Node version rather than of the file: on Linux and macOS the tokeniser goes
+ * first on every supported Node, on Windows with Node 20 `JSON.stringify` does.
+ */
+const ranOutOfStack = (error) =>
+  error instanceof RangeError && /call stack|stack size/i.test(error.message);
+
+/**
+ * Said only of a document the server would accept: the depth check has already refused anything
+ * deeper than `MAX_JSON_DEPTH`, so reaching this means the limit hit was this machine's and not
+ * Nuxeo's. It says so, because a reader told only `Maximum call stack size exceeded` cannot tell a
+ * file that is too deep for the server from one that is merely too deep for their Node, and the
+ * two want opposite fixes — edit the file, or change Node.
+ */
+const outOfStack = (depth) =>
+  `nested ${depth} deep; the server accepts this depth but this Node ran out of stack walking it. Build with Node 22 or newer.`;
+
+/**
  * The server's checks on a fragment or layout body: it is not nested deeper than the parser
  * accepts, it parses, it repeats no key, and it is an object. Both bodies the server reads go
  * through here — a `src` file and inline `<json>` — so a check added here covers both.
@@ -566,7 +586,7 @@ function parseObject(text, report) {
     parsed = JSON.parse(text);
     rejectDuplicateKeys(text);
   } catch (error) {
-    report(error.message);
+    report(ranOutOfStack(error) ? outOfStack(depth) : error.message);
     return null;
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
@@ -584,8 +604,18 @@ function checkJson(file) {
   const parsed = parseObject(text, (message) => problem(file, message));
   if (!parsed) return null;
   delete parsed.$schema;
-  // The limit applies to what is packaged, which is what the server reads.
-  const packaged = Buffer.from(JSON.stringify(parsed));
+  // The limit applies to what is packaged, which is what the server reads. `JSON.stringify`
+  // recurses through the document, so it is the second place a deep one can exhaust the stack —
+  // and on Windows with Node 20 it is the first, overflowing from about depth 993 while the
+  // tokeniser above survives. It was the one depth-sensitive call outside a `try`, so there it
+  // ended the build with a raw `RangeError` trace instead of a refusal naming the file.
+  let packaged;
+  try {
+    packaged = Buffer.from(JSON.stringify(parsed));
+  } catch (error) {
+    problem(file, ranOutOfStack(error) ? outOfStack(nestingDepth(text)) : error.message);
+    return null;
+  }
   if (packaged.length > MAX_JSON_BYTES) {
     problem(
       file,
