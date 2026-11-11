@@ -212,7 +212,7 @@ try {
   const reservedSegment = segments.find(isWindowsDeviceName);
   if (reservedSegment !== undefined) {
     throw new Error(
-      `--directory "${parentDirectory}" has the segment "${reservedSegment}", a device name Windows reserves; a directory of that name cannot be created there.`,
+      `--directory "${parentDirectory}" has the segment "${reservedSegment}", a device name Windows reserves; a directory of that name cannot be used there.`,
     );
   }
   if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name)) {
@@ -231,7 +231,7 @@ try {
   }
   if (isWindowsDeviceName(name)) {
     throw new Error(
-      `"${name}" is a device name Windows reserves; a directory of that name cannot be created there. Choose another name, e.g. acme-config.`,
+      `"${name}" is a device name Windows reserves; a directory of that name cannot be used there. Choose another name, e.g. acme-config.`,
     );
   }
   if (!/^[a-z][a-z0-9]*$/.test(options.owner)) {

@@ -6,7 +6,7 @@
  */
 import { posix } from 'node:path';
 
-const REPO_URL = 'https://github.com/nuxeo/agentic-ui-poc';
+const REPO_URL = 'https://github.com/nuxeo/Nuxeo-Satori-UI';
 
 /**
  * @param {string} href the link target as written, e.g. `../../scripts/x.mjs#L35`

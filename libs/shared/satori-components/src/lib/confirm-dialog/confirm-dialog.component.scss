@@ -1,0 +1,10 @@
+:host {
+  display: block;
+  width: 400px;
+  max-width: 100%;
+}
+
+.nxs-confirm-dialog__message {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+}

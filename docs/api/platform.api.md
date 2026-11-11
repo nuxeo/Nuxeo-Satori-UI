@@ -21,7 +21,7 @@ type PlatformEntryPoint = (typeof PLATFORM_ENTRY_POINTS)[number];
 
 ## @nuxeo/satori-platform/app-config
 
-37 exported symbol(s).
+40 exported symbol(s).
 
 ```ts
 const APP_BOOTSTRAP_CONFIG_FILE = "bootstrap.json";
@@ -58,6 +58,7 @@ interface AppBrandingConfig {
     readonly applicationTitle: string;
     readonly documentTitle: string;
     readonly logo: AppBrandingLogo | null;
+    readonly favicon?: AppBrandingLogo | null;
     }
 }
 interface AppBrandingLogo {
@@ -99,7 +100,9 @@ class AppConfigService {
     readonly url: string;
     readonly alt: string;
     } | null>;
+    readonly brandingFavicon: import("@angular/core").Signal<string | null>;
     reportBrandingLogoUnavailable(url: string, reason: string): void;
+    reportUnsupportedDefaultLanguage(value: string, fallback: string, reason: string): void;
     load(): Promise<void>;
     resolveTheme(id: string | null): AppThemeConfig;
     featureToggle(id: string, fallback: boolean): boolean;
@@ -180,18 +183,26 @@ interface ManifestNavItem {
 }
 const PRESET_QUERY_PARAM = "preset";
 const PRESET_STORAGE_KEY = "agentic-ui.preset";
+const RTL_LANGUAGES: readonly string[];
+type TextDirection = 'ltr' | 'rtl';
 function mergeBootstrapConfig(base: AppBootstrapConfig, patch: unknown): AppBootstrapConfig;
 function mergeRuntimeManifest(base: AppRuntimeManifest, patch: unknown): AppRuntimeManifest;
 function resolveBootstrapConfigUrl(baseUri: string): string;
 function resolveManifestConfigUrl(bootstrapUrl: string): string;
 function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeConfig;
+function textDirectionForLanguage(language: string | null | undefined): TextDirection;
 ```
 
 ## @nuxeo/satori-platform/components
 
-149 exported symbol(s).
+193 exported symbol(s).
 
 ```ts
+const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
+const NXS_ADMIN_USERS_GROUPS_PAGE_ID = "nxs.components.adminUsersGroupsPage";
+const NXS_ADMIN_USER_DETAILS_PAGE_ID = "nxs.components.adminUserDetailsPage";
+const NXS_ASSET_FACETS_DRAWER_ID = "nxs.components.assetFacetsDrawer";
+const NXS_ASSET_GRID_ID = "nxs.components.assetGrid";
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
 const NXS_MODIFIED_RANGES: readonly ["last24h", "lastWeek", "lastMonth", "lastYear", "priorToLastYear"];
@@ -212,8 +223,12 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly upload: "nxs.primitives.upload";
     }>;
 }
+const NXS_PUBLISH_DIALOG_ID = "nxs.components.publishDialog";
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
+const NXS_STORYBOARD_ID = "nxs.components.storyboard";
+const NXS_TASK_DETAIL_ID = "nxs.components.taskDetail";
 const NXS_TOAST_DURATION = 4000;
+const NXS_TRASH_LIST_ID = "nxs.components.trashList";
 interface NxsActionBarInputs {
     readonly actions: InputSignal<readonly NxsToolbarAction[]>;
     readonly label: InputSignal<string>;
@@ -265,6 +280,332 @@ class NxsActionMenuComponent {
     };
     }, {
     "selected": "selected";
+    }, never, never, true, never>;
+    }
+}
+class NxsAdminGroupDetailsPageComponent {
+    readonly groupId: import("@angular/core").InputSignal<string>;
+    readonly deleted: import("@angular/core").InputSignal<() => void>;
+    readonly userChosen: import("@angular/core").InputSignal<(username: string) => void>;
+    readonly groupChosen: import("@angular/core").InputSignal<(groupname: string) => void>;
+    readonly documentChosen: import("@angular/core").InputSignal<(documentId: string) => void>;
+    protected readonly memberColumns: readonly ["username", "actions"];
+    protected readonly nestedColumns: readonly ["groupname", "actions"];
+    protected readonly permissionColumns: readonly ["on", "right", "timeFrame", "grantedBy", "actions"];
+    protected readonly pageSize = 10;
+    protected readonly group: import("@angular/core").WritableSignal<NuxeoGroup | null>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly loadFailed: import("@angular/core").WritableSignal<boolean>;
+    protected readonly status: import("@angular/core").WritableSignal<Status | null>;
+    protected readonly permissionsPage: import("@angular/core").WritableSignal<PrincipalPermissionPage>;
+    protected readonly permissionsLoading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly permissionsIndex: import("@angular/core").WritableSignal<number>;
+    constructor();
+    protected onPermissionsPage(event: PageEvent): void;
+    protected edit(): void;
+    protected deleteGroup(): void;
+    protected removeMember(userId: string): void;
+    protected removeNestedGroup(nestedId: string): void;
+    protected removePermission(row: PrincipalPermissionRow): void;
+    protected timeFrame(row: PrincipalPermissionRow): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAdminGroupDetailsPageComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAdminGroupDetailsPageComponent, "nxs-admin-group-details-page", never, {
+    "groupId": {
+    "alias": "groupId";
+    "required": true;
+    "isSignal": true;
+    };
+    "deleted": {
+    "alias": "deleted";
+    "required": false;
+    "isSignal": true;
+    };
+    "userChosen": {
+    "alias": "userChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    "groupChosen": {
+    "alias": "groupChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    "documentChosen": {
+    "alias": "documentChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+class NxsAdminUserDetailsPageComponent {
+    readonly userId: import("@angular/core").InputSignal<string>;
+    readonly deleted: import("@angular/core").InputSignal<() => void>;
+    readonly groupChosen: import("@angular/core").InputSignal<(groupname: string) => void>;
+    readonly documentChosen: import("@angular/core").InputSignal<(documentId: string) => void>;
+    protected readonly permissionColumns: readonly ["on", "right", "timeFrame", "grantedBy", "actions"];
+    protected readonly groupColumns: readonly ["name", "identifier", "actions"];
+    protected readonly pageSize = 10;
+    protected readonly user: import("@angular/core").WritableSignal<NuxeoUser | null>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly loadFailed: import("@angular/core").WritableSignal<boolean>;
+    protected readonly status: import("@angular/core").WritableSignal<Status$1 | null>;
+    protected readonly groups: import("@angular/core").WritableSignal<MemberGroup[]>;
+    protected readonly localPermissions: import("@angular/core").WritableSignal<PrincipalPermissionPage>;
+    protected readonly localPermissionsLoading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly localPage: import("@angular/core").WritableSignal<number>;
+    protected readonly groupPermissions: import("@angular/core").WritableSignal<Record<string, PrincipalPermissionPage>>;
+    protected readonly groupPermissionsLoading: import("@angular/core").WritableSignal<Record<string, boolean>>;
+    protected readonly removingGroup: import("@angular/core").WritableSignal<boolean>;
+    constructor();
+    protected pageChanged(groupId: string | null, event: PageEvent): void;
+    protected changePassword(): void;
+    protected edit(): void;
+    protected deleteUser(): void;
+    protected removeFromGroup(groupId: string): void;
+    protected removePermission(row: PrincipalPermissionRow): void;
+    protected timeFrame(row: PrincipalPermissionRow): string;
+    protected groupPermissionsOf(groupId: string): PrincipalPermissionPage;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAdminUserDetailsPageComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAdminUserDetailsPageComponent, "nxs-admin-user-details-page", never, {
+    "userId": {
+    "alias": "userId";
+    "required": true;
+    "isSignal": true;
+    };
+    "deleted": {
+    "alias": "deleted";
+    "required": false;
+    "isSignal": true;
+    };
+    "groupChosen": {
+    "alias": "groupChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    "documentChosen": {
+    "alias": "documentChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+class NxsAdminUsersGroupsPageComponent implements OnInit {
+    readonly userChosen: import("@angular/core").InputSignal<(username: string) => void>;
+    readonly groupChosen: import("@angular/core").InputSignal<(groupname: string) => void>;
+    protected readonly pageSize = 20;
+    protected readonly recentPageSize = 5;
+    protected readonly userColumns: readonly ["username", "name", "email", "groups", "actions"];
+    protected readonly groupColumns: readonly ["groupname", "label", "members", "actions"];
+    protected readonly recentColumns: readonly ["name", "identifier", "email"];
+    protected readonly query: import("@angular/core").WritableSignal<string>;
+    protected readonly users: import("@angular/core").WritableSignal<NuxeoUser[]>;
+    protected readonly groups: import("@angular/core").WritableSignal<NuxeoGroup[]>;
+    protected readonly usersPage: import("@angular/core").WritableSignal<number>;
+    protected readonly groupsPage: import("@angular/core").WritableSignal<number>;
+    protected readonly usersTotal: import("@angular/core").WritableSignal<number>;
+    protected readonly groupsTotal: import("@angular/core").WritableSignal<number>;
+    protected readonly usersLoading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly groupsLoading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly usersError: import("@angular/core").WritableSignal<boolean>;
+    protected readonly groupsError: import("@angular/core").WritableSignal<boolean>;
+    protected readonly recent: import("@angular/core").WritableSignal<NxsRecentPrincipalRow[]>;
+    protected readonly recentLoading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly recentPage: import("@angular/core").WritableSignal<number>;
+    protected readonly recentPageRows: import("@angular/core").Signal<NxsRecentPrincipalRow[]>;
+    protected readonly selectedTab: import("@angular/core").WritableSignal<number>;
+    protected readonly status: import("@angular/core").WritableSignal<Status$2 | null>;
+    ngOnInit(): void;
+    protected onQueryChange(value: string): void;
+    protected runSearch(): void;
+    protected loadRecent(): void;
+    protected onUsersPage(event: PageEvent): void;
+    protected onGroupsPage(event: PageEvent): void;
+    protected onRecentPage(event: PageEvent): void;
+    protected openRecent(row: NxsRecentPrincipalRow): void;
+    protected openCreateUser(): void;
+    protected openEditUser(user: NuxeoUser): void;
+    protected deleteUser(user: NuxeoUser): void;
+    protected openCreateGroup(): void;
+    protected openEditGroup(group: NuxeoGroup): void;
+    protected deleteGroup(group: NuxeoGroup): void;
+    protected displayName(user: NuxeoUser): string;
+    protected groupsLabel(user: NuxeoUser): string;
+    protected membersPreview(group: NuxeoGroup): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAdminUsersGroupsPageComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAdminUsersGroupsPageComponent, "nxs-admin-users-groups-page", never, {
+    "userChosen": {
+    "alias": "userChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    "groupChosen": {
+    "alias": "groupChosen";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsAssetCard {
+    readonly id: string;
+    readonly name: string;
+    readonly type: string;
+    readonly icon: string;
+    readonly thumbnailUrl: string | null;
+    }
+}
+type NxsAssetFacetsAction = 'reset' | 'save-as' | 'search';
+class NxsAssetFacetsDrawerComponent {
+    readonly groups: import("@angular/core").InputSignal<readonly NxsFacetGroup[]>;
+    readonly fullText: import("@angular/core").InputSignal<string>;
+    readonly autoSearch: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly canSaveAs: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly initiallyExpandedGroupIds: import("@angular/core").InputSignal<readonly string[]>;
+    readonly fullTextChangeHandler: import("@angular/core").InputSignal<((value: string) => void) | null>;
+    readonly fullTextSubmitHandler: import("@angular/core").InputSignal<((value: string) => void) | null>;
+    readonly optionToggleHandler: import("@angular/core").InputSignal<((selection: NxsFacetSelection) => void) | null>;
+    readonly autoSearchChangeHandler: import("@angular/core").InputSignal<((autoSearch: boolean) => void) | null>;
+    readonly actionHandler: import("@angular/core").InputSignal<((action: NxsAssetFacetsAction) => void) | null>;
+    readonly fullTextChange: import("@angular/core").OutputEmitterRef<string>;
+    readonly fullTextSubmit: import("@angular/core").OutputEmitterRef<string>;
+    readonly optionToggle: import("@angular/core").OutputEmitterRef<NxsFacetSelection>;
+    readonly autoSearchChange: import("@angular/core").OutputEmitterRef<boolean>;
+    readonly action: import("@angular/core").OutputEmitterRef<NxsAssetFacetsAction>;
+    protected readonly text: import("@angular/core").WritableSignal<string>;
+    protected readonly expanded: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly ids: {
+    fulltext: string;
+    autoLabel: string;
+    group: (id: string) => string;
+    };
+    protected readonly ownLabel: import("@angular/core").Signal<string>;
+    protected readonly hasText: import("@angular/core").Signal<boolean>;
+    protected isExpanded(id: string): boolean;
+    protected toggleGroup(id: string): void;
+    protected countText(choice: NxsFacetChoice): string;
+    protected onText(value: string): void;
+    protected submitText(): void;
+    protected clearText(): void;
+    protected toggleOption(groupId: string, value: string): void;
+    protected setAutoSearch(autoSearch: boolean): void;
+    protected run(action: NxsAssetFacetsAction): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAssetFacetsDrawerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAssetFacetsDrawerComponent, "nxs-asset-facets-drawer", never, {
+    "groups": {
+    "alias": "groups";
+    "required": false;
+    "isSignal": true;
+    };
+    "fullText": {
+    "alias": "fullText";
+    "required": false;
+    "isSignal": true;
+    };
+    "autoSearch": {
+    "alias": "autoSearch";
+    "required": false;
+    "isSignal": true;
+    };
+    "canSaveAs": {
+    "alias": "canSaveAs";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "initiallyExpandedGroupIds": {
+    "alias": "initiallyExpandedGroupIds";
+    "required": false;
+    "isSignal": true;
+    };
+    "fullTextChangeHandler": {
+    "alias": "fullTextChangeHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "fullTextSubmitHandler": {
+    "alias": "fullTextSubmitHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "optionToggleHandler": {
+    "alias": "optionToggleHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "autoSearchChangeHandler": {
+    "alias": "autoSearchChangeHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "actionHandler": {
+    "alias": "actionHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "fullTextChange": "fullTextChange";
+    "fullTextSubmit": "fullTextSubmit";
+    "optionToggle": "optionToggle";
+    "autoSearchChange": "autoSearchChange";
+    "action": "action";
+    }, never, never, true, never>;
+    }
+}
+class NxsAssetGridComponent {
+    readonly assets: import("@angular/core").InputSignal<readonly NxsAssetCard[]>;
+    readonly selectedIds: import("@angular/core").InputSignal<readonly string[] | ReadonlySet<string>>;
+    readonly selectable: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly openHandler: import("@angular/core").InputSignal<((asset: NxsAssetCard) => void) | null>;
+    readonly selectionToggleHandler: import("@angular/core").InputSignal<((id: string) => void) | null>;
+    readonly assetOpen: import("@angular/core").OutputEmitterRef<NxsAssetCard>;
+    readonly selectionToggle: import("@angular/core").OutputEmitterRef<string>;
+    protected readonly ownLabel: import("@angular/core").Signal<string>;
+    protected isSelected(id: string): boolean;
+    protected open(asset: NxsAssetCard): void;
+    protected toggle(id: string): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAssetGridComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAssetGridComponent, "nxs-asset-grid", never, {
+    "assets": {
+    "alias": "assets";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectedIds": {
+    "alias": "selectedIds";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectable": {
+    "alias": "selectable";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "openHandler": {
+    "alias": "openHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectionToggleHandler": {
+    "alias": "selectionToggleHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "assetOpen": "assetOpen";
+    "selectionToggle": "selectionToggle";
     }, never, never, true, never>;
     }
 }
@@ -476,6 +817,23 @@ interface NxsCardInputs {
     readonly actions: InputSignal<TemplateRef<unknown> | null>;
     }
 }
+class NxsChangePasswordDialogComponent {
+    protected readonly data: NxsChangePasswordDialogData;
+    protected readonly password: import("@angular/core").WritableSignal<string>;
+    protected readonly confirm: import("@angular/core").WritableSignal<string>;
+    protected readonly trimmedPassword: import("@angular/core").Signal<string>;
+    protected readonly matches: import("@angular/core").Signal<boolean>;
+    protected readonly mismatch: import("@angular/core").Signal<boolean>;
+    protected save(): void;
+    protected cancel(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsChangePasswordDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsChangePasswordDialogComponent, "nxs-change-password-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsChangePasswordDialogData {
+    readonly username: string;
+    }
+}
 interface NxsChipItem {
     readonly id: string;
     readonly label: string;
@@ -638,6 +996,20 @@ class NxsCommentsComponent {
     }, {
     "threadChange": "threadChange";
     }, ["extra"], never, true, never>;
+    }
+}
+class NxsConfirmDialogComponent {
+    protected readonly cancelResult: undefined;
+    protected readonly data: NxsConfirmDialogData;
+    protected confirm(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsConfirmDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsConfirmDialogComponent, "nxs-confirm-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsConfirmDialogData {
+    readonly title: string;
+    readonly message: string;
+    readonly confirmLabel: string;
     }
 }
 class NxsCreateVersionDialogComponent {
@@ -1461,10 +1833,29 @@ interface NxsErrorStateInputs {
     }
 }
 type NxsErrorStatus = 401 | 403 | 404 | 500;
+interface NxsFacetChoice {
+    readonly value: string;
+    readonly label: string;
+    readonly selected: boolean;
+    readonly count: number | null;
+    }
+}
+interface NxsFacetGroup {
+    readonly id: string;
+    readonly label: string;
+    readonly options: readonly NxsFacetChoice[];
+    readonly dynamic: boolean;
+    }
+}
 type NxsFacetLabels = Readonly<Partial<Record<string, Readonly<Record<string, string>>>>>;
 interface NxsFacetOption {
     readonly value: string;
     readonly count: number | null;
+    }
+}
+interface NxsFacetSelection {
+    readonly groupId: string;
+    readonly value: string;
     }
 }
 class NxsFavoriteToggleComponent {
@@ -1563,6 +1954,41 @@ interface NxsFolderPickerDialogResult {
     readonly uid: string;
     readonly path: string;
     readonly title: string;
+    }
+}
+class NxsGroupFormDialogComponent implements OnInit {
+    protected readonly data: NxsGroupFormDialogData;
+    protected readonly separatorKeysCodes: number[];
+    protected readonly groupname: import("@angular/core").WritableSignal<string>;
+    protected readonly grouplabel: import("@angular/core").WritableSignal<string>;
+    protected readonly members: import("@angular/core").WritableSignal<string[]>;
+    protected readonly memberQuery: import("@angular/core").WritableSignal<string>;
+    protected readonly memberOptions: import("@angular/core").WritableSignal<NuxeoUser[]>;
+    protected readonly canSave: import("@angular/core").Signal<boolean>;
+    ngOnInit(): void;
+    protected onMemberSearch(query: string): void;
+    protected onMemberInputKeydown(event: KeyboardEvent): void;
+    protected onMemberSelected(event: MatAutocompleteSelectedEvent): void;
+    protected addMemberFromInput(event: MatChipInputEvent): void;
+    protected removeMember(id: string): void;
+    protected cancel(): void;
+    protected submit(createAnother?: boolean): void;
+    protected userDisplayLine(user: NuxeoUser): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsGroupFormDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsGroupFormDialogComponent, "nxs-group-form-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsGroupFormDialogData {
+    readonly mode: 'create' | 'edit';
+    readonly group?: NuxeoGroup;
+    }
+}
+interface NxsGroupFormDialogResult {
+    readonly mode: 'create' | 'edit';
+    readonly groupname: string;
+    readonly grouplabel: string;
+    readonly memberUsers: string[];
+    readonly createAnother?: boolean;
     }
 }
 type NxsHeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
@@ -1709,6 +2135,10 @@ class NxsMetadataEditorComponent {
     }, {
     "validChange": "validChange";
     }, never, never, true, never>;
+    }
+}
+interface NxsOpenPublishDialogOptions {
+    readonly stillWanted?: () => boolean;
     }
 }
 class NxsPagerComponent {
@@ -1939,6 +2369,48 @@ class NxsPropertiesPanelComponent {
     }, never, ["[nxsVersion]", "[nxsTags]", "*"], true, never>;
     }
 }
+class NxsPublishDialogComponent {
+    protected readonly data: NxsPublishDialogData;
+    protected readonly noRendition: symbol;
+    protected readonly defaultRendition: symbol;
+    protected readonly renditions: readonly NxsPublishRendition[];
+    protected readonly sectionsState: import("@angular/core").WritableSignal<"failed" | "loading" | "ready">;
+    protected readonly sections: import("@angular/core").WritableSignal<readonly SectionOption[]>;
+    protected readonly versions: import("@angular/core").WritableSignal<readonly VersionOption[]>;
+    protected readonly section: import("@angular/core").WritableSignal<string>;
+    protected readonly version: import("@angular/core").WritableSignal<string>;
+    protected readonly showRenditions: import("@angular/core").WritableSignal<boolean>;
+    protected readonly rendition: import("@angular/core").WritableSignal<RenditionChoice>;
+    protected readonly override: import("@angular/core").WritableSignal<boolean>;
+    protected readonly publishing: import("@angular/core").WritableSignal<boolean>;
+    constructor();
+    protected loadSections(): void;
+    protected publish(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsPublishDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsPublishDialogComponent, "nxs-publish-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsPublishDialogData {
+    readonly documentUid: string;
+    readonly documentTitle: string;
+    readonly versionLabel?: string;
+    readonly versionableUid?: string;
+    readonly renditions?: readonly NxsPublishRendition[];
+    }
+}
+type NxsPublishDialogResult = NuxeoDocument | undefined;
+interface NxsPublishRendition {
+    readonly name: string;
+    readonly label: string;
+    }
+}
+interface NxsRecentPrincipalRow {
+    readonly kind: 'group' | 'user';
+    readonly name: string;
+    readonly identifier: string;
+    readonly email: string;
+    }
+}
 class NxsRenameDialogComponent {
     protected readonly data: NxsRenameDialogData;
     protected readonly title: import("@angular/core").WritableSignal<string>;
@@ -2110,6 +2582,7 @@ interface NxsSearchFilters {
     }
 }
 class NxsSearchFiltersComponent {
+    protected readonly chipSetId: "nxs.primitives.chipSet";
     readonly filters: import("@angular/core").ModelSignal<NxsSearchFilters>;
     readonly aggregations: import("@angular/core").InputSignal<SearchAggregations>;
     readonly optionLabels: import("@angular/core").InputSignal<Readonly<Partial<Record<string, Readonly<Record<string, string>>>>>>;
@@ -2148,6 +2621,7 @@ class NxsSearchFiltersComponent {
     protected clearFulltext(): void;
     protected addChoice(field: ChoiceField, value: string): void;
     protected removeChoice(field: ChoiceField, value: string): void;
+    protected chipRemover(field: ChoiceField): (item: NxsChipItem) => void;
     protected chipItems(field: ChoiceField, values: readonly string[]): NxsChipItem[];
     protected onCollectionsFocus(): void;
     protected onTagInput(value: string): void;
@@ -2253,6 +2727,55 @@ interface NxsStatusTagInputs {
     readonly label: InputSignal<string>;
     readonly status: InputSignal<NxsTagStatus>;
     readonly hideIcon: InputSignal<boolean>;
+    }
+}
+class NxsStoryboardComponent {
+    readonly items: import("@angular/core").InputSignal<readonly NxsStoryboardItem[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly activeTimecode: import("@angular/core").InputSignal<number | null>;
+    readonly seekHandler: import("@angular/core").InputSignal<((timecode: number) => void) | null>;
+    readonly seek: import("@angular/core").OutputEmitterRef<number>;
+    protected readonly visible: import("@angular/core").Signal<boolean>;
+    protected readonly ownLabel: import("@angular/core").Signal<string>;
+    protected readonly frames: import("@angular/core").Signal<{
+    item: NxsStoryboardItem;
+    timecode: string;
+    caption: string;
+    name: string;
+    active: boolean;
+    }[]>;
+    protected select(item: NxsStoryboardItem): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsStoryboardComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsStoryboardComponent, "nxs-storyboard", never, {
+    "items": {
+    "alias": "items";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "activeTimecode": {
+    "alias": "activeTimecode";
+    "required": false;
+    "isSignal": true;
+    };
+    "seekHandler": {
+    "alias": "seekHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "seek": "seek";
+    }, never, never, true, never>;
+    }
+}
+interface NxsStoryboardItem {
+    readonly timecode: number;
+    readonly thumbnailUrl: string | null;
+    readonly label: string;
     }
 }
 interface NxsTab {
@@ -2456,6 +2979,71 @@ interface NxsTagInputs {
     }
 }
 type NxsTagStatus = 'important' | 'important-loud' | 'info' | 'neutral' | 'neutral-quiet' | 'success' | 'warning';
+class NxsTaskDetailComponent {
+    readonly task: InputSignal<NuxeoTask>;
+    readonly taskDone: InputSignal<(task: NuxeoTask, outcome: NxsTaskOutcome) => void>;
+    readonly taskChanged: InputSignal<(task: NuxeoTask) => void>;
+    readonly headingLevel: InputSignal<NxsHeadingLevel>;
+    protected readonly panelHeadingLevel: import("@angular/core").Signal<number>;
+    protected readonly actions: import("@angular/core").Signal<readonly TaskAction[]>;
+    protected readonly choosesParticipants: import("@angular/core").Signal<boolean>;
+    protected readonly actors: import("@angular/core").Signal<string[]>;
+    protected readonly delegatedActors: import("@angular/core").Signal<string[]>;
+    protected readonly comments: import("@angular/core").Signal<TaskComment[]>;
+    protected readonly overdue: import("@angular/core").Signal<boolean>;
+    protected readonly dueLabel: import("@angular/core").Signal<{
+    key: string;
+    count: number;
+    } | null>;
+    protected readonly comment: import("@angular/core").WritableSignal<string>;
+    protected readonly participants: import("@angular/core").WritableSignal<readonly NxsPrincipal[]>;
+    protected readonly reviewType: import("@angular/core").WritableSignal<string>;
+    protected readonly panel: import("@angular/core").WritableSignal<Panel>;
+    protected readonly assignees: import("@angular/core").WritableSignal<readonly NxsPrincipal[]>;
+    protected readonly panelComment: import("@angular/core").WritableSignal<string>;
+    protected readonly graph: import("@angular/core").WritableSignal<Graph | null>;
+    protected readonly submitting: import("@angular/core").WritableSignal<boolean>;
+    constructor();
+    protected execute(action: TaskAction): void;
+    protected abandon(): void;
+    protected openPanel(panel: Exclude<Panel, null>): void;
+    protected closePanel(): void;
+    protected setParticipants(value: NxsPrincipal | readonly NxsPrincipal[] | null): void;
+    protected setAssignees(value: NxsPrincipal | readonly NxsPrincipal[] | null): void;
+    protected confirmPanel(): void;
+    protected openGraph(): void;
+    protected closeGraph(): void;
+    protected title(): string;
+    protected actionLabel(action: TaskAction): string;
+    protected actionTone(action: TaskAction): '' | 'primary' | 'warn';
+    protected principalLabel(id: string): string;
+    protected initial(id: string): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTaskDetailComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTaskDetailComponent, "nxs-task-detail", never, {
+    "task": {
+    "alias": "task";
+    "required": true;
+    "isSignal": true;
+    };
+    "taskDone": {
+    "alias": "taskDone";
+    "required": false;
+    "isSignal": true;
+    };
+    "taskChanged": {
+    "alias": "taskChanged";
+    "required": false;
+    "isSignal": true;
+    };
+    "headingLevel": {
+    "alias": "headingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+type NxsTaskOutcome = 'abandoned' | 'completed';
 class NxsThumbnailComponent {
     readonly documentId: import("@angular/core").InputSignal<string>;
     readonly alt: import("@angular/core").InputSignal<string>;
@@ -2508,6 +3096,107 @@ interface NxsToolbarAction {
     readonly overflow?: boolean;
     }
 }
+class NxsTrashListComponent {
+    readonly filters: import("@angular/core").InputSignal<TrashFilters>;
+    readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly initialView: import("@angular/core").InputSignal<NxsTrashListView>;
+    readonly openHandler: import("@angular/core").InputSignal<((document: NuxeoDocument) => void) | null>;
+    readonly resultsHandler: import("@angular/core").InputSignal<((results: NxsTrashListResults) => void) | null>;
+    protected readonly tagId: "nxs.primitives.tag";
+    protected readonly cardId: "nxs.primitives.card";
+    protected readonly views: readonly NxsTrashListView[];
+    protected readonly sortChoices: {
+    key: string;
+    field: string | null;
+    labelKey: string;
+    }[];
+    protected readonly view: import("@angular/core").WritableSignal<NxsTrashListView>;
+    protected readonly sort: import("@angular/core").WritableSignal<NxsDocumentListSort>;
+    protected readonly pageIndex: import("@angular/core").WritableSignal<number>;
+    protected readonly documents: import("@angular/core").WritableSignal<readonly NuxeoDocument[]>;
+    protected readonly totalSize: import("@angular/core").WritableSignal<number>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly error: import("@angular/core").WritableSignal<NxsErrorStatus | null>;
+    protected readonly selectedIds: import("@angular/core").WritableSignal<readonly string[]>;
+    protected readonly busy: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly visibleColumns: import("@angular/core").WritableSignal<readonly string[]>;
+    protected readonly pickerOpen: import("@angular/core").WritableSignal<boolean>;
+    protected readonly requiredColumns: readonly string[];
+    protected readonly defaultColumns: readonly string[];
+    protected readonly hasNextPage: import("@angular/core").WritableSignal<boolean>;
+    protected readonly selectedCount: import("@angular/core").Signal<number>;
+    protected readonly emptyHeading: import("@angular/core").Signal<any>;
+    protected readonly selected: import("@angular/core").Signal<Set<string>>;
+    protected readonly selectionBusy: import("@angular/core").Signal<boolean>;
+    protected readonly columns: import("@angular/core").Signal<readonly NxsDocumentListColumn[]>;
+    protected readonly pickerColumns: import("@angular/core").Signal<readonly NxsPickableColumn[]>;
+    protected readonly rowActions: import("@angular/core").Signal<Record<string, readonly NxsMenuAction[]>>;
+    protected readonly cardHandlers: import("@angular/core").Signal<Map<string, {
+    open: (() => void) | null;
+    select: (on: boolean) => void;
+    }>>;
+    constructor();
+    reload(): void;
+    protected setView(view: NxsTrashListView): void;
+    protected viewLabel(view: NxsTrashListView): string;
+    protected viewIcon(view: NxsTrashListView): string;
+    protected onSortChange(sort: NxsDocumentListSort | null): void;
+    protected onSortKey(key: string): void;
+    protected toggleDirection(): void;
+    protected goToPage(index: number): void;
+    protected applyColumns(keys: readonly string[]): void;
+    protected open(doc: NuxeoDocument): void;
+    protected title(doc: NuxeoDocument): string;
+    protected icon(doc: NuxeoDocument): string;
+    protected isSelected(uid: string): boolean;
+    protected setSelected(uid: string, on: boolean): void;
+    protected allSelected(): boolean;
+    protected toggleAll(on: boolean): void;
+    protected clearSelection(): void;
+    protected onRowAction({ action, document }: NxsDocumentListRowAction): void;
+    protected restoreSelected(): void;
+    protected purgeSelected(): void;
+    protected restore(docs: readonly NuxeoDocument[]): void;
+    protected purge(docs: readonly NuxeoDocument[]): void;
+    protected exportCsv(): void;
+    protected cellText(doc: NuxeoDocument, key: string): string;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTrashListComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTrashListComponent, "nxs-trash-list", never, {
+    "filters": {
+    "alias": "filters";
+    "required": false;
+    "isSignal": true;
+    };
+    "pageSize": {
+    "alias": "pageSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "initialView": {
+    "alias": "initialView";
+    "required": false;
+    "isSignal": true;
+    };
+    "openHandler": {
+    "alias": "openHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "resultsHandler": {
+    "alias": "resultsHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsTrashListResults {
+    readonly loading: boolean;
+    readonly documents: readonly NuxeoDocument[];
+    readonly totalSize: number;
+    }
+}
+type NxsTrashListView = 'grid' | 'list' | 'table';
 class NxsUpdatePermissionDialogComponent {
     protected datesValid(): boolean;
     protected readonly id: string;
@@ -2607,6 +3296,58 @@ class NxsUploadQueueComponent {
     }
 }
 type NxsUploadState = 'done' | 'failed' | 'staged' | 'uploading' | 'waiting';
+class NxsUserFormDialogComponent implements OnInit {
+    protected readonly data: NxsUserFormDialogData;
+    protected readonly separatorKeysCodes: number[];
+    protected readonly username: import("@angular/core").WritableSignal<string>;
+    protected readonly firstName: import("@angular/core").WritableSignal<string>;
+    protected readonly lastName: import("@angular/core").WritableSignal<string>;
+    protected readonly company: import("@angular/core").WritableSignal<string>;
+    protected readonly email: import("@angular/core").WritableSignal<string>;
+    protected readonly groups: import("@angular/core").WritableSignal<string[]>;
+    protected readonly setPassword: import("@angular/core").WritableSignal<boolean>;
+    protected readonly password: import("@angular/core").WritableSignal<string>;
+    protected readonly confirmPassword: import("@angular/core").WritableSignal<string>;
+    protected readonly groupQuery: import("@angular/core").WritableSignal<string>;
+    protected readonly groupOptions: import("@angular/core").WritableSignal<GroupOption[]>;
+    protected readonly loadingGroups: import("@angular/core").WritableSignal<boolean>;
+    protected readonly loadingGroupOptions: import("@angular/core").WritableSignal<boolean>;
+    protected readonly saving: import("@angular/core").WritableSignal<boolean>;
+    protected readonly failure: import("@angular/core").WritableSignal<string | null>;
+    protected readonly passwordsDiffer: import("@angular/core").Signal<boolean>;
+    protected readonly canSave: import("@angular/core").Signal<boolean>;
+    ngOnInit(): void;
+    protected onGroupSearch(query: string): void;
+    protected onGroupInputFocus(): void;
+    protected onGroupInputKeydown(event: KeyboardEvent): void;
+    protected onGroupSelected(event: MatAutocompleteSelectedEvent): void;
+    protected addGroupFromInput(event: MatChipInputEvent): void;
+    protected removeGroup(groupname: string): void;
+    protected setPasswordEnabled(enabled: boolean): void;
+    protected cancel(): void;
+    protected submit(createAnother?: boolean): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsUserFormDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsUserFormDialogComponent, "nxs-user-form-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsUserFormDialogData {
+    readonly mode: 'create' | 'edit';
+    readonly user?: NuxeoUser;
+    }
+}
+interface NxsUserFormDialogResult {
+    readonly mode: 'create' | 'edit';
+    readonly username: string;
+    readonly firstName: string;
+    readonly lastName: string;
+    readonly company: string;
+    readonly email: string;
+    readonly groups: string[];
+    readonly password?: string;
+    readonly invited?: boolean;
+    readonly createAnother?: boolean;
+    }
+}
 class NxsUserGroupPickerComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly label: import("@angular/core").InputSignal<string>;
     readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
@@ -2787,9 +3528,11 @@ function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: 
 function nxsActionBarView(bar: NxsActionBarSource): NxsActionBarView;
 function nxsDocumentSuggestionQuery(term: string, types?: readonly string[]): string;
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
+function nxsFormatTimecode(seconds: number): string;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
 function nxsInitials(text: string | null | undefined, count: number): string;
 function nxsOfferedRights(visible: readonly string[] | null | undefined, current?: string): readonly string[];
+function nxsOpenPublishDialog(dialog: MatDialog, components: ExtensionComponentRegistry, data: NxsPublishDialogData, options?: NxsOpenPublishDialogOptions): Promise<MatDialogRef<unknown, NxsPublishDialogResult> | undefined>;
 function nxsPropertyText(value: unknown): string;
 function nxsRangeOptions(ranges: readonly string[], aggregation: AggregateResult | undefined): NxsFacetOption[];
 function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): boolean;
@@ -2823,7 +3566,7 @@ function provideNxsSatoriComponents(): EnvironmentProviders;
 
 ## @nuxeo/satori-platform/extensions
 
-61 exported symbol(s).
+65 exported symbol(s).
 
 ```ts
 const APP_NAV_ITEMS: InjectionToken<Signal<readonly NavItemDescriptor[]>>;
@@ -2831,6 +3574,9 @@ class AppExtensionsService {
     readonly config: import("@angular/core").Signal<ExtensionConfig>;
     readonly missingLayers: import("@angular/core").Signal<readonly string[]>;
     readonly invalidRoutes: import("@angular/core").Signal<readonly RejectedExtensionRoute[]>;
+    readonly refusedSlotEntries: import("@angular/core").Signal<readonly RefusedExtensionEntry[]>;
+    readonly refusedOverrides: import("@angular/core").Signal<readonly RefusedExtensionOverride[]>;
+    readonly refusedSections: import("@angular/core").Signal<readonly RefusedExtensionSection[]>;
     constructor();
     register<T extends ExtensionElement>(slot: ExtensionSlotId, entries: readonly T[]): void;
     registerRules(evaluators: Readonly<Record<string, ExtensionRuleEvaluator>>): void;
@@ -3036,6 +3782,7 @@ class ExtensionRuleRegistry {
     }
 }
 type ExtensionRuleResolver = (rule: ExtensionRule) => boolean;
+type ExtensionSectionKey = 'overrides' | 'slots';
 type ExtensionSlotId = string;
 interface ExtensionSlotOverrides {
     readonly byId: Readonly<Record<string, ExtensionOverride>>;
@@ -3084,6 +3831,25 @@ const PACKAGED_ROW_ACTIONS: readonly ExtensionActionDescriptor[];
 interface PartitionedExtensionRoutes {
     readonly accepted: readonly ExtensionRouteDescriptor[];
     readonly rejected: readonly RejectedExtensionRoute[];
+    }
+}
+interface RefusedExtensionEntry {
+    readonly slot: ExtensionSlotId;
+    readonly id: string | null;
+    readonly reason: string;
+    readonly source: string;
+    }
+}
+interface RefusedExtensionOverride {
+    readonly id: string;
+    readonly reason: string;
+    readonly source: string;
+    }
+}
+interface RefusedExtensionSection {
+    readonly key: ExtensionSectionKey;
+    readonly reason: string;
+    readonly source: string;
     }
 }
 interface RejectedExtensionRoute {
@@ -4047,6 +4813,7 @@ interface NuxeoTask {
     name: string;
     label: string;
     url?: string;
+    validate?: boolean;
     }[];
     };
     targetDocTitle?: string;
@@ -4154,6 +4921,7 @@ interface PrincipalPermissionRow {
     end: string | null;
     grantedBy: string | null;
     acePrincipal: string;
+    aceId: string;
     }
 }
 class PrincipalPermissionsService {
@@ -4655,7 +5423,7 @@ function writeClipboardDocs(docs: ClipboardDoc[]): void;
 
 ## @nuxeo/satori-platform/ui
 
-49 exported symbol(s).
+50 exported symbol(s).
 
 ```ts
 class ConfirmDialogComponent {
@@ -4737,6 +5505,11 @@ class DocumentViewerComponent {
     readonly showARenderViewer: import("@angular/core").Signal<boolean>;
     readonly showImageToolbar: import("@angular/core").Signal<boolean>;
     readonly showVideoStoryboard: import("@angular/core").Signal<boolean>;
+    protected readonly storyboardId = "nxs.components.storyboard";
+    protected readonly storyboardInputs: import("@angular/core").Signal<{
+    items: StoryboardItem[];
+    seekHandler: (timecode: number) => void;
+    }>;
     readonly showPictureCards: import("@angular/core").Signal<boolean>;
     readonly showVideoInfoCard: import("@angular/core").Signal<boolean>;
     readonly arenderAvailable: import("@angular/core").Signal<boolean>;
@@ -5098,12 +5871,7 @@ interface ShareSavedSearchDialogData {
     id: string;
     }
 }
-interface StoryboardItem {
-    timecode: number;
-    thumbnailUrl: string | null;
-    label: string;
-    }
-}
+type StoryboardItem = { -readonly [K in keyof NxsStoryboardItem]: NxsStoryboardItem[K]; };
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
 class TranslatedDatepickerIntl extends TranslatedDatepickerIntl$1 {
     static ɵfac: i0.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;
@@ -5173,6 +5941,7 @@ class WidgetGridComponent {
     }, {}, never, ["*"], true, never>;
     }
 }
+function canFormatDatesIn(localeId: string): boolean;
 function dateMaskFor(localeId: string, translatedMask: string): string;
 function observeMatTabListKeyboardA11y(root: HTMLElement): (() => void) | null;
 function observeStripRedundantMatInputAriaRequired(input: HTMLInputElement | null | undefined): MutationObserver | null;

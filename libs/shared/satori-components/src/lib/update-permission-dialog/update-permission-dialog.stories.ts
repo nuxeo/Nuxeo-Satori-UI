@@ -1,3 +1,4 @@
+import { expect, fn, userEvent, within } from 'storybook/test';
 import type { Provider } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
@@ -17,6 +18,8 @@ import {
   NxsUpdatePermissionDialogComponent,
   type NxsUpdatePermissionDialogData,
 } from './update-permission-dialog.component';
+
+const closeDialog = fn(action('dialogRef.close'));
 
 /** Logs each call in the Actions panel under `name`, then lets the fake answer it. */
 function logged<A extends unknown[], R>(
@@ -62,7 +65,7 @@ const withDialog = (
     replacePermissionWithNotification: logged('replacePermissionWithNotification', replace),
   };
   const dialogRef: Pick<MatDialogRef<NxsUpdatePermissionDialogComponent>, 'close'> = {
-    close: logged('dialogRef.close', () => undefined),
+    close: closeDialog,
   };
   const data: NxsUpdatePermissionDialogData = {
     documentUid: 'story-doc',
@@ -124,4 +127,16 @@ export const DatedEntry: Story = {
 /** Nuxeo refuses (403): Update reports a refusal and the dialog stays open. */
 export const Refused: Story = {
   decorators: [withDialog(LOCAL, () => throwError(() => new HttpErrorResponse({ status: 403 })))],
+};
+
+/** The preview stays mounted; this asserts the dialog's close request. */
+export const KeyboardCancellation: Story = {
+  ...ExternalShare,
+  play: async ({ canvasElement }) => {
+    closeDialog.mockClear();
+    const cancel = await within(canvasElement).findByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(closeDialog).toHaveBeenCalledTimes(1);
+  },
 };

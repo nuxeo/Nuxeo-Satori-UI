@@ -1,7 +1,9 @@
 # SonarCloud security remediation plan
 
 **Scope:** the 34 issues with a `SECURITY` software-quality impact, status `OPEN` or `CONFIRMED`, on
-`nuxeo_agentic-ui-poc`.
+`nuxeo_agentic-ui-poc` — the SonarCloud project key, which kept the repository's former name when
+GitHub renamed `nuxeo/agentic-ui-poc` to `nuxeo/Nuxeo-Satori-UI` on 30 October 2026. Every
+`componentKeys=` below is that key and is correct as written.
 **Sonar effort estimate:** 1 000 minutes (16 h 40 m). That number is Sonar's per-rule default
 (30 min × 32 + 5 + 5), not an estimate of this plan.
 

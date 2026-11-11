@@ -70,6 +70,13 @@ export {
 // that choice either way; what stays unexported is the date-fns `Locale` type, which
 // `dateFnsLocaleFor` returns and which would otherwise enter our TypeScript API.
 export { provideSatoriDateAdapter } from './lib/date-adapter/satori-date-adapter';
+// `canFormatDatesIn` takes a string and returns a boolean, so it carries no date-fns type into
+// the API either — the same reason `dateMaskFor` below is exportable and `dateFnsLocaleFor` is
+// not. It is public because the question it answers is about this BUILD, not about a
+// deployment's configuration: which locales the bundled date-fns map can parse. A host that
+// provides its own `LOCALE_ID` — directly, or by mounting one of our exported dialogs — needs
+// it to avoid formatting dates in a locale we would then read back as English (#522).
+export { canFormatDatesIn } from './lib/date-adapter/satori-date-adapter';
 // `dateMaskFor` takes and returns strings, so it carries no date-fns type into the API. It is
 // exported beside the pipe for a host that renders its own date hint.
 export { dateMaskFor } from './lib/date-adapter/date-mask';

@@ -70,7 +70,9 @@ hold nothing secret. Users see a change the next time they open the application.
 them.
 
 Creating and building such a package needs only Node.js 20: no `npm ci`, no GitHub token, none of
-this repository's dependencies. In a clone of this repository:
+this repository's dependencies. [**CUSTOMISING.md**](../../CUSTOMISING.md) is that path in full —
+what each file is, what to change, how to install it and what to do when it does not take. The
+short form, in a clone of this repository:
 
 ```bash
 node tools/satori-generators/src/config-package/create.mjs acme-config --owner=acme
@@ -94,6 +96,7 @@ files.
 | Change the product name and the browser-tab title                                                                              | settings fragment, `branding`                                    | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                                                    |
 | Change the colours, or add your own colour theme and make it the default                                                       | settings fragment, `themes`, `defaultThemeId`                    | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                                                    |
 | Put your logo in the header and on the sign-in page                                                                            | settings fragment, `branding.logo`                               | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                                                    |
+| Put your own icon in the browser tab                                                                                           | settings fragment, `branding.favicon`                            | [The extensibility contract, `branding.favicon`](../30-engineering/07-extensibility-contract.md#brandingfavicon)                       |
 | Choose the default language                                                                                                    | settings fragment, `defaultLanguage`                             | [Our default settings](../../nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json)                          |
 | Change on-screen wording — the same text in every language                                                                     | manifest fragment, `labels`                                      | [Runbook, beat 4](../../docs/beta-demo-runbook.md#beat-4--relabel-the-product-2-min)                                                   |
 | Hide, reorder or rename a menu entry, toolbar button, tab, list column or bulk action                                          | manifest fragment, `extensions.overrides`                        | [Extension reference, overrides](../../docs/extension-reference.md#per-id-overrides)                                                   |
@@ -102,11 +105,37 @@ files.
 | Choose which list columns are offered, and which start switched on                                                             | manifest fragment, `extensions.slots`                            | [Runbook, beat 6](../../docs/beta-demo-runbook.md#beat-6--columns-3-min)                                                               |
 | Show a tab or toolbar action only on some document types, or only on documents with a facet                                    | manifest fragment, `app.rules.isType` or `app.rules.hasFacet`    | [Extension reference, document rules](../../docs/extension-reference.md#document-rules)                                                |
 | Choose which of a document type's own fields the Properties panel shows, in which order (read-only)                            | a layout file in the package, named by a `<layout>` contribution | [Extension reference, per-type layouts](../../docs/extension-reference.md#9b-per-type-layouts--which-properties-a-document-type-shows) |
-| Keep several demo configurations on one server and switch between them per browser                                             | settings fragment, `presales`                                    | [Extension reference, presales presets](../../docs/extension-reference.md#presales-presets)                                            |
+| Show one demo server to several prospects, each branded for them, from a link                                                  | settings fragment, `presales`                                    | [Extension reference, presales presets](../../docs/extension-reference.md#presales-presets)                                            |
 
 The conditions are a fixed list that ships with the product; adding your own is code. Every name
 that configuration can address is listed in the
 [extension reference](../../docs/extension-reference.md).
+
+### Showing one demo server to two prospects
+
+The last row is the one people most often assume needs a fork, so it is worth spelling out. A demo
+package can carry named presets, and a link chooses one for that browser:
+
+```
+https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance
+https://<server>/nuxeo/agentic-ui/?preset=logistics    # Globex Logistics
+https://<server>/nuxeo/agentic-ui/?preset=             # clear it
+```
+
+Those two prospects are real and already in the repository, in `config-packages/presales-demo`. A
+preset replaces the product name, the tab title, the logo, the tab icon, the whole colour palette
+and any wording, and a badge in the header says which one is in force. Nothing changes on the
+server and nothing changes for anyone else.
+
+It is **inert unless a package sets `presales.presetSwitching: true`**, so a customer's production
+server ignores `?preset=` entirely and says in the console that it did.
+
+This is not a way around configuration-as-code. The preset's _content_ is versioned package
+content like every other fragment; only the _selection_ is runtime, per browser, with no
+server-side state. What does still cost a package rebuild and a restart today is adding a
+**new** prospect — around two to four minutes — and the development override directory removes
+that for a demo server: see "The fast loop while you are tuning a value" in
+`config-packages/presales-demo/README.md`.
 
 For example, this manifest fragment hides Trash, renames Collections to "Repository", and
 shows Administration to administrators only:
@@ -171,29 +200,35 @@ the package is not published yet, you build it from this repository. Publishing 
 
 ## How to start
 
-1. **Run it.** On your own machine, against Nuxeo in Docker: follow
-   [Developer Getting Started](../30-engineering/01-getting-started.md). You need Docker,
-   Node.js 20, and a GitHub token that can read Hyland's and Alfresco's GitHub Packages.
-2. **Change something without code.** Locally, put the example above in a file and run
-   `npm run config:dev -- --manifest <file>` before `nx serve`
-   ([Part 0.6 of the runbook](../../docs/beta-demo-runbook.md#06-write-the-dev-configuration)).
-   On a server, contribute the same JSON as a fragment from your own package, created and built
-   with Node alone as [above](#where-configuration-lives-today). Beats 3 to 7 of the
-   [demo runbook](../../docs/beta-demo-runbook.md#part-4--the-demo-script) give the exact JSON
-   for each change and what you should see.
-3. **Customise it with an AI coding agent.** Use the
+1. **Change something without code.** This is the first thing to do, and it needs **Node.js 20 and
+   nothing else** — no dependencies to fetch, no GitHub token, no account. Create your
+   configuration package, put the example above in its `manifest.json` fragment, build it and
+   install it on a Nuxeo server. [**CUSTOMISING.md**](../../CUSTOMISING.md) is that path end to
+   end, in five steps. Beats 3 to 7 of the
+   [demo runbook](../../docs/beta-demo-runbook.md#part-4--the-demo-script) give the exact JSON for
+   each change and what you should see.
+2. **Customise it with an AI coding agent.** Use the
    [Nuxeo Agentic UI prompt library](https://github.com/nuxeo-sandbox/nuxeo-agentic-ui-prompts),
    started by Nuxeo presales. Its rule is that the agent reads our source but never changes it,
    and writes everything into your own Marketplace package that depends on `nuxeo-agentic-ui`.
    Its branding prompt was written before configuration moved into packages and copies a
    settings file onto the server, which is no longer read; put the same JSON in your package's
-   `bootstrap.json` fragment instead.
+   `bootstrap.json` fragment instead, as CUSTOMISING.md shows.
    Prompts are collected there rather than in this repository.
+3. **Run it on your own machine** — only if you are working on Satori itself, or want to see a
+   configuration change without installing a package on a server. This is contributor setup, not
+   customer setup: follow [Developer Getting Started](../30-engineering/01-getting-started.md).
+   You need Docker, **Node.js 24** — the version `.nvmrc` pins, because Angular 22 refuses Node 20
+   (NXSAT-669) — and `SATORI_GH_READONLY_TOKEN`, a GitHub token that can read Hyland's GitHub
+   Packages. Without it `npm ci` fails and no `nx` command can run, so steps 1 and 2 above — which
+   need none of it — are not blocked by anything here. Note that step 1 is unaffected: the
+   configuration scripts use Node built-ins only, and 20 remains their documented floor.
 
 ## Read more
 
 | If you want to…                                        | Read                                                                                                                  |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **Customise it, start to finish, with Node alone**     | [**CUSTOMISING.md**](../../CUSTOMISING.md)                                                                            |
 | See every feature and its status                       | [Feature Catalog](02-feature-catalog.md)                                                                              |
 | Know every name configuration can address              | [Extension reference](../../docs/extension-reference.md)                                                              |
 | Walk through each no-code change, and what not to demo | [Beta demo runbook](../../docs/beta-demo-runbook.md), written for presenters                                          |

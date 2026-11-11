@@ -312,6 +312,135 @@ describe('NxsMetadataEditorComponent', () => {
     expect(element.textContent).not.toContain('Duplicate title');
   });
 
+  it('takes the required flag and constraints of a section field Dublin Core has', async () => {
+    host.sections.set([
+      {
+        id: 'dc',
+        heading: null,
+        fields: [
+          {
+            xpath: 'dc:nature',
+            label: 'Kind',
+            definition: { type: 'string', directory: 'nature', required: true },
+          },
+          {
+            xpath: 'dc:description',
+            label: 'Summary',
+            definition: { type: 'string', constraints: { maxLength: 5 } },
+          },
+        ],
+      },
+    ]);
+    host.values.set({ 'dc:title': 'Claim' });
+    await settle();
+    expect(element.querySelectorAll('[data-xpath="dc:nature"]')).toHaveLength(1);
+    expect(element.textContent).not.toContain('Kind');
+
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    // A vocabulary field says so in the picker's own words.
+    expect(errors()).toContain('Required');
+    expect(summary()).toBe('1 field needs a correction before you can save.');
+
+    await type('dc:description', 'Too long');
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(errors().some((error) => error?.startsWith('Description'))).toBe(true);
+  });
+
+  it('keeps a Dublin Core field required when any section listing it says so', async () => {
+    const nature = (required: boolean) => ({
+      xpath: 'dc:nature',
+      label: 'Kind',
+      definition: { type: 'string', directory: 'nature', ...(required ? { required } : {}) },
+    });
+    host.sections.set([
+      { id: 'a', heading: null, fields: [nature(true)] },
+      { id: 'b', heading: null, fields: [nature(false)] },
+    ]);
+    host.values.set({ 'dc:title': 'Claim' });
+    await settle();
+
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(errors()).toContain('Required');
+  });
+
+  it('checks what new sections ask of a field already typed in, keeping what was typed', async () => {
+    const description = (maxLength?: number) => ({
+      id: 'dc',
+      heading: null,
+      fields: [
+        {
+          xpath: 'dc:description',
+          label: 'Summary',
+          definition: { type: 'string', ...(maxLength ? { constraints: { maxLength } } : {}) },
+        },
+      ],
+    });
+    await type('dc:description', 'Too long');
+    expect(host.editor().validate()).toBe(true);
+
+    host.sections.set([POLICY, description(5)]);
+    await settle();
+    expect(host.editor().validate()).toBe(false);
+    expect(field<HTMLTextAreaElement>('dc:description').value).toBe('Too long');
+    expect(host.editor().dirtyProperties()['dc:description']).toBe('Too long');
+
+    host.sections.set([POLICY, description()]);
+    await settle();
+    expect(host.editor().validate()).toBe(true);
+    expect(host.editor().dirtyProperties()['dc:description']).toBe('Too long');
+  });
+
+  it('keeps a repeated field of the type required when any listing says so, in every listing', async () => {
+    const contacts = (required: boolean) => ({
+      xpath: 'pol:contacts',
+      label: 'Contacts',
+      definition: {
+        type: 'complex[]',
+        ...(required ? { required } : {}),
+        fields: { name: { type: 'string' } },
+      },
+    });
+    host.sections.set([
+      { id: 'a', heading: 'A', fields: [contacts(true)] },
+      { id: 'b', heading: 'B', fields: [contacts(false)] },
+    ]);
+    host.values.set({ 'dc:title': 'Claim', 'pol:contacts': [] });
+    await settle();
+
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(element.querySelectorAll('[data-xpath="pol:contacts"]')).toHaveLength(2);
+    expect(errors().filter((error) => error === 'Contacts is required.')).toHaveLength(2);
+  });
+
+  it('keeps a half-typed date, and its error, when new sections change the field’s checks', async () => {
+    const expires = (required: boolean) => ({
+      id: 'dc',
+      heading: null,
+      fields: [
+        {
+          xpath: 'dc:expired',
+          label: 'Expires',
+          definition: { type: 'date', ...(required ? { required } : {}) },
+        },
+      ],
+    });
+    host.sections.set([POLICY, expires(true)]);
+    await settle();
+    await type('dc:expired', '12/');
+    expect(host.editor().validate()).toBe(false);
+
+    host.sections.set([POLICY, expires(false)]);
+    await settle();
+    expect(field('dc:expired').value).toBe('12/');
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(errors()).toContain(`Enter a date like 12/31/${new Date().getFullYear()}`);
+  });
+
   it('reports nothing changed until the user edits, then only what changed, trimmed', async () => {
     expect(host.editor().dirtyProperties()).toEqual({});
     await type('dc:title', '  New title  ');

@@ -191,8 +191,14 @@ describe('config-package generator', () => {
       ).rejects.toThrow(/every configuration package depends on/);
     });
 
-    // The name becomes a directory, and a directory with one of these names cannot be created on
+    // The name becomes a directory, and a directory with one of these names cannot be used on
     // Windows — so one generated on macOS leaves a repository that cannot be checked out there.
+    //
+    // "used", not "created", in the message and here: QA measured both on Windows 11 build
+    // 26100 (NXSAT-784). `cmd mkdir con` fails with "The directory name is invalid" and
+    // `cmd mkdir nul` exits 0 having created nothing — but Node's own mkdir *does* create the
+    // directory, and Explorer and cmd then cannot open or delete it. Refusing is right either
+    // way; claiming it cannot be created was not.
     it.each(['con', 'prn', 'aux', 'nul', 'com1', 'com0', 'com9', 'lpt1', 'lpt0', 'lpt9'])(
       '%s, a device name Windows reserves',
       async (name) => {

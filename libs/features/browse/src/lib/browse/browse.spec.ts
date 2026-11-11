@@ -6,7 +6,7 @@ import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { vi } from 'vitest';
-import { EMPTY, of, throwError } from 'rxjs';
+import { EMPTY, of, Subject, throwError } from 'rxjs';
 import { BrowseComponent } from './browse';
 import {
   BrowseService,
@@ -825,19 +825,23 @@ describe('BrowseComponent', () => {
       granted: true,
       creator: 'Administrator',
       begin: '2026-07-01T00:00:00.000Z',
-      end: '2026-12-31T23:59:59.000Z',
+      end: '2026-12-31T00:00:00.000Z',
       status: 'effective',
     };
 
-    expect(component.aceTimeFrame(ace)).not.toBe('Permanent');
     // Both dates present resolves `permissions.time-frame.range`, which separates them rather
-    // than joining them with English connectives.
-    //
-    // The years are pinned to 2026 deliberately. An earlier version left them open, reasoning that
-    // `23:59:59Z` lands in the next year east of UTC -- true before `formatAceDateRange` formatted
-    // in UTC, and false after. Leaving them open would let the UTC round-trip regress without this
-    // test noticing, which is the whole thing that guard exists to prevent.
-    expect(component.aceTimeFrame(ace)).toMatch(/^\w{3} \d{2}, 2026 - \w{3} \d{2}, 2026$/);
+    // than joining them with English connectives. The days are the ones a day-only write names —
+    // Nuxeo anchors those at the server's midnight, which the suite's UTC+5:30 reads as 05:30 —
+    // and the ones the update dialog edits, not the local dates of the instants. Expected text is
+    // built from the same `Intl` call for those days, so ICU data cannot make it brittle.
+    const day = (iso: string) =>
+      new Date(iso).toLocaleDateString(component['locale'], {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+    expect(component.aceTimeFrame(ace)).toBe(`${day('2026-07-01')} - ${day('2026-12-31')}`);
   });
 
   it('canManageCurrentPermissions is false for read-only users (NXSAT-162)', () => {
@@ -913,5 +917,64 @@ describe('BrowseComponent', () => {
     expect(mockDocumentDetailService.getDocumentPermissions).toHaveBeenCalledTimes(2);
     expect(component.permissionsLoaded()).toBe(true);
     expect(component.permissionsLoading()).toBe(false);
+  });
+
+  it('discards a permissions read for the folder left behind when the next listing fails', () => {
+    // Folder A is open: its listing succeeded, so it is on screen and it is `openedPath`.
+    const folderA = doc({ uid: 'folder-a', title: 'Folder A', path: '/default-domain/folder-a' });
+    mockBrowseService.getBrowseFolderContents.mockReturnValue(
+      of({ folder: folderA, entries: [], totalSize: 0 }),
+    );
+    mockBrowseService.getFolderContext.mockReturnValue(of(folderA));
+    component['currentNuxeoPath'] = '/default-domain/folder-a';
+    component.loadContent();
+    expect(component.currentDoc()?.uid).toBe('folder-a');
+
+    // The user opens Permissions. Nothing has replaced A yet, so the read it issues is A's.
+    const permissionsA = new Subject<NuxeoDocument>();
+    mockDocumentDetailService.getDocumentPermissions.mockReturnValue(permissionsA);
+    component.onTabChange(1);
+    expect(mockDocumentDetailService.getDocumentPermissions).toHaveBeenCalledWith('folder-a');
+
+    // They navigate to B while that read is still in flight, and B's listing fails, which takes A
+    // off screen. Moving `currentNuxeoPath` is what the `NavigationEnd` handler does; the router
+    // itself has no routes here, since the suite shallow-renders the component.
+    component['currentNuxeoPath'] = '/default-domain/folder-b';
+    mockBrowseService.getBrowseFolderContents.mockReturnValue(
+      throwError(() => new Error('failed to list')),
+    );
+    component.loadContent();
+    expect(component.currentDoc()).toBeNull();
+
+    // A's permissions arrive afterwards. They must not put A back under B's address, where its
+    // title, its actions and its ACL would all read as B's.
+    permissionsA.next(
+      doc({
+        uid: 'folder-a',
+        contextParameters: {
+          acls: [{ name: 'local', aces: [] }],
+          userVisiblePermissions: ['Read', 'Write', 'Everything'],
+        },
+      }),
+    );
+
+    expect(component.currentDoc()).toBeNull();
+    expect(component.permissionsLoaded()).toBe(false);
+    expect(component.permissionsLoading()).toBe(false);
+  });
+
+  it('applyPermissionsDoc drops a read with no folder on screen instead of installing it', () => {
+    // Every outcome that takes a folder off screen now invalidates its permissions read, so the
+    // test above is the only way in and it no longer gets here. This asserts the guard that keeps
+    // that true: the cost of a future outcome forgetting to invalidate must be a panel with no
+    // permissions in it, not the folder the user left reappearing under another one's address.
+    component.currentDoc.set(null);
+
+    const applied = component['applyPermissionsDoc'](
+      doc({ uid: 'folder-a', contextParameters: { acls: [{ name: 'local', aces: [] }] } }),
+    );
+
+    expect(applied).toBe(false);
+    expect(component.currentDoc()).toBeNull();
   });
 });

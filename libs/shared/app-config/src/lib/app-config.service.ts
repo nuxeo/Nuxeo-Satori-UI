@@ -8,6 +8,7 @@ import {
   AppThemeConfig,
   DEFAULT_APP_BOOTSTRAP_CONFIG,
   describeBrandingLogoRefusal,
+  describeSsoEndpointPathForm,
   mergeBootstrapConfig,
   nuxeoOriginsOf,
   resolveBrandingLogoUrl,
@@ -123,15 +124,40 @@ export class AppConfigService {
     const config = this.bootstrapConfig();
     const logo = config.branding.logo;
     if (!logo) return null;
+    const url = this.resolveBrandingImage(logo.src);
+    if (url === null || url === this.failedLogoUrl()) return null;
+    return { url, alt: logo.alt };
+  });
+
+  /**
+   * The URL the `<link rel="icon">` may load, or `null` to keep the icon `index.html` ships.
+   *
+   * The logo's resolver, unchanged, because the rules are the same ones: an icon is fetched from
+   * the application's own origin and a `src` that could name a Nuxeo endpoint there is refused
+   * for the reason a logo's is.
+   *
+   * Unlike {@link brandingLogo} this has no load-failure channel. A `<link rel="icon">` fires no
+   * usable `error` event — browsers fetch favicons outside the document's normal resource
+   * pipeline — so there is nothing for a surface to report back, and the browser already falls
+   * back to showing no icon on its own. The absence is the honest state rather than a gap:
+   * {@link reportBrandingLogoUnavailable} exists because an `<img>` *can* tell us, not because
+   * every image ought to.
+   */
+  readonly brandingFavicon = computed<string | null>(() => {
+    const favicon = this.bootstrapConfig().branding.favicon;
+    return favicon ? this.resolveBrandingImage(favicon.src) : null;
+  });
+
+  /** The URL an element may load for a configured branding image, or `null` when it may not. */
+  private resolveBrandingImage(src: string): string | null {
+    const config = this.bootstrapConfig();
     const baseUri = this.document.baseURI;
     // Guarded for the same reason as the diagnostic pass: a malformed `APP_BOOTSTRAP_CONFIG_URL`
     // override would otherwise throw out of this computed, from whichever template read it.
     const configUrl = parseUrlOrNull(this.bootstrapUrl, baseUri)?.href;
     if (configUrl === undefined) return null;
-    const url = resolveBrandingLogoUrl(logo.src, configUrl, nuxeoOriginsOf(config, baseUri));
-    if (url === null || url === this.failedLogoUrl()) return null;
-    return { url, alt: logo.alt };
-  });
+    return resolveBrandingLogoUrl(src, configUrl, nuxeoOriginsOf(config, baseUri));
+  }
 
   /**
    * A configured logo the browser could not show, so the brand surfaces fall back to the packaged
@@ -153,6 +179,33 @@ export class AppConfigService {
     if (!url || this.failedLogoUrl() === url) return;
     this.failedLogoUrl.set(url);
     this.note(`branding.logo not shown, using the Satori marks instead — ${reason}: ${url}`);
+  }
+
+  /**
+   * A configured `defaultLanguage` the host application refused, with the reason and what it used
+   * instead.
+   *
+   * Reported from outside for the same reason as {@link reportBrandingLogoUnavailable}: the check
+   * depends on something this library cannot see. Whether a language renders depends on which
+   * translation catalogues the application bundles, which is a build-time fact about the
+   * application, not a property of the configuration — and `availableLanguages` cannot stand in
+   * for it, because Layer 0 is customer-editable and may advertise a language no catalogue backs
+   * (the #522 review's argument, applied to the string language in NXSAT-733).
+   *
+   * The two differ in one way worth stating: a logo failure is discovered at runtime, this one is
+   * decidable before the first render. It still cannot live here, because the fact it turns on
+   * belongs to the consumer.
+   *
+   * It names the value, the reason and the fallback — all three, because "a typo" and "a language
+   * this deployment chose not to offer" need different fixes from whoever reads the console, and
+   * an administrator who is not told which language is in force has no way to tell a refusal from
+   * configuration that never arrived (the NXSAT-724 argument).
+   */
+  reportUnsupportedDefaultLanguage(value: string, fallback: string, reason: string): void {
+    this.note(
+      `defaultLanguage "${value}" was refused — ${reason}; using "${fallback}" instead, so ` +
+        'the language announced on <html lang> matches the text that renders',
+    );
   }
 
   /**
@@ -206,11 +259,52 @@ export class AppConfigService {
       );
     }
     this.noteRefusedLogos(bootstrapFragments, preset, bootstrapConfig);
+    this.noteRefusedSsoEndpoints(bootstrapFragments, preset);
   }
 
   /**
-   * Report every contributed `branding.logo.src` the checks refuse, naming the value, where it came
-   * from and the reason.
+   * Report every contributed `sso.endpoints[].path` the checks refuse, naming the value, where it
+   * came from and the reason.
+   *
+   * The same argument as {@link noteRefusedLogos}: a refused entry is dropped during the merge, so
+   * by the time the configuration is assembled the bad value is gone and the sign-in button has
+   * simply not appeared. Before NXSAT-731 one of these values rendered a button that left the
+   * application; now it renders nothing, and an administrator who is not told why would have no
+   * way to tell a refused path from one they never contributed.
+   *
+   * It says a value was refused and deliberately **not** which buttons end up on screen — but
+   * **not for the reason {@link noteRefusedLogos} gives**, and asserting that reason here was
+   * wrong (review of PR 519). `readLogo` returns `base` when it refuses a `src`, so an earlier
+   * layer's logo really does survive. `readSsoEndpoints` does not: whenever a contribution writes
+   * an **array**, the merged list is that contribution's accepted entries and the earlier list is
+   * gone. So a contribution whose every entry is refused removes an earlier layer's buttons, and
+   * is indistinguishable from the explicit `"endpoints": []` that turns SSO off — which is the
+   * behaviour a customer needs and must not change.
+   *
+   * The message therefore stays silent about the outcome because the outcome depends on the
+   * remaining contributions, not because an earlier one is guaranteed to win.
+   */
+  private noteRefusedSsoEndpoints(
+    fragments: readonly AppConfigFragment[],
+    preset: AppPreset | null,
+  ): void {
+    for (const { label, content } of contributedSources(fragments, preset)) {
+      for (const { index, path } of configuredSsoPaths(content)) {
+        const reason = describeSsoEndpointPathForm(path);
+        if (reason) {
+          this.note(`sso.endpoints[${index}].path "${path}" from ${label} was refused — ${reason}`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Report every contributed `branding.logo.src` and `branding.favicon.src` the checks refuse,
+   * naming the key, the value, where it came from and the reason.
+   *
+   * Both keys, in one pass, because they go through one set of rules: reporting only the logo
+   * would make a refused favicon exactly as silent as a refused logo was before NXSAT-724. The
+   * key is in the message, so an administrator who set both is told which one was refused.
    *
    * Read from the contributions rather than from the merged configuration, because a refused `src`
    * is dropped during the merge: by the time the configuration is assembled the bad value is gone.
@@ -244,24 +338,17 @@ export class AppConfigService {
     }
     const nuxeoOrigins = nuxeoOriginsOf(config, baseUri);
 
-    // The active preset is merged over the fragments, so a logo it names is live and a refusal of
-    // it is just as silent. Unselected presets contribute nothing and stay quiet.
-    const sources: readonly { readonly label: string; readonly content: unknown }[] = [
-      ...fragments.map((fragment) => ({ label: fragment.component, content: fragment.content })),
-      ...(preset?.bootstrap
-        ? [{ label: `preset "${preset.name}"`, content: preset.bootstrap }]
-        : []),
-    ];
+    for (const { label, content } of contributedSources(fragments, preset)) {
+      for (const key of BRANDING_IMAGE_KEYS) {
+        // `null` is "declares none"; `''` is "declares a blank value", which `readLogo` refuses
+        // and which used to be passed over here as if nothing had been written.
+        const src = configuredBrandingImageSrc(content, key);
+        if (src === null) continue;
 
-    for (const { label, content } of sources) {
-      // `null` is "declares none"; `''` is "declares a blank value", which `readLogo` refuses and
-      // which used to be passed over here as if nothing had been written.
-      const src = configuredLogoSrc(content);
-      if (src === null) continue;
-
-      const reason = describeBrandingLogoRefusal(src, configUrl, nuxeoOrigins);
-      if (reason) {
-        this.note(`branding.logo "${src}" from ${label} was refused — ${reason}`);
+        const reason = describeBrandingLogoRefusal(src, configUrl, nuxeoOrigins);
+        if (reason) {
+          this.note(`branding.${key} "${src}" from ${label} was refused — ${reason}`);
+        }
       }
     }
   }
@@ -363,8 +450,11 @@ function describe(error: unknown): string {
   return typeof message === 'string' ? message : 'request failed';
 }
 
+/** The `branding` keys that hold a configured image address, and so share the logo's rules. */
+const BRANDING_IMAGE_KEYS = ['logo', 'favicon'] as const;
+
 /**
- * The `branding.logo.src` a contribution declares, trimmed, or `null` when it declares none.
+ * The `branding.<key>.src` a contribution declares, trimmed, or `null` when it declares none.
  *
  * Reads the raw contribution rather than the parsed configuration, so a value the merge is about
  * to discard is still visible to report on.
@@ -373,14 +463,54 @@ function describe(error: unknown): string {
  * written as `""` made the blank — which `readLogo` refuses — indistinguishable from a
  * contribution that sets no logo, and so silent (review of PR 512).
  */
-function configuredLogoSrc(content: unknown): string | null {
+function configuredBrandingImageSrc(
+  content: unknown,
+  key: (typeof BRANDING_IMAGE_KEYS)[number],
+): string | null {
   if (!isPlainRecord(content)) return null;
   const branding = content['branding'];
   if (!isPlainRecord(branding)) return null;
-  const logo = branding['logo'];
-  if (!isPlainRecord(logo)) return null;
-  const src = logo['src'];
+  const image = branding[key];
+  if (!isPlainRecord(image)) return null;
+  const src = image['src'];
   return typeof src === 'string' ? src.trim() : null;
+}
+
+/**
+ * Every contribution whose values are live, each labelled by where it came from.
+ *
+ * The active preset is merged over the fragments, so a value it names is live and a refusal of it
+ * is just as silent as a fragment's. Unselected presets contribute nothing and stay quiet.
+ */
+function contributedSources(
+  fragments: readonly AppConfigFragment[],
+  preset: AppPreset | null,
+): readonly { readonly label: string; readonly content: unknown }[] {
+  return [
+    ...fragments.map((fragment) => ({ label: fragment.component, content: fragment.content })),
+    ...(preset?.bootstrap ? [{ label: `preset "${preset.name}"`, content: preset.bootstrap }] : []),
+  ];
+}
+
+/**
+ * Every `sso.endpoints[].path` a contribution writes, with the index it was written at.
+ *
+ * Read from the raw contribution, like {@link configuredLogoSrc}, so a value the merge is about to
+ * discard is still there to report on. Entries whose `path` is not a string are left out: the
+ * merge drops those for being the wrong type, which is a different complaint from a path that is
+ * a string and points somewhere it may not.
+ */
+function configuredSsoPaths(content: unknown): readonly { index: number; path: string }[] {
+  if (!isPlainRecord(content)) return [];
+  const sso = content['sso'];
+  if (!isPlainRecord(sso)) return [];
+  const endpoints = sso['endpoints'];
+  if (!Array.isArray(endpoints)) return [];
+  return endpoints.flatMap((entry, index) => {
+    if (!isPlainRecord(entry)) return [];
+    const path = entry['path'];
+    return typeof path === 'string' ? [{ index, path }] : [];
+  });
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

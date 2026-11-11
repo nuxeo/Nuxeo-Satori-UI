@@ -40,6 +40,20 @@ export const PRESENTED_SCHEMAS: ReadonlySet<string> = new Set([
   'thumbnail',
 ]);
 
+/**
+ * Stock schemas a generated edit or create form also leaves out: nobody types their values.
+ * `collection` holds a collection's members, which Add to collection writes; `domain`,
+ * `webcontainer` and `publishing` are configuration the JSF UI kept on domains and workspaces.
+ * Web UI's `lts-2025` edit and create layouts for Collection, Domain and Workspace show only the
+ * Dublin Core fields. A layout file may still name any of their fields.
+ */
+export const FORM_LEFT_OUT_SCHEMAS: ReadonlySet<string> = new Set([
+  'collection',
+  'domain',
+  'publishing',
+  'webcontainer',
+]);
+
 /** Translation keys a manifest `labels` entry can set to rename a generated label. */
 export const fieldLabelKey = (xpath: string): string => `layout.field.${xpath}`;
 export const schemaLabelKey = (schema: string): string => `layout.schema.${schema}`;
@@ -239,6 +253,7 @@ const isFile = (definition: LayoutFieldType): boolean => /^blob(\[\])?$/.test(de
 function sectionsOf(schemas: readonly DocumentTypeSchema[], mode: LayoutMode) {
   return schemas
     .filter((schema) => !PRESENTED_SCHEMAS.has(schema.name))
+    .filter((schema) => mode === 'metadata' || !FORM_LEFT_OUT_SCHEMAS.has(schema.name))
     .sort((a, b) => byName(a.name, b.name))
     .map((schema) => ({
       id: schema.name,
@@ -255,7 +270,7 @@ function sectionsOf(schemas: readonly DocumentTypeSchema[], mode: LayoutMode) {
  * No layout file for this type and mode: one section per schema the panel does not already
  * present. The type's own come first, then those the document's dynamic facets added, so a
  * facet on one document never moves the sections every document of its type shows. The edit and
- * create forms leave out file fields.
+ * create forms leave out file fields and `FORM_LEFT_OUT_SCHEMAS`.
  */
 export function generateLayout(
   type: DocumentTypeDefinition,

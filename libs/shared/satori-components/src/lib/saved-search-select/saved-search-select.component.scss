@@ -16,10 +16,13 @@
   align-items: center;
 }
 
+// The 28px gutter holds the arrow below, so the two have to mirror together: logical on both
+// keeps the gutter under the arrow instead of opposite it.
 .nxs-saved-search-select__input {
   box-sizing: border-box;
   width: 100%;
-  padding: 6px 28px 6px 8px;
+  padding: 6px 8px;
+  padding-inline-end: 28px;
   border: 1px solid var(--mat-sys-outline, currentColor);
   border-radius: 4px;
   background: var(--mat-sys-surface, transparent);
@@ -46,7 +49,7 @@
 
 .nxs-saved-search-select__arrow {
   position: absolute;
-  right: 4px;
+  inset-inline-end: 4px;
   pointer-events: none;
   color: var(--mat-sys-on-surface-variant, inherit);
 }

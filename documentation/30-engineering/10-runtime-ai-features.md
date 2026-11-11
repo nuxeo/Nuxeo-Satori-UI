@@ -76,15 +76,21 @@ removing the need for a user to think in filters.
 
 ## 3. Configuration and gating
 
-| Concern          | Mechanism                                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Backend location | `AI_BACKEND_URL` injection token, `libs/shared/ai-client/src/lib/ai.config.ts`                                                      |
-| Feature flag     | `AiFeatureFlagService` — `sessionStorage` key `ai-features-enabled`, with a one-time migration key `ai-features-default-enabled-v1` |
-| Per-user toggle  | `toggle()`                                                                                                                          |
+| Concern          | Mechanism                                                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Backend location | `AI_BACKEND_URL` injection token, `libs/shared/ai-client/src/lib/ai.config.ts`                                                     |
+| Feature flag     | `AiFeatureFlagService` — **`AI_FEATURES_ENABLED = false`** (`ai-feature-flag.service.ts:35`), off for every user since `a519ebd5d` |
+| Per-user toggle  | **None.** `toggle()` and `setEnabled()` return early while the flag is off, and the header menu entry is commented out             |
 
-**The flag is client-side and per-session.** There is no server-side entitlement check in this
-repository, and no telemetry on usage — so we cannot currently answer "how many users have AI
-features on?".
+**No user has AI features on, and none can turn them on.** `aiEnabled` is a module-level
+`computed(() => false)` sealed with `writable: false, configurable: false`; it does not read
+browser storage while off, and the two keys it once used (`localStorage` — not `sessionStorage`, as
+this table previously said) are purged on construction. `AiGatewayService` refuses the request as a
+second backstop (`ai-gateway.service.ts:64`).
+
+There is still no server-side entitlement check in this repository and no telemetry on usage, so if
+the flag is ever flipped back on we would again be unable to answer "how many users have AI features
+on?". That is a gap to close before re-enabling, not a live one.
 
 ## 4. Files
 

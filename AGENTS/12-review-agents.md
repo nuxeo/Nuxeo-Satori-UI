@@ -141,11 +141,6 @@ todos, and the diff.
    - Reverted work is the specific thing to look for, because it leaves no trace in the
      diff. Read the session's history, not only its final state. A dead end that
      eliminated an option belongs in section 10 with what it bought.
-   - Anything that exists only because adf-hx or adf-core forces it needs a row in
-     `docs/adf-hx-workarounds.md` **and** a marker at the site. The `guardrails` gate
-     checks that pair in both directions, so a missing one is a red gate rather than your
-     judgement call — but a row whose **Removable?** column is wrong is yours: structural
-     and "future cleanup" are not the same claim, and leadership reads the count.
    - A decision that belongs to a human goes in section 9 with its cost of delay. "We
      will decide later" inside a phase write-up is not a record of a decision.
 

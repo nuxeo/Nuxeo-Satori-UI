@@ -14,8 +14,8 @@
  *
  * What the contrast example below does NOT cover: the numeric ratio against each packaged
  * theme's real header background. The fixture is a synthetic DOM with no `sat-app-header`
- * behind the button, so it only measures against the nearest painted ancestor (usually
- * `<body>`). Packaged theme × colour-scheme combinations were checked in the Playwright
+ * behind the button, so it measures against an explicit Canvas surface in light and dark
+ * schemes. Transparent ancestors cannot be assumed white. Packaged themes were checked in the Playwright
  * evidence run; what is pinned here is the invariant — a non-none 2px ring using the theme
  * primary token — matching `header-search-focus-ring.spec.ts` (NXENG-775).
  */
@@ -107,20 +107,25 @@ describe('header Settings menu — keyboard focus indicator (NXENG-872)', () => 
     expect(style.outlineOffset).toBe('2px');
   });
 
-  it('meets the 3:1 non-text contrast of SC 1.4.11 against the fixture surface the ring touches', () => {
-    button.focus();
-    const style = getComputedStyle(button);
+  for (const scheme of ['light', 'dark']) {
+    it(`meets 3:1 focus contrast against the ${scheme} fixture surface`, () => {
+      // A transparent document uses the browser canvas, which is not always white.
+      fixture.nativeElement.style.colorScheme = scheme;
+      fixture.nativeElement.style.backgroundColor = 'Canvas';
+      button.focus();
+      const style = getComputedStyle(button);
 
-    // Same guard as NXENG-775: `outline-color` can compute to `currentColor` while
-    // `outline-style` is still `none`, which would pass contrast without a visible ring.
-    expect(style.outlineStyle).not.toBe('none');
-    expect(parseFloat(style.outlineWidth)).toBeGreaterThan(0);
-    expect(parseFloat(style.outlineOffset)).toBeGreaterThan(0);
+      // Same guard as NXENG-775: `outline-color` can compute to `currentColor` while
+      // `outline-style` is still `none`, which would pass contrast without a visible ring.
+      expect(style.outlineStyle).not.toBe('none');
+      expect(parseFloat(style.outlineWidth)).toBeGreaterThan(0);
+      expect(parseFloat(style.outlineOffset)).toBeGreaterThan(0);
 
-    expect(
-      contrastRatio(rgb(style.outlineColor), rgb(surfaceBehindTheRing())),
-    ).toBeGreaterThanOrEqual(3);
-  });
+      expect(
+        contrastRatio(rgb(style.outlineColor), rgb(surfaceBehindTheRing())),
+      ).toBeGreaterThanOrEqual(3);
+    });
+  }
 
   it('declares at least one standalone :focus rule that IBM can read', () => {
     const focusSelectors: string[] = [];

@@ -264,7 +264,7 @@
               </div>
             </div>
 
-            @if (viewMode() === 'list') {
+            @if (viewMode() === 'list' && !isForbidden()) {
               <div class="browse-list-container">
                 @if (columnPanelOpen()) {
                   <nxs-column-picker
@@ -316,7 +316,13 @@
                 [heading]="errorStatus() === 500 ? message : ''"
                 retryable
                 (retry)="loadContent()"
-              />
+              >
+                @if (errorStatus() === 403 && sharedDocumentLink(); as sharedLink) {
+                  <a mat-stroked-button color="primary" [routerLink]="sharedLink">
+                    {{ 'browse.browse.back-to-shared-document' | translate }}
+                  </a>
+                }
+              </nxs-error-state>
             } @else {
               @if (filteredEntries().length === 0 && pageIndex() === 0) {
                 <div class="browse-empty">

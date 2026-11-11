@@ -12,7 +12,7 @@ gh pr view <PR-number> --json reviews,comments \
   | jq '.reviews[] | select(.state == "CHANGES_REQUESTED") | .body'
 
 # Get inline (line-level) comments
-gh api repos/nuxeo/agentic-ui-poc/pulls/<PR-number>/comments \
+gh api repos/nuxeo/Nuxeo-Satori-UI/pulls/<PR-number>/comments \
   | jq '.[] | { path: .path, line: .line, body: .body, id: .id }'
 ```
 
@@ -42,7 +42,7 @@ git push
 ## Step 4 — Reply to Comments (Optional but Good Practice)
 
 ```bash
-gh api repos/nuxeo/agentic-ui-poc/pulls/<PR-number>/comments/<comment-id>/replies \
+gh api repos/nuxeo/Nuxeo-Satori-UI/pulls/<PR-number>/comments/<comment-id>/replies \
   -f body="Fixed: added takeUntilDestroyed() to subscription in search.ts line 145"
 ```
 
@@ -92,7 +92,7 @@ the sample at all.
 Verify it rather than believing this paragraph:
 
 ```bash
-gh api graphql -f query='{repository(owner:"nuxeo",name:"agentic-ui-poc"){pullRequests(last:40,states:[OPEN,MERGED,CLOSED]){nodes{reviews(first:20){nodes{author{login} state}}}}}}' \
+gh api graphql -f query='{repository(owner:"nuxeo",name:"Nuxeo-Satori-UI"){pullRequests(last:40,states:[OPEN,MERGED,CLOSED]){nodes{reviews(first:20){nodes{author{login} state}}}}}}' \
   --jq '[.data.repository.pullRequests.nodes[].reviews.nodes[] | select(.author.login=="copilot-pull-request-reviewer")] | group_by(.state) | map({state: .[0].state, count: length})'
 ```
 

@@ -2,6 +2,19 @@ export {
   NxsActionMenuComponent,
   type NxsMenuAction,
 } from './lib/action-menu/action-menu.component';
+export {
+  NxsAssetFacetsDrawerComponent,
+  NXS_ASSET_FACETS_DRAWER_ID,
+  type NxsAssetFacetsAction,
+  type NxsFacetChoice,
+  type NxsFacetGroup,
+  type NxsFacetSelection,
+} from './lib/asset-facets-drawer/asset-facets-drawer.component';
+export {
+  NxsAssetGridComponent,
+  NXS_ASSET_GRID_ID,
+  type NxsAssetCard,
+} from './lib/asset-grid/asset-grid.component';
 export { NxsBannerComponent } from './lib/banner/banner.component';
 export { NxsChipSetComponent } from './lib/chip-set/chip-set.component';
 export {
@@ -107,10 +120,47 @@ export {
 } from './lib/properties-panel/properties-panel.component';
 export { nxsPropertyText } from './lib/properties-panel/property-text';
 export {
+  NxsChangePasswordDialogComponent,
+  type NxsChangePasswordDialogData,
+} from './lib/change-password-dialog/change-password-dialog.component';
+export {
+  NxsUserFormDialogComponent,
+  type NxsUserFormDialogData,
+  type NxsUserFormDialogResult,
+} from './lib/user-form-dialog/user-form-dialog.component';
+export {
+  NxsGroupFormDialogComponent,
+  type NxsGroupFormDialogData,
+  type NxsGroupFormDialogResult,
+} from './lib/group-form-dialog/group-form-dialog.component';
+export {
+  NxsConfirmDialogComponent,
+  type NxsConfirmDialogData,
+} from './lib/confirm-dialog/confirm-dialog.component';
+export {
+  NXS_ADMIN_USERS_GROUPS_PAGE_ID,
+  NxsAdminUsersGroupsPageComponent,
+  type NxsRecentPrincipalRow,
+} from './lib/admin-users-groups-page/admin-users-groups-page.component';
+export {
+  NXS_ADMIN_USER_DETAILS_PAGE_ID,
+  NxsAdminUserDetailsPageComponent,
+} from './lib/admin-user-details-page/admin-user-details-page.component';
+export {
+  NXS_ADMIN_GROUP_DETAILS_PAGE_ID,
+  NxsAdminGroupDetailsPageComponent,
+} from './lib/admin-group-details-page/admin-group-details-page.component';
+export {
   NxsRenameDialogComponent,
   type NxsRenameDialogData,
 } from './lib/rename-dialog/rename-dialog.component';
 export { NxsSpinnerComponent } from './lib/spinner/spinner.component';
+export {
+  NxsStoryboardComponent,
+  NXS_STORYBOARD_ID,
+  nxsFormatTimecode,
+  type NxsStoryboardItem,
+} from './lib/storyboard/storyboard.component';
 export {
   NxsTabBodyDirective,
   type NxsTab,
@@ -197,6 +247,26 @@ export {
 } from './lib/saved-search-select/saved-search-select.component';
 export { NxsSavedSearchActionsComponent } from './lib/saved-search-actions/saved-search-actions.component';
 export { NxsCardComponent } from './lib/card/card.component';
+export {
+  NXS_PUBLISH_DIALOG_ID,
+  NxsPublishDialogComponent,
+  nxsOpenPublishDialog,
+  type NxsOpenPublishDialogOptions,
+  type NxsPublishDialogData,
+  type NxsPublishDialogResult,
+  type NxsPublishRendition,
+} from './lib/publish-dialog/publish-dialog.component';
+export {
+  NXS_TASK_DETAIL_ID,
+  NxsTaskDetailComponent,
+  type NxsTaskOutcome,
+} from './lib/task-detail/task-detail.component';
+export {
+  NXS_TRASH_LIST_ID,
+  NxsTrashListComponent,
+  type NxsTrashListResults,
+  type NxsTrashListView,
+} from './lib/trash-list/trash-list.component';
 // satori:export:components — `satori-component` inserts above this line
 
 export { TranslatedDatepickerIntl } from './lib/date-input/translated-datepicker-intl';

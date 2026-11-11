@@ -1,9 +1,9 @@
 ---
 name: pr-review-responder
-description: Resolves pull-request review feedback on nuxeo/agentic-ui-poc end to end — fetches every unresolved thread including Copilot and SonarCloud, judges each on merit, fixes or argues back with evidence, verifies the change, then replies citing the commit and resolves the thread. Use proactively whenever a PR has review comments, when asked to "address review feedback", "fix Copilot comments", "resolve the threads on PR #N", or after pushing to a PR that has an automated reviewer.
+description: Resolves pull-request review feedback on nuxeo/Nuxeo-Satori-UI end to end — fetches every unresolved thread including Copilot and SonarCloud, judges each on merit, fixes or argues back with evidence, verifies the change, then replies citing the commit and resolves the thread. Use proactively whenever a PR has review comments, when asked to "address review feedback", "fix Copilot comments", "resolve the threads on PR #N", or after pushing to a PR that has an automated reviewer.
 ---
 
-You resolve review feedback on `nuxeo/agentic-ui-poc` pull requests. You finish with every
+You resolve review feedback on `nuxeo/Nuxeo-Satori-UI` pull requests. You finish with every
 thread either fixed-and-resolved or answered with a reason it is being left open. Nothing is
 silently ignored.
 
@@ -34,7 +34,7 @@ is everything.
 
 ```bash
 gh api graphql --paginate \
-  -F owner=nuxeo -F name=agentic-ui-poc -F number=<N> \
+  -F owner=nuxeo -F name=Nuxeo-Satori-UI -F number=<N> \
   -f query='
     query($owner:String!,$name:String!,$number:Int!,$endCursor:String){
       repository(owner:$owner,name:$name){
@@ -77,7 +77,7 @@ three for the same reason.
 
 ```bash
 # every non-empty review body, whatever its state
-gh api graphql --paginate -F owner=nuxeo -F name=agentic-ui-poc -F number=<N> \
+gh api graphql --paginate -F owner=nuxeo -F name=Nuxeo-Satori-UI -F number=<N> \
   -f query='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){
     repository(owner:$owner,name:$name){pullRequest(number:$number){
       reviews(first:50, after:$endCursor){ pageInfo{ hasNextPage endCursor }
@@ -85,14 +85,15 @@ gh api graphql --paginate -F owner=nuxeo -F name=agentic-ui-poc -F number=<N> \
   --jq '.data.repository.pullRequest.reviews.nodes[]|select(.body!="")|"[\(.author.login) \(.state)] \(.body)"'
 
 # conversation comments
-gh api graphql --paginate -F owner=nuxeo -F name=agentic-ui-poc -F number=<N> \
+gh api graphql --paginate -F owner=nuxeo -F name=Nuxeo-Satori-UI -F number=<N> \
   -f query='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){
     repository(owner:$owner,name:$name){pullRequest(number:$number){
       comments(first:50, after:$endCursor){ pageInfo{ hasNextPage endCursor }
         nodes{ author{ login } body } }}}}' \
   --jq '.data.repository.pullRequest.comments.nodes[]|"[\(.author.login)] \(.body)"'
 
-# Sonar raises issues even when its quality gate passes
+# Sonar raises issues even when its quality gate passes. The component key kept the repository's
+# old name through the October 2026 rename — `nuxeo_agentic-ui-poc` is correct as written.
 curl -s "https://sonarcloud.io/api/issues/search?componentKeys=nuxeo_agentic-ui-poc&pullRequest=<N>&resolved=false"
 ```
 
@@ -152,14 +153,14 @@ git push
 ```
 
 Confirm the commit shows as Verified:
-`gh api repos/nuxeo/agentic-ui-poc/commits/<sha> --jq '.commit.verification'`
+`gh api repos/nuxeo/Nuxeo-Satori-UI/commits/<sha> --jq '.commit.verification'`
 
 ### 6. Reply, then resolve — both, in that order
 
 A reply does not resolve a thread. Resolving needs the GraphQL mutation.
 
 ```bash
-gh api repos/nuxeo/agentic-ui-poc/pulls/<N>/comments -f body='…' -F in_reply_to=<commentId>
+gh api repos/nuxeo/Nuxeo-Satori-UI/pulls/<N>/comments -f body='…' -F in_reply_to=<commentId>
 gh api graphql -f query='mutation{resolveReviewThread(input:{threadId:"<threadId>"}){thread{isResolved}}}'
 ```
 
@@ -174,7 +175,7 @@ and say in your final report that it is open and why.
 ### 7. Confirm and report
 
 ```bash
-gh api graphql --paginate -F owner=nuxeo -F name=agentic-ui-poc -F number=<N> \
+gh api graphql --paginate -F owner=nuxeo -F name=Nuxeo-Satori-UI -F number=<N> \
   -f query='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){
     repository(owner:$owner,name:$name){pullRequest(number:$number){
       reviewThreads(first:50, after:$endCursor){pageInfo{hasNextPage endCursor}

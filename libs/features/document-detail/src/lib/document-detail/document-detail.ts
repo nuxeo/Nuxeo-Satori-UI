@@ -150,7 +150,6 @@ import {
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
 import { AddToCollectionDialogComponent } from '../add-to-collection-dialog/add-to-collection-dialog';
-import { PublishDialogComponent, PublishDialogData } from '../publish-dialog/publish-dialog';
 import { AttachmentPreviewDialogComponent } from '../attachment-preview-dialog/attachment-preview-dialog';
 import { ReplaceAttachmentDialogComponent } from '../replace-attachment-dialog/replace-attachment-dialog';
 import { RemoveAttachmentDialogComponent } from '../remove-attachment-dialog/remove-attachment-dialog';
@@ -161,6 +160,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   NXS_PERMISSIONS_PANEL_ID,
+  nxsOpenPublishDialog,
   NxsCommentExtraDirective,
   NXS_PRIMITIVE_IDS,
   NxsAvatarComponent,
@@ -179,6 +179,7 @@ import {
   NxsPermissionsPanelComponent,
   NxsPropertiesPanelComponent,
   NxsSpinnerComponent,
+  NxsBannerComponent,
   NxsTabsComponent,
   NxsTagComponent,
   NxsToastService,
@@ -194,6 +195,7 @@ import {
   type NxsUpdatePermissionDialogData,
   type NxsErrorStatus,
   type NxsTab,
+  type NxsBannerAction,
   type NxsToolbarAction,
   type NxsVocabularyLabel,
 } from '@nuxeo/satori-platform/components';
@@ -251,6 +253,12 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   md: 'text/markdown',
 };
 
+/** A banner's text and the actions it offers, as a banner rendered by ID takes them. */
+interface DocumentBanner {
+  readonly message: string;
+  readonly actions: readonly NxsBannerAction[];
+}
+
 @Component({
   selector: 'lib-document-detail',
   standalone: true,
@@ -290,6 +298,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     NxsPermissionsPanelComponent,
     NoteEditorComponent,
     SAT_BANNER_IMPORTS,
+    NxsBannerComponent,
     SatGhost,
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter(), provideNxsToast()],
@@ -615,6 +624,13 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly documentTasks = signal<NuxeoTask[]>([]);
   readonly documentTasksLoading = signal(false);
   readonly documentWorkflows = signal<NuxeoWorkflow[]>([]);
+  /** Ids of workflows whose banner the user dismissed on this document; the workflow keeps running. */
+  readonly dismissedWorkflowIds = signal<ReadonlySet<string>>(new Set());
+  /** The running workflows whose banner is still on screen. */
+  readonly visibleWorkflows = computed(() => {
+    const dismissed = this.dismissedWorkflowIds();
+    return this.documentWorkflows().filter((wf) => !dismissed.has(wf.id));
+  });
   readonly abandoningWorkflow = signal(false);
   readonly availableWorkflows = signal<NuxeoWorkflowModel[]>([]);
   readonly workflowsLoading = signal(false);
@@ -703,7 +719,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     if (!d) return [];
 
     const path = d.path ?? '';
-    const cacheKey = `${path}\0${d.title}`;
+    // An external share recipient can open none of the ancestors (NXSAT-211): they are text for them.
+    const external = (this.currentUsername() ?? '').startsWith('transient/');
+    const cacheKey = `${path}\0${d.title}\0${external}`;
     if (cacheKey === this.breadcrumbPathCache) {
       return this.breadcrumbItemsCache;
     }
@@ -714,10 +732,14 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     // Router links, not hrefs: whichever component `nxs.primitives.breadcrumbs` resolves to routes
     // them itself — the folded ones too, which Material's trail lists in a menu outside its host.
     // One command per segment, so the router encodes each exactly once.
-    this.breadcrumbItemsCache = parts.map((s, index) => ({
-      label: decodeNuxeoPathSegment(s),
-      routerLink: ['/browse', ...parts.slice(0, index + 1)],
-    }));
+    this.breadcrumbItemsCache = parts.map((s, index) =>
+      external
+        ? { label: decodeNuxeoPathSegment(s) }
+        : {
+            label: decodeNuxeoPathSegment(s),
+            routerLink: ['/browse', ...parts.slice(0, index + 1)],
+          },
+    );
     return this.breadcrumbItemsCache;
   });
 
@@ -731,6 +753,74 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const label = `${this.currentMajor()}.${this.currentMinor()}`;
     return d.isCheckedOut ? `${label}+` : label;
   });
+
+  /** A banner's message and actions, translated and read afresh when the page's state changes. */
+  readonly trashedBanner = computed<DocumentBanner>(() => {
+    this.translationTick();
+    return {
+      message: this.translate.instant(
+        'document-detail.document-detail.you-are-viewing-a-trashed-document',
+      ),
+      actions: [
+        ...(this.canWriteDoc()
+          ? [
+              {
+                label: this.translate.instant('document-detail.document-detail.restore'),
+                icon: 'restore',
+                emphasis: 'outlined' as const,
+                disabled: this.actionInProgress() === 'restore',
+                press: () => this.restoreFromTrash(),
+              },
+            ]
+          : []),
+        ...(this.canRemoveDoc()
+          ? [
+              {
+                label: this.translate.instant('document-detail.document-detail.delete-permanently'),
+                icon: 'delete_forever',
+                emphasis: 'outlined' as const,
+                disabled: this.actionInProgress() === 'permanentDelete',
+                press: () => this.permanentlyDelete(),
+              },
+            ]
+          : []),
+      ],
+    };
+  });
+
+  /** The version banner's message and actions, the Go to latest and Restore buttons it offers. */
+  readonly versionBanner = computed<DocumentBanner>(() => {
+    this.translationTick();
+    return {
+      message: this.translate.instant('document-detail.version-viewing', {
+        version: this.versionLabel(),
+      }),
+      actions: [
+        {
+          label: this.translate.instant('document-detail.version-go-to-latest'),
+          emphasis: 'text',
+          cssClass: 'version-banner-latest',
+          press: () => this.showLatestVersion(),
+        },
+        ...(this.canRestoreVersion()
+          ? [
+              {
+                label: this.translate.instant('document-detail.version-restore', {
+                  version: this.versionLabel(),
+                }),
+                icon: 'restore',
+                emphasis: 'filled' as const,
+                cssClass: 'version-banner-restore',
+                disabled: this.actionInProgress() === 'restore',
+                press: () => this.confirmRestoreVersion(),
+              },
+            ]
+          : []),
+      ],
+    };
+  });
+
+  readonly bannerId = NXS_PRIMITIVE_IDS.banner;
 
   readonly publicationCount = computed(() => this.publishedDocs().length);
 
@@ -1032,6 +1122,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.showStartProcessPanel.set(false);
     this.documentTasks.set([]);
     this.documentWorkflows.set([]);
+    this.dismissedWorkflowIds.set(new Set());
     this.panelSubTab.set('properties');
     this.permissionsTabLoaded = false;
     this.publishTabLoaded = false;
@@ -1287,6 +1378,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
         }
       },
     });
+  }
+
+  /** Hides this workflow's banner for the document on screen. The workflow itself is untouched. */
+  dismissWorkflowBanner(wf: NuxeoWorkflow): void {
+    this.dismissedWorkflowIds.update((ids) => new Set(ids).add(wf.id));
   }
 
   abandonWorkflow(wf: NuxeoWorkflow): void {
@@ -3369,7 +3465,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   /**
    * Web UI's `isPublishable`, so a version is published as it is: `Document.PublishToSection`
-   * runs on the document on screen, and the dialog lists the live document's versions.
+   * runs on the document on screen, and the dialog lists the live document's versions. Opens
+   * whatever `NXS_PUBLISH_DIALOG_ID` resolves to, as the bulk Publish does.
    */
   openPublishDialog(): void {
     const doc = this.doc();
@@ -3379,35 +3476,31 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     }
     const requestedFor = this.docUid;
     const generation = this.documentLoadGeneration;
-    const openDialog = (versions: NuxeoDocument[]) => {
-      if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
-      this.dialog
-        .open(PublishDialogComponent, {
-          width: '620px',
-          panelClass: 'publish-dialog-panel',
-          data: {
-            documentUid: doc.uid,
-            documentTitle: doc.title,
-            versionLabel: this.versionLabel(),
-            renditions: this.buildRenditionOptions(),
-            versions,
-          } satisfies PublishDialogData,
-        })
-        .afterClosed()
+    const stillHere = () =>
+      !this.destroyRef.destroyed &&
+      requestedFor === this.docUid &&
+      generation === this.documentLoadGeneration;
+    void nxsOpenPublishDialog(
+      this.dialog,
+      this.componentRegistry,
+      {
+        documentUid: doc.uid,
+        documentTitle: doc.title,
+        versionLabel: this.versionLabel(),
+        versionableUid: this.liveDocumentUid(),
+        renditions: this.buildRenditionOptions(),
+      },
+      { stillWanted: stillHere },
+    ).then((ref) =>
+      ref
+        ?.afterClosed()
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe((published) => {
-          if (!published) return;
+          if (!published || !stillHere()) return;
           this.publishTabLoaded = false;
           this.refreshPublishedDocs();
-        });
-    };
-    this.detailService
-      .getVersionsDirect(this.liveDocumentUid())
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (versions) => openDialog(versions),
-        error: () => openDialog([]),
-      });
+        }),
+    );
   }
 
   private buildRenditionOptions(): { name: string; label: string }[] {

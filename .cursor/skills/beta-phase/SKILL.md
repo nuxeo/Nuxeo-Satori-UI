@@ -1,6 +1,6 @@
 ---
 name: beta-phase
-description: End-to-end SDLC orchestrator for one phase of the Nuxeo Satori Beta program in agentic-ui-poc — load the phase contract, plan, implement in verifiable steps, iterate against the quality gate until green, capture per-step image evidence with assertions, run a multi-model adversarial review, open a conventional-commit PR with the evidence report attached, then monitor CI to green. Use when asked to run or continue a Beta phase (phase-0-baseline through phase-6-quality), to "execute the Beta plan", to implement Layer 0/1/2/3 work, or to adopt adf-hx components.
+description: End-to-end SDLC orchestrator for one phase of the Nuxeo Satori Beta program in Nuxeo-Satori-UI — load the phase contract, plan, implement in verifiable steps, iterate against the quality gate until green, capture per-step image evidence with assertions, run a multi-model adversarial review, open a conventional-commit PR with the evidence report attached, then monitor CI to green. Use when asked to run or continue a Beta phase (phase-0-baseline through phase-6-quality), to "execute the Beta plan", to implement Layer 0/1/2/3 work, or to adopt adf-hx components.
 ---
 
 # Run a Beta phase, end to end
@@ -152,13 +152,6 @@ before debugging code.
   - A number moved? Update section 5.
   - A gap opened or closed? Section 6.
   - A claim turned out wrong? Section 7. Do not delete the original claim.
-- **Update `docs/adf-hx-workarounds.md`** for anything the phase added that exists only
-  because adf-hx or adf-core forces it. Put the marker at the site —
-  `WORKAROUND(adf-hx): W<n>`, `MISSING(adf-hx): M<n>`, `REFUSES: R<n>` or
-  `DEGRADED(adf-hx): D<n>` — **and** the row in the register. The two are gated against
-  each other by `guardrails`, in both directions, so a marker without a row or a row
-  without a marker fails the phase. Set the **Removable?** column honestly: structural
-  is not the same as future cleanup, and leadership reads the count.
 - **Update `docs/adf-hx-upstream-findings.md`** if the cause was upstream's. That file is
   written to be sent to the adf-hx team, so every finding needs a version, a file path and
   a reproduction. Keep our own environmental problems out of it — a Node global, a macOS

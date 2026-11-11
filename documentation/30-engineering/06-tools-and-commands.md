@@ -21,6 +21,10 @@ audience: engineering
 
 ## 1. Setup
 
+> Everything on this page except §7's first block is **contributor** tooling and needs
+> `SATORI_GH_READONLY_TOKEN`. A customer customising Satori needs none of it —
+> [`CUSTOMISING.md`](../../CUSTOMISING.md) is their path, and it is Node and nothing else.
+
 | Command                                  | Purpose                            | Notes                                                  |
 | ---------------------------------------- | ---------------------------------- | ------------------------------------------------------ |
 | `nvm use`                                | Select Node 20 from `.nvmrc`       | **Not optional.** Node 22+ breaks `localStorage` specs |
@@ -150,16 +154,43 @@ and silently corrupts the snapshot.
 
 ## 7. Generators
 
+### The configuration package — Node only, no install, no token
+
+The one generator a customer runs, and the only one that works without this repository's
+dependencies. `create.mjs` imports Node built-ins and nothing else, so it runs in a fresh clone
+before anything is installed:
+
+```bash
+node tools/satori-generators/src/config-package/create.mjs acme-config --owner=acme
+node config-packages/acme-config/build.mjs      # checks the fragments, writes the installable zip
+```
+
+[`CUSTOMISING.md`](../../CUSTOMISING.md) is the customer-facing version of those two lines, with
+what to edit between them. The `config-package` Nx generator writes the **same files, byte for
+byte** — `create.spec.ts` runs both and compares — and is the form to use once the workspace is
+installed:
+
+```bash
+npx nx g ./tools/satori-generators:config-package acme-config --owner=acme
+npx nx build acme-config                        # same zip, into dist/config-packages/acme-config/
+```
+
+### The extension library — Layer 2, needs the install
+
 ```bash
 # In this repository
 npx nx g ./tools/satori-generators:extension-library acme-extensions --owner=acme
-
-# From the published package, as a customer
-npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
-npx nx g @nuxeo/satori-platform:extension-rule      is-legal-team --library=acme-extensions
-npx nx g @nuxeo/satori-platform:extension-action    export-claim  --library=acme-extensions
-npx nx g @nuxeo/satori-platform:extension-component claim-summary --library=acme-extensions
+npx nx g ./tools/satori-generators:extension-rule      is-legal-team --library=acme-extensions
+npx nx g ./tools/satori-generators:extension-action    export-claim  --library=acme-extensions
+npx nx g ./tools/satori-generators:extension-component claim-summary --library=acme-extensions
 ```
+
+> **The `@nuxeo/satori-platform:` forms of the four commands above do not work yet.** They are the
+> intended customer route and they are what the customer documentation describes, but the package
+> is unpublished — it 404s on npmjs.org, npm.pkg.github.com and packages.nuxeo.com alike — so
+> `npx nx g @nuxeo/satori-platform:extension-library …` cannot resolve. Use the
+> `./tools/satori-generators:` forms until D-c publishes the first alpha. The configuration-package
+> path above is unaffected: it needs no package and no registry.
 
 `--directory` is the **parent**: `--directory=libs/custom` yields `libs/custom/<name>`.
 Default parent is `libs/extensions`.

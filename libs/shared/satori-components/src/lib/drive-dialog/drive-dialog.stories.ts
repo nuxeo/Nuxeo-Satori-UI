@@ -1,3 +1,4 @@
+import { expect, fn, userEvent, within } from 'storybook/test';
 import type { Provider } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
@@ -9,6 +10,8 @@ import { NuxeoDriveService } from '@nuxeo/satori-platform/nuxeo-client';
 import { dialogPreview } from '../../../.storybook/dialog-preview';
 
 import { NxsDriveDialogComponent } from './drive-dialog.component';
+
+const closeDialog = fn(action('dialogRef.close'));
 
 /** Logs each call in the Actions panel under `name`, then lets the fake answer it. */
 function logged<A extends unknown[], R>(
@@ -34,7 +37,7 @@ const withDrive = (hasDriveToken: () => Observable<boolean>) => {
     openDriveUrl: logged<[url: string], void>('openDriveUrl', () => undefined),
   };
   const dialogRef: Pick<MatDialogRef<NxsDriveDialogComponent>, 'close'> = {
-    close: logged('dialogRef.close', () => undefined),
+    close: closeDialog,
   };
   const providers: Provider[] = [
     { provide: NuxeoDriveService, useValue: drive },
@@ -75,3 +78,15 @@ export const NoDriveToken: Story = { decorators: [withDrive(() => of(false))] };
 
 /** While Nuxeo is asked whether this user has a Drive token. */
 export const Checking: Story = { decorators: [withDrive(() => NEVER)] };
+
+/** The preview stays mounted; this asserts the dialog's close request. */
+export const KeyboardCancellation: Story = {
+  ...NoDriveToken,
+  play: async ({ canvasElement }) => {
+    closeDialog.mockClear();
+    const cancel = await within(canvasElement).findByRole('button', { name: 'Close' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(closeDialog).toHaveBeenCalledTimes(1);
+  },
+};

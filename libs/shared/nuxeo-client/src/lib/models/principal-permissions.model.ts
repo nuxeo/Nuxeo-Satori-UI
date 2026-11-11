@@ -9,6 +9,8 @@ export interface PrincipalPermissionRow {
   grantedBy: string | null;
   /** Exact ACE username field — required for `Document.RemovePermission`. */
   acePrincipal: string;
+  /** The ACE's Nuxeo id, which removes exactly this entry; see `DocumentDetailService.removePermissionById`. */
+  aceId: string;
 }
 
 export interface PrincipalPermissionPage {

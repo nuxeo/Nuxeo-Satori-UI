@@ -121,10 +121,13 @@ not currently in any phase of the plan.
 | Knowing their configuration        | Their configuration package — readable **if** they share it                                                                                  |
 | Distinguishing our bug from theirs | The support boundary is architecturally clear (their library, their repo) — **untested in practice**                                         |
 | Escalation path for adf-hx defects | Established — `docs/adf-hx-upstream-findings.md`, written to be sent to the adf-hx team, requiring a version, a file path and a reproduction |
-| Workaround register                | `docs/adf-hx-workarounds.md`, gated **in both directions**: a marker without a row, or a row without a marker, fails the build               |
 
-That last row is a genuinely good practice: every workaround forced by an upstream defect is
-tracked at the code _and_ in a register, and leadership can read the count.
+The escalation path is a genuinely good practice: an upstream defect is reported with enough
+detail that the other team can act on it without a round trip.
+
+A workaround register sat beside it until 2026-11, gated in both directions against markers in
+the code. It was deleted once adf-hx was gone and the last marker with it: a gate over an empty
+set reads as a live control and is not one.
 
 ---
 

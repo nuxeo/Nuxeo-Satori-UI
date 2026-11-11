@@ -1,12 +1,13 @@
 import { registerLocaleData } from '@angular/common';
+import localeAr from '@angular/common/locales/ar';
 import localeDe from '@angular/common/locales/de';
+import localeEs from '@angular/common/locales/es';
 import localeFr from '@angular/common/locales/fr';
+import localeHe from '@angular/common/locales/he';
+import localeIt from '@angular/common/locales/it';
 import localeJa from '@angular/common/locales/ja';
 import localeNl from '@angular/common/locales/nl';
-import localeTh from '@angular/common/locales/th';
-// `zh` is Simplified Chinese: identical to `zh-Hans` apart from its id. Crowdin's `zh-CN`
-// downloads as `zh.json` through `%two_letters_code%`, so the app's locale id is `zh`.
-import localeZh from '@angular/common/locales/zh';
+import localeSv from '@angular/common/locales/sv';
 
 /**
  * Angular locale data for every language we ship a catalogue for.
@@ -33,27 +34,60 @@ import localeZh from '@angular/common/locales/zh';
  * That ordering is worth keeping in mind: **the i18n bug was hiding the l10n bug.** A
  * half-applied locale looks like a working one right up until it works.
  *
- * ## Adding a locale
+ * ## Adding a locale — six touchpoints, in two steps, not one change
  *
- * A locale needs four things that are easy to do only some of: a catalogue in
- * `apps/nuxeo-ui/public/i18n/`, an entry in `availableLanguages`, an entry here, and a
- * `--language` in `download_translations_args` in `.github/workflows/crowdin-pull.yaml`, which
- * downloads only the languages listed there. Six ship today: `fr`, `de`, `ja`, `nl`, `th`
- * and `zh` (Crowdin's `zh-CN`, Simplified Chinese).
+ * The order matters, and getting it wrong is not a style question: four of the six cannot
+ * precede the translated catalogue, and those cannot even be pushed early, because
+ * `.husky/pre-push` runs `review:guardrails`.
+ *
+ * **Step 1 — request it.** Safe before any translation exists:
+ *
+ * - an entry in `LOCALE_DATA` here;
+ * - a `--language` in `download_translations_args` in `.github/workflows/crowdin-pull.yaml`,
+ *   which downloads only the languages listed there — so this is what *causes* the catalogue.
+ *
+ * **Step 2 — advertise it**, once `apps/nuxeo-ui/public/i18n/<lang>.json` has landed:
+ *
+ * - `SHIPPED_CATALOGUE_LANGUAGES` in `shipped-catalogues.ts`. **Mandatory, and it is what
+ *   actually renders the language**: `resolveStringLanguage` refuses a `defaultLanguage` that is
+ *   not in it, so a catalogue added without it is shipped and never used, and the application
+ *   boots in English (NXSAT-733). `checkShippedCatalogueLanguages` fails either direction, so it
+ *   can neither lead nor lag;
+ * - `availableLanguages` in both Layer 0 configs — earlier, and
+ *   `checkAdvertisedLocalesShip` fails it;
+ * - `DATE_FNS_LOCALES` in `libs/shared/ui/.../satori-date-adapter.ts`, easy to miss because it
+ *   is in another library; a test holds it equal to `availableLanguages`, so it cannot drift
+ *   silently — but that also means it cannot lead.
+ *
+ * A language sits between the two steps for as long as translation takes. That is the normal
+ * state, not an unfinished one: nine non-English languages are registered here, the set Nuxeo
+ * Web UI supports — `ar`, `de`, `es`, `fr`, `he`, `it`, `ja`, `nl`, `sv` — and **five of them
+ * are mid-flight**, with `ar`, `es`, `he`, `it` and `sv` requested and awaiting Crowdin.
+ *
+ * Registration leading is the harmless direction, which is the whole reason step 1 can run
+ * early: `checkLocaleDataRegistered` only *warns* about locale data with no catalogue behind it,
+ * while the reverse throws `NG0701` wherever a date renders. See `D8e-webui`.
+ *
  * `checkLocaleDataRegistered` in `scripts/review-guardrails.mjs` fails the build when a
  * catalogue has no matching registration, because the symptom otherwise appears far from the
  * cause — as a pipe error on a page that has nothing to do with the locale that was added.
+ *
+ * `th` and `zh` were registered until the set was aligned to Web UI; their catalogues and
+ * Crowdin downloads went with them.
  *
  * `en` is not listed: Angular bundles it, and registering it would be a no-op that the
  * guardrail would then have to special-case in the opposite direction.
  */
 const LOCALE_DATA: ReadonlyArray<readonly [locale: string, data: unknown]> = [
-  ['fr', localeFr],
+  ['ar', localeAr],
   ['de', localeDe],
+  ['es', localeEs],
+  ['fr', localeFr],
+  ['he', localeHe],
+  ['it', localeIt],
   ['ja', localeJa],
   ['nl', localeNl],
-  ['th', localeTh],
-  ['zh', localeZh],
+  ['sv', localeSv],
 ];
 
 /** Registers Angular locale data for every non-English locale we ship. */

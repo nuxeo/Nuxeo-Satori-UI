@@ -4,8 +4,8 @@
  * `/satori/`.
  *
  * The root keeps serving what it always has, so every existing link to
- * https://nuxeo.github.io/agentic-ui-poc/ still lands on the Material Storybook. `/satori/` is new
- * and carries Satori's tokens and fonts, which the Satori package owners approved publishing.
+ * https://nuxeo.github.io/Nuxeo-Satori-UI/ still lands on the Material Storybook. `/satori/` is
+ * new and carries Satori's tokens and fonts, which the Satori package owners approved publishing.
  *
  * A shell `cp -R` with interpolated paths is how a blank site gets published: a renamed output
  * directory copies nothing, the deploy succeeds, and the site is an empty shell nobody notices

@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -39,6 +39,7 @@ import {
 import {
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
+  ExtensionComponentRegistry,
   ExtensionRuleContextService,
   PACKAGED_DOCUMENT_TABS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
@@ -47,7 +48,15 @@ import {
 } from '@nuxeo/satori-platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
-import { NxsToastService } from '@nuxeo/satori-platform/components';
+import {
+  NXS_PUBLISH_DIALOG_ID,
+  NxsPublishDialogComponent,
+  NxsToastService,
+} from '@nuxeo/satori-platform/components';
+
+/** A customer's replacement for the publish dialog, registered under its ID. */
+@Component({ selector: 'lib-custom-publish-dialog', template: '' })
+class CustomPublishDialogComponent {}
 
 /**
  * Toolbar behaviour, document actions, and the dialogs they open.
@@ -127,6 +136,9 @@ function workflow(over: Partial<NuxeoWorkflow> = {}): NuxeoWorkflow {
 interface DialogRefLike {
   afterClosed: () => Observable<unknown>;
 }
+
+/** The signed-in username the component sees; a test can make it an external share recipient. */
+let currentUsername = 'tester';
 
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument> => of(doc())),
@@ -322,7 +334,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         { provide: AiChatService, useValue: { openPanel: vi.fn() } },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(false) } },
         { provide: NuxeoApiBase, useValue: { nxqlSearch: vi.fn(() => of({ entries: [] })) } },
-        { provide: CURRENT_USERNAME, useValue: () => 'tester' },
+        { provide: CURRENT_USERNAME, useValue: () => currentUsername },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {
@@ -1198,16 +1210,64 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         ...over,
       });
 
-    it('publishes the document on screen, with its versions read from the repository', async () => {
-      const v = doc({ uid: 'v1', properties: { 'uid:major_version': 1 } });
-      mockDetailService.getVersionsDirect.mockReturnValue(of([v]));
+    it('opens the dialog registered for publishing, for the document on screen', async () => {
       await build(publishable());
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
+      await Promise.resolve();
 
-      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-1');
-      expect(lastDialogData()).toMatchObject({ documentUid: 'doc-1', versions: [v] });
+      expect(mockDialog.open.mock.calls.at(-1)?.[0]).toBe(NxsPublishDialogComponent);
+      expect(lastDialogData()).toMatchObject({
+        documentUid: 'doc-1',
+        documentTitle: doc().title,
+        versionableUid: 'doc-1',
+      });
+    });
+
+    it('opens a replacement registered under the publish dialog ID instead', async () => {
+      await build(publishable());
+      TestBed.inject(ExtensionComponentRegistry).register({
+        [NXS_PUBLISH_DIALOG_ID]: CustomPublishDialogComponent,
+      });
+      mockDialog.open.mockClear();
+
+      component.openPublishDialog();
+      await Promise.resolve();
+
+      expect(mockDialog.open.mock.calls.at(-1)?.[0]).toBe(CustomPublishDialogComponent);
+    });
+
+    it('does not open a lazily resolved dialog for a document the user has since left', async () => {
+      await build(publishable());
+      let resolve!: (c: typeof CustomPublishDialogComponent) => void;
+      TestBed.inject(ExtensionComponentRegistry).register({
+        [NXS_PUBLISH_DIALOG_ID]: () => new Promise((r) => (resolve = r)),
+      });
+      mockDialog.open.mockClear();
+
+      component.openPublishDialog();
+      component['documentLoadGeneration'] += 1;
+      resolve(CustomPublishDialogComponent);
+      await new Promise((r) => setTimeout(r));
+
+      expect(mockDialog.open).not.toHaveBeenCalled();
+    });
+
+    it('does not open a lazily resolved dialog once the user has left the document page', async () => {
+      await build(publishable());
+      let resolve!: (c: typeof CustomPublishDialogComponent) => void;
+      TestBed.inject(ExtensionComponentRegistry).register({
+        [NXS_PUBLISH_DIALOG_ID]: () => new Promise((r) => (resolve = r)),
+      });
+      mockDialog.open.mockClear();
+
+      component.openPublishDialog();
+      fixture.destroy();
+      resolve(CustomPublishDialogComponent);
+      await new Promise((r) => setTimeout(r));
+
+      expect(mockDialog.open).not.toHaveBeenCalled();
     });
 
     it('publishes a version as it is, as Web UI does, listing its live document’s versions', async () => {
@@ -1222,20 +1282,14 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
+      await Promise.resolve();
 
       expect(toast.error).not.toHaveBeenCalled();
-      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-live');
-      expect(lastDialogData()).toMatchObject({ documentUid: 'v-1-0', versionLabel: '1.0' });
-    });
-
-    it('still opens the dialog with no versions when the fetch fails', async () => {
-      mockDetailService.getVersionsDirect.mockReturnValue(throwError(() => new Error('500')));
-      await build(publishable());
-      mockDialog.open.mockClear();
-
-      component.openPublishDialog();
-
-      expect(lastDialogData()).toMatchObject({ versions: [] });
+      expect(lastDialogData()).toMatchObject({
+        documentUid: 'v-1-0',
+        versionLabel: '1.0',
+        versionableUid: 'doc-live',
+      });
     });
 
     it('offers the renditions the document actually has', async () => {
@@ -1250,6 +1304,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
+      await Promise.resolve();
 
       expect(lastDialogData()).toMatchObject({
         renditions: [
@@ -1264,6 +1319,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
+      await Promise.resolve();
 
       expect(lastDialogData()).toMatchObject({
         renditions: [
@@ -1281,6 +1337,8 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       mockDetailService.getPublishedVersions.mockClear();
 
       component.openPublishDialog();
+      await Promise.resolve();
+      await Promise.resolve();
 
       expect(mockDetailService.getPublishedVersions).toHaveBeenCalledWith('doc-1');
     });
@@ -1390,6 +1448,60 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.abandoningWorkflow()).toBe(false);
       expect(toast.error).toHaveBeenCalledWith('Failed to abandon workflow.');
+    });
+
+    it('hides a workflow banner the user dismisses, and leaves the workflow running', async () => {
+      const wf = workflow();
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([wf]));
+      await build();
+      expect(component.visibleWorkflows()).toEqual([wf]);
+
+      component.dismissWorkflowBanner(wf);
+
+      expect(component.visibleWorkflows()).toEqual([]);
+      expect(component.documentWorkflows()).toEqual([wf]);
+      expect(mockWorkflowService.cancelWorkflow).not.toHaveBeenCalled();
+    });
+
+    it('shows the banner again for a workflow started after one was dismissed', async () => {
+      const first = workflow({ id: 'wf-1' });
+      const second = workflow({ id: 'wf-2' });
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([first]));
+      await build();
+      component.dismissWorkflowBanner(first);
+
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([first, second]));
+      component.selectedWorkflowModel.set('SerialDocumentReview');
+      component.startProcess();
+
+      expect(component.visibleWorkflows()).toEqual([second]);
+    });
+
+    it('shows a dismissed banner again when the route leaves the document and comes back', async () => {
+      // Angular reuses this component when only the route param changes, so the reset on
+      // document change has to run on the reused instance, not on a fresh one.
+      const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-1' }));
+      TestBed.overrideProvider(ActivatedRoute, {
+        useValue: {
+          paramMap: route,
+          queryParamMap: of(convertToParamMap({})),
+          snapshot: { queryParamMap: convertToParamMap({}) },
+        },
+      });
+      const wf = workflow();
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([wf]));
+      await build();
+      component.dismissWorkflowBanner(wf);
+      expect(component.visibleWorkflows()).toEqual([]);
+
+      mockDetailService.getFullDocument.mockReturnValue(of(doc({ uid: 'doc-2' })));
+      route.next(convertToParamMap({ uid: 'doc-2' }));
+      await fixture.whenStable();
+      mockDetailService.getFullDocument.mockReturnValue(of(doc()));
+      route.next(convertToParamMap({ uid: 'doc-1' }));
+      await fixture.whenStable();
+
+      expect(component.visibleWorkflows()).toEqual([wf]);
     });
 
     it('turns an i18n task key into a readable label', async () => {
@@ -1522,6 +1634,21 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.detailsPanelToggleLabelKey()).toBe('document-detail.show-details');
       component.openPropertiesPanel();
       expect(component.detailsPanelToggleLabelKey()).toBe('document-detail.hide-details');
+    });
+
+    it('shows an external share recipient the ancestor folders as text, not links', async () => {
+      currentUsername = 'transient/recipient@example.invalid';
+      try {
+        await build(doc({ path: '/default-domain/workspaces/ws/report', title: 'Report' }));
+
+        expect(component.breadcrumbItems()).toEqual([
+          { label: 'default-domain' },
+          { label: 'workspaces' },
+          { label: 'ws' },
+        ]);
+      } finally {
+        currentUsername = 'tester';
+      }
     });
 
     it('builds router links for every ancestor folder but not the document itself', async () => {

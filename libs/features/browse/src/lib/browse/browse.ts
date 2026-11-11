@@ -16,12 +16,15 @@ import {
   NxsFolderHeaderComponent,
   NxsPagerComponent,
   NxsPermissionsPanelComponent,
+  NxsShareExternalDialogComponent,
   NxsSpinnerComponent,
   NxsTagComponent,
   NxsTagEditorComponent,
   NxsThumbnailComponent,
+  NxsUpdatePermissionDialogComponent,
   NxsUploadQueue,
   NxsUploadQueueComponent,
+  nxsAceTimeFrame,
   nxsErrorStatus,
   provideNxsThumbnailCache,
   type NxsBreadcrumbItem,
@@ -35,6 +38,8 @@ import {
   type NxsRenameDialogData,
   type NxsMenuAction,
   type NxsPickableColumn,
+  type NxsShareExternalDialogData,
+  type NxsUpdatePermissionDialogData,
   NxsToastService,
   nxsVisibleText,
   provideNxsToast,
@@ -51,7 +56,7 @@ import {
   untracked,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { NavigationEnd, Router } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, UrlTree } from '@angular/router';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -128,7 +133,6 @@ import {
   postTrashBrowseRouterUrl,
   isCollectionDocument,
   formatRelativeTime,
-  formatAceDateRange,
   permissionRightLabel,
   DocTypeLabelPipe,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -150,12 +154,8 @@ import {
 } from '@nuxeo/satori-platform/ui';
 
 import {
-  UpdatePermissionDialogComponent,
-  UpdatePermissionDialogData,
   DeletePermissionDialogComponent,
   DeletePermissionDialogData,
-  ShareExternalDialogComponent,
-  ShareExternalDialogData,
 } from '@agentic-ui/shared-permission-dialogs';
 
 import {
@@ -217,6 +217,13 @@ const SORT_FIELDS: Readonly<Record<string, string>> = {
 const PAGE_SIZE = 50;
 
 /**
+ * Session-storage key the app shell writes the share link's landing path under. Duplicated as a
+ * literal in apps/nuxeo-ui/src/app/auth/share-token.util.ts because a feature library cannot import the
+ * app; keep the two in step.
+ */
+const SHARED_DOCUMENT_STORAGE_KEY = 'nxs.sharedDocumentPath';
+
+/**
  * How long a changed filter waits before the listing reloads.
  *
  * The filters run on the server now, so each keystroke would otherwise be a request. The loader's
@@ -260,6 +267,7 @@ export const FILTER_DEBOUNCE_MS = 250;
     MatIconModule,
     MatProgressSpinnerModule,
     MatButtonModule,
+    RouterLink,
     MatTabsModule,
     MatTableModule,
     MatSortModule,
@@ -365,14 +373,31 @@ export class BrowseComponent {
   // Permissions tab
   readonly permissionsLoaded = signal(false);
   readonly permissionsLoading = signal(false);
+  /**
+   * Bumped by every permissions read and by every change of folder, so an answer is applied only
+   * by the read that is still current. Comparing paths or uids cannot tell a first visit to a
+   * folder from a return to it.
+   */
+  private permissionsRequest = 0;
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadPermissions();
+  /**
+   * The document's own pending and effective external shares, as document detail and collections
+   * list them. An inherited share is the parent's to edit, and an archived one has expired.
+   */
   readonly externalAces = computed<NuxeoAce[]>(() => {
-    const doc = this.currentDoc();
-    const acls = doc?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
+    const acls = this.currentDoc()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
     if (!acls) return [];
-    return acls.flatMap((a) => a.aces).filter((ace) => ace.externalUser && ace.granted);
+    return acls
+      .filter((acl) => acl.name !== 'inherited')
+      .flatMap((acl) => acl.aces)
+      .filter(
+        (ace) =>
+          ace.externalUser &&
+          ace.granted &&
+          (ace.status === 'pending' || ace.status === 'effective'),
+      );
   });
   readonly canWriteCurrentDoc = computed(() => canWriteDocument(this.currentDoc()));
   readonly canCreateContentHere = computed(() => {
@@ -405,6 +430,16 @@ export class BrowseComponent {
   readonly canManageCurrentPermissions = computed(() =>
     canManageDocumentPermissions(this.currentDoc()),
   );
+  /**
+   * The type's `userVisiblePermissions` from the permissions read, the rights the external-share
+   * dialogs offer. Held apart from `currentDoc`, which every listing refresh replaces with a read
+   * that does not ask for them.
+   */
+  private readonly typeRights = signal<{ uid: string; permissions: string[] } | null>(null);
+  private readonly visiblePermissions = computed(() => {
+    const rights = this.typeRights();
+    return rights && rights.uid === this.currentDoc()?.uid ? rights.permissions : undefined;
+  });
   readonly actionInProgress = signal<string | null>(null);
 
   // History tab
@@ -859,7 +894,20 @@ export class BrowseComponent {
     })),
   );
 
+  /**
+   * The trail as the signed-in user may use it. A transient user (an external recipient of a share)
+   * can open none of the ancestors, so they are shown as plain text and only the current item stays
+   * as it is. Presentation only: the server still refuses those paths to the same user.
+   */
   readonly breadcrumbs = computed<NxsBreadcrumbItem[]>(() => {
+    const trail = this.fullTrail();
+    if (!this.isExternalUser()) return trail;
+    return trail.map((crumb, index) =>
+      index === trail.length - 1 ? crumb : { label: crumb.label },
+    );
+  });
+
+  private readonly fullTrail = computed<NxsBreadcrumbItem[]>(() => {
     this.currentLang();
     const doc = this.currentDoc();
     // A folder that could not be opened has no document, so its trail comes from the address and
@@ -892,6 +940,37 @@ export class BrowseComponent {
     }
     return crumbs;
   });
+
+  /**
+   * A folder the user may not read. Shown by the browse-level error state rather than the list, so
+   * the "back to shared document" action can sit in it; other failures keep the list's own state.
+   */
+  readonly isForbidden = computed(() => this.error() !== null && this.errorStatus() === 403);
+
+  /** A transient user: the `transient/` principal Nuxeo gives an external share recipient. */
+  isExternalUser(): boolean {
+    return (this.currentUsername() ?? '').startsWith('transient/');
+  }
+
+  /**
+   * Where the share link the recipient came in by landed, as a route to navigate to, for the "back to
+   * shared document" action. Written by the app shell when the share token is exchanged, together with
+   * the principal it was issued to: offered only to that same principal, and never as a raw string, so
+   * an encoded path resolves once. Null when it is not there or was issued to someone else.
+   */
+  sharedDocumentLink(): UrlTree | null {
+    try {
+      const raw = window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY);
+      if (!raw) return null;
+      const stored = JSON.parse(raw) as { user?: unknown; path?: unknown };
+      if (typeof stored.user !== 'string' || typeof stored.path !== 'string') return null;
+      if (stored.user !== this.currentUsername()) return null;
+      if (!stored.path.startsWith('/')) return null;
+      return this.router.parseUrl(stored.path);
+    } catch {
+      return null;
+    }
+  }
 
   readonly showBreadcrumbs = computed(() => {
     const doc = this.currentDoc();
@@ -1027,6 +1106,11 @@ export class BrowseComponent {
           // actions in the header, its count, nor the end of the trail. The same folder failing
           // on another page or order keeps them.
           if (payload.nuxeoPath !== this.openedPath) {
+            // Including a permissions read still in flight for it. A Permissions tab opened while
+            // this listing was on its way read the folder the user had left, and an answer that
+            // outlived the failure would hand that folder's ACL and rights back under an address
+            // that never opened.
+            this.invalidatePermissions();
             this.openedPath = null;
             this.currentDoc.set(null);
             this.entries.set([]);
@@ -1042,8 +1126,12 @@ export class BrowseComponent {
           void this.router.navigateByUrl(`/browse${redirectTo}`, { replaceUrl: true });
           return;
         }
+        // A Permissions tab opened before this listing arrived read the folder the user had left.
+        const folderChanged = this.currentDoc()?.uid !== folder.uid;
+        if (folderChanged) this.invalidatePermissions();
         this.currentDoc.set(folder);
         this.openedPath = payload.nuxeoPath;
+        if (folderChanged && this.activeTabIndex() === 1) this.loadPermissions();
         this.unopenedPath.set(null);
         this.browseContext.setFromNuxeoPath(folder.path);
         this.entries.set(entries);
@@ -1197,8 +1285,7 @@ export class BrowseComponent {
   private resetBrowseTabState(): void {
     this.historyLoaded = false;
     this.trashLoaded = false;
-    this.permissionsLoaded.set(false);
-    this.permissionsLoading.set(false);
+    this.invalidatePermissions();
     this.activeTabIndex.set(0);
     this.pendingPasteEntries.clear();
     this.syncPendingPasteList();
@@ -2536,13 +2623,9 @@ export class BrowseComponent {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
 
+  /** The calendar days the share's writer picked, as the update dialog reads them. */
   aceTimeFrame(ace: NuxeoAce): string {
-    return formatAceDateRange(
-      ace.begin,
-      ace.end,
-      (key, params) => this.translate.instant(key, params),
-      this.locale,
-    );
+    return nxsAceTimeFrame(ace, (key, params) => this.translate.instant(key, params), this.locale);
   }
 
   displayUsername(ace: NuxeoAce): string {
@@ -2559,34 +2642,50 @@ export class BrowseComponent {
     if (!doc || this.permissionsLoading()) return;
     if (this.permissionsLoaded() && !force) return;
 
+    const request = ++this.permissionsRequest;
     this.permissionsLoading.set(true);
     this.detailService
       .getDocumentPermissions(doc.uid)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (updated) => {
-          this.applyPermissionsDoc(updated);
-          this.permissionsLoaded.set(true);
+          if (request !== this.permissionsRequest) return;
+          this.permissionsLoaded.set(this.applyPermissionsDoc(updated));
           this.permissionsLoading.set(false);
         },
         error: () => {
+          if (request !== this.permissionsRequest) return;
           this.permissionsLoading.set(false);
           this.toast.error(this.translate.instant('browse.message.failed-to-load-permissions'));
         },
       });
   }
 
-  private applyPermissionsDoc(updated: NuxeoDocument): void {
+  /** Merges a permissions read into the folder on screen. Returns false if there is none left. */
+  private applyPermissionsDoc(updated: NuxeoDocument): boolean {
     const existing = this.currentDoc();
-    if (!existing) {
-      this.currentDoc.set(updated);
-      return;
-    }
+    // Every outcome that takes a folder off screen invalidates its permissions read, so a read
+    // that is still current always has a document to merge into. Dropping rather than installing
+    // keeps that true the next time an outcome is added: the cost of forgetting is a panel with
+    // no permissions in it, not the folder the user left reappearing under another one's address.
+    if (!existing) return false;
+    const visible = updated.contextParameters?.['userVisiblePermissions'];
+    this.typeRights.set(
+      Array.isArray(visible) ? { uid: updated.uid, permissions: visible as string[] } : null,
+    );
     this.currentDoc.set(mergeDocumentPermissionsContext(existing, updated));
+    return true;
   }
 
   private reloadPermissions(): void {
     this.loadPermissions(true);
+  }
+
+  /** Forgets this tab's permissions read, and discards any answer still on its way. */
+  private invalidatePermissions(): void {
+    this.permissionsRequest++;
+    this.permissionsLoaded.set(false);
+    this.permissionsLoading.set(false);
   }
 
   deletePermission(ace: NuxeoAce): void {
@@ -2615,36 +2714,37 @@ export class BrowseComponent {
   shareWithExternal(): void {
     const doc = this.currentDoc();
     if (!doc) return;
-    const dialogRef = this.dialog.open(ShareExternalDialogComponent, {
-      data: { documentUid: doc.uid } satisfies ShareExternalDialogData,
-      width: '520px',
-    });
-    dialogRef
+    this.dialog
+      .open(NxsShareExternalDialogComponent, {
+        maxWidth: '95vw',
+        data: {
+          documentUid: doc.uid,
+          permissions: this.visiblePermissions(),
+        } satisfies NxsShareExternalDialogData,
+      })
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((created: boolean | undefined) => {
-        if (created) {
-          this.reloadPermissions();
-          this.toast.show(this.translate.instant('browse.message.shared-with-external-user'));
-        }
+      .subscribe((shared: boolean | undefined) => {
+        if (shared) this.reloadPermissions();
       });
   }
 
   editExternalPermission(ace: NuxeoAce): void {
     const doc = this.currentDoc();
     if (!doc) return;
-    const dialogRef = this.dialog.open(UpdatePermissionDialogComponent, {
-      data: { documentUid: doc.uid, ace, isExternal: true } satisfies UpdatePermissionDialogData,
-      width: '520px',
-    });
-    dialogRef
+    this.dialog
+      .open(NxsUpdatePermissionDialogComponent, {
+        maxWidth: '95vw',
+        data: {
+          documentUid: doc.uid,
+          ace,
+          permissions: this.visiblePermissions(),
+        } satisfies NxsUpdatePermissionDialogData,
+      })
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((updated: boolean | undefined) => {
-        if (updated) {
-          this.reloadPermissions();
-          this.toast.show(this.translate.instant('browse.message.permission-updated'));
-        }
+        if (updated) this.reloadPermissions();
       });
   }
 

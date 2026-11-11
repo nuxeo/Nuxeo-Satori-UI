@@ -157,6 +157,27 @@
               }
             }
           ]
+        },
+        "favicon": {
+          "description": "The browser tab icon; null keeps the one the application ships. Same forms and the same checks as logo. alt is accepted and not used: a tab icon has no accessible name, the tab title is its label.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["src"],
+              "properties": {
+                "src": {
+                  "type": "string"
+                },
+                "alt": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -266,7 +287,8 @@
               },
               "path": {
                 "type": "string",
-                "pattern": "^/"
+                "description": "A path on the Nuxeo origin, e.g. /nuxeo/oauth2/authorization/azure. A leading // or /\\ is read by the browser as another host, and a backslash or control character anywhere makes the value differ from the path it looks like, so the application refuses all of them (NXSAT-731).",
+                "pattern": "^/(?![/\\\\])[^\\\\\\u0000-\\u001f\\u007f]*$"
               }
             }
           }

@@ -1,3 +1,4 @@
+import { expect, fn, userEvent, within } from 'storybook/test';
 import type { Provider } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
@@ -16,6 +17,8 @@ import {
   NxsShareExternalDialogComponent,
   type NxsShareExternalDialogData,
 } from './share-external-dialog.component';
+
+const closeDialog = fn(action('dialogRef.close'));
 
 /** Logs each call in the Actions panel under `name`, then lets the fake answer it. */
 function logged<A extends unknown[], R>(
@@ -42,7 +45,7 @@ const withDialog = (
     MatDialogRef<NxsShareExternalDialogComponent>,
     'close' | 'backdropClick' | 'keydownEvents' | 'disableClose'
   > = {
-    close: logged('dialogRef.close', () => undefined),
+    close: closeDialog,
     backdropClick: () => NEVER,
     keydownEvents: () => NEVER,
     disableClose: false,
@@ -106,3 +109,15 @@ export const Refused: Story = {
 // dates (`end: '2031-02-01T00:00:00.000Z'`, `begin`/`end`), so the narrow-width behavior is already
 // exercised. Adding a programmatic play function here to pre-fill Share external's dates would test
 // the check itself, not the user-facing dialog, since users never see pre-filled dates in this form.
+
+/** The preview stays mounted; this asserts the dialog's close request. */
+export const KeyboardCancellation: Story = {
+  ...Default,
+  play: async ({ canvasElement }) => {
+    closeDialog.mockClear();
+    const cancel = await within(canvasElement).findByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(closeDialog).toHaveBeenCalledTimes(1);
+  },
+};

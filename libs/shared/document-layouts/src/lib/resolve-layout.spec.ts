@@ -644,6 +644,51 @@ describe('edit and create layouts', () => {
     }
   });
 
+  describe('the stock schemas nobody types into', () => {
+    /** As `/config/types/Workspace`, `/Collection` and `/Domain` answer, plus a customer schema. */
+    const stock = (): DocumentTypeDefinition => ({
+      name: 'Workspace',
+      schemas: [
+        { name: 'webcontainer', prefix: 'webc', fields: { isWebContainer: { type: 'boolean' } } },
+        { name: 'publishing', prefix: 'publish', fields: { sections: { type: 'string[]' } } },
+        { name: 'collection', prefix: 'collection', fields: { documentIds: { type: 'string[]' } } },
+        { name: 'domain', prefix: 'domain', fields: { display_type: { type: 'string' } } },
+        { name: 'acme', prefix: 'acme', fields: { region: { type: 'string' } } },
+      ],
+    });
+    const ids = (mode: 'metadata' | 'edit' | 'create') =>
+      generateLayout(stock(), mode).sections.map((section) => section.id);
+
+    it('leaves them out of the generated edit and create forms, as Web UI does', () => {
+      expect(ids('edit')).toEqual(['acme']);
+      expect(ids('create')).toEqual(['acme']);
+    });
+
+    it('keeps them in the read-only metadata layout', () => {
+      expect(ids('metadata')).toEqual([
+        'acme',
+        'collection',
+        'domain',
+        'publishing',
+        'webcontainer',
+      ]);
+    });
+
+    it('still lets a create file name one of their fields', () => {
+      const read = readLayoutFile({
+        version: 1,
+        sections: [{ id: 'web', fields: ['webc:isWebContainer', 'acme:region'] }],
+      });
+      if ('invalid' in read) throw new Error(read.invalid);
+      const { layout, skipped } = applyLayoutFile(stock(), 'create', read);
+      expect(layout.sections[0]?.fields.map((f) => f.xpath)).toEqual([
+        'webc:isWebContainer',
+        'acme:region',
+      ]);
+      expect(skipped).toEqual([]);
+    });
+  });
+
   it('lets a layout file make a field required, never optional', () => {
     const read = readLayoutFile({
       version: 1,

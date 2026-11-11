@@ -51,6 +51,12 @@ owns is narrower: that a preview shows the dialog a page opens. Reflow (1.4.10) 
 stay a11y-scout's, on the application's screens; a preview that fits 320 px says nothing about a
 route that opens it.
 
+The component stories also assert keyboard API contracts: emitted selections, activation,
+overlay dismissal and focus restoration. Their inventory and preview limitations are in
+[Component keyboard contracts](satori-components/keyboard-contracts.md). These behavior
+assertions do not add a WCAG verdict or change the ownership table below. In particular, a
+dialog preview with a fake `MatDialogRef` cannot establish the real modal's focus trap.
+
 ### Why axe is owned by `phase-6-a11y.mjs` and not by a11y-scout
 
 Both run axe, so one of them had to give it up. phase-6 keeps it for three reasons:

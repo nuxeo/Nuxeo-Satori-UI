@@ -63,16 +63,88 @@ fragment's `content` is a `bootstrap` fragment in your configuration package.
 | `nuxeoApiOrigin`                         | Where the Nuxeo REST API lives                                               |
 | `branding`                               | Product name, browser tab title, and `logo` (below)                          |
 | `themes` / `defaultThemeId`              | Named token sets applied to `<html>`                                         |
-| `defaultLanguage` / `availableLanguages` | i18n                                                                         |
+| `defaultLanguage` / `availableLanguages` | i18n — see the coverage caveat below                                         |
+| `sso`                                    | Sign-in buttons and the post-login return URL (below)                        |
 | `presales`                               | Presales presets, honoured only where a package sets `presetSwitching: true` |
+
+### `availableLanguages` is not uniform coverage
+
+An advertised language is **two** promises, and only one of them is ours to keep.
+
+The application's own catalogue is ours, and every advertised language has a complete one —
+`checkAdvertisedLocalesShip` fails a configuration that advertises a language without one. The
+shared-component strings are the vendor's, and `@hylandsoftware/satori-ui` ships **fifteen**
+catalogues: `de en es fr it pl pt` plus the regional variants `de-DE`, `en-AU`, `en-US`,
+`es-ES`, `fr-FR`, `it-IT`, `pl-PL` and `pt-PT`.
+
+**The match is exact on the catalogue filename**, which is the part worth knowing. A deployment
+set to `en-US` or `fr-FR` is covered, because those files exist. One set to `pt-BR` is **not**,
+even though `pt` exists — nothing falls back from a regional variant to its base language, so
+`pt-BR` is in the same position as a language the vendor never shipped. **Any locale id outside
+those fifteen renders every `sat.*` string in English** — including the accessible names on the
+navigation rail — inside an otherwise translated application. Tracked upstream as
+[DS-2803](https://hyland.atlassian.net/browse/DS-2803); it cannot be closed in this repository,
+because the strings are the vendor's to author.
+
+The advertised set is deliberately not listed here. It is Layer 0 configuration, it changes
+without this document, and a list written down in prose is one that goes stale silently and is
+believed anyway. Read it from `availableLanguages` in `bootstrap-config.ts` and intersect it with
+the vendor set above; `checkUpstreamCatalogueLanguages` keeps the loader's view of that vendor set
+equal to what the installed package actually contains, so the intersection is always computable
+rather than remembered.
+
+A customer adding a language gets the same split: their own catalogue is honoured, the shared
+components are not. Nothing breaks and nothing 404s — the loader asks the vendor's folder only
+for languages it ships — but the shared strings stay in the fallback language.
+
+> **Right-to-left is a separate concern, and it is being addressed elsewhere.** The vendor's
+> components carry `:dir(rtl)` rules and depend on `@angular/cdk/bidi`. On `main` as of this
+> change, this application sets no `dir` at all — so advertising a right-to-left language would
+> render its text correctly and its layout mirrored the wrong way. **NXSAT-752 sets the document
+> direction from the active language**; check whether it has landed before relying on either
+> statement, and do not take the absence recorded here as current.
+
+### `defaultLanguage` must name a language this build ships
+
+An unsupported value — a typo, or a language dropped from a later release — falls back to `en`,
+and the console records one `[agentic-ui-config]` diagnostic naming the value, the reason and the
+fallback. It is not honoured as written, for two reasons that are both about honesty rather than
+about the strings: `<html lang>` is what a screen reader picks a voice from and what browser
+translation offers as the source language, so announcing a language the text is not in is a WCAG
+3.1.1 failure (NXSAT-733); and asking for a catalogue that cannot exist answers 404 on every
+load.
+
+A value is honoured only if **both** are true:
+
+| Check                                | Question                             | Who decides  |
+| ------------------------------------ | ------------------------------------ | ------------ |
+| a catalogue ships in the build       | will the text actually render in it? | this build   |
+| it is listed in `availableLanguages` | does this deployment offer it?       | the customer |
+
+`availableLanguages` alone is **not** sufficient, and this is the case worth knowing about when
+writing a fragment: `{ "defaultLanguage": "es", "availableLanguages": ["en", "es"] }` is valid
+configuration that parses cleanly, and because no `es.json` ships, the application's own strings
+would render English under `<html lang="es">`. `checkAdvertisedLocalesShip` cannot catch it —
+that gate reads the packaged config, not a customer's — so the build-time check is what refuses
+it, and the deployment gets `en` with a diagnostic rather than a page that misdescribes itself.
+
+Strings falling back to English is separate, deliberate, and unchanged: `setFallbackLang('en')`
+means any individual key missing from a catalogue renders its English source rather than a raw
+key.
+
+One locale is admitted by a third route, and it is not reachable from a deployment: the generated
+`zz` pseudo-locale, which `npm run i18n:audit` writes into the build to find strings hard-coded
+past the translation layer. It is honoured **only** under a development server — a release build
+refuses it exactly like any other language it ships no catalogue for — so it cannot be configured
+into a customer deployment.
 
 ### `branding.logo`
 
 `{ "src": "assets/acme-logo.svg", "alt": "Acme Insurance" }` replaces the Satori word mark in the header
 and the Satori lockup on the login page. `null` or absent keeps the Satori marks. It does not
 replace the Hyland mark at the top of the navigation rail or the "Content Innovation Cloud" title
-shown when the rail is expanded (both hard-coded in Satori's `sat-platform-nav`), and there is no
-key for the favicon.
+shown when the rail is expanded (both hard-coded in Satori's `sat-platform-nav`). The browser tab
+icon has its own key, `branding.favicon`, below.
 
 - **`src`** is a relative path resolved against the directory `bootstrap.json` is served from,
   `/nuxeo/agentic-ui-config/`. The servlet serves images only under `assets/`, so a logo is
@@ -175,6 +247,120 @@ key for the favicon.
 - Contributed assets are served at `/nuxeo/agentic-ui-config/assets/<name>` (NXSAT-312). The servlet path is outside every
   `NuxeoAuthenticationFilter` URL pattern, which is what lets the login page load the logo before
   sign-in; the NXSAT-312 rehearsal fetched a contributed SVG there anonymously, as `image/svg+xml`.
+
+### `branding.favicon`
+
+`{ "src": "assets/acme-icon.png" }` replaces the browser tab icon. `null` or absent keeps the one
+the application bundle ships. It was the last branding surface that was not configurable
+(NXSAT-313), which showed: the tab _title_ has followed `branding.documentTitle` since NXSAT-722,
+so a demo branded for a prospect put their name next to the Nuxeo mark.
+
+- **Exactly the same forms and exactly the same checks as `branding.logo`.** A relative path
+  inside the configuration directory, an `https:` URL or a `data:image/` URI are accepted;
+  backslashes, control characters, a non-`https:` scheme, an absolute path, a `..` or `%2e%2e`
+  segment and any host that serves Nuxeo are refused. Not "the same rules" as a description —
+  literally the same functions, so a correction to one applies to the other. Four of the logo's
+  rules were added after review found a way past the first version, and a second implementation
+  would have had none of them.
+- **A refusal is reported the same way**, naming the key, the value, the fragment it came from and
+  the reason, once per load. The key is in the message, so a fragment that sets both a logo and a
+  favicon says which one was refused.
+- **A refused or absent value shows the packaged icon**, which is what every deployment saw before
+  this key existed.
+- **One icon, not a platform set.** Web UI ships six (`favicon-32x32.png`, `favicon-16x16.png`,
+  `favicon.ico`, `safari-pinned-tab.svg`, `apple-touch-icon.png`,
+  `ms-touch-icon-144x144-precomposed.png`) and has no configuration key for any of them — a
+  customer replaces the files inside a bundle. We cannot do that, because our Angular bundle is
+  installed whole and replaced on every upgrade, so a key is both the only mechanism open to us
+  and the better one. Accepting a single icon is a recorded limitation rather than an oversight;
+  the Apple and Microsoft variants are not addressable for Beta.
+- **`alt` is accepted and not used.** The shape is shared with `branding.logo`; a tab icon has no
+  accessible name to carry, because the tab title is its label.
+- The `type` hint `index.html` ships is removed when a configured icon is in force. It says
+  `image/x-icon`, which is false of the `.png` or `.svg` a customer is most likely to contribute,
+  and a browser may use it to skip a format it believes it cannot render.
+
+### Presales presets, and why they are not a hole in configuration-as-code
+
+One demo server can be shown to several prospects, each with their own branding, with nothing but
+a link — and this is **already shipped**, which is worth stating plainly because the most common
+request for it comes from people who believe it needs a fork (NXSAT-684).
+
+A bootstrap fragment declares named presets under `presales`; each carries a whole `bootstrap` and
+`manifest` patch applied **after** every package's fragments, so it wins over all of them:
+application title, document title, logo, favicon, the entire theme token map, `defaultThemeId`,
+languages, and every Layer 1 capability. `config-packages/presales-demo` ships two worked
+prospects:
+
+```
+https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance
+https://<server>/nuxeo/agentic-ui/?preset=logistics    # Globex Logistics
+https://<server>/nuxeo/agentic-ui/?preset=             # clear it
+```
+
+The choice is remembered in `localStorage` for that browser and a badge in the header names the
+preset in force. The full key reference is in
+[the extension reference](../../docs/extension-reference.md#presales-presets).
+
+**This does not contradict the regulated-customer requirement that configuration is code.** The
+distinction is between the content and the selection, and only one of them is runtime:
+
+- A preset's **content** is a JSON fragment inside a reviewed, versioned, built-from-source
+  Marketplace package. Nothing is stored in the repository, nothing is edited on the server, and
+  it reaches a server by the same install path as every other fragment.
+- Only the **selection** is runtime, and it is per browser, held in `localStorage`, invisible to
+  every other user, and backed by no server-side state at all. It is a view switch in one browser,
+  not multi-tenancy.
+- **Nothing happens unless a package sets `presetSwitching: true`.** A customer production server
+  ignores `?preset=` and the stored choice alike, and records in the diagnostics and the console
+  that it did. A later fragment can turn it off, so a customer package layered over a demo one
+  wins.
+
+**What still costs a rebuild, said honestly:** adding a _new_ prospect means editing
+`bootstrap.json`, raising the version, rebuilding, reinstalling and restarting — two to four
+minutes, because presets are package content and package content is read once at startup. The fix
+is the development override directory: with `nuxeo.agentic.ui.config.dev=true` a new preset is one
+`docker cp` and a reload. See "The fast loop while you are tuning a value" in
+`config-packages/presales-demo/README.md`.
+
+### `sso.endpoints`
+
+`{ "id": "azure", "label": "Log In With Azure SAML", "path": "/nuxeo/oauth2/authorization/azure" }`
+adds a sign-in button to the login page. The registration id has to match the Nuxeo
+OpenID/SAML setup, which is exactly the per-deployment fact that used to require editing our
+source. `postLoginPath` and `returnQueryParam` control the return URL Nuxeo is asked to redirect
+to after sign-in; `returnQueryParam: null` sends none.
+
+- **`path` must be a path on the Nuxeo origin**, and only that. It must begin with a single `/`,
+  and it may contain no backslash and no control character. Those two refusals are not cosmetic:
+  the URL parser rewrites `\` as a path separator and **deletes** tabs, newlines and carriage
+  returns before it reads anything, so `/\evil.example/sso` and `/<TAB>/evil.example/sso` both
+  resolve to another host while looking like paths (NXSAT-731). An absolute address is refused
+  whatever its scheme, and the scheme is named in the message, because `javascript:` and
+  `https://idp.example` are very different mistakes to have made.
+- **A refused entry renders no button, and the refusal is reported** as
+  `[agentic-ui-config] sso.endpoints[<n>].path "<value>" from <component> was refused — <reason>`,
+  both on the console and in `diagnostics().messages`. The message names what was refused and not
+  what ended up on screen, because the outcome depends on the remaining contributions.
+- **`endpoints` is replaced, not merged entry by entry, and that matters when an entry is
+  refused.** A contribution that writes the key at all supplies the whole list: the merged value is
+  that contribution's **accepted** entries, and an earlier package's list is gone. So a
+  contribution whose every entry is refused leaves no buttons at all, and is indistinguishable from
+  the `"endpoints": []` that deliberately turns SSO off — which is the behaviour a deployment needs,
+  so it does not change. **This is not how `branding.logo` behaves**: a refused `logo.src` keeps the
+  logo an earlier layer set. Do not reason from one to the other (review of PR 519).
+- **The refusal during the merge is not the security boundary.** `AuthService.startSamlLogin` is:
+  it resolves the configured path against the Nuxeo origin and refuses to navigate unless the
+  resolved origin is that origin, so a value that never passed through the merge — the
+  `NUXEO_SAML_LOGIN_ENDPOINTS` token is public, and a host application may fill it directly — is
+  still refused at the point the browser would be sent somewhere. The comparison is on the
+  resolved URL rather than on the string, so it does not depend on having enumerated the shapes a
+  parser can reach an authority from.
+- **`postLoginPath` is held to the same rule against the application's own origin**, and a bad one
+  drops the return parameter rather than refusing the sign-in. The return path is a convenience;
+  blocking SSO over it would be the worse outcome.
+- The JSON schema the `config-package` generator writes carries the same rule, so an editor marks
+  a bad `path` as you type rather than at run time.
 
 ### Why it is contributed, not edited
 

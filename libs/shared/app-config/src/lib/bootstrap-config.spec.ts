@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  type AppBootstrapConfig,
+  type AppBrandingConfig,
   DEFAULT_APP_BOOTSTRAP_CONFIG,
   describeBrandingLogoRefusal,
+  describeSsoEndpointPathForm,
   mergeBootstrapConfig,
   nuxeoOriginsOf,
   resolveBrandingLogoUrl,
@@ -96,6 +99,112 @@ describe('branding.logo', () => {
     expect(resolveBrandingLogoUrl('https://cdn.example.com/a.svg', configUrl)).toBe(
       'https://cdn.example.com/a.svg',
     );
+  });
+});
+
+/**
+ * NXSAT-313, plan item F1. The tab icon was the last branding surface that was not configurable,
+ * so a demo branded for a prospect showed their name next to the Nuxeo mark.
+ *
+ * These assert the property the ticket turns on: `favicon` is read by the **same** function as
+ * `logo`, so every rule the logo's `src` has — and there are four of them that cost a review
+ * round each — applies to it without a second implementation to keep in step. The cases are
+ * therefore deliberately a subset of the logo's above, picked to span the rule families rather
+ * than to re-enumerate them; re-listing all 24 would be a second copy of the thing this ticket
+ * exists not to have.
+ */
+describe('branding.favicon', () => {
+  const faviconOf = (favicon: unknown) =>
+    mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, { branding: { favicon } }).branding.favicon;
+
+  it('ships absent, so the packaged icon renders', () => {
+    expect(DEFAULT_APP_BOOTSTRAP_CONFIG.branding.favicon).toBeNull();
+  });
+
+  /**
+   * The key is **optional**, so a branding object written before it existed is still a valid one
+   * — the half of the Copilot finding on PR 546 that was conceded. A required member added to an
+   * exported interface breaks every caller that constructs one, which is what made the PR's
+   * "minor" classification wrong until the key became optional.
+   *
+   * Asserted on a base with the key genuinely deleted rather than set to `null`, because `null`
+   * is the case the suite above already covers and it is not the one that used to fail to
+   * compile. The merge must leave the absence alone: normalising it to `null` would be a value
+   * the caller's base never had, and would make the `?` on the type a decoration.
+   */
+  it('leaves an absent key absent rather than normalising it to null', () => {
+    const branding: AppBrandingConfig = {
+      applicationTitle: 'Acme',
+      documentTitle: 'Acme',
+      logo: null,
+    };
+    const base: AppBootstrapConfig = { ...DEFAULT_APP_BOOTSTRAP_CONFIG, branding };
+
+    // Nothing configured, and nothing invented.
+    expect(mergeBootstrapConfig(base, {}).branding.favicon).toBeUndefined();
+    expect(
+      mergeBootstrapConfig(base, { branding: { applicationTitle: 'X' } }).branding.favicon,
+    ).toBeUndefined();
+    // A key that is absent from the base is still *settable*, and still refused when unusable:
+    // optional must not mean unvalidated.
+    expect(mergeBootstrapConfig(base, { branding: { favicon: { src: 'a.png' } } }).branding.favicon)
+      .toEqual({ src: 'a.png', alt: '' });
+    expect(
+      mergeBootstrapConfig(base, { branding: { favicon: { src: '/nuxeo/api/v1/me' } } }).branding
+        .favicon,
+    ).toBeUndefined();
+  });
+
+  it.each([
+    ['a contributed asset', 'assets/acme-icon.png'],
+    ['an .ico beside bootstrap.json', 'acme.ico'],
+    ['an https URL', 'https://cdn.example.com/acme.ico'],
+    ['a data:image URI', 'data:image/png;base64,iVBORw0KGgo='],
+  ])('accepts %s', (_label, src) => {
+    expect(faviconOf({ src })).toEqual({ src, alt: '' });
+  });
+
+  it.each([
+    ['an absolute Nuxeo REST path', '/nuxeo/api/v1/id/abc/@blob/file:content'],
+    ['a protocol-relative URL', '//evil.example/icon.png'],
+    ['a parent-directory segment', '../agentic-ui/assets/icon.png'],
+    ['an encoded parent-directory segment', '%2e%2e/api/v1/me'],
+    ['a backslash path', '..\\secret.ico'],
+    ['an http URL', 'http://cdn.example.com/acme.ico'],
+    ['a javascript URL', 'javascript:alert(1)'],
+    ['a non-image data URI', 'data:text/html,<script>alert(1)</script>'],
+    ['a tab hidden in a parent segment', '.\t./api/v1/me'],
+    ['a blank src', '   '],
+  ])('rejects %s and keeps the packaged icon', (_label, src) => {
+    expect(faviconOf({ src })).toBeNull();
+  });
+
+  it('keeps a favicon an earlier layer set when this one omits or garbles it, and clears it on null', () => {
+    const base = {
+      ...DEFAULT_APP_BOOTSTRAP_CONFIG,
+      branding: { ...DEFAULT_APP_BOOTSTRAP_CONFIG.branding, favicon: { src: 'a.png', alt: '' } },
+    };
+
+    expect(
+      mergeBootstrapConfig(base, { branding: { favicon: { src: '/nuxeo/api' } } }).branding.favicon,
+    ).toEqual({ src: 'a.png', alt: '' });
+    expect(
+      mergeBootstrapConfig(base, { branding: { applicationTitle: 'X' } }).branding.favicon,
+    ).toEqual({ src: 'a.png', alt: '' });
+    expect(mergeBootstrapConfig(base, { branding: { favicon: null } }).branding.favicon).toBeNull();
+  });
+
+  it('is independent of the logo, so a deployment may set either alone', () => {
+    const logoOnly = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+      branding: { logo: { src: 'a.svg', alt: 'A' } },
+    }).branding;
+    const faviconOnly = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+      branding: { favicon: { src: 'a.png' } },
+    }).branding;
+
+    expect(logoOnly.favicon).toBeNull();
+    expect(faviconOnly.logo).toBeNull();
+    expect(faviconOnly.favicon).toEqual({ src: 'a.png', alt: '' });
   });
 });
 
@@ -469,6 +578,113 @@ describe('describeBrandingLogoRefusal', () => {
     it('still refuses one that does leave the directory, with the same reason', () => {
       expect(reasonFor('../x.svg')).toBe(reasonFor('assets/../acme.svg'));
     });
+  });
+});
+
+/**
+ * NXSAT-731 — the form rule for `sso.endpoints[].path`, asserted directly rather than only
+ * through the merge, because the reason it gives is part of the contract: an administrator whose
+ * button silently stopped rendering has nothing else to go on.
+ *
+ * The ticket suggested refusing the `//` and `/\` prefixes. That is why the tab, newline and
+ * carriage-return cases are here: the URL parser deletes those from the input before it looks at
+ * anything, so `/<TAB>/evil.example` passes a prefix check and still resolves to `evil.example`.
+ */
+describe('describeSsoEndpointPathForm', () => {
+  const ACCEPTED: readonly string[] = [
+    '/nuxeo/login/azure',
+    '/nuxeo/sso-ok',
+    '/nuxeo/oauth2/authorization/azure',
+    // Trailing and leading whitespace: `startSamlLogin` trims, so the rule is checked on the
+    // trimmed value and these are the same endpoint as the first one.
+    '  /nuxeo/login/azure  ',
+    // On the origin however the parser or the server reads it. `%2f` stays an escape in a path,
+    // and a `..` cannot climb above the root, so neither reaches another host.
+    '/%2f%2fevil.example',
+    '/./%2e%2e//evil.example',
+    '/ /evil.example',
+    '/nuxeo/login/azure?tenant=acme#top',
+  ];
+
+  it.each(ACCEPTED.map((path) => [path] as const))('accepts %j', (path) => {
+    expect(describeSsoEndpointPathForm(path)).toBeNull();
+  });
+
+  /** One distinct, administrator-readable reason per cause. */
+  const CAUSES: ReadonlyArray<readonly [string, string]> = [
+    ['blank', '   '],
+    ['protocol-relative', '//evil.example/sso'],
+    ['a backslash the parser rewrites as a separator', '/\\evil.example/sso'],
+    ['a control character the parser deletes', '/\t/evil.example/sso'],
+    ['an absolute https address', 'https://evil.example/sso'],
+    ['a javascript scheme', 'javascript:alert(1)'],
+    ['a path that is not absolute', 'nuxeo/login/azure'],
+  ];
+
+  it.each(CAUSES)('gives a reason for %s', (_label, path) => {
+    expect(describeSsoEndpointPathForm(path)).toBeTruthy();
+  });
+
+  it('gives a different reason for every cause, so a log line identifies what went wrong', () => {
+    const byReason = new Map<string, string[]>();
+    for (const [label, path] of CAUSES) {
+      const reason = describeSsoEndpointPathForm(path) ?? '(accepted)';
+      byReason.set(reason, [...(byReason.get(reason) ?? []), label]);
+    }
+    expect([...byReason.entries()].filter(([, labels]) => labels.length > 1)).toEqual([]);
+  });
+
+  it('names the scheme it refused, so javascript: is not reported as merely not-a-path', () => {
+    expect(describeSsoEndpointPathForm('javascript:alert(1)')).toContain('javascript');
+    expect(describeSsoEndpointPathForm('https://evil.example/sso')).toContain('https');
+  });
+
+  /** Every shape that has defeated a check on a URL-ish configuration value in this repo. */
+  const REFUSED_OFF_ORIGIN: ReadonlyArray<readonly [string, string]> = [
+    ['the protocol-relative form the ticket reports', '//evil.example/sso'],
+    ['a backslash in place of the second slash', '/\\evil.example/sso'],
+    ['a backslash before a slash', '/\\/evil.example/sso'],
+    ['a tab the parser deletes', '/\t/evil.example/sso'],
+    ['a newline the parser deletes', '/\n/evil.example/sso'],
+    ['a carriage return the parser deletes', '/\r/evil.example/sso'],
+    ['a tab before the leading slash', '\t//evil.example/sso'],
+    ['a NUL before the leading slash', '\u0000//evil.example/sso'],
+    ['a DEL inside the prefix', '/\u007f/evil.example/sso'],
+    ['an absolute address', 'https://evil.example/sso'],
+    ['an absolute address with a leading space', ' https://evil.example/sso'],
+    ['a javascript: URL', 'javascript:alert(1)'],
+  ];
+
+  it.each(REFUSED_OFF_ORIGIN)('refuses %s', (_label, path) => {
+    expect(describeSsoEndpointPathForm(path)).toBeTruthy();
+  });
+
+  /**
+   * The load-bearing assertion, and the one that makes this a rule rather than a list.
+   *
+   * The form check is a string rule; the thing it is supposed to guarantee is about the resolved
+   * URL. Two rules that must agree, with nothing comparing them, is exactly how a check ends up
+   * testing a proxy for the property in its own name — so this one resolves every accepted value
+   * and asserts the origin did not move, against more than one base so a rule that happened to
+   * suit one origin cannot pass.
+   */
+  it('accepts nothing that resolves onto another origin', () => {
+    const bases = ['http://localhost:4200/', 'https://nuxeo.example:8443/', 'http://127.0.0.1/'];
+    const every = [
+      ...ACCEPTED,
+      ...CAUSES.map(([, path]) => path),
+      ...REFUSED_OFF_ORIGIN.map(([, path]) => path),
+    ];
+
+    for (const base of bases) {
+      for (const path of every) {
+        if (describeSsoEndpointPathForm(path) !== null) continue;
+        const resolved = new URL(path.trim(), base);
+        expect(resolved.origin, `${JSON.stringify(path)} against ${base}`).toBe(
+          new URL(base).origin,
+        );
+      }
+    }
   });
 });
 
@@ -848,6 +1064,78 @@ describe('mergeBootstrapConfig', () => {
     ]);
     expect(merged.sso.postLoginPath).toBe('/browse');
     expect(merged.sso.returnQueryParam).toBe(DEFAULT_APP_BOOTSTRAP_CONFIG.sso.returnQueryParam);
+  });
+
+  /**
+   * NXSAT-731. `path.startsWith('/')` was the whole check, so `//evil.example/sso` passed it and
+   * the sign-in page — pre-authentication, anonymous, the screen where a user types a password —
+   * offered a button that left the application for a host the configuration author chose.
+   *
+   * The control is in the same assertion on purpose: a check that refuses everything would pass a
+   * test that only looked at the attacks.
+   */
+  it('drops an SSO endpoint whose path would leave the application, and keeps the one that would not', () => {
+    const merged = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+      sso: {
+        endpoints: [
+          { id: 'azure', label: 'Azure AD', path: '/nuxeo/login/azure' },
+          { id: 'ok', label: 'Nuxeo SSO', path: '/nuxeo/sso-ok' },
+          { id: 'company', label: 'Company SSO', path: '//evil.example/sso' },
+          { id: 'backslash', label: 'Company SSO', path: '/\\evil.example/sso' },
+          { id: 'tab', label: 'Company SSO', path: '/\t/evil.example/sso' },
+        ],
+      },
+    });
+
+    expect(merged.sso.endpoints).toEqual([
+      { id: 'azure', label: 'Azure AD', path: '/nuxeo/login/azure' },
+      { id: 'ok', label: 'Nuxeo SSO', path: '/nuxeo/sso-ok' },
+    ]);
+  });
+
+  /**
+   * Review of PR 519. The doc comment and the extensibility contract both claimed a refused entry
+   * fell back to whatever `sso.endpoints` an earlier layer set — reasoning carried over from
+   * `readLogo`, which really does return `base` on a refusal. `readSsoEndpoints` does not: a
+   * contribution that writes the key at all supplies the whole list. The claim was prose nobody
+   * compared to the branch, which is why it is now a test and not a sentence.
+   *
+   * The behaviour itself must not change. `"endpoints": []` is how a deployment turns SSO off, and
+   * per-entry fallback would make that indistinguishable from "every entry was refused".
+   */
+  it('replaces an earlier list rather than falling back to it, even when every entry is refused', () => {
+    const base = {
+      ...DEFAULT_APP_BOOTSTRAP_CONFIG,
+      sso: {
+        ...DEFAULT_APP_BOOTSTRAP_CONFIG.sso,
+        endpoints: [{ id: 'azure', label: 'Azure AD', path: '/nuxeo/login/azure' }],
+      },
+    };
+
+    // One refused entry does not rescue the earlier list — the accepted ones replace it.
+    expect(
+      mergeBootstrapConfig(base, {
+        sso: {
+          endpoints: [
+            { id: 'okta', label: 'Okta', path: '/nuxeo/login/okta' },
+            { id: 'company', label: 'Company SSO', path: '//evil.example/sso' },
+          ],
+        },
+      }).sso.endpoints,
+    ).toEqual([{ id: 'okta', label: 'Okta', path: '/nuxeo/login/okta' }]);
+
+    // Every entry refused leaves none, which is the same outcome as an explicit empty array.
+    expect(
+      mergeBootstrapConfig(base, {
+        sso: { endpoints: [{ id: 'company', label: 'Company SSO', path: '//evil.example/sso' }] },
+      }).sso.endpoints,
+    ).toEqual([]);
+
+    // A contribution that does not write the key keeps the earlier list, which is the one case
+    // the old prose described correctly.
+    expect(mergeBootstrapConfig(base, { sso: { postLoginPath: '/browse' } }).sso.endpoints).toEqual(
+      base.sso.endpoints,
+    );
   });
 
   it('lets a customer turn every SSO button off', () => {

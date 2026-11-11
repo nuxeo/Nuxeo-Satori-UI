@@ -1015,7 +1015,10 @@ not own — the fragment name in the component XML, the Marketplace package name
 on disk. A package named `defaults` therefore contributed `fragment bootstrap/defaults`, the key
 Satori's own packaged defaults occupy, and `ContributionRegistry.resolve()` did what it is
 designed to do and let the later contribution take the key. Replacement is a documented feature,
-so the server was not the thing to change. The only trace was an `info` diagnostic.
+so the server was not the thing to change. The only trace was an `info` diagnostic — which
+NXSAT-747 since raised to a `warning` with its own code for the case where what was displaced is
+something we packaged, because the generator can only protect the names it hands out and a
+hand-written component XML reaches the server regardless.
 
 - **The operating system is one of those namespaces.** A name that becomes a path has to clear
   the Windows device names (`con`, `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9`) — through
@@ -1121,7 +1124,8 @@ who reads it is not always the user who wrote it.
 
 **Do not "recover" the day with a rounding heuristic** in general-purpose code. `dayToDate` in
 `permissions-model.ts` snaps an instant to the nearest UTC midnight and is correct _there_, because
-an ACE date really is midnight in some zone. Applied to a field that renders arbitrary `date`
+an ACE date really is midnight in some zone — or, for an end Nuxeo Web UI wrote, the last second
+before one, which it reads as the day that second closes. Applied to a field that renders arbitrary `date`
 properties it is wrong for every timestamp after 12:00 UTC, which it reports as the next day.
 Narrow correctness does not generalise; check what the values actually are.
 
@@ -1267,6 +1271,122 @@ thing. `tools/satori-generators/src/config-package/generator.spec.ts`, "nesting 
 
 ---
 
+## 31. A URL rule enforced on the string, where the parser decides
+
+```typescript
+// BAD ❌ — the rule is "this value is a path on our own origin", and this tests a prefix.
+// `//evil.example/sso` starts with a slash and the browser reads it as another host.
+if (typeof path !== 'string' || !path.startsWith('/')) continue;
+
+// STILL BAD ❌ — the two prefixes the ticket suggested. The parser DELETES tabs, newlines and
+// carriage returns from the input before it reads anything, so this sees a harmless string:
+//   new URL('/\t/evil.example/sso', 'http://app.example/') === 'http://evil.example/sso'
+if (path.startsWith('//') || path.startsWith('/\\')) continue;
+
+// GOOD ✅ — at the boundary, resolve and compare the thing the rule is actually about.
+const url = new URL(path, base.href);
+if (url.origin !== base.origin) return { refused: `resolves to ${url.origin}, not ${base.origin}` };
+```
+
+NXSAT-731: `sso.endpoints[].path` was checked with `startsWith('/')`, so an administrator-written
+`//evil.example/sso` put a "Company SSO" button on the **pre-authentication** login page that sent
+the user to another site — an open redirect on the screen where people type passwords.
+
+**Compare the resolved URL, not the string.** A string rule has to enumerate the shapes a parser
+can reach an authority from, and the list is longer than it looks: `//host`, `/\host`, `/\/host`,
+a tab/LF/CR anywhere in the prefix, and whatever the next browser version normalises. One
+`url.origin !== base.origin` closes all of them at once and keeps closing them. Prove it the way
+this repo already insists on — print the forms and look, rather than reasoning about the spec:
+
+```bash
+node -e "for (const p of ['//h/x','/\\\\h/x','/\t/h/x','/%2f%2fh']) console.log(JSON.stringify(p), new URL(p,'http://a.example/').origin)"
+```
+
+**Put the boundary where the browser is sent, not only where the value is parsed.** A fix at merge
+time alone leaves every other caller unguarded — `NUXEO_SAML_LOGIN_ENDPOINTS` is a public token a
+host application can fill directly. A fix at navigation time alone still renders a button that
+looks legitimate. Both, with the roles written down: the merge refuses what is wrong whatever it
+resolves to (so no button appears), and the navigation refuses on the resolved origin.
+
+**Do not reuse the neighbouring predicate because it looks like the same rule.** `isAcceptedLogoSrc`
+sits four lines away and refuses _every_ absolute path, because a logo must be relative. An SSO
+path must be absolute. Same technique, opposite requirement.
+
+**Watch the leniency that defeats the check.** `startSamlLogin` prepended a `/` to a path written
+without one, which quietly turned `https://evil.example/sso` into the path `/https://evil.example/sso`
+— on our origin, so the origin comparison allowed it, and all the administrator saw was a 404.
+Refuse a value that carries a scheme before any such normalisation, and name the scheme.
+
+Regression test pattern: one case per bypass class **plus the control** (`/nuxeo/login/azure` must
+still render a working button), and one property test that resolves every accepted value against
+more than one base and asserts the origin did not move — that last one is what ties the string
+rule to the behaviour it claims, rather than testing a proxy for it
+(`bootstrap-config.spec.ts`, `auth.service.sso.spec.ts`).
+
+---
+
+## 32. One source, two module systems, and a test that only ever sees the forgiving one
+
+```typescript
+// BAD ❌ — works in the compiled CommonJS every customer runs, and in vitest. Throws
+// `ReferenceError: __dirname is not defined` in the one place the documentation sends people:
+// Nx loads this .ts with Node's native type stripping, so the module is ESM.
+generateFiles(tree, join(__dirname, 'files'), projectRoot, substitutions);
+
+// GOOD ✅ — one resolver, both module systems, and both branches asserted.
+generateFiles(tree, generatorFilesDir('config-package'), projectRoot, substitutions);
+```
+
+NXSAT-795: all four generators that write templates used `join(__dirname, 'files')`.
+`scripts/build-platform-generators.mjs` compiles them to CommonJS for `@nuxeo/satori-platform`,
+where `__dirname` exists, and vitest defines it too — so 187 tests, 34 gates and a QA pass of
+NXSAT-729 were all green while `npx nx g ./tools/satori-generators:config-package …`, the command
+in `docs/extension-reference.md`, `docs/beta-demo-runbook.md` and `libs/platform/AGENTS.md`, had
+never once worked on Node ≥ 22.6. QA found it by running the documented command.
+
+**A file loaded two ways needs the harsher way tested, and tests run the forgiving one.** Nx 23's
+`loadTsFile` prefers Node's native type stripping and falls back to swc only when stripping
+_fails_; stripping does not transform module syntax, so a `.ts` with `import` statements is ESM
+and nothing in CJS is defined. Vitest and `tsc --module commonjs` both give you the CJS globals,
+so no unit test and no build can see this. `NX_PREFER_NODE_STRIP_TYPES=false` restores the old
+behaviour — useful to confirm a diagnosis, not a fix, because a documented command must not need
+an environment variable.
+
+**Reach for a static check when no runtime test can see the gap.** `checkGeneratorsEsmSafe` in
+`scripts/review-guardrails.mjs` fails on `__dirname`, `__filename` or `require` anywhere under
+`tools/satori-generators/src` except the one resolver that guards with `typeof`, with specs
+exempt. That is what would have caught this; a test could not, because the test harness is the
+forgiving environment.
+
+**Ask which paths your evidence actually covered.** NXSAT-729's own verification ran the generator
+through `create.mjs` (a subprocess), the Nx generator through vitest (in-process) and the
+published compiled copy — three ways, none of them the Nx command line on the TypeScript source.
+Count the ways a thing can be invoked before reporting that it was exercised.
+
+**A default parameter cannot be overridden with `undefined`, so it cannot be used to reach the
+branch it hides.** The first fix for this had the shape below, and its "no `__dirname`" tests all
+ran the CommonJS branch — the default is applied whether the argument was omitted or passed as
+`undefined`. They passed, because both branches resolve to the same directory here. Measured, not
+argued: with the ESM branch deliberately returning a wrong path, all ten tests stayed green.
+
+```typescript
+// BAD ❌ — `f('x', undefined)` runs the default, so the `here === undefined` branch is unreachable.
+function f(generator: string, here = typeof __dirname === 'undefined' ? undefined : __dirname) {}
+
+// GOOD ✅ — a pure function taking the value, and a thin wrapper that supplies it.
+export function filesDirFrom(here: string | undefined, generator: string) {}
+export function generatorFilesDir(generator: string) {
+  return filesDirFrom(moduleDir(), generator);
+}
+```
+
+`__dirname` cannot be stubbed to reach the branch either: in CommonJS it is a module-scoped
+binding, not a property of `globalThis`. And when both branches return the same value, assert one
+that **cannot** — give the CommonJS branch a directory outside the workspace and check the answer
+came from it. Without that case, a branch that stops reading its input still passes.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
@@ -1288,3 +1408,4 @@ Fix proactively to avoid a review cycle:
 - "No fallback if the image fails to load" → bind `(error)` and clear the state the template branches on, not a flag local to one component; and measure `naturalWidth` after `load` too, because an image that draws nothing fires no `error`
 - "Host comparison may be bypassed by equivalent forms" → canonicalise before comparing (strip a trailing dot, alias the loopback spellings); the URL parser normalises case and IPv4 but not those
 - "Silent rejection" → return the reason and derive the boolean from it, then log it once from the service; a bare `null` makes a refusal look like nothing was configured
+- "Open redirect / unvalidated redirect" → resolve the value and compare `url.origin` against the origin it must stay on; a prefix check loses to the tab, newline and backslash forms the parser rewrites

@@ -23,6 +23,7 @@ const row = {
   end: null,
   grantedBy: null,
   acePrincipal: 'group:members',
+  aceId: 'group:members:Read',
 };
 
 describe('principal-permission-display', () => {

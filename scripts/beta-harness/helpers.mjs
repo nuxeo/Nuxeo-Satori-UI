@@ -147,13 +147,14 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
    * `since` where no later boundary will either. So a transition with one outstanding **refuses**,
    * naming it, rather than letting it through unjudged.
    *
-   * Refusing and not waiting is the deliberate choice. Discarding traffic the guard could not
-   * read is worse than the hardcoded fallback this guard replaced: the run reports
+   * Refusing and not waiting is the decided behaviour (NXSAT-703). Discarding traffic the guard
+   * could not read is worse than the hardcoded fallback this guard replaced: the run reports
    * `identity.valid: true` over a result that may have been read as the guest, which is false
-   * evidence rather than a missing check. Refusing is noisy and correct. A bounded wait needs a
-   * deadline *and* an expiry policy, and admits a harness that hangs instead of reporting — its
-   * own failure mode. See `pendingRequests` in `identity-guard.mjs` for the full trade-off; the
-   * design question is NXSAT-703, not settled here.
+   * evidence rather than a missing check. A bounded wait would need a deadline *and* an expiry
+   * policy, and admits a harness that hangs instead of reporting — its own failure mode. The
+   * cost is that a legitimately slow request invalidates the run, though the run was not
+   * compromised; this refusal's message says to let the app settle before the transition is
+   * declared. See `pendingRequests` in `identity-guard.mjs` for the full trade-off.
    *
    * @param {string} what names the transition, e.g. `h.signedOut()`
    * @param {string} [where] distinguishes a second verification of the same transition, e.g.
@@ -606,7 +607,7 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      */
     async goTo(route) {
       const url = route.startsWith('http') ? route : `${this.baseUrl}${route}`;
-      await page.goto(url, { waitUntil: 'networkidle' });
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 120000 });
       await page.waitForTimeout(1200);
     },
 
@@ -784,7 +785,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       // checks the interval before `expectApp` restarts the window.
       if (!replacing) identity?.sessionInstalled();
 
-      await page.reload({ waitUntil: 'networkidle' });
+      // The default 30s is shorter than this instance takes to go idle after a restart. Longer, not
+      // unbounded: a page that never settles still fails.
+      await page.reload({ waitUntil: 'networkidle', timeout: 120000 });
       await page.waitForTimeout(1200);
     },
   };

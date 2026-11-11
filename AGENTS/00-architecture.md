@@ -133,8 +133,8 @@ interface and a spec compares their declared inputs, so `componentInputs` mean t
 whichever is registered. `@hylandsoftware/satori-ui` is an **optional** peer of the package, and
 `beta:installable` proves the built tarball installs without it. The IDs are in
 `docs/extension-reference.md` §6a. The screens resolve each avatar, category tag, status tag and
-trail of their own by ID, with the `nxs-` element as the fallback, never `sat-*` directly; browse's
-and search's card views render each card by ID, document detail its tab strip and header actions,
+trail of their own by ID, with the `nxs-` element as the fallback, never `sat-*` directly; browse's,
+search's and the trash's card views render each card by ID, document detail its tab strip and header actions,
 and `nxs-document-list` each row's type tag and contributor avatar. Library components nested in a
 screen — `nxs-comments`, `nxs-document-history`, `nxs-properties-panel`, `nxs-tag-editor` — still
 draw `nxs-avatar`/`nxs-tag` directly, so an override does not reach them; §6a lists them. A
@@ -162,13 +162,13 @@ Focus lost for nowhere counts only if it has not come back a task later, because
 focused chip's removal that way before Material refocuses its neighbour.
 
 **Storybook 10** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
-<https://nuxeo.github.io/agentic-ui-poc/>. Each component has an Overview, an API page and its
+<https://nuxeo.github.io/Nuxeo-Satori-UI/>. Each component has an Overview, an API page and its
 stories, after a Getting started page:
 
 ```bash
 npx nx run satori-components:storybook              # dev server on :6006
 npx nx run satori-components:build-storybook        # static build, dist/storybook/satori-components
-npx nx run satori-components:build-storybook:satori # the same under Satori's theme; needs the token; never published
+npx nx run satori-components:build-storybook:satori # the same under Satori's theme; needs the token; published at /satori/ (see Publishing)
 ```
 
 The default build needs **no GitHub Packages token**: it themes with plain `mat.theme`
@@ -177,6 +177,14 @@ and the default configuration's `styles` as well as `src/`. Whenever the library
 builds it with `@hylandsoftware` and `@alfresco` removed from `node_modules`, so an accidental
 Satori import fails the build rather than compiling. Only the opt-in `:satori` configuration reaches `@hylandsoftware/satori-ui`, for its theme.
 `typecheck` type-checks the stories too.
+
+**Download from a CI run.** Whenever the `storybook` job builds this Storybook (the library changed, or the
+interaction runner, dialog-layout check or publication gate did), it uploads the build as the workflow
+artifact `storybook-<short sha>` of the PR head, kept seven days, after the publication gate has passed.
+Storybook will not open from `file://`: its manager scripts are blocked by CORS, so unzip the artifact and
+serve the folder over HTTP with any static file server. Checked on 2026-10-29: the build is 349 files,
+35 MB on disk; served over HTTP its sidebar lists 65 entries, and from `file://` it logs CORS failures and
+lists none.
 
 **Publishing.** `.github/workflows/storybook-pages.yml` deploys **two** builds to GitHub Pages on
 every push to `main`: the default configuration, token-free, at the root, and the `:satori`
@@ -362,9 +370,13 @@ shipped in the package; customers use `extension-component`. By hand, the steps 
 8. Members only the template uses are `protected`, so the component's contract is its inputs and
    outputs. Specs reach them by element access (`panel()['save']()`).
 9. A component that replaces packaged markup is registered by ID (`nxs.<group>.<name>`, exported as
-   a constant) and rendered through `lib-extension-outlet` with the component as the unresolved
-   fallback, so a customer library can re-register the ID. `beta:reference` checks `nxs.*` IDs
-   against `docs/extension-reference.md` as it does `app.*` ones.
+   a constant). Where a packaged screen renders it, the screen goes through `lib-extension-outlet`
+   with the component as the unresolved fallback, so a customer library can re-register the ID. The
+   screens that do this are listed in `docs/extension-reference.md` §6a. A primitive written as a
+   selector into a template (`<nxs-error-state>`, `<nxs-empty-state>`, and the rest §6a names) is not
+   resolved by its ID yet: moving those screens onto the outlet is follow-up work, not a case the
+   rule excepts. `beta:reference` checks `nxs.*` IDs against `docs/extension-reference.md` as it
+   does `app.*` ones.
 10. Put it on the with-and-without-Satori page. `docs/satori-components/with-and-without-satori.md`
     is the source of the Confluence page that shows every component without and with Satori:
     - add a `### <Name>` section under "Side by side" with its `| Field | Value |` table — the

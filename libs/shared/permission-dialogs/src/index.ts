@@ -1,6 +1,6 @@
 /**
- * The four permission and sharing dialogs, shared by `browse`, `document-detail` and
- * `collections`.
+ * The add and delete permission dialogs from before `libs/shared/satori-components`. Browse still
+ * opens the delete dialog; the share and update dialogs it opened are `nxs-` components now.
  *
  * ## Why they are here and not in `collections`
  *
@@ -14,16 +14,12 @@
  * ## Why not `libs/shared/ui`
  *
  * `libs/shared/ui` is a **published** entry point of `@nuxeo/satori-platform` — it is
- * `@nuxeo/satori-platform/ui`. Putting these here rather than there keeps eight symbols
+ * `@nuxeo/satori-platform/ui`. Putting these here rather than there keeps their symbols
  * out of the customer-facing API surface. They are internal application UI, and once a
  * customer can import a name, renaming it is a breaking change.
  */
 
 export { AddPermissionDialogComponent } from './lib/add-permission-dialog/add-permission-dialog';
 export type { AddPermissionDialogData } from './lib/add-permission-dialog/add-permission-dialog';
-export { UpdatePermissionDialogComponent } from './lib/update-permission-dialog/update-permission-dialog';
-export type { UpdatePermissionDialogData } from './lib/update-permission-dialog/update-permission-dialog';
 export { DeletePermissionDialogComponent } from './lib/delete-permission-dialog/delete-permission-dialog';
 export type { DeletePermissionDialogData } from './lib/delete-permission-dialog/delete-permission-dialog';
-export { ShareExternalDialogComponent } from './lib/share-external-dialog/share-external-dialog';
-export type { ShareExternalDialogData } from './lib/share-external-dialog/share-external-dialog';

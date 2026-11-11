@@ -187,3 +187,20 @@ describe('app.rules.hasFile', () => {
     expect(registry.evaluate('app.rules.hasFile', on(null))).toBe(false);
   });
 });
+
+describe('app.rules.isExternalUser', () => {
+  const rule = DOCUMENT_RULE_EVALUATORS['app.rules.isExternalUser'];
+  const context = (username: string | null) => ({
+    ...EMPTY_EXTENSION_RULE_CONTEXT,
+    user: { username, isAdministrator: false },
+  });
+
+  it('is true for a transient share recipient', () => {
+    expect(rule(context('transient/recipient@example.invalid'), [], () => false)).toBe(true);
+  });
+
+  it('is false for a signed-in user and for nobody signed in', () => {
+    expect(rule(context('jdoe'), [], () => false)).toBe(false);
+    expect(rule(context(null), [], () => false)).toBe(false);
+  });
+});

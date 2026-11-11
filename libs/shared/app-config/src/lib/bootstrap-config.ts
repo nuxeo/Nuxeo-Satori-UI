@@ -68,6 +68,45 @@ export interface AppBrandingConfig {
   readonly documentTitle: string;
   /** `null` keeps the Satori marks. */
   readonly logo: AppBrandingLogo | null;
+  /**
+   * The browser tab icon. Absent or `null` keeps the one `index.html` ships (NXSAT-313, plan
+   * item F1).
+   *
+   * **Optional, unlike its sibling {@link logo}, and the difference is release history rather
+   * than semantics.** `logo` was in the first released shape of this interface, so every object
+   * ever constructed against it already writes the key. `favicon` was added to it, and a
+   * required member added to an exported interface breaks every caller that *constructs* one —
+   * which the API snapshot cannot see, because it reports removals and signature changes and a
+   * new member is neither (review of PR 546).
+   *
+   * Optional is not unconditionally the safer direction, and claiming so would be wrong: it
+   * widens the type for readers, so code annotating `const f: AppBrandingLogo | null =
+   * branding.favicon` stops compiling. What settles it here is that **this member is new in the
+   * change that introduces it** — it is absent from the previously released interface — so there
+   * is no existing reader to widen under, and there are existing constructors to break. With one
+   * side populated and the other empty, optional is what lets this ship as a minor.
+   *
+   * Absent and `null` are the same state to every reader, which is what makes the optionality
+   * free of a third case to handle: {@link readLogo} returns the base it was given, so an absent
+   * key stays absent rather than being normalised; `AppConfigService.brandingFavicon` tests the
+   * value for truth; and `syncDocumentFavicon` writes the href `index.html` shipped for anything
+   * falsy. A configuration that predates this key therefore renders exactly what it rendered
+   * before it existed, with nothing logged.
+   *
+   * The same shape and the same reader as `logo`, deliberately: a favicon is a configured
+   * image address with exactly the logo's hazards, so it goes through `readLogo`,
+   * `describeLogoSrcForm` and `resolveBrandingLogoUrl` unchanged. A second validator for the
+   * same rules is a second validator to keep in step, and the logo's has been corrected four
+   * times — for `..`, for IPv4-in-IPv6 hosts, for Tomcat's `;` path parameters, for the
+   * `*.localhost` suffix — none of which a fresh one would have had. Optional does not mean
+   * unvalidated: a key that *is* supplied is checked and refused exactly as a logo's is.
+   *
+   * `alt` is accepted and not used. A favicon has no accessible name to carry: it is decorative
+   * chrome the browser draws beside the tab title, which `documentTitle` already names. Sharing
+   * the type is worth one ignored field; the alternative is a near-duplicate type whose only
+   * difference is the absence of a string.
+   */
+  readonly favicon?: AppBrandingLogo | null;
 }
 
 /**
@@ -215,6 +254,11 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
     applicationTitle: 'Hyland Nuxeo',
     documentTitle: 'Nuxeo Platform',
     logo: null,
+    // `null` is "the icon `index.html` ships", which is what every deployment showed before
+    // this key existed — including a branded demo, which is the gap it closes. Written out
+    // rather than omitted even though the key is optional: this object is the documented
+    // starting point a customer spreads, so it should show every key that can be set.
+    favicon: null,
   },
   defaultThemeId: 'nuxeo',
   themes: DEFAULT_APP_THEMES,
@@ -223,18 +267,37 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   // locale here that has no catalogue would advertise a language the application cannot
   // render, which `checkAdvertisedLocalesShip` fails.
   //
-  // Six ship besides English — fr, de, ja, nl, th and zh (Simplified Chinese, Crowdin's
-  // `zh-CN`) — each pulled from Crowdin once approved. It does NOT mean every key is translated:
-  // `setFallbackLang('en')` covers gaps, and a Crowdin pull fills every unapproved string with its
-  // English source. `checkTranslationCatalogues` warns on a missing key and fails only on one
-  // `en.json` does not have. See D8d in docs/i18n-localization-plan.md.
+  // **This is five of the ten languages the application targets.** The target set is Nuxeo Web
+  // UI's — `ar`, `nl`, `en`, `fr`, `de`, `he`, `it`, `ja`, `es`, `sv` — and `th` and `zh` were
+  // dropped from here to match it. The other five are already set up everywhere a language can
+  // be set up ahead of its translations: Angular locale data in `register-locale-data.ts`, and a
+  // `--language` in the Crowdin pull. What is missing is only the catalogue, and this list is
+  // the one touchpoint that cannot run ahead of one — advertising a language renders the English
+  // fallback throughout, which reads as broken rather than absent (D8e, `D8e-webui`).
+  //
+  // So each of `ar`, `es`, `he`, `it`, `sv` joins this list — and `DATE_FNS_LOCALES`, which a
+  // test holds equal to it — in the pull request that brings its catalogue. `es` needs one
+  // Crowdin string fixed first (`Seleccionado(s)`). `ar` and `he` need nothing further for
+  // layout: RTL landed in NXSAT-752, so `syncDocumentDirection` sets `<html dir>` from the
+  // active language and either one mirrors.
+  //
+  // Neither is reachable today, and that is deliberate: since NXSAT-733 `resolveStringLanguage`
+  // refuses a `defaultLanguage` this build ships no catalogue for, so `ar` and `he` fall back to
+  // `en` and the application runs left-to-right in English. `<html lang="ar">` over English text
+  // was the WCAG 3.1.1 defect that ticket fixed, so the refusal is the correct behaviour and the
+  // RTL work is not bypassed by it — the two land together. The moment `ar.json` exists the
+  // language is accepted, `syncDocumentDirection` sees it on `onLangChange`, and the layout
+  // mirrors with no further change. `LOCALE_ID` needs its own `DATE_FNS_LOCALES` entry at the
+  // same time, or dates stay English while strings and direction do not.
+  //
+  // Shipping a catalogue does NOT mean every key is translated: `setFallbackLang('en')` covers
+  // gaps, and a Crowdin pull fills every unapproved string with its English source.
+  // `checkTranslationCatalogues` warns on a missing key and fails only on one `en.json` does not
+  // have. See D8d in docs/i18n-localization-plan.md.
   //
   // Nothing renders this list yet: there is no language picker (NXSAT-294), and only the config
   // parser reads it. A deployment selects its language through `defaultLanguage`.
-  //
-  // Adding a language here also means adding it to `download_translations_args` in
-  // .github/workflows/crowdin-pull.yaml, which downloads only the languages the app ships.
-  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl', 'th', 'zh'],
+  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl'],
   integrations: {
     arender: null,
     knowledgeDiscoveryOperations: {},
@@ -480,10 +543,80 @@ function readSsoEndpoints(
     const path = entry['path'];
     // A button with no ID or nowhere to send the browser is not a login option.
     if (typeof id !== 'string' || id.trim() === '') continue;
-    if (typeof path !== 'string' || !path.startsWith('/')) continue;
+    if (typeof path !== 'string' || !isAcceptedSsoEndpointPath(path)) continue;
     endpoints.push({ id, path, label: readString(entry, 'label', id) });
   }
   return endpoints;
+}
+
+/**
+ * Early rejection of a configured `sso.endpoints[].path`, on the string as written.
+ *
+ * Not the security boundary — `AuthService.startSamlLogin` is, because it checks the URL the
+ * browser is actually sent to, and `NUXEO_SAML_LOGIN_ENDPOINTS` is a token a host application can
+ * fill with endpoints that never passed through this merge. This only refuses what is wrong
+ * whatever it resolves to, so that no button is ever rendered for such an entry.
+ *
+ * Same technique as {@link isAcceptedLogoSrc} and deliberately **not** the same predicate: that
+ * one refuses *every* absolute path, because a logo must be relative, `https:` or `data:`. An SSO
+ * path must be absolute. The two rules agree only on the forms the URL parser rewrites.
+ */
+function isAcceptedSsoEndpointPath(path: string): boolean {
+  return describeSsoEndpointPathForm(path) === null;
+}
+
+/**
+ * Why an `sso.endpoints[].path` is refused on its written form, or `null` when that form is
+ * acceptable.
+ *
+ * The single implementation of the rules {@link isAcceptedSsoEndpointPath} applies, so the verdict
+ * and the reason given for it cannot drift apart — and, as for a logo, a refusal that returned a
+ * bare `false` would be indistinguishable from no endpoint having been configured. Reasons are
+ * written for the administrator who set the value (NXSAT-724).
+ *
+ * `path.startsWith('/')` used to be the whole check and it is not enough: `//evil.example/sso`
+ * starts with a slash and the browser reads it as another host, so the sign-in page offered a
+ * button that sent the user — before authentication, on the screen where they type a password —
+ * to a site the configuration author chose (NXSAT-731).
+ *
+ * Refusing the two literal prefixes `//` and `/\` is not enough either, because the parser
+ * **removes** tabs, newlines and carriage returns from the input before it looks at anything:
+ * `/<TAB>/evil.example` passes a prefix check and still resolves to `evil.example`. So the forms
+ * that are not what they look like are refused first, and only then is a second leading slash.
+ * With a backslash and every control character already out of the way, a leading `/` can no
+ * longer begin an authority — which is what makes this a rule rather than a list of the tricks we
+ * happened to think of.
+ *
+ * Checked on the trimmed value, because that is what `startSamlLogin` resolves.
+ */
+export function describeSsoEndpointPathForm(path: string): string | null {
+  const value = path.trim();
+  // `readSsoEndpoints` would discard a blank anyway, so this branch changes no verdict — it
+  // exists so a value that was written and is blank can be reported rather than passed over.
+  if (value === '') {
+    return 'it is blank, so it names nowhere to send the browser';
+  }
+  // Split rather than reported together, as for a logo: these are different mistakes, and one
+  // message for both cannot tell the administrator which they made.
+  if (value.includes('\\')) {
+    return 'it contains a backslash, which the URL parser rewrites as a path separator, so the value is not the path it looks like';
+  }
+  if ([...value].some((char) => char < ' ' || char === '\u007f')) {
+    return 'it contains a control character, which the URL parser drops, so the value is not the path it looks like';
+  }
+  // Named rather than just refused, for the same reason as a logo's: `javascript:` and
+  // `https://idp.example` are very different mistakes to have made in a configuration file.
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(value)?.[1];
+  if (scheme !== undefined) {
+    return `an SSO path must name a path on the Nuxeo origin, and this is an absolute "${scheme.toLowerCase()}:" address`;
+  }
+  if (!value.startsWith('/')) {
+    return 'an SSO path must start with "/", so that it names a path on the Nuxeo origin';
+  }
+  // The one form a leading slash can still take that is not a path.
+  return value.startsWith('//')
+    ? 'it starts with "//", which the browser reads as the start of another host rather than as a path'
+    : null;
 }
 
 /**
@@ -564,6 +697,9 @@ function describeLogoSrcForm(src: string): string | null {
 /**
  * `null` clears a logo an earlier layer set; anything unusable keeps `base`.
  *
+ * Reads both `branding.logo` and `branding.favicon`, which are the same thing to every rule
+ * below — a configured image address — and differ only in where the result is rendered.
+ *
  * **What a refusal falls back to depends on which of the two layers refused it**, and saying
  * "the packaged marks" for both is wrong — which this comment used to do, and the log message
  * used to repeat (review of PR 512):
@@ -579,8 +715,20 @@ function describeLogoSrcForm(src: string): string | null {
  *
  * So a value this function retains can still end up not displayed, and the two layers report
  * themselves differently for exactly that reason.
+ *
+ * Generic in the base only so that an **absent** key survives the merge: `favicon` is optional
+ * and `logo` is not, and "keep what the base had" has to mean `undefined` for the one and `null`
+ * for the other. Every rule below is the same for both, and the body does not read `T` — this
+ * returns `base` on each unusable input, so the absence propagates on its own rather than being
+ * normalised to a `null` the caller's base never had.
+ *
+ * `null` is in the return type independently of `T` because an explicit `null` in the patch
+ * clears the key whatever the base held, which is the one result that does not come from `base`.
  */
-function readLogo(value: unknown, base: AppBrandingLogo | null): AppBrandingLogo | null {
+function readLogo<T extends AppBrandingLogo | null | undefined>(
+  value: unknown,
+  base: T,
+): AppBrandingLogo | T | null {
   if (value === null) return null;
   if (!isRecord(value)) return base;
   const src = typeof value['src'] === 'string' ? value['src'].trim() : '';
@@ -894,6 +1042,7 @@ export function mergeBootstrapConfig(base: AppBootstrapConfig, patch: unknown): 
       ),
       documentTitle: readNonBlankString(branding, 'documentTitle', base.branding.documentTitle),
       logo: readLogo(branding['logo'], base.branding.logo),
+      favicon: readLogo(branding['favicon'], base.branding.favicon),
     },
     defaultThemeId: readString(patch, 'defaultThemeId', base.defaultThemeId),
     themes: mergeThemes(base.themes, patch['themes']),

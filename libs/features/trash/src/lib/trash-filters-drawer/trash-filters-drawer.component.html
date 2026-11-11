@@ -200,12 +200,15 @@
 <!-- ───── RESULTS MODE ───── -->
 @if (trashFilterService.layoutMode() === 'results') {
   <div class="drawer-results-header">
-    <span class="drawer-results-count">{{
-      (trashFilterService.totalResults() === 1
-        ? 'common.count.result-one'
-        : 'common.count.result-many'
-      ) | translate: { count: trashFilterService.totalResults() }
-    }}</span>
+    <!-- A negative total is one the server did not count. -->
+    @if (trashFilterService.totalResults() >= 0) {
+      <span class="drawer-results-count">{{
+        (trashFilterService.totalResults() === 1
+          ? 'common.count.result-one'
+          : 'common.count.result-many'
+        ) | translate: { count: trashFilterService.totalResults() }
+      }}</span>
+    }
   </div>
 
   @if (trashFilterService.resultsLoading()) {
@@ -219,11 +222,9 @@
       @for (item of trashFilterService.results(); track item.uid) {
         <button class="drawer-result-item" type="button" (click)="openDocument(item.uid)">
           <div class="drawer-result-thumb">
-            @if (trashFilterService.resultThumbnails()[item.uid]; as thumb) {
-              <img class="drawer-result-thumb-img" [src]="thumb" alt="" />
-            } @else {
+            <nxs-thumbnail class="drawer-result-thumb-img" [documentId]="item.uid">
               <mat-icon class="drawer-result-thumb-icon" [svgIcon]="docIcon(item.type)" />
-            }
+            </nxs-thumbnail>
           </div>
           <div class="drawer-result-info">
             <span class="drawer-result-title">{{ item.title }}</span>

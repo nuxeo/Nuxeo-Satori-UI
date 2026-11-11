@@ -5,7 +5,7 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { of } from 'rxjs';
-import { fn } from 'storybook/test';
+import { expect, fireEvent, fn, waitFor, within } from 'storybook/test';
 
 import { NxsMetadataEditorComponent } from './metadata-editor.component';
 import type { NxsEditorSection, NxsEditorValues } from './metadata-editor.model';
@@ -208,6 +208,17 @@ export const CustomerType: Story = {
 /** The same type with its sections as tabs. */
 export const AsTabs: Story = {
   args: { sections: [POLICY, CLAIMS], display: 'tabs', values: POLICY_VALUES },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const policy = canvas.getByRole('tab', { name: 'Policy' });
+    policy.focus();
+    fireEvent.keyDown(policy, { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 });
+    const claims = canvas.getByRole('tab', { name: 'Claims' });
+    await waitFor(() => expect(claims).toHaveFocus());
+    fireEvent.keyDown(claims, { key: 'Enter', code: 'Enter', keyCode: 13 });
+    await waitFor(() => expect(claims).toHaveAttribute('aria-selected', 'true'));
+    await expect(await canvas.findByRole('textbox', { name: 'Claim reference' })).toBeVisible();
+  },
 };
 
 /** Creating a document: nothing filled in yet. Validate to see the errors and the summary. */

@@ -74,28 +74,33 @@ product follows from it.
 
 ## What a customer actually receives
 
-| Artifact                                  | What they do with it                                                                                                                                                               |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **The marketplace package**               | Install into Nuxeo. Gets the application and our configuration defaults; their own configuration is a package of theirs that depends on ours, which **no upgrade of ours touches** |
-| **`@nuxeo/satori-platform`** (npm)        | Depend on it from their own extension library. 4 entry points, 10 declared peers, 347 kB                                                                                           |
-| **The app template**                      | Fork it. Deliberately thin, and ships **no design system**, so they add their own rather than removing ours                                                                        |
-| **The generators**                        | `npx nx g @nuxeo/satori-platform:extension-library …` — shipped inside the package                                                                                                 |
-| **The guardrail script**                  | Run in their own CI, so an AI agent can verify its own output before a human reviews it                                                                                            |
-| **`AGENTS.md` + the extension reference** | A knowledge base any AI coding tool can read, versioned as a product artifact                                                                                                      |
+| Artifact                                  | What they do with it                                                                                                                                                                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The marketplace package**               | Install into Nuxeo. Gets the application and our configuration defaults; their own configuration is a package of theirs that depends on ours, which **no upgrade of ours touches**                                                  |
+| **`@nuxeo/satori-platform`** (npm)        | Depend on it from their own extension library. 4 entry points, 10 declared peers, 347 kB                                                                                                                                            |
+| **The app template**                      | Fork it. Deliberately thin, and ships **no design system**, so they add their own rather than removing ours                                                                                                                         |
+| **The generators**                        | Two kinds. The configuration-package scaffolder runs on **Node alone** (`node …/config-package/create.mjs`), which is the Layer 0/1 path; the Layer 2 library generators ship inside `@nuxeo/satori-platform` and need it installed |
+| **The guardrail script**                  | Run in their own CI, so an AI agent can verify its own output before a human reviews it                                                                                                                                             |
+| **`AGENTS.md` + the extension reference** | A knowledge base any AI coding tool can read, versioned as a product artifact                                                                                                                                                       |
 
 ---
 
 ## The four layers — the core of the value proposition
 
-| Layer                      | Customer writes                 | App rebuild? | Example                                                                                                              |
-| -------------------------- | ------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------- |
-| **0 — Configuration**      | JSON + CSS variables            | **No**       | Rebrand: colours, product name, header and sign-in logo, default language — not the rail mark, rail title or favicon |
-| **1 — Declarative wiring** | JSON referencing registered IDs | **No**       | Hide the Reports nav entry; relabel Home to "Dashboard"; add a Contracts entry at position 35                        |
-| **2 — Customer code**      | TypeScript in **their** repo    | Yes, theirs  | A contract-approval action visible only to users who can write the document                                          |
-| **3 — Agent harness**      | Prompts                         | Yes, theirs  | The same request as a short agent session against a defined API                                                      |
+| Layer                      | Customer writes                 | App rebuild? | Example                                                                                                                       |
+| -------------------------- | ------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| **0 — Configuration**      | JSON + CSS variables            | **No**       | Rebrand: colours, product name, header and sign-in logo, browser tab icon, default language — not the rail mark or rail title |
+| **1 — Declarative wiring** | JSON referencing registered IDs | **No**       | Hide the Reports nav entry; relabel Home to "Dashboard"; add a Contracts entry at position 35                                 |
+| **2 — Customer code**      | TypeScript in **their** repo    | Yes, theirs  | A contract-approval action visible only to users who can write the document                                                   |
+| **3 — Agent harness**      | Prompts                         | Yes, theirs  | The same request as a short agent session against a defined API                                                               |
 
 For Layers 0 and 1 the only build is the customer's configuration package, zipped by a
-dependency-free script (`npx nx build <package>`) and installed; the application is not rebuilt.
+dependency-free script and installed; the application is not rebuilt. **Dependency-free means what
+it says:** `node tools/satori-generators/src/config-package/create.mjs <name> --owner=<owner>`
+scaffolds it and `node <package>/build.mjs` zips it, with Node alone — no install, no Nx, no
+registry token. (`npx nx build <package>` runs the same script, and is the form for someone who
+already has this workspace installed.) [`CUSTOMISING.md`](../../CUSTOMISING.md) is that path end to
+end.
 
 RFC §6.3 describes the intended Layer 3 experience:
 

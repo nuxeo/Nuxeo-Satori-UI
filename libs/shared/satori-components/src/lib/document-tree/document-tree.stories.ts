@@ -104,6 +104,31 @@ type Story = StoryObj<NxsDocumentTreeComponent>;
 /** At the repository root: the root and its domains, the root marked. */
 export const AtTheRoot: Story = {};
 
+export const KeyboardExpansion: Story = {
+  args: { currentPath: '/default-domain/workspaces/claims' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const current = await canvas.findByRole('treeitem', { current: 'page' });
+    current.focus();
+    await expect(current).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.keyboard('{ArrowLeft}');
+    await waitFor(() => expect(current).toHaveAttribute('aria-expanded', 'false'));
+    await expect(current).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() => expect(current).toHaveAttribute('aria-expanded', 'true'));
+    await userEvent.keyboard('{ArrowRight}');
+    const child = canvas.getByText('2026').closest('[role="treeitem"]');
+    await waitFor(() => expect(child).toHaveFocus());
+    await userEvent.keyboard('{ArrowLeft}');
+    await waitFor(() => expect(current).toHaveFocus());
+    await userEvent.keyboard('{End}');
+    const rows = canvas.getAllByRole('treeitem');
+    await waitFor(() => expect(rows[rows.length - 1]).toHaveFocus());
+    await userEvent.keyboard('{Home}');
+    await waitFor(() => expect(rows[0]).toHaveFocus());
+  },
+};
+
 /** Inside a domain: that domain's branch, expanded to Claims, which is marked as the current page. */
 export const InsideADomain: Story = {
   args: { currentPath: '/default-domain/workspaces/claims' },

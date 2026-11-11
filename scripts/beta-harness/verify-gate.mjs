@@ -18,8 +18,12 @@ import { spawnToolSync } from './package-command.mjs';
  *                    unknown one prints the full current list, so that is the
  *                    authoritative enumeration rather than this line, which went stale
  *                    twice while gates were added.
- *   --base <ref>     git base for affected calculation (default origin/main)
+ *   --base <ref>     git base for affected calculation (default origin/main). When it resolves
+ *                    to HEAD there is nothing to be affected by, so lint, test, build and
+ *                    typecheck run `run-many --all` instead — see `scope` below.
  *   --tail <n>       lines of failing output to show (default 40)
+ *   --print-scope    print the resolved scope and the exact argv of the four scoped gates, then
+ *                    exit. Runs nothing.
  *   --require-complete  exit 1 unless the verdict is `pass`: every gate ran and passed
  *   --platform-sensitive  only the gates whose verdict can differ by operating system,
  *   --require-scope-complete  exit 1 unless every SELECTED gate ran and passed
@@ -51,6 +55,59 @@ for (let i = 2; i < process.argv.length; i += 1) {
 const phase = args.get('phase') ?? 'adhoc';
 const base = args.get('base') ?? process.env['NX_BASE'] ?? 'origin/main';
 const tail = Number(args.get('tail') ?? 40);
+
+/**
+ * Does `--base` resolve to HEAD?
+ *
+ * If it does, `nx affected --base=<base>` matches **zero projects**, and the four gates built on
+ * it pass in seconds having compiled, linted and run nothing. That is the state `main` is in:
+ * check out `main`, pull, and `base` is `origin/main` is `HEAD`. The in-gate timings looked like
+ * cache replay and were not — lint 19.0 s, test 1.5 s, build 1.4 s, typecheck 1.5 s, because Nx
+ * found nothing to do. **A green gate on `main` said nothing whatever about the code**, and a
+ * lint error merged to `main` was never seen by the gate again.
+ *
+ * So when the base is HEAD the scoped gates run `run-many --all` instead. Not a fallback and not
+ * a widening: with no diff to narrow by, the whole workspace *is* the affected set, and the only
+ * other honest option is to refuse to run at all. Cold, the full set is lint 29 projects, test
+ * 25, build 6 + 2, typecheck 8 + 1 — affordable, and measured in the pull request.
+ *
+ * Compared by resolved SHA, not by ref name: `--base=main` on `main`, `--base=HEAD`, an explicit
+ * SHA of the current commit and the default `origin/main` on a freshly pulled `main` are all the
+ * same situation, and only the SHA sees that.
+ *
+ * **Peeled to a commit with `^{commit}`**, because `git rev-parse` on an *annotated* tag returns
+ * the tag object's own SHA, not the commit it points at. So `--base=v1.2.3` with that tag sitting
+ * on HEAD compared unequal, took the `affected` path, and Nx — which peels the ref itself — then
+ * diffed HEAD against HEAD and ran zero projects. That is the vacuous pass this whole mechanism
+ * exists to remove, reachable through a perfectly valid base ref. Found by review on PR #544 and
+ * confirmed against a real annotated tag before fixing.
+ *
+ * A base that git cannot resolve — a shallow clone with no `origin/main`, a ref that does not
+ * exist — is left to Nx to report. Guessing `--all` there would turn a broken checkout into a
+ * fifteen-minute run whose failure says nothing about the checkout.
+ */
+const headSha = gitFact(['rev-parse', 'HEAD^{commit}'], null);
+const baseSha = gitFact(['rev-parse', `${base}^{commit}`], null);
+const baseIsHead = headSha !== null && baseSha !== null && baseSha === headSha;
+const scope = baseIsHead ? 'all' : 'affected';
+
+/**
+ * The argv for a gate that would otherwise be `nx affected -t <target>`.
+ *
+ * One function, so the four gates cannot drift into disagreeing about scope — which is how this
+ * defect would come back: a fifth target added as plain `affected` is vacuous on `main` again,
+ * and nothing would say so.
+ *
+ * @param {string} target
+ * @returns {string[]}
+ */
+const scoped = (target) =>
+  baseIsHead
+    ? ['nx', 'run-many', '-t', target, '--all']
+    : ['nx', 'affected', '-t', target, `--base=${base}`];
+
+/** The label carries the scope, so a report cannot be read as the other one. */
+const scopedLabel = (what) => (baseIsHead ? `${what} (all projects)` : `Affected ${what}`);
 
 /**
  * Ordered cheapest-first. Stopping at the first failure is deliberate: a lint
@@ -239,6 +296,23 @@ const ALL_GATES = [
     // Which checks were observed failing on purpose is the evidence, so surface it on a pass too.
     echoOnPass: true,
   },
+  // The recovery that the gate above now depends on when it is interrupted. Registered rather than
+  // left to be run by hand, for the reason this repository already applies to a committed scenes
+  // file: nothing in CI referenced it, so it would be code that never executes and rots as the
+  // selftest's perturbations move. Runs straight after, because it perturbs the same real files.
+  {
+    id: 'sanitizer-recovery-selftest',
+    // The recovery it proves is a marker file and a byte comparison — pure filesystem, identical on
+    // every OS. What is *not* identical is how a process dies: Windows has no signals, so Node turns
+    // a hard kill into an abrupt exit. The controls accept either, but the trigger being a different
+    // mechanism there is why this is not worth a second slow Windows job (NXSAT-751).
+    platformSensitive: false,
+    label: 'Sanitizer selftest crash-recovery controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/sanitizer-selftest-recovery.selftest.mjs'],
+    // Same reasoning as above: the controls are the evidence, so show them on a pass.
+    echoOnPass: true,
+  },
   // Static, so it belongs with the cheap gates — and it guards the one thing the
   // other six structurally cannot. Lint, test, build and typecheck all check the
   // *application*; nothing checked whether the *evidence* was capable of failing.
@@ -306,23 +380,26 @@ const ALL_GATES = [
   {
     id: 'lint',
     platformSensitive: true,
-    label: 'Affected lint',
+    label: scopedLabel('lint'),
+    scoped: true,
     tool: 'npx',
-    argv: ['nx', 'affected', '-t', 'lint', `--base=${base}`],
+    argv: scoped('lint'),
   },
   {
     id: 'test',
     platformSensitive: true,
-    label: 'Affected tests',
+    label: scopedLabel('tests'),
+    scoped: true,
     tool: 'npx',
-    argv: ['nx', 'affected', '-t', 'test', `--base=${base}`],
+    argv: scoped('test'),
   },
   {
     id: 'build',
     platformSensitive: true,
-    label: 'Affected build',
+    label: scopedLabel('build'),
+    scoped: true,
     tool: 'npx',
-    argv: ['nx', 'affected', '-t', 'build', `--base=${base}`],
+    argv: scoped('build'),
   },
   // Libraries have no `build` target — Nx's module-boundary rule forbids a
   // buildable library from importing a non-buildable one, and nothing in
@@ -332,9 +409,10 @@ const ALL_GATES = [
   {
     id: 'typecheck',
     platformSensitive: true,
-    label: 'Affected typecheck',
+    label: scopedLabel('typecheck'),
+    scoped: true,
     tool: 'npx',
-    argv: ['nx', 'affected', '-t', 'typecheck', `--base=${base}`],
+    argv: scoped('typecheck'),
   },
   // `typecheck` above covers library sources only: it runs the per-project targets, which
   // point at `tsconfig.lib.json`, and that config excludes `*.spec.ts` by construction.
@@ -439,6 +517,21 @@ const ALL_GATES = [
     cmd: 'node',
     argv: ['scripts/beta-harness/extension-reference-drift.mjs'],
   },
+  // Its negative controls, and the reason this gate had six review findings against it on #544,
+  // every one found by a human reading the diff: until `--root` existed it could only be run
+  // against the one repository it lives in, and that repository is correct. There was nothing to
+  // run it against. Each control builds a miniature repository that is wrong on purpose, under
+  // `os.tmpdir()`, so nothing tracked is touched and this is safe beside anything.
+  {
+    id: 'reference-drift-selftest',
+    // Fixture repositories and string comparison; no path semantics that differ by OS.
+    platformSensitive: false,
+    label: 'Extension reference drift controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/extension-reference-drift.selftest.mjs'],
+    // Which of the six findings each control pins is the evidence, so surface it on a pass too.
+    echoOnPass: true,
+  },
   // The same question for the page that shows each `nxs-` component with and without Satori: it
   // lives on Confluence, so a component added without a section there is missed in review. Fails
   // on a barrel component with no section, a section with no component, and a section whose ID,
@@ -485,6 +578,69 @@ const ALL_GATES = [
     argv: ['scripts/storybook-assemble-site.selftest.mjs'],
     echoOnPass: true,
   },
+  // The published addresses this repository advertises, and the ones it records as dead.
+  //
+  // Next to `supply-chain` and `peer-installability` in kind: it needs the network, so it declares
+  // the same skip. Registered because two addresses went wrong in October and neither was noticed
+  // by anything here — `https://nuxeo.github.io/agentic-ui-poc/` has been 404 with no redirect
+  // since the 30 October rename, because GitHub redirects a renamed repository's URL and not its
+  // Pages site; and the public Storybook was five days stale, found only because a human opened
+  // the page. A liveness check alone would rot in the direction nobody looks, so the gate is
+  // two-directional: a recorded-dead address that starts answering fails it too.
+  {
+    id: 'published-links',
+    // HTTP status codes from GitHub. Nothing about it reads the filesystem.
+    platformSensitive: false,
+    label: 'Published links',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/published-links.mjs'],
+    mayNotRun: true,
+    // Which addresses were checked, and which are recorded dead and whose they are, is the point.
+    echoOnPass: true,
+  },
+  // Its negative controls, against a local HTTP server. The gate observes one state of the world
+  // at a time and today both of its lists are correct, so nothing about a real run tells a working
+  // check from one that returns pass unconditionally. Four of the eight controls are negative.
+  {
+    id: 'published-links-selftest',
+    platformSensitive: false,
+    label: 'Published links controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/published-links.selftest.mjs'],
+    echoOnPass: true,
+  },
+  // The controls for the weekly AGENTS/ staleness report, and for the workflow that files it.
+  //
+  // Registered rather than left as a script someone remembers to run, because the thing it covers
+  // is the least observable kind of defect this repository has: `staleness-check.yml` interpolated
+  // its own generated text into a shell body, failed on exit 127 for seven consecutive weeks from
+  // 14 September, and filed nothing. The issue step runs *only* when there is drift, so the job
+  // was green precisely when it had nothing to report — nobody had a reason to look.
+  //
+  // Two of its nine controls are negative in the strict sense: they run the OLD interpolated shell
+  // with a hostile value and require it to misbehave. Without them the suite would not distinguish
+  // a closed injection from a harmless fixture.
+  //
+  // In process, fixtures under `os.tmpdir()`, ~1 s.
+  {
+    id: 'staleness-report-selftest',
+    /* The workflow it covers runs on `ubuntu-latest` and nowhere else, and what is under test is
+     * a Node script's text handling plus the shape of a YAML `run:` body — neither of which a
+     * second operating system can say anything new about. The one `bash` control deliberately
+     * reproduces a Linux runner's shell, so running it under a different shell would weaken it
+     * rather than widen the coverage.
+     *
+     * Declared `false` after the Windows job proved the point from the other direction: two
+     * controls need a filename containing `>` or a newline, which Win32 cannot create, so they
+     * failed on the filesystem rather than on the subject. They are POSIX-gated and reported as
+     * SKIPPED now, so a Windows developer's full `beta:gate` is green and honest about what ran. */
+    platformSensitive: false,
+    label: 'AGENTS staleness report controls',
+    cmd: 'node',
+    argv: ['scripts/agents-staleness-report.selftest.mjs'],
+    // Which controls are negative is the evidence, so surface it on a pass too.
+    echoOnPass: true,
+  },
   // `.cursor/` is the source for the agent configuration and `.claude/` and `.agent/` are
   // generated copies, so three copies of every skill exist with nothing comparing them. That
   // is the shape of drift this repository keeps paying for, and it is worse here than usual:
@@ -522,6 +678,62 @@ const ALL_GATES = [
     // reference library, which proves it passes, and its selftest, which proves it can fail.
     tool: 'npm',
     argv: ['run', '--silent', 'beta:customer-guardrails'],
+    echoOnPass: true,
+  },
+  // The nx commands THIS runner does not use. Every gate above that touches nx builds
+  // `nx affected -t <target> --base=<base>` or `nx run-many -t <target> --all`, and neither
+  // passes `--exclude` or a project pattern — so `findMatchingProjects`, which is where nx turns
+  // a pattern into a regex, is reached by nothing here. CI's `test` job does pass
+  // `--exclude=browse,document-detail,knowledge-discovery,search`, and that is how a tree where
+  // nx cannot compile a pattern at all was green through every local gate while CI's affected
+  // leg died (run 42932394850): a `minimatch@^10` override reached nx's exact `10.2.5` pin, and
+  // minimatch 11.0.1 had removed the `makeRe` nx calls.
+  //
+  // Last rather than early on purpose, and it is a real cost: on a broken tree `lint`, `test`,
+  // `build` and `typecheck` all pass first, because none of them walks that path, so the red
+  // arrives minutes late. The alternative was renumbering 36 rows of the §2 inventory for a
+  // CI-only fix. If this gate ever fires in anger, moving it next to `lockfile` — where it
+  // belongs by cost and by subject — is the right follow-up.
+  {
+    id: 'nx-project-matching',
+    // Spawns nx and walks `node_modules/nx/dist`, so a Windows run can tell you something a
+    // macOS run cannot: whether the probes' directory patterns still match a project root there.
+    platformSensitive: true,
+    label: 'Nx project-pattern matching',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/nx-project-matching.mjs'],
+    // The subject, the two patterns and the minimatch version it checked are the evidence that
+    // the probes ran against something real, so surface them on a pass too.
+    echoOnPass: true,
+  },
+  // And its controls, because the gate above shipped wrong in exactly the way this repository
+  // keeps paying for: check C accepted a scanned `minimatch` member under EITHER access path,
+  // which is green against the break it was written for — 11.0.1 dropped `makeRe` from both — and
+  // green against half of it. A minimatch keeping the named export and dropping the function
+  // property satisfies "either" while every `minimatch_1.minimatch.makeRe(…)` call still throws.
+  // Review (#586) found it by reading the code, because the gate had no controls at all.
+  //
+  // The second round of review found the worse end of the same class: the gate's main-module guard
+  // compared `import.meta.url` against `new URL('file://' + process.argv[1])`, so a checkout path
+  // containing `#` or `?` had its tail read as a fragment or a query, `main()` never ran, and the
+  // gate exited **0 having checked nothing**. A silent pass is worse than a wrong failure —
+  // nothing in the log tells it apart from a healthy run. Two controls now invoke the gate for
+  // real through exactly those paths and require exit 2.
+  //
+  // Fixtures under `os.tmpdir()` and no tracked file touched. The gathering half past the first
+  // step (`createRequire` against nx's tree, `statSync` on `nx/dist/src`) is the class of verdict
+  // these controls cannot reach, and both files say so rather than leaving a reader to infer it.
+  {
+    id: 'nx-project-matching-selftest',
+    // It builds symlinks, spawns the gate, and compares file URLs — `#` is a legal filename
+    // character on Windows and `?` is not, Windows needs a permission for symlinks at all, and
+    // path canonicalisation is the thing under test. A Windows run can tell you what macOS cannot.
+    platformSensitive: true,
+    label: 'Nx project-pattern matching controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/nx-project-matching.selftest.mjs'],
+    // The negative/positive split is the evidence, not noise: "37 controls passed" says nothing
+    // about whether any of them could have failed.
     echoOnPass: true,
   },
 ];
@@ -580,8 +792,32 @@ if (args.has('list-gates')) {
   process.exit(0);
 }
 
+/* `--print-scope` resolves the scope and runs nothing.
+ *
+ * It prints the gates' own `argv` arrays, not a re-derivation of them, so a control reading this
+ * output is reading the command that would be executed. A second copy of the decision here —
+ * even one that looked right — would be exactly the self-confirming check this repository has
+ * shipped three of: it would stay green with `scoped()` wired to `affected` unconditionally. */
+if (args.has('print-scope')) {
+  console.log(`scope ${scope}`);
+  console.log(`base ${base}${baseSha ? ` (${baseSha.slice(0, 9)})` : ' (unresolved)'}`);
+  console.log(`head ${headSha ? headSha.slice(0, 9) : 'unresolved'}`);
+  for (const gate of ALL_GATES.filter((g) => g.scoped)) {
+    console.log(`${gate.id} ${gate.tool ?? gate.cmd} ${gate.argv.join(' ')}`);
+  }
+  process.exit(0);
+}
+
 console.log(`\nBeta verification gate — ${phase}`);
 console.log(`  base   ${base}`);
+/* Printed every run, not only in the `--all` case. A reader who sees `affected` knows the run
+ * speaks for the diff and nothing else; a reader who sees nothing assumes whichever they expected,
+ * which is how the vacuous figures on `main` were quoted for weeks as if they covered the code. */
+console.log(
+  baseIsHead
+    ? `  scope  run-many --all — ${base} resolves to HEAD, so nothing is affected`
+    : `  scope  affected --base=${base} — this run speaks for the diff, not the workspace`,
+);
 console.log(
   `  gates  ${selected.map((g) => g.id).join(' -> ')}  (${selected.length} of ${ALL_GATES.length})`,
 );
@@ -664,12 +900,15 @@ const {
 });
 
 /**
- * The commit the gate actually ran against, and whether the tree was dirty.
+ * One fact out of git, or `fallback` if git refused.
  *
- * `ranAt` alone cannot answer the question that matters — "does this report
- * describe the code as it is now?" — because a wall-clock time says nothing about
- * what was committed since. `state-check.mjs` uses this to reject a phase signed
- * off on a run that predates the source it claims to cover.
+ * Hoisted on purpose: the scope resolution at the top of the file calls it too, and resolving
+ * `--base` against HEAD there is what decides whether the scoped gates are `affected` or `--all`.
+ *
+ * @param {readonly string[]} argv
+ * @param {T} fallback
+ * @template T
+ * @returns {string | T}
  */
 function gitFact(argv, fallback) {
   const proc = spawnSync('git', argv, { encoding: 'utf8' });
@@ -680,7 +919,14 @@ const report = {
   phase,
   verdict,
   base,
+  /* `affected` or `all`. Without it a report cannot be told apart from one whose scoped gates
+   * matched zero projects, and that is the distinction the whole of G3 is about. */
+  scope,
   ranAt: new Date().toISOString(),
+  /* The commit the gate actually ran against. `ranAt` alone cannot answer the question that
+   * matters — "does this report describe the code as it is now?" — because a wall-clock time says
+   * nothing about what was committed since. `state-check.mjs` uses this to reject a phase signed
+   * off on a run that predates the source it claims to cover. */
   commit: gitFact(['rev-parse', 'HEAD'], null),
   // A green gate on a dirty tree describes something no commit contains.
   dirty: gitFact(['status', '--porcelain'], '') !== '',

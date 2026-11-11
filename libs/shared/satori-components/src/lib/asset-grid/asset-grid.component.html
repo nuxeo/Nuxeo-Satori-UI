@@ -1,0 +1,56 @@
+@if (assets().length > 0) {
+  <!-- A real `<ul>`/`<li>`, not a `div` carrying `role="list"`: the native elements say the same
+       thing without an ARIA attribute, which is what `Web:S6819` asks for. The markers are gone
+       because the items are `display: flex`, not `display: list-item` — not because of
+       `list-style: none`, which is the one way to lose the list role in VoiceOver. -->
+  <ul
+    class="nxs-asset-grid__grid"
+    [attr.aria-label]="ownLabel() || ('satori-components.asset-grid.label' | translate)"
+  >
+    @for (asset of assets(); track asset.id) {
+      <li
+        class="nxs-asset-grid__card"
+        [class.nxs-asset-grid__card--selected]="isSelected(asset.id)"
+      >
+        @if (selectable()) {
+          <div class="nxs-asset-grid__select">
+            <!-- `[aria-label]`, Material's own input, not `[attr.aria-label]`: the checkbox role is
+                 the inner `<input>`, which a name on the host element does not reach. -->
+            <mat-checkbox
+              [checked]="isSelected(asset.id)"
+              [aria-label]="'satori-components.asset-grid.select' | translate: { name: asset.name }"
+              (change)="toggle(asset.id)"
+            />
+          </div>
+        }
+
+        <div class="nxs-asset-grid__thumbnail">
+          @if (asset.thumbnailUrl; as url) {
+            <img class="nxs-asset-grid__image" [src]="url" alt="" />
+          } @else {
+            <mat-icon class="nxs-asset-grid__icon" [svgIcon]="asset.icon" />
+          }
+        </div>
+
+        <div class="nxs-asset-grid__body">
+          <!-- The title carries the type as well as the name. Both are clipped with an ellipsis,
+               and the pill is `pointer-events: none` so it cannot hold a tooltip of its own; this
+               button's hit area covers the whole card, so hovering anywhere — the pill included —
+               reads out both in full. -->
+          <button
+            type="button"
+            class="nxs-asset-grid__name"
+            [title]="
+              'satori-components.asset-grid.name-and-type'
+                | translate: { name: asset.name, type: asset.type | docTypeLabel }
+            "
+            (click)="open(asset)"
+          >
+            {{ asset.name }}
+          </button>
+          <span class="nxs-asset-grid__type">{{ asset.type | docTypeLabel }}</span>
+        </div>
+      </li>
+    }
+  </ul>
+}

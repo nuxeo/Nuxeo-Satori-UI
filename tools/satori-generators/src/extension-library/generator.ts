@@ -7,8 +7,8 @@ import {
   updateProjectConfiguration,
   type Tree,
 } from '@nx/devkit';
-import { join } from 'node:path';
 
+import { generatorFilesDir } from '../util/generator-files-dir';
 import type { SatoriProjectConfiguration } from '../util/library-context';
 
 export interface ExtensionLibrarySchema {
@@ -125,7 +125,7 @@ export default async function extensionLibraryGenerator(
   };
   configure(tree, name.fileName, config);
 
-  generateFiles(tree, join(__dirname, 'files'), projectRoot, substitutions);
+  generateFiles(tree, generatorFilesDir('extension-library'), projectRoot, substitutions);
 
   // Register the import alias, or the application cannot reference the library.
   updateJson(tree, 'tsconfig.base.json', (json) => {

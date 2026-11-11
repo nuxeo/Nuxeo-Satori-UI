@@ -8,6 +8,15 @@ Read Part 0 and Part 6 before anything else. Part 6 is the list of things that d
 is the more useful half of this document, because the failure mode of a demo like this is
 confidently showing something that is not there.
 
+> **This is a presenter's runbook, not a customer's instructions.** It drives a local dev server,
+> so it needs the full contributor install and `SATORI_GH_READONLY_TOKEN` — without that token
+> `npm ci` fails and nothing in Part 0 past 0.1 can run. **Do not hand this document to a customer
+> as "how to customise it".** `npm run config:dev` is a dev-server shortcut that writes files
+> `nx serve` reads; it exists so a beat takes seconds instead of a package install, and it does not
+> exist on a real server. The same changes, done for real, are a configuration package:
+> [**CUSTOMISING.md**](../CUSTOMISING.md), which needs Node and nothing else. Every beat's JSON is
+> the same JSON either way — only the delivery differs.
+
 ---
 
 ## Part 0 — Pre-flight, 30 minutes before
@@ -230,8 +239,9 @@ Two independent artefacts, and a clean support boundary.
 four for Layer 2 libraries, one for configuration packages — and the guardrail script.
 
 **Say "publishable", not "published".** Nothing is on any registry — that is a deliberate later
-step. `private: true` remains in the built `package.json` as an intentional tripwire; the
-publishability check _fails_ if it is missing. Verified: `nx build platform` exit 0,
+step. The built `package.json` is public and names the Nuxeo registry in `publishConfig`
+(NXSAT-667); the publishability check _fails_ if `private: true` returns or the registry is
+missing. Verified: `nx build platform` exit 0,
 `npm publish --dry-run` succeeds, and the template app compiles against the built types.
 
 **On the name:** the package in the repo today is `@nuxeo/satori-platform`, and that is the form
@@ -300,6 +310,14 @@ adf-hx entirely. _Changed by NXSAT-638 (2026-10):_ adf-hx is no longer in the pr
 
 Timings are measured on a warm dev server.
 
+Beats 3 to 7 change the product by configuration. Each gives the JSON and applies it with
+`npm run config:dev`, which is the dev-server shortcut — it writes the files `nx serve` reads, and
+needs this repository installed. **If someone in the room asks how they would do it,** the answer
+is not that command: it is the same JSON in a `bootstrap` or `manifest` fragment of their own
+package, built with `node build.mjs` and installed with `nuxeoctl mp-install`, which needs Node and
+nothing else. [`CUSTOMISING.md`](../CUSTOMISING.md) is the page to send them, and Part 0.7 and
+Beat 12 show that route running.
+
 ### Beat 1 — The product as shipped (2 min)
 
 `/#/browse/default-domain`. Real repository, 113 documents. This is the baseline; everything after
@@ -365,7 +383,8 @@ accent applied.
 **Demo** `documentTitle`**, not** `applicationTitle` — see F2. The logo is demoable since NXSAT-313,
 with limits worth saying before anyone asks: it does not replace the Hyland mark at the top of the
 navigation rail or the "Content Innovation Cloud" title shown when the rail is expanded (both
-hard-coded in Satori's `sat-platform-nav`), nor the favicon.
+hard-coded in Satori's `sat-platform-nav`). The browser tab icon is a separate key,
+`branding.favicon` (NXSAT-313).
 
 The strongest version of this beat: point out that the JavaScript bundle is byte-identical before
 and after. It was verified by hashing `main-*.js` across a rebrand — `sha256` unchanged.
@@ -857,7 +876,9 @@ Yes, in a bootstrap fragment with no rebuild of the application: `branding.logo`
 package contributes, served at `agentic-ui-config/assets/<name>`, and it replaces the Satori word
 mark in the header and the lockup on the login page. It does not replace the Hyland mark at the top
 of the navigation rail or the "Content Innovation Cloud" title shown when the rail is expanded (both
-hard-coded in Satori's `sat-platform-nav`), and the favicon cannot be changed yet.
+hard-coded in Satori's `sat-platform-nav`). The browser tab icon has its own key,
+`branding.favicon`, taking an asset the same way (NXSAT-313); the Apple and Microsoft tile
+variants do not.
 
 **"Is this adf-hx or your own UI?"**
 Both, deliberately. Six upstream components render real adf-hx surfaces; the surrounding chrome is
@@ -889,7 +910,7 @@ renders upstream's read-only properties panel either; metadata is on the documen
 | #       | What                                                                                                               | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **F0**  | **The customer extension on** `:4200`                                                                              | `nuxeo-ui` never registers `acme.`*. No manifest can add it — Layer 1 only addresses IDs that code registered. Layer 2 lives on `:4310`.                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **F1**  | ~~**A logo change**~~ — **withdrawn 2026-10-06, it is demoable**                                                   | NXSAT-313 added `branding.logo` to `AppBrandingConfig`: an image the configuration package contributes replaces the Satori word mark in the header and the lockup on the login page, with no rebuild of the application (the configuration package is still built and installed). See Beat 3. The navigation-rail mark and the expanded rail's "Content Innovation Cloud" title (hard-coded in Satori's `sat-platform-nav`) and the **favicon** have no key and remain out of scope.                                                                         |
+| **F1**  | ~~**A logo change**~~ — **withdrawn 2026-10-06, it is demoable**                                                   | NXSAT-313 added `branding.logo` to `AppBrandingConfig`: an image the configuration package contributes replaces the Satori word mark in the header and the lockup on the login page, with no rebuild of the application (the configuration package is still built and installed). See Beat 3. The navigation-rail mark and the expanded rail's "Content Innovation Cloud" title (hard-coded in Satori's `sat-platform-nav`) have no key and remain out of scope. The **favicon** has one, `branding.favicon`, added later under the same ticket.             |
 | **F2**  | `applicationTitle` **in the header**                                                                               | The route label wins. With the brand set, `/#/browse` still reads "Browse". It only surfaces on a route no nav entry matches. Demo `documentTitle` — the browser tab — which changes everywhere.                                                                                                                                                                                                                                                                                                                                                             |
 | **F3**  | **Branding in a manifest fragment**                                                                                | Two separate layers. Branding is a `bootstrap` fragment; `runtime-manifest.ts` has no `branding` key.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **F4**  | `overrides` **with** `hiddenByDefault` **/** `sortable` **/** `field`                                              | Silently dropped; `overrides` honours only `order`, `label`, `rule`, `visible`. Use `slots.documentList`. The doc example was wrong and is now fixed.                                                                                                                                                                                                                                                                                                                                                                                                        |

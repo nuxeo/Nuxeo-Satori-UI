@@ -1,10 +1,18 @@
-# agentic-ui-poc
+# Nuxeo Agentic UI
 
-**Nuxeo Agentic UI** — a modern web interface for Nuxeo, delivered as a Marketplace package, that you change by configuration or with your own code.
+A modern web interface for Nuxeo, delivered as a Marketplace package, that you change by configuration or with your own code. You will also see it called **Nuxeo Satori** — the programme name, the title the Marketplace listing shows, and the name of this repository (`nuxeo/Nuxeo-Satori-UI`, renamed from `nuxeo/agentic-ui-poc` on 30 October 2026); the package itself is `nuxeo-agentic-ui`.
 
-> **Not a developer on this repository?** Read [the short version](documentation/20-product/00-the-short-version.md): five minutes on what it does, what it does not, what you can change without code, and how to start. To customise it with an AI coding agent, use the [prompt library](https://github.com/nuxeo-sandbox/nuxeo-agentic-ui-prompts).
+> **Customising it? Start at [CUSTOMISING.md](CUSTOMISING.md).** Changing the product name, the
+> logo, the colours, the wording, or which menu entries, buttons, tabs and columns appear needs
+> **Node.js and nothing else** — no dependencies to fetch, no registry token, no account. That page
+> is the whole path, end to end. **The Commands block below is not it**: those commands are for
+> people working on Satori itself and need credentials you have no reason to have.
+>
+> **New to the product?** Read [the short version](documentation/20-product/00-the-short-version.md):
+> five minutes on what it does, what it does not, and what you can change without code. To
+> customise it with an AI coding agent, use the [prompt library](https://github.com/nuxeo-sandbox/nuxeo-agentic-ui-prompts).
 
-The rest of this page is for developers. Nx + **Angular 22** monorepo for Nuxeo Agentic UI, built with AI coding agents. PoC charter: [README.charter.md](README.charter.md). Boundaries and aliases: [docs/architecture.md](docs/architecture.md).
+The rest of this page is for developers of Satori itself. Nx + **Angular 22** monorepo for Nuxeo Agentic UI, built with AI coding agents. PoC charter: [README.charter.md](README.charter.md). Boundaries and aliases: [docs/architecture.md](docs/architecture.md).
 
 The `nuxeo-ui` app uses a root [`angular.json`](angular.json) for `ng build` / `ng serve` / `ng test` (Karma); Nx targets in [`apps/nuxeo-ui/project.json`](apps/nuxeo-ui/project.json) delegate to the Angular CLI (`nx:run-commands`) to avoid an Nx 22 + Angular application-builder schema bug (`visitor is not a function`). Libraries use **Vitest 4** and **Analog 2.9** (aligned with Angular 21).
 
@@ -22,10 +30,17 @@ The `nuxeo-ui` app uses a root [`angular.json`](angular.json) for `ng build` / `
 | `libs/features/document-detail` | `document-detail`  | Document detail feature (lazy route)                  |
 | `libs/shared/ai-client`         | `shared-ai-client` | Angular AI gateway service + chat state + models      |
 
-## Commands
+## Commands — contributors only
+
+Every command below needs the dependencies installed, and installing them needs
+**`SATORI_GH_READONLY_TOKEN`**, a GitHub token with `read:packages` on the Hyland organisation:
+`@hylandsoftware/satori-ui` is a hard dependency, so without that token `npm ci` fails with E401,
+there is no `node_modules`, and no `nx` command can run. **Customising Satori needs none of this —
+see [CUSTOMISING.md](CUSTOMISING.md).**
 
 ```bash
-npm install
+export SATORI_GH_READONLY_TOKEN=<pat>
+npm ci                        # never a bare install — documentation/30-engineering/06-tools-and-commands.md §1
 npm run dev                   # http://localhost:4200
 npx nx serve nuxeo-ui         # same as above
 npx nx build nuxeo-ui
@@ -35,6 +50,7 @@ npx nx test <project>         # e.g. core, nuxeo-ui, browse
 
 ## Docs
 
+- [CUSTOMISING.md](CUSTOMISING.md) — **customising Satori**: the whole no-code path, Node only
 - [documentation/README.md](documentation/README.md) — **documentation home**: where to start, by who you are
 - [docs/ai-features.md](docs/ai-features.md) — **AI features guide** (NL search, summarization, chat, tagging, anomaly detection, etc.)
 - [docs/knowledge-discovery.md](docs/knowledge-discovery.md) — Knowledge Discovery page setup and flow (via Nuxeo CIC connector)

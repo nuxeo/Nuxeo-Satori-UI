@@ -130,6 +130,22 @@ class ClaimViewComponent {
 })
 class CaseViewComponent {}
 
+/**
+ * NXSAT-746's repro: a registered component with a **required** input that the manifest
+ * entry never supplies. It is found and loaded without complaint, and throws NG0950 on the
+ * first change detection of its host view — after `createComponent`, so nothing around the
+ * construction can see it. A mistyped input name reaches the same place.
+ */
+@Component({
+  standalone: true,
+  selector: 'lib-test-throwing-view',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: '<p class="throwing-view">NEEDS {{ mandatory() }}</p>',
+})
+class ThrowingViewComponent {
+  readonly mandatory = input.required<string>();
+}
+
 /** A customer's permissions panel, registered under the packaged panel's ID. */
 @Component({
   standalone: true,
@@ -347,6 +363,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
             'acme.views.claim': ClaimViewComponent,
             'acme.views.case': CaseViewComponent,
             'acme.views.broken': () => Promise.reject(new Error('chunk failed to load')),
+            'acme.views.throwing': ThrowingViewComponent,
             'acme.views.flaky': () =>
               ++flakyLoads === 1
                 ? Promise.reject(new Error('chunk failed to load'))
@@ -1188,6 +1205,75 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
           .querySelector('.document-view-outlet')
           ?.classList.contains('document-view-outlet--unresolved'),
       ).toBe(true);
+    });
+
+    /**
+     * NXSAT-746. A `documentView` entry naming a component that throws while it is drawn must
+     * leave the View tab showing the packaged viewer, and must not take anything round it down.
+     *
+     * Seen red on purpose before the fix: `render()` itself threw NG0950 out of
+     * `fixture.detectChanges()`, so the test aborted before its first expectation — the throw
+     * escaped the change detection that draws the tab body, which is the defect.
+     *
+     * The tab row is asserted as a **control**, deliberately. The ticket reports the whole group
+     * disappearing — View, Annotations, Permissions, History and Publishing — and on this build
+     * it does not: the browser evidence for the fix shows the strip surviving and only the body
+     * blanking, because the body is an `ng-template` the tabs component instantiates in a view
+     * of its own. Asserting it anyway is what would catch a containment that cost the strip.
+     */
+    it('keeps the tab group and falls back when a custom view throws while drawing', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      await render(
+        {
+          slots: {
+            documentView: [forType('acme.documentView.throwing', 'acme.views.throwing', ['Claim'])],
+          },
+        },
+        claim(),
+      );
+
+      expect(tabLabels()).toEqual(['View', 'Annotations', 'Permissions', 'History', 'Publishing']);
+      expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
+      expect(viewBody().querySelector('.throwing-view')).toBeNull();
+      expect(
+        viewBody()
+          .querySelector('.document-view-outlet')
+          ?.classList.contains('document-view-outlet--unresolved'),
+      ).toBe(true);
+
+      // Reported, and reported once — the entry names itself so a customer can find it.
+      const reported = warn.mock.calls.filter((call) =>
+        String(call[0]).includes('[agentic-ui-extensions]'),
+      );
+      expect(reported).toHaveLength(1);
+      expect(String(reported[0]?.[0])).toContain('acme.views.throwing');
+      warn.mockRestore();
+    });
+
+    /**
+     * The control for the test above, and for the ticket's "other types still work": the
+     * guarded first render must not turn every custom view into a fallback. A valid entry on
+     * one type and a throwing entry on another, in the same manifest.
+     */
+    it('still renders a valid custom view while another type’s view throws', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const slots = {
+        documentView: [
+          forType('acme.documentView.throwing', 'acme.views.throwing', ['File']),
+          forType('acme.documentView.claim', 'acme.views.claim', ['Claim']),
+        ],
+      };
+
+      await render({ slots }, claim());
+      expect(viewBody().textContent).toContain('CLAIM VIEW Claim CLM-42');
+      expect(viewBody().querySelector('lib-document-viewer')).toBeNull();
+      expect(tabLabels()).toEqual(['View', 'Annotations', 'Permissions', 'History', 'Publishing']);
+
+      await render({ slots });
+      expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
+      expect(tabLabels()).toEqual(['View', 'Annotations', 'Permissions', 'History', 'Publishing']);
+      warn.mockRestore();
     });
 
     it('recovers the contributed view on a refetch after its loader failed once', async () => {

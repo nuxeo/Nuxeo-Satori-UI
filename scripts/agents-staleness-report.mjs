@@ -1,0 +1,183 @@
+#!/usr/bin/env node
+/**
+ * Which `nuxeo-client` services are missing from `AGENTS/01-services.md`, as an issue body.
+ *
+ * ## The defect this replaces
+ *
+ * `staleness-check.yml` did this in bash, and interpolated its own generated text back into a
+ * shell body with `${{ steps.check.outputs.missing }}`. The text contains backticks — the list
+ * items read `` - `content-model.service.ts` not found in … `` — so bash took them as command
+ * substitution and tried to execute `content-model.service.ts`, exiting 127.
+ *
+ * It failed **seven consecutive weeks**, from 14 September, and filed nothing. Nobody noticed
+ * because the issue step runs *only when there is drift to report*: a green run meant "nothing to
+ * say", a red run meant "something to say, and it will not be said", and those are the two states
+ * a scheduled job is least likely to be watched in.
+ *
+ * ## Why a script rather than better quoting
+ *
+ * Escaping the value would have fixed this instance and left the class. There is no shell body
+ * holding generated text here at all: this writes the issue body to a **file**, and the workflow
+ * passes that file to `gh issue create --body-file`. A service named
+ * `` `rm -rf ~`$(id).service.ts `` reaches the issue as those literal characters.
+ *
+ * ## Usage
+ *
+ *   node scripts/agents-staleness-report.mjs --out <path>
+ *   node scripts/agents-staleness-report.mjs --out <path> --services <dir> --doc <file>
+ *
+ * `--services` and `--doc` default to the real locations and exist so the controls in
+ * `agents-staleness-report.selftest.mjs` can drive it over fixtures, including hostile filenames
+ * that must never appear in this repository.
+ *
+ * Writes `drift_detected=true|false` to `$GITHUB_OUTPUT` when set, and always to stdout. The body
+ * file is written only when there is drift.
+ *
+ * Exit 0 whenever it could read its inputs: this reports, it does not gate. Exit 1 only when the
+ * services directory or the document is unreadable, because then "no drift" would be a lie.
+ */
+
+import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const repoRoot = resolve(import.meta.dirname, '..');
+
+const args = new Map();
+for (let i = 2; i < process.argv.length; i += 1) {
+  const arg = process.argv[i];
+  if (arg.startsWith('--')) args.set(arg.slice(2), process.argv[++i]);
+}
+
+const out = args.get('out');
+if (!out) {
+  console.error('agents-staleness-report: --out <path> is required.');
+  process.exit(1);
+}
+/* Defaults are relative to the repository, overrides to the caller's working directory — an
+ * override resolved against the repository root would silently look in the wrong place for
+ * anyone running this from anywhere else, which `--out` already does not do. */
+const DEFAULT_SERVICES = 'libs/shared/nuxeo-client/src/lib/services';
+const DEFAULT_DOC = 'AGENTS/01-services.md';
+const servicesDir = args.has('services')
+  ? resolve(args.get('services'))
+  : resolve(repoRoot, DEFAULT_SERVICES);
+const docPath = args.has('doc') ? resolve(args.get('doc')) : resolve(repoRoot, DEFAULT_DOC);
+
+let entries;
+let doc;
+try {
+  entries = readdirSync(servicesDir);
+  doc = readFileSync(docPath, 'utf8');
+} catch (error) {
+  console.error(
+    `agents-staleness-report: cannot read ${servicesDir} or ${docPath} — ${error.message}.\n` +
+      '  Reporting "no drift" from inputs it could not read is the failure mode worth avoiding.',
+  );
+  process.exit(1);
+}
+
+/**
+ * The service basename, as the bash version derived it: `basename "$file" .service.ts`.
+ *
+ * `*.spec*` is skipped for the same reason it was there — `browse.service.spec.ts` and
+ * `browse.service.export.spec.ts` are tests of a service, not services.
+ */
+const services = entries
+  .filter((name) => name.endsWith('.service.ts'))
+  .map((name) => name.slice(0, -'.service.ts'.length))
+  .filter((name) => !name.includes('.spec'))
+  .sort();
+
+/** Case-insensitive substring, matching the `grep -qi` the bash version used. */
+const lowerDoc = doc.toLowerCase();
+const missing = services.filter((name) => !lowerDoc.includes(name.toLowerCase()));
+
+/**
+ * One list item per service, whatever the filename contains.
+ *
+ * A POSIX filename may hold a newline, and the item template puts the name inside a `- ` bullet.
+ * So a service called `` a<newline>- `injected.service.ts` `` rendered as-is produced **three**
+ * bullet lines for two services — a forged entry in an issue a maintainer is meant to act on.
+ * Not a shell injection: the body reaches `gh issue create --body-file` and no shell parses it.
+ * It is a content forgery, and it was found by review (PR #544).
+ *
+ * C0 control characters are escaped rather than stripped. Stripping would silently rewrite the
+ * name, and the name is the thing the report exists to tell you; `\n` keeps it one line, keeps it
+ * legible, and keeps it faithful.
+ */
+function oneLine(name) {
+  return name.replace(
+    // eslint-disable-next-line no-control-regex
+    /[\u0000-\u001f\u007f]/g,
+    (character) =>
+      ({ '\n': '\\n', '\r': '\\r', '\t': '\\t' })[character] ??
+      `\\x${character.charCodeAt(0).toString(16).padStart(2, '0')}`,
+  );
+}
+
+/**
+ * `text` as a Markdown code span that cannot be escaped by backticks inside `text`.
+ *
+ * A single-backtick delimiter is not enough, and the consequence is worse than a mangled display.
+ * A filename may contain a backtick, and with an odd number of them the tail of the item falls
+ * **outside** the code span and is parsed as Markdown. Rendered through a real CommonMark parser,
+ * the legal filename `` a` @report-canary b.service.ts `` produced:
+ *
+ *     text outside <code>: "@report-canary b.service.ts` not found in AGENTS/01-services.md"
+ *
+ * — a live `@mention` in an issue a maintainer is meant to read, so a filename could notify people
+ * and inject markup. Raised in review on PR #554. `oneLine()` above stops a newline forging a
+ * list item; this stops a backtick forging anything else.
+ *
+ * CommonMark's rule: a code span may be delimited by any run of backticks, closed by a run of the
+ * same length, so a delimiter one longer than the longest run inside the text can never be closed
+ * early. The padding spaces matter when the text itself starts or ends with a backtick — a parser
+ * strips exactly one space from each end when both are present, so the content survives verbatim.
+ */
+function codeSpan(text) {
+  const longestRun = Math.max(0, ...[...text.matchAll(/`+/g)].map((m) => m[0].length));
+  const fence = '`'.repeat(longestRun + 1);
+  const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : '';
+  return `${fence}${pad}${text}${pad}${fence}`;
+}
+
+const driftDetected = missing.length > 0;
+
+if (driftDetected) {
+  writeFileSync(
+    out,
+    [
+      '## AGENTS.md Staleness Report',
+      '',
+      'The following service files exist in the codebase but are not documented in',
+      '`AGENTS/01-services.md`:',
+      '',
+      ...missing.map(
+        (name) => `- ${codeSpan(`${oneLine(name)}.service.ts`)} not found in AGENTS/01-services.md`,
+      ),
+      '',
+      '### What to do',
+      '',
+      '1. Open `AGENTS/01-services.md`',
+      '2. Add a section for each missing service with its public method signatures',
+      '3. Commit: `docs: update AGENTS/01-services.md with new services`',
+      '',
+      '---',
+      '',
+      '*Generated automatically by the AGENTS.md Staleness Agent (staleness-check.yml), through',
+      '`scripts/agents-staleness-report.mjs`.*',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
+const line = `drift_detected=${driftDetected}`;
+if (process.env['GITHUB_OUTPUT']) appendFileSync(process.env['GITHUB_OUTPUT'], `${line}\n`, 'utf8');
+console.log(line);
+console.log(
+  driftDetected
+    ? `${missing.length} of ${services.length} service(s) undocumented: ${missing.join(', ')}\n` +
+        `issue body written to ${out}`
+    : `all ${services.length} service(s) appear in ${args.get('doc') ?? DEFAULT_DOC}`,
+);

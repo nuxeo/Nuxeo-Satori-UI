@@ -1,0 +1,116 @@
+<section
+  class="nxs-asset-facets-drawer__panel"
+  [attr.aria-label]="ownLabel() || ('satori-components.asset-facets-drawer.label' | translate)"
+>
+  <p class="nxs-asset-facets-drawer__heading">
+    {{ 'satori-components.asset-facets-drawer.filters' | translate }}
+  </p>
+
+  <div class="nxs-asset-facets-drawer__group">
+    <label class="nxs-asset-facets-drawer__group-title" [for]="ids.fulltext">
+      {{ 'satori-components.asset-facets-drawer.full-text' | translate }}
+    </label>
+    <div class="nxs-asset-facets-drawer__input-wrap">
+      <input
+        [id]="ids.fulltext"
+        class="nxs-asset-facets-drawer__input"
+        type="search"
+        [placeholder]="'satori-components.asset-facets-drawer.search-placeholder' | translate"
+        [value]="text()"
+        (input)="onText($any($event.target).value)"
+        (keydown.enter)="submitText()"
+      />
+      @if (hasText()) {
+        <button
+          class="nxs-asset-facets-drawer__clear"
+          type="button"
+          [attr.aria-label]="'satori-components.asset-facets-drawer.clear' | translate"
+          (click)="clearText()"
+        >
+          <mat-icon svgIcon="x_large" />
+        </button>
+      }
+    </div>
+  </div>
+
+  @for (group of groups(); track group.id) {
+    <div class="nxs-asset-facets-drawer__group">
+      <!-- `aria-controls` only while the group is open: the options element below is rendered only
+           then, so naming it while collapsed is a reference to an element that is not in the
+           document. -->
+      <button
+        class="nxs-asset-facets-drawer__group-toggle"
+        type="button"
+        [attr.aria-expanded]="isExpanded(group.id)"
+        [attr.aria-controls]="isExpanded(group.id) ? ids.group(group.id) : null"
+        (click)="toggleGroup(group.id)"
+      >
+        <span class="nxs-asset-facets-drawer__group-label">{{ group.label }}</span>
+        <mat-icon
+          class="nxs-asset-facets-drawer__group-icon"
+          [svgIcon]="isExpanded(group.id) ? 'chevron_up' : 'chevron_down'"
+        />
+      </button>
+
+      @if (isExpanded(group.id)) {
+        <div class="nxs-asset-facets-drawer__options" [id]="ids.group(group.id)">
+          @if (group.dynamic && group.options.length === 0) {
+            <span class="nxs-asset-facets-drawer__no-results">{{
+              'satori-components.asset-facets-drawer.no-available-results' | translate
+            }}</span>
+          } @else {
+            @for (option of group.options; track option.value) {
+              <!-- `[aria-label]`, Material's own input, not `[attr.aria-label]`: the checkbox role is
+                   the inner `<input>`, which a name on the host element does not reach. -->
+              <mat-checkbox
+                class="nxs-asset-facets-drawer__option"
+                [checked]="option.selected"
+                [aria-label]="option.label"
+                (change)="toggleOption(group.id, option.value)"
+                >{{ option.label }}{{ countText(option) }}</mat-checkbox
+              >
+            }
+          }
+        </div>
+      }
+    </div>
+  }
+</section>
+
+<mat-divider />
+
+<div class="nxs-asset-facets-drawer__footer">
+  <div class="nxs-asset-facets-drawer__auto">
+    <span [id]="ids.autoLabel" class="nxs-asset-facets-drawer__auto-label">
+      {{ 'satori-components.asset-facets-drawer.auto-search' | translate }}
+    </span>
+    <!-- Material's own input, not `[attr.]`: the `switch` role is on the inner button, and the
+         component forwards this to it. Set as a bare attribute it would stay on the host, where
+         nothing reads it. -->
+    <mat-slide-toggle
+      [aria-labelledby]="ids.autoLabel"
+      [checked]="autoSearch()"
+      (change)="setAutoSearch($event.checked)"
+    />
+  </div>
+
+  <div class="nxs-asset-facets-drawer__actions">
+    <button mat-stroked-button type="button" (click)="run('reset')">
+      {{ 'satori-components.asset-facets-drawer.reset' | translate }}
+    </button>
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      [disabled]="!canSaveAs()"
+      (click)="run('save-as')"
+    >
+      {{ 'satori-components.asset-facets-drawer.save-as' | translate }}
+    </button>
+    @if (!autoSearch()) {
+      <button mat-flat-button color="primary" type="button" (click)="run('search')">
+        {{ 'satori-components.asset-facets-drawer.search' | translate }}
+      </button>
+    }
+  </div>
+</div>

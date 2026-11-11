@@ -6,9 +6,8 @@ name: Publish Platform
 # `dryRun` is false, and only with `--tag alpha`. The workflow never passes `latest`, and
 # promoting a version to `latest` is a separate, deliberate step.
 #
-# While `libs/platform/package.json` carries `"private": true`, npm refuses the real publish
-# with EPRIVATE. That flag is the switch NXSAT-667 flips. Until then this workflow can dry-run
-# and cannot publish.
+# `libs/platform/package.json` is public (NXSAT-667 removed `"private": true`), so a dispatch with
+# `dryRun: false` publishes for real. Keep it dispatch-only and keep the `alpha` tag.
 on:
   workflow_dispatch:
     inputs:

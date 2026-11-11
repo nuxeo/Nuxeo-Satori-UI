@@ -174,6 +174,14 @@
       "sTotal": 4,
       "sCovered": 4
     },
+    "trash": {
+      "lines": 35.47,
+      "statements": 35.47,
+      "branches": 18.75,
+      "functions": 23.86,
+      "sTotal": 296,
+      "sCovered": 105
+    },
     "ui": {
       "lines": 75.93,
       "statements": 75.93,

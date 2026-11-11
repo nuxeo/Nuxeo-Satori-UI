@@ -448,8 +448,8 @@ Estimated effort: **8 hours**.
 
 | Tool                                                        | Version    |
 | ----------------------------------------------------------- | ---------- |
-| Vitest                                                      | **4.1.10** |
-| `@vitest/coverage-v8`, `@vitest/ui`                         | 4.1.10     |
+| Vitest                                                      | **4.1.12** |
+| `@vitest/coverage-v8`, `@vitest/ui`                         | 4.1.12     |
 | jsdom                                                       | **28.1.0** |
 | `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | **2.9.0**  |
 
@@ -857,7 +857,7 @@ most of that surface; `app.config.ts` and the shell nav drawer also import it on
 - [ADF source](https://github.com/Alfresco/alfresco-ng2-components)
 - **In-repo, and the only accurate source for the bridge:** `libs/shared/adf-hx-bridge/ARCHITECTURE.md`
   (removed with the bridge; in git history),
-  `docs/adf-hx-upstream-findings.md`, `docs/adf-hx-workarounds.md`, `docs/adf-hx-beta-plan.md`
+  `docs/adf-hx-upstream-findings.md`, `docs/adf-hx-beta-plan.md`
 
 Estimated effort: **30 hours**.
 
@@ -895,9 +895,19 @@ consequence of Automation's flat parameter model.
 RAG happens **server-side**. There is no client-side streaming: no `EventSource`, no chunked reads.
 Each chat turn is a single POST with the history replayed.
 
-Feature flag: `AiFeatureFlagService` is a signal backed by `localStorage['ai-features-enabled']`,
-**default on** with an explicit user opt-out, surfaced to the manifest as rule
-`app.rules.isAiEnabled`, which gates the `app.tabs.aiInsights` tab.
+Feature flag: `AiFeatureFlagService.aiEnabled` is **`false` for every user and not toggleable at
+runtime** — `AI_FEATURES_ENABLED = false` at `ai-feature-flag.service.ts:35` since `a519ebd5d`. It
+does not read `localStorage` while off; both stored keys are purged on construction. The flag is
+still surfaced to the manifest as rule `app.rules.isAiEnabled` (`surface-rules.ts:30`), which gates
+the `app.tabs.aiInsights` tab (`packaged-tabs.ts:30`), so the tab is **hidden by default**.
+
+**Hidden by default is not the same as unreachable, and the difference is worth knowing.** A
+manifest override of `{"rule": null}` clears a packaged rule rather than being ignored
+(`extension-slot-registry.service.ts:178-180`), and the tab body has no second flag check of its
+own (`document-detail.html:725`), so a manifest can put that tab back on screen. What it cannot do
+is make it work: `AiGatewayService` checks the flag itself (`ai-gateway.service.ts:64`) and refuses
+every request, so an unhidden tab renders its errors and no AI traffic reaches the wire. **The
+network block is unconditional; the UI gate is configuration.**
 
 Concepts to learn: prompt/response contracts, RAG at a conceptual level, why a UI must treat every
 AI response as untrusted content (the `AiMarkdownPipe` renders through DOMPurify), and graceful
@@ -1136,7 +1146,9 @@ rather than a fixed 90% cliff.
 
 #### 22.3 SonarCloud
 
-Organisation `nuxeo`, project key `nuxeo_agentic-ui-poc`. Coverage is **one explicit path** —
+Organisation `nuxeo`, project key `nuxeo_agentic-ui-poc` — still the repository's former name,
+because a Sonar key is an identifier and does not follow a GitHub rename. Coverage is **one
+explicit path** —
 `coverage/lcov.info`, written by `scripts/lcov-merge.mjs`, which rebases every project's LCOV onto
 the repository root and fails if any source path does not resolve. Sonar drops unresolvable paths
 silently and reports 0%, which is exactly what happened before the merge script existed.
@@ -1304,7 +1316,7 @@ before relying on it.
 | `ng-packagr`                                                | 22.2.5                                                   |
 | `vite`                                                      | 8.3.5 (`^8.3.5`; the same version pinned by `overrides`) |
 | `esbuild`                                                   | 0.28.2 (pinned by `overrides`)                           |
-| `vitest`, `@vitest/coverage-v8`, `@vitest/ui`               | 4.1.10                                                   |
+| `vitest`, `@vitest/coverage-v8`, `@vitest/ui`               | 4.1.12                                                   |
 | `jsdom`                                                     | 28.1.0                                                   |
 | `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | 1.22.5                                                   |
 | `eslint`                                                    | 9.39.5                                                   |

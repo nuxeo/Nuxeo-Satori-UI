@@ -39,7 +39,7 @@ AI coding tools automatically add themselves as co-authors to show their contrib
 ### Configure CLA Assistant
 
 1. **Go to CLA Assistant configuration:**
-   - https://github.com/nuxeo/agentic-ui-poc/settings/installations
+   - https://github.com/nuxeo/Nuxeo-Satori-UI/settings/installations
    - Find "CLA Assistant" app
    - Click "Configure"
 
@@ -57,7 +57,7 @@ AI coding tools automatically add themselves as co-authors to show their contrib
 3. **Or use CLA Assistant web UI:**
    - Go to https://cla-assistant.io/
    - Sign in with GitHub
-   - Select `nuxeo/agentic-ui-poc`
+   - Select `nuxeo/Nuxeo-Satori-UI`
    - Add to allowlist:
      - `cursoragent`
      - `claude`
@@ -123,7 +123,7 @@ git commit --amend
 
 If your organization doesn't require CLAs:
 
-1. Go to: https://github.com/nuxeo/agentic-ui-poc/settings/installations
+1. Go to: https://github.com/nuxeo/Nuxeo-Satori-UI/settings/installations
 2. Find "CLA Assistant"
 3. Click "Configure" → "Uninstall"
 
@@ -131,7 +131,7 @@ If your organization doesn't require CLAs:
 
 ## Recommended Approach
 
-For `nuxeo/agentic-ui-poc`:
+For `nuxeo/Nuxeo-Satori-UI`:
 
 1. ✅ **Allowlist AI bots** - keeps co-author credits, avoids CLA issues
 2. ✅ **Keep GPG signing** - ensures commit authenticity
