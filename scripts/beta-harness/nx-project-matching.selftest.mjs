@@ -93,8 +93,25 @@ const results = [];
  * complain, `positive` cases must leave it quiet. Both totals are printed, because "22 controls
  * passed" says nothing about whether any of them could ever have failed.
  */
-function check(name, kind, ok, detail) {
-  results.push({ name, kind, ok: Boolean(ok), detail });
+function check(name, kind, body, detail) {
+  /* `body` may be a thunk, and every control that calls into the module under test passes one.
+   *
+   * The reason is not style. Proving the reworked `pickSubject` controls could fail — by deleting
+   * that function's rejection logic — made one of them throw (`root.slice` on a null root) instead
+   * of returning false, and the throw escaped before the report at the bottom of this file ran. So
+   * two controls that HAD correctly failed printed nothing, and a deliberately broken gate
+   * produced a stack trace rather than a verdict. The exit code was still non-zero, so the gate
+   * was red; what was lost was every other control's answer, which is the whole output of a
+   * control harness. A gap in the list must not be able to shorten the list. */
+  if (typeof body === 'function') {
+    try {
+      results.push({ name, kind, ok: Boolean(body()), detail });
+    } catch (error) {
+      results.push({ name, kind, ok: false, detail: `threw ${error.name}: ${error.message}` });
+    }
+    return;
+  }
+  results.push({ name, kind, ok: Boolean(body), detail });
 }
 
 function same(a, b) {
@@ -115,17 +132,13 @@ function scan(caseName, files) {
   return minimatchMembersUsedUnder(dir).map(({ member, access }) => `${access}:${member}`);
 }
 
-check(
-  'the function-property form is recorded as `function` access',
-  'positive',
+check('the function-property form is recorded as `function` access', 'positive', () =>
   same(scan('fn-form', { 'a.js': 'const r = minimatch_1.minimatch.makeRe(p, { dot: true });' }), [
     'function:makeRe',
   ]),
 );
 
-check(
-  'the named-export form is recorded as `namespace` access',
-  'positive',
+check('the named-export form is recorded as `namespace` access', 'positive', () =>
   same(scan('ns-form', { 'a.js': 'const r = minimatch_1.makeRe(p);' }), ['namespace:makeRe']),
 );
 
@@ -141,15 +154,11 @@ check(
   ),
 );
 
-check(
-  'the bare binding `minimatch_1.minimatch(…)` is not a member usage',
-  'negative',
+check('the bare binding `minimatch_1.minimatch(…)` is not a member usage', 'negative', () =>
   same(scan('bare-binding', { 'a.js': 'if (minimatch_1.minimatch(file, pattern)) return;' }), []),
 );
 
-check(
-  'a nested directory is walked',
-  'positive',
+check('a nested directory is walked', 'positive', () =>
   same(scan('nested', { 'deep/deeper/a.js': 'minimatch_1.minimatch.filter(p);' }), [
     'function:filter',
   ]),
@@ -168,15 +177,11 @@ check(
   ),
 );
 
-check(
-  'a .js file with no `minimatch_1.` reference contributes nothing',
-  'negative',
+check('a .js file with no `minimatch_1.` reference contributes nothing', 'negative', () =>
   same(scan('unrelated', { 'a.js': 'const { minimatch } = require("minimatch");' }), []),
 );
 
-check(
-  'an empty tree scans to nothing rather than throwing',
-  'negative',
+check('an empty tree scans to nothing rather than throwing', 'negative', () =>
   same(scan('empty', {}), []),
 );
 
@@ -245,53 +250,97 @@ for (const [name, usages, module, expected] of API_CASES) {
 check(
   'a one-sided failure says the other path exists and does not save the call sites',
   'negative',
-  evaluate(okInput({ usages: VIA_FUNCTION, module: NAMESPACE_ONLY })).failures[0]?.detail.includes(
-    'different runtime path',
-  ),
+  () =>
+    evaluate(
+      okInput({ usages: VIA_FUNCTION, module: NAMESPACE_ONLY }),
+    ).failures[0]?.detail.includes('different runtime path'),
 );
 
 /* ------------------------------------------------------------------------ pickSubject */
 
-const ROOTS = { alpha: 'libs/alpha', beta: 'libs/beta', dotty: '.', tiny: 'x' };
+/**
+ * Project roots keyed by name, with every **rejectable** fixture named so that it sorts BEFORE
+ * the usable one.
+ *
+ * That ordering is the whole point, and getting it wrong made three controls assert nothing.
+ * `pickSubject` sorts the roster and returns at the first usable root, so with `['dotty',
+ * 'alpha']` it visited `alpha`, accepted it, and returned — `rootOf('dotty')` was never called.
+ * The control then checked that the subject was `alpha`, which is true of a `pickSubject` with no
+ * rejection logic at all. Review (#588) caught it on the unresolvable-root case; the `.`-root and
+ * one-character-root cases next to it had the identical defect, and fixing only the one that was
+ * reported would have left two copies of it in place.
+ *
+ * `aa-`/`ab-`/`ac-` prefixes put them ahead of `alpha`, and `pickVisiting` below asserts each was
+ * actually reached, so none of these can go quiet again without failing.
+ */
+const ROOTS = {
+  'aa-dot-root': '.',
+  'ab-short-root': 'x',
+  /* `ac-no-root` is deliberately absent, so `rootOf` returns null for it. */
+  alpha: 'libs/alpha',
+  beta: 'libs/beta',
+};
 const rootOf = (name) => ROOTS[name] ?? null;
+
+/** `pickSubject`, plus the names `rootOf` was actually called with. */
+function pickVisiting(names) {
+  const visited = [];
+  const picked = pickSubject(names, (name) => {
+    visited.push(name);
+    return rootOf(name);
+  });
+  return { picked, visited };
+}
+
+/**
+ * A rejectable fixture must be VISITED and then passed over, with `alpha` chosen instead. Both
+ * halves are asserted: without the first, the control is the vacuous one described above.
+ */
+function skips(rejectable) {
+  const { picked, visited } = pickVisiting([rejectable, 'alpha']);
+  return visited[0] === rejectable && picked.subject?.name === 'alpha';
+}
 
 check(
   'the first usable root in sorted order is the subject, and `other` differs',
   'positive',
-  (() => {
+  () => {
     const p = pickSubject(['beta', 'alpha'], rootOf);
     return p.subject?.name === 'alpha' && p.other === 'beta' && p.rootGlob === 'libs/alph*';
-  })(),
+  },
 );
 
 check(
-  'a `.` root is skipped — its glob would be `*`, which minimatch does not match against `.`',
+  'a `.` root is reached and skipped — its glob would be `*`, which minimatch will not match against `.`',
   'negative',
-  pickSubject(['dotty', 'alpha'], rootOf).subject?.name === 'alpha',
+  () => skips('aa-dot-root'),
 );
 
 check(
-  'a one-character root is skipped — nothing would be left once the last character becomes `*`',
+  'a one-character root is reached and skipped — nothing is left once the last character becomes `*`',
   'negative',
-  pickSubject(['tiny', 'alpha'], rootOf).subject?.name === 'alpha',
+  () => skips('ab-short-root'),
 );
 
-check(
-  'a roster where no project has a usable root is a gap, not a pass',
-  'negative',
-  'gap' in pickSubject(['dotty', 'tiny'], rootOf),
+check('an unresolvable root is reached and skipped rather than crashing', 'negative', () =>
+  skips('ac-no-root'),
 );
+
+check('a roster where no project has a usable root is a gap, not a pass', 'negative', () => {
+  const { picked, visited } = pickVisiting(['aa-dot-root', 'ab-short-root']);
+  /* Every name must be tried before the gap is declared, or the gap is being reported for the
+   * wrong reason. */
+  return 'gap' in picked && visited.length === 2;
+});
 
 check(
   'a roster of one project is a gap — probe A needs a second project to exclude',
   'negative',
-  'gap' in pickSubject(['alpha'], rootOf),
-);
-
-check(
-  'an unresolvable root is skipped rather than crashing',
-  'negative',
-  pickSubject(['missing', 'alpha'], rootOf).subject?.name === 'alpha',
+  () => {
+    const { picked, visited } = pickVisiting(['alpha']);
+    /* And it short-circuits on the count: a one-project roster must not cost a root lookup. */
+    return 'gap' in picked && visited.length === 0;
+  },
 );
 
 /* --------------------------------------------------------------------------- evaluate */
@@ -317,25 +366,21 @@ check('a healthy input set exits 0', 'positive', evaluate(okInput()).exit === 0)
 check(
   'no usage at all is exit 2 — a scanner that found nothing is a gap, not a clean bill',
   'negative',
-  (() => {
+  () => {
     const v = evaluate(okInput({ usages: [] }));
     return v.exit === 2 && v.gap?.includes('re-point it');
-  })(),
+  },
 );
 
-check(
-  'probe A erroring is exit 1 and quotes nx',
-  'negative',
-  (() => {
-    const v = evaluate(okInput({ probeA: { error: 'nx exited 1: makeRe is not a function' } }));
-    return v.exit === 1 && v.failures[0].detail.includes('makeRe is not a function');
-  })(),
-);
+check('probe A erroring is exit 1 and quotes nx', 'negative', () => {
+  const v = evaluate(okInput({ probeA: { error: 'nx exited 1: makeRe is not a function' } }));
+  return v.exit === 1 && v.failures[0].detail.includes('makeRe is not a function');
+});
 
 check(
   "probe A's control separates a broken matcher from an unselectable subject",
   'negative',
-  (() => {
+  () => {
     const broken = evaluate(okInput({ probeA: { error: 'boom' } }));
     const graph = evaluate(
       okInput({ probeA: { error: 'boom' }, controlProbe: () => ({ error: 'also boom' }) }),
@@ -344,66 +389,63 @@ check(
       broken.failures[0].detail.includes('the fault is in --exclude') &&
       graph.failures[0].detail.includes('may be the project graph')
     );
-  })(),
+  },
 );
 
-check(
-  'the control probe is not consulted while probe A is healthy',
-  'positive',
-  (() => {
-    let called = 0;
-    evaluate(
-      okInput({
-        controlProbe: () => {
-          called += 1;
-          return { projects: ['alpha'] };
-        },
-      }),
-    );
-    return called === 0;
-  })(),
-);
+check('the control probe is not consulted while probe A is healthy', 'positive', () => {
+  let called = 0;
+  evaluate(
+    okInput({
+      controlProbe: () => {
+        called += 1;
+        return { projects: ['alpha'] };
+      },
+    }),
+  );
+  return called === 0;
+});
 
 check(
   'probe A returning a project it was not given is exit 1',
   'negative',
-  evaluate(okInput({ probeA: { projects: ['alpha', 'beta'] } })).exit === 1,
+  () => evaluate(okInput({ probeA: { projects: ['alpha', 'beta'] } })).exit === 1,
 );
 
 check(
   'probe A returning nothing is exit 1 — excluding a project outside the selection must not empty it',
   'negative',
-  evaluate(okInput({ probeA: { projects: [] } })).exit === 1,
+  () => evaluate(okInput({ probeA: { projects: [] } })).exit === 1,
 );
 
 check(
   'probe B still holding the subject is exit 1 — this is the no-op exclusion case',
   'negative',
-  (() => {
+  () => {
     const v = evaluate(okInput({ probeB: { projects: ['alpha'] } }));
     return v.exit === 1 && v.failures[0].detail.includes('silently skipped');
-  })(),
+  },
 );
 
 check(
   'probe B erroring is exit 1',
   'negative',
-  evaluate(okInput({ probeB: { error: 'nx exited 1' } })).exit === 1,
+  () => evaluate(okInput({ probeB: { error: 'nx exited 1' } })).exit === 1,
 );
 
 check(
   'a probe failure and an API failure are reported together, not one instead of the other',
   'negative',
-  evaluate(okInput({ probeB: { projects: ['alpha'] }, module: NEITHER })).failures.length === 2,
+  () =>
+    evaluate(okInput({ probeB: { projects: ['alpha'] }, module: NEITHER })).failures.length === 2,
 );
 
 check(
   'the notes name the subject and both patterns, so a pass says what it ran against',
   'positive',
-  (() => {
+  () => {
     const notes = evaluate(okInput()).notes.join('\n');
     return notes.includes('alpha') && notes.includes('beta') && notes.includes('libs/alph*');
-  })(),
+  },
 );
 
 /* ------------------------------------------------------- isMainModule: the guard, in isolation */
@@ -465,42 +507,40 @@ for (const [name, path, concatBreaks] of GUARD_PATHS) {
 check(
   'the guard follows a symlink, because Node canonicalises the main module and argv[1] is as typed',
   'positive',
-  isMainModule(pathToFileURL(resolve('/real/gate.mjs')).href, resolve('/link/gate.mjs'), {
-    realpath: () => resolve('/real/gate.mjs'),
-  }),
+  () =>
+    isMainModule(pathToFileURL(resolve('/real/gate.mjs')).href, resolve('/link/gate.mjs'), {
+      realpath: () => resolve('/real/gate.mjs'),
+    }),
 );
 
 check(
   'a different file is not the main module',
   'negative',
-  !isMainModule(pathToFileURL(resolve('/repo/gate.mjs')).href, resolve('/repo/other.mjs'), {
-    realpath: (p) => p,
-  }),
+  () =>
+    !isMainModule(pathToFileURL(resolve('/repo/gate.mjs')).href, resolve('/repo/other.mjs'), {
+      realpath: (p) => p,
+    }),
 );
 
 check(
   'no argv[1] at all — `node --eval`, or an import — is not the main module',
   'negative',
-  !isMainModule(pathToFileURL(resolve('/repo/gate.mjs')).href, undefined),
+  () => !isMainModule(pathToFileURL(resolve('/repo/gate.mjs')).href, undefined),
 );
 
-check(
-  'a realpath that throws does not throw out of the guard',
-  'negative',
-  (() => {
-    try {
-      return (
-        isMainModule(pathToFileURL(resolve('/repo/gate.mjs')).href, resolve('/repo/gate.mjs'), {
-          realpath: () => {
-            throw new Error('ENOENT');
-          },
-        }) === true
-      );
-    } catch {
-      return false;
-    }
-  })(),
-);
+check('a realpath that throws does not throw out of the guard', 'negative', () => {
+  try {
+    return (
+      isMainModule(pathToFileURL(resolve('/repo/gate.mjs')).href, resolve('/repo/gate.mjs'), {
+        realpath: () => {
+          throw new Error('ENOENT');
+        },
+      }) === true
+    );
+  } catch {
+    return false;
+  }
+});
 
 /* --------------------------------------- isMainModule: the gate actually running, end to end */
 
