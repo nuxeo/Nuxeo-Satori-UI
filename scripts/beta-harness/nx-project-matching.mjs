@@ -56,22 +56,42 @@
  * Plus one check on the cause, so a red gate names it instead of leaving it to be rediscovered:
  *
  *   C. Every `minimatch` member nx's compiled output references — read out of `nx/dist/src`
- *      rather than hardcoded, so it stays true if nx starts calling something else — exists on
- *      the `minimatch` that nx actually resolves.
+ *      rather than hardcoded, so it stays true if nx starts calling something else — exists **at
+ *      the access path the call site uses**.
+ *
+ * ### Why C keeps the access path, rather than accepting either
+ *
+ * tsc emits two shapes for a CommonJS import, and they are not interchangeable at runtime:
+ * `minimatch_1.makeRe(…)` reads the named export, `minimatch_1.minimatch.makeRe(…)` reads a
+ * property of the exported function. minimatch 10 carried `makeRe` in both places and 11.0.1
+ * dropped it from both, so collapsing the two and accepting either was green against *this*
+ * break — and it would have been green against half of it. A minimatch that kept the named
+ * export and dropped the function property would satisfy "either", while every
+ * `minimatch_1.minimatch.makeRe(…)` call site still threw, and C — the check whose whole job is
+ * to name the cause — would have said nothing. Review (#586) caught that; the controls in
+ * `nx-project-matching.selftest.mjs` pin each one-sided removal to its own failing case.
  *
  * ## Inspection gaps fail
  *
- * No roster, fewer than two projects, no project with a usable root, nx missing from the tree,
- * nx unable to resolve `minimatch`, or a C scan that finds no `minimatch` reference at all (nx
- * changed how it emits that import and this scanner needs re-pointing) each exit 2. Reading
- * nothing must not pass as finding nothing.
+ * No roster, fewer than two projects, no project with a usable root, nx missing from the tree, nx
+ * unable to resolve `minimatch`, an unreadable directory under `nx/dist/src`, or a C scan that
+ * finds no `minimatch` reference at all (nx changed how it emits that import and this scanner
+ * needs re-pointing) each exit 2. Reading nothing must not pass as finding nothing.
  *
  * ## Seen failing on purpose
  *
- * With `node_modules/nx/node_modules/minimatch` swapped for 11.0.1, A and B both fail and C
- * names `makeRe`; with the tree as the lock describes it, all three pass. The lockfile's own
- * minimatch shape is what decides it, which is the point: this gate is the thing that goes red
- * if an `overrides` entry forces a major on nx again.
+ * With `node_modules/nx/node_modules/minimatch` swapped for 11.0.1, A and B both fail and C names
+ * `makeRe`; with the tree as the lock describes it, all three pass. The lockfile's own minimatch
+ * shape is what decides it, which is the point: this gate is the thing that goes red if an
+ * `overrides` entry forces a major on nx again.
+ *
+ * ## What is pure, and therefore under control
+ *
+ * `pickSubject`, `minimatchMembersUsedUnder`, `missingUsages` and `evaluate` are exported and
+ * side-effect free, and the selftest drives all four. Gathering — spawning nx, resolving
+ * `minimatch` from nx's own tree — is the only part that is not, so a gap raised while gathering
+ * (`cannot launch nx`, `nx cannot resolve minimatch`) is the one class of verdict the controls
+ * cannot reach. Said rather than left for a reader to work out.
  *
  * Usage:
  *   node scripts/beta-harness/nx-project-matching.mjs [--json]
@@ -84,309 +104,408 @@ import { createRequire } from 'node:module';
 import { join, resolve, sep } from 'node:path';
 import { spawnToolSync } from './package-command.mjs';
 
-const args = new Set(process.argv.slice(2).map((a) => a.replace(/^--/, '')));
-const asJson = args.has('json');
-const repoRoot = process.cwd();
-
-/** Repo-relative, with the separator this platform actually uses, so Windows reads the same. */
-const relative = (path) =>
-  path.startsWith(repoRoot + sep) ? path.slice(repoRoot.length + 1) : path;
-
-/** @type {{ check: string, detail: string }[]} */
-const failures = [];
-/** @type {string[]} */
-const notes = [];
-
-/** Exit 2 and say what could not be looked at. Never a pass. */
-function gap(detail) {
-  if (asJson) {
-    console.log(JSON.stringify({ ok: false, exit: 2, gap: detail, notes }, null, 2));
-  } else {
-    for (const note of notes) console.log(`  ${note}`);
-    console.error(`nx-project-matching: cannot inspect — ${detail}`);
-  }
-  process.exit(2);
-}
-
 /**
- * Run `nx <argv>` and hand back its streams and status.
- *
- * `stderr` is returned rather than printed: nx writes advisory lines there on a healthy run, and
- * the useful half — the crash message — only matters once a probe has already gone wrong.
- *
- * @param {string[]} argv
- * @returns {{ status: number | null, stdout: string, stderr: string }}
+ * The two shapes tsc emits for a member of a CommonJS `minimatch` import, and the runtime path
+ * each one actually reads. Keyed by the name used throughout this file and its controls.
  */
-function nx(argv) {
-  const run = spawnToolSync('nx', argv, { cwd: repoRoot, encoding: 'utf8' });
-  if (run.error) gap(`cannot launch nx (${run.error.message})`);
-  return { status: run.status, stdout: run.stdout ?? '', stderr: run.stderr ?? '' };
+export const ACCESS = Object.freeze({
+  /** `minimatch_1.makeRe(…)` — the named export. */
+  namespace: 'namespace',
+  /** `minimatch_1.minimatch.makeRe(…)` — a property of the exported function. */
+  function: 'function',
+});
+
+/** How a usage of `<member>` via `<access>` reads off a loaded module. Used by C and its controls. */
+export function readUsage(module, usage) {
+  const holder = usage.access === ACCESS.function ? module?.minimatch : module;
+  return holder?.[usage.member];
 }
 
-/** Strip ANSI so a failure detail is readable in a log file as well as a terminal. */
-function plain(text) {
-  // eslint-disable-next-line no-control-regex -- reading nx's own coloured output
-  return text.replace(/\u001b\[[0-9;]*m/g, '');
+/** `minimatch_1.makeRe` / `minimatch_1.minimatch.makeRe` as the source text spells it. */
+export function usageExpression(usage) {
+  return usage.access === ACCESS.function
+    ? `minimatch.${usage.member}`
+    : `minimatch_1.${usage.member}`;
 }
 
 /**
- * The JSON array `nx show projects --json` prints, or why it could not be read.
+ * Pick the project the probes run against, and a second project to exclude by name.
  *
- * nx prints advisory lines around the payload on some installs ("Your AI agent configuration is
- * outdated"), so the array is located rather than assumed to be the whole of stdout.
- *
- * @param {{ status: number | null, stdout: string, stderr: string }} run
- * @returns {{ projects: string[] } | { error: string }}
- */
-function parseProjects(run) {
-  if (run.status !== 0) {
-    const message = plain(`${run.stderr}\n${run.stdout}`)
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .slice(0, 4)
-      .join(' / ');
-    return { error: `nx exited ${run.status}: ${message || '(no output)'}` };
-  }
-  const text = plain(run.stdout);
-  const start = text.indexOf('[');
-  const end = text.lastIndexOf(']');
-  if (start < 0 || end < start) return { error: `no JSON array in nx output: ${text.trim()}` };
-  try {
-    const parsed = JSON.parse(text.slice(start, end + 1));
-    if (!Array.isArray(parsed) || parsed.some((p) => typeof p !== 'string')) {
-      return { error: 'nx printed a JSON value that is not an array of project names' };
-    }
-    return { projects: parsed };
-  } catch (error) {
-    return { error: `nx output is not valid JSON (${error.message})` };
-  }
-}
-
-/* --------------------------------------------------------------- the roster and the subject */
-
-const roster = parseProjects(nx(['show', 'projects', '--json']));
-if ('error' in roster) gap(`cannot read the project roster — ${roster.error}`);
-if (roster.projects.length < 2) {
-  gap(`the roster holds ${roster.projects.length} project(s); these probes need at least two`);
-}
-
-const names = [...roster.projects].sort();
-
-/**
- * A project whose root is a real subdirectory, chosen deterministically so two runs of this gate
- * on the same tree make the same claim.
+ * Deterministic — sorted order, first usable root — so two runs on the same tree make the same
+ * claim. `rootOf` is called lazily and only until a usable root turns up, because in the gate it
+ * is an `nx show project` spawn costing about a second each.
  *
  * The workspace root itself (`.`) is rejected: probe B would build the pattern `*`, which
  * minimatch does not match against `.` without `dot`, so the probe would report a defect that is
- * really an artefact of the subject. Roots shorter than two characters go for the same reason —
- * a character has to be left over once the last one becomes `*`.
+ * really an artefact of the subject. Roots shorter than two characters go for the same reason — a
+ * character has to be left over once the last one becomes `*`.
+ *
+ * @param {string[]} names
+ * @param {(name: string) => string | null} rootOf
+ * @returns {{ subject: { name: string, root: string }, other: string, rootGlob: string } | { gap: string }}
  */
-let subject = null;
-for (const name of names) {
-  const shown = nx(['show', 'project', name, '--json']);
-  if (shown.status !== 0) continue;
-  const text = plain(shown.stdout);
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start < 0 || end < start) continue;
-  let root;
-  try {
-    root = JSON.parse(text.slice(start, end + 1)).root;
-  } catch {
-    continue;
+export function pickSubject(names, rootOf) {
+  if (names.length < 2) {
+    return { gap: `the roster holds ${names.length} project(s); these probes need at least two` };
   }
-  if (typeof root !== 'string' || root.length < 2 || root.startsWith('.')) continue;
-  subject = { name, root };
-  break;
+  const sorted = [...names].sort();
+  for (const name of sorted) {
+    const root = rootOf(name);
+    if (typeof root !== 'string' || root.length < 2 || root.startsWith('.')) continue;
+    return {
+      subject: { name, root },
+      other: sorted.find((candidate) => candidate !== name),
+      rootGlob: `${root.slice(0, -1)}*`,
+    };
+  }
+  return { gap: 'no project has a root this gate can build a directory pattern from' };
 }
-if (!subject) gap('no project has a root this gate can build a directory pattern from');
-
-const other = names.find((name) => name !== subject.name);
-const rootGlob = `${subject.root.slice(0, -1)}*`;
-
-notes.push(`subject            ${subject.name}  (root ${subject.root})`);
-notes.push(`A excludes by name ${other}  — not in the selection, so it must change nothing`);
-notes.push(`B excludes by glob ${rootGlob}  — matches the subject's root, so it must empty it`);
-
-/* --------------------------------------------------------------------------------- probe A */
-
-const probeA = parseProjects(
-  nx(['show', 'projects', `--projects=${subject.name}`, `--exclude=${other}`, '--json']),
-);
-if ('error' in probeA) {
-  /* Only now is the control worth its second of runtime: it separates "exclusion is broken" from
-   * "this subject was never selectable in the first place". */
-  const control = parseProjects(nx(['show', 'projects', `--projects=${subject.name}`, '--json']));
-  failures.push({
-    check: 'A: an exclude pattern that is outside the selection',
-    detail:
-      `\`nx show projects --projects=${subject.name} --exclude=${other}\` produced no project ` +
-      `list — ${probeA.error}\n  ` +
-      ('error' in control
-        ? `Selecting ${subject.name} with no --exclude also fails (${control.error}), so the ` +
-          'fault may be the project graph rather than the matcher.'
-        : `Selecting ${subject.name} with no --exclude returns ` +
-          `${JSON.stringify(control.projects)}, so the fault is in --exclude, not in the graph.`),
-  });
-} else if (probeA.projects.length !== 1 || probeA.projects[0] !== subject.name) {
-  failures.push({
-    check: 'A: an exclude pattern that is outside the selection',
-    detail:
-      `expected exactly ["${subject.name}"], got ${JSON.stringify(probeA.projects)}. ` +
-      `\`${other}\` is not in the selection, so excluding it must change nothing.`,
-  });
-}
-
-/* --------------------------------------------------------------------------------- probe B */
-
-const probeB = parseProjects(
-  nx(['show', 'projects', `--projects=${subject.name}`, `--exclude=${rootGlob}`, '--json']),
-);
-if ('error' in probeB) {
-  failures.push({
-    check: 'B: a glob exclude pattern matched against project roots',
-    detail:
-      `\`nx show projects --projects=${subject.name} --exclude=${rootGlob}\` produced no project ` +
-      `list — ${probeB.error}`,
-  });
-} else if (probeB.projects.length !== 0) {
-  failures.push({
-    check: 'B: a glob exclude pattern matched against project roots',
-    detail:
-      `expected [], got ${JSON.stringify(probeB.projects)}. \`${rootGlob}\` matches ` +
-      `\`${subject.root}\`, so ${subject.name} must be excluded. An exclusion that compiles to a ` +
-      'regex matching nothing, or that is silently skipped, looks exactly like this.',
-  });
-}
-
-/* -------------------------------------------------- check C: the minimatch API nx relies on */
 
 /**
- * Every member of `minimatch` that a compiled file references, in the two forms tsc emits for a
- * CommonJS import: `minimatch_1.minimatch.makeRe` (a property of the exported function) and
- * `minimatch_1.makeRe` (the named export). minimatch 10 had `makeRe` in both places and 11.0.1
- * dropped it from both, so both forms have to be read.
+ * Every `minimatch` member a compiled file references, **with the access path it reads through**.
+ *
+ * One member can appear under both access paths in different files, so each (member, access) pair
+ * is its own usage with its own file list. `minimatch_1.minimatch(…)` on its own is the binding
+ * being called, not a member of it, and is skipped.
+ *
+ * Throws rather than exiting, so the caller decides what a gap means; the gate turns it into
+ * exit 2.
  *
  * @param {string} dir
- * @returns {Map<string, string[]>} member -> up to three repo-relative files that reference it
+ * @returns {{ member: string, access: string, files: string[] }[]} sorted by access then member
  */
-function minimatchMembersUsedUnder(dir) {
-  /** @type {Map<string, string[]>} */
+export function minimatchMembersUsedUnder(dir) {
+  /** @type {Map<string, { member: string, access: string, files: string[] }>} */
   const found = new Map();
-  const pattern = /\bminimatch_1\.(?:minimatch\.)?([A-Za-z_$][\w$]*)/g;
+  /* Group 1 is non-empty only for the `.minimatch.` form, which is what tells the two apart. */
+  const pattern = /\bminimatch_1\.(minimatch\.)?([A-Za-z_$][\w$]*)/g;
   /** @param {string} current */
   const walk = (current) => {
-    let entries;
-    try {
-      entries = readdirSync(current, { withFileTypes: true });
-    } catch (error) {
-      gap(`cannot list ${current} (${error.message})`);
-      return;
-    }
-    for (const entry of entries) {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
       const path = join(current, entry.name);
       if (entry.isDirectory()) {
         walk(path);
         continue;
       }
       if (!entry.isFile() || !entry.name.endsWith('.js')) continue;
-      let source;
-      try {
-        source = readFileSync(path, 'utf8');
-      } catch (error) {
-        gap(`cannot read ${path} (${error.message})`);
-        return;
-      }
+      const source = readFileSync(path, 'utf8');
       if (!source.includes('minimatch_1.')) continue;
       for (const match of source.matchAll(pattern)) {
-        const member = match[1];
+        const access = match[1] ? ACCESS.function : ACCESS.namespace;
+        const member = match[2];
         /* The import binding itself, not a member of it. */
-        if (member === 'minimatch') continue;
-        const files = found.get(member) ?? [];
-        if (files.length < 3) files.push(relative(path));
-        found.set(member, files);
+        if (access === ACCESS.namespace && member === 'minimatch') continue;
+        const key = `${access}:${member}`;
+        const usage = found.get(key) ?? { member, access, files: [] };
+        if (usage.files.length < 3) usage.files.push(path);
+        found.set(key, usage);
       }
     }
   };
   walk(dir);
-  return found;
-}
-
-const nxDist = resolve(repoRoot, 'node_modules/nx/dist/src');
-try {
-  if (!statSync(nxDist).isDirectory()) gap(`${nxDist} is not a directory`);
-} catch (error) {
-  gap(`cannot find nx's compiled sources at ${nxDist} (${error.message})`);
-}
-
-const used = minimatchMembersUsedUnder(nxDist);
-if (used.size === 0) {
-  gap(
-    `found no \`minimatch_1.…\` reference under ${relative(nxDist)}. nx has ` +
-      'changed how it emits that import, so this scanner reports nothing for a reason that has ' +
-      'nothing to do with the tree being healthy — re-point it rather than trusting it.',
+  return [...found.values()].sort(
+    (a, b) => a.access.localeCompare(b.access) || a.member.localeCompare(b.member),
   );
 }
 
-let resolvedMinimatch = null;
-try {
-  const requireFromNx = createRequire(join(repoRoot, 'node_modules/nx/package.json'));
-  resolvedMinimatch = {
-    version: requireFromNx('minimatch/package.json').version,
-    module: requireFromNx('minimatch'),
-    path: relative(requireFromNx.resolve('minimatch/package.json')),
+/**
+ * The usages whose own access path is absent from a loaded `minimatch`.
+ *
+ * Deliberately NOT "present under either path". See the header: accepting either was green
+ * against the break that prompted this gate and would have been green against half of it.
+ *
+ * @param {{ member: string, access: string, files: string[] }[]} usages
+ * @param {unknown} module
+ */
+export function missingUsages(usages, module) {
+  return usages.filter((usage) => typeof readUsage(module, usage) !== 'function');
+}
+
+/**
+ * The verdict, from inputs alone — no spawning, no filesystem, no `process.exit`.
+ *
+ * @param {object} input
+ * @param {{ name: string, root: string }} input.subject
+ * @param {string} input.other
+ * @param {string} input.rootGlob
+ * @param {{ projects: string[] } | { error: string }} input.probeA
+ * @param {{ projects: string[] } | { error: string }} input.probeB
+ * @param {() => ({ projects: string[] } | { error: string })} input.controlProbe  only consulted
+ *        when probe A errored, where it separates "exclusion is broken" from "this subject was
+ *        never selectable"
+ * @param {{ member: string, access: string, files: string[] }[]} input.usages
+ * @param {{ version: string, path: string, module: unknown }} input.minimatch
+ * @param {(path: string) => string} [input.relative]
+ * @returns {{ exit: 0 | 1 | 2, gap?: string, failures: { check: string, detail: string }[], notes: string[] }}
+ */
+export function evaluate({
+  subject,
+  other,
+  rootGlob,
+  probeA,
+  probeB,
+  controlProbe,
+  usages,
+  minimatch,
+  relative = (path) => path,
+}) {
+  const notes = [
+    `subject            ${subject.name}  (root ${subject.root})`,
+    `A excludes by name ${other}  — not in the selection, so it must change nothing`,
+    `B excludes by glob ${rootGlob}  — matches the subject's root, so it must empty it`,
+  ];
+
+  if (usages.length === 0) {
+    return {
+      exit: 2,
+      gap:
+        "found no `minimatch_1.…` reference in nx's compiled sources. nx has changed how it " +
+        'emits that import, so this scanner reports nothing for a reason that has nothing to do ' +
+        'with the tree being healthy — re-point it rather than trusting it.',
+      failures: [],
+      notes,
+    };
+  }
+
+  notes.push(
+    `nx resolves       minimatch ${minimatch.version}  (${minimatch.path})`,
+    `C checks         ${usages.map((u) => `${usageExpression(u)}`).join(', ')}`,
+  );
+
+  const failures = [];
+
+  if ('error' in probeA) {
+    const control = controlProbe();
+    failures.push({
+      check: 'A: an exclude pattern that is outside the selection',
+      detail:
+        `\`nx show projects --projects=${subject.name} --exclude=${other}\` produced no project ` +
+        `list — ${probeA.error}\n  ` +
+        ('error' in control
+          ? `Selecting ${subject.name} with no --exclude also fails (${control.error}), so the ` +
+            'fault may be the project graph rather than the matcher.'
+          : `Selecting ${subject.name} with no --exclude returns ` +
+            `${JSON.stringify(control.projects)}, so the fault is in --exclude, not in the graph.`),
+    });
+  } else if (probeA.projects.length !== 1 || probeA.projects[0] !== subject.name) {
+    failures.push({
+      check: 'A: an exclude pattern that is outside the selection',
+      detail:
+        `expected exactly ["${subject.name}"], got ${JSON.stringify(probeA.projects)}. ` +
+        `\`${other}\` is not in the selection, so excluding it must change nothing.`,
+    });
+  }
+
+  if ('error' in probeB) {
+    failures.push({
+      check: 'B: a glob exclude pattern matched against project roots',
+      detail:
+        `\`nx show projects --projects=${subject.name} --exclude=${rootGlob}\` produced no ` +
+        `project list — ${probeB.error}`,
+    });
+  } else if (probeB.projects.length !== 0) {
+    failures.push({
+      check: 'B: a glob exclude pattern matched against project roots',
+      detail:
+        `expected [], got ${JSON.stringify(probeB.projects)}. \`${rootGlob}\` matches ` +
+        `\`${subject.root}\`, so ${subject.name} must be excluded. An exclusion that compiles to ` +
+        'a regex matching nothing, or that is silently skipped, looks exactly like this.',
+    });
+  }
+
+  for (const usage of missingUsages(usages, minimatch.module)) {
+    const sibling = usage.access === ACCESS.function ? ACCESS.namespace : ACCESS.function;
+    const siblingPresent =
+      typeof readUsage(minimatch.module, { ...usage, access: sibling }) === 'function';
+    failures.push({
+      check: `C: ${usageExpression(usage)} is missing`,
+      detail:
+        `nx reads \`${usageExpression(usage)}\` (${usage.files.map(relative).join(', ')}) and the ` +
+        `copy it resolves — minimatch ${minimatch.version} at ${minimatch.path} — does not have ` +
+        'it there. ' +
+        (siblingPresent
+          ? `It does carry \`${usageExpression({ ...usage, access: sibling })}\`, which is a ` +
+            'different runtime path and does not save these call sites. '
+          : '') +
+        'An `overrides` entry that forces a major on nx is the usual cause: nx 23 and 24 both ' +
+        'pin `minimatch` to 10.2.5, and npm applies a `minimatch@^10` override to that exact ' +
+        'pin too.',
+    });
+  }
+
+  return { exit: failures.length === 0 ? 0 : 1, failures, notes };
+}
+
+/* ------------------------------------------------------------------------------- the gate */
+
+/* Importing this module must not run it: the selftest drives the four functions above directly,
+ * and a module that spawns nx on import cannot be imported by anything cheap. */
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  main();
+}
+
+function main() {
+  const args = new Set(process.argv.slice(2).map((a) => a.replace(/^--/, '')));
+  const asJson = args.has('json');
+  const repoRoot = process.cwd();
+
+  /** Repo-relative, with the separator this platform uses, so Windows reads the same. */
+  const relative = (path) =>
+    path.startsWith(repoRoot + sep) ? path.slice(repoRoot.length + 1) : path;
+
+  /** Report a gap and exit 2. Never a pass. */
+  const gap = (detail, notes = []) => {
+    if (asJson) {
+      console.log(JSON.stringify({ ok: false, exit: 2, gap: detail, notes }, null, 2));
+    } else {
+      for (const note of notes) console.log(`  ${note}`);
+      console.error(`nx-project-matching: cannot inspect — ${detail}`);
+    }
+    process.exit(2);
   };
-} catch (error) {
-  gap(`nx cannot resolve minimatch (${error.message})`);
-}
 
-notes.push(
-  `nx resolves       minimatch ${resolvedMinimatch.version}  (${resolvedMinimatch.path})`,
-  `C checks members  ${[...used.keys()].sort().join(', ')}`,
-);
+  /** Strip ANSI so a failure detail reads the same in a log file as in a terminal. */
+  const plain = (text) =>
+    // eslint-disable-next-line no-control-regex -- reading nx's own coloured output
+    text.replace(/\u001b\[[0-9;]*m/g, '');
 
-for (const [member, files] of [...used].sort(([a], [b]) => a.localeCompare(b))) {
-  const onNamespace = typeof resolvedMinimatch.module?.[member] === 'function';
-  const onFunction = typeof resolvedMinimatch.module?.minimatch?.[member] === 'function';
-  if (onNamespace || onFunction) continue;
-  failures.push({
-    check: `C: minimatch.${member} is missing`,
-    detail:
-      `nx calls \`minimatch.${member}\` (${files.join(', ')}) and the copy it resolves — ` +
-      `minimatch ${resolvedMinimatch.version} at ${resolvedMinimatch.path} — does not have it. ` +
-      'An `overrides` entry that forces a major on nx is the usual cause: nx 23 and 24 both pin ' +
-      '`minimatch` to 10.2.5, and npm applies a `minimatch@^10` override to that exact pin too.',
+  /**
+   * Run `nx <argv>`. `stderr` is returned rather than printed: nx writes advisory lines there on
+   * a healthy run, and the useful half — the crash message — only matters once something has
+   * already gone wrong.
+   */
+  const nx = (argv) => {
+    const run = spawnToolSync('nx', argv, { cwd: repoRoot, encoding: 'utf8' });
+    if (run.error) gap(`cannot launch nx (${run.error.message})`);
+    return { status: run.status, stdout: run.stdout ?? '', stderr: run.stderr ?? '' };
+  };
+
+  /**
+   * The JSON array `nx show projects --json` prints, or why it could not be read. nx prints
+   * advisory lines around the payload on some installs ("Your AI agent configuration is
+   * outdated"), so the array is located rather than assumed to be the whole of stdout.
+   */
+  const parseProjects = (run) => {
+    if (run.status !== 0) {
+      const message = plain(`${run.stderr}\n${run.stdout}`)
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, 4)
+        .join(' / ');
+      return { error: `nx exited ${run.status}: ${message || '(no output)'}` };
+    }
+    const text = plain(run.stdout);
+    const start = text.indexOf('[');
+    const end = text.lastIndexOf(']');
+    if (start < 0 || end < start) return { error: `no JSON array in nx output: ${text.trim()}` };
+    try {
+      const parsed = JSON.parse(text.slice(start, end + 1));
+      if (!Array.isArray(parsed) || parsed.some((p) => typeof p !== 'string')) {
+        return { error: 'nx printed a JSON value that is not an array of project names' };
+      }
+      return { projects: parsed };
+    } catch (error) {
+      return { error: `nx output is not valid JSON (${error.message})` };
+    }
+  };
+
+  const roster = parseProjects(nx(['show', 'projects', '--json']));
+  if ('error' in roster) gap(`cannot read the project roster — ${roster.error}`);
+
+  const picked = pickSubject(roster.projects, (name) => {
+    const shown = nx(['show', 'project', name, '--json']);
+    if (shown.status !== 0) return null;
+    const text = plain(shown.stdout);
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start < 0 || end < start) return null;
+    try {
+      return JSON.parse(text.slice(start, end + 1)).root ?? null;
+    } catch {
+      return null;
+    }
   });
-}
+  if ('gap' in picked) gap(picked.gap);
+  const { subject, other, rootGlob } = picked;
 
-/* --------------------------------------------------------------------------------- verdict */
+  const probe = (pattern) =>
+    parseProjects(
+      nx(['show', 'projects', `--projects=${subject.name}`, `--exclude=${pattern}`, '--json']),
+    );
 
-if (asJson) {
-  console.log(
-    JSON.stringify(
-      { ok: failures.length === 0, exit: failures.length === 0 ? 0 : 1, failures, notes },
-      null,
-      2,
-    ),
-  );
-} else {
-  for (const note of notes) console.log(`  ${note}`);
-  if (failures.length === 0) {
+  const nxDist = resolve(repoRoot, 'node_modules/nx/dist/src');
+  try {
+    if (!statSync(nxDist).isDirectory()) gap(`${nxDist} is not a directory`);
+  } catch (error) {
+    gap(`cannot find nx's compiled sources at ${relative(nxDist)} (${error.message})`);
+  }
+
+  let usages;
+  try {
+    usages = minimatchMembersUsedUnder(nxDist);
+  } catch (error) {
+    gap(`cannot scan ${relative(nxDist)} (${error.message})`);
+  }
+
+  let minimatch;
+  try {
+    const requireFromNx = createRequire(join(repoRoot, 'node_modules/nx/package.json'));
+    minimatch = {
+      version: requireFromNx('minimatch/package.json').version,
+      module: requireFromNx('minimatch'),
+      path: relative(requireFromNx.resolve('minimatch/package.json')),
+    };
+  } catch (error) {
+    gap(`nx cannot resolve minimatch (${error.message})`);
+  }
+
+  const verdict = evaluate({
+    subject,
+    other,
+    rootGlob,
+    probeA: probe(other),
+    probeB: probe(rootGlob),
+    controlProbe: () =>
+      parseProjects(nx(['show', 'projects', `--projects=${subject.name}`, '--json'])),
+    usages,
+    minimatch,
+    relative,
+  });
+
+  if (verdict.exit === 2) gap(verdict.gap, verdict.notes);
+
+  if (asJson) {
     console.log(
-      `nx-project-matching: PASS — probes A and B, and ${used.size} API member(s), against ` +
-        `minimatch ${resolvedMinimatch.version}.`,
+      JSON.stringify(
+        {
+          ok: verdict.exit === 0,
+          exit: verdict.exit,
+          failures: verdict.failures,
+          notes: verdict.notes,
+        },
+        null,
+        2,
+      ),
     );
   } else {
-    for (const failure of failures) {
-      console.error(`\nnx-project-matching: FAIL — ${failure.check}\n  ${failure.detail}`);
+    for (const note of verdict.notes) console.log(`  ${note}`);
+    if (verdict.failures.length === 0) {
+      console.log(
+        `nx-project-matching: PASS — probes A and B, and ${usages.length} API access path(s), ` +
+          `against minimatch ${minimatch.version}.`,
+      );
+    } else {
+      for (const failure of verdict.failures) {
+        console.error(`\nnx-project-matching: FAIL — ${failure.check}\n  ${failure.detail}`);
+      }
+      console.error(
+        `\n${verdict.failures.length} failure(s). While this is red, \`nx affected\` with ` +
+          '`--exclude` can die after the explicitly-named projects have passed, and every ' +
+          'project in the tail silently does not run its tests.',
+      );
     }
-    console.error(
-      `\n${failures.length} of 3 checks failed. While this is red, \`nx affected\` with ` +
-        '`--exclude` can die after the explicitly-named projects have passed, and every project ' +
-        'in the tail silently does not run its tests.',
-    );
   }
-}
 
-process.exit(failures.length === 0 ? 0 : 1);
+  process.exit(verdict.exit);
+}

@@ -567,6 +567,13 @@ jobs:
       - name: Check nx can still match project patterns
         run: npm run beta:nx-matching
 
+      # Its controls, named here as well as registered, because the step above shipped accepting a
+      # `minimatch` member under either access path — green against the break it was written for
+      # and green against half of it (#586). Hermetic and under a second: pure functions and
+      # fixtures under the runner's temp directory, no nx spawn.
+      - name: Run nx project-matching controls
+        run: npm run beta:nx-matching-selftest
+
       # `--parallel=1` is kept deliberately (f7ab1f78a): the Vitest and Karma projects
       # intermittently exited under runner contention with no useful failure output when run
       # concurrently with each other. This job having a runner to itself does not change that —

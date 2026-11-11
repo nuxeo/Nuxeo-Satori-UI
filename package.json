@@ -25,6 +25,7 @@
     "beta:dependency-tree": "node scripts/beta-harness/dependency-tree.mjs",
     "beta:dependency-tree-selftest": "node scripts/beta-harness/dependency-tree.selftest.mjs",
     "beta:nx-matching": "node scripts/beta-harness/nx-project-matching.mjs",
+    "beta:nx-matching-selftest": "node scripts/beta-harness/nx-project-matching.selftest.mjs",
     "beta:evidence": "node scripts/beta-harness/phase-runner.mjs",
     "beta:fork": "node scripts/beta-harness/fork-simulation.mjs",
     "beta:gate": "node scripts/beta-harness/verify-gate.mjs",

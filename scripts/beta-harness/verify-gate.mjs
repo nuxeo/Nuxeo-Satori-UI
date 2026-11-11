@@ -706,6 +706,28 @@ const ALL_GATES = [
     // the probes ran against something real, so surface them on a pass too.
     echoOnPass: true,
   },
+  // And its controls, because the gate above shipped wrong in exactly the way this repository
+  // keeps paying for: check C accepted a scanned `minimatch` member under EITHER access path,
+  // which is green against the break it was written for — 11.0.1 dropped `makeRe` from both — and
+  // green against half of it. A minimatch keeping the named export and dropping the function
+  // property satisfies "either" while every `minimatch_1.minimatch.makeRe(…)` call still throws.
+  // Review (#586) found it by reading the code, because the gate had no controls at all.
+  //
+  // Hermetic: the gate's four pure functions, fixtures under `os.tmpdir()`, no nx spawn and no
+  // tracked file touched. Which also bounds it — the gathering half (`spawnToolSync`,
+  // `createRequire` against nx's tree) is the one class of verdict these controls cannot reach,
+  // and both files say so rather than leaving a reader to infer it.
+  {
+    id: 'nx-project-matching-selftest',
+    // Pure functions, temp-directory fixtures, no path comparison that an OS can change.
+    platformSensitive: false,
+    label: 'Nx project-pattern matching controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/nx-project-matching.selftest.mjs'],
+    // The negative/positive split is the evidence, not noise: "37 controls passed" says nothing
+    // about whether any of them could have failed.
+    echoOnPass: true,
+  },
 ];
 
 /* Every gate must say whether its VERDICT can differ by operating system. Not whether it is
