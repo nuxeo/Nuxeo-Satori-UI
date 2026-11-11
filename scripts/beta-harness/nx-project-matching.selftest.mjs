@@ -25,6 +25,26 @@
  * run. `isMainModule` now uses `pathToFileURL(realpathSync(…))`, and the two `runsFrom` controls
  * below invoke this gate for real through exactly those paths.
  *
+ * The third round caught this file doing the same kind of thing to itself. Its fixture paths were
+ * bare `/repo/…` literals, which are POSIX absolute paths and only drive-relative roots on
+ * Windows, where `pathToFileURL` supplies the current drive and a raw `'file://' + path`
+ * concatenation does not — so on the one platform this selftest had just been marked
+ * `platformSensitive: true` to cover, two controls went red against a healthy gate. Fixtures are
+ * now `resolve`d to native absolute paths, and the assertion about what the OLD comparison did is
+ * made only for `#` and `?`, where the disagreement is parser-level and identical everywhere
+ * (`pathToFileURL` percent-encodes them; the URL parser reads them as a fragment or query
+ * delimiter). What the concatenation did with a path *without* them turns on Windows drive-letter
+ * parsing, which is not under test, so it is not asserted at all. An expectation that flips by
+ * platform is an expectation that reddens a healthy gate.
+ *
+ * ## What the positive half of the guard controls is, and is not
+ *
+ * `the guard matches …` compares `pathToFileURL(p).href` with what `isMainModule` computes from
+ * `p`, so against an implementation that already uses `pathToFileURL` it cannot fail: it is a
+ * change-detector for *which* conversion the guard uses, not independent proof that Node agrees.
+ * The independent proof is the two `runsFrom` controls, which run the file and require it to have
+ * done something. Said here because "the guard matches a path with `#`" reads like more than it is.
+ *
  * ## Hermetic, with one exception that is named
  *
  * Nothing here reads the repository's `node_modules` or perturbs a tracked file; the fixtures are
@@ -389,20 +409,34 @@ check(
 /* ------------------------------------------------------- isMainModule: the guard, in isolation */
 
 /* The comparison the gate used to make, kept here so these controls demonstrate the bug rather
- * than merely asserting the fix. `vacuity-verdict.mjs` carries the measured table: `#` and `?`
- * each turned an exit 2 into an exit 0, a space did not. */
+ * than merely asserting the fix. */
 const oldGuard = (moduleUrl, argv1) =>
   Boolean(argv1) && moduleUrl === new URL(`file://${argv1}`).href;
 
+/**
+ * Fixture paths, resolved to a **native absolute** path before either guard or `pathToFileURL`
+ * sees them.
+ *
+ * Review (#586) caught the reason: a bare `/repo/…` literal is a POSIX absolute path and only a
+ * drive-relative root on Windows, where `pathToFileURL` supplies the current drive and a raw
+ * `'file://' + path` concatenation does not. So the two sides were comparing different things
+ * there, and the plain and space controls went red on a perfectly healthy gate — on the very
+ * platform this selftest was just marked `platformSensitive: true` to cover. `resolve` gives both
+ * sides the same well-formed native path on both platforms.
+ *
+ * `?` is not a legal Windows *filename*, but nothing here touches the disk — `realpath` is
+ * stubbed and these paths never exist — so it is a fine string to parse on either platform. Only
+ * the `runsFrom` fixtures below create real directories, and that one is skipped on Windows.
+ */
 const GUARD_PATHS = [
-  ['a plain path', '/repo/scripts/gate.mjs', true],
-  ['a path with a space', '/repo/my scripts/gate.mjs', true],
-  ['a path with `#`', '/repo/feature#42/gate.mjs', false],
-  ['a path with `?`', '/repo/what?/gate.mjs', false],
-  ['a path with both `#` and `?`', '/repo/a#b?c/gate.mjs', false],
+  ['a plain path', resolve('/repo/scripts/gate.mjs'), false],
+  ['a path with a space', resolve('/repo/my scripts/gate.mjs'), false],
+  ['a path with `#`', resolve('/repo/feature#42/gate.mjs'), true],
+  ['a path with `?`', resolve('/repo/what?/gate.mjs'), true],
+  ['a path with both `#` and `?`', resolve('/repo/a#b?c/gate.mjs'), true],
 ];
 
-for (const [name, path, oldWorked] of GUARD_PATHS) {
+for (const [name, path, concatBreaks] of GUARD_PATHS) {
   const url = pathToFileURL(path).href;
   /* realpath is stubbed: these paths do not exist, and what is under test is the URL half. */
   const nowMatches = isMainModule(url, path, { realpath: (p) => p });
@@ -410,34 +444,44 @@ for (const [name, path, oldWorked] of GUARD_PATHS) {
     `the guard matches ${name}`,
     'positive',
     nowMatches,
-    nowMatches ? undefined : 'did not match its own module URL',
+    nowMatches ? undefined : `did not match its own module URL (${url})`,
   );
-  check(
-    `the old \`file://\` concatenation ${oldWorked ? 'coped with' : 'SILENTLY SKIPPED'} ${name}`,
-    'negative',
-    oldGuard(url, path) === oldWorked,
-    'the control no longer demonstrates the bug it guards',
-  );
+  /* Asserted only where the disagreement is parser-level and therefore the same on every
+   * platform: `pathToFileURL` percent-encodes `#` to `%23` and `?` to `%3F`, while the URL parser
+   * reads them as the start of a fragment or a query, so the two hrefs can never be equal. What
+   * the concatenation did with a path WITHOUT them depends on how a Windows drive letter is
+   * parsed after `file://`, which is not what is under test — and an expectation that flips by
+   * platform is an expectation that reddens a healthy gate. So it is not asserted at all. */
+  if (concatBreaks) {
+    check(
+      `the old \`file://\` concatenation SILENTLY SKIPPED ${name}`,
+      'negative',
+      oldGuard(url, path) === false,
+      'the control no longer demonstrates the bug it guards',
+    );
+  }
 }
 
 check(
   'the guard follows a symlink, because Node canonicalises the main module and argv[1] is as typed',
   'positive',
-  isMainModule(pathToFileURL('/real/gate.mjs').href, '/link/gate.mjs', {
-    realpath: () => '/real/gate.mjs',
+  isMainModule(pathToFileURL(resolve('/real/gate.mjs')).href, resolve('/link/gate.mjs'), {
+    realpath: () => resolve('/real/gate.mjs'),
   }),
 );
 
 check(
   'a different file is not the main module',
   'negative',
-  !isMainModule(pathToFileURL('/repo/gate.mjs').href, '/repo/other.mjs', { realpath: (p) => p }),
+  !isMainModule(pathToFileURL(resolve('/repo/gate.mjs')).href, resolve('/repo/other.mjs'), {
+    realpath: (p) => p,
+  }),
 );
 
 check(
   'no argv[1] at all — `node --eval`, or an import — is not the main module',
   'negative',
-  !isMainModule(pathToFileURL('/repo/gate.mjs').href, undefined),
+  !isMainModule(pathToFileURL(resolve('/repo/gate.mjs')).href, undefined),
 );
 
 check(
@@ -446,7 +490,7 @@ check(
   (() => {
     try {
       return (
-        isMainModule(pathToFileURL('/repo/gate.mjs').href, '/repo/gate.mjs', {
+        isMainModule(pathToFileURL(resolve('/repo/gate.mjs')).href, resolve('/repo/gate.mjs'), {
           realpath: () => {
             throw new Error('ENOENT');
           },
