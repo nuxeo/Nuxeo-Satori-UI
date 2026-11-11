@@ -284,8 +284,8 @@ list), cheapest first, stopping at the first failure and printing only its outpu
 tail: `node`, the `lockfile` and `dependency-tree` pairs, `supply-chain`,
 `code-scanning`, the guardrails and sanitizer pairs, `assertions`, the
 `parity-surface` pair, then affected
-`lint`, `test`, `build`, `typecheck`, then `spec-types`, `bundle` and the packaging
-and drift gates. [Dev Harness & Gates](../../documentation/30-engineering/08-dev-harness-and-gates.md)
+`lint`, `test`, `build`, `typecheck`, then `spec-types`, the `stories-types` pair,
+`bundle` and the packaging and drift gates. [Dev Harness & Gates](../../documentation/30-engineering/08-dev-harness-and-gates.md)
 has the table. That ordering is deliberate — a lint error usually explains the test
 failure that would follow, and running the full set on a known-broken tree wastes
 minutes per iteration.

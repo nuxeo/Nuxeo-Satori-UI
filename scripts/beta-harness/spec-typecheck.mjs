@@ -32,7 +32,7 @@ import { spawnToolSync } from './package-command.mjs';
  * project cannot opt out by omission.
  *
  * The cost of that choice is the one thing a project target would have got for free: Nx's
- * `dependsOn`. See `PREREQUISITES` below.
+ * `dependsOn`. See `generated-inputs.mjs`, which this gate and `stories-typecheck.mjs` share.
  *
  * Usage:
  *   node scripts/beta-harness/spec-typecheck.mjs
@@ -44,53 +44,26 @@ import { spawnToolSync } from './package-command.mjs';
 import { readdirSync, existsSync, statSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 
+import { NO_PROGRESS, ensureGeneratedInputs } from './generated-inputs.mjs';
+
 const repoRoot = resolve(import.meta.dirname, '..', '..');
 const asJson = process.argv.includes('--json');
 
 /**
- * Generated files a spec typecheck imports, and the Nx target that writes each one.
- *
- * `typecheck`, `test`, `storybook` and `build-storybook` all declare `dependsOn: ["compodoc"]`
- * in `satori-components/project.json`. This gate is a bare `tsc` runner outside the project
- * graph, so it had no way to declare the same thing and did not — and
- * `.storybook/api-members.spec.ts` reaches `.storybook/compodoc.ts`, which imports the
- * **gitignored** `documentation.json` that `compodoc` writes.
- *
- * So on a fresh clone `npm run beta:gate` was red with
- * `compodoc.ts(1,27): error TS2307: Cannot find module '../documentation.json'`, and nothing in
- * the gate could have produced it: on `main` the `typecheck` gate was `nx affected`, which
- * matched nothing, so the target that would have pulled `compodoc` in never ran either. CI never
- * saw it because `windows-gate.yml` runs `satori-components:compodoc` as an explicit step before
- * the gate — a workaround whose reason was never written down, so it read as a cache warm-up.
- *
- * Run unconditionally rather than only when the file is absent. `dependsOn` does not check for a
- * file either: it runs the target, and Nx's cache makes a warm run a few hundred milliseconds.
- * Skipping on presence would accept a `documentation.json` left over from an older source tree,
- * which is a worse failure than a slow one — it type-checks the specs against a stale API.
+ * The generated files this gate compiles — `.storybook/api-members.spec.ts` reaches
+ * `.storybook/compodoc.ts`, which imports the gitignored `documentation.json` — are produced by
+ * `generated-inputs.mjs`, which carries the whole reason that is this gate's problem rather than
+ * Nx's. `stories-typecheck.mjs` needs the same file for the same reason and reads the same list,
+ * so a new generated input is declared once instead of once per discovering gate.
  */
-const PREREQUISITES = [
-  {
-    target: 'satori-components:compodoc',
-    writes: 'libs/shared/satori-components/documentation.json',
-    neededBy: 'libs/shared/satori-components/.storybook/compodoc.ts',
-  },
-];
-
-for (const { target, writes, neededBy } of PREREQUISITES) {
-  if (!asJson) console.log(`  prep  nx run ${target}  (writes ${writes})`);
-  const proc = spawnToolSync('npx', ['nx', 'run', target], { cwd: repoRoot, encoding: 'utf8' });
-  const absent = !existsSync(resolve(repoRoot, writes));
-  if (proc.status !== 0 || absent) {
-    console.error(
-      `spec-typecheck: could not produce ${writes}.\n` +
-        `  \`nx run ${target}\` exited ${proc.status}${absent ? ' and the file is still absent' : ''}.\n` +
-        `  ${neededBy} imports it, so every spec that reaches that file would fail with TS2307 —\n` +
-        '  which reads as a type error in the specs rather than a missing build step. Failing here\n' +
-        '  instead, because this gate cannot speak for a project whose generated inputs are missing.\n' +
-        `${proc.stdout ?? ''}${proc.stderr ?? ''}`,
-    );
-    process.exit(1);
-  }
+const prep = ensureGeneratedInputs({
+  root: repoRoot,
+  gate: 'spec-typecheck',
+  log: asJson ? NO_PROGRESS : (line) => console.log(line),
+});
+if (!prep.ok) {
+  console.error(prep.message);
+  process.exit(1);
 }
 
 /** Every `tsconfig.spec.json` under `apps/` and `libs/`, at any nesting depth. */
