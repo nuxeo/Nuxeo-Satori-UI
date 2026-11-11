@@ -1127,7 +1127,6 @@
       "zoom-out": "Verkleinern"
     },
     "block": "Sperren",
-    "checking-content-lake-status": "Status von Content Lake wird überprüft",
     "create-version-dialog": {
       "cancel": "Abbrechen",
       "create-version": "Version erstellen",
@@ -1142,8 +1141,6 @@
       "add-a-tag": "Tag hinzufügen…",
       "ai-assistant": "KI-Assistent",
       "ai-insights": "KI-Einblicke",
-      "already-in-content-lake": "Bereits in Content Lake",
-      "already-ingested-to-content-lake": "Bereits in Content Lake aufgenommen",
       "analyze-sentiment": "Stimmung analysieren",
       "attachments": "Anhänge",
       "augment-your-editorial-workflow-with-cognitive": "Erweitern Sie Ihren redaktionellen Workflow durch kognitive Verarbeitung. Erstellen Sie Zusammenfassungen, klassifizieren Sie komplexe Daten und entdecken Sie verborgene Zusammenhänge.",
@@ -1193,9 +1190,7 @@
       "go-back-2": "Zurück",
       "granted-by": "Gewährt von",
       "if-you-want-to-explicitly-control": "Wenn Sie den Zugriff auf dieses Dokument explizit steuern möchten, können Sie die Vererbung von Berechtigungen sperren. Änderungen am übergeordneten Dokument wirken sich dann nicht auf die Zugriffsbedingungen für dieses Dokument aus. Sie und die Administratoren werden zu den lokalen Berechtigungen hinzugefügt.",
-      "indexed-in-content-lake": "In Content Lake indiziert",
       "indexing-properties": "Indizierungseigenschaften",
-      "ingest-to-content-lake": "In Content Lake aufnehmen",
       "key-points": "Kernpunkte:",
       "last-modified": "Letztes Update",
       "loading": "Wird geladen",
@@ -1306,7 +1301,6 @@
     "generate": "Generieren",
     "hide-details": "Details ausblenden",
     "html-source": "HTML-Quelle",
-    "ingesting-into-content-lake": "Wird in Content Lake aufgenommen",
     "message": {
       "added-to-collection": "Zur Sammlung hinzugefügt",
       "added-to-favorites": "Zu Favoriten hinzugefügt",
@@ -1315,8 +1309,6 @@
       "classification-failed": "Klassifizierung fehlgeschlagen",
       "classification-unavailable-vocabulary": "Dokumentklassifizierung nicht verfügbar: Das Vokabular „nature“ konnte nicht geladen werden. Aktualisieren Sie die Seite und versuchen Sie es erneut.",
       "comment-deleted": "Kommentar gelöscht",
-      "content-lake-ingest-failed": "Erfassung in Content Lake fehlgeschlagen.",
-      "content-lake-ingest-finished-with-errors": "Erfassung in Content Lake mit Fehlern abgeschlossen ({{ count }} fehlgeschlagen). Prüfen Sie, ob der HxAI-Konnektor und die Anmeldeinformationen für die Erfassung in Nuxeo konfiguriert sind.",
       "document-locked": "Dokument gesperrt",
       "document-moved-to-trash": "Dokument in den Papierkorb verschoben",
       "document-permanently-deleted": "Dokument dauerhaft gelöscht.",
@@ -1357,7 +1349,6 @@
       "failed-to-update-permission-inheritance": "Berechtigungsvererbung konnte nicht aktualisiert werden",
       "failed-to-upload-attachment": "Anhang konnte nicht hochgeladen werden",
       "failed-to-upload-image": "Bild konnte nicht hochgeladen werden",
-      "ingested-to-content-lake": "In Content Lake erfasst. Knowledge Discovery-Agenten können dieses Dokument durchsuchen, sobald die Indizierung abgeschlossen ist.",
       "ke-category-not-in-vocabulary": "Knowledge Enrichment hat „{{ category }}“ zurückgegeben. Dies ist keine der {{ count }} Dokumentkategorien. Um die Kategorie manuell festzulegen, klicken Sie auf die Schaltfläche 'Bearbeiten' und wählen Sie einen Wert für Dokumentkategorie aus.",
       "ke-failed-classification": "Fehler beim Ausführen der Dokumentklassifizierung.",
       "ke-failed-entity-extraction": "Fehler beim Ausführen der Entitätsextraktion.",
@@ -1537,8 +1528,7 @@
       "type-to-browse-subfolders": "Geben Sie / ein, um Unterordner zu durchsuchen",
       "up-one-folder-level": "Eine Ordnerebene nach oben",
       "upload-or-ingest-failed": "Hochladen oder Erfassung in Content Lake fehlgeschlagen.",
-      "upload-to-content-lake": "In Content Lake hochladen",
-      "ingesting-into-content-lake": "Wird in Content Lake aufgenommen..."
+      "upload-to-content-lake": "In Content Lake hochladen"
     },
     "debug-http-status": "HTTP {{ status }}",
     "debug-operation": "Debug: {{ operation }}",

@@ -1,7 +1,7 @@
 /**
  * NXSAT-528 / IBM 2301747460 — header toolbar icon buttons must not expose Material icon
  * ligature text as visible labelling that conflicts with the accessible name (WCAG 2.5.3
- * label-in-name). Same pattern as Content Lake ingest (NXENG-793) and dashboard FAB.
+ * label-in-name). Same pattern as the dashboard FAB.
  *
  * The page renders its toolbar through `nxs-document-toolbar`, so the markup contract is that
  * component's template; its spec asserts the rendered names.

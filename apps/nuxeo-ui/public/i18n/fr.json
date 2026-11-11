@@ -1127,7 +1127,6 @@
       "zoom-out": "Zoom arrière"
     },
     "block": "Bloquer",
-    "checking-content-lake-status": "Vérification du statut Content Lake",
     "create-version-dialog": {
       "cancel": "Annuler",
       "create-version": "Créer une version",
@@ -1142,8 +1141,6 @@
       "add-a-tag": "Ajouter une balise…",
       "ai-assistant": "Assistant IA",
       "ai-insights": "Informations IA",
-      "already-in-content-lake": "Déjà dans Content Lake",
-      "already-ingested-to-content-lake": "Déjà ingéré dans Content Lake",
       "analyze-sentiment": "Analyser le sentiment",
       "attachments": "Pièces jointes",
       "augment-your-editorial-workflow-with-cognitive": "Enrichissez votre flux de travail éditorial grâce au traitement cognitif. Générez des résumés, classez des données complexes et découvrez des relations cachées.",
@@ -1193,9 +1190,7 @@
       "go-back-2": "Retour",
       "granted-by": "Accordé par",
       "if-you-want-to-explicitly-control": "Si vous souhaitez contrôler explicitement l'accès à ce document, vous pouvez bloquer l'héritage des autorisations. Toute modification apportée au document parent n'affectera pas les conditions d'accès à ce document. Vous et les administrateurs serez ajoutés aux autorisations locales.",
-      "indexed-in-content-lake": "Indexé dans Content Lake",
       "indexing-properties": "Propriétés d'indexation",
-      "ingest-to-content-lake": "Ingérer dans Content Lake",
       "key-points": "Points clés :",
       "last-modified": "Dernière modification",
       "loading": "Chargement",
@@ -1306,7 +1301,6 @@
     "generate": "Générer",
     "hide-details": "Masquer les détails",
     "html-source": "Source HTML",
-    "ingesting-into-content-lake": "Ingestion dans Content Lake",
     "message": {
       "added-to-collection": "Ajouté à la collection",
       "added-to-favorites": "Ajouté aux favoris",
@@ -1315,8 +1309,6 @@
       "classification-failed": "Échec de la classification",
       "classification-unavailable-vocabulary": "Classification des documents indisponible : le vocabulaire « nature » n'a pas pu être chargé. Actualisez la page et réessayez.",
       "comment-deleted": "Commentaire supprimé",
-      "content-lake-ingest-failed": "Échec de l'ingestion dans Content Lake.",
-      "content-lake-ingest-finished-with-errors": "Ingestion dans Content Lake terminée avec des erreurs ({{ count }} en échec). Vérifiez que le connecteur HxAI et les informations d'identification d'ingestion sont configurés sur Nuxeo.",
       "document-locked": "Document verrouillé",
       "document-moved-to-trash": "Document déplacé dans la corbeille",
       "document-permanently-deleted": "Document supprimé définitivement.",
@@ -1357,7 +1349,6 @@
       "failed-to-update-permission-inheritance": "Échec de la mise à jour de l'héritage des autorisations",
       "failed-to-upload-attachment": "Échec de l'importation de la pièce jointe",
       "failed-to-upload-image": "Échec de l'importation de l'image",
-      "ingested-to-content-lake": "Ingéré dans Content Lake. Les agents Knowledge Discovery pourront rechercher ce document une fois l'indexation terminée.",
       "ke-category-not-in-vocabulary": "Knowledge Enrichment a renvoyé « {{ category }} », qui ne fait pas partie des {{ count }} catégories de documents. Pour la définir manuellement, cliquez sur le bouton Modifier et choisissez une valeur pour Catégorie de document.",
       "ke-failed-classification": "Échec de l'exécution de la classification des documents.",
       "ke-failed-entity-extraction": "Échec de l'exécution de l'extraction d'entités.",
@@ -1537,8 +1528,7 @@
       "type-to-browse-subfolders": "Tapez / pour parcourir les sous-dossiers",
       "up-one-folder-level": "Remonter d'un niveau de dossier",
       "upload-or-ingest-failed": "Échec de l'importation ou de l'ingestion dans Content Lake.",
-      "upload-to-content-lake": "Importer dans Content Lake",
-      "ingesting-into-content-lake": "Ingestion dans Content Lake..."
+      "upload-to-content-lake": "Importer dans Content Lake"
     },
     "debug-http-status": "HTTP {{ status }}",
     "debug-operation": "Débogage : {{ operation }}",

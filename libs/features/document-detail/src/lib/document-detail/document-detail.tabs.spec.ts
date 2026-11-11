@@ -18,7 +18,6 @@ import {
   ARenderService,
   BrowseService,
   CURRENT_USERNAME,
-  ContentLakeIngestService,
   DirectoryService,
   DocumentDetailService,
   NuxeoApiBase,
@@ -31,7 +30,6 @@ import {
   type NuxeoComment,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   AiChatService,
   AiFeatureFlagService,
@@ -205,24 +203,6 @@ const mockKeClient = {
   enrich: vi.fn((): Observable<KeEnrichmentResult> => of(keResult())),
 };
 
-const mockIngestService = {
-  startIngest: vi.fn((): Observable<{ commandId: string }> => of({ commandId: 'cmd-1' })),
-  waitUntilComplete: vi.fn(
-    (): Observable<{
-      commandId: string;
-      state: string;
-      processed: number;
-      error: boolean;
-      errorCount: number;
-    }> => of({ commandId: 'cmd-1', state: 'COMPLETED', processed: 1, error: false, errorCount: 0 }),
-  ),
-  markIngested: vi.fn((): Observable<NuxeoDocument[]> => of([])),
-  backfillIngestMarkerIfNeeded: vi.fn(
-    (): Observable<{ doc: NuxeoDocument | null; presentInContentLake: boolean }> =>
-      of({ doc: null, presentInContentLake: false }),
-  ),
-};
-
 const mockNuxeoApi = {
   nxqlSearch: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
 };
@@ -306,14 +286,6 @@ describe('DocumentDetailComponent — tab surfaces', () => {
     mockAiGateway.findSimilar.mockReturnValue(of({ documents: [] }));
     mockAiGateway.analyzeSentiment.mockReturnValue(of({ sentiments: [], threadSummary: null }));
     mockKeClient.enrich.mockReturnValue(of(keResult()));
-    mockIngestService.startIngest.mockReturnValue(of({ commandId: 'cmd-1' }));
-    mockIngestService.waitUntilComplete.mockReturnValue(
-      of({ commandId: 'cmd-1', state: 'COMPLETED', processed: 1, error: false, errorCount: 0 }),
-    );
-    mockIngestService.markIngested.mockReturnValue(of([]));
-    mockIngestService.backfillIngestMarkerIfNeeded.mockReturnValue(
-      of({ doc: null, presentInContentLake: false }),
-    );
     mockNuxeoApi.nxqlSearch.mockReturnValue(of({ entries: [] }));
     mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
   }
@@ -362,8 +334,6 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         { provide: AiChatService, useValue: { openPanel: vi.fn() } },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(true) } },
         { provide: NuxeoApiBase, useValue: mockNuxeoApi },
-        { provide: ContentLakeIngestService, useValue: mockIngestService },
-        { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({

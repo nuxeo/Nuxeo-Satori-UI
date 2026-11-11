@@ -194,9 +194,6 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-detail.add-to-collection-dialog.search-or-create-collection':
     'Search or create collection...',
   'document-detail.add-to-collection-dialog.select-a-collection': 'Select a Collection...',
-  'document-detail.document-detail.already-in-content-lake': 'Already in Content Lake',
-  'document-detail.document-detail.already-ingested-to-content-lake':
-    'Already ingested to Content Lake',
   'document-detail.document-detail.cancel': 'Cancel',
   'document-detail.document-detail.close-panel': 'Close panel',
   'document-detail.document-detail.close-start-process-dialog': 'Close start process dialog',
@@ -209,7 +206,6 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-detail.document-detail.edit-permission': 'Edit permission',
   'document-detail.document-detail.filter-by-username': 'Filter by username',
   'document-detail.document-detail.go-back': 'Go back',
-  'document-detail.document-detail.ingest-to-content-lake': 'Ingest to Content Lake',
   'document-detail.document-detail.loading': 'Loading',
   'document-detail.document-detail.more-actions': 'More actions',
   'document-detail.document-detail.open-in-nuxeo-drive': 'Open in Nuxeo Drive',

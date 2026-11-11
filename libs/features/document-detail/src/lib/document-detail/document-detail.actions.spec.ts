@@ -20,7 +20,6 @@ import {
   BrowseService,
   CURRENT_USERNAME,
   CLIPBOARD_STORAGE_KEY,
-  ContentLakeIngestService,
   DirectoryService,
   DocumentDetailService,
   NuxeoApiBase,
@@ -32,7 +31,6 @@ import {
   type NuxeoTask,
   type NuxeoWorkflow,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   AiChatService,
   AiFeatureFlagService,
@@ -341,18 +339,6 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(false) } },
         { provide: NuxeoApiBase, useValue: { nxqlSearch: vi.fn(() => of({ entries: [] })) } },
         { provide: CURRENT_USERNAME, useValue: () => currentUsername },
-        {
-          provide: ContentLakeIngestService,
-          useValue: {
-            startIngest: vi.fn(() => of({ commandId: 'c1' })),
-            waitUntilComplete: vi.fn(() => of({})),
-            markIngested: vi.fn(() => of([])),
-            backfillIngestMarkerIfNeeded: vi.fn(() =>
-              of({ doc: null, presentInContentLake: false }),
-            ),
-          },
-        },
-        { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {

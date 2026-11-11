@@ -666,7 +666,7 @@
       "edit": "Edit",
       "export-csv": "Export CSV",
       "filter-by-title": "Filter by title...",
-      "filtering": "Filtering\u2026",
+      "filtering": "Filtering…",
       "from": "From",
       "granted-by": "Granted by",
       "if-you-want-to-explicitly-control": "If you want to explicitly control the access to this document you can block the permissions inheritance. Any change made on parent document will not affect the access conditions to this document. You and the administrators will be added to local permissions.",
@@ -1161,7 +1161,6 @@
       "zoom-out": "Zoom out"
     },
     "block": "Block",
-    "checking-content-lake-status": "Checking Content Lake status",
     "create-version-dialog": {
       "cancel": "Cancel",
       "create-version": "Create Version",
@@ -1176,8 +1175,6 @@
       "add-a-tag": "Add a tag…",
       "ai-assistant": "AI Assistant",
       "ai-insights": "AI Insights",
-      "already-in-content-lake": "Already in Content Lake",
-      "already-ingested-to-content-lake": "Already ingested to Content Lake",
       "analyze-sentiment": "Analyze Sentiment",
       "attachments": "Attachments",
       "augment-your-editorial-workflow-with-cognitive": "Augment your editorial workflow with cognitive processing. Generate summaries, classify complex data, and discover hidden relationships.",
@@ -1228,9 +1225,7 @@
       "go-back-2": "Go Back",
       "granted-by": "Granted by",
       "if-you-want-to-explicitly-control": "If you want to explicitly control the access to this document you can block the permissions inheritance. Any change made on parent document will not affect the access conditions to this document. You and the administrators will be added to local permissions.",
-      "indexed-in-content-lake": "Indexed in Content Lake",
       "indexing-properties": "Indexing Properties",
-      "ingest-to-content-lake": "Ingest to Content Lake",
       "key-points": "Key Points:",
       "last-modified": "Last Modified",
       "loading": "Loading",
@@ -1349,7 +1344,6 @@
     "generate": "Generate",
     "hide-details": "Hide details",
     "html-source": "HTML source",
-    "ingesting-into-content-lake": "Ingesting into Content Lake",
     "message": {
       "added-to-collection": "Added to collection",
       "added-to-favorites": "Added to favorites",
@@ -1358,8 +1352,6 @@
       "classification-failed": "Classification failed",
       "classification-unavailable-vocabulary": "Document classification is unavailable: the \"nature\" vocabulary failed to load. Refresh the page and try again.",
       "comment-deleted": "Comment deleted",
-      "content-lake-ingest-failed": "Content Lake ingest failed.",
-      "content-lake-ingest-finished-with-errors": "Content Lake ingest finished with errors ({{ count }} failed). Check that the HxAI connector and ingest credentials are configured on Nuxeo.",
       "document-locked": "Document locked",
       "document-moved-to-trash": "Document moved to trash",
       "document-permanently-deleted": "Document permanently deleted.",
@@ -1400,7 +1392,6 @@
       "failed-to-update-permission-inheritance": "Failed to update permission inheritance",
       "failed-to-upload-attachment": "Failed to upload attachment",
       "failed-to-upload-image": "Failed to upload image",
-      "ingested-to-content-lake": "Ingested to Content Lake. Knowledge Discovery agents can search this document once indexing completes.",
       "ke-category-not-in-vocabulary": "Knowledge Enrichment returned \"{{ category }}\", which is not one of the {{ count }} document categories. To set it manually, click the Edit button and pick a value for Document Category.",
       "ke-failed-classification": "Failed to run document classification.",
       "ke-failed-entity-extraction": "Failed to run entity extraction.",
@@ -1583,8 +1574,7 @@
       "type-to-browse-subfolders": "Type / to browse subfolders",
       "up-one-folder-level": "Up one folder level",
       "upload-or-ingest-failed": "Upload or Content Lake ingest failed.",
-      "upload-to-content-lake": "Upload to Content Lake",
-      "ingesting-into-content-lake": "Ingesting into Content Lake..."
+      "upload-to-content-lake": "Upload to Content Lake"
     },
     "debug-http-status": "HTTP {{ status }}",
     "debug-operation": "Debug: {{ operation }}",
@@ -2717,7 +2707,7 @@
     "asset-grid": {
       "label": "Assets",
       "select": "Select {{name}}",
-      "name-and-type": "{{name}} \u2014 {{type}}"
+      "name-and-type": "{{name}} — {{type}}"
     },
     "asset-facets-drawer": {
       "label": "Asset filters",

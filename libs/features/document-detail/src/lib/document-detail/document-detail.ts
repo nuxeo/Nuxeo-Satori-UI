@@ -70,14 +70,6 @@ import {
   insecureAllowedForHost,
   originOf,
   TagService,
-  ContentLakeIngestService,
-  buildContentLakeIngestMarker,
-  isContentLakeIngestCurrent,
-  needsContentLakeIngest,
-  readBlobDigest,
-  resolveIngestMarkerWriteProperty,
-  shouldProbeContentLakeIngestStatus,
-  supportsContentLakeIngest,
   canManageDocumentPermissions,
   canPublishDocument,
   canTagDocument,
@@ -133,7 +125,6 @@ import {
   type KeEnrichmentResult,
 } from '@agentic-ui/shared/ke-client';
 import { DocumentLayoutComponent } from '@agentic-ui/shared/document-layouts';
-import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   catchError,
   finalize,
@@ -420,8 +411,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private readonly tagService = inject(TagService);
   private readonly aiGateway = inject(AiGatewayService);
   private readonly keClient = inject(KeClientService);
-  private readonly contentLakeIngestService = inject(ContentLakeIngestService);
-  private readonly kdClient = inject(KdClientService);
   private readonly aiChatService = inject(AiChatService);
   readonly featureFlags = inject(AiFeatureFlagService);
 
@@ -677,12 +666,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly keActionInFlight = signal<KeUiAction | null>(null);
   readonly keStatus = signal<string | null>(null);
   readonly keError = signal<string | null>(null);
-  readonly contentLakeIngestInFlight = signal(false);
-  readonly contentLakeIngestStatus = signal<string | null>(null);
-  readonly contentLakeIngestError = signal<string | null>(null);
-  /** Set after a successful ingest or CheckDigest probe when the marker cannot be persisted. */
-  readonly contentLakePresenceVerified = signal(false);
-  readonly contentLakePresenceChecking = signal(false);
 
   // Loaded from the Nuxeo `nature` directory and supplied as candidate classes to the
   // KE text-classification model. Sourcing live ids guarantees the value we write back
@@ -946,11 +929,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const mime = this.fileMimeType();
     return mime.startsWith('image/') || this.typeTraits().picture;
   });
-  readonly canIngestToContentLake = computed(() => needsContentLakeIngest(this.doc()));
-  readonly showsContentLakeIngested = computed(
-    () => isContentLakeIngestCurrent(this.doc()) || this.contentLakePresenceVerified(),
-  );
-  readonly showsContentLakeIngestAction = computed(() => supportsContentLakeIngest(this.doc()));
 
   readonly attachments = computed(() => {
     const d = this.doc();
@@ -1233,11 +1211,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.keActionInFlight.set(null);
     this.keStatus.set(null);
     this.keError.set(null);
-    this.contentLakeIngestInFlight.set(false);
-    this.contentLakeIngestStatus.set(null);
-    this.contentLakeIngestError.set(null);
-    this.contentLakePresenceVerified.set(false);
-    this.contentLakePresenceChecking.set(false);
     this.panelSubTab.set('properties');
     this.permissionsTabLoaded = false;
     this.publishTabLoaded = false;
@@ -1392,64 +1365,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       actions: ['image-description', 'named-entity-recognition-image'],
       maxWordCount: 100,
     });
-  }
-
-  ingestToContentLake(): void {
-    const uid = this.docUid;
-    if (!uid || !this.canIngestToContentLake() || this.contentLakeIngestInFlight()) {
-      return;
-    }
-
-    this.contentLakeIngestInFlight.set(true);
-    this.contentLakeIngestError.set(null);
-    this.contentLakeIngestStatus.set(null);
-
-    this.contentLakeIngestService
-      .startIngest([uid])
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        switchMap((command) => this.contentLakeIngestService.waitUntilComplete(command.commandId)),
-        switchMap((status) =>
-          this.contentLakeIngestService
-            .markIngested([uid])
-            .pipe(map((updatedDocs) => ({ status, updatedDoc: updatedDocs[0] ?? null }))),
-        ),
-        finalize(() => this.contentLakeIngestInFlight.set(false)),
-      )
-      .subscribe({
-        next: ({ status, updatedDoc }) => {
-          if (status.error || status.errorCount > 0) {
-            const message = this.translate.instant(
-              'document-detail.message.content-lake-ingest-finished-with-errors',
-              { count: status.errorCount },
-            );
-            this.contentLakeIngestError.set(message);
-            this.contentLakeIngestStatus.set(null);
-            this.toast.error(message);
-            return;
-          }
-
-          const message = this.translate.instant(
-            'document-detail.message.ingested-to-content-lake',
-          );
-          this.contentLakeIngestStatus.set(message);
-          this.contentLakePresenceVerified.set(true);
-          if (updatedDoc) {
-            this.doc.set(updatedDoc);
-          } else {
-            this.applyContentLakeIngestMarkerLocally();
-          }
-          this.toast.show(message);
-        },
-        error: (err: Error) => {
-          const message =
-            err.message ||
-            this.translate.instant('document-detail.message.content-lake-ingest-failed');
-          this.contentLakeIngestError.set(message);
-          this.contentLakeIngestStatus.set(null);
-          this.toast.error(message);
-        },
-      });
   }
 
   isKeActionRunning(action: KeUiAction): boolean {
@@ -1697,55 +1612,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.revokeStoryboardObjectUrls();
   }
 
-  private maybeBackfillContentLakeMarker(doc: NuxeoDocument): void {
-    // The backfill writes the marker to the document, and a version is read-only.
-    if (doc.isVersion) return;
-    if (!shouldProbeContentLakeIngestStatus(doc)) {
-      if (isContentLakeIngestCurrent(doc)) {
-        this.contentLakePresenceVerified.set(true);
-      }
-      return;
-    }
-
-    this.contentLakePresenceChecking.set(true);
-    this.kdClient
-      .listIngestSourceIds()
-      .pipe(
-        switchMap((sourceIds) =>
-          this.contentLakeIngestService.backfillIngestMarkerIfNeeded(doc, sourceIds),
-        ),
-        finalize(() => this.contentLakePresenceChecking.set(false)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((result) => {
-        if (result.presentInContentLake) {
-          this.contentLakePresenceVerified.set(true);
-        }
-        if (result.doc && this.doc()?.uid === result.doc.uid) {
-          this.doc.set(result.doc);
-        }
-      });
-  }
-
-  private applyContentLakeIngestMarkerLocally(): void {
-    const doc = this.doc();
-    if (!doc) {
-      return;
-    }
-    const digest = readBlobDigest(doc);
-    const writeProperty = resolveIngestMarkerWriteProperty(doc);
-    if (!digest || !writeProperty) {
-      return;
-    }
-    this.doc.set({
-      ...doc,
-      properties: {
-        ...doc.properties,
-        [writeProperty]: buildContentLakeIngestMarker(digest),
-      },
-    });
-  }
-
   private loadDocument(uid: string): void {
     const generation = ++this.documentLoadGeneration;
     const isCurrent = (): boolean =>
@@ -1788,7 +1654,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           this.loadDocumentTasks(uid);
           this.loadDocumentWorkflows(uid);
           this.loadARenderUrl(doc);
-          this.maybeBackfillContentLakeMarker(doc);
         },
         error: (err: unknown) => {
           if (!isCurrent()) return;
