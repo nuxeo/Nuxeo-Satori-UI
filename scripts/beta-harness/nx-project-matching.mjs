@@ -85,13 +85,15 @@
  * shape is what decides it, which is the point: this gate is the thing that goes red if an
  * `overrides` entry forces a major on nx again.
  *
- * ## What is pure, and therefore under control
+ * ## What is under control
  *
- * `pickSubject`, `minimatchMembersUsedUnder`, `missingUsages` and `evaluate` are exported and
- * side-effect free, and the selftest drives all four. Gathering — spawning nx, resolving
- * `minimatch` from nx's own tree — is the only part that is not, so a gap raised while gathering
- * (`cannot launch nx`, `nx cannot resolve minimatch`) is the one class of verdict the controls
- * cannot reach. Said rather than left for a reader to work out.
+ * `pickSubject`, `minimatchMembersUsedUnder`, `missingUsages`, `evaluate` and `isMainModule` are
+ * exported and side-effect free, and the selftest drives all five; two further controls run this
+ * file for real, from a symlink under a `#` and a `?` directory, and require it to reach `main()`.
+ *
+ * Gathering — spawning nx, resolving `minimatch` from nx's own tree — is the part that is not
+ * pure, so a gap raised while gathering (`cannot launch nx`, `nx cannot resolve minimatch`) is the
+ * one class of verdict the controls cannot reach. Said rather than left for a reader to work out.
  *
  * Usage:
  *   node scripts/beta-harness/nx-project-matching.mjs [--json]
@@ -99,9 +101,10 @@
  * Exit: 0 pass · 1 a probe or the API check failed · 2 something could not be inspected.
  */
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawnToolSync } from './package-command.mjs';
 
 /**
@@ -338,9 +341,46 @@ export function evaluate({
 
 /* ------------------------------------------------------------------------------- the gate */
 
-/* Importing this module must not run it: the selftest drives the four functions above directly,
- * and a module that spawns nx on import cannot be imported by anything cheap. */
-if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+/**
+ * Was this file run, rather than imported?
+ *
+ * Importing it must not run it: the selftest drives the pure functions above directly, and a
+ * module that spawns nx on import cannot be imported by anything cheap.
+ *
+ * ## Why this is not `new URL('file://' + process.argv[1])`
+ *
+ * It was, and that is a **silent pass** — the worst failure a gate has, because every probe is
+ * skipped and the exit code is 0. Concatenation hands the path to the URL parser unencoded, so a
+ * checkout path containing `#` or `?` has its tail read as a fragment or a query and the href
+ * stops matching `import.meta.url`. `vacuity-verdict.mjs` carries the measured table for the same
+ * bug: `#` and `?` both turned an exit 2 into an exit 0, while a space did not, because `new URL`
+ * percent-encodes a space. `pathToFileURL` encodes all three.
+ *
+ * `realpathSync` is the other half. Node resolves the main module through its realpath, so
+ * `import.meta.url` is canonical while `process.argv[1]` is the path as typed — invoking through a
+ * symlink mismatches without it. Review (#586) named both halves; the controls in
+ * `nx-project-matching.selftest.mjs` cover each, including two that run this file for real and
+ * require it to reach `main()`.
+ *
+ * @param {string} moduleUrl  `import.meta.url` of the module asking
+ * @param {string | undefined} argv1  `process.argv[1]`
+ * @param {{ realpath?: (p: string) => string }} [io]
+ */
+export function isMainModule(moduleUrl, argv1, { realpath = realpathSync } = {}) {
+  if (!argv1) return false;
+  let resolved;
+  try {
+    resolved = realpath(argv1);
+  } catch {
+    /* Not a path that exists, so not the module Node is running. Compare anyway rather than
+     * guessing: a false here is the safe answer for an import, and the two spawn controls are
+     * what stop a false from being the answer for a real invocation. */
+    resolved = argv1;
+  }
+  return pathToFileURL(resolved).href === moduleUrl;
+}
+
+if (isMainModule(import.meta.url, process.argv[1])) {
   main();
 }
 

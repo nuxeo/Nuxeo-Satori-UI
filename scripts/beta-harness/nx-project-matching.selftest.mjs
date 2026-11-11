@@ -17,36 +17,52 @@
  * does. Four cases, not two, because a check that only ever rejects is as useless as one that
  * only ever accepts.
  *
- * ## Hermetic
+ * The second round of review found the other end of the same class, and a worse one: the gate's
+ * main-module guard compared `import.meta.url` against `new URL('file://' + process.argv[1])`, so
+ * a checkout path containing `#` or `?` had its tail parsed as a fragment or a query, the
+ * comparison failed, `main()` never ran, and the gate **exited 0 having checked nothing**. A
+ * silent pass is worse than a wrong failure: nothing in the log distinguishes it from a healthy
+ * run. `isMainModule` now uses `pathToFileURL(realpathSync(…))`, and the two `runsFrom` controls
+ * below invoke this gate for real through exactly those paths.
  *
- * Nothing here spawns nx, reads the repository's `node_modules` or perturbs a tracked file. The
- * gate's four pure functions are imported directly; the scanner's fixtures are throwaway trees
- * under the OS temp directory, and the API shapes are objects built in this file. So there is no
- * dirty-tree recovery path, because there is no way for this to leave the tree dirty.
+ * ## Hermetic, with one exception that is named
+ *
+ * Nothing here reads the repository's `node_modules` or perturbs a tracked file; the fixtures are
+ * throwaway trees under the OS temp directory and the API shapes are objects built in this file.
+ * The exception is the two `runsFrom` controls, which spawn the gate — necessarily, since a guard
+ * that decides whether the process runs at all cannot be proven by importing it. They spawn it
+ * with a **cwd that has no nx**, so it fails at the first gather step and exits 2 in well under a
+ * second: no project graph, no nx, and exit 2 rather than 0 is precisely the discriminator, since
+ * the old guard's failure mode was exit 0 with empty output.
  *
  * ## What it does not reach, stated so the pass is not read as more than it is
  *
- * The gate's gathering half — `spawnToolSync('nx', …)`, `createRequire` against nx's own tree,
- * `statSync` on `nx/dist/src` — is not pure and is not driven here. Those produce the
- * `cannot launch nx` / `nx cannot resolve minimatch` / `is not a directory` gaps, and they are
- * the one class of verdict with no control. The gate's header says the same thing.
+ * The gate's gathering half beyond that first step — `createRequire` against nx's own tree,
+ * `statSync` on `nx/dist/src`, a healthy `spawnToolSync('nx', …)` — is not pure and is not driven
+ * here. Those produce the `nx cannot resolve minimatch` and `is not a directory` gaps, and they
+ * are the class of verdict with no control. The gate's header says the same thing.
  *
  * Usage:  node scripts/beta-harness/nx-project-matching.selftest.mjs
  *
  * Exit: 0 every control behaved as specified · 1 at least one did not.
  */
 
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   ACCESS,
   evaluate,
+  isMainModule,
   minimatchMembersUsedUnder,
   missingUsages,
   pickSubject,
 } from './nx-project-matching.mjs';
+
+const GATE = fileURLToPath(new URL('./nx-project-matching.mjs', import.meta.url));
 
 const workspace = mkdtempSync(join(tmpdir(), 'nx-project-matching-selftest-'));
 /** @type {{ name: string, kind: 'negative' | 'positive', ok: boolean, detail?: string }[]} */
@@ -369,6 +385,131 @@ check(
     return notes.includes('alpha') && notes.includes('beta') && notes.includes('libs/alph*');
   })(),
 );
+
+/* ------------------------------------------------------- isMainModule: the guard, in isolation */
+
+/* The comparison the gate used to make, kept here so these controls demonstrate the bug rather
+ * than merely asserting the fix. `vacuity-verdict.mjs` carries the measured table: `#` and `?`
+ * each turned an exit 2 into an exit 0, a space did not. */
+const oldGuard = (moduleUrl, argv1) =>
+  Boolean(argv1) && moduleUrl === new URL(`file://${argv1}`).href;
+
+const GUARD_PATHS = [
+  ['a plain path', '/repo/scripts/gate.mjs', true],
+  ['a path with a space', '/repo/my scripts/gate.mjs', true],
+  ['a path with `#`', '/repo/feature#42/gate.mjs', false],
+  ['a path with `?`', '/repo/what?/gate.mjs', false],
+  ['a path with both `#` and `?`', '/repo/a#b?c/gate.mjs', false],
+];
+
+for (const [name, path, oldWorked] of GUARD_PATHS) {
+  const url = pathToFileURL(path).href;
+  /* realpath is stubbed: these paths do not exist, and what is under test is the URL half. */
+  const nowMatches = isMainModule(url, path, { realpath: (p) => p });
+  check(
+    `the guard matches ${name}`,
+    'positive',
+    nowMatches,
+    nowMatches ? undefined : 'did not match its own module URL',
+  );
+  check(
+    `the old \`file://\` concatenation ${oldWorked ? 'coped with' : 'SILENTLY SKIPPED'} ${name}`,
+    'negative',
+    oldGuard(url, path) === oldWorked,
+    'the control no longer demonstrates the bug it guards',
+  );
+}
+
+check(
+  'the guard follows a symlink, because Node canonicalises the main module and argv[1] is as typed',
+  'positive',
+  isMainModule(pathToFileURL('/real/gate.mjs').href, '/link/gate.mjs', {
+    realpath: () => '/real/gate.mjs',
+  }),
+);
+
+check(
+  'a different file is not the main module',
+  'negative',
+  !isMainModule(pathToFileURL('/repo/gate.mjs').href, '/repo/other.mjs', { realpath: (p) => p }),
+);
+
+check(
+  'no argv[1] at all — `node --eval`, or an import — is not the main module',
+  'negative',
+  !isMainModule(pathToFileURL('/repo/gate.mjs').href, undefined),
+);
+
+check(
+  'a realpath that throws does not throw out of the guard',
+  'negative',
+  (() => {
+    try {
+      return (
+        isMainModule(pathToFileURL('/repo/gate.mjs').href, '/repo/gate.mjs', {
+          realpath: () => {
+            throw new Error('ENOENT');
+          },
+        }) === true
+      );
+    } catch {
+      return false;
+    }
+  })(),
+);
+
+/* --------------------------------------- isMainModule: the gate actually running, end to end */
+
+/**
+ * Run the real gate through `dirName`, via a symlink, with a cwd that has no nx.
+ *
+ * A guard that decides whether the process does anything cannot be proven by importing the
+ * module, so this is the one place that spawns. The gate fails at its first gather step and exits
+ * **2** — which is the whole discriminator: the broken guard's failure mode was exit 0 with no
+ * output, indistinguishable in a log from a healthy pass.
+ *
+ * @returns {{ ok: boolean, detail: string }}
+ */
+function runsFrom(dirName) {
+  const dir = join(workspace, dirName);
+  const link = join(dir, 'nx-project-matching.mjs');
+  const emptyCwd = join(workspace, `${dirName}-cwd`);
+  try {
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(emptyCwd, { recursive: true });
+    /* A symlink, not a copy: the gate imports `./package-command.mjs`, and Node resolves that
+     * from the realpath. So one fixture exercises the symlink half and the path half together. */
+    symlinkSync(GATE, link);
+  } catch (error) {
+    return {
+      ok: false,
+      detail:
+        `could not build the fixture (${error.message}). On Windows a symlink needs Developer ` +
+        'Mode or an administrator terminal, as the dependency-tree controls already do.',
+    };
+  }
+  const run = spawnSync(process.execPath, [link], { cwd: emptyCwd, encoding: 'utf8' });
+  const output = `${run.stdout ?? ''}${run.stderr ?? ''}`.trim();
+  return {
+    ok: run.status === 2 && output.length > 0,
+    detail:
+      run.status === 0 && output === ''
+        ? 'exit 0 with no output — the guard skipped main() and the gate checked nothing'
+        : `exit ${run.status}, output ${JSON.stringify(output.slice(0, 120))}`,
+  };
+}
+
+for (const [name, dirName] of [
+  ['a `#` in the path', 'runs#from'],
+  ...(process.platform === 'win32' ? [] : [['a `?` in the path', 'runs?from']]),
+]) {
+  const r = runsFrom(dirName);
+  check(`the gate reaches main() with ${name}, via a symlink`, 'positive', r.ok, r.detail);
+}
+
+if (process.platform === 'win32') {
+  console.log('  note `?` is not a legal Windows filename, so that fixture is skipped here');
+}
 
 /* ---------------------------------------------------------------------------- verdict */
 

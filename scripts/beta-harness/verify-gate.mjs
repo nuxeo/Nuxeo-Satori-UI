@@ -713,14 +713,22 @@ const ALL_GATES = [
   // property satisfies "either" while every `minimatch_1.minimatch.makeRe(…)` call still throws.
   // Review (#586) found it by reading the code, because the gate had no controls at all.
   //
-  // Hermetic: the gate's four pure functions, fixtures under `os.tmpdir()`, no nx spawn and no
-  // tracked file touched. Which also bounds it — the gathering half (`spawnToolSync`,
-  // `createRequire` against nx's tree) is the one class of verdict these controls cannot reach,
-  // and both files say so rather than leaving a reader to infer it.
+  // The second round of review found the worse end of the same class: the gate's main-module guard
+  // compared `import.meta.url` against `new URL('file://' + process.argv[1])`, so a checkout path
+  // containing `#` or `?` had its tail read as a fragment or a query, `main()` never ran, and the
+  // gate exited **0 having checked nothing**. A silent pass is worse than a wrong failure —
+  // nothing in the log tells it apart from a healthy run. Two controls now invoke the gate for
+  // real through exactly those paths and require exit 2.
+  //
+  // Fixtures under `os.tmpdir()` and no tracked file touched. The gathering half past the first
+  // step (`createRequire` against nx's tree, `statSync` on `nx/dist/src`) is the class of verdict
+  // these controls cannot reach, and both files say so rather than leaving a reader to infer it.
   {
     id: 'nx-project-matching-selftest',
-    // Pure functions, temp-directory fixtures, no path comparison that an OS can change.
-    platformSensitive: false,
+    // It builds symlinks, spawns the gate, and compares file URLs — `#` is a legal filename
+    // character on Windows and `?` is not, Windows needs a permission for symlinks at all, and
+    // path canonicalisation is the thing under test. A Windows run can tell you what macOS cannot.
+    platformSensitive: true,
     label: 'Nx project-pattern matching controls',
     cmd: 'node',
     argv: ['scripts/beta-harness/nx-project-matching.selftest.mjs'],
