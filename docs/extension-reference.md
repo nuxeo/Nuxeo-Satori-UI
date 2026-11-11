@@ -81,7 +81,13 @@ nested more than 1000 deep, a missing asset — and writes the installable zip:
 `node config-packages/acme-config/build.mjs`. Nesting is the one of those limits the server does
 not set itself: `ConfigSnapshot` parses with a plain Jackson `ObjectMapper`, so the depth it
 accepts is jackson-core's `StreamReadConstraints` default, and a fragment past it is dropped at
-`error invalid-json` while the package installs and Nuxeo starts normally (NXSAT-730). The
+`error invalid-json` while the package installs and Nuxeo starts normally (NXSAT-730). Inside that
+band the build has a limit of its own, and now says so when it meets one: the duplicate-key walk
+and the packaging step both recurse through the body, so a body nested close to 1000 can exhaust
+the stack of the Node running the build — on Windows with Node 20 from about depth 993, where it is
+packaging that gives out first and used to end the build with a raw `RangeError` trace. The refusal
+names the file and the depth and says the server would have accepted that depth, so it cannot be
+read as the limit above; Node 22 and newer carry the whole band on every platform we test. The
 `config-package` Nx generator writes the same files, byte for byte, where Nx is installed:
 `npx nx g ./tools/satori-generators:config-package acme-config --owner=acme` after a full install
 of this repository, or `npx nx g @nuxeo/satori-platform:config-package acme-config --owner=acme`

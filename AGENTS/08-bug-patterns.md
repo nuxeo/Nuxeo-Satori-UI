@@ -1228,11 +1228,42 @@ and read. And pick the safe direction to be wrong in: stricter than the server r
 that would have worked, which the customer sees immediately; more generous ships one that installs,
 starts, and silently does nothing.
 
+**Bounding the input does not bound the walks inside the bound.** QA found the rest of this one.
+Refusing past 1000 fixed everything deeper than 1000 and nothing below it: both remaining walks —
+the recursive tokeniser, and the `JSON.stringify` that packages the result — are still functions of
+depth, so the greatest depth the tool can actually handle stayed a property of the machine. It just
+moved to inside the band the server accepts, where the tool now claims to work. On Windows with
+Node 20 that is about depth 993, and `JSON.stringify` was the one depth-sensitive call left outside
+a `try`, so the build died there with the raw trace the fix was supposed to have removed. After
+bounding the input, **list every walk that is still a function of it** and decide what each one does
+at its own limit. A refusal inside the accepted band must also say _whose_ limit it was: "the server
+accepts this depth but this Node ran out of stack walking it" sends the reader to their toolchain,
+where "nested 993 deep" alone sends them to edit a file that was fine.
+
+**Which recursive walk gives out first flips by platform, so one OS proves nothing about the
+others.** On macOS and Linux the tokeniser goes first in the real script at every stack size tried
+(`--stack-size` from 100 KB up: always the caught refusal, never a `JSON.stringify` trace); on
+Windows with Node 20 the order is reversed, from about depth 993. So on this machine the
+`JSON.stringify` branch is **unreachable**, and a test that only shrinks the stack leaves it
+unexercised while looking thorough. Reach it by injecting the failure at that exact call
+(`--import` a preload that makes `JSON.stringify` throw the `RangeError`), and keep the real
+small-stack test beside it for the branch this platform does reach. One genuine overflow, one
+injected at the site only another platform reaches.
+
+Measure in the script, not in a probe. Each call's overflow depth in isolation — roughly 3800–4700
+for the tokeniser on Node 20 to 24 against 5900–6200 for `JSON.stringify`, which is iterative from
+Node 25 — moves by hundreds between runs of the same probe, enough to reverse the order, because it
+depends on how much stack the caller had already spent. Only the end-to-end run is stable enough to
+conclude from.
+
 Regression test pattern: the boundary on **both** sides (1000 builds, 1001 refused), a depth far
 past any stack asserting no trace and a one-line refusal, both container kinds since the parser
 counts arrays too, a string full of `{` that must still build, and a shallow control — otherwise a
-check that refuses everything passes.
-`tools/satori-generators/src/config-package/generator.spec.ts`, "nesting depth".
+check that refuses everything passes. Then, for the band the server accepts: a small `--stack-size`
+with a normal package as the control that Node still starts, the real overflow there, the injected
+overflow at the platform-only site, and a non-stack `RangeError` asserting it is **not** dressed up
+as one — "Invalid string length" told to build with a newer Node sends the reader after the wrong
+thing. `tools/satori-generators/src/config-package/generator.spec.ts`, "nesting depth".
 
 ---
 
