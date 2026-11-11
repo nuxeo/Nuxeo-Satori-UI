@@ -18,14 +18,29 @@ import { compodoc } from './compodoc';
 let english: TranslationObject | null = null;
 
 /**
+ * Where a catalogue is fetched from: the path `main.ts` copies it to, stamped with a hash of the
+ * catalogues this build shipped.
+ *
+ * The stamp is what stops a *stale* catalogue answering. `staticDirs` copies the catalogues under
+ * their own names while every other output is hashed, so without this they are the one file a
+ * browser or CDN can still be holding from the previous deploy — and GitHub Pages serves them
+ * `max-age=600`. A build that added keys then renders those keys raw for ten minutes, which is
+ * what NXSAT-331's components showed on the published docs pages. On the query string the
+ * catalogue is part of the cache key, so a build can only read the catalogue it was built against.
+ */
+const catalogueUrl = (lang: string) =>
+  `i18n/${lang}.json?v=${process.env['NXS_CATALOGUE_VERSION'] ?? 'dev'}`;
+
+/**
  * A Storybook loader: runs before every story renders, and fetches the catalogue the first time.
  * With it in memory, `ApplicationCatalogueLoader` answers synchronously, so a story's first render
  * is already translated — a play function asserting a translated label, and the interaction runner
- * checking for untranslated keys, never race the request.
+ * checking for untranslated keys, never race the request. Storybook runs preview loaders on the
+ * docs path too, so a docs page's previews are translated on their first render as well.
  */
 async function loadCatalogue(): Promise<void> {
   if (english) return;
-  const response = await fetch('i18n/en.json');
+  const response = await fetch(catalogueUrl('en'));
   if (response.ok) english = (await response.json()) as TranslationObject;
 }
 
@@ -40,7 +55,7 @@ class ApplicationCatalogueLoader implements TranslateLoader {
   getTranslation(lang: string): Observable<TranslationObject> {
     return lang === 'en' && english
       ? of(english)
-      : this.http.get<TranslationObject>(`i18n/${lang}.json`);
+      : this.http.get<TranslationObject>(catalogueUrl(lang));
   }
 }
 

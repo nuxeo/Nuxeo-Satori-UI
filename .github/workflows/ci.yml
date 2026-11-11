@@ -290,6 +290,9 @@ jobs:
           npm run beta:published-links-selftest
           # The Storybook publication gate's controls: each Satori fingerprint must fail it.
           npm run storybook:publication-gate-selftest
+          # The catalogue-cache gate's controls: each way a published catalogue can go stale
+          # against the bundle that reads it must fail it, the shipped defect included.
+          npm run storybook:catalogue-cache-selftest
           # The root ESLint config against a deleted `@hylandsoftware` scope, which is the state
           # the Material Storybook build creates on purpose. Both directions: it must load with
           # the package absent, and it must still carry the Satori rules when it is installed.
@@ -620,7 +623,7 @@ jobs:
           set -euo pipefail
           affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
           runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
-          gate="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- 'scripts/storybook-publication-gate*.mjs')"
+          gate="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- 'scripts/storybook-publication-gate*.mjs' 'scripts/storybook-catalogue-cache*.mjs')"
 
           # The two workflow files that define this build and publish what it produces. Nx
           # attributes anything under .github to no project — `nx show projects --affected
@@ -733,6 +736,9 @@ jobs:
           done
           npx nx run satori-components:build-storybook:ci --skip-nx-cache
           node scripts/storybook-publication-gate.mjs dist/storybook/satori-components
+          # Fails the pull request for a build whose catalogue could be served to it stale, which
+          # storybook-pages.yml would otherwise only refuse at publish time, on main.
+          node scripts/storybook-catalogue-cache.mjs dist/storybook/satori-components
 
       # The Material build, downloadable from the run page so a reviewer can open the component
       # library for this commit without building it. Uploaded only after the publication gate has
@@ -793,6 +799,16 @@ jobs:
       # checked for MatDialog's layout at 1280 and 320 px (`storybook-dialog-layout.mjs`), after
       # that check's own negative controls have run.
       #
+      # Every **docs page** is opened too, and fails on an untranslated key among its previews.
+      # Story runs alone missed one: NXSAT-331's components put raw `satori-components.*` keys on
+      # their published Overview pages while this step was green, because nothing had ever opened
+      # `?viewMode=docs`. A docs page is also the surface a reader actually links to.
+      #
+      # Every **docs page** is opened too, and fails on an untranslated key among its previews.
+      # Story runs alone missed one: NXSAT-331's components put raw `satori-components.*` keys on
+      # their published Overview pages while this step was green, because nothing had ever opened
+      # `?viewMode=docs`. A docs page is also the surface a reader actually links to.
+      #
       # The suite was four and a half minutes — 268.9 s for all 214 stories, measured in run
       # 39914726264 — and it is NOT what spends this step's budget. `playwright install --with-deps`
       # is: the apt fetch of its 25.9 MB set (CJK fonts, NSS, xvfb) from the Azure Ubuntu mirror was
@@ -805,11 +821,11 @@ jobs:
       # workflow into independent jobs removes that masking, since a red static gate no longer
       # prevents this job from running and reporting.
       #
-      # So 30 minutes, and it is not headroom over the suite: the suite already has its own budget.
-      # `storybook-interactions.mjs` defaults to `--budget 900000`, a hard 15-minute cap measured
+      # So 35 minutes, and it is not headroom over the suite: the suite already has its own budget.
+      # `storybook-interactions.mjs` defaults to `--budget 1200000`, a hard 20-minute cap measured
       # from browser launch after which every remaining story is FAILED rather than skipped, so a
       # suite that slows down goes red on its own terms and this timeout can never be what hides
-      # it. 30 = that 15-minute self-cap plus 15 minutes for everything before it, which is 1.5x the
+      # it. 35 = that 20-minute self-cap plus 15 minutes for everything before it, which is 1.5x the
       # slowest pre-suite phase on record. Do not trim it back towards the suite's duration: the
       # install is the unbounded half, it answers to a mirror's throughput rather than to anything
       # in this repository, and `registry-auth.yml` already allows 25 for the same reason. The
@@ -820,14 +836,21 @@ jobs:
       # reason that has nothing to do with the story that tripped it. Run 41637854927 on `main`
       # printed `300 of 300 stories passed ... in 582.2 s` — 17.8 s of headroom, about nine
       # stories — and the eighteen this ticket adds spent it, stranding 61 stories behind
-      # `budget ... spent before it ran`. 900000 restores a trip wire that means something: at the
+      # `budget ... spent before it ran`. 900000 restored a trip wire that means something: at the
       # 1.94 s per story that run measured it is hit at roughly 464 stories, so the cap still
       # catches a suite that slows down rather than one that merely grew. Re-measure and raise it
       # again — do not delete it — when a green run on `main` comes within 15% of the cap.
+      #
+      # That rule is why it is 1200000 now: adding the docs pages spends the rest of 900000.
+      # Measured on a runner, in this job on #563 — 636.0 s for 318 stories and 304.5 s for 127
+      # docs pages, 940.5 s together, past the old cap outright. Against 1200000 that is 78%
+      # spent and 21.6% headroom: above the 15% trigger, but one more component group crosses it.
+      # The two halves now scale on different things — stories with stories, docs pages with
+      # components — so re-measure both terms rather than extrapolating either.
       - name: Storybook interactions (satori-components)
         if: steps.scope.outputs.interactions == 'true'
         shell: bash
-        timeout-minutes: 30
+        timeout-minutes: 35
         env:
           # `.npmrc` reads both; npm refuses to start when a variable it names is unset.
           NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
