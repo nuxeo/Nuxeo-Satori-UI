@@ -17,3 +17,18 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "nx"
         update-types: ["version-update:semver-major"]
+      # minimatch 11 removed `makeRe`, which nx calls in three places, and nx pins minimatch to
+      # 10.2.5 exactly — 23.3.0 and 24.0.6 both do. Forcing 11 into the tree (an override on
+      # `minimatch@^10` reaches that exact pin, because `10.2.5` is a subset of `^10`) kills
+      # `nx affected --exclude` with `minimatch_1.minimatch.makeRe is not a function`: CI run
+      # 42932394850, where the affected leg died after four green projects and the whole tail
+      # silently ran no tests.
+      #
+      # GHSA-g3hv-75wg-m249 is the advisory that prompted it. Its only patched version is 11.0.1,
+      # so there is nothing in the 10.x line to move to — and it is moot here: `npm ls minimatch
+      # --omit=dev --all` is empty. Every consumer (nx, @nx/devkit, @typescript-eslint, the
+      # @ts-morph under compodoc) is a devDependency, so no customer build reaches it, which is
+      # also why `beta:supply-chain` — it gates `npm audit --omit=dev` — does not report it.
+      # Lift this when nx's own pin moves off 10.x.
+      - dependency-name: "minimatch"
+        update-types: ["version-update:semver-major"]
