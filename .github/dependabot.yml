@@ -29,6 +29,16 @@ updates:
       # --omit=dev --all` is empty. Every consumer (nx, @nx/devkit, @typescript-eslint, the
       # @ts-morph under compodoc) is a devDependency, so no customer build reaches it, which is
       # also why `beta:supply-chain` — it gates `npm audit --omit=dev` — does not report it.
+      #
+      # `versions`, NOT `update-types`, and that distinction is the whole value of this entry. The
+      # PR that has to be stopped is a **security** update for the advisory above, not a scheduled
+      # major bump, and the reference documents `update-types` concretely only for version
+      # updates — the "only affects version updates, not security updates" caveat is written
+      # against `allow`, and the `ignore` section never says either way. `versions` is the option
+      # whose semantics the docs state plainly ("ignore specific versions or ranges of versions"),
+      # so it does not rest on that ambiguity. The alert itself stays visible either way; what is
+      # suppressed is the automated PR that would reintroduce the break.
+      #
       # Lift this when nx's own pin moves off 10.x.
       - dependency-name: "minimatch"
-        update-types: ["version-update:semver-major"]
+        versions: [">=11.0.0"]
