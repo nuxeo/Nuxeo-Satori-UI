@@ -32,6 +32,11 @@
                 "glob": "**/*",
                 "input": "node_modules/@hylandsoftware/satori-ui/i18n",
                 "output": "assets/satori-ui/i18n"
+              },
+              {
+                "glob": "satori-icons.svg",
+                "input": "node_modules/@hylandsoftware/satori-icons",
+                "output": "satori-icons"
               }
             ],
             "styles": ["apps/nuxeo-ui/src/styles.scss"]
@@ -76,6 +81,11 @@
                   "glob": "**/*",
                   "input": "node_modules/@hylandsoftware/satori-ui/i18n",
                   "output": "assets/satori-ui/i18n"
+                },
+                {
+                  "glob": "satori-icons.svg",
+                  "input": "node_modules/@hylandsoftware/satori-icons",
+                  "output": "satori-icons"
                 }
               ]
             }
