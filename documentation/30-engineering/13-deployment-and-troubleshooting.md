@@ -124,6 +124,11 @@ or `npx nx g @nuxeo/satori-platform:config-package …` from the published packa
 `presales-demo`, lives in [nuxeo/Nuxeo-Satori-Config](https://github.com/nuxeo/Nuxeo-Satori-Config)
 with the hosted Beta's `satori-beta`, and is built and published from there.
 
+The [Admin Center configuration-package rehearsal](../../docs/admin-center-config-package-rehearsal.md)
+records the disposable LTS-2025 environment, installed package versions and verified provisioning
+checks for NXSAT-680. It also records the missing package lifecycle controls in the available
+administration UIs; the install, upgrade and removal protocol remains separate from those checks.
+
 ### How the application loads it
 
 At startup, before anything renders and before anyone signs in, the application fetches
