@@ -1,8 +1,79 @@
 {
   "$schema": "../../schema/bootstrap.schema.json",
+
+  "branding": {
+    "applicationTitle": "Acme Claims Cloud",
+    "documentTitle": "Acme Claims",
+    "logo": { "src": "assets/acme-logo.svg", "alt": "Acme Insurance" },
+    "favicon": { "src": "assets/acme-favicon.svg" }
+  },
+
+  "defaultThemeId": "acme",
+  "themes": [
+    {
+      "id": "acme",
+      "label": "Acme",
+      "base": "light",
+      "preview": { "primary": "#0b5fff", "surface": "#f4f7fb" },
+      "tokens": {
+        "--mat-sys-primary": "#0b5fff",
+        "--mat-sys-on-primary": "#ffffff",
+        "--mat-sys-surface": "#f4f7fb",
+        "--mat-sys-surface-container": "#e7eef9",
+        "--mat-sys-secondary": "#5b6b7f"
+      }
+    }
+  ],
+
+  "defaultLanguage": "en",
+  "availableLanguages": ["en", "fr", "de"],
+
+  "session": {
+    "idleTimeoutMs": 1800000,
+    "warningBeforeMs": 120000
+  },
+
+  "sso": {
+    "endpoints": [
+      {
+        "id": "acme-azure",
+        "label": "Sign in with Acme SSO",
+        "path": "/nuxeo/oauth2/authorization/azure"
+      }
+    ],
+    "postLoginPath": "/#/dashboard",
+    "returnQueryParam": "requestedUrl"
+  },
+
   "integrations": {
     "arender": {
       "viewerOrigin": "https://nev-satori.beta.nuxeocloud.com"
+    }
+  },
+
+  "presales": {
+    "presetSwitching": true,
+    "presets": {
+      "claims": {
+        "label": "Acme Claims",
+        "bootstrap": {
+          "branding": { "applicationTitle": "Acme Claims Cloud" },
+          "defaultThemeId": "acme"
+        },
+        "manifest": {
+          "labels": { "nav.item.collections": "Claim files" }
+        }
+      },
+      "legal": {
+        "label": "Acme Legal",
+        "bootstrap": {
+          "branding": { "applicationTitle": "Acme Legal Hold" },
+          "defaultThemeId": "dark"
+        },
+        "manifest": {
+          "labels": { "nav.item.collections": "Matters" }
+        }
+      }
     }
   }
 }

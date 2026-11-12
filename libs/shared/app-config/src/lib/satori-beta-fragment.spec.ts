@@ -58,11 +58,27 @@ describe("the satori-beta package's bootstrap fragment", () => {
     expect(url.pathname).toBe('/');
   });
 
-  it('overrides nothing else, so the Beta keeps Satori’s own branding and navigation', () => {
-    // A configuration package is where a deployment fact goes, and this deployment has exactly
-    // one. The generator's starter fragment sets `branding`; shipping that would have renamed the
-    // application as a side effect of enabling the viewer.
-    expect(Object.keys(fragment).filter((key) => key !== '$schema')).toEqual(['integrations']);
+  it('sets only keys the application actually reads, so a typo cannot be silent', () => {
+    // This assertion used to be `toEqual(['integrations'])` — the fragment set the one deployment
+    // fact and nothing else, because `branding` would then have been an accidental side effect of
+    // enabling the viewer. The package now carries a deliberate customisation set for the hosted
+    // Beta, so that guard no longer describes it.
+    //
+    // What is still worth guarding is the failure it was really protecting against: a key nothing
+    // reads. `mergeBootstrapConfig` ignores an unknown top-level key silently, so a typo —
+    // `brandings`, `sessions` — is invisible at runtime and looks like a customisation that did
+    // not work. Every key here must be one the merge reads, or `presales`, which is read
+    // separately by `readPresales` and so is absent from the merged shape.
+    const presentKeys = Object.keys(fragment).filter((key) => key !== '$schema');
+    const readKeys = [...Object.keys(DEFAULT_APP_BOOTSTRAP_CONFIG), 'presales'];
+
+    expect(presentKeys.filter((key) => !readKeys.includes(key))).toEqual([]);
+  });
+
+  it('still carries the ARender deployment fact alongside the customisations', () => {
+    // The customisation set must not displace the one key this package originally existed for.
+    // Asserted on the raw fragment as well as the merge above, so a `branding` block that
+    // accidentally swallowed `integrations` fails here rather than in the Annotations tab.
     expect(fragment['integrations']).toEqual({ arender: { viewerOrigin: NEV_ORIGIN } });
   });
 });

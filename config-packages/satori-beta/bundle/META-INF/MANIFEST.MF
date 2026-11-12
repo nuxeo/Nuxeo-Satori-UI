@@ -2,5 +2,5 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: satori-beta
 Bundle-SymbolicName: hyland.config.satori-beta;singleton:=true
-Bundle-Version: 1.0.0
+Bundle-Version: 1.1.0
 Nuxeo-Component: OSGI-INF/satori-beta-config.xml

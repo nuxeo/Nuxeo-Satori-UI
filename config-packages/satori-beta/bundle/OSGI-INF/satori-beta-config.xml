@@ -7,9 +7,20 @@
     <fragment name="satori-beta" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />
     <fragment name="satori-beta" layer="manifest" src="agentic-ui-config/manifest.json" />
 
-    <!-- An image the bootstrap fragment can name as "logo": { "src": "assets/<name>" }.
-         Put the file in agentic-ui-config/assets/ and uncomment:
-    <asset name="logo.svg" src="agentic-ui-config/assets/logo.svg" />
-    -->
+    <!-- Images the bootstrap fragment names as branding.logo / branding.favicon. Both are
+         served from /nuxeo/agentic-ui-config/assets/<name>, which sits outside every
+         NuxeoAuthenticationFilter pattern — which is what lets the login page load the logo
+         before sign-in. -->
+    <asset name="acme-logo.svg" src="agentic-ui-config/assets/acme-logo.svg" />
+    <asset name="acme-favicon.svg" src="agentic-ui-config/assets/acme-favicon.svg" />
+
+    <!-- Per-type layout: which properties a File shows in the document-detail Properties
+         panel, and in what order. type is a document type name, mode is one of
+         metadata | edit | create. -->
+    <layout
+      type="File"
+      mode="metadata"
+      src="agentic-ui-config/layouts/File.metadata.layout.json"
+    />
   </extension>
 </component>

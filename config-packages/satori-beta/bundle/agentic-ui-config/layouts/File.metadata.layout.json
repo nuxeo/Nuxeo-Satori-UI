@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "display": "sections",
+  "sections": [
+    {
+      "id": "claim",
+      "label": "Claim summary",
+      "fields": [
+        "dc:title",
+        { "field": "dc:description", "label": "Loss description" },
+        { "field": "dc:nature", "label": "Claim type" },
+        { "field": "dc:coverage", "label": "Coverage" }
+      ]
+    },
+    {
+      "id": "handling",
+      "label": "Handling",
+      "fields": [
+        { "field": "dc:creator", "label": "Opened by" },
+        { "field": "dc:created", "label": "Opened" },
+        { "field": "dc:lastContributor", "label": "Adjuster" },
+        { "field": "dc:modified", "label": "Last updated" }
+      ]
+    },
+    {
+      "id": "retention",
+      "label": "Retention",
+      "fields": [
+        { "field": "dc:expired", "label": "Retain until" },
+        { "field": "dc:valid", "label": "Reviewed on" }
+      ]
+    }
+  ]
+}

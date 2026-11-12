@@ -1,4 +1,60 @@
 {
   "$schema": "../../schema/manifest.schema.json",
-  "version": 1
+  "version": 1,
+
+  "labels": {
+    "nav.item.collections": "Claim files",
+    "nav.item.favorites": "Pinned claims",
+    "nav.item.assets": "Evidence library",
+    "nav.item.tasks": "Adjuster queue"
+  },
+
+  "featureToggles": {
+    "permissions.externalUsers": false
+  },
+
+  "extensions": {
+    "overrides": {
+      "app.navbar.trash": { "visible": false },
+      "app.navbar.clipboard": { "visible": false },
+      "app.navbar.collections": { "order": 15 },
+      "app.navbar.browse": { "label": "Repository" },
+      "app.navbar.administration": { "rule": "app.rules.isAdministrator" },
+
+      "app.documentList.nature": { "visible": false },
+      "app.documentList.coverage": { "visible": false },
+      "app.documentList.subjects": { "visible": false },
+      "app.documentList.lastContributor": { "order": 25, "label": "Adjuster" },
+
+      "app.toolbar.startProcess": { "visible": false },
+      "app.toolbar.addToClipboard": { "visible": false },
+      "app.toolbar.removeFromClipboard": { "visible": false },
+      "app.toolbar.export": { "label": "Download copy" },
+
+      "app.tabs.publishing": { "visible": false },
+      "app.tabs.annotations": { "order": 15 },
+
+      "app.contextMenu.subscribe": { "visible": false },
+      "app.contextMenu.unsubscribe": { "visible": false },
+      "app.rowActions.moveTo": { "visible": false },
+      "app.rowActions.rename": { "label": "Rename file" },
+
+      "app.bulkActions.delete": { "rule": "app.rules.isAdministrator" },
+      "app.bulkActions.compare": { "visible": false },
+      "app.bulkActions.downloadZip": { "label": "Download all as Zip" }
+    },
+
+    "slots": {
+      "navbar": [
+        {
+          "id": "acme.navbar.claimSearch",
+          "label": "Claim search",
+          "path": "/search",
+          "icon": "gavel",
+          "order": 25,
+          "rule": { "type": "core.not", "parameters": ["app.rules.isExternalUser"] }
+        }
+      ]
+    }
+  }
 }
