@@ -81,8 +81,9 @@ nuxeoctl mp-install config-packages/acme-config/dist/acme-config-1.0.0.zip   # o
 ```
 
 What it writes is plain JSON, XML and a build script with no dependencies, so it can live in your
-own repository. `config-packages/presales-demo` is a finished example that builds the same way,
-with `node config-packages/presales-demo/build.mjs`; copying it instead also needs only Node, but
+own repository. [`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo),
+in nuxeo/Nuxeo-Satori-Config, is a finished example that builds the same way, with
+`node config-packages/presales-demo/build.mjs` from a clone of it; copying it instead also needs only Node, but
 means renaming it in `package.xml`, `MANIFEST.MF` and the component XML (and that file's name), and
 removing its presets.
 With this repository fully installed (which does need the token), the `config-package` Nx generator
@@ -122,7 +123,9 @@ https://<server>/nuxeo/agentic-ui/?preset=logistics    # Globex Logistics
 https://<server>/nuxeo/agentic-ui/?preset=             # clear it
 ```
 
-Those two prospects are real and already in the repository, in `config-packages/presales-demo`. A
+Both presets already exist — fictional companies, in
+[`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo)
+in nuxeo/Nuxeo-Satori-Config. A
 preset replaces the product name, the tab title, the logo, the tab icon, the whole colour palette
 and any wording, and a badge in the header says which one is in force. Nothing changes on the
 server and nothing changes for anyone else.

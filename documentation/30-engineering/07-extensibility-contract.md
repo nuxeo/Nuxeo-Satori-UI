@@ -289,8 +289,9 @@ request for it comes from people who believe it needs a fork (NXSAT-684).
 A bootstrap fragment declares named presets under `presales`; each carries a whole `bootstrap` and
 `manifest` patch applied **after** every package's fragments, so it wins over all of them:
 application title, document title, logo, favicon, the entire theme token map, `defaultThemeId`,
-languages, and every Layer 1 capability. `config-packages/presales-demo` ships two worked
-prospects:
+languages, and every Layer 1 capability.
+[`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo),
+in nuxeo/Nuxeo-Satori-Config, ships two worked prospects, both fictional:
 
 ```
 https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance

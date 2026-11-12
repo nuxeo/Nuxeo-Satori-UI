@@ -109,8 +109,8 @@ our own packaged fragments, and `nuxeo-agentic-ui`, the package yours depends on
 name Windows reserves, such as `con` or `nul`, which cannot be a directory there. A package named
 `defaults` would otherwise contribute a fragment on the same key as ours and take its place, which
 the server reports as a warning — see "Displacing one of our packaged defaults" below.
-`config-packages/presales-demo` in this repository is one, with two
-demo presets. The `bootstrap.json` that used to be copied and edited beside
+[`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo)
+in nuxeo/Nuxeo-Satori-Config is one, with two demo presets. The `bootstrap.json` that used to be copied and edited beside
 the bundle is **removed with no migration**: a file left in `nxserver/nuxeo.war/agentic-ui-config`
 is not served.
 
@@ -211,8 +211,9 @@ later fragment's `presetSwitching` wins, so a customer package can switch it off
 is up to 64 letters, digits, `.`, `_` and `-`, starting with a letter or digit; a preset whose
 name breaks that rule is skipped, and an unknown name is reported and forgotten.
 
-Two worked prospects already ship, in `config-packages/presales-demo`, so this needs no new
-package to try:
+Two worked prospects — both fictional — already ship, in
+[`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo)
+in nuxeo/Nuxeo-Satori-Config, so this needs no new package to try:
 
 ```
 https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance

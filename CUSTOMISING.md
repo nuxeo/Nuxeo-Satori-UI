@@ -185,9 +185,9 @@ decision is in
 
 ## Read next
 
-| To…                                                | Read                                                                                              |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Know every name a fragment can address             | [Extension reference](docs/extension-reference.md)                                                |
-| Understand the product and what it does not do yet | [The short version](documentation/20-product/00-the-short-version.md)                             |
-| See a finished example                             | [`config-packages/presales-demo`](config-packages/presales-demo)                                  |
-| Troubleshoot an install                            | [Deployment & troubleshooting](documentation/30-engineering/13-deployment-and-troubleshooting.md) |
+| To…                                                | Read                                                                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Know every name a fragment can address             | [Extension reference](docs/extension-reference.md)                                                                             |
+| Understand the product and what it does not do yet | [The short version](documentation/20-product/00-the-short-version.md)                                                          |
+| See a finished example                             | [`presales-demo` in Nuxeo-Satori-Config](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo) |
+| Troubleshoot an install                            | [Deployment & troubleshooting](documentation/30-engineering/13-deployment-and-troubleshooting.md)                              |
