@@ -10621,8 +10621,8 @@ expectWarn(
   null,
   /A warning rather than a failure: this clone is shallow or cannot resolve its own default branch/,
   // The other half of the condition, and the half that matters in CI: `ci.yml` checks out with
-  // `fetch-depth: 0` so the rule fails there, while `build-marketplace.yml` and
-  // `publish-config-package.yml` use `fetch-depth: 1` and get a warning. Mutation testing found
+  // `fetch-depth: 0` so the rule fails there, while `build-marketplace.yml` uses `fetch-depth: 1`
+  // and gets a warning. Mutation testing found
   // this half unasserted — dropping `!cloneIsShallow` changed no verdict, because every other
   // fixture is a full repository.
   { shallow: true },

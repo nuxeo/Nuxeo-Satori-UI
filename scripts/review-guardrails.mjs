@@ -11408,8 +11408,8 @@ function checkAdoptedPatternsNotBypassed() {
  * parser below reads specific lines and has to be stricter, because `.github/workflows` is
  * commented heavily and the comments discuss the very syntax being parsed. `storybook-pages.yml`
  * carried `# TODO(NXSAT-649): move this and the deploy job's \`if:\` to \`main\``, which a naive
- * `if:` scan reads as a gate, and `ci.yml`, `build-marketplace.yml` and `publish-config-package.yml`
- * all explain `github.ref` in prose. A parser that reads comments reports the documentation instead
+ * `if:` scan reads as a gate, and `ci.yml` and `build-marketplace.yml` both explain `github.ref`
+ * in prose. A parser that reads comments reports the documentation instead
  * of the configuration — and would have reported this workflow as gated on `main` while it was
  * gated on a deleted branch.
  *
@@ -12252,8 +12252,8 @@ function checkWorkflowRefGates() {
    *
    * A clone that is not shallow AND can resolve its own default branch has the refs to answer the
    * question, so there a missing branch is evidence rather than a guess. `ci.yml` checks out with
-   * `fetch-depth: 0`, so this is the case in this repository's own CI; `build-marketplace.yml` and
-   * `publish-config-package.yml` use `fetch-depth: 1`, and there it stays a warning. Severity
+   * `fetch-depth: 0`, so this is the case in this repository's own CI; `build-marketplace.yml`
+   * uses `fetch-depth: 1`, and there it stays a warning. Severity
    * follows what the clone can prove, instead of assuming the worst everywhere. */
   const cloneIsShallow = (() => {
     try {

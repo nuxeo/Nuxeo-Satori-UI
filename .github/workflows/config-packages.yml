@@ -2,15 +2,16 @@ name: Configuration packages
 
 # The customer path, checked the way a customer runs it: Node and nothing else.
 #
-# Until this workflow existed, the only CI check on `config-packages/*` was `ci.yml`'s
-# `nx affected -t build` — every package under `config-packages/` declares an Nx `build` target, so
-# a change to one was built there. `publish-config-package.yml` says so in its own header, and
-# gives it as the reason it has no `pull_request` trigger. But `ci.yml` runs `npm ci` with
+# The configuration packages this repository used to carry, `presales-demo` and `satori-beta`, moved
+# to nuxeo/Nuxeo-Satori-Config, whose own CI builds them the same credential-free way and compares
+# their `build.mjs` and schemas against this repository's generator templates. What stays here is
+# the generator, so this workflow checks what a customer gets from it: a package scaffolded by
+# `create.mjs`, built with Node alone, and verified as a well-formed Nuxeo Package.
+#
+# It runs without an install because `ci.yml` cannot test that claim: it runs `npm ci` with
 # `NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}` first, and without that token there is
-# no `node_modules` and no `nx`. So the one path we tell customers needs no credentials was checked
-# only by a job that cannot start without them: the zero-credential claim was asserted, never
-# tested, and could have regressed — a `require()` of a third-party module added to `build.mjs`
-# would have stayed green in `ci.yml` forever, because `ci.yml` installs the whole tree.
+# no `node_modules` and no `nx`. A `require()` of a third-party module added to the `build.mjs`
+# template would stay green there forever, because `ci.yml` installs the whole tree.
 #
 # Nothing here calls `npm ci`, `npm install` or `nx`, and `setup-node` is deliberately used WITHOUT
 # `registry-url`, so no `.npmrc` with an auth line is written and no `NODE_AUTH_TOKEN` is in scope.
@@ -32,10 +33,7 @@ name: Configuration packages
 on:
   pull_request:
     paths:
-      - 'config-packages/**'
       - 'tools/satori-generators/src/config-package/**'
-      - 'scripts/check-build-mjs-copies.mjs'
-      - 'scripts/check-build-mjs-copies.selftest.mjs'
       - 'scripts/verify-package-zip.mjs'
       - 'scripts/verify-package-zip.selftest.mjs'
       - '.github/workflows/config-packages.yml'
@@ -44,10 +42,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'config-packages/**'
       - 'tools/satori-generators/src/config-package/**'
-      - 'scripts/check-build-mjs-copies.mjs'
-      - 'scripts/check-build-mjs-copies.selftest.mjs'
       - 'scripts/verify-package-zip.mjs'
       - 'scripts/verify-package-zip.selftest.mjs'
       - '.github/workflows/config-packages.yml'
@@ -115,37 +110,7 @@ jobs:
           done
           echo "No node_modules, no token in scope, no auth line that resolves. Node $(node --version)."
 
-      # The committed packages. A customer edits fragments in a package shaped exactly like these,
-      # so a break here is a break in what they were handed.
-      - name: Build every configuration package with Node alone
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          built=0
-          for dir in config-packages/*/; do
-            if [ ! -f "${dir}build.mjs" ]; then continue; fi
-            name=$(basename "$dir")
-            echo "::group::$name"
-            node "${dir}build.mjs" --out "dist/config-packages/$name"
-            zips=("dist/config-packages/$name"/*.zip)
-            if [ ${#zips[@]} -ne 1 ]; then
-              echo "::error::$name produced ${#zips[@]} zip(s), expected exactly 1"
-              exit 1
-            fi
-            node scripts/verify-package-zip.mjs "${zips[0]}"
-            echo "::endgroup::"
-            built=$((built + 1))
-          done
-          # A loop over an empty glob succeeds silently, and a step that checked nothing reports
-          # the same green as one that checked everything.
-          if [ "$built" -eq 0 ]; then
-            echo "::error::no config-packages/*/build.mjs was built; this step checked nothing"
-            exit 1
-          fi
-          echo "$built configuration package(s) built and verified with no install and no token."
-
-      # The generator's own output, not only the two packages committed here — those could drift
-      # into working while what a customer scaffolds today does not. Scaffolded OUTSIDE the clone,
+      # The generator's own output — what a customer scaffolds today. Scaffolded OUTSIDE the clone,
       # which also catches a `create.mjs` that assumed the repository was the working directory.
       - name: Scaffold a package with create.mjs and build that
         run: |
@@ -160,25 +125,7 @@ jobs:
           cd "$repo"
           rm -rf "$scratch"
 
-      # The verifier's negative controls: without them the two steps above prove only that the
-      # check can pass, never that it can fail.
+      # The verifier's negative controls: without them the step above proves only that the check
+      # can pass, never that it can fail.
       - name: Controls for the package verifier
         run: node scripts/verify-package-zip.selftest.mjs
-
-  # I4 — the three copies of build.mjs, which nothing compared until this job.
-  build-script-copies:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
-      - name: Compare the copies of build.mjs
-        run: node scripts/check-build-mjs-copies.mjs
-
-      - name: Controls for the copy check
-        run: node scripts/check-build-mjs-copies.selftest.mjs

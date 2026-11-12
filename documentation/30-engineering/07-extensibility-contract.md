@@ -320,8 +320,9 @@ distinction is between the content and the selection, and only one of them is ru
 `bootstrap.json`, raising the version, rebuilding, reinstalling and restarting — two to four
 minutes, because presets are package content and package content is read once at startup. The fix
 is the development override directory: with `nuxeo.agentic.ui.config.dev=true` a new preset is one
-`docker cp` and a reload. See "The fast loop while you are tuning a value" in
-`config-packages/presales-demo/README.md`.
+`docker cp` and a reload. See
+[The fast loop while you are tuning a value](../../docs/extension-reference.md#the-fast-loop-while-you-are-tuning-a-value)
+in the extension reference.
 
 ### `sso.endpoints`
 

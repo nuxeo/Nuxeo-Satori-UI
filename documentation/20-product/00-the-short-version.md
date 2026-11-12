@@ -134,8 +134,9 @@ This is not a way around configuration-as-code. The preset's _content_ is versio
 content like every other fragment; only the _selection_ is runtime, per browser, with no
 server-side state. What does still cost a package rebuild and a restart today is adding a
 **new** prospect — around two to four minutes — and the development override directory removes
-that for a demo server: see "The fast loop while you are tuning a value" in
-`config-packages/presales-demo/README.md`.
+that for a demo server: see
+[The fast loop while you are tuning a value](../../docs/extension-reference.md#the-fast-loop-while-you-are-tuning-a-value)
+in the extension reference.
 
 For example, this manifest fragment hides Trash, renames Collections to "Repository", and
 shows Administration to administrators only:
