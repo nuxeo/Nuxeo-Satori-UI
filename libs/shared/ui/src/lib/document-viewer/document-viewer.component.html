@@ -174,7 +174,7 @@
       }
     </div>
     <div class="viewer-footer-actions">
-      @if (!annotationsTab()) {
+      @if (!annotationsTab() && !showARenderViewer()) {
         <button
           mat-icon-button
           [matTooltip]="'shared-ui.document-viewer.open-with-nuxeo-drive' | translate"
@@ -202,7 +202,7 @@
       >
         <mat-icon svgIcon="download" />
       </button>
-      @if (showMainFileControls()) {
+      @if (showMainFileControls() && (annotationsTab() || !showARenderViewer())) {
         <button
           mat-icon-button
           [matTooltip]="'shared-ui.document-viewer.replace-main-file' | translate"

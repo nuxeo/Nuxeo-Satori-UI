@@ -4,6 +4,7 @@ import {
   canPublishDocument,
   canRemoveDocument,
   canWriteDocument,
+  mediaTypeEssence,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -71,6 +72,21 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
   'app.rules.hasFacet': (context, parameters) => {
     const facets = context.document?.facets ?? [];
     return stringParameters(parameters).some((facet) => facets.includes(facet));
+  },
+  /** Match the main blob's MIME essence exactly or by a family such as `image/*`. */
+  'app.rules.hasMimeType': (context, parameters) => {
+    const content = context.document?.properties?.['file:content'];
+    if (typeof content !== 'object' || content === null || Array.isArray(content)) return false;
+    const value = (content as Record<string, unknown>)['mime-type'];
+    if (typeof value !== 'string') return false;
+    const mime = mediaTypeEssence(value);
+    if (!mime.includes('/')) return false;
+    return stringParameters(parameters).some((parameter) => {
+      const pattern = mediaTypeEssence(parameter);
+      return pattern.endsWith('/*')
+        ? mime.startsWith(pattern.slice(0, -1))
+        : !pattern.includes('*') && mime === pattern;
+    });
   },
   /**
    * The focused document holds a main file, `file:content` — what Download downloads. Nuxeo's

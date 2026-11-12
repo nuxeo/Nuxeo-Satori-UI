@@ -739,3 +739,10 @@ analysis results never satisfy the wait. Run
 | Extension reference     | `docs/extension-reference.md`                               |
 | Extension registry      | `libs/shared/extensions/`                                   |
 | Orchestrating skill     | `.cursor/skills/beta-phase/SKILL.md`                        |
+
+### NEV View preference (NXSAT-698)
+
+`documentView` still has no packaged entry. Deployments select NEV within the packaged viewer
+using the `preferARender` rule on `app.tabs.view` in `extensions.slots.tabs`. This preserves
+built-in fallback when no NEV URL is available. `app.rules.hasMimeType` enables per-MIME selection;
+see `docs/extension-reference.md`. No new extension slot or Layer 2 component is required.
