@@ -289,8 +289,9 @@ request for it comes from people who believe it needs a fork (NXSAT-684).
 A bootstrap fragment declares named presets under `presales`; each carries a whole `bootstrap` and
 `manifest` patch applied **after** every package's fragments, so it wins over all of them:
 application title, document title, logo, favicon, the entire theme token map, `defaultThemeId`,
-languages, and every Layer 1 capability. `config-packages/presales-demo` ships two worked
-prospects:
+languages, and every Layer 1 capability.
+[`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo),
+in nuxeo/Nuxeo-Satori-Config, ships two worked prospects, both fictional:
 
 ```
 https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance
@@ -320,8 +321,9 @@ distinction is between the content and the selection, and only one of them is ru
 `bootstrap.json`, raising the version, rebuilding, reinstalling and restarting — two to four
 minutes, because presets are package content and package content is read once at startup. The fix
 is the development override directory: with `nuxeo.agentic.ui.config.dev=true` a new preset is one
-`docker cp` and a reload. See "The fast loop while you are tuning a value" in
-`config-packages/presales-demo/README.md`.
+`docker cp` and a reload. See
+[The fast loop while you are tuning a value](../../docs/extension-reference.md#the-fast-loop-while-you-are-tuning-a-value)
+in the extension reference.
 
 ### `sso.endpoints`
 

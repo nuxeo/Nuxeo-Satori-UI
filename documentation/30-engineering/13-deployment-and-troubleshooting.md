@@ -120,8 +120,9 @@ checks its fragments and writes the zip `nuxeoctl mp-install` takes, to `config-
 Where Nx is installed, the `config-package` generator writes the same files
 (`npx nx g ./tools/satori-generators:config-package <name> --owner=<owner>` after a full install,
 or `npx nx g @nuxeo/satori-platform:config-package …` from the published package) and
-`npx nx build <name>` runs the same `build.mjs`. `config-packages/presales-demo` is the demo
-package presales installs.
+`npx nx build <name>` runs the same `build.mjs`. The demo package presales installs,
+`presales-demo`, lives in [nuxeo/Nuxeo-Satori-Config](https://github.com/nuxeo/Nuxeo-Satori-Config)
+with the hosted Beta's `satori-beta`, and is built and published from there.
 
 ### How the application loads it
 
