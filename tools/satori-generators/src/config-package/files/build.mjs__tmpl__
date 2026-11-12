@@ -485,6 +485,40 @@ function attributes(tag) {
 }
 
 /**
+ * The server reads component requirements and descriptor JSON by child path, not a descendant
+ * search. Reject misleading nested elements before the text checks below can mistake them for
+ * a requirement or body the server will actually read. Comments, instructions and CDATA have
+ * already been removed or blanked; quoted ">" characters must not end a start tag.
+ */
+function checkElementParents(markup, report) {
+  const parents = [];
+  for (const [, close, name, tail] of markup.matchAll(
+    /<(\/)?([^\s/>]+)((?:[^>"']|"[^"]*"|'[^']*')*)>/g,
+  )) {
+    if (close) {
+      parents.pop();
+      continue;
+    }
+    const parent = parents.at(-1);
+    if (name === 'require' && (parent !== 'component' || parents.length !== 1)) {
+      report('<require> must be a direct child of <component>');
+    }
+    if (
+      name === 'json' &&
+      (parents.length !== 3 ||
+        parents[0] !== 'component' ||
+        parents[1] !== 'extension' ||
+        (parent !== 'fragment' && parent !== 'layout'))
+    ) {
+      report(
+        '<json> must be a direct child of <fragment> or <layout> under <component>/<extension>',
+      );
+    }
+    if (!tail.trimEnd().endsWith('/')) parents.push(name);
+  }
+}
+
+/**
  * The text of the `<json>` child of the `<element>` whose start tag ends at `from` — CDATA kept
  * verbatim, references resolved, trimmed — or `undefined` when it has none.
  */
@@ -677,6 +711,27 @@ const manifest = ((existsSync(manifestFile) ? readUtf8(manifestFile) : '') ?? ''
   /(?:\r\n|\r|\n) /g,
   '',
 );
+/** Fold logical headers without splitting UTF-8 characters; continuation spaces count too. */
+function packageManifest(text) {
+  const lines = [];
+  for (const header of text.replace(/[\r\n]+$/, '').split(/\r\n|\r|\n/)) {
+    let line = '';
+    let size = 0;
+    for (const character of header) {
+      const bytes = Buffer.byteLength(character);
+      if (size + bytes > 72) {
+        lines.push(line);
+        line = ' ';
+        size = 1;
+      }
+      line += character;
+      size += bytes;
+    }
+    lines.push(line);
+  }
+  return Buffer.from(lines.join('\r\n') + '\r\n\r\n');
+}
+
 const componentPaths = (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(manifest)?.[1] ?? '')
   .split(',')
   .map((path) => path.trim())
@@ -702,6 +757,7 @@ for (const componentPath of componentPaths) {
   const xml = withoutCommentsOrInstructions(source);
   // Markup is looked for here; text, including inline JSON, is read from `xml` at the same offsets.
   const markup = withoutCdata(xml);
+  checkElementParents(markup, (message) => problem(componentFile, message));
   const contributes = [
     ...markup.matchAll(/<extension(?=[ \t\n/>])((?:[^>"']|"[^"]*"|'[^']*')*)>/g),
   ].some(([, tag]) => attributes(tag).target === 'org.nuxeo.agentic.ui.config');
@@ -783,8 +839,14 @@ const entries = [];
 for (const file of bundleIsLink || !existsSync(BUNDLE) ? [] : filesUnder(BUNDLE).sort()) {
   if (!isPackaged(file)) continue;
   const name = relative(BUNDLE, file).split(sep).join('/');
+  // A contribution's JSON contract also applies when its src names the JAR manifest.
+  // Validate bodies before choosing a file-specific packaging transform.
   const data =
-    file.endsWith('.json') || jsonBodies.has(file) ? checkJson(file) : readFileSync(file);
+    file.endsWith('.json') || jsonBodies.has(file)
+      ? checkJson(file)
+      : name === MANIFEST_ENTRY
+        ? packageManifest(manifest)
+        : readFileSync(file);
   if (data) entries.push({ name, data });
 }
 

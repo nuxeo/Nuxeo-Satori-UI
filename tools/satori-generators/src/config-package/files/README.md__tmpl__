@@ -46,6 +46,11 @@ well-formed UTF-8, a `src` or `Nuxeo-Component` that names no packaged file, a s
 or `package/`, a package name or version that is not a plain file name, and a component that does
 not `<require>` Satori's defaults.
 
+The packaged JAR manifest is written without a UTF-8 BOM, with CRLF line endings and headers
+wrapped at 72 bytes, including continuation spaces. The source manifest is left unchanged.
+A `<require>` must be a direct child of `<component>`; inline `<json>` must be a direct child
+of its `<fragment>` or `<layout>` under `<component>/<extension>`. Nested elements are refused.
+
 **Raise the version for every change you install.** Nuxeo installs a higher version as an upgrade;
 the same version is the package it already has.
 
