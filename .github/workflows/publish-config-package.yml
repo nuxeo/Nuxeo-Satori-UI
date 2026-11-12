@@ -62,6 +62,67 @@ jobs:
           echo "dir=config-packages/$PACKAGE" >> "$GITHUB_OUTPUT"
           echo "out=dist/config-packages/$PACKAGE" >> "$GITHUB_OUTPUT"
 
+      - name: Stamp the published version
+        id: version
+        env:
+          DIR: ${{ steps.resolve.outputs.dir }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          # The Marketplace is global state keyed on `<name>-<version>`, and nothing else in
+          # this workflow makes an upload unique. Two dispatches of the same declared version —
+          # from `main` and from a branch, or the same branch twice — carry the same string, and
+          # the `concurrency` group on the `publish` job below serialises them without making
+          # them distinguishable. So `package.xml` holds the *base* version, bumped by hand only
+          # when the intent is semantic, and the published version is stamped here.
+          #
+          # Same scheme as `build-marketplace.yml`, for the reasons documented there: a run
+          # number is unique per workflow across every ref, so the suffix is branch-neutral,
+          # and the timestamp orders the preprod listing. A branch slug is deliberately not
+          # used — it would put an internal branch name on a customer-visible listing.
+          #
+          # Only `package.xml` is stamped. `Bundle-Version` in `MANIFEST.MF` stays at the
+          # declared version: OSGi versions are `major.minor.micro.qualifier` and would reject
+          # this string, the bundle is `singleton:=true`, and the installer restarts, so the new
+          # jar replaces the old whatever its version says. `build.mjs` does not cross-check the
+          # two, and the zip is named from `package.xml` alone.
+          #
+          # Rewritten with the tag matched rather than by `sed "s/version=\"[^\"]*\"/…/"`, which
+          # is what `build-marketplace.yml` uses. That pattern is safe on today's files —
+          # `<target-platform><version>` and the `<package>` dependency are element text, not
+          # attributes, so it does not reach them — but it rewrites the first match on *every*
+          # line, so a `package.xml` that ever grows a second `version="…"` attribute would have
+          # it silently changed too. Scoping to the `<package>` tag cannot, and the workflow
+          # already parses this file in Node below to read the name, so this is one approach
+          # rather than two.
+          PACKAGE_XML="$DIR/package/package.xml"
+
+          BASE=$(node -e '
+            const { readFileSync } = require("node:fs");
+            const xml = readFileSync(process.argv[1], "utf8");
+            const tag = xml.match(/<package\s[^>]*>/);
+            const version = tag && tag[0].match(/\bversion\s*=\s*"([^"]+)"/);
+            if (!version) { console.error("no version attribute on <package> in " + process.argv[1]); process.exit(1); }
+            process.stdout.write(version[1]);
+          ' "$PACKAGE_XML")
+
+          VERSION="${BASE}-$(date +%Y%m%d%H%M%S)-BUILD-${RUN_NUMBER}"
+
+          node -e '
+            const { readFileSync, writeFileSync } = require("node:fs");
+            const [file, version] = process.argv.slice(1);
+            const xml = readFileSync(file, "utf8");
+            const tag = xml.match(/<package\s[^>]*>/);
+            if (!tag) { console.error("no <package> tag in " + file); process.exit(1); }
+            const stamped = tag[0].replace(/\bversion\s*=\s*"[^"]*"/, `version="${version}"`);
+            if (stamped === tag[0]) { console.error("version attribute unchanged in " + file); process.exit(1); }
+            writeFileSync(file, xml.replace(tag[0], stamped));
+          ' "$PACKAGE_XML" "$VERSION"
+
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing $BASE as $VERSION" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build the package
         id: build
         env:
