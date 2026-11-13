@@ -3,6 +3,7 @@ import {
   DestroyRef,
   computed,
   inject,
+  linkedSignal,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
@@ -28,13 +29,18 @@ import {
   DirectoryService,
   FOLDERISH_TYPES,
   SearchAggregationService,
+  type SearchAggregations,
   type SearchResultItem,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { SearchQueueComponent } from '../search-queue/search-queue.component';
 import { loadFacetLabels } from './facet-labels';
 import { askSavedSearchName } from '../search-session/saved-search-dialogs';
-import { SEARCH_PAGE_PROVIDER, SearchSession } from '../search-session/search-session';
+import {
+  SEARCH_PAGE_PROVIDER,
+  SearchSession,
+  type SearchResultsState,
+} from '../search-session/search-session';
 
 type DrawerViewMode = 'filter' | 'queue';
 
@@ -91,7 +97,16 @@ export class SearchFiltersDrawerComponent {
   readonly savedSearchesVersion = this.session.savedSearchesVersion;
   /** The shared search's state. Subscribing keeps it running while the drawer is open. */
   private readonly results = toSignal(this.session.results$);
-  readonly aggregations = computed(() => this.results()?.aggregations ?? {});
+  /**
+   * The facet counts. While a new search is loading its state carries empty aggregations, so
+   * reading them straight through blanked every count until the response arrived. Keep the last
+   * loaded counts on screen and replace them once the new ones are in.
+   */
+  readonly aggregations = linkedSignal<SearchResultsState | undefined, SearchAggregations>({
+    source: this.results,
+    computation: (state, previous) =>
+      state && state.status !== 'loading' ? state.aggregations : (previous?.value ?? {}),
+  });
   /** The nature, subject and coverage labels, in the language the app is shown in. */
   readonly facetLabels = toSignal(
     this.translate.onLangChange.pipe(
@@ -143,6 +158,12 @@ export class SearchFiltersDrawerComponent {
 
   onReset(): void {
     this.session.closeSavedSearch();
+    this.ensureSearchRoute();
+  }
+
+  /** Closes the open saved search and clears the filters it applied. */
+  onSavedSearchCleared(): void {
+    this.session.reset();
     this.ensureSearchRoute();
   }
 

@@ -4,7 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-import { BehaviorSubject, of, throwError, type Observable } from 'rxjs';
+import { BehaviorSubject, Subject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
 import {
@@ -114,6 +114,32 @@ describe('SearchFiltersDrawerComponent', () => {
     expect(el.querySelector('nxs-saved-search-select')).not.toBeNull();
     expect(el.querySelector('nxs-search-filters')).not.toBeNull();
     expect(searchService.search).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the last facet counts on screen while a new search loads, then swaps in the new ones', async () => {
+    const counts = (n: number) => ({
+      dc_modified_agg: { buckets: [{ key: 'lastMonth', docCount: n }] },
+    });
+    const second = new Subject<SearchResponse>();
+    searchService.search
+      .mockReturnValueOnce(
+        of({ items: [], aggregations: counts(36), totalSize: 36, hasNextPage: false }),
+      )
+      .mockReturnValueOnce(second);
+    // The first request was already made in beforeEach; send a fresh one for the first answer.
+    component.onFiltersChange({ ...NXS_EMPTY_SEARCH_FILTERS, fulltext: 'a' });
+    await fixture.whenStable();
+    expect(component.aggregations().dc_modified_agg?.buckets[0].docCount).toBe(36);
+
+    // A second search is now loading: the counts must not blank out.
+    component.onFiltersChange({ ...NXS_EMPTY_SEARCH_FILTERS, fulltext: 'ab' });
+    await fixture.whenStable();
+    expect(component.aggregations().dc_modified_agg?.buckets[0].docCount).toBe(36);
+
+    // The answer replaces them once it arrives.
+    second.next({ items: [], aggregations: counts(7), totalSize: 7, hasNextPage: false });
+    await fixture.whenStable();
+    expect(component.aggregations().dc_modified_agg?.buckets[0].docCount).toBe(7);
   });
 
   it('writes a change of the filters into the session and shows the results page', async () => {

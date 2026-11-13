@@ -22,7 +22,7 @@
   box-sizing: border-box;
   width: 100%;
   padding: 6px 8px;
-  padding-inline-end: 28px;
+  padding-inline-end: 52px;
   border: 1px solid var(--mat-sys-outline, currentColor);
   border-radius: 4px;
   background: var(--mat-sys-surface, transparent);
@@ -44,6 +44,41 @@
 
   &::placeholder {
     color: var(--mat-sys-on-surface-variant, inherit);
+  }
+}
+
+// Sits left of the arrow, inside the input's end gutter.
+.nxs-saved-search-select__clear {
+  position: absolute;
+  inset-inline-end: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--mat-sys-on-surface-variant, inherit);
+  cursor: pointer;
+
+  mat-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high, rgba(0, 0, 0, 0.08));
+  }
+
+  // Both selectors: IBM Equal Access reads `:focus` only (NXSAT-547), see the input above.
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary, currentColor);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary, currentColor);
   }
 }
 
