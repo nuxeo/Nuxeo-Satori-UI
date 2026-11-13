@@ -432,6 +432,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'satori-components.toast.retry': 'Retry',
   'satori-components.saved-search-actions.more': 'Saved search actions',
   'satori-components.saved-search-select.placeholder': 'Search Filters',
+  'satori-components.saved-search-select.clear': 'Clear saved search',
   'satori-components.search-filters.authors-placeholder': 'Search for authors...',
   'satori-components.search-filters.chosen-authors': 'Chosen authors',
   'satori-components.search-filters.chosen-collections': 'Chosen collections',

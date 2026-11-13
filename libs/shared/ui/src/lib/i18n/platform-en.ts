@@ -651,6 +651,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "satori-components.saved-search-actions.save": "Save",
   "satori-components.saved-search-actions.save-as": "Save As",
   "satori-components.saved-search-actions.share": "Share",
+  "satori-components.saved-search-select.clear": "Clear saved search",
   "satori-components.saved-search-select.label": "Saved Searches",
   "satori-components.saved-search-select.loading": "Loading saved searches...",
   "satori-components.saved-search-select.no-match": "No matching saved searches",

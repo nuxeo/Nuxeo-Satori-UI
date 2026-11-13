@@ -2649,6 +2649,7 @@
   "satori-components.saved-search-select.loading": "Shown in the Saved Searches list while it is read from the server.",
   "satori-components.saved-search-select.none": "Shown in the Saved Searches list when the user has no saved search and none is shared with them.",
   "satori-components.saved-search-select.no-match": "Shown in the Saved Searches list when no saved search name contains what is typed.",
+  "satori-components.saved-search-select.clear": "Accessible name of the small x button inside the Saved Searches box; it closes the open saved search and clears the filters it applied. A VERB phrase.",
   "satori-components.saved-search-actions.save-as": "Button above the search results that saves the current filters as a new saved search, under a name the user gives. A VERB phrase.",
   "satori-components.saved-search-actions.save": "Button above the search results that saves the changed filters into the open saved search. A VERB.",
   "satori-components.saved-search-actions.more": "Accessible name of the three-dot button above the search results that opens the menu to rename, share or delete the open saved search.",

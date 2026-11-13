@@ -6,12 +6,23 @@
     class="nxs-saved-search-select__input"
     type="text"
     [id]="inputId"
+    #box
     [placeholder]="'satori-components.saved-search-select.placeholder' | translate"
     [value]="text()"
     [matAutocomplete]="panel"
     (focus)="load()"
     (input)="onInput($any($event.target).value)"
   />
+  @if (selectedId()) {
+    <button
+      type="button"
+      class="nxs-saved-search-select__clear"
+      [attr.aria-label]="'satori-components.saved-search-select.clear' | translate"
+      (click)="clear()"
+    >
+      <mat-icon aria-hidden="true" svgIcon="x_large" />
+    </button>
+  }
   <mat-icon class="nxs-saved-search-select__arrow" aria-hidden="true" svgIcon="chevron_down" />
 </div>
 <mat-autocomplete

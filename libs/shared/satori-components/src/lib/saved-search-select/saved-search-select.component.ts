@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -9,9 +10,10 @@ import {
   output,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatAutocomplete, MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 
@@ -52,7 +54,11 @@ export class NxsSavedSearchSelectComponent {
   readonly refresh = input(0);
   /** The user chose a saved search. */
   readonly selectedChange = output<NxsSavedSearchChoice>();
+  /** The user cleared the open saved search with the x button. */
+  readonly cleared = output<void>();
 
+  private readonly panel = viewChild(MatAutocomplete);
+  private readonly box = viewChild<ElementRef<HTMLInputElement>>('box');
   private readonly searchService = inject(SearchService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -113,6 +119,17 @@ export class NxsSavedSearchSelectComponent {
     if (!search) return;
     this.text.set(search.title);
     this.selectedChange.emit({ id: search.id, title: search.title });
+  }
+
+  /** Empties the box and tells the host to close the open saved search. */
+  protected clear(): void {
+    this.text.set('');
+    // The autocomplete keeps the option picked last marked as selected; without this the list
+    // still shows the cleared search as chosen.
+    this.panel()?.options.forEach((option) => option.deselect(false));
+    // The x button leaves with the selection; a keyboard user would otherwise lose their place.
+    this.box()?.nativeElement.focus();
+    this.cleared.emit();
   }
 
   /** Puts the open search's title back when the box is left without a choice. */
