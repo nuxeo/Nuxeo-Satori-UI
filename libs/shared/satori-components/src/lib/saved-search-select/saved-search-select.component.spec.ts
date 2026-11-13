@@ -125,6 +125,23 @@ describe('NxsSavedSearchSelectComponent', () => {
     expect(clearButton()).toBeNull();
   });
 
+  it('returns focus to the box when the focused clear button is activated', async () => {
+    host.selectedId.set('ss-1');
+    host.selectedTitle.set('Contracts this month');
+    await render();
+    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '.nxs-saved-search-select__clear',
+    );
+    button?.focus();
+    expect(document.activeElement).toBe(button);
+
+    button?.click();
+    host.selectedId.set('');
+    host.selectedTitle.set('');
+    await render();
+    expect(document.activeElement).toBe(box());
+  });
+
   it('does not leave the cleared saved search marked as selected in the list', async () => {
     await open();
     const first = document.querySelector<HTMLElement>('mat-option');

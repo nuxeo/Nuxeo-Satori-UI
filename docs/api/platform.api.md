@@ -2530,6 +2530,7 @@ class NxsSavedSearchSelectComponent {
     readonly pageProvider: import("@angular/core").InputSignal<string>;
     readonly refresh: import("@angular/core").InputSignal<number>;
     readonly selectedChange: import("@angular/core").OutputEmitterRef<NxsSavedSearchChoice>;
+    readonly cleared: import("@angular/core").OutputEmitterRef<void>;
     protected readonly inputId: string;
     protected readonly text: import("@angular/core").WritableSignal<string>;
     protected readonly searches: import("@angular/core").WritableSignal<readonly SavedSearchOption[]>;
@@ -2539,6 +2540,7 @@ class NxsSavedSearchSelectComponent {
     protected load(): void;
     protected onInput(value: string): void;
     protected choose(id: string): void;
+    protected clear(): void;
     protected restore(): void;
     protected readonly display: (id: string | null) => string;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsSavedSearchSelectComponent, never>;
@@ -2565,6 +2567,7 @@ class NxsSavedSearchSelectComponent {
     };
     }, {
     "selectedChange": "selectedChange";
+    "cleared": "cleared";
     }, never, never, true, never>;
     }
 }

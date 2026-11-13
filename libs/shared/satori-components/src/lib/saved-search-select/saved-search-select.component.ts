@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -57,6 +58,7 @@ export class NxsSavedSearchSelectComponent {
   readonly cleared = output<void>();
 
   private readonly panel = viewChild(MatAutocomplete);
+  private readonly box = viewChild<ElementRef<HTMLInputElement>>('box');
   private readonly searchService = inject(SearchService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -125,6 +127,8 @@ export class NxsSavedSearchSelectComponent {
     // The autocomplete keeps the option picked last marked as selected; without this the list
     // still shows the cleared search as chosen.
     this.panel()?.options.forEach((option) => option.deselect(false));
+    // The x button leaves with the selection; a keyboard user would otherwise lose their place.
+    this.box()?.nativeElement.focus();
     this.cleared.emit();
   }
 
