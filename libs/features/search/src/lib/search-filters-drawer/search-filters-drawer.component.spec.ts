@@ -163,6 +163,21 @@ describe('SearchFiltersDrawerComponent', () => {
     expect(session.savedSearchId()).toBe('');
   });
 
+  it('clears the open saved search and the filters it applied, and shows the results page', async () => {
+    component.onSavedSearchChosen({ id: 'ss-1', title: 'Mine' });
+    await fixture.whenStable();
+    expect(session.savedSearchId()).toBe('ss-1');
+    expect(session.filters().fulltext).toBe('x');
+    await router.navigateByUrl('/doc/abc');
+
+    component.onSavedSearchCleared();
+    await fixture.whenStable();
+    expect(session.savedSearchId()).toBe('');
+    expect(session.savedSearchTitle()).toBe('');
+    expect(session.filters().fulltext).toBe('');
+    expect(path()).toBe('/search');
+  });
+
   it('opens a chosen saved search and shows its results', async () => {
     component.onSavedSearchChosen({ id: 'ss-1', title: 'Mine' });
     await fixture.whenStable();
