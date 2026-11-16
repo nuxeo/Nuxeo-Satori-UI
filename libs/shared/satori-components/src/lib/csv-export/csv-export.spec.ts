@@ -27,6 +27,10 @@ describe('nxsCsvText', () => {
     },
   );
 
+  it('keeps a negative number a number, since only text can be a formula', () => {
+    expect(nxsCsvText([[-12, -0.5, '-12']])).toBe(`"-12","-0.5","'-12"`);
+  });
+
   it('leaves text that merely contains an operator, and an em dash, as it is', () => {
     expect(nxsCsvText([['a=b', 'x-y', '11/10/2026', '—']])).toBe('"a=b","x-y","11/10/2026","—"');
   });

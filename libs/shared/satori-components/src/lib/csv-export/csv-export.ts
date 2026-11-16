@@ -13,8 +13,9 @@ const FORMULA_START = /^[=+\-@\t\r]/;
 function cellText(cell: NxsCsvCell): string {
   const text = cell === null || cell === undefined ? '' : String(cell);
   // A leading apostrophe makes the spreadsheet show the text as it is instead of calculating it.
-  // A title is user-supplied, so `=HYPERLINK(...)` as a document name must not run.
-  const safe = FORMULA_START.test(text) ? `'${text}` : text;
+  // A title is user-supplied, so `=HYPERLINK(...)` as a document name must not run. Only text can
+  // be a formula: a number such as -12 is data and stays a number, so it can be summed.
+  const safe = typeof cell === 'string' && FORMULA_START.test(text) ? `'${text}` : text;
   return `"${safe.replaceAll('"', '""')}"`;
 }
 
