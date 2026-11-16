@@ -204,9 +204,17 @@ export class NxsTaskDetailComponent {
     source: this.taskId,
     computation: () => 'simpleReview',
   });
-  protected readonly panel = linkedSignal<string, Panel>({
-    source: this.taskId,
-    computation: () => null,
+  // Closed when the host shows another task, and also when the same task is fetched again and no
+  // longer allows reassignment: an open Reassign form would otherwise still send the request that
+  // Nuxeo refuses. Delegate stays open through such a refresh.
+  protected readonly panel = linkedSignal<{ id: string; reassign: boolean }, Panel>({
+    source: computed(() => ({ id: this.taskId(), reassign: this.canReassign() })),
+    computation: (source, previous) =>
+      previous &&
+      previous.source.id === source.id &&
+      !(previous.value === 'reassign' && !source.reassign)
+        ? previous.value
+        : null,
   });
   protected readonly assignees = linkedSignal<string, readonly NxsPrincipal[]>({
     source: this.taskId,
@@ -280,6 +288,7 @@ export class NxsTaskDetailComponent {
   /** A write in flight closes the panel it came from when it lands, so no other opens meanwhile. */
   protected openPanel(panel: Exclude<Panel, null>): void {
     if (this.submitting()) return;
+    if (panel === 'reassign' && !this.canReassign()) return;
     this.panel.set(panel);
     this.assignees.set([]);
     this.panelComment.set('');

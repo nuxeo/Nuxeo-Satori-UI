@@ -246,6 +246,43 @@ describe('NxsTaskDetailComponent', () => {
       expect(el().querySelector('[data-panel="reassign"]')).toBeNull();
     });
 
+    it('closes an open Reassign form when the same task is fetched again and no longer allows it', async () => {
+      await render();
+      await click('Reassign');
+      expect(el().querySelector('[data-panel="reassign"]')).toBeTruthy();
+      pickers()[0].value.set([principal('user', 'asmith')]);
+      fixture.detectChanges();
+
+      await render(makeTask({ taskInfo: { taskActions: [], allowTaskReassignment: false } }));
+
+      expect(el().querySelector('[data-panel="reassign"]')).toBeNull();
+      expect(button('Reassign')).toBeUndefined();
+      // Nothing is left to confirm, so the request Nuxeo refuses cannot be sent.
+      detail()['confirmPanel']();
+      expect(tasks['reassignTask']).not.toHaveBeenCalled();
+    });
+
+    it('keeps an open Delegate form through a refresh that removes Reassign', async () => {
+      await render();
+      await click('Delegate');
+      await render(makeTask({ taskInfo: { taskActions: [], allowTaskReassignment: false } }));
+      expect(el().querySelector('[data-panel="delegate"]')).toBeTruthy();
+    });
+
+    it('keeps an open Reassign form through a refresh of the same task that still allows it', async () => {
+      await render();
+      await click('Reassign');
+      await render(makeTask({ taskInfo: { taskActions: [], allowTaskReassignment: true } }));
+      expect(el().querySelector('[data-panel="reassign"]')).toBeTruthy();
+    });
+
+    it('does not open Reassign for a task that does not allow it, even when asked directly', async () => {
+      await render(makeTask({ taskInfo: { taskActions: [], allowTaskReassignment: false } }));
+      detail()['openPanel']('reassign');
+      fixture.detectChanges();
+      expect(el().querySelector('[data-panel="reassign"]')).toBeNull();
+    });
+
     it('offers no action button when the task lists none', async () => {
       await render(makeTask({ taskInfo: undefined as unknown as NuxeoTask['taskInfo'] }));
       expect(el().querySelectorAll('.nxs-task-detail__actions button')).toHaveLength(0);
