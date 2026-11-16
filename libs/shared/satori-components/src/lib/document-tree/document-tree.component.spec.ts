@@ -440,6 +440,31 @@ describe('NxsDocumentTreeComponent', () => {
     });
   });
 
+  describe('for a user who can only read a workspace', () => {
+    // The bootstrap puts such workspaces directly under the root, with no domain above them.
+    const MINE = folder('mine', '/default-domain/UserWorkspaces/mine', 'Mine', 'Workspace');
+    const THEIRS = folder('theirs', '/default-domain/UserWorkspaces/theirs', 'Theirs', 'Workspace');
+    const SUB = folder('sub', '/default-domain/UserWorkspaces/mine/sub', 'Sub');
+    const accessible: Record<string, NuxeoDocument[]> = { mine: [SUB], theirs: [], sub: [] };
+    const backLabels = (): string[] =>
+      [...el().querySelectorAll('.nxs-document-tree__back')].map(
+        (button) => button.textContent?.trim() ?? '',
+      );
+
+    it('narrows to the opened workspace, with the root as its one back row', async () => {
+      await create('/default-domain/UserWorkspaces/mine', [MINE, THEIRS], accessible);
+      expect(labels()).toEqual(['Mine', 'Sub']);
+      expect(backLabels()).toEqual(['Root']);
+      expect(item('Mine').getAttribute('aria-current')).toBe('page');
+    });
+
+    it('narrows to a folder inside it, with the workspace as a back row', async () => {
+      await create('/default-domain/UserWorkspaces/mine/sub', [MINE, THEIRS], accessible);
+      expect(labels()).toEqual(['Sub']);
+      expect(backLabels()).toEqual(['Root', 'Mine']);
+    });
+  });
+
   describe('after navigating and retrying', () => {
     const backs = (): HTMLButtonElement[] => [
       ...el().querySelectorAll<HTMLButtonElement>('.nxs-document-tree__back'),

@@ -144,7 +144,12 @@ export class NxsDocumentTreeComponent {
     let nodes: readonly TreeNode[] = root.children;
     for (const prefix of cumulativeNuxeoPathPrefixes(settled)) {
       const node = nodeAt(nodes, prefix);
-      if (!node) break;
+      if (!node) {
+        // A user who can only read a workspace has it directly under the root, with no domain above
+        // it: skip the leading folders the tree does not hold, but stop at a gap further down.
+        if (chain.length === 0) continue;
+        break;
+      }
       chain.push(node);
       nodes = node.children;
     }
@@ -519,7 +524,11 @@ export class NxsDocumentTreeComponent {
     };
     const step = (nodes: readonly TreeNode[], index: number): void => {
       if (generation !== this.syncGeneration) return;
-      const next = index < prefixes.length ? nodeAt(nodes, prefixes[index]) : undefined;
+      let next = index < prefixes.length ? nodeAt(nodes, prefixes[index]) : undefined;
+      // The first level may start below the top of the path: see `pathChain`.
+      if (!next && nodes === root.children) {
+        while (!next && ++index < prefixes.length) next = nodeAt(nodes, prefixes[index]);
+      }
       for (const node of nodes) {
         if (node !== next) collapse(node);
       }
