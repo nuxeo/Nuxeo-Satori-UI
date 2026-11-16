@@ -6,6 +6,8 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -108,6 +110,7 @@ export class NxsDocumentTreeComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly destroyRef = inject(DestroyRef);
   private readonly direction = inject(Directionality, { optional: true });
+  private readonly injector = inject(Injector);
 
   protected readonly status = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly loadError = signal<NxsErrorStatus>(500);
@@ -123,6 +126,13 @@ export class NxsDocumentTreeComponent {
    * of widening back to the whole domain in between.
    */
   private readonly settledPath = signal<string | null>(null);
+  /**
+   * The folder a row or back button just opened. Opening it replaces the element that had focus (the
+   * row moves to the top of the narrowed tree, a back button leaves), so once the tree has settled on
+   * that folder, focus is put on its row. Only the folder asked for: a sync for anything else, such as
+   * the page moving on its own, never takes focus.
+   */
+  private pendingFocusPath: string | null = null;
 
   /** The folders from the first level down to the settled path's deepest folder the tree holds. */
   private readonly pathChain = computed<readonly TreeNode[]>(() => {
@@ -137,6 +147,13 @@ export class NxsDocumentTreeComponent {
       if (!node) break;
       chain.push(node);
       nodes = node.children;
+    }
+    // Never narrow to a folder whose folders are still to load: after a retry, an ancestor holds new
+    // children that nothing has expanded yet, and narrowing to one would show it empty.
+    while (chain.length > 0) {
+      const last = chain[chain.length - 1];
+      if (last.loaded || last.error) break;
+      chain.pop();
     }
     return chain;
   });
@@ -354,13 +371,34 @@ export class NxsDocumentTreeComponent {
   }
 
   private open(node: TreeNode): void {
+    let target: NuxeoDocument;
     if (node.root) {
       // Web UI's shortcut: a repository with one domain opens that domain, not an empty root.
       const only = node.children.length === 1 ? node.children[0] : null;
-      this.navigate.emit(only ? only.doc : { ...node.doc, path: '/' });
-      return;
+      target = only ? only.doc : { ...node.doc, path: '/' };
+    } else {
+      target = node.doc;
     }
-    this.navigate.emit(node.doc);
+    const targetPath = target.path ?? '/';
+    this.pendingFocusPath = nuxeoPathsEqualFlexible(targetPath, this.currentPath())
+      ? null
+      : targetPath;
+    this.navigate.emit(target);
+  }
+
+  /** Puts focus on the current folder's row, once the tree has been redrawn around it. */
+  private focusCurrentRow(): void {
+    afterNextRender(
+      () => {
+        const key = this.currentKey();
+        if (!key) return;
+        this.focusKey.set(key);
+        [...this.host.nativeElement.querySelectorAll<HTMLElement>('[data-row-key]')]
+          .find((element) => element.dataset['rowKey'] === key)
+          ?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
   private toggle(node: TreeNode): void {
@@ -388,7 +426,17 @@ export class NxsDocumentTreeComponent {
     node.loaded = false;
     node.expanded = false;
     this.focusKey.set(node.key);
-    this.toggle(node);
+    // A folder on the current path is retried through the sync, which goes on to load the rest of
+    // the path below it; loading just this one would leave the folder on screen unexpanded.
+    if (this.onCurrentPath(node)) this.syncTo(this.currentPath());
+    else this.toggle(node);
+  }
+
+  private onCurrentPath(node: TreeNode): boolean {
+    if (node.root) return true;
+    const own = normalizeNuxeoPath(node.doc.path ?? '');
+    const current = normalizeNuxeoPath(this.currentPath());
+    return current === own || current.startsWith(`${own}/`);
   }
 
   private load(): void {
@@ -434,6 +482,10 @@ export class NxsDocumentTreeComponent {
     const settle = (): void => {
       this.settledPath.set(normalizeNuxeoPath(path));
       this.bump();
+      if (this.pendingFocusPath !== null && nuxeoPathsEqualFlexible(this.pendingFocusPath, path)) {
+        this.pendingFocusPath = null;
+        this.focusCurrentRow();
+      }
     };
     const step = (nodes: readonly TreeNode[], index: number): void => {
       if (generation !== this.syncGeneration) return;

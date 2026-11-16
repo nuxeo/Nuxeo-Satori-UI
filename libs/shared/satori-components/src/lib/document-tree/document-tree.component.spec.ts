@@ -67,12 +67,18 @@ const HOLD_FOLDERS = new Set(['domain', 'workspaces', 'claims']);
   template: `<nxs-document-tree
     label="Folders"
     [currentPath]="path()"
-    (navigate)="opened.push($event.path)"
+    (navigate)="onNavigate($event)"
   />`,
 })
 class HostComponent {
   readonly path = signal('/');
   readonly opened: string[] = [];
+  /** When set, the page follows a chosen folder, as the real shell does. */
+  follow = false;
+  onNavigate(doc: { path?: string }): void {
+    this.opened.push(doc.path ?? '');
+    if (this.follow) this.path.set(doc.path ?? '/');
+  }
   readonly tree = viewChild.required(NxsDocumentTreeComponent);
 }
 
@@ -431,6 +437,97 @@ describe('NxsDocumentTreeComponent', () => {
       key(item('Claims'), 'ArrowUp');
       await render();
       expect(document.activeElement).toBe(item('Workspaces'));
+    });
+  });
+
+  describe('after navigating and retrying', () => {
+    const backs = (): HTMLButtonElement[] => [
+      ...el().querySelectorAll<HTMLButtonElement>('.nxs-document-tree__back'),
+    ];
+
+    it('resumes loading the path below a folder whose retry succeeds', async () => {
+      await create('/');
+      let failed = false;
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) => {
+        if (doc.uid === 'workspaces' && !failed) {
+          failed = true;
+          return throwError(() => ({ status: 500 }));
+        }
+        return of({ entries: CHILDREN[doc.uid] ?? [] });
+      });
+      host.path.set('/default-domain/workspaces/claims');
+      await render();
+      // The sync stopped at Workspaces; the tree stays on it with its failure row.
+      expect(item('Workspaces').getAttribute('aria-expanded')).toBe('true');
+      const failure = el().querySelector('.nxs-document-tree__item--error') as HTMLElement;
+      expect(failure).not.toBeNull();
+
+      key(failure, 'Enter');
+      await render();
+      // Retrying goes on to Claims and its folders, rather than narrowing to Claims unexpanded.
+      expect(labels()).toEqual(['Claims', 'Archive']);
+      expect(item('Claims').getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('stays on the failed folder, not an empty one, while the retry loads the rest of the path', async () => {
+      await create('/');
+      const claimsFolders = new Subject<{ entries: NuxeoDocument[] }>();
+      let failed = false;
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) => {
+        if (doc.uid === 'workspaces' && !failed) {
+          failed = true;
+          return throwError(() => ({ status: 500 }));
+        }
+        if (doc.uid === 'claims') return claimsFolders;
+        return of({ entries: CHILDREN[doc.uid] ?? [] });
+      });
+      host.path.set('/default-domain/workspaces/claims');
+      await render();
+      key(el().querySelector('.nxs-document-tree__item--error') as HTMLElement, 'Enter');
+      await render();
+      // Workspaces has its folders back, but Claims is still loading: the tree must not narrow to
+      // Claims yet, because there is nothing under it to show.
+      expect(labels()).toEqual(['Workspaces', 'Claims', 'Legal']);
+
+      claimsFolders.next({ entries: CHILDREN['claims'] });
+      claimsFolders.complete();
+      await render();
+      expect(labels()).toEqual(['Claims', 'Archive']);
+    });
+
+    it('puts focus on the opened folder’s row after Enter', async () => {
+      await create('/default-domain/workspaces');
+      host.follow = true;
+      const claims = item('Claims');
+      claims.focus();
+      key(claims, 'Enter');
+      await render();
+      expect(host.path()).toBe('/default-domain/workspaces/claims');
+      expect(labels()).toEqual(['Claims', 'Archive']);
+      expect(document.activeElement).toBe(item('Claims'));
+      expect(item('Claims').tabIndex).toBe(0);
+    });
+
+    it('puts focus on the folder a back button opened', async () => {
+      await create('/default-domain/workspaces/claims');
+      host.follow = true;
+      const workspacesBack = backs()[2];
+      workspacesBack.focus();
+      workspacesBack.click();
+      await render();
+      expect(host.path()).toBe('/default-domain/workspaces');
+      expect(document.activeElement).toBe(item('Workspaces'));
+    });
+
+    it('does not take focus when the page moves on its own', async () => {
+      await create('/default-domain/workspaces');
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      outside.focus();
+      host.path.set('/default-domain/sections');
+      await render();
+      expect(document.activeElement).toBe(outside);
+      outside.remove();
     });
   });
 
