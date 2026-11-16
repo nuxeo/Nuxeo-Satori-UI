@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { nxsCsvText, nxsDownloadCsv } from './csv-export';
 
@@ -38,12 +38,12 @@ describe('nxsCsvText', () => {
 
 describe('nxsDownloadCsv', () => {
   let created: Blob[];
-  let click: ReturnType<typeof vi.fn>;
+  let click: Mock<() => void>;
   let revoke: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     created = [];
-    click = vi.fn();
+    click = vi.fn<() => void>();
     revoke = vi.fn();
     Object.assign(URL, {
       createObjectURL: vi.fn((blob: Blob) => {
