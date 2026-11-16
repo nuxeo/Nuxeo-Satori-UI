@@ -2986,6 +2986,7 @@ class NxsTaskDetailComponent {
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
     protected readonly panelHeadingLevel: import("@angular/core").Signal<number>;
     protected readonly actions: import("@angular/core").Signal<readonly TaskAction[]>;
+    protected readonly canReassign: import("@angular/core").Signal<boolean>;
     protected readonly choosesParticipants: import("@angular/core").Signal<boolean>;
     protected readonly actors: import("@angular/core").Signal<string[]>;
     protected readonly delegatedActors: import("@angular/core").Signal<string[]>;
@@ -4815,6 +4816,7 @@ interface NuxeoTask {
     url?: string;
     validate?: boolean;
     }[];
+    allowTaskReassignment?: boolean;
     };
     targetDocTitle?: string;
     }

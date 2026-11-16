@@ -155,6 +155,14 @@ export class NxsTaskDetailComponent {
   protected readonly actions = computed<readonly TaskAction[]>(
     () => this.task().taskInfo?.taskActions ?? [],
   );
+  /**
+   * Reassign is offered unless the workflow step says it does not allow it. Nuxeo refuses such a
+   * request with a 500, so the action is not shown, instead of failing when it is used. A task
+   * that carries no such flag keeps the action.
+   */
+  protected readonly canReassign = computed(
+    () => this.task().taskInfo?.allowTaskReassignment !== false,
+  );
   protected readonly choosesParticipants = computed(() => isChooseParticipants(this.task()));
   protected readonly actors = computed(() => (this.task().actors ?? []).map((actor) => actor.id));
   protected readonly delegatedActors = computed(() =>
