@@ -230,7 +230,12 @@
 
   <!-- Video metadata card -->
   @if (showVideoInfoCard()) {
-    <div class="picture-cards">
+    <div
+      class="picture-cards"
+      role="region"
+      tabindex="0"
+      [attr.aria-label]="'shared-ui.document-viewer.video-metadata-region' | translate"
+    >
       <div class="picture-card">
         <h4 class="picture-card-title">{{ 'shared-ui.document-viewer.video-info' | translate }}</h4>
         <div class="picture-card-body">
@@ -289,7 +294,12 @@
 
   <!-- Picture metadata cards -->
   @if (showPictureCards()) {
-    <div class="picture-cards">
+    <div
+      class="picture-cards"
+      role="region"
+      tabindex="0"
+      [attr.aria-label]="'shared-ui.document-viewer.picture-metadata-region' | translate"
+    >
       <!-- Picture Info -->
       <div class="picture-card">
         <h4 class="picture-card-title">

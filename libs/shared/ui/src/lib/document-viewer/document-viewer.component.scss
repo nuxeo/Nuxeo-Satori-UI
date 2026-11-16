@@ -405,13 +405,27 @@
   /* NXSAT-803 — was `flex-shrink: 0`, which let the cards take all the height and left the
      preview a ~100px strip. They now shrink and scroll within their own strip instead. */
   flex: 0 1 auto;
-  min-height: 96px;
+  /* The floors scale down with the window: fixed 240px + 96px did not fit a short viewer, and the
+     panel clips overflow, so part of the strip could not be scrolled into view. */
+  min-height: min(96px, 20vh);
   overflow-y: auto;
+}
+
+/* The strip scrolls, so it must be reachable and visibly focused from the keyboard (Safari does
+   not focus a scroller on its own). Both selectors: IBM Equal Access reads `:focus` only. */
+.picture-cards:focus {
+  outline: 2px solid var(--document-viewer-focus-on-light-surface);
+  outline-offset: -2px;
+}
+
+.picture-cards:focus-visible {
+  outline: 2px solid var(--document-viewer-focus-on-light-surface);
+  outline-offset: -2px;
 }
 
 /* NXSAT-803 — keep a usable preview whenever the metadata cards share the panel. */
 .viewer-content:has(~ .picture-cards) {
-  min-height: 240px;
+  min-height: min(240px, 35vh);
 }
 
 .picture-card {

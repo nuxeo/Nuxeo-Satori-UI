@@ -27,8 +27,16 @@ describe('DocumentViewerComponent — picture cards layout (NXSAT-803)', () => {
     expect(cards).toMatch(/overflow-y:\s*auto/);
   });
 
-  it('keeps a usable preview while the cards are shown', () => {
-    expect(block('.viewer-content:has(~ .picture-cards)')).toMatch(/min-height:\s*240px/);
+  it('keeps a usable preview while the cards are shown, scaling down in short windows', () => {
+    expect(block('.viewer-content:has(~ .picture-cards)')).toMatch(
+      /min-height:\s*min\(240px,\s*35vh\)/,
+    );
+    expect(block('.picture-cards')).toMatch(/min-height:\s*min\(96px,\s*20vh\)/);
+  });
+
+  it('draws a focus ring on the scrollable strip, on :focus as well as :focus-visible', () => {
+    expect(block('.picture-cards:focus')).toMatch(/outline:\s*2px solid/);
+    expect(block('.picture-cards:focus-visible')).toMatch(/outline:\s*2px solid/);
   });
 
   it('wraps to fewer, wider columns instead of squeezing a card below its widest row', () => {
@@ -42,5 +50,18 @@ describe('DocumentViewerComponent — picture cards layout (NXSAT-803)', () => {
     expect(block('.format-row')).toMatch(/flex-wrap:\s*wrap/);
     expect(block('.format-details')).toMatch(/flex-wrap:\s*wrap/);
     expect(block('.format-details')).not.toMatch(/white-space:\s*nowrap/);
+  });
+
+  it('makes every scrollable strip a labelled, keyboard-focusable region', () => {
+    const html = readFileSync(join(import.meta.dirname, 'document-viewer.component.html'), 'utf8');
+    const strips = [...html.matchAll(/<div\s[^>]*class="picture-cards"[^>]*>/gs)].map((m) => m[0]);
+    expect(strips).toHaveLength(2);
+    for (const strip of strips) {
+      expect(strip).toMatch(/tabindex="0"/);
+      expect(strip).toMatch(/role="region"/);
+      expect(strip).toMatch(
+        /\[attr\.aria-label\]="'shared-ui\.document-viewer\.(picture|video)-metadata-region'/,
+      );
+    }
   });
 });
