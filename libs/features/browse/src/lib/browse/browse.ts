@@ -25,6 +25,7 @@ import {
   NxsUploadQueue,
   NxsUploadQueueComponent,
   nxsAceTimeFrame,
+  nxsDownloadCsv,
   nxsErrorStatus,
   provideNxsThumbnailCache,
   type NxsBreadcrumbItem,
@@ -1924,12 +1925,7 @@ export class BrowseComponent {
       .pipe(switchMap((commandId) => this.browseService.pollAndDownloadCsv(commandId)))
       .subscribe({
         next: (blob) => {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${doc.title ?? 'export'}.csv`;
-          a.click();
-          URL.revokeObjectURL(url);
+          nxsDownloadCsv(`${doc.title ?? 'export'}.csv`, blob);
           this.csvExporting.set(false);
           this.toast.show(this.translate.instant('browse.message.csv-exported-successfully'));
         },
