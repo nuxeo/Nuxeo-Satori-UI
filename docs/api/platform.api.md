@@ -1604,6 +1604,7 @@ class NxsDocumentTreeComponent {
     protected onItemClick(event: MouseEvent, row: TreeRow): void;
     protected onKeydown(event: KeyboardEvent, row: TreeRow): void;
     protected openAncestor(node: TreeNode): void;
+    protected onFocusOut(event: FocusEvent): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentTreeComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentTreeComponent, "nxs-document-tree", never, {
     "currentPath": {

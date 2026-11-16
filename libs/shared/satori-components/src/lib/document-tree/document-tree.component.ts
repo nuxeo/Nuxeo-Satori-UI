@@ -93,7 +93,7 @@ interface TreeRow {
     TranslatePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'nxs-document-tree' },
+  host: { class: 'nxs-document-tree', '(focusout)': 'onFocusOut($event)' },
 })
 export class NxsDocumentTreeComponent {
   /** The Nuxeo path of the folder on screen: the tree expands down to it and marks it. */
@@ -380,16 +380,40 @@ export class NxsDocumentTreeComponent {
       target = node.doc;
     }
     const targetPath = target.path ?? '/';
-    this.pendingFocusPath = nuxeoPathsEqualFlexible(targetPath, this.currentPath())
-      ? null
-      : targetPath;
+    // Focus is only brought back for a user who was in the tree when they opened the folder, and
+    // only to a folder that is not already the one on screen.
+    this.pendingFocusPath =
+      this.focusIsInTree() && !nuxeoPathsEqualFlexible(targetPath, this.currentPath())
+        ? targetPath
+        : null;
     this.navigate.emit(target);
   }
 
-  /** Puts focus on the current folder's row, once the tree has been redrawn around it. */
-  private focusCurrentRow(): void {
+  private focusIsInTree(): boolean {
+    const active = this.host.nativeElement.ownerDocument.activeElement;
+    return !!active && this.host.nativeElement.contains(active);
+  }
+
+  /** Focus that moves to another control cancels the focus a pending navigation would restore. */
+  protected onFocusOut(event: FocusEvent): void {
+    const next = event.relatedTarget;
+    if (next instanceof Node && !this.host.nativeElement.contains(next)) {
+      this.pendingFocusPath = null;
+    }
+  }
+
+  /**
+   * Puts focus on the current folder's row, once the tree has been redrawn around it. `requested`
+   * is the folder the user opened: if the page has since moved on, or focus has gone to a control
+   * outside the tree, a late response must not pull it back.
+   */
+  private focusCurrentRow(requested: string): void {
     afterNextRender(
       () => {
+        if (!nuxeoPathsEqualFlexible(requested, this.currentPath())) return;
+        const active = this.host.nativeElement.ownerDocument.activeElement;
+        const body = this.host.nativeElement.ownerDocument.body;
+        if (active && active !== body && !this.host.nativeElement.contains(active)) return;
         const key = this.currentKey();
         if (!key) return;
         this.focusKey.set(key);
@@ -432,11 +456,13 @@ export class NxsDocumentTreeComponent {
     else this.toggle(node);
   }
 
+  /** Whether `node` is the current folder or one above it, matched as `nodeAt` matches the path. */
   private onCurrentPath(node: TreeNode): boolean {
     if (node.root) return true;
-    const own = normalizeNuxeoPath(node.doc.path ?? '');
-    const current = normalizeNuxeoPath(this.currentPath());
-    return current === own || current.startsWith(`${own}/`);
+    const own = node.doc.path ?? '';
+    return cumulativeNuxeoPathPrefixes(normalizeNuxeoPath(this.currentPath())).some((prefix) =>
+      nuxeoPathsEqualFlexible(prefix, own),
+    );
   }
 
   private load(): void {
@@ -476,6 +502,10 @@ export class NxsDocumentTreeComponent {
   private syncTo(path: string): void {
     const root = this.root;
     if (!root) return;
+    // A sync for some other folder supersedes the one the user asked for; its focus is not wanted.
+    if (this.pendingFocusPath !== null && !nuxeoPathsEqualFlexible(this.pendingFocusPath, path)) {
+      this.pendingFocusPath = null;
+    }
     const generation = ++this.syncGeneration;
     const prefixes = cumulativeNuxeoPathPrefixes(normalizeNuxeoPath(path));
     root.expanded = true;
@@ -484,7 +514,7 @@ export class NxsDocumentTreeComponent {
       this.bump();
       if (this.pendingFocusPath !== null && nuxeoPathsEqualFlexible(this.pendingFocusPath, path)) {
         this.pendingFocusPath = null;
-        this.focusCurrentRow();
+        this.focusCurrentRow(path);
       }
     };
     const step = (nodes: readonly TreeNode[], index: number): void => {

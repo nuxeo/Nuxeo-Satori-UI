@@ -519,6 +519,73 @@ describe('NxsDocumentTreeComponent', () => {
       expect(document.activeElement).toBe(item('Workspaces'));
     });
 
+    it('retries through the sync when the route spells the path differently', async () => {
+      await create('/');
+      let failed = false;
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) => {
+        if (doc.uid === 'workspaces' && !failed) {
+          failed = true;
+          return throwError(() => ({ status: 500 }));
+        }
+        return of({ entries: CHILDREN[doc.uid] ?? [] });
+      });
+      host.path.set('/DEFAULT-DOMAIN/WORKSPACES/claims');
+      await render();
+      key(el().querySelector('.nxs-document-tree__item--error') as HTMLElement, 'Enter');
+      await render();
+      expect(labels()).toEqual(['Claims', 'Archive']);
+    });
+
+    it('does not pull focus back once the user has moved it out of the tree', async () => {
+      await create('/default-domain/workspaces');
+      host.follow = true;
+      const claimsFolders = new Subject<{ entries: NuxeoDocument[] }>();
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) =>
+        doc.uid === 'claims' ? claimsFolders : of({ entries: CHILDREN[doc.uid] ?? [] }),
+      );
+      const claims = item('Claims');
+      claims.focus();
+      key(claims, 'Enter');
+      await render();
+
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      outside.focus();
+      claimsFolders.next({ entries: CHILDREN['claims'] });
+      claimsFolders.complete();
+      await render();
+      expect(labels()).toEqual(['Claims', 'Archive']);
+      expect(document.activeElement).toBe(outside);
+      outside.remove();
+    });
+
+    it('drops the focus intent when another folder supersedes the one opened', async () => {
+      await create('/default-domain/workspaces');
+      host.follow = true;
+      const claimsFolders = new Subject<{ entries: NuxeoDocument[] }>();
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) =>
+        doc.uid === 'claims' ? claimsFolders : of({ entries: CHILDREN[doc.uid] ?? [] }),
+      );
+      const claims = item('Claims');
+      claims.focus();
+      key(claims, 'Enter');
+      await render();
+
+      // Another control sends the page to Sections before Claims has answered.
+      host.path.set('/default-domain/sections');
+      await render();
+      (document.activeElement as HTMLElement | null)?.blur();
+      claimsFolders.next({ entries: CHILDREN['claims'] });
+      claimsFolders.complete();
+      await render();
+
+      // Later the page comes back to Claims by itself: that is not the user's Enter any more.
+      host.path.set('/default-domain/workspaces/claims');
+      await render();
+      expect(labels()).toEqual(['Claims', 'Archive']);
+      expect(el().contains(document.activeElement)).toBe(false);
+    });
+
     it('does not take focus when the page moves on its own', async () => {
       await create('/default-domain/workspaces');
       const outside = document.createElement('button');
