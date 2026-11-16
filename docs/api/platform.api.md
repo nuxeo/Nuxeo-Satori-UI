@@ -1593,7 +1593,7 @@ class NxsDocumentTreeComponent {
     protected readonly loadError: import("@angular/core").WritableSignal<NxsErrorStatus>;
     protected readonly focusKey: import("@angular/core").WritableSignal<string | null>;
     protected readonly topNodes: import("@angular/core").Signal<readonly TreeNode[]>;
-    protected readonly showRootBack: import("@angular/core").Signal<boolean>;
+    protected readonly ancestors: import("@angular/core").Signal<readonly TreeNode[]>;
     protected readonly rows: import("@angular/core").Signal<readonly TreeRow[]>;
     protected readonly currentKey: import("@angular/core").Signal<string | null>;
     protected rowFor(key: string): TreeRow | undefined;
@@ -1603,7 +1603,7 @@ class NxsDocumentTreeComponent {
     protected nodeLabel(node: TreeNode): string;
     protected onItemClick(event: MouseEvent, row: TreeRow): void;
     protected onKeydown(event: KeyboardEvent, row: TreeRow): void;
-    protected openRoot(): void;
+    protected openAncestor(node: TreeNode): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentTreeComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentTreeComponent, "nxs-document-tree", never, {
     "currentPath": {

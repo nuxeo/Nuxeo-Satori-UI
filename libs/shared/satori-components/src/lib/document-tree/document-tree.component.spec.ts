@@ -213,15 +213,32 @@ describe('NxsDocumentTreeComponent', () => {
   describe('inside a domain', () => {
     beforeEach(() => create('/default-domain/workspaces/claims'));
 
-    it('shows that domain’s branch, expanded down to the current folder, which is marked', () => {
-      expect(labels()).toEqual(['Domain', 'Workspaces', 'Claims', 'Archive', 'Legal', 'Sections']);
+    const backLabels = (): string[] =>
+      [...el().querySelectorAll('.nxs-document-tree__back')].map(
+        (button) => button.textContent?.trim() ?? '',
+      );
+
+    it('shows the folder on screen alone, expanded to its folders, which is marked', () => {
+      expect(labels()).toEqual(['Claims', 'Archive']);
       expect(item('Claims').getAttribute('aria-current')).toBe('page');
-      expect(item('Workspaces').getAttribute('aria-expanded')).toBe('true');
       expect(item('Claims').getAttribute('aria-expanded')).toBe('true');
       expect(item('Archive').hasAttribute('aria-expanded')).toBe(false);
       expect(items().filter((node) => node.getAttribute('aria-current') === 'page')).toHaveLength(
         1,
       );
+    });
+
+    it('hides the siblings of the folder and of each folder above it', () => {
+      // Legal is a sibling of Claims, Sections of Workspaces, the other domain of Domain.
+      expect(labels()).not.toContain('Legal');
+      expect(labels()).not.toContain('Sections');
+      expect(labels()).not.toContain('Workspaces');
+      expect(labels()).not.toContain('Domain');
+      expect(labels()).not.toContain('Other domain');
+    });
+
+    it('shows one back row for each ancestor, from the root down', () => {
+      expect(backLabels()).toEqual(['Root', 'Domain', 'Workspaces']);
     });
 
     it('goes back to the root from its button', () => {
@@ -231,12 +248,44 @@ describe('NxsDocumentTreeComponent', () => {
       expect(host.opened).toEqual(['/']);
     });
 
-    it('follows the page to another folder, folding the branch it left', async () => {
+    it('opens an ancestor from its back row', () => {
+      const buttons = [...el().querySelectorAll<HTMLButtonElement>('.nxs-document-tree__back')];
+      buttons[2].click();
+      buttons[1].click();
+      expect(host.opened).toEqual(['/default-domain/workspaces', '/default-domain']);
+    });
+
+    it('follows the page to another folder, narrowing to it', async () => {
       host.path.set('/default-domain/sections');
       await render();
-      expect(labels()).toEqual(['Domain', 'Workspaces', 'Sections']);
+      expect(labels()).toEqual(['Sections']);
+      expect(backLabels()).toEqual(['Root', 'Domain']);
       expect(item('Sections').getAttribute('aria-current')).toBe('page');
-      expect(item('Workspaces').getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('shows a domain on its own at its own level, with the root as the one back row', async () => {
+      host.path.set('/default-domain');
+      await render();
+      expect(labels()).toEqual(['Domain', 'Workspaces', 'Sections']);
+      expect(backLabels()).toEqual(['Root']);
+    });
+
+    it('stays narrowed while a newly opened folder loads, rather than widening to the domain', async () => {
+      const held = new Subject<{ entries: NuxeoDocument[] }>();
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) =>
+        doc.uid === 'legal' ? held : of({ entries: CHILDREN[doc.uid] ?? [] }),
+      );
+      host.path.set('/default-domain/workspaces/legal');
+      await render();
+      // The folder just left is folded as the path moves; nothing around it is brought back.
+      expect(labels()).toEqual(['Claims']);
+      expect(backLabels()).toEqual(['Root', 'Domain', 'Workspaces']);
+
+      held.next({ entries: [] });
+      held.complete();
+      await render();
+      expect(labels()).toEqual(['Legal']);
+      expect(backLabels()).toEqual(['Root', 'Domain', 'Workspaces']);
     });
 
     it('marks the nearest shown folder when the current one is not in the tree', async () => {
@@ -291,13 +340,13 @@ describe('NxsDocumentTreeComponent', () => {
 
       key(item('Claims'), 'End');
       await render();
-      expect(document.activeElement).toBe(item('Sections'));
-      key(item('Sections'), 'Home');
+      expect(document.activeElement).toBe(item('Legal'));
+      key(item('Legal'), 'Home');
       await render();
-      expect(document.activeElement).toBe(item('Domain'));
-      key(item('Domain'), 'ArrowUp');
+      expect(document.activeElement).toBe(item('Workspaces'));
+      key(item('Workspaces'), 'ArrowUp');
       await render();
-      expect(document.activeElement).toBe(item('Domain'));
+      expect(document.activeElement).toBe(item('Workspaces'));
     });
 
     it('expands with Right, then steps into the first child', async () => {
@@ -310,14 +359,14 @@ describe('NxsDocumentTreeComponent', () => {
       expect(document.activeElement).toBe(item('Archive'));
     });
 
-    it('collapses with Left, then steps out to the parent', async () => {
-      item('Workspaces').focus();
+    it('steps out to the parent with Left, then collapses it', async () => {
+      item('Claims').focus();
+      key(item('Claims'), 'ArrowLeft');
+      await render();
+      expect(document.activeElement).toBe(item('Workspaces'));
       key(item('Workspaces'), 'ArrowLeft');
       await render();
       expect(item('Workspaces').getAttribute('aria-expanded')).toBe('false');
-      key(item('Workspaces'), 'ArrowLeft');
-      await render();
-      expect(document.activeElement).toBe(item('Domain'));
     });
 
     it('opens with Enter and toggles with Space', async () => {
@@ -363,14 +412,14 @@ describe('NxsDocumentTreeComponent', () => {
       expect(document.activeElement).toBe(item('Archive'));
     });
 
-    it('collapses with Right, then steps out to the parent', async () => {
-      item('Workspaces').focus();
+    it('steps out to the parent with Right, then collapses it', async () => {
+      item('Claims').focus();
+      key(item('Claims'), 'ArrowRight');
+      await render();
+      expect(document.activeElement).toBe(item('Workspaces'));
       key(item('Workspaces'), 'ArrowRight');
       await render();
       expect(item('Workspaces').getAttribute('aria-expanded')).toBe('false');
-      key(item('Workspaces'), 'ArrowRight');
-      await render();
-      expect(document.activeElement).toBe(item('Domain'));
     });
 
     it('leaves Up and Down alone, which do not mirror', async () => {
