@@ -1,8 +1,10 @@
-# Reply to the presales feedback
+# Satori UI: Status and Getting Started
 
 Hi all,
 
-Thanks for the feedback. It came from a few different places, so I've put it all in one list: what you asked for, and what we've done so far.
+Thanks for the feedback. It came from a few different places, so I've put it all in one list: what you asked for, and what we've done so far. At the end you'll find how to install the `satori-beta` package, a prototype of what we're planning for GA, and links to the docs.
+
+## Status
 
 **1. The generator needed `npm ci` and access to the @alfresco packages**
 
@@ -10,10 +12,12 @@ Thanks for the feedback. It came from a few different places, so I've put it all
 - To make a config package you only need Node.js now. You don't need `npm ci`, a token or an account.
 - Config packages have moved to their own public repo, nuxeo/Nuxeo-Satori-Config. It builds every PR and can publish to the pre-prod Marketplace. It also sets the version number for you.
 - What's left: installing the full UI repo still needs a GitHub token, because Satori UI comes from GitHub Packages. The Nx generator needs that full install too. The easy way around it is to copy `presales-demo` in the config repo.
+- To try it, install the `satori-beta` package from the pre-prod Marketplace: [satori-beta 1.1.0](https://nos-preprod-connect.nuxeocloud.com/nuxeo/site/marketplace/package/satori-beta?version=1.1.0-20261112020624-BUILD-1). The steps are in [Installing the satori-beta package](#installing-the-satori-beta-package) below.
 
 **2. No config stored as a Note, and no forking**
 
 - Done. The config only comes from Marketplace packages now. Nothing is saved as a Note or stored in the repository, and nobody edits it on the server.
+- Customisation that used to live in the Angular Web UI is now a config package. You install your own package on top of the default one.
 - We ship the default package, `nuxeo-agentic-ui`. Your package depends on it and loads after it, so your settings win.
 - When we upgrade our package, yours stays as it is. We tested that. If you remove yours, you're back on the defaults.
 - We also fixed the bug where an upgrade failed after someone had edited the config on the server.
@@ -69,4 +73,40 @@ Thanks for the feedback. It came from a few different places, so I've put it all
 - The Permissions tab on a document and on `/browse` now offers the full list: what the server suggests for that type, the standard ones (Write, Remove, WriteSecurity, Unlock and so on), and any others the server has.
 - Collections show the server's list for the type, like Web UI does.
 
+**12. Moving existing Studio customisations to Satori**
+
+- Not yet. Studio is still on Polymer, so there's no way to extract existing Studio customisations and import them into Satori.
+- This is difficult without access to the Studio API. We'll look into it and let you know.
+
 Thanks too for the kind words about the registered IDs, the API snapshot, the fork and upgrade tests, and the drift check. They're all staying, and the config repo now runs the drift check every Monday as well.
+
+## Installing the satori-beta package
+
+`satori-beta` is a sample config package that shows most of what configuration can do. It brands the UI for a made-up insurer, Acme, and also sets a theme, languages, session timeouts, sign-in options, demo presets and some navigation changes. It has preset switching turned on, so put it on a demo server only, never on a customer's server.
+
+1. **Check the server.** You need Nuxeo LTS with Nuxeo Satori (`nuxeo-agentic-ui`) 2026.0.2 or later. On an older Satori, Nuxeo won't start with this package installed. If that happens, remove the package to recover.
+2. **Download the package.** Open the [satori-beta listing](https://nos-preprod-connect.nuxeocloud.com/nuxeo/site/marketplace/package/satori-beta?version=1.1.0-20261112020624-BUILD-1) on the pre-prod Marketplace and download version `1.1.0-20261112020624-BUILD-1`. The listing is public, but you need a Nuxeo Online Services account to download it.
+3. **Install it.** On the Nuxeo server (inside the container, if you run Nuxeo in Docker), run:
+
+   ```bash
+   nuxeoctl mp-install satori-beta-1.1.0-20261112020624-BUILD-1.zip
+   ```
+
+   A Nuxeo Cloud environment installs it from the Marketplace like any other package.
+
+4. **Restart Nuxeo.** The server only reads config packages when it starts.
+5. **Hard refresh the browser.** The UI reads its config once, when it loads.
+6. **Check that it worked.** You should see the Acme branding: "Acme Claims" in the browser tab, the Acme logo in the header and on the sign-in page, and the Acme theme. If you don't, open `/nuxeo/agentic-ui-config/bootstrap.json` on the server. The satori-beta fragment should be listed after `org.nuxeo.agentic.ui.config.defaults`.
+7. **To remove it**, run `nuxeoctl mp-remove satori-beta` and restart Nuxeo. You're back on the defaults.
+
+## Prototype: work in progress for GA
+
+We have an interactive prototype of some changes we are planning for the GA release, the Nuxeo Workspace Prototype. We're sharing its link with you directly rather than putting it here, because this page is public.
+
+The navigation and search will be almost the same as in the prototype. We are still discussing the other parts and features. It is still a prototype, and we welcome your feedback on any part of it, including the design, the layout and the features.
+
+## Links
+
+- [README](https://github.com/nuxeo/Nuxeo-Satori-UI/blob/main/README.md): what Satori UI is and where to start
+- [CUSTOMISING.md](https://github.com/nuxeo/Nuxeo-Satori-UI/blob/main/CUSTOMISING.md): the whole no-code customisation path on one page
+- [Customising the Nuxeo Satori UI without rebuilding](https://hyland.atlassian.net/wiki/x/LDJhAgE) on Confluence (being updated)
