@@ -594,3 +594,10 @@ customer-authored code.
   > four of them were inert.
 
 - What is the supported Nuxeo LTS matrix for Beta, which determines the contract-test grid?
+
+### Packaged View viewer preference (NXSAT-698)
+
+Layer 1 can now opt the packaged View tab into NEV with `app.tabs.view.preferARender` in a
+`slots.tabs` contribution. The rule may select main-file MIME types via `app.rules.hasMimeType`.
+The default remains built-in; a null NEV URL falls back to it. This adds no packaged
+`documentView` entry. See [the extension reference](extension-reference.md#select-nev-for-the-packaged-view-tab-nxsat-698).

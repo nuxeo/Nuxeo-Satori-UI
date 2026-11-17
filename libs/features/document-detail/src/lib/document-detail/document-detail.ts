@@ -433,6 +433,23 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     ),
   );
 
+  /** A manifest rule on the packaged View tab selects NEV without replacing its fallback. */
+  readonly preferARender = computed(() => {
+    const rule = this.detailTabs().find((tab) => tab.id === 'app.tabs.view')?.preferARender;
+    // Manifest overrides are untyped JSON. Missing or malformed opt-ins keep the default.
+    if (
+      !rule ||
+      (typeof rule !== 'string' &&
+        (typeof rule !== 'object' || Array.isArray(rule) || typeof rule.type !== 'string'))
+    ) {
+      return false;
+    }
+    return this.extensions.evaluateRule(rule, {
+      ...this.extensionRuleContext.context(),
+      document: this.doc(),
+    });
+  });
+
   /** The tab strip for `nxs-tabs`: labels translated, so a language change relabels it. */
   readonly detailTabEntries = computed<readonly NxsTab[]>(() => {
     this.translationTick();
