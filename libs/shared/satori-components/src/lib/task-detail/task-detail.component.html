@@ -15,15 +15,17 @@
     >
       {{ 'satori-components.task-detail.delegate' | translate }}
     </button>
-    <button
-      type="button"
-      class="nxs-task-detail__link"
-      [attr.aria-expanded]="panel() === 'reassign'"
-      [disabled]="submitting()"
-      (click)="openPanel('reassign')"
-    >
-      {{ 'satori-components.task-detail.reassign' | translate }}
-    </button>
+    @if (canReassign()) {
+      <button
+        type="button"
+        class="nxs-task-detail__link"
+        [attr.aria-expanded]="panel() === 'reassign'"
+        [disabled]="submitting()"
+        (click)="openPanel('reassign')"
+      >
+        {{ 'satori-components.task-detail.reassign' | translate }}
+      </button>
+    }
   </div>
 </div>
 
