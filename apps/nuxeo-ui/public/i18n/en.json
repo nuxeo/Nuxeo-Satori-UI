@@ -2535,7 +2535,8 @@
       "placeholder": "Search Filters",
       "loading": "Loading saved searches...",
       "none": "No saved searches",
-      "no-match": "No matching saved searches"
+      "no-match": "No matching saved searches",
+      "clear": "Clear saved search"
     },
     "saved-search-actions": {
       "save-as": "Save As",
