@@ -92,12 +92,14 @@ describe('drawerToOpenForRoute', () => {
     });
   });
 
-  describe('with a drawer chosen but closed', () => {
-    it('does not reopen the drawer the user just closed, on a route that drawer owns', () => {
+  // The shell clears the chosen drawer when it closes one, so this state is not produced today;
+  // these keep the older rule for it.
+  describe('with a drawer chosen but not open', () => {
+    it('does not set again a drawer that is already chosen for this route', () => {
       expect(drawerToOpenForRoute(ITEMS, '/browse/some/folder', BROWSE, false)).toBeNull();
     });
 
-    it('opens the drawer a route belongs to when it is another drawer that was closed', () => {
+    it('opens the drawer a route belongs to when another drawer was the one chosen', () => {
       expect(drawerToOpenForRoute(ITEMS, '/browse/some/folder', FAVORITES, false)).toBe(BROWSE);
     });
   });

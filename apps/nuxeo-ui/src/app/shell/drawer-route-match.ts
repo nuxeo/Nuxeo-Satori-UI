@@ -34,8 +34,13 @@ export function drawerItemForPath(
  * `/browse/...`, must not swap Favorites for the Browse tree. The Personal Space drawer is the
  * same case: its route redirects into `/browse/...`, and the Browse tree must not take it over.
  *
- * `active` being the item that already owns the route returns `null` even when its drawer is
- * closed: re-setting it would reopen a drawer the user has just closed.
+ * Back and Forward are not told apart from other navigation: with a drawer open they leave it as
+ * it is, and with nothing open they open the route's drawer, like a deep link.
+ *
+ * Closing a drawer in the shell clears the chosen item along with the open flag, so a later route
+ * into that drawer's section opens it again. That is unchanged by this function. The last check
+ * keeps the older rule that a drawer already chosen for the route is not set a second time; the
+ * shell does not produce a chosen drawer that is closed today.
  */
 export function drawerToOpenForRoute(
   navItems: readonly AppNavItem[],

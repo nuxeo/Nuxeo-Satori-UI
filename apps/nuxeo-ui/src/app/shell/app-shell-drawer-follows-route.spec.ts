@@ -113,15 +113,30 @@ describe('AppShellComponent — the side nav drawer follows the route (NXSAT-811
     expect(component.drawerOpen()).toBe(true);
   });
 
-  it('does not reopen a drawer the user has just closed', () => {
+  it('opens a section’s drawer again on a route into it after the user closed it, as before', () => {
     open('/browse');
     component.onDrawerClose();
     expect(component.drawerOpen()).toBe(false);
+    expect(component.activeDrawerItem()).toBeNull();
 
-    // Closing clears the chosen drawer, so the next route into Browse opens it again: that is
-    // the deep-link rule, and it is how this behaved before.
+    // Closing clears the chosen drawer along with the open flag, so nothing is open and the next
+    // route into Browse is treated like a deep link. This did not change.
     navigatedTo('/browse/default-domain/workspaces/QA287');
+
+    expect(component.drawerOpen()).toBe(true);
     expect(component.activeDrawerItem()?.path).toBe('/browse');
+  });
+
+  it('leaves an open drawer alone when history navigation lands on another drawer’s route', () => {
+    open('/personal-space');
+
+    // Back to an earlier Browse page reaches the shell as the same navigation end as a link does:
+    // history navigation does not replace an open drawer either. With nothing open it opens the
+    // route's drawer, which the deep-link test above covers.
+    navigatedTo('/browse/default-domain/workspaces/QA287');
+
+    expect(component.activeDrawerItem()?.path).toBe('/personal-space');
+    expect(component.drawerOpen()).toBe(true);
   });
 
   it('still switches drawers when the user picks another item in the rail', () => {
