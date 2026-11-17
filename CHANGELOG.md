@@ -29,6 +29,26 @@ the fragments named `defaults`. `level` was already one of `error` / `warning` /
 is an open string, so neither is a schema change — but a consumer that matched on `replaced` or
 `removed` to notice this case should match the new codes instead.
 
+### Fixed (generators) — the documented `npx nx g ./tools/satori-generators:…` command runs
+
+Every generator that writes templates — `config-package`, `extension-library`,
+`extension-component`, `satori-component` — threw `ReferenceError: __dirname is not defined` when
+run through the Nx command line, on Node 22.6 and later (NXSAT-795). They resolved their template
+directory with `join(__dirname, 'files')`; since Nx 23, `loadTsFile` prefers Node's native type
+stripping, which gives the TypeScript source ESM semantics, and ESM has no `__dirname`. A single
+`generatorFilesDir()` now serves both module systems.
+
+This never affected customers: `@nuxeo/satori-platform` ships the generators compiled to
+CommonJS, where `__dirname` exists, and `npx nx g @nuxeo/satori-platform:<generator>` worked
+throughout. It affected anyone following `docs/extension-reference.md`,
+`docs/beta-demo-runbook.md` or `libs/platform/AGENTS.md` in this repository — the demo runbook
+among them. `checkGeneratorsEsmSafe` now fails the guardrails gate on a CommonJS-only global in
+those sources, since no test can see this: vitest defines `__dirname` too.
+
+The refusal message for a Windows device name now says a directory of that name "cannot be used
+there" rather than "cannot be created there" (NXSAT-729 QA). Node does create `con` or `nul` on
+Windows 11; Explorer and `cmd` then cannot open or delete it. The refusal is unchanged.
+
 ### Changed — BREAKING (registered IDs) — one Browse entry again
 
 The adf-hx proof of concept is removed, with its two routes and its navigation entry.
@@ -176,7 +196,15 @@ private readonly locale = inject(LOCALE_ID);
   on a server whose Jackson raised the default the build is stricter than it needs to be rather
   than generous enough to ship a package that does not work. Component XML is bounded the same way
   at 256 elements, this script's own limit, because the recursive well-formedness walk used to
-  overflow and print a raw Node stack trace.
+  overflow and print a raw Node stack trace. Inside the band the server accepts, the build now also
+  says when the limit it met was its own: both the duplicate-key walk and the `JSON.stringify` that
+  packages a body still recurse through it, so a body nested close to 1000 can exhaust the stack of
+  the Node running the build — on Windows with Node 20 from about depth 993, where packaging gives
+  out first and, being the one depth-sensitive call outside a `try`, ended the build with a raw
+  `RangeError` trace. Both now report
+  `nested 993 deep; the server accepts this depth but this Node ran out of stack walking it. Build with Node 22 or newer.`,
+  naming the file and never writing a zip. A `RangeError` that is not the stack, such as
+  "Invalid string length", is still reported as itself rather than blamed on Node.
 - The `config-package` generator and `create.mjs` refuse a package name they cannot honour, before
   writing anything, and say what it would clash with (NXSAT-729). Refused: `defaults`, the name of
   Satori's own packaged fragments in both layers — a package of that name contributed a fragment on

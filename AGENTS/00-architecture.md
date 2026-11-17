@@ -471,3 +471,12 @@ contributed. A customer ships their own package that depends on `nuxeo-agentic-u
 - Blob URLs: always `URL.revokeObjectURL()` in `ngOnDestroy` for every `createObjectURL`
 - Authenticated content: always use `HttpClient` (via services) — never `<img [src]="nuxeoUrl">`
 - Imports: `@nuxeo/satori-platform/nuxeo-client`, `@nuxeo/satori-platform/ui`, `@nuxeo/satori-platform/components`, `@agentic-ui/shared/ai-client`, `@agentic-ui/shared/kd-client`, `@agentic-ui/shared/ke-client`
+
+## View tab viewer selection (NXSAT-698)
+
+`app.tabs.view` accepts a `preferARender` rule through `extensions.slots.tabs`. Document detail
+evaluates it against the focused document and passes the result to `DocumentViewerComponent`.
+The shared viewer chooses NEV only with a non-null URL, otherwise keeping its existing dispatch.
+Notes and custom `documentView` components keep precedence. `app.rules.hasMimeType` matches the
+main blob MIME essence, exactly or by family (`image/*`), without rendition fallback.
+See `docs/extension-reference.md` for the deployment manifest contract.

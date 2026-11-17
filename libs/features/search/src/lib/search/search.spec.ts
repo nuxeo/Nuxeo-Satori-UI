@@ -1409,7 +1409,7 @@ describe('SearchComponent', () => {
 
       if (!lastBlob) throw new Error('exportCsv created no Blob');
       expect(lastBlob.type).toContain('text/csv');
-      const lines = (await lastBlob.text()).split('\n');
+      const lines = (await lastBlob.text()).split('\r\n');
       expect(lines[0]).toContain('"Title"');
       expect(lines).toHaveLength(2);
       expect(lines[1]).toContain('"Report"');
@@ -1434,7 +1434,7 @@ describe('SearchComponent', () => {
       expect(await lastBlob.text()).toContain('"He said ""hi"""');
     });
 
-    it('renders an em dash for the optional columns that are absent', async () => {
+    it('writes the optional columns that are absent as empty cells, not a dash', async () => {
       mockSearchService.search.mockReturnValue(
         of({
           items: [resultItem({ id: '1', state: undefined, version: undefined, flags: undefined })],
@@ -1448,7 +1448,46 @@ describe('SearchComponent', () => {
       component.exportCsv();
 
       if (!lastBlob) throw new Error('exportCsv created no Blob');
-      expect(await lastBlob.text()).toContain('"—"');
+      const text = await lastBlob.text();
+      // The "—" this wrote used to reach Excel as `â€”`, for want of a UTF-8 marker.
+      expect(text).not.toContain('—');
+      const [header, row] = text.split('\r\n').map((line) => line.slice(1, -1).split('","'));
+      for (const column of ['State', 'Version', 'Flags']) {
+        expect(row?.[header?.indexOf(column) ?? -1]).toBe('');
+      }
+    });
+
+    it('starts the file with the UTF-8 byte order mark so Excel reads accents and dashes', async () => {
+      mockSearchService.search.mockReturnValue(
+        of({ items: [resultItem({ id: '1', title: 'Café' })], aggregations: {} }),
+      );
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      await fixture.whenStable();
+
+      component.exportCsv();
+
+      if (!lastBlob) throw new Error('exportCsv created no Blob');
+      const bytes = new Uint8Array(await lastBlob.arrayBuffer());
+      expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+      expect(await lastBlob.text()).toContain('"Café"');
+    });
+
+    it('writes a title that would run as a spreadsheet formula as plain text', async () => {
+      mockSearchService.search.mockReturnValue(
+        of({
+          items: [resultItem({ id: '1', title: '=HYPERLINK("http://x","y")' })],
+          aggregations: {},
+        }),
+      );
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      await fixture.whenStable();
+
+      component.exportCsv();
+
+      if (!lastBlob) throw new Error('exportCsv created no Blob');
+      expect(await lastBlob.text()).toContain(`"'=HYPERLINK(""http://x"",""y"")"`);
     });
   });
 

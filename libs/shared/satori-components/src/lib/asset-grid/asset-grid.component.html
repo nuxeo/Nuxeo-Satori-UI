@@ -33,17 +33,22 @@
         </div>
 
         <div class="nxs-asset-grid__body">
+          <!-- The title carries the type as well as the name. Both are clipped with an ellipsis,
+               and the pill is `pointer-events: none` so it cannot hold a tooltip of its own; this
+               button's hit area covers the whole card, so hovering anywhere — the pill included —
+               reads out both in full. -->
           <button
             type="button"
             class="nxs-asset-grid__name"
-            [title]="asset.name"
+            [title]="
+              'satori-components.asset-grid.name-and-type'
+                | translate: { name: asset.name, type: asset.type | docTypeLabel }
+            "
             (click)="open(asset)"
           >
             {{ asset.name }}
           </button>
-          <span class="nxs-asset-grid__type" [title]="asset.type | docTypeLabel">{{
-            asset.type | docTypeLabel
-          }}</span>
+          <span class="nxs-asset-grid__type">{{ asset.type | docTypeLabel }}</span>
         </div>
       </li>
     }

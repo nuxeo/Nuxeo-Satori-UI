@@ -137,6 +137,9 @@ interface DialogRefLike {
   afterClosed: () => Observable<unknown>;
 }
 
+/** The signed-in username the component sees; a test can make it an external share recipient. */
+let currentUsername = 'tester';
+
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument> => of(doc())),
   fetchBlob: vi.fn((): Observable<Blob> => of(new Blob(['x'], { type: 'text/plain' }))),
@@ -331,7 +334,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         { provide: AiChatService, useValue: { openPanel: vi.fn() } },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(false) } },
         { provide: NuxeoApiBase, useValue: { nxqlSearch: vi.fn(() => of({ entries: [] })) } },
-        { provide: CURRENT_USERNAME, useValue: () => 'tester' },
+        { provide: CURRENT_USERNAME, useValue: () => currentUsername },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {
@@ -1447,6 +1450,60 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(toast.error).toHaveBeenCalledWith('Failed to abandon workflow.');
     });
 
+    it('hides a workflow banner the user dismisses, and leaves the workflow running', async () => {
+      const wf = workflow();
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([wf]));
+      await build();
+      expect(component.visibleWorkflows()).toEqual([wf]);
+
+      component.dismissWorkflowBanner(wf);
+
+      expect(component.visibleWorkflows()).toEqual([]);
+      expect(component.documentWorkflows()).toEqual([wf]);
+      expect(mockWorkflowService.cancelWorkflow).not.toHaveBeenCalled();
+    });
+
+    it('shows the banner again for a workflow started after one was dismissed', async () => {
+      const first = workflow({ id: 'wf-1' });
+      const second = workflow({ id: 'wf-2' });
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([first]));
+      await build();
+      component.dismissWorkflowBanner(first);
+
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([first, second]));
+      component.selectedWorkflowModel.set('SerialDocumentReview');
+      component.startProcess();
+
+      expect(component.visibleWorkflows()).toEqual([second]);
+    });
+
+    it('shows a dismissed banner again when the route leaves the document and comes back', async () => {
+      // Angular reuses this component when only the route param changes, so the reset on
+      // document change has to run on the reused instance, not on a fresh one.
+      const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-1' }));
+      TestBed.overrideProvider(ActivatedRoute, {
+        useValue: {
+          paramMap: route,
+          queryParamMap: of(convertToParamMap({})),
+          snapshot: { queryParamMap: convertToParamMap({}) },
+        },
+      });
+      const wf = workflow();
+      mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([wf]));
+      await build();
+      component.dismissWorkflowBanner(wf);
+      expect(component.visibleWorkflows()).toEqual([]);
+
+      mockDetailService.getFullDocument.mockReturnValue(of(doc({ uid: 'doc-2' })));
+      route.next(convertToParamMap({ uid: 'doc-2' }));
+      await fixture.whenStable();
+      mockDetailService.getFullDocument.mockReturnValue(of(doc()));
+      route.next(convertToParamMap({ uid: 'doc-1' }));
+      await fixture.whenStable();
+
+      expect(component.visibleWorkflows()).toEqual([wf]);
+    });
+
     it('turns an i18n task key into a readable label', async () => {
       await build();
 
@@ -1577,6 +1634,21 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.detailsPanelToggleLabelKey()).toBe('document-detail.show-details');
       component.openPropertiesPanel();
       expect(component.detailsPanelToggleLabelKey()).toBe('document-detail.hide-details');
+    });
+
+    it('shows an external share recipient the ancestor folders as text, not links', async () => {
+      currentUsername = 'transient/recipient@example.invalid';
+      try {
+        await build(doc({ path: '/default-domain/workspaces/ws/report', title: 'Report' }));
+
+        expect(component.breadcrumbItems()).toEqual([
+          { label: 'default-domain' },
+          { label: 'workspaces' },
+          { label: 'ws' },
+        ]);
+      } finally {
+        currentUsername = 'tester';
+      }
     });
 
     it('builds router links for every ancestor folder but not the document itself', async () => {

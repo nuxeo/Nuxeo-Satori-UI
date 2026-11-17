@@ -4,6 +4,7 @@ import {
   canPublishDocument,
   canRemoveDocument,
   canWriteDocument,
+  mediaTypeEssence,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -72,6 +73,21 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
     const facets = context.document?.facets ?? [];
     return stringParameters(parameters).some((facet) => facets.includes(facet));
   },
+  /** Match the main blob's MIME essence exactly or by a family such as `image/*`. */
+  'app.rules.hasMimeType': (context, parameters) => {
+    const content = context.document?.properties?.['file:content'];
+    if (typeof content !== 'object' || content === null || Array.isArray(content)) return false;
+    const value = (content as Record<string, unknown>)['mime-type'];
+    if (typeof value !== 'string') return false;
+    const mime = mediaTypeEssence(value);
+    if (!mime.includes('/')) return false;
+    return stringParameters(parameters).some((parameter) => {
+      const pattern = mediaTypeEssence(parameter);
+      return pattern.endsWith('/*')
+        ? mime.startsWith(pattern.slice(0, -1))
+        : !pattern.includes('*') && mime === pattern;
+    });
+  },
   /**
    * The focused document holds a main file, `file:content` — what Download downloads. Nuxeo's
    * `Downloadable` facet is not a test for it: Picture holds a file and has no such facet.
@@ -91,6 +107,11 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
   'app.rules.hasSingleSelection': (context) => context.selectionCount === 1,
   'app.rules.hasMultipleSelection': (context) => context.selectionCount > 1,
   'app.rules.isAdministrator': (context) => context.user.isAdministrator,
+  /**
+   * An external share recipient: the `transient/` principal Nuxeo gives them. Hides navigation they
+   * cannot use. Presentation only; the server refuses those paths to them regardless.
+   */
+  'app.rules.isExternalUser': (context) => (context.user.username ?? '').startsWith('transient/'),
   /** Every selected document is writable — the bulk counterpart of `canWrite`. */
   'app.rules.canWriteSelection': (context) =>
     context.selection.length > 0 && context.selection.every(canWriteDocument),

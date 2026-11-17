@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatExpansionModule } from '@angular/material/expansion';
+import { SAT_ACCORDION_IMPORTS } from '@hylandsoftware/satori-ui/accordion';
 
 import {
   AdministrationService,
@@ -39,7 +39,7 @@ const DEFAULT_NXQL =
     MatTableModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatExpansionModule,
+    SAT_ACCORDION_IMPORTS,
   ],
   templateUrl: './admin-nxql-search-page.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,

@@ -107,7 +107,7 @@
   }
 
   <!-- Workflow info banner — one per running workflow -->
-  @for (wf of documentWorkflows(); track wf.id) {
+  @for (wf of visibleWorkflows(); track wf.id) {
     <sat-banner variant="warning" [border]="true">
       <sat-banner-message>{{
         'document-detail.workflow-started-on-document'
@@ -120,6 +120,14 @@
         (click)="abandonWorkflow(wf)"
       >
         {{ 'document-detail.document-detail.abandon' | translate }}
+      </button>
+      <button
+        mat-icon-button
+        satBannerDismissButton
+        type="button"
+        (click)="dismissWorkflowBanner(wf)"
+      >
+        <mat-icon aria-hidden="true" svgIcon="x_large" />
       </button>
     </sat-banner>
   }
@@ -170,6 +178,7 @@
           }}</mat-label>
           <mat-select
             [value]="selectedWorkflowModel()"
+            [placeholder]="'document-detail.document-detail.select-a-process' | translate"
             (selectionChange)="selectedWorkflowModel.set($event.value)"
           >
             @for (wf of availableWorkflows(); track wf.name) {
@@ -299,7 +308,7 @@
                 [mimeType]="mimeType()"
                 [fileName]="fileName()"
                 [fileSize]="fileSize()"
-                [loading]="viewerLoading()"
+                [loading]="preferARender() && arenderUrl() !== null ? loading() : viewerLoading()"
                 [noteContent]="noteContent()"
                 [noteHtml]="noteHtml()"
                 [videoSources]="videoSources()"
@@ -316,6 +325,7 @@
                 [arenderReloadId]="arenderReloadId()"
                 [viewerDocUid]="doc()?.uid ?? ''"
                 [annotationsTab]="false"
+                [preferARender]="preferARender()"
                 [showMainFileControls]="!!fileName() && canWriteDoc() && !isTrashed()"
                 [mainFileActionInProgress]="actionInProgress()"
                 (downloadClicked)="download()"

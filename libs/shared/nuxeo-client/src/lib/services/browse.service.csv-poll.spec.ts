@@ -70,6 +70,76 @@ describe('BrowseService.pollAndDownloadCsv', () => {
     expect(await (await pending).text()).toBe('done');
   });
 
+  // Nuxeo answers the status call with 200 and a `bulkStatus` message, not 202, while the job is
+  // scheduled or running. That message used to be saved as the CSV.
+  const bulkStatus = (state: string): string =>
+    JSON.stringify({
+      'entity-type': 'bulkStatus',
+      value: { 'entity-type': 'bulkStatus', commandId: 'cmd-1', state, processed: 0, total: 13 },
+    });
+
+  it.each(['SCHEDULED', 'RUNNING', 'SCROLLING_RUNNING'])(
+    'keeps polling when the status call answers 200 with a %s bulkStatus message',
+    async (state) => {
+      const pending = firstValueFrom(service.pollAndDownloadCsv(EXEC_ID));
+
+      await vi.advanceTimersByTimeAsync(1000);
+      httpMock.expectOne(STATUS_URL).flush(bulkStatus(state), { status: 200, statusText: 'OK' });
+
+      httpMock.expectNone(BLOB_PATH);
+      await vi.advanceTimersByTimeAsync(1500);
+      httpMock
+        .expectOne(STATUS_URL)
+        .flush(JSON.stringify({ url: BLOB_URL }), { status: 200, statusText: 'OK' });
+      httpMock.expectOne(BLOB_PATH).flush(new Blob(['uid,title\n1,A\n'], { type: 'text/csv' }));
+
+      const csv = await pending;
+      expect(await csv.text()).toBe('uid,title\n1,A\n');
+    },
+  );
+
+  it('reads the status of a bulkStatus message that is not wrapped in `value`', async () => {
+    const pending = firstValueFrom(service.pollAndDownloadCsv(EXEC_ID));
+    await vi.advanceTimersByTimeAsync(1000);
+    httpMock
+      .expectOne(STATUS_URL)
+      .flush(JSON.stringify({ 'entity-type': 'bulkStatus', state: 'RUNNING' }), {
+        status: 200,
+        statusText: 'OK',
+      });
+
+    await vi.advanceTimersByTimeAsync(1500);
+    httpMock
+      .expectOne(STATUS_URL)
+      .flush(JSON.stringify({ url: BLOB_URL }), { status: 200, statusText: 'OK' });
+    httpMock.expectOne(BLOB_PATH).flush(new Blob(['done'], { type: 'text/csv' }));
+
+    expect(await (await pending).text()).toBe('done');
+  });
+
+  it('fetches the result when a 200 bulkStatus message says COMPLETED', async () => {
+    const pending = firstValueFrom(service.pollAndDownloadCsv(EXEC_ID));
+    await vi.advanceTimersByTimeAsync(1000);
+    httpMock
+      .expectOne(STATUS_URL)
+      .flush(bulkStatus('COMPLETED'), { status: 200, statusText: 'OK' });
+
+    httpMock.expectOne(RESULT_URL).flush({ url: BLOB_URL });
+    httpMock.expectOne(BLOB_PATH).flush(new Blob(['finished'], { type: 'text/csv' }));
+
+    expect(await (await pending).text()).toBe('finished');
+  });
+
+  it('fails instead of saving a file when the job is ABORTED', async () => {
+    const pending = firstValueFrom(service.pollAndDownloadCsv(EXEC_ID));
+    await vi.advanceTimersByTimeAsync(1000);
+    httpMock.expectOne(STATUS_URL).flush(bulkStatus('ABORTED'), { status: 200, statusText: 'OK' });
+
+    httpMock.expectNone(RESULT_URL);
+    httpMock.expectNone(BLOB_PATH);
+    await expect(pending).rejects.toThrow('aborted');
+  });
+
   it('treats a non-JSON 200 body as the CSV itself', async () => {
     const pending = firstValueFrom(service.pollAndDownloadCsv(EXEC_ID));
     await vi.advanceTimersByTimeAsync(1000);
