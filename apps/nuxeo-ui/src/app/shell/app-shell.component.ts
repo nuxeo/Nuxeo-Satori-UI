@@ -60,7 +60,7 @@ import { SessionTimeoutService } from '../auth/session-timeout.service';
 import { BrandLogoFallbackDirective } from '../config/brand-logo-fallback.directive';
 import { AppNavItem, SETTINGS_DRAWER_ITEMS, toAppNavItem } from '../platform-nav-items';
 import { ThemingFeatureFlagService } from '../theme/theming-feature-flag.service';
-import { drawerItemForPath } from './drawer-route-match';
+import { drawerToOpenForRoute } from './drawer-route-match';
 import { NavDrawerComponent } from './nav-drawer/nav-drawer.component';
 import { PresetBadgeComponent } from './preset-badge/preset-badge.component';
 import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
@@ -440,24 +440,30 @@ export class AppShellComponent implements OnDestroy {
   }
 
   /**
-   * Open the drawer belonging to the route being shown, if it has one.
+   * Open the drawer belonging to the route being shown, if it has one and none is open.
    *
    * Driven from the route rather than from the nav click, so a deep link and a browser
    * back both arrive with the tree already open — which is how the section is meant to
    * look, and previously only happened if the user clicked the nav item themselves.
+   *
+   * It never replaces a drawer that is already open (see `drawerToOpenForRoute`): following a
+   * document's breadcrumb into Browse from Favorites, Clipboard or any other drawer used to swap
+   * that drawer for the Browse tree.
    */
   private syncDrawerToRoute(currentPath: string): void {
-    const matchingItem = drawerItemForPath(this.navItems(), currentPath);
-
-    // Re-setting the same item would reopen a drawer the user has just closed, so a
-    // navigation within one section leaves their choice alone.
-    if (matchingItem && this.activeDrawerItem()?.path !== matchingItem.path) {
-      this.activeDrawerItem.set(matchingItem);
+    const drawer = drawerToOpenForRoute(
+      this.navItems(),
+      currentPath,
+      this.activeDrawerItem(),
+      this.drawerOpen(),
+    );
+    if (drawer) {
+      this.activeDrawerItem.set(drawer);
       this.drawerOpen.set(true);
     }
 
-    // Navigating away deliberately does not close it: the drawer is the browse tree, and
-    // opening a document from it would otherwise dismiss the tree the user is working in.
+    // Navigating away deliberately does not close it: the drawer is the list or tree the user
+    // is working in, and opening a document from it would otherwise dismiss it.
   }
 
   toggleSettingsDrawer(): void {
