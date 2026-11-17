@@ -2932,6 +2932,7 @@
       "open-with-nuxeo-drive": "Open with Nuxeo Drive",
       "pdf-frame": "PDF preview of {{ name }}",
       "picture-info": "Picture Info",
+      "picture-metadata-region": "Picture metadata",
       "preview": "Preview",
       "preview-frame": "Preview of {{ name }}",
       "preview-not-available": "Preview not available",
@@ -2945,6 +2946,7 @@
       "use-the-view-tab-for-the": "Use the View tab for the standard preview.",
       "video-codec": "Video Codec",
       "video-info": "Video Info",
+      "video-metadata-region": "Video metadata",
       "weight": "Weight",
       "zoom-in": "Zoom in",
       "zoom-out": "Zoom out"

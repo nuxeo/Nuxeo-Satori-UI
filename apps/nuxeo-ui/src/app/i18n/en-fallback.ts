@@ -437,6 +437,8 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'satori-components.search-filters.chosen-collections': 'Chosen collections',
   'satori-components.search-filters.chosen-tags': 'Chosen tags',
   'satori-components.search-filters.clear-fulltext': 'Clear full text',
+  'shared-ui.document-viewer.picture-metadata-region': 'Picture metadata',
+  'shared-ui.document-viewer.video-metadata-region': 'Video metadata',
   'satori-components.search-filters.collections-placeholder': 'Select a value.',
   'satori-components.search-filters.fulltext-placeholder': 'Search for something...',
   'satori-components.search-filters.remove': 'Remove {{ value }}',
