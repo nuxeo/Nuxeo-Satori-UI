@@ -101,7 +101,9 @@ Thanks too for the kind words about the registered IDs, the API snapshot, the fo
 
 ## Prototype: work in progress for GA
 
-We have an interactive prototype of some changes we are planning for the GA release, the Nuxeo Workspace Prototype. We're sharing its link with you directly rather than putting it here, because this page is public.
+Below is an interactive prototype of some changes we are planning for the GA release:
+
+[Nuxeo Workspace Prototype](https://claude.ai/artifact/G6JrRe2PgHvA3ETLTVJzVS?sk=dMCRJmfEjv6KXFEuSot_ZA)
 
 The navigation and search will be almost the same as in the prototype. We are still discussing the other parts and features. It is still a prototype, and we welcome your feedback on any part of it, including the design, the layout and the features.
 
