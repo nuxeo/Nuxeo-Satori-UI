@@ -25,7 +25,7 @@ Thanks for the feedback. It came from a few different places, so I've put it all
 **3. Static files in `nuxeo.war` and `nuxeo sync` instead of the servlet**
 
 - We kept the servlet on purpose. With static files, your config and ours would be the same file, so one package would overwrite the other. Editing that file on the server is also what broke Marketplace upgrades.
-- For quick changes there's now a dev mode. Set `nuxeo.agentic.ui.config.dev=true` and the server reads your files again on every request. You edit a file and reload the page, without rebuilding or restarting.
+- For quick changes there's now a dev mode. Set `nuxeo.agentic.ui.config.dev=true` in `nuxeo.conf` and restart Nuxeo once. After that, the server reads your files from its dev folder on every request: `agentic-ui-config-dev` in the Nuxeo data directory, or the folder you set in `nuxeo.agentic.ui.config.dev.dir`. You edit a file and reload the page, without rebuilding or restarting.
 - `nuxeo sync` works with that folder on a local install. In Docker it doesn't, because there it always writes to Web UI's folder. The extension reference has a small `docker cp` script for that case.
 - About the prompts: the two branding prompts in nuxeo-agentic-ui-prompts still copy `bootstrap.json` into `nxserver/nuxeo.war/agentic-ui-config/`, and they read a file that no longer exists. The servlet owns that path now and ignores files on disk there, so the branding never shows up. I think that's behind a lot of the "overkill" feeling, and the agents getting confused.
 
@@ -70,7 +70,7 @@ Thanks for the feedback. It came from a few different places, so I've put it all
 **11. All the permission levels, not just three**
 
 - Done. The old Browse page that only had Read, ReadWrite and Everything is gone, and its links now open `/browse`.
-- The Permissions tab on a document and on `/browse` now offers the full list: what the server suggests for that type, the standard ones (Write, Remove, WriteSecurity, Unlock and so on), and any others the server has.
+- The Permissions tab on a document and on `/browse` now offers the full list: what the server suggests for that type, the standard ones (Write, Remove, WriteSecurity, Unlock and so on), and any other permission the server reports. Nuxeo only reports the permissions you hold yourself, so you see all the custom ones only if you have Everything.
 - Collections show the server's list for the type, like Web UI does.
 
 **12. Moving existing Studio customisations to Satori**
