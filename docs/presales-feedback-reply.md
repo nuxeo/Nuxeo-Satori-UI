@@ -40,8 +40,8 @@ Thanks for the feedback. It came from a few different places, so I've put it all
 
 - Mostly done. The `app.rules.isType` and `app.rules.hasFacet` rules let you show or hide actions and tabs by type or facet.
 - A layout file in your package decides which properties each type shows. Without one, we show the fields from the type's schemas.
-- This works for folder types like a Case folder too.
-- Not yet: editing a type's own fields. The Properties panel is read-only, and the edit form is the same for every type. A custom view or form for one type needs code, and that's blocked by point 7.
+- Editing works too. The Edit and Create dialogs show the type's own fields, from its schemas or from an edit or create layout in your package. The Properties panel itself is read-only.
+- Two things don't work yet. Folder types like a Case folder open in Browse, so you never see their Properties panel. And a fully custom view or form for one type needs code, which is blocked by point 7.
 
 **7. Building a real app on our components**
 
@@ -50,8 +50,8 @@ Thanks for the feedback. It came from a few different places, so I've put it all
 
 **8. Making the "what configuration can't do" list configurable**
 
-- Partly done. The logo, the favicon, type and facet rules, and per-type layouts are all configuration now.
-- These still need code, or aren't possible yet: the rail mark, editing a type's own fields, your own rule conditions (like "the user is in the legal team"), new screens or buttons, and installing from a public registry.
+- Partly done. The logo, the favicon, type and facet rules, and per-type layouts (including the Edit and Create forms) are all configuration now.
+- These still need code, or aren't possible yet: the rail mark, your own rule conditions (like "the user is in the legal team"), new screens or buttons, and installing from a public registry.
 
 **9. Using the Nuxeo JS client instead of our own**
 
