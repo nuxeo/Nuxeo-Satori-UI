@@ -801,6 +801,41 @@ describe('the generated build.mjs', () => {
       return build();
     };
 
+    const manifestAsset = async (headers: number) => {
+      await generate();
+      const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+      const original = readFileSync(join(dir, manifestPath), 'utf8');
+      // Each valid header needs both a continuation and CRLF normalization when packaged.
+      const source =
+        original.trimEnd() +
+        '\n' +
+        Array.from(
+          { length: headers },
+          (_, index) => 'X-Padding-' + index + ': ' + 'a'.repeat(100) + '\n',
+        ).join('');
+      expect(Buffer.byteLength(source)).toBeLessThanOrEqual(2 * 1024 * 1024);
+      write(manifestPath, source);
+      contribute('<asset name="manifest.svg" src="META-INF/MANIFEST.MF" />');
+      return { ...build(), source };
+    };
+
+    it('rejects a manifest asset that normalization enlarges over the server limit', async () => {
+      const { status, output, zip } = await manifestAsset(17500);
+      expect(status).toBe(1);
+      expect(output).toMatch(
+        /MANIFEST\.MF: packaged as \d+ bytes; the server refuses an asset over 2097152/,
+      );
+      expect(zip).toBeUndefined();
+    });
+
+    it('accepts a normalized manifest asset that stays under the server limit', async () => {
+      const { status, zip, source } = await manifestAsset(17000);
+      expect(status).toBe(0);
+      const jar = unzip(unzip(zip as Buffer).get('install/bundles/acme-config.jar') as Buffer);
+      const packaged = jar.get('META-INF/MANIFEST.MF') as Buffer;
+      expect(packaged.length).toBeGreaterThan(Buffer.byteLength(source));
+      expect(packaged.length).toBeLessThanOrEqual(2 * 1024 * 1024);
+    });
     it('is accepted as a plain image file name', async () => {
       expect((await withAsset('acme-logo.svg', 100)).status).toBe(0);
     });

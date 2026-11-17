@@ -782,6 +782,8 @@ if (componentPaths.length === 0) problem(manifestFile, 'needs a Nuxeo-Component 
 
 /** Fragment and layout bodies named by `src`: JSON whatever the file is called. */
 const jsonBodies = new Set();
+/** Enabled asset sources, checked again after any packaging transform. */
+const assetBodies = new Set();
 
 for (const componentPath of componentPaths) {
   const componentFile = resolve(BUNDLE, componentPath);
@@ -870,6 +872,7 @@ for (const componentPath of componentPaths) {
       jsonBodies.add(target);
       continue;
     }
+    assetBodies.add(target);
     const size = statSync(target).size;
     if (size > MAX_ASSET_BYTES) {
       problem(target, `${size} bytes; the server refuses an asset over ${MAX_ASSET_BYTES}`);
@@ -889,6 +892,12 @@ for (const file of bundleIsLink || !existsSync(BUNDLE) ? [] : filesUnder(BUNDLE)
       : name === MANIFEST_ENTRY
         ? packageManifest(manifest)
         : readFileSync(file);
+  if (data && assetBodies.has(file) && data.length > MAX_ASSET_BYTES) {
+    problem(
+      file,
+      `packaged as ${data.length} bytes; the server refuses an asset over ${MAX_ASSET_BYTES}`,
+    );
+  }
   if (data) entries.push({ name, data });
 }
 
