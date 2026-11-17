@@ -55,7 +55,7 @@ Thanks for the feedback. It came from a few different places, so I've put it all
 **8. Making the "what configuration can't do" list configurable**
 
 - Partly done. The logo, the favicon, type and facet rules, and per-type layouts (including the Edit and Create forms) are all configuration now.
-- These still need code, or aren't possible yet: the rail mark, your own rule conditions (like "the user is in the legal team"), new screens or buttons, and installing from a public registry.
+- These still need code, or aren't possible yet: the rail mark, your own rule conditions (like "the user is in the legal team"), new screens, buttons that do something new (configuration can only place a button for an action that already exists in the code), and installing from a public registry.
 
 **9. Using the Nuxeo JS client instead of our own**
 
