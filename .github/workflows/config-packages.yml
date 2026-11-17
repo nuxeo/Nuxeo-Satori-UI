@@ -122,6 +122,23 @@ jobs:
           node config-packages/acme-config/build.mjs
           node "$repo/scripts/verify-package-zip.mjs" \
             config-packages/acme-config/dist/acme-config-1.0.0.zip
+          # Documentation examples are not active contributions. Check the generated builder
+          # and artifact verifier agree even when an example names a file that is not packaged.
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const file = 'config-packages/acme-config/bundle/OSGI-INF/acme-config-config.xml';
+          const examples = '<documentation><code>' +
+            '<fragment name="example" layer="manifest" src="examples/missing.json" />' +
+            '<fragment name="inline-example" layer="manifest"><json>{}</json></fragment>' +
+            '<layout type="Contract" mode="view" src="examples/missing-layout.json" />' +
+            '<asset name="example.svg" src="examples/missing.svg" />' +
+            '</code></documentation>';
+          const docs = examples + '<extension-point name="examples">' + examples + '</extension-point>';
+          writeFileSync(file, readFileSync(file, 'utf8').replace('<require>', docs + '<require>'));
+          NODE
+          node config-packages/acme-config/build.mjs
+          node "$repo/scripts/verify-package-zip.mjs" \
+            config-packages/acme-config/dist/acme-config-1.0.0.zip
           cd "$repo"
           rm -rf "$scratch"
 
