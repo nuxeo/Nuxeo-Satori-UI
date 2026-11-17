@@ -671,6 +671,84 @@ describe('the generated build.mjs', () => {
     expect(output).toMatch(/must <require>org\.nuxeo\.agentic\.ui\.config\.defaults<\/require>/);
   });
 
+  it.each(['component', 'extension-point'])(
+    'ignores real XML examples in %s documentation',
+    async (location) => {
+      await generate();
+      const examples =
+        '<documentation><code>' +
+        '<require>example.defaults</require>' +
+        '<extension target="org.nuxeo.agentic.ui.config" point="configuration">' +
+        '<fragment name="example" layer="manifest"><json>{"labels":{}}</json></fragment>' +
+        '<fragment name="example-src" layer="bootstrap" src="examples/missing.json" />' +
+        '<layout type="Contract" mode="view" src="examples/missing-layout.json" />' +
+        '<asset name="example.svg" src="examples/missing.svg" />' +
+        '</extension>' +
+        '</code></documentation>';
+      const documentation =
+        location === 'component'
+          ? examples
+          : '<extension-point name="configuration">' + examples + '</extension-point>';
+      const xml = readFileSync(join(dir, componentXml), 'utf8');
+      write(componentXml, xml.replace('<require>', documentation + '<require>'));
+      expect(build().status).toBe(0);
+    },
+  );
+
+  it('ignores documented extensions without inventing an active dependency', async () => {
+    await generate();
+    write(
+      componentXml,
+      '<component name="acme.config.acme-config"><documentation><code>' +
+        '<extension target="org.nuxeo.agentic.ui.config" point="configuration">' +
+        '<fragment name="example" layer="manifest" src="examples/missing.json" />' +
+        '</extension></code></documentation></component>',
+    );
+    expect(build().status).toBe(0);
+  });
+
+  it('keeps extraction offsets after documentation containing CDATA and nested markup', async () => {
+    await generate();
+    const xml = readFileSync(join(dir, componentXml), 'utf8');
+    write(
+      componentXml,
+      xml.replace(
+        '<require>',
+        '<documentation><code title=">">' +
+          '<![CDATA[</documentation><require>not active</require>]]>' +
+          '<documentation><json>not JSON</json></documentation>' +
+          '</code></documentation><documentation/><require>',
+      ),
+    );
+    contribute('<fragment name="active" layer="manifest"><json>{"labels":{}}</json></fragment>');
+    expect(build().status).toBe(0);
+  });
+
+  it('does not let documentation inside a descriptor hide nested JSON', async () => {
+    await generate();
+    contribute(
+      '<fragment name="wrapped" layer="manifest"><documentation><json>{}</json></documentation></fragment>',
+    );
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain('<json> must be a direct child');
+  });
+
+  it('does not count a documented require as an active dependency', async () => {
+    await generate();
+    const xml = readFileSync(join(dir, componentXml), 'utf8');
+    write(
+      componentXml,
+      xml.replace(
+        /<require>([^<]*)<\/require>/,
+        '<documentation><code><require>$1</require></code></documentation>',
+      ),
+    );
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toMatch(/must <require>org\.nuxeo\.agentic\.ui\.config\.defaults<\/require>/);
+  });
+
   it('refuses a nested require that the component loader does not read', async () => {
     await generate();
     const xml = readFileSync(join(dir, componentXml), 'utf8');

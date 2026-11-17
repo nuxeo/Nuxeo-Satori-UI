@@ -142,7 +142,9 @@ did not review; and a component missing the `<require>` that orders your fragmen
 The packaged JAR manifest is written without a UTF-8 BOM, with CRLF line endings and headers
 wrapped at 72 bytes, including continuation spaces. The source manifest is left unchanged.
 A `<require>` must be a direct child of `<component>`; inline `<json>` must be a direct child
-of its `<fragment>` or `<layout>` under `<component>/<extension>`. Nested elements are refused.
+of its `<fragment>` or `<layout>` under `<component>/<extension>`. Nested live configuration
+elements are refused. Examples in component or extension-point `<documentation>` are ignored
+when checking contributions.
 
 ## 5. Install it on the server
 
