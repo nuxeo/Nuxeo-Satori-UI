@@ -1,4 +1,4 @@
-# Satori UI: Status and Getting Started
+# Phase 1 improvements
 
 Hi all,
 
