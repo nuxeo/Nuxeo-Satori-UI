@@ -195,7 +195,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-193 exported symbol(s).
+196 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -1032,6 +1032,7 @@ interface NxsCreateVersionDialogData {
     }
 }
 type NxsCreateVersionDialogResult = NuxeoDocument | undefined;
+type NxsCsvCell = string | number | null | undefined;
 class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly label: import("@angular/core").InputSignal<string>;
     readonly min: import("@angular/core").InputSignal<Date | null>;
@@ -3529,7 +3530,9 @@ class TranslatedDatepickerIntl extends MatDatepickerIntl {
 }
 function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: string, params?: Record<string, unknown>) => string, locale: string): string;
 function nxsActionBarView(bar: NxsActionBarSource): NxsActionBarView;
+function nxsCsvText(rows: readonly (readonly NxsCsvCell[])[]): string;
 function nxsDocumentSuggestionQuery(term: string, types?: readonly string[]): string;
+function nxsDownloadCsv(filename: string, content: string | Blob, doc?: Document): void;
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsFormatTimecode(seconds: number): string;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;

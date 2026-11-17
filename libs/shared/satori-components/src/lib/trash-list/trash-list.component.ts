@@ -50,6 +50,7 @@ import {
   NxsConfirmDialogComponent,
   type NxsConfirmDialogData,
 } from '../confirm-dialog/confirm-dialog.component';
+import { nxsCsvText, nxsDownloadCsv } from '../csv-export/csv-export';
 import { type NxsMenuAction } from '../action-menu/action-menu.component';
 import {
   NxsDocumentListComponent,
@@ -530,24 +531,11 @@ export class NxsTrashListComponent {
   /** Writes the page on screen as CSV, with the columns shown, and downloads it. */
   protected exportCsv(): void {
     const columns = this.columns();
-    const quote = (value: string): string => `"${value.replaceAll('"', '""')}"`;
-    const lines = [
-      columns.map((column) => quote(column.label)).join(','),
-      ...this.documents().map((doc) =>
-        columns.map((column) => quote(this.cellText(doc, column.key))).join(','),
-      ),
+    const rows = [
+      columns.map((column) => column.label),
+      ...this.documents().map((doc) => columns.map((column) => this.cellText(doc, column.key))),
     ];
-    const url = URL.createObjectURL(
-      new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' }),
-    );
-    try {
-      const link = this.document.createElement('a');
-      link.href = url;
-      link.download = 'trash.csv';
-      link.click();
-    } finally {
-      URL.revokeObjectURL(url);
-    }
+    nxsDownloadCsv('trash.csv', nxsCsvText(rows), this.document);
   }
 
   protected cellText(doc: NuxeoDocument, key: string): string {

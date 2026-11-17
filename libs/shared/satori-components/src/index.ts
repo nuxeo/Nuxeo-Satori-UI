@@ -64,6 +64,7 @@ export {
   type NxsActionBarView,
 } from './lib/document-toolbar/action-bar-view';
 export { NxsDateInputComponent } from './lib/date-input/date-input.component';
+export { nxsCsvText, nxsDownloadCsv, type NxsCsvCell } from './lib/csv-export/csv-export';
 export { NxsDocTypeIconComponent } from './lib/doc-type-icon/doc-type-icon.component';
 export {
   NxsDocumentListComponent,
