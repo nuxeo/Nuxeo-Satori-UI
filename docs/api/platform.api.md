@@ -1044,6 +1044,7 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     protected readonly adapterMin: import("@angular/core").Signal<unknown>;
     protected readonly adapterMax: import("@angular/core").Signal<unknown>;
     protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly hasText: import("@angular/core").Signal<boolean>;
     protected readonly problem: import("@angular/core").Signal<"max" | "min" | "parse" | null>;
     protected readonly example: import("@angular/core").Signal<string>;
     protected readonly errorState: {
@@ -1061,6 +1062,7 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     protected formatted(date: unknown): string;
     protected typing(event: Event): void;
     protected changed(event: MatDatepickerInputEvent<unknown>): void;
+    protected clear(): void;
     protected blurred(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDateInputComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDateInputComponent, "nxs-date-input", never, {
