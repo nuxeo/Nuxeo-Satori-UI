@@ -9,3 +9,8 @@
  */
 
 export { nuxeoDocument, nuxeoAce } from './lib/nuxeo-fixtures';
+export {
+  iconCentringProblems,
+  ruleDeclarations,
+  withoutScssComments,
+} from './lib/stylesheet-rules';

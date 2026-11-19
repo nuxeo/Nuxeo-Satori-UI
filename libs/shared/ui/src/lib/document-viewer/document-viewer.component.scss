@@ -313,6 +313,13 @@
     width: 36px;
     height: 36px;
     line-height: 36px;
+    // NXSAT-809 — centre the icon. A Material icon button is 40px: 24px icon plus 8px padding on
+    // each side. Resized to 36px with the padding left in place and a 20px icon, the icon sat
+    // 4px low; centring it is correct at any size.
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
 
     mat-icon {
       font-size: 20px;
@@ -520,6 +527,11 @@
   width: 28px !important;
   height: 28px !important;
   line-height: 28px !important;
+  // NXSAT-809 — centre the icon (see `.viewer-toolbar button`).
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   flex-shrink: 0;
 
   mat-icon {
