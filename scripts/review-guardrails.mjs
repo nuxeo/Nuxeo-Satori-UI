@@ -4642,6 +4642,9 @@ function stringsOfArrayLiteral(node) {
 
 const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
 
+/** The locale manifest an upstream catalogue folder may ship beside its catalogues (DS-2803). */
+const VENDOR_LOCALES_MANIFEST = 'languages.json';
+
 /**
  * `UPSTREAM_FOLDERS` names exactly the languages the installed package actually ships.
  *
@@ -5001,7 +5004,13 @@ function checkUpstreamCatalogueLanguages() {
 
         // What this rule actually copies: the directory filtered by the glob, not every file
         // that happens to sit in it.
-        const files = readdirSync(absolute).filter((entry) => entry.endsWith('.json'));
+        // `languages.json` is not a catalogue: from `@hylandsoftware/satori-ui@1.0.0` (DS-2803) it
+        // is the vendor's manifest of the locales the folder ships, so counting it would demand
+        // that the loader request a language called "languages". Excluded by exact name only, so
+        // a real catalogue can never be skipped by it.
+        const files = readdirSync(absolute).filter(
+          (entry) => entry.endsWith('.json') && entry !== VENDOR_LOCALES_MANIFEST,
+        );
         for (const file of files) {
           if (globs.some((glob) => globCopies(glob, file))) {
             servedLangs.add(file.slice(0, -'.json'.length));

@@ -1,0 +1,194 @@
+# Satori `1.0.0-alpha.201` → `1.0.0` — migration plan
+
+**Status (2026-11-19):** bumped on `fix/satori-design-system-1-0-0-ebf667`, not yet merged.
+
+## Outcome
+
+- `satori-ui`, `satori-lint`, `satori-design-system-checker` and `satori-migrations` are pinned
+  to exactly `1.0.0`. `update-satori` rewrote them to `~1.0.0`; the exact pins were put back,
+  matching every earlier Satori pin in this repo.
+- Lockfile: npm install on Node 24, then an entry-by-entry diff against the pre-bump lock. Every
+  removed, added or changed entry sits under a Satori package, plus one new transitive dependency
+  (`@isaacs/nonrecursive-glob-match`) and `satori-illustrations` 0.5.0 → 0.6.1. No `@emnapi/*`
+  entry was pruned. The `lockfile` and `lockfile-selftest` gates pass.
+- `update-satori --from=1.0.0-alpha.201 --to=1.0.0`: 16 of 18 migrators found nothing.
+  `migrate-satori-ui-submodule-imports` reported an update to
+  `document-detail-slots.spec.ts`, but the only change was Prettier reflowing one line; the file
+  already imported from `satori-ui/providers`, so it was reverted. `migrate-satori-icons-to-assets`
+  warned about `document-detail` and `satori-components-satori` having no build target. Every
+  location it flagged is a spec, a story or the Storybook preview; the Satori Storybook already
+  serves the sprite, so nothing changed.
+- **One regression the schematics did not catch — fixed.** 1.0.0 dropped the bare-named catalogues
+  from `satori-ui/i18n` (`en.json`, `fr.json`, …) and ships only regional files (`en-US.json`, …)
+  plus `languages.json`, the DS-2803 locale manifest. The application's languages are bare
+  codes, so `AppTranslateLoader` would have requested no Satori catalogue in any language. Every
+  `sat.*` string would have been lost, including the platform-nav toggle's accessible name. The
+  `guardrails` gate (`checkUpstreamCatalogueLanguages`) caught it. Fix:
+  - `UPSTREAM_FOLDERS` lists the eight regional files 1.0.0 ships, and a new `aliases` map sends
+    each bare code to its regional file (`en` → `en-US`, `de` → `de-DE`, …). In alpha.171 each
+    bare file held the same strings as that region (`en.json` = `en-US.json`, all 54 keys;
+    `en-AU` differs in two).
+  - `review-guardrails.mjs` no longer counts `languages.json` as a catalogue (it is matched by
+    exact name only). Two selftest controls cover it: the manifest beside catalogues stays green,
+    and a loader that lists `languages` as a language still goes red.
+  - `app-translate-loader.spec.ts` asserts `fr` → `fr-FR.json`, `en` → `en-US.json` (not `en-AU`),
+    and that every alias points at a listed catalogue. Seen red on purpose: an `en` → `en-AU`
+    alias and a dangling `de` → `de` alias each failed their test.
+  - `shared-strings-at-startup.spec.ts` mocked the alpha folder (`en.json`, `fr.json`). Against
+    that mock the unfixed loader would have passed while broken in the real app. The mock now
+    serves only the 1.0.0 file names and 404s the bare ones. With `aliases` removed, the
+    rendered-label tests fail (English and French lose the platform-nav accessible name), 9 of
+    the 30 i18n specs in all.
+  - The `bundle` gate's required file and the Phase 6 a11y step both checked
+    `assets/satori-ui/i18n/en.json`. They now check `en-US.json`, the file the loader fetches for
+    English. The bundle gate had gone red on the missing `en.json` before this change.
+- **Real-app check** (`nx serve nuxeo-ui` against local Nuxeo, 2026-11-20):
+  - `en` requests `assets/satori-ui/i18n/en-US.json` (200); the nav reads "Expand navigation" /
+    "Collapse navigation".
+  - `fr` requests `fr-FR.json` (200); the nav reads "Développer la navigation".
+  - `ja` makes no Satori request and falls back to English, the same behaviour as before the bump.
+  - No raw `sat.*` keys and no buttons without an accessible name. All 10 shell icons rendered.
+    The served sprite holds 493 icons.
+  - The only failed requests are `agentic-ui-config/bootstrap.json` and `manifest.json`, which
+    are absent on a plain dev server.
+- **Adoption score: 99.69 → 89.61, caused by the checker, not by our code.** The alpha.171
+  checker scores the same tree 99.61. Checker 1.0.0 counts CIC Nav use in the design-language
+  KPI, and we do not use CIC Nav. Details and the excusal route are in
+  `docs/satori-adoption-dashboard.md`.
+- **Not done:** the `code-scanning` gate needs CodeQL to analyse a pushed branch. All other 40
+  gates pass locally. The Satori 1.0.0 release announcement is
+  dated 17 Nov 2026.
+
+This plan covers what the 1.0.0 release changes, what each change means for this repo, and the
+order of work. Every "impact" row below comes from a search of this branch, not from the release
+notes alone. Where a row says **verify**, the search could not settle it without the 1.0.0
+packages installed.
+
+Sources: the 1.0.0 release announcement (summary, breaking-change list, changelog), the
+`satori-migrations` collection and READMEs (read from the `1.0.0-alpha.171` copy in the main
+checkout's `node_modules`; the worktree has no install), and the
+[1.0.0 migration guide in Storybook](https://storybook.supernova.io/design-systems/375663/alias/storybook/index.html?path=/docs/misc-migration-1-0-0--overview).
+
+## Where we start
+
+| Package                                        | Today (`package.json`) | Target                        |
+| ---------------------------------------------- | ---------------------- | ----------------------------- |
+| `@hylandsoftware/satori-ui`                    | `1.0.0-alpha.201`      | `1.0.0`                       |
+| `@hylandsoftware/satori-lint`                  | `1.0.0-alpha.201`      | `1.0.0` (lockstep)            |
+| `@hylandsoftware/satori-design-system-checker` | `1.0.0-alpha.201`      | `1.0.0` (lockstep)            |
+| `@hylandsoftware/satori-migrations`            | `1.0.0-alpha.201`      | `1.0.0` (lockstep)            |
+| `@hylandsoftware/satori-icons`                 | `^4.0.0`               | `^4.0.0` (unchanged)          |
+| `@ngx-translate/core`                          | `18.0.0`               | `^18` (already met — DS-2197) |
+| Angular                                        | `~22.2.x`              | `>=22 <23` (met)              |
+
+`satori-icons`, `satori-illustrations`, `satori-tokens` and `satori-fonts` are **not** on the
+lockstep train (`update-satori/registry.js`), so `update-satori` will not bump them. Bump them by
+hand to the version `satori-ui@1.0.0` peers.
+
+The last two upgrades show what this kind of work involves: `76326b339` (alpha.175) and `1a9bd4572`
+(alpha.201). In alpha.201 the icon sprite became a startup asset, `@emnapi/runtime` had to be
+restored in the lockfile, and the Material expansion panel was replaced with `sat-accordion`.
+
+## Blockers — resolved 2026-11-19 from the `v1.0.0` tag of `HylandSoftware/satori`
+
+1. **Registry — stays on GitHub Packages.** Satori's `publish-stable.yml` publishes every stable
+   release to both Cloudsmith (`npm.artifacts.hyland.dev/cic-unified-shared-libs/`) and
+   `npm.pkg.github.com`. The `v1.0.0` GitHub release (17 Nov) is created by that same workflow
+   after the publish job. Our `.npmrc` does not need to change, so DS-2770 does not affect us.
+2. **Peer ranges — all met.** `packages/satori-ui/package.json` at `v1.0.0` peers
+   `@angular/* >=22.0.0 <23.0.0`, `@ngx-translate/core ^18.0.0`, `rxjs ^7.8.0`, `sass ^1.85.0`. It
+   depends on `satori-icons ^4.0.0`, `satori-tokens ^0.6.0`, `satori-fonts ^3.0.0` and
+   `satori-illustrations ^0.6.1`, so the companion packages need no bump either.
+3. **Migrator list — 18 tagged `1.0.0`.** That is the 17 listed below plus
+   `migrate-satori-icons-to-assets` (DS-2829). 1.0.0 stops bundling icons into the JavaScript and
+   downloads `satori-icons/satori-icons.svg` at startup. `angular.json` already serves that asset
+   (added in `1a9bd4572`), so the migrator should make no change. `SatoriConfig.icons` is now an
+   object, but we call `provideSatori()` with no arguments.
+4. **NgModules — still exported.** `SatPlatformNavModule`, `SatAppHeaderModule`,
+   `SatAvatarModule`, `SatLogoModule` and `SatTagModule` are all in their `public-api.ts` at
+   `v1.0.0`.
+
+**Still open:** installing. `SATORI_GH_READONLY_TOKEN` is rejected by GitHub itself (401 on
+`/user`), so it has expired or been revoked. The lockfile cannot be regenerated until it is
+replaced with a token that has `read:packages`.
+
+## Breaking changes → impact here
+
+Key: **none** = the search found nothing to change; **verify** = check after install;
+**manual** = a code change the schematics will not make.
+
+| Change                                                                                                                             | Migrator                                                     | Impact here                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DS-2402 remove `satori-preview`                                                                                                    | `migrate-preview-to-satori-ui`                               | **none** — no `satori-preview` import, asset or dependency                                                                                                                                                                                                                                                                                           |
+| DS-2395/2681/2390/2399/2394/2392/2387/2385/2393/2389/2397 — components moved into `satori-ui`                                      | `migrate-preview-to-satori-ui`                               | **none** — we already import `satori-ui/platform-nav`, `header-bar`, `upload-field`, `navigation-tabs`, `banner`, `action-bar`, `interactive-card`, `empty-state`, `ghost`                                                                                                                                                                           |
+| DS-2371 remove `satori-cic` re-exports; DS-2769 CIC Nav environment ID mandatory                                                   | —                                                            | **none** — `satori-cic` / CIC Nav not used                                                                                                                                                                                                                                                                                                           |
+| DS-2405 remove deprecated barrel re-exports                                                                                        | `migrate-satori-ui-submodule-imports`                        | **none** — every import is a submodule path; no bare `@hylandsoftware/satori-ui` import                                                                                                                                                                                                                                                              |
+| DS-2107 non-prefixed export names                                                                                                  | `migrate-non-standardized-export-names`                      | **none expected** — we already use `provideAndConfigureSatoriTranslations`; no `RichTooltip*` unprefixed types found                                                                                                                                                                                                                                 |
+| DS-1850 suffixed class names (`Sat*Component`)                                                                                     | `migrate-suffixed-class-names`                               | **none** — no `Sat*Component`/`Sat*Directive` imports                                                                                                                                                                                                                                                                                                |
+| NgModules still in use: `SatPlatformNavModule` (29 refs), `SatAppHeaderModule`, `SatAvatarModule`, `SatLogoModule`, `SatTagModule` | `migrate-deprecated-ngmodules` (exists; release tag unknown) | **none** — still exported at `v1.0.0` (see blockers)                                                                                                                                                                                                                                                                                                 |
+| DS-1505 deprecated icon names (`AI`, `Nuxeo`, `regenerate_ai`, `record_audio`, …)                                                  | `migrate-deprecated-satori-icons`                            | **none static**. The migrator skips dynamic `[svgIcon]="expr"`, so manifest- and map-driven icon names (`docTypeIcon`, Layer 0/1 manifests, extension descriptors) need a manual check. No capitalised icon names were found in `.ts`/`.json`, but customer manifests can supply any name: **document** the renames in `docs/extension-reference.md` |
+| DS-1353 remove `SatIconModule`                                                                                                     | `remove-icons-module`                                        | **none** — `provideSatori()` already in `app.config.ts`                                                                                                                                                                                                                                                                                              |
+| DS-2829 smaller initial icon bundle                                                                                                | `migrate-satori-icons-to-assets`                             | **none expected** — the sprite asset already sits in both `angular.json` configurations and in `satori-components-satori/.storybook/main.ts`. Icons still need a real browser check: a missing sprite renders blank, with no error.                                                                                                                  |
+| DS-2366 rename Avatar statuses                                                                                                     | `migrate-avatar-indicator-status`                            | **none** — no `status` binding on `sat-avatar`                                                                                                                                                                                                                                                                                                       |
+| DS-822 platform-nav avatar content projection removed                                                                              | `migrate-avatar-projection`                                  | **none for nav items** (already `<sat-platform-nav-avatar [item]>`). **Verify** the user profile button in `app-shell.component.html:36-41`, which projects a `<sat-avatar>`. The migrator handles only initials, a lone `img` or a lone `mat-icon`.                                                                                                 |
+| DS-821 legacy App Header selectors                                                                                                 | `migrate-app-header-selectors`                               | **none** — `sat-app-header` already                                                                                                                                                                                                                                                                                                                  |
+| DS-915 Rich Tooltip inputs removed, `(close)` → `(closed)`                                                                         | `migrate-rich-tooltip-inputs`                                | **none** — wrapper template uses none of them                                                                                                                                                                                                                                                                                                        |
+| DS-1638 Banner `orientation`; DS-1648 Upload Field `<svg>`; DS-1480 `satHideIcon`                                                  | respective migrators                                         | **none** found                                                                                                                                                                                                                                                                                                                                       |
+| DS-1108 styling overrides removed                                                                                                  | `migrate-deprecated-override-tokens`                         | **verify** — search SCSS for `sat-avatar-overrides`, `sat-breadcrumbs-overrides`, `sat-app-header-overrides`                                                                                                                                                                                                                                         |
+| DS-885 language config `default` → `fallbackLang`                                                                                  | `migrate-language-config-default`                            | **verify** — config in `provide-nxs-satori-components.ts`                                                                                                                                                                                                                                                                                            |
+| DS-2803 supported languages manifest                                                                                               | —                                                            | **manual — done** — 1.0.0 dropped the bare-named catalogues; see Outcome. Reading `languages.json` at runtime instead of declaring the list is a possible follow-up, not needed for the bump.                                                                                                                                                        |
+| DS-2197 ngx-translate 18                                                                                                           | companion bump                                               | **done** (`18.0.0`)                                                                                                                                                                                                                                                                                                                                  |
+| DS-2373 `sdsp` removed                                                                                                             | —                                                            | **none** — scripts use `sdsc`                                                                                                                                                                                                                                                                                                                        |
+| satori-lint rules scoped to `**/*.html`                                                                                            | `migrate-satori-lint-eslint-config`                          | **none** — `eslint.config.mjs` already scopes to `**/*.html`                                                                                                                                                                                                                                                                                         |
+
+Figma-only changes (Card slots, Expansion Panel and Toolbar removed, Chip variants pruned) need no
+code changes. Design files that still use those components need a separate design pass.
+
+## Steps
+
+1. **Unblock** — resolve the three blockers above. Record the registry decision in
+   `docs/adf-hx-beta-plan.md` if it changes.
+2. **Branch + bump** — set the four lockstep packages to `1.0.0` and bump `satori-icons` (and
+   `satori-tokens`/`fonts`/`illustrations` if `satori-ui@1.0.0` peers new majors). Regenerate the
+   lock **without a bare `npm install` commit**: start from the known-good lock, merge in the new
+   entries, and restore the macOS-pruned optional entries (`@emnapi/runtime` last time). Then run
+   `npm run beta:gate -- --gates lockfile`.
+3. **Run the schematics — dry run first:**
+   `npx nx g @hylandsoftware/satori-migrations:update-satori --from=1.0.0-alpha.201 --to=1.0.0 --dry-run`.
+   Expect almost no file changes. Review every changed file, because
+   `migrate-non-standardized-export-names` does a word-boundary rewrite across the whole file,
+   including comments and strings.
+4. **Manual fixes** — every **verify** or **manual** row above: NgModules, the icon sprite path,
+   the profile-button avatar, SCSS overrides, language config, the i18n asset glob.
+5. **Gate** — `npm run beta:gate` (all gates). `test` does not typecheck, so `build` and
+   `typecheck` are the ones that catch a removed export.
+6. **Real-app check** — `nx serve nuxeo-ui` against local Nuxeo, then check: the platform nav
+   (expand/collapse, avatars, clipboard badge), the header bar and mobile trigger, a sample of
+   icons (static and manifest-driven), the banner, empty and error states, upload, breadcrumbs,
+   the rich tooltip, tabs, the NXQL accordion, an RTL language and a non-English catalogue. Run
+   both Storybooks. Capture evidence under `~/Desktop/agentic-ui-evidence/` with real reloads.
+7. **Prove the icon check can fail** — point the sprite glob at a wrong path, watch the icon
+   assertion go red, then restore it (CLAUDE.md: a gate is not evidence until it has failed on
+   purpose).
+8. **Docs** — update the versions in `docs/satori-adoption-dashboard.md` and the deprecated-icon
+   renames in `docs/extension-reference.md`. Re-run `npm run satori:score`.
+9. **Independent adversarial review** before merge.
+
+Estimate: 1–2 days if 1.0.0 is on GitHub Packages and the NgModules survived; add time for the
+registry migration if it is Cloudsmith-only.
+
+## Adoption opportunities (separate tickets, not part of the bump)
+
+- **AI Disclosure tag** (DS-2854) — mark AI-generated content (AI chat answers, enrichment,
+  summaries). Probably the most valuable new component for this product.
+- **Important button** (DS-2382) — destructive actions: delete, permanent trash purge, remove
+  permission. Expose it as a variant on the `nxs-` wrapper, not as a direct `sat-` use.
+- **Tonal button / icon button** (DS-2731) — secondary emphasis in toolbars.
+- **Breadcrumb Title variant** (DS-1508) — the folder header and document detail title.
+- **Drag & drop** on list, card, dialog and table rows (DS-2359) — possible replacement for the
+  custom drag handling in the document list and dropzone.
+- **Accordion** — already adopted on the NXQL page; candidates elsewhere wherever
+  `mat-expansion-panel` remains.
+
+Each new component goes through the `nxs-` wrapper. If it is customer-facing, it also goes through
+Layer 0/1 (`add-extension-point` skill).

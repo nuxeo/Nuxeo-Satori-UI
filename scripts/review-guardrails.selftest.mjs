@@ -12489,6 +12489,36 @@ expectGreen(
   },
 );
 
+// satori-ui 1.0.0 (DS-2803) ships `languages.json`, a manifest of its locales, beside the
+// catalogues. Read as a catalogue it demanded a language called "languages", so the real 1.0.0
+// folder failed the gate with a correct loader. It must stay green with the manifest present.
+falsePositiveControls += 1;
+expectGreen(
+  'a vendor locales manifest beside the catalogues is not a language',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [`${VENDOR_I18N}/languages.json`]: '{ "locales": ["de", "en", "fr"] }\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+// And the exclusion must not turn into a blind spot: the manifest is skipped as a served file,
+// so a loader that requests it as a language is still a request for a catalogue nothing serves.
+expectRed(
+  'a loader listing the locales manifest as a language',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [`${VENDOR_I18N}/languages.json`]: '{ "locales": ["de", "en", "fr"] }\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr', 'languages'])),
+  },
+  null,
+  /lists languages in `languages`[\s\S]*build serves[\s\S]*no catalogue for it/,
+);
+
 // Round 4: a non-object entry, or one whose `path` is computed, was silently SKIPPED. The
 // loader iterates the real array and would request that folder, so its languages went unchecked
 // while the gate passed on the entries it could read. Each control pairs the malformed entry

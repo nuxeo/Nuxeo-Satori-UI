@@ -121,9 +121,11 @@ const REQUIRED_FILES = [
     fix: 'Check the asset glob for apps/nuxeo-ui/public in angular.json.',
   },
   {
-    path: 'assets/satori-ui/i18n/en.json',
+    // `en-US`, not `en`: satori-ui 1.0.0 ships regional catalogues only, and `aliases` in
+    // UPSTREAM_FOLDERS sends the app's `en` to this file.
+    path: 'assets/satori-ui/i18n/en-US.json',
     key: 'sat.platform-nav.expand',
-    why: "satori-ui's catalogue (UPSTREAM_FOLDERS in app-translate-loader.ts); the platform nav's expand button reads this key.",
+    why: "satori-ui's English catalogue, which AppTranslateLoader fetches for `en` (UPSTREAM_FOLDERS in app-translate-loader.ts); the platform nav's expand button reads this key.",
     fix: 'Check the asset glob for node_modules/@hylandsoftware/satori-ui/i18n in angular.json.',
   },
 ];
