@@ -128,6 +128,15 @@ const REQUIRED_FILES = [
     why: "satori-ui's English catalogue, which AppTranslateLoader fetches for `en` (UPSTREAM_FOLDERS in app-translate-loader.ts); the platform nav's expand button reads this key.",
     fix: 'Check the asset glob for node_modules/@hylandsoftware/satori-ui/i18n in angular.json.',
   },
+  {
+    // From satori-ui 1.0.0 (DS-2829) `provideSatori()` no longer bundles icons into the
+    // JavaScript: it downloads this sprite at startup. Without it every `<mat-icon svgIcon>`
+    // renders blank, which no test or compiler sees. `menu` is the app header's nav trigger.
+    path: 'satori-icons/satori-icons.svg',
+    contains: 'id="menu"',
+    why: "Satori's icon sprite, which provideSatori() fetches at startup; every svgIcon in the app, including the header's `menu` trigger, renders from it.",
+    fix: 'Check the asset glob for node_modules/@hylandsoftware/satori-icons in angular.json (output must be "satori-icons").',
+  },
 ];
 
 /** @type {{ pattern: string, file: string, count: number, why: string, fix: string }[]} */

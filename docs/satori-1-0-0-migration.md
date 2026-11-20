@@ -62,13 +62,44 @@ bump, kept for its reasoning; each part says how it turned out.
     The served sprite holds 493 icons.
   - The only failed requests are `agentic-ui-config/bootstrap.json` and `manifest.json`, which
     are absent on a plain dev server.
+  - Second pass, same day, at 1440×900: Browse (`sat-breadcrumbs`), Contracts (`sat-banner`),
+    Trash (`sat-header-bar`), Tasks, Favorites and Search, plus a document's detail page
+    (`sat-navigation-tabs`, `sat-breadcrumbs`). Clicking through the first five tabs moves the
+    active tab each time. On every page: no blank icon, no raw `sat.`/`nxs.` key, no visible
+    control without an accessible name.
+  - **RTL (`ar`):** `dir="rtl"`; the platform nav moves from the left edge to the right and the
+    main content to the left (screenshot checked). Strings fall back to English because neither
+    the app nor satori-ui ships Arabic, so `i18n/ar.json` 404s (the app's own catalogue, an
+    existing fallback) and no satori-ui file is requested.
+  - **Not covered:** the NXQL search page's `sat-accordion`. The browser session was the
+    `Anonymous` user, Administration redirects without admin rights, and the run did not sign in
+    as an administrator.
+- **The Satori Storybook had the same regression — fixed.** `.storybook/preview.ts` and
+  `primitives.satori.stories.ts` configured Satori's own loader with `en`, which requested
+  `i18n/@hylandsoftware/satori-ui/en.json` (404). Stories showed raw keys
+  (`sat.empty-state.server-error.description`, `sat.rich-tooltip.press-escape-to-close`). Both now
+  use `en-US`. Satori's loader asks for the exact code and falls back to the base language, so
+  the app catalogue path still loads `/i18n/en.json` after one expected `/i18n/en-US.json` 404.
+  Checked in the built Storybook: no raw keys, 13 Satori elements, 10 SVG icons, none blank. The
+  `satori-components` Storybook builds (446 entries) and does not use Satori's providers.
+- **The icon sprite is now a gate requirement, and it has been seen to fail.** No gate checked
+  `satori-icons/satori-icons.svg`, which 1.0.0 downloads at startup (DS-2829); a broken
+  `angular.json` glob would have shipped blank icons with every gate green. The `bundle` gate now
+  requires the sprite in the build and that it contains `id="menu"`, the header's nav trigger.
+  With the glob's `output` pointed at another folder it failed (`satori-icons/satori-icons.svg:
+absent`). Restored, it passes.
+- **Customer manifests:** the 24 icon names 1.0.0 removed are now listed in
+  `docs/extension-reference.md`. Descriptor `icon` values reach `[svgIcon]` at run time, which
+  the icon migrator cannot rewrite, so a stale name renders blank with no error.
+- **Evidence-harness run: not done.** `npm run beta:evidence` needs `NUXEO_USER`/`NUXEO_PASS`,
+  which this session did not have. The checks above were made in the preview browser, and their
+  results are recorded here instead of under `~/Desktop/agentic-ui-evidence/`.
 - **Adoption score: 99.69 → 89.61, caused by the checker, not by our code.** The alpha.171
   checker scores the same tree 99.61. Checker 1.0.0 counts CIC Nav use in the design-language
   KPI, and we do not use CIC Nav. Details and the excusal route are in
   `docs/satori-adoption-dashboard.md`.
-- **Not done:** the `code-scanning` gate needs CodeQL to analyse a pushed branch. All other 40
-  gates pass locally. The Satori 1.0.0 release announcement is
-  dated 17 Nov 2026.
+- **Gates:** all 40 local gates pass. `code-scanning` runs on the PR. (The Satori 1.0.0 release
+  announcement is dated 17 Nov 2026.)
 
 This plan covers what the 1.0.0 release changes, what each change means for this repo, and the
 order of work. Every "impact" row below comes from a search of this branch, not from the release
@@ -166,17 +197,17 @@ code changes. Design files that still use those components need a separate desig
 
 The plan as written before the bump. How each step turned out, as of 2026-11-20:
 
-| Step                         | Status                                                                                                                                                                                                               |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 Unblock                    | Done — see Blockers                                                                                                                                                                                                  |
-| 2 Branch + bump              | Done — see Outcome. No companion-package bump was needed                                                                                                                                                             |
-| 3 Schematics                 | Done — dry run, then real run; one formatting-only change reverted                                                                                                                                                   |
-| 4 Manual fixes               | Done — the translation-catalogue mapping (DS-2803) was the only one                                                                                                                                                  |
-| 5 Gate                       | Done locally — 40 of 41 gates pass; `code-scanning` runs on the PR                                                                                                                                                   |
-| 6 Real-app check             | **Partial** — the shell, platform nav, icons and three languages were checked in the running app. Not done: both Storybooks, an RTL language, the other listed components, and evidence under `agentic-ui-evidence/` |
-| 7 Prove the icon check fails | **Not done** — negative controls were run for the translation fix, not for the icon sprite                                                                                                                           |
-| 8 Docs                       | **Partial** — versions and score updated. The deprecated-icon renames were not added to `docs/extension-reference.md` (no deprecated name is in use here, but customer manifests could supply one)                   |
-| 9 Adversarial review         | **Open**                                                                                                                                                                                                             |
+| Step                         | Status                                                                                                                                                                                                                                                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 Unblock                    | Done — see Blockers                                                                                                                                                                                                                                                                                 |
+| 2 Branch + bump              | Done — see Outcome. No companion-package bump was needed                                                                                                                                                                                                                                            |
+| 3 Schematics                 | Done — dry run, then real run; one formatting-only change reverted                                                                                                                                                                                                                                  |
+| 4 Manual fixes               | Done — the translation-catalogue mapping (DS-2803) was the only one                                                                                                                                                                                                                                 |
+| 5 Gate                       | Done locally — 40 of 41 gates pass; `code-scanning` runs on the PR                                                                                                                                                                                                                                  |
+| 6 Real-app check             | **Done, one gap** — shell, nav, icons, Browse, Contracts, Trash, Tasks, Favorites, Search, document detail and tabs, three languages and RTL (`ar`), both Storybooks. Not covered: the admin-only NXQL accordion (no admin session). Recorded here rather than as harness evidence (no credentials) |
+| 7 Prove the icon check fails | **Done** — the `bundle` gate now requires the sprite; it failed with the glob broken and passed restored                                                                                                                                                                                            |
+| 8 Docs                       | **Done** — versions, score, and the removed icon names in `docs/extension-reference.md`                                                                                                                                                                                                             |
+| 9 Adversarial review         | **Open**                                                                                                                                                                                                                                                                                            |
 
 1. **Unblock** — resolve the three blockers above. Record the registry decision in
    `docs/adf-hx-beta-plan.md` if it changes.
