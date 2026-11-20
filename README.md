@@ -1,11 +1,27 @@
+<div align="center">
+
 # Nuxeo Satori UI
 
-[![CI](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/ci.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/codeql.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/codeql.yml)
-[![A11y](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/a11y.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/a11y.yml)
-[![SonarCloud](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/sonarcloud.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/sonarcloud.yml)
-[![Storybook](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/storybook-pages.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/storybook-pages.yml)
-[![Dependency review](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/dependency-review.yml)
+**A modern, customisable web interface for Nuxeo content repositories.**<br>
+Delivered as a Nuxeo Marketplace package · Built with Angular 22 on the Hyland Satori design system
+
+![Status](https://img.shields.io/badge/status-beta-orange)
+![Angular](https://img.shields.io/badge/Angular-22-dd0031?logo=angular&logoColor=white)
+![Nx](https://img.shields.io/badge/Nx-23-143055?logo=nx&logoColor=white)
+![Node](https://img.shields.io/badge/Node-%5E24.15-339933?logo=nodedotjs&logoColor=white)
+
+<a href="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/ci.yml/badge.svg"></a>
+<a href="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/codeql.yml/badge.svg"></a>
+<a href="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/a11y.yml"><img alt="A11y" src="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/a11y.yml/badge.svg"></a>
+<a href="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/sonarcloud.yml"><img alt="SonarCloud" src="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/sonarcloud.yml/badge.svg"></a>
+<a href="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/storybook-pages.yml"><img alt="Storybook" src="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/storybook-pages.yml/badge.svg"></a>
+<a href="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/dependency-review.yml"><img alt="Dependency review" src="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/dependency-review.yml/badge.svg"></a>
+
+[Customise it](CUSTOMISING.md) · [Short version](documentation/20-product/00-the-short-version.md) · [Developer setup](#getting-started-contributors) · [Documentation](documentation/README.md) · [Security](SECURITY.md)
+
+</div>
+
+---
 
 A modern web interface for [Nuxeo](https://www.nuxeo.com/) content repositories, delivered as a
 Nuxeo Marketplace package. Built with Angular 22 on the Hyland Satori design system, and
@@ -20,7 +36,8 @@ customisable by configuration or with your own code.
 | **Requirements** | Node.js `^24.15.0` (see [`.nvmrc`](.nvmrc)), npm 11, a Nuxeo server             |
 | **Security**     | [SECURITY.md](SECURITY.md) — report vulnerabilities privately, never via issues |
 
-## Contents
+<details>
+<summary><strong>Table of contents</strong></summary>
 
 - [Choose your path](#choose-your-path)
 - [Features](#features)
@@ -42,6 +59,8 @@ customisable by configuration or with your own code.
 - [Contributing](#contributing)
 - [Security](#security)
 
+</details>
+
 ## Choose your path
 
 | You want to…                                                        | Go to                                                                                                |
@@ -52,6 +71,7 @@ customisable by configuration or with your own code.
 | Work on Satori itself                                               | Continue below, then [Developer getting started](documentation/30-engineering/01-getting-started.md) |
 | Install the platform packages in your own project                   | [docs/installing-satori-platform.md](docs/installing-satori-platform.md)                             |
 
+> [!IMPORTANT]
 > The commands under [Getting started](#getting-started-contributors) are for people developing
 > Satori itself and need credentials a customer has no reason to hold. **Customising Satori does
 > not.**
@@ -156,6 +176,7 @@ npm run dev                                       # http://localhost:4200
 The dev server proxies API calls to Nuxeo on `localhost:8080` through
 [`apps/nuxeo-ui/proxy.conf.json`](apps/nuxeo-ui/proxy.conf.json).
 
+> [!WARNING]
 > **Always use `npm ci`.** A bare `npm install` on macOS prunes optional platform entries that
 > Linux needs, and the committed lockfile then fails to install in CI. See
 > [tools and commands](documentation/30-engineering/06-tools-and-commands.md).
@@ -292,6 +313,7 @@ Your configuration ships as your own Marketplace package that depends on ours; u
 overwrite it. The registered extension IDs are listed in
 [docs/extension-reference.md](docs/extension-reference.md).
 
+> [!CAUTION]
 > Hiding an action in a manifest is not a security control. Server-side Nuxeo permissions still
 > gate every operation.
 
