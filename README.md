@@ -1,14 +1,17 @@
+<a id="readme-top"></a>
+
 <div align="center">
 
-# Nuxeo Satori UI
+# 🧭 Nuxeo Satori UI
 
 **A modern, customisable web interface for Nuxeo content repositories.**<br>
 Delivered as a Nuxeo Marketplace package · Built with Angular 22 on the Hyland Satori design system
 
-![Status](https://img.shields.io/badge/status-beta-orange)
-![Angular](https://img.shields.io/badge/Angular-22-dd0031?logo=angular&logoColor=white)
-![Nx](https://img.shields.io/badge/Nx-23-143055?logo=nx&logoColor=white)
-![Node](https://img.shields.io/badge/Node-%5E24.15-339933?logo=nodedotjs&logoColor=white)
+![Status](https://img.shields.io/badge/status-beta-orange?style=flat-square)
+![Package](https://img.shields.io/badge/package-nuxeo--agentic--ui-0a6cff?style=flat-square)
+![Node](https://img.shields.io/badge/node-%5E24.15-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![Languages](https://img.shields.io/badge/languages-5-8957e5?style=flat-square)
+![A11y](https://img.shields.io/badge/a11y-WCAG%202.1%20AA%20target-1a7f37?style=flat-square)
 
 <a href="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/ci.yml/badge.svg"></a>
 <a href="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/codeql.yml/badge.svg"></a>
@@ -17,105 +20,138 @@ Delivered as a Nuxeo Marketplace package · Built with Angular 22 on the Hyland 
 <a href="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/storybook-pages.yml"><img alt="Storybook" src="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/storybook-pages.yml/badge.svg"></a>
 <a href="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/dependency-review.yml"><img alt="Dependency review" src="https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/dependency-review.yml/badge.svg"></a>
 
-[Customise it](CUSTOMISING.md) · [Short version](documentation/20-product/00-the-short-version.md) · [Developer setup](#getting-started-contributors) · [Documentation](documentation/README.md) · [Security](SECURITY.md)
+<br>
+
+[🎨 Customise it](CUSTOMISING.md) ·
+[⚡ Short version](documentation/20-product/00-the-short-version.md) ·
+[🛠️ Developer setup](#-getting-started-contributors) ·
+[📚 Documentation](documentation/README.md) ·
+[🔒 Security](SECURITY.md)
 
 </div>
 
 ---
 
-A modern web interface for [Nuxeo](https://www.nuxeo.com/) content repositories, delivered as a
-Nuxeo Marketplace package. Built with Angular 22 on the Hyland Satori design system, and
-customisable by configuration or with your own code.
+## 📖 About
 
-|                  |                                                                                 |
-| ---------------- | ------------------------------------------------------------------------------- |
-| **Status**       | Beta                                                                            |
-| **Package**      | `nuxeo-agentic-ui` (Nuxeo Marketplace)                                          |
-| **Programme**    | Nuxeo Satori                                                                    |
-| **Repository**   | `nuxeo/Nuxeo-Satori-UI`                                                         |
-| **Requirements** | Node.js `^24.15.0` (see [`.nvmrc`](.nvmrc)), npm 11, a Nuxeo server             |
-| **Security**     | [SECURITY.md](SECURITY.md) — report vulnerabilities privately, never via issues |
+Nuxeo Satori UI is a web interface for a Nuxeo content repository. It runs in the browser, talks
+to your Nuxeo server, and is delivered as a Nuxeo Marketplace package. You change it by
+configuration, or with your own code, and upgrades never overwrite your changes.
+
+|                     |                                                                                |
+| ------------------- | ------------------------------------------------------------------------------ |
+| 🏷️ **Status**       | Beta                                                                           |
+| 📦 **Package**      | `nuxeo-agentic-ui` (Nuxeo Marketplace)                                         |
+| 🗂️ **Repository**   | `nuxeo/Nuxeo-Satori-UI`                                                        |
+| 🧰 **Requirements** | Node.js `^24.15.0` (see [`.nvmrc`](.nvmrc)), npm 11, a Nuxeo server            |
+| 🔒 **Security**     | [SECURITY.md](SECURITY.md): report vulnerabilities privately, never via issues |
+
+### 🏗️ Built with
+
+![Angular](https://img.shields.io/badge/Angular-dd0031?style=for-the-badge&logo=angular&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?style=for-the-badge&logo=typescript&logoColor=white)
+![Nx](https://img.shields.io/badge/Nx-143055?style=for-the-badge&logo=nx&logoColor=white)
+![RxJS](https://img.shields.io/badge/RxJS-b7178c?style=for-the-badge&logo=reactivex&logoColor=white)
+![Vitest](https://img.shields.io/badge/Vitest-6e9f18?style=for-the-badge&logo=vitest&logoColor=white)
+![Playwright](https://img.shields.io/badge/Playwright-2ead33?style=for-the-badge&logo=playwright&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ed?style=for-the-badge&logo=docker&logoColor=white)
+![Java 21](https://img.shields.io/badge/Java%2021-437291?style=for-the-badge&logo=openjdk&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-c71a36?style=for-the-badge&logo=apachemaven&logoColor=white)
+![Storybook](https://img.shields.io/badge/Storybook-ff4785?style=for-the-badge&logo=storybook&logoColor=white)
+![SonarCloud](https://img.shields.io/badge/SonarCloud-f3702a?style=for-the-badge&logo=sonarcloud&logoColor=white)
+![Crowdin](https://img.shields.io/badge/Crowdin-2e3340?style=for-the-badge&logo=crowdin&logoColor=white)
 
 <details>
-<summary><strong>Table of contents</strong></summary>
+<summary><strong>📑 Table of contents</strong></summary>
 
-- [Choose your path](#choose-your-path)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Repository layout](#repository-layout)
-- [Technology stack](#technology-stack)
-- [Getting started (contributors)](#getting-started-contributors)
-- [Local development stack](#local-development-stack)
-- [Common commands](#common-commands)
-- [Testing](#testing)
-- [Quality gates](#quality-gates)
-- [Build and package](#build-and-package)
-- [Internationalisation](#internationalisation)
-- [CI/CD workflows](#cicd-workflows)
-- [Configuration and environment](#configuration-and-environment)
-- [Customisation model](#customisation-model)
-- [Troubleshooting](#troubleshooting)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
-- [Security](#security)
+- [🧭 Choose your path](#-choose-your-path)
+- [✨ Features](#-features)
+- [🏛️ Architecture](#-architecture)
+- [🗺️ Repository layout](#-repository-layout)
+- [🧱 Technology stack](#-technology-stack)
+- [🚀 Getting started (contributors)](#-getting-started-contributors)
+- [🐳 Local development stack](#-local-development-stack)
+- [⌨️ Common commands](#-common-commands)
+- [🧪 Testing](#-testing)
+- [🚦 Quality gates](#-quality-gates)
+- [📦 Build and package](#-build-and-package)
+- [🌍 Internationalisation](#-internationalisation)
+- [🔄 CI/CD workflows](#-cicd-workflows)
+- [⚙️ Configuration and environment](#-configuration-and-environment)
+- [🎛️ Customisation model](#-customisation-model)
+- [🩺 Troubleshooting](#-troubleshooting)
+- [📚 Documentation](#-documentation)
+- [🤝 Contributing](#-contributing)
+- [🔒 Security](#-security)
+- [📄 Licence](#-licence)
 
 </details>
 
-## Choose your path
+## 🧭 Choose your path
 
-| You want to…                                                        | Go to                                                                                                |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Rebrand or rearrange the product (name, logo, colours, menus, tabs) | [CUSTOMISING.md](CUSTOMISING.md) — needs Node.js only, no registry token, no account                 |
-| Understand what the product does and does not do                    | [The short version](documentation/20-product/00-the-short-version.md) (five minutes)                 |
-| Customise with an AI coding agent                                   | [Prompt library](https://github.com/nuxeo-sandbox/nuxeo-agentic-ui-prompts)                          |
-| Work on Satori itself                                               | Continue below, then [Developer getting started](documentation/30-engineering/01-getting-started.md) |
-| Install the platform packages in your own project                   | [docs/installing-satori-platform.md](docs/installing-satori-platform.md)                             |
+| You want to…                                                           | Go to                                                                                                |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 🎨 Rebrand or rearrange the product (name, logo, colours, menus, tabs) | [CUSTOMISING.md](CUSTOMISING.md): needs Node.js only, no registry token, no account                  |
+| ⚡ Understand what the product does and does not do                    | [The short version](documentation/20-product/00-the-short-version.md) (five minutes)                 |
+| 🤖 Customise with an AI coding agent                                   | [Prompt library](https://github.com/nuxeo-sandbox/nuxeo-agentic-ui-prompts)                          |
+| 🛠️ Work on Satori itself                                               | Continue below, then [Developer getting started](documentation/30-engineering/01-getting-started.md) |
+| 📥 Install the platform packages in your own project                   | [docs/installing-satori-platform.md](docs/installing-satori-platform.md)                             |
 
 > [!IMPORTANT]
-> The commands under [Getting started](#getting-started-contributors) are for people developing
+> The commands under [Getting started](#-getting-started-contributors) are for people developing
 > Satori itself and need credentials a customer has no reason to hold. **Customising Satori does
 > not.**
 
-## Features
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-- **Content management** — browse, search (full text, filters, saved searches), preview, create,
+## ✨ Features
+
+- 📁 **Content management**: browse, search (full text, filters, saved searches), preview, create,
   upload, edit, move, copy, delete, and restore from the trash.
-- **Governance** — versions, permissions, history, comments, tags, collections, favourites and
+- 🛡️ **Governance**: versions, permissions, history, comments, tags, collections, favourites and
   publishing.
-- **Work** — workflow tasks, plus administration of users, groups and vocabularies.
-- **Localised** — English, French, German, Japanese and Dutch.
-- **Accessible** — WCAG 2.1 AA is the quality bar. CI runs a static template scan; the live axe scan runs locally against a Nuxeo.
-- **Optional server-side capabilities** — AI features (natural-language search, summaries, tag
+- ✅ **Work**: workflow tasks, plus administration of users, groups and vocabularies.
+- 🌍 **Localised**: English, French, German, Japanese and Dutch.
+- ♿ **Accessible**: WCAG 2.1 AA is the quality bar. CI runs a static template scan; the live axe
+  scan runs locally against a Nuxeo.
+- 🎛️ **Customisable**: four layers, from settings to your own code, with upgrade-safe overrides.
+- 🧩 **Extensible**: a registry of extension points for menus, actions, tabs and columns.
+- 🤖 **Optional server-side capabilities**: AI features (natural-language search, summaries, tag
   suggestions, chat), Knowledge Discovery and the ARender annotation viewer each need a separate
   server component. Without them those features are unavailable and the rest of the application
   works normally. See [docs/ai-features.md](docs/ai-features.md) and
   [docs/knowledge-discovery.md](docs/knowledge-discovery.md).
 
-## Architecture
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## 🏛️ Architecture
 
 An Nx monorepo with strict, lint-enforced layering. Features never import one another.
 
-```text
-apps/nuxeo-ui          Application shell: routing, auth, global search
-        │ lazy-loads
-libs/features/*        Feature libraries: browse, search, document-detail, …
-        │ imports from
-libs/shared/*          Nuxeo client, Satori components, extensions, AI client, utilities
-        │ calls
-Nuxeo server           Dev-server proxy locally, same origin in production
+```mermaid
+flowchart TD
+    A["apps/nuxeo-ui<br/>Application shell: routing, auth, global search"]
+    F["libs/features/*<br/>browse · search · document-detail · …"]
+    S["libs/shared/*<br/>Nuxeo client · nxs- components · extensions · AI client"]
+    N[("Nuxeo server<br/>dev proxy locally, same origin in production")]
+    A -- lazy-loads --> F
+    F -- imports from --> S
+    S -- calls --> N
 ```
 
-- UI is built on the `nxs-` components. [`libs/shared/satori-components`](libs/shared/satori-components)
+- 🧱 UI is built on the `nxs-` components. [`libs/shared/satori-components`](libs/shared/satori-components)
   holds the Angular Material-backed implementations, and
   [`libs/shared/satori-components-satori`](libs/shared/satori-components-satori) supplies optional
   implementations on `@hylandsoftware/satori-ui`. Adoption is in progress: some feature code
   still imports `@hylandsoftware/satori-ui` directly.
-- Module boundaries are enforced by `@nx/enforce-module-boundaries` rules in
+- 🚧 Module boundaries are enforced by `@nx/enforce-module-boundaries` rules in
   [`eslint.config.mjs`](eslint.config.mjs); every project carries `scope:` and `type:` tags.
-- Full detail: [docs/architecture.md](docs/architecture.md) and
+- 📐 Full detail: [docs/architecture.md](docs/architecture.md) and
   [AGENTS/00-architecture.md](AGENTS/00-architecture.md).
 
-## Repository layout
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## 🗺️ Repository layout
 
 | Path                              | Purpose                                                           |
 | --------------------------------- | ----------------------------------------------------------------- |
@@ -134,43 +170,49 @@ Nuxeo server           Dev-server proxy locally, same origin in production
 | `docs/`, `documentation/`         | Engineering records and the structured documentation set          |
 | `AGENTS/`, `.cursor/`             | Contracts and playbooks for AI coding agents                      |
 
-## Technology stack
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-| Area             | Technology                                                                                  |
-| ---------------- | ------------------------------------------------------------------------------------------- |
-| Framework        | Angular ~22.2 (standalone components, signals), TypeScript, RxJS                            |
-| Monorepo         | Nx 23, enforced module boundaries and tags                                                  |
-| UI               | `@hylandsoftware/satori-ui`, Angular Material, in-house `nxs-` components                   |
-| i18n             | `@ngx-translate/core`, Crowdin                                                              |
-| Unit tests       | Vitest                                                                                      |
-| E2E and a11y     | Playwright, axe-core and Angular template lint (Playwright and axe are installed on demand) |
-| Quality          | ESLint, Prettier, Husky, lint-staged, SonarCloud, CodeQL                                    |
-| Server packaging | JDK 21 and Maven 3.9+ (Nuxeo Marketplace package and OSGi bundle)                           |
-| Local backend    | Nuxeo Server and OpenSearch in Docker; optional ARender and Mailpit                         |
+## 🧱 Technology stack
+
+| Area                | Technology                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| 🅰️ Framework        | Angular ~22.2 (standalone components, signals), TypeScript, RxJS                            |
+| 🧩 Monorepo         | Nx 23, enforced module boundaries and tags                                                  |
+| 🎨 UI               | `@hylandsoftware/satori-ui`, Angular Material, in-house `nxs-` components                   |
+| 🌍 i18n             | `@ngx-translate/core`, Crowdin                                                              |
+| 🧪 Unit tests       | Vitest                                                                                      |
+| ♿ E2E and a11y     | Playwright, axe-core and Angular template lint (Playwright and axe are installed on demand) |
+| 🛡️ Quality          | ESLint, Prettier, Husky, lint-staged, SonarCloud, CodeQL                                    |
+| 📦 Server packaging | JDK 21 and Maven 3.9+ (Nuxeo Marketplace package and OSGi bundle)                           |
+| 🐳 Local backend    | Nuxeo Server and OpenSearch in Docker; optional ARender and Mailpit                         |
 
 The full matrix, with the reason for each choice, is in
 [Technology stack](documentation/30-engineering/05-technology-stack.md).
 
-## Getting started (contributors)
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-### Prerequisites
+## 🚀 Getting started (contributors)
 
-- **Node.js** `^24.15.0` — `nvm use` reads [`.nvmrc`](.nvmrc). Angular 22 refuses Node 20.
+### 📋 Prerequisites
+
+- **Node.js** `^24.15.0`: `nvm use` reads [`.nvmrc`](.nvmrc). Angular 22 refuses Node 20.
 - **Docker**, to run a local Nuxeo server with OpenSearch.
-- **`SATORI_GH_READONLY_TOKEN`** — a GitHub token with `read:packages` on the Hyland organisation.
+- **`SATORI_GH_READONLY_TOKEN`**: a GitHub token with `read:packages` on the Hyland organisation.
   `@hylandsoftware/satori-ui` is installed from GitHub Packages, so without the token `npm ci`
   fails with `E401`.
 
-### Install and run
+### 🔧 Install and run
 
 ```bash
+# 1. Install dependencies (always npm ci, never a bare npm install)
 export SATORI_GH_READONLY_TOKEN=<token>
 npm ci
-```
 
-```bash
-export NUXEO_USER=<user> NUXEO_PASS=<password>   # no defaults; see the engineering docs
-npm run dev                                       # http://localhost:4200
+# 2. Point the tooling at your Nuxeo server (no defaults)
+export NUXEO_USER=<user> NUXEO_PASS=<password>
+
+# 3. Start the app
+npm run dev          # http://localhost:4200
 ```
 
 The dev server proxies API calls to Nuxeo on `localhost:8080` through
@@ -184,36 +226,58 @@ The dev server proxies API calls to Nuxeo on `localhost:8080` through
 A complete walk-through, including starting Nuxeo, is in
 [Developer getting started](documentation/30-engineering/01-getting-started.md).
 
-## Local development stack
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## 🐳 Local development stack
 
 The application is a client; it needs a running Nuxeo to be useful.
 
-| Component          | How to run                                                                                                                    |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| Nuxeo + OpenSearch | Docker, container `nuxeo`, port 8080. See [docs/opensearch-setup.md](docs/opensearch-setup.md)                                |
-| Server-side config | Fragments in [`nuxeo-conf/`](nuxeo-conf)                                                                                      |
-| The app            | `npm run dev` serves on `:4200` and proxies `/nuxeo` to `:8080`                                                               |
-| ARender (preview)  | `docker compose -f arender-docker-compose.yml --env-file .env.arender up -d` — [docs/arender-setup.md](docs/arender-setup.md) |
-| Mailpit (SMTP)     | `docker compose -f mailpit-docker-compose.yml up -d` — captures permission-notification email                                 |
+| Component             | How to run                                                                                     |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| 🗄️ Nuxeo + OpenSearch | Docker, container `nuxeo`, port 8080. See [docs/opensearch-setup.md](docs/opensearch-setup.md) |
+| ⚙️ Server-side config | Fragments in [`nuxeo-conf/`](nuxeo-conf)                                                       |
+| 💻 The app            | `npm run dev` serves on `:4200` and proxies `/nuxeo` to `:8080`                                |
+| 👁️ ARender (preview)  | See below, and [docs/arender-setup.md](docs/arender-setup.md)                                  |
+| ✉️ Mailpit (SMTP)     | See below. Captures permission-notification email                                              |
 
-Check the backend is reachable with `npm run beta:backend`.
+```bash
+# Optional: rich document preview
+docker compose -f arender-docker-compose.yml --env-file .env.arender up -d
 
-## Common commands
+# Optional: local SMTP for permission notifications
+docker compose -f mailpit-docker-compose.yml up -d
 
-| Command                                                 | What it does                               |
-| ------------------------------------------------------- | ------------------------------------------ |
-| `npm run dev`                                           | Serve the app at http://localhost:4200     |
-| `npx nx build nuxeo-ui`                                 | Production build                           |
-| `npx nx test <project>`                                 | Unit tests for one project (e.g. `browse`) |
-| `npm run lint`                                          | Lint every project                         |
-| `npm run a11y`                                          | Accessibility scan                         |
-| `npx nx graph`                                          | Visualise the project dependency graph     |
-| `npm run beta:state`                                    | Programme status, checked against evidence |
-| `npm run beta:gate -- --gates lockfile,guardrails,lint` | Fast inner-loop quality gates              |
+# Check the backend is reachable
+npm run beta:backend
+```
 
-Every command above runs the same in PowerShell, macOS and Linux terminals.
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Testing
+## ⌨️ Common commands
+
+```bash
+# Run
+npm run dev                       # serve the app at http://localhost:4200
+
+# Build
+npx nx build nuxeo-ui             # production build
+
+# Test and lint
+npx nx test <project>             # unit tests for one project (e.g. browse)
+npm run lint                      # lint every project
+npm run a11y                      # accessibility scan
+
+# Explore and verify
+npx nx graph                      # visualise the project dependency graph
+npm run beta:state                # programme status, checked against evidence
+npm run beta:gate -- --gates lockfile,guardrails,lint   # fast inner-loop gates
+```
+
+Every command runs the same in PowerShell, macOS and Linux terminals.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## 🧪 Testing
 
 | Level         | Command                    | Notes                                                                                                                                                           |
 | ------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -225,7 +289,9 @@ Every command above runs the same in PowerShell, macOS and Linux terminals.
 
 Test standards are in [AGENTS/05-test-standards.md](AGENTS/05-test-standards.md).
 
-## Quality gates
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## 🚦 Quality gates
 
 `npm run beta:gate` runs the full pipeline: lockfile integrity, guardrails, lint, unit tests,
 build and typecheck. Run it before opening a pull request.
@@ -234,35 +300,45 @@ build and typecheck. Run it before opening a pull request.
 npm run beta:gate -- --phase <phase-id>   # full gate for a phase
 ```
 
-Two things to know:
-
-- **`test` does not typecheck.** Vitest strips types, so a green test run is not type safety;
-  only `build` and `typecheck` catch a `TS` error.
-- **A gate is only trusted once seen failing.** Break it on purpose and confirm it goes red.
+> [!NOTE]
+> Two things to know.
+>
+> - **`test` does not typecheck.** Vitest strips types, so a green test run is not type safety;
+>   only `build` and `typecheck` catch a `TS` error.
+> - **A gate is only trusted once seen failing.** Break it on purpose and confirm it goes red.
 
 Details: [Dev harness and gates](documentation/30-engineering/08-dev-harness-and-gates.md) and
 [Testing and evidence](documentation/30-engineering/12-testing-and-evidence.md).
 
-## Build and package
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## 📦 Build and package
 
 Three artifacts ship from this repository:
 
-| Artifact                 | Built by                           | Contains                                                      |
-| ------------------------ | ---------------------------------- | ------------------------------------------------------------- |
-| Marketplace package      | Maven — `nuxeo-agentic-ui-package` | The built Angular app, the OSGi bundle and the default config |
-| `nuxeo-agentic-core`     | Maven                              | Small OSGi module: auth and start-page configuration          |
-| `@nuxeo/satori-platform` | `npx nx build platform`            | The npm package customers extend the product with             |
+| Artifact                    | Built by                          | Contains                                                      |
+| --------------------------- | --------------------------------- | ------------------------------------------------------------- |
+| 📦 Marketplace package      | Maven: `nuxeo-agentic-ui-package` | The built Angular app, the OSGi bundle and the default config |
+| ☕ `nuxeo-agentic-core`     | Maven                             | Small OSGi module: auth and start-page configuration          |
+| 📚 `@nuxeo/satori-platform` | `npx nx build platform`           | The npm package customers extend the product with             |
 
 ```bash
-npx nx build nuxeo-ui --configuration=production --base-href=/nuxeo/agentic-ui/   # Angular application
-mvn clean package -pl nuxeo-agentic-ui-package -am                                # Marketplace ZIP (JDK 21, Maven 3.9+)
-npx nx build platform                              # dist/libs/platform
+# Angular application
+npx nx build nuxeo-ui --configuration=production --base-href=/nuxeo/agentic-ui/
+
+# Marketplace ZIP (JDK 21, Maven 3.9+)
+mvn clean package -pl nuxeo-agentic-ui-package -am
+
+# Platform package -> dist/libs/platform
+npx nx build platform
 ```
 
 Deployment, the server-side configuration model, rollback and publishing are covered in
 [Deployment and troubleshooting](documentation/30-engineering/13-deployment-and-troubleshooting.md).
 
-## Configuration and environment
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## ⚙️ Configuration and environment
 
 | Variable                   | Purpose                                             | Required for         |
 | -------------------------- | --------------------------------------------------- | -------------------- |
@@ -271,11 +347,13 @@ Deployment, the server-side configuration model, rollback and publishing are cov
 
 Credentials come from the environment only. Never hard-code them or put them in a URL.
 
-## Internationalisation
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-The UI ships in English, French, German, Japanese and Dutch. Strings
-are managed in Crowdin (see [`crowdin-conf.yml`](crowdin-conf.yml)); push, pull and status run
-as GitHub Actions workflows.
+## 🌍 Internationalisation
+
+The UI ships in 🇬🇧 English, 🇫🇷 French, 🇩🇪 German, 🇯🇵 Japanese and 🇳🇱 Dutch. Strings are managed
+in Crowdin (see [`crowdin-conf.yml`](crowdin-conf.yml)); push, pull and status run as GitHub
+Actions workflows.
 
 ```bash
 npm run i18n:pseudo    # generate the pseudo-locale
@@ -285,29 +363,33 @@ npm run i18n:audit     # find untranslated or truncated strings
 Plan and current coverage: [docs/i18n-localization-plan.md](docs/i18n-localization-plan.md) and
 [docs/i18n-status.md](docs/i18n-status.md).
 
-## CI/CD workflows
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-| Workflow                                                | Purpose                                        |
-| ------------------------------------------------------- | ---------------------------------------------- |
-| `ci.yml`                                                | Lint, test, build, typecheck and bundle budget |
-| `a11y.yml`                                              | Accessibility scan                             |
-| `codeql.yml`, `sonarcloud.yml`, `dependency-review.yml` | Static analysis and dependency review          |
-| `build-marketplace.yml`                                 | Builds the Marketplace package                 |
-| `release.yml`                                           | Manual release                                 |
-| `publish-platform.yml`                                  | Publishes the platform package                 |
-| `storybook-pages.yml`                                   | Publishes the component Storybook              |
-| `crowdin-push.yaml`, `crowdin-pull.yaml`                | Translation sync                               |
+## 🔄 CI/CD workflows
 
-## Customisation model
+| Workflow                                                   | Purpose                                        |
+| ---------------------------------------------------------- | ---------------------------------------------- |
+| ✅ `ci.yml`                                                | Lint, test, build, typecheck and bundle budget |
+| ♿ `a11y.yml`                                              | Accessibility scan                             |
+| 🔍 `codeql.yml`, `sonarcloud.yml`, `dependency-review.yml` | Static analysis and dependency review          |
+| 📦 `build-marketplace.yml`                                 | Builds the Marketplace package                 |
+| 🚢 `release.yml`                                           | Manual release                                 |
+| 📤 `publish-platform.yml`                                  | Publishes the platform package                 |
+| 📖 `storybook-pages.yml`                                   | Publishes the component Storybook              |
+| 🌍 `crowdin-push.yaml`, `crowdin-pull.yaml`                | Translation sync                               |
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## 🎛️ Customisation model
 
 Every change falls into one of four layers, so customers can upgrade without losing their work:
 
-| Layer | What you change                                                       | Code needed | Rebuild |
-| ----- | --------------------------------------------------------------------- | ----------- | ------- |
-| 0     | Settings: product name, logo, colours, language, wording              | No          | No      |
-| 1     | Arrangement: menu entries, buttons, tabs, columns, order and audience | No          | No      |
-| 2     | Your own screens, actions and conditions                              | Yes         | Yes     |
-| 3     | Agent harness: instructions, generators and checks for AI agents      | Shipped     | —       |
+| Layer    | What you change                                                       | Code needed | Rebuild |
+| -------- | --------------------------------------------------------------------- | ----------- | ------- |
+| 🟢 **0** | Settings: product name, logo, colours, language, wording              | No          | No      |
+| 🟢 **1** | Arrangement: menu entries, buttons, tabs, columns, order and audience | No          | No      |
+| 🟠 **2** | Your own screens, actions and conditions                              | Yes         | Yes     |
+| 🔵 **3** | Agent harness: instructions, generators and checks for AI agents      | Shipped     | n/a     |
 
 Your configuration ships as your own Marketplace package that depends on ours; upgrades never
 overwrite it. The registered extension IDs are listed in
@@ -317,7 +399,9 @@ overwrite it. The registered extension IDs are listed in
 > Hiding an action in a manifest is not a security control. Server-side Nuxeo permissions still
 > gate every operation.
 
-## Troubleshooting
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## 🩺 Troubleshooting
 
 | Symptom                                      | Cause and fix                                                                                        |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -332,7 +416,9 @@ overwrite it. The registered extension IDs are listed in
 
 More rows: [Deployment and troubleshooting](documentation/30-engineering/13-deployment-and-troubleshooting.md).
 
-## Documentation
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## 📚 Documentation
 
 | Document                                                   | Audience                       |
 | ---------------------------------------------------------- | ------------------------------ |
@@ -346,20 +432,26 @@ More rows: [Deployment and troubleshooting](documentation/30-engineering/13-depl
 | [AGENTS.md](AGENTS.md) and [`AGENTS/`](AGENTS)             | AI coding agents               |
 | [CHANGELOG.md](CHANGELOG.md)                               | Everyone                       |
 
-## Contributing
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-1. Branch from `main` and keep changes focused.
-2. Follow the conventions in [AGENTS.md](AGENTS.md): standalone components, `inject()`, signals,
+## 🤝 Contributing
+
+1. 🌿 Branch from `main` and keep changes focused.
+2. 📏 Follow the conventions in [AGENTS.md](AGENTS.md): standalone components, `inject()`, signals,
    `takeUntilDestroyed()`, external templates, no cross-feature imports.
-3. Run `npm run beta:gate` and make sure it is green.
-4. Open a pull request using the [template](.github/PULL_REQUEST_TEMPLATE.md).
+3. 🚦 Run `npm run beta:gate` and make sure it is green.
+4. 🔀 Open a pull request using the [template](.github/PULL_REQUEST_TEMPLATE.md).
 
-## Security
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## 🔒 Security
 
 Do not report vulnerabilities through public issues or pull requests. Follow
 [SECURITY.md](SECURITY.md).
 
-## Licence
+## 📄 Licence
 
 This repository does not currently ship a `LICENSE` file. Confirm terms with Hyland before
 redistributing.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
