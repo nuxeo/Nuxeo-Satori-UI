@@ -56,6 +56,10 @@ const note = (html) => `<div class="note">${ic('lightbulb', 1)}<div>${html}</div
 const head = (title, sub, tags) => (tags ? ptags(tags) : '') + `<h1>${title}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}`;
 
 function toast(msg, undo) {
+  // Only the latest change can be undone. Every change shows a toast, and an earlier Undo restores a
+  // snapshot taken before this change, so pressing it would overwrite this change and leave its side
+  // effects (a closed task, a new document) behind. A new toast retires every earlier Undo.
+  for (const earlier of $$('#toast button')) earlier.remove();
   const d = document.createElement('div');
   d.innerHTML = `<span>${esc(msg)}</span>`;
   if (undo) {
