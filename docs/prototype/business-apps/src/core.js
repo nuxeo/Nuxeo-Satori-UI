@@ -119,7 +119,19 @@ function shell(r) {
   $('#nav').innerHTML = nav;
 }
 
+// Attributes that identify a control across a re-render. An in-place render (a ticked row, a
+// switched hold, a chosen decision) rebuilds the markup, so focus is restored by these, not by node.
+const FOCUS_KEYS = ['data-act', 'data-id', 'data-i', 'data-k', 'data-f', 'name', 'value'];
+function focusKeyOf(node) {
+  if (!node || !node.closest || !node.closest('#main, #hdr, #nav')) return null;
+  const parts = FOCUS_KEYS.filter((k) => node.hasAttribute(k)).map((k) => `[${k}="${CSS.escape(node.getAttribute(k))}"]`);
+  return parts.length ? node.tagName.toLowerCase() + parts.join('') : null;
+}
+let renderedHash = null;
 function render() {
+  const routeChanged = location.hash !== renderedHash;
+  renderedHash = location.hash;
+  const keep = routeChanged ? null : focusKeyOf(document.activeElement);
   const r = route();
   const key = r[0] === 'build' || r[0] === 'start' ? (r[1] ? r[0] + '/' + r[1] : r[0]) : r[0];
   const page = P[key] || P.notFound;
@@ -134,6 +146,11 @@ function render() {
   $('#main').innerHTML = html;
   const h = $('#main h1');
   document.title = (h ? h.textContent + ' · ' : '') + 'Nuxeo business apps prototype';
-  if (h) { h.tabIndex = -1; h.focus(); }
+  if (routeChanged) {
+    if (h) { h.tabIndex = -1; h.focus(); }
+  } else if (keep) {
+    const again = document.querySelector(keep);
+    if (again) again.focus();
+  }
 }
 P.notFound = () => head('Page not found', 'That address is not part of the prototype.') + '<a href="#/start">Back to the guide</a>';

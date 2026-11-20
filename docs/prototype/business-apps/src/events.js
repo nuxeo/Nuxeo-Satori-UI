@@ -5,13 +5,14 @@ function ask(title, body, okLabel, fn, danger) {
   modal(`<h2 id="dt">${title}</h2>${body}<div class="row end"><button data-act="close">Cancel</button><button class="${danger ? 'danger' : 'primary'}" data-act="ok">${okLabel}</button></div>`);
 }
 const logOn = (on, icon, t) => S.log.unshift({ on, icon, t });
+const nextId = (map, prefix) => prefix + (Math.max(0, ...Object.keys(map).map((k) => Number(k.slice(prefix.length)) || 0)) + 1);
 const personaOpts = (sel) => Object.entries(PERSONAS).map(([k, p]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(p.n)}, ${esc(p.role)}</option>`).join('');
-function setState(id, to, extra) {
+function setState(id, to, extra, alsoUndo) {
   const c = CLAIMS[id], before = { ...c };
   c.state = to;
   Object.assign(c, extra || {});
   logOn(id, 'steps', `State changed to ${CLAIM_STATE_LABEL[to]} by ${me().n}`);
-  toast(`${id} moved to ${CLAIM_STATE_LABEL[to]}`, () => { Object.assign(c, before); S.log.shift(); });
+  toast(`${id} moved to ${CLAIM_STATE_LABEL[to]}`, () => { Object.assign(c, before); S.log.shift(); if (alsoUndo) alsoUndo(); });
 }
 
 function completeTask(id) {
@@ -31,21 +32,25 @@ function completeTask(id) {
     return;
   }
   t.done = true;
+  // One undo for the whole completion: the task reopens with whatever the task moved.
+  const reopen = () => { t.done = false; };
   if (t.target.startsWith('CLAIM')) {
     const c = CLAIMS[t.target];
     if (t.node === 'Determine') {
-      if (f.decision === 'approve') setState(t.target, 'approved', { allowed: Number(f.allowed) });
-      else if (f.decision === 'deny') setState(t.target, 'denied', { denial: f.reason, allowed: 0 });
-      else setState(t.target, 'pended');
-    } else setState(t.target, f.decision === 'approve' ? 'approved' : 'inReview', f.decision === 'approve' ? { allowed: c.billed } : {});
+      if (f.decision === 'approve') setState(t.target, 'approved', { allowed: Number(f.allowed) }, reopen);
+      else if (f.decision === 'deny') setState(t.target, 'denied', { denial: f.reason, allowed: 0 }, reopen);
+      else setState(t.target, 'pended', null, reopen);
+    } else setState(t.target, f.decision === 'approve' ? 'approved' : 'inReview', f.decision === 'approve' ? { allowed: c.billed } : {}, reopen);
   } else {
     logOn(t.target, 'circle_check', `${t.n} completed by ${me().n}: ${f.decision}`);
-    toast(`${t.n} completed`);
+    toast(`${t.n} completed`, () => { reopen(); S.log.shift(); });
   }
   location.hash = '#/' + (t.target.startsWith('CLAIM') ? 'claim/' : 'case/') + t.target;
 }
 
 document.addEventListener('click', (ev) => {
+  // Before any route logic: its href is #main, which the router would read as a page.
+  if (ev.target.closest('a.skip')) { ev.preventDefault(); $('#main').focus(); return; }
   const el = ev.target.closest('[data-act]');
   if (!el) return;
   const a = el.dataset.act, id = el.dataset.id;
@@ -136,7 +141,7 @@ document.addEventListener('click', (ev) => {
     }
     case 'start-case':
       ask('Start a case', `<label class="f"><span>Type</span><select id="ct"><option>Grievance</option><option>Appeal</option></select></label><label class="f"><span>About claim</span><select id="cc">${Object.entries(CLAIMS).filter(([, c]) => c.member === id).map(([k]) => `<option>${k}</option>`).join('')}</select></label>`, 'Start', (d) => {
-        const n = 'CASE-' + (2041 + Object.keys(CASES).length);
+        const n = nextId(CASES, 'CASE-');
         CASES[n] = { title: d.querySelector('#ct').value + ' for ' + mName(id), type: d.querySelector('#ct').value, member: id, claim: d.querySelector('#cc').value, state: 'open', rcvd: '2026-11-21', due: '2026-12-21', assignee: S.persona, hold: false, determination: null, people: [[S.persona, 'Owner']], checklist: [['Member statement', null]], timeline: [['2026-11-21', 'gavel', 'Case started from the member page', me().n]] };
         setTimeout(() => (location.hash = '#/case/' + n));
         toast(`${n} started`);
@@ -150,7 +155,7 @@ document.addEventListener('click', (ev) => {
     case 'upload': toast('Added under this member. Suggested category: Correspondence'); break;
     case 'check-upload': {
       const k = CASES[id], i = Number(el.dataset.i), name = k.checklist[i][0];
-      const did = 'DOC-' + (Object.keys(DOCS).length + 1);
+      const did = nextId(DOCS, 'DOC-');
       DOCS[did] = { n: name + '.pdf', cat: name, size: '410 KB', case: id };
       k.checklist[i][1] = did;
       logOn(id, 'upload', `${name} uploaded by ${me().n} and filed in the case`);
@@ -175,9 +180,10 @@ document.addEventListener('click', (ev) => {
     case 'read-all': NOTIFS.forEach((n, i) => n.to === S.persona && S.read.add(i)); render(); break;
     case 'file-in': {
       const x = INBOX.find((y) => y.id === id);
+      const target = x.target[0], did = nextId(DOCS, 'DOC-');
+      if (target.startsWith('CLAIM')) { DOCS[did] = { n: x.file, cat: x.cls[0], size: '1.1 MB', claim: target }; CLAIMS[target].docs.push(did); }
+      else DOCS[did] = { n: x.file, cat: x.cls[0], size: '1.1 MB', case: target };
       x.done = true;
-      const target = x.target[0];
-      if (target.startsWith('CLAIM')) { const did = 'DOC-' + (Object.keys(DOCS).length + 1); DOCS[did] = { n: x.file, cat: x.cls[0], size: '1.1 MB', claim: target }; CLAIMS[target].docs.push(did); }
       logOn(target, 'inbox', `${x.cls[0]} filed from the inbox (${x.ch.toLowerCase()})`);
       toast(`Filed to ${target}; the assignee was notified`);
       render();
