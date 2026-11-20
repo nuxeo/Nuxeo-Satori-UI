@@ -13,13 +13,6 @@ name: E2E nightly
 #   SATORI_GH_READONLY_TOKEN  already used by ci.yml
 
 on:
-  # TEMPORARY: lets the workflow run from this branch before it exists on main. Remove before merge.
-  push:
-    branches: ['fix/**']
-    paths:
-      - '.github/workflows/e2e-nightly.yml'
-      - 'apps/nuxeo-ui/proxy.remote.conf.mjs'
-      - 'apps/nuxeo-ui-e2e/**'
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
@@ -117,7 +110,7 @@ jobs:
   report:
     name: Report failure
     needs: e2e
-    if: ${{ always() && needs.e2e.result == 'failure' && github.event_name != 'push' }}
+    if: ${{ always() && needs.e2e.result == 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
