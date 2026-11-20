@@ -72,7 +72,7 @@ P.queue = (r) => {
 
 // ---- record lists, generated from each type's schemas unless a layout names the columns (Step 1)
 P.members = () => head('Members', 'Generated list for the Member type, with a computed age and a combined name.', ['s1', 'ootb']) +
-  `<div class="card" style="padding:4px 8px"><table><thead><tr><th>Member ID</th><th>Name</th><th class="num">Age</th><th>Plan</th><th>Primary care</th><th>Status</th></tr></thead><tbody>${Object.entries(MEMBERS).map(([id, m]) => `<tr><td>${id}</td><td>${mLink(id)}</td><td class="num">${ageOf(m.dob)}</td><td>${m.plan}</td><td>${m.pcp}</td><td><span class="st ok">Active</span></td></tr>`).join('')}</tbody></table></div>`;
+  `<div class="card" style="padding:4px 8px"><table><thead><tr><th>Member ID</th><th>Name</th><th class="num">Age</th><th>Plan</th><th>Primary care</th><th>Status</th></tr></thead><tbody>${Object.entries(MEMBERS).map(([id, m]) => `<tr><td>${id}</td><td>${mLink(id)}</td><td class="num">${ageOf(m.dob)}</td><td>${esc(m.plan)}</td><td>${esc(m.pcp)}</td><td><span class="st ok">Active</span></td></tr>`).join('')}</tbody></table></div>`;
 P.claims = (r) => {
   const st = CLAIM_STATE_LABEL[r[1]] ? r[1] : null;
   const list = Object.entries(CLAIMS).filter(([, c]) => !st || c.state === st);

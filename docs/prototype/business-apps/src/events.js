@@ -127,7 +127,13 @@ document.addEventListener('click', (ev) => {
           if (!v) { d.querySelector('#dr').setAttribute('aria-invalid', 'true'); d.querySelector('#dre').textContent = 'Choose a reason.'; d.querySelector('#dr').focus(); return false; }
           moveFromPage(id, to, { denial: v, allowed: 0 });
         }, true);
-      } else { moveFromPage(id, to); render(); }
+      } else {
+        // Paying records the payment: the allowed amount, or the billed amount when none was set.
+        // It rides in the same state change, so the same Undo takes it back.
+        const c = CLAIMS[id];
+        moveFromPage(id, to, to === 'paid' ? { paid: c.allowed ?? c.billed } : undefined);
+        render();
+      }
       break;
     }
     case 'op-records': {
@@ -147,7 +153,7 @@ document.addEventListener('click', (ev) => {
       break;
     case 'edit-member': {
       const m = MEMBERS[id];
-      ask(`Edit ${esc(m.first + ' ' + m.last)}`, `<div class="grid2" style="gap:0 12px"><label class="f"><span>First name (required)</span><input type="text" id="fn" value="${esc(m.first)}"></label><label class="f"><span>Last name (required)</span><input type="text" id="ln" value="${esc(m.last)}"></label></div><div class="err" id="namee"></div><label class="f"><span>Date of birth</span><input type="date" id="dob" value="${m.dob}"></label><label class="f"><span>Phone</span><input type="text" id="ph" value="${esc(m.phone)}"></label><label class="f"><span>Street</span><input type="text" id="st" value="${esc(m.street)}"></label><div class="grid2" style="gap:0 12px"><label class="f"><span>City</span><input type="text" id="ct" value="${esc(m.city)}"></label><label class="f"><span>ZIP (5 digits)</span><input type="text" id="zip" value="${m.zip}"></label></div><div class="err" id="zipe"></div>`, 'Save', (d) => {
+      ask(`Edit ${esc(m.first + ' ' + m.last)}`, `<div class="grid2" style="gap:0 12px"><label class="f"><span>First name (required)</span><input type="text" id="fn" value="${esc(m.first)}"></label><label class="f"><span>Last name (required)</span><input type="text" id="ln" value="${esc(m.last)}"></label></div><div class="err" id="namee"></div><label class="f"><span>Date of birth</span><input type="date" id="dob" value="${esc(m.dob)}"></label><label class="f"><span>Phone</span><input type="text" id="ph" value="${esc(m.phone)}"></label><label class="f"><span>Street</span><input type="text" id="st" value="${esc(m.street)}"></label><div class="grid2" style="gap:0 12px"><label class="f"><span>City</span><input type="text" id="ct" value="${esc(m.city)}"></label><label class="f"><span>ZIP (5 digits)</span><input type="text" id="zip" value="${esc(m.zip)}"></label></div><div class="err" id="zipe"></div>`, 'Save', (d) => {
         const q = (s) => d.querySelector(s), fn = q('#fn'), ln = q('#ln'), z = q('#zip');
         for (const [el, msg] of [[fn, 'Enter a first name.'], [ln, 'Enter a last name.']]) {
           if (!el.value.trim()) { el.setAttribute('aria-invalid', 'true'); q('#namee').textContent = msg; el.focus(); return false; }
