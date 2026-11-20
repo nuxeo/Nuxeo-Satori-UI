@@ -232,18 +232,22 @@ The app is a client; without Nuxeo it renders empty shells. Run Nuxeo with OpenS
 and the server-side config fragments are in [`nuxeo-conf/`](nuxeo-conf).
 
 ```bash
+export NUXEO_USER=<user> NUXEO_PASS=<password>   # required, no defaults
 docker ps                # is a `nuxeo` container already running on :8080?
 npm run beta:backend     # expect: Nuxeo is serving at http://localhost:8080 (HTTP 200)
 ```
 
+> [!NOTE]
+> `beta:backend` only checks the server, and starts a `nuxeo` container that already exists but
+> is stopped. It cannot create a Nuxeo stack: create yours first, as described in the setup guide.
+
 ### 💻 4. Run the application
 
 ```bash
-export NUXEO_USER=<user> NUXEO_PASS=<password>   # required, no defaults
 npm run dev                                       # same as: npx nx serve nuxeo-ui
 ```
 
-Open **http://localhost:4200**. The dev server proxies `/nuxeo` to `localhost:8080` through
+Open **http://localhost:4200** (with `NUXEO_USER` and `NUXEO_PASS` still exported). The dev server proxies `/nuxeo` to `localhost:8080` through
 [`apps/nuxeo-ui/proxy.conf.json`](apps/nuxeo-ui/proxy.conf.json), so reach Nuxeo through `:4200`,
 never `:8080` directly, in tests.
 
