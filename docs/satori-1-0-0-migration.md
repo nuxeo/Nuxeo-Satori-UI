@@ -74,18 +74,23 @@ bump, kept for its reasoning; each part says how it turned out.
   - **Not covered:** the NXQL search page's `sat-accordion`. The browser session was the
     `Anonymous` user, Administration redirects without admin rights, and the run did not sign in
     as an administrator.
-  - **Breadcrumbs `NG0956` (support log, DS-2662) — checked 2026-11-20, not a 1.0.0 regression.**
-    Moving between folders logs one dev-mode `NG0956` warning per new trail ("track by identity
-    caused re-creation of the entire collection of size 1"). The stack trace points at our
-    wrapper, `NxsSatoriBreadcrumbsComponent`, not at `sat-breadcrumbs`. Its template remounts
-    `sat-breadcrumbs` on purpose — `@for (trail of [satoriItems()]; track trail)` — so each new trail
-    is measured. That was added in `ca722912d` (NXSAT-308, 13 Oct), when Satori fitted a trail only
-    at start-up and on resize, and this branch does not change it. **satori-ui 1.0.0 now re-fits
-    when `items` changes** (an `effect()` in `breadcrumbs.ts` at `v1.0.0` resets and re-runs
-    truncation on every `items` or `variant` change), so the remount — and the warning — are
-    probably no longer needed. Not removed here: the remount was justified by a real overflow
-    (a long trail at 1440px after navigating), and its spec asserts only that a new instance is
-    created. Removing it needs that overflow re-proven on 1.0.0 first.
+  - **Breadcrumbs `NG0956` (support log, DS-2662) — found and removed, 2026-11-20.** Moving
+    between folders logged one dev-mode `NG0956` warning per new trail ("track by identity caused
+    re-creation of the entire collection of size 1"). The stack trace pointed at our wrapper,
+    `NxsSatoriBreadcrumbsComponent`, not at `sat-breadcrumbs`: its template remounted
+    `sat-breadcrumbs` per trail (`@for (trail of [satoriItems()]; track trail)`), added in
+    `ca722912d` (NXSAT-308, 13 Oct) because Satori then fitted a trail only at start-up and on
+    resize. satori-ui 1.0.0 re-fits whenever `items` changes (an `effect()` in `breadcrumbs.ts` at
+    `v1.0.0`), so the wrapper now renders one `<sat-breadcrumbs [items]="satoriItems()" />`.
+    - **Test:** the old spec asserted only that a new instance was created. It is replaced by one
+      that gives the box a layout (200px; 100px per shown crumb), switches from a 2-crumb to a
+      5-crumb trail with no resize, and asserts it collapses to fit with "show more". Seen red
+      on purpose: with the `debounceTruncation()` call removed from Satori's items `effect()` in
+      `node_modules` (the pre-1.0 behaviour), it failed with `expected 500 to be ≤ 200` — the
+      NXSAT-308 overflow. Restored, it passes.
+    - **Real app, no resize events:** at 520px, 4 → 5 crumbs collapsed `default-domain` behind
+      "show more" and fitted; back to 4 restored it, twice. At 1440px every trail rendered in full.
+      `NG0956` warnings: 5 before the change, 0 after, over the same navigation.
 - **The Satori Storybook had the same regression — fixed.** `.storybook/preview.ts` and
   `primitives.satori.stories.ts` configured Satori's own loader with `en`, which requested
   `i18n/@hylandsoftware/satori-ui/en.json` (404). Stories showed raw keys
