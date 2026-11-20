@@ -41,6 +41,8 @@ function completeTask(id) {
   if (t.node === 'Determine' && f.decision === 'approve') {
     const v = Number(f.allowed), billed = CLAIMS[t.target].billed;
     if (f.allowed === '' || Number.isNaN(v)) e.allowed = 'Enter the allowed amount.';
+    // An approval pays something; paying nothing is a denial, which has its own reason.
+    else if (v <= 0) e.allowed = 'Enter an amount above $0.00. To pay nothing, deny the claim instead.';
     else if (v > billed) e.allowed = `The allowed amount cannot be more than the billed ${moneyText(billed)}.`;
   }
   if (t.node === 'Determine' && f.decision === 'deny' && !f.reason) e.reason = 'Choose a denial reason. It is required when you deny a claim.';
@@ -175,8 +177,9 @@ document.addEventListener('click', (ev) => {
     }
     case 'edit-claim': {
       const c = CLAIMS[id];
-      ask(`Edit ${id}`, `<label class="f"><span>Allowed amount, USD (at most ${moneyText(c.billed)})</span><input type="number" id="al" value="${c.allowed ?? ''}"></label><div class="err" id="ale"></div>${c.state === 'denied' ? `<label class="f"><span>Denial reason (shown because the claim is denied)</span><select id="dr2">${DENIAL_REASONS.map(([k, l]) => `<option value="${k}" ${k === c.denial ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}`, 'Save', (d) => {
+      ask(`Edit ${id}`, `<label class="f"><span>Allowed amount, USD (at most ${moneyText(c.billed)})</span><input type="number" min="0" step="0.01" id="al" value="${c.allowed ?? ''}"></label><div class="err" id="ale"></div>${c.state === 'denied' ? `<label class="f"><span>Denial reason (shown because the claim is denied)</span><select id="dr2">${DENIAL_REASONS.map(([k, l]) => `<option value="${k}" ${k === c.denial ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}`, 'Save', (d) => {
         const f = d.querySelector('#al'), v = Number(f.value);
+        if (f.value !== '' && (Number.isNaN(v) || v < 0)) { f.setAttribute('aria-invalid', 'true'); d.querySelector('#ale').textContent = 'The allowed amount cannot be below $0.00.'; f.focus(); return false; }
         if (f.value !== '' && v > c.billed) { f.setAttribute('aria-invalid', 'true'); d.querySelector('#ale').textContent = 'The allowed amount cannot be more than the billed amount.'; f.focus(); return false; }
         c.allowed = f.value === '' ? null : v;
         if (c.state === 'denied') c.denial = d.querySelector('#dr2').value;
