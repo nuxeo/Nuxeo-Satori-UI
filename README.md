@@ -193,38 +193,113 @@ The full matrix, with the reason for each choice, is in
 
 ## 🚀 Getting started (contributors)
 
-### 📋 Prerequisites
+> [!TIP]
+> **📖 A complete walk-through, including starting Nuxeo, is in [Developer getting started](documentation/30-engineering/01-getting-started.md).**
+> Budget about two hours, most of it Docker pulling Nuxeo. The steps below are the high-level path.
 
-- **Node.js** `^24.15.0`: `nvm use` reads [`.nvmrc`](.nvmrc). Angular 22 refuses Node 20.
-- **Docker**, to run a local Nuxeo server with OpenSearch.
-- **`SATORI_GH_READONLY_TOKEN`**: a GitHub token with `read:packages` on the Hyland organisation.
-  `@hylandsoftware/satori-ui` is installed from GitHub Packages, so without the token `npm ci`
-  fails with `E401`.
+### 📋 1. Prerequisites
 
-### 🔧 Install and run
+| Requirement                       | Version                                                      | Why                                                                                              |
+| --------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| 🟢 **Node.js**                    | `^24.15.0`                                                   | Pinned in [`.nvmrc`](.nvmrc). Angular 22 refuses Node 20; run `nvm use`                          |
+| 📦 **npm**                        | 11.x (ships with Node 24)                                    | The lockfile is `lockfileVersion` 3                                                              |
+| 🐳 **Docker** + Compose           | any current                                                  | Runs Nuxeo and OpenSearch, and optionally ARender and Mailpit                                    |
+| ☕ **JDK 21** + Maven 3.9+        | only to build the Marketplace package                        |                                                                                                  |
+| 🔑 **`SATORI_GH_READONLY_TOKEN`** | GitHub token with `read:packages` on the Hyland organisation | `@hylandsoftware/satori-ui` installs from GitHub Packages; without it `npm ci` fails with `E401` |
+
+### 📥 2. Clone and install
 
 ```bash
-# 1. Install dependencies (always npm ci, never a bare npm install)
+git clone https://github.com/nuxeo/Nuxeo-Satori-UI.git
+cd Nuxeo-Satori-UI
+nvm use                                        # reads .nvmrc -> Node 24
 export SATORI_GH_READONLY_TOKEN=<token>
-npm ci
-
-# 2. Point the tooling at your Nuxeo server (no defaults)
-export NUXEO_USER=<user> NUXEO_PASS=<password>
-
-# 3. Start the app
-npm run dev          # http://localhost:4200
+npm ci                                         # never a bare npm install
 ```
-
-The dev server proxies API calls to Nuxeo on `localhost:8080` through
-[`apps/nuxeo-ui/proxy.conf.json`](apps/nuxeo-ui/proxy.conf.json).
 
 > [!WARNING]
 > **Always use `npm ci`.** A bare `npm install` on macOS prunes optional platform entries that
-> Linux needs, and the committed lockfile then fails to install in CI. See
-> [tools and commands](documentation/30-engineering/06-tools-and-commands.md).
+> Linux needs, and the committed lockfile then fails to install in CI. To add a dependency,
+> restore a known-good `package-lock.json`, merge in only the new entries, then run
+> `npm run beta:lockfile`.
 
-A complete walk-through, including starting Nuxeo, is in
-[Developer getting started](documentation/30-engineering/01-getting-started.md).
+### 🗄️ 3. Start the backend
+
+The app is a client; without Nuxeo it renders empty shells. Run Nuxeo with OpenSearch in Docker
+(container `nuxeo`, port 8080). Setup is in [docs/opensearch-setup.md](docs/opensearch-setup.md),
+and the server-side config fragments are in [`nuxeo-conf/`](nuxeo-conf).
+
+```bash
+docker ps                # is a `nuxeo` container already running on :8080?
+npm run beta:backend     # expect: Nuxeo is serving at http://localhost:8080 (HTTP 200)
+```
+
+### 💻 4. Run the application
+
+```bash
+export NUXEO_USER=<user> NUXEO_PASS=<password>   # required, no defaults
+npm run dev                                       # same as: npx nx serve nuxeo-ui
+```
+
+Open **http://localhost:4200**. The dev server proxies `/nuxeo` to `localhost:8080` through
+[`apps/nuxeo-ui/proxy.conf.json`](apps/nuxeo-ui/proxy.conf.json), so reach Nuxeo through `:4200`,
+never `:8080` directly, in tests.
+
+| App                     | Purpose                                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------------------------- |
+| `nuxeo-ui`              | The product: every feature library, Material and the Satori design system                       |
+| `nuxeo-satori-template` | The forkable customer template, on plain Angular Material. `npx nx serve nuxeo-satori-template` |
+
+### 🚦 5. Run the checks
+
+```bash
+npm run beta:gate -- --gates lockfile,guardrails,lint   # fast inner loop
+npm run beta:gate -- --phase my-change                  # full gate before a PR
+```
+
+### 📚 6. Read before writing code
+
+1. [`AGENTS.md`](AGENTS.md): architecture and conventions on one page.
+2. [`CLAUDE.md`](CLAUDE.md): the hard-won rules and the non-negotiables.
+3. [`AGENTS/11-beta-program.md`](AGENTS/11-beta-program.md) section 3: verified facts. Prove one
+   wrong before acting against it.
+4. The `AGENTS/` file for your task: services, Nuxeo APIs, test standards, security, bug patterns.
+
+<details>
+<summary><strong>📏 The non-negotiable conventions</strong></summary>
+
+- `standalone: true` on every component, no NgModules
+- `inject()` for DI, never constructor parameters
+- `signal()` for mutable UI state, never `BehaviorSubject`
+- `takeUntilDestroyed()` on every `.subscribe()`
+- `templateUrl` always, no inline templates
+- Never `<img [src]="nuxeoUrl">`: fetch through a service, use a blob URL, revoke on destroy
+- Never cross-feature imports: shared logic goes in `libs/shared/`. Enforced by `depConstraints`;
+  an untagged project cannot depend on anything, so a new library needs `scope:` and `type:` tags
+- Third-party component types never appear in our public API; a feature uses the `nxs-` wrapper
+- Anything a customer might change goes through Layer 0 or 1, not a hardcoded value
+
+</details>
+
+### 🌿 7. Your first contribution
+
+```bash
+git checkout -b fix/<short-description>      # never commit to main
+# make the smallest change that satisfies a stated assertion, with a unit test
+npm run beta:gate -- --gates lockfile,guardrails,lint
+npm run beta:gate -- --phase my-change
+git commit                                   # Husky runs ESLint --fix and Prettier
+git push -u origin HEAD
+gh run list --branch fix/<short-description> --limit 3   # only CI is authoritative
+```
+
+Commit conventions are in [AGENTS/06-git-workflow.md](AGENTS/06-git-workflow.md). Pushing again
+cancels the previous CI run, so a `cancelled` result on an older commit is expected.
+
+> [!NOTE]
+> 📖 Stuck on something? **A complete walk-through, including starting Nuxeo, is in
+> [Developer getting started](documentation/30-engineering/01-getting-started.md)**, with a
+> common-problems table and the extension guide.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
