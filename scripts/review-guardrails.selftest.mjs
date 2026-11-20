@@ -12675,6 +12675,147 @@ expectGreen(
   },
 );
 
+/* ---------------- checkStorybookSatoriCatalogues ---------------- */
+
+/**
+ * satori-ui 1.0.0 dropped `en.json`, and the Satori-backed Storybook still asked Satori's own
+ * loader for `en` — through `.storybook/preview.ts` AND through the stories file's decorator, the
+ * second of which a hand fix missed at first. Stories rendered raw `sat.*` keys and every gate was
+ * green. These controls pin the comparison: each place a language can be requested, the served
+ * folder it is judged against, and the loader's base-language fallback.
+ */
+const SB = 'libs/shared/sb-satori';
+const SB_VENDOR = 'node_modules/@hylandsoftware/satori-ui/i18n';
+
+/** `main.ts` serving the vendor folder where Satori's loader looks, or `staticDirs` as given. */
+const sbMain = (
+  staticDirs = `[{ from: '../../../../${SB_VENDOR}', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+) =>
+  `const config = { stories: ['../src/**/*.stories.ts'], staticDirs: ${staticDirs} };\nexport default config;\n`;
+
+/** `preview.ts` configuring Satori's loader with `fallback` and switching to `active`. */
+const sbPreview = (fallback, active = fallback) =>
+  `import { provideAndConfigureSatoriTranslations } from '@hylandsoftware/satori-ui/translations';
+const providers = [
+  provideAndConfigureSatoriTranslations({ fallbackLang: ${fallback} }),
+  { useValue: () => inject(TranslateService).use(${active}) },
+];
+export default providers;
+`;
+
+/** A stories file with its own decorator, the shape `primitives.satori.stories.ts` has. */
+const sbStories = (fallback) =>
+  `const meta = { decorators: [provideAndConfigureSatoriTranslations({ fallbackLang: ${fallback} })] };
+export default meta;
+`;
+
+/** A vendor folder shipping 1.0.0's shape: regional catalogues and the locale manifest. */
+const SB_VENDOR_1_0_0 = {
+  [`${SB_VENDOR}/en-US.json`]: '{}\n',
+  [`${SB_VENDOR}/fr-FR.json`]: '{}\n',
+  [`${SB_VENDOR}/languages.json`]: '{ "locales": ["en-US", "fr-FR"] }\n',
+};
+
+expectRed(
+  'a Storybook preview asking Satori for a language the served folder does not ship',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en'`),
+  },
+  null,
+  /preview\.ts asks Satori's translation loader for "en" \(`fallbackLang`\)[\s\S]*serves no en\.json/,
+);
+
+// The active language is requested as well as the fallback, so fixing only one is still red.
+expectRed(
+  'a preview whose fallback is served but whose active language is not',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`, `'en'`),
+  },
+  null,
+  /asks Satori's translation loader for "en" \(`TranslateService\.use\(\)`\)/,
+);
+
+// The place the hand fix missed: a stories file's own decorator.
+expectRed(
+  "a stories file's decorator asking Satori for an unserved language",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+    [`${SB}/src/lib/primitives.stories.ts`]: sbStories(`'en'`),
+  },
+  null,
+  /primitives\.stories\.ts asks Satori's translation loader for "en"/,
+);
+
+expectRed(
+  'Satori translations configured with nothing served at the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(`[{ from: '../../../../${SB_VENDOR}', to: 'i18n' }]`),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /serves nothing at i18n\/@hylandsoftware\/satori-ui/,
+);
+
+expectRed(
+  'a fallback language this gate cannot read',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview('LANG', `'en-US'`),
+  },
+  null,
+  /sets Satori's `fallbackLang` to `LANG`, which is not a string literal/,
+);
+
+// The loader's own rule: `en-US` falls back to `en.json`, so a folder of bare names serves it.
+// Without this control the gate could demand an exact match and reject a working setup.
+falsePositiveControls += 1;
+expectGreen(
+  'a regional language served by its base-language catalogue',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB_VENDOR}/en.json`]: '{}\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'the 1.0.0 folder with every requested language regional, manifest present',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`, `'fr-FR'`),
+    [`${SB}/src/lib/primitives.stories.ts`]: sbStories(`'en-US'`),
+  },
+);
+
+// A clean checkout without GitHub Packages has no satori-ui to compare against: say so, stay green.
+expectWarn(
+  'a served folder whose package is not installed',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en'`),
+  },
+  null,
+  /node_modules\/@hylandsoftware\/satori-ui is not installed/,
+);
+
 /* ---------------- checkGateInventory ---------------- */
 
 /**

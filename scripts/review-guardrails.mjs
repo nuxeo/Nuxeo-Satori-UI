@@ -5075,6 +5075,272 @@ function checkUpstreamCatalogueLanguages() {
   }
 }
 
+/** Where Satori's own loader looks for its `sat.*` catalogues: `./i18n/<path>/<lang>.json`. */
+const SATORI_STORYBOOK_CATALOGUE_DIR = 'i18n/@hylandsoftware/satori-ui';
+
+/**
+ * A Storybook that uses Satori's own translation loader asks it only for languages it serves.
+ *
+ * ## The defect this exists to make unrepeatable
+ *
+ * `checkUpstreamCatalogueLanguages` guards the application, whose `AppTranslateLoader` maps its
+ * bare codes to the regional files satori-ui ships. The Satori-backed Storybook does not use that
+ * loader: it calls upstream's `provideAndConfigureSatoriTranslations`, whose
+ * `MultiTranslateHttpLoader` requests `./i18n/@hylandsoftware/satori-ui/<lang>.json` for the
+ * active language and the fallback language. It was configured with `en`, and satori-ui 1.0.0
+ * stopped shipping `en.json`, so every story rendered raw `sat.*` keys
+ * (`sat.rich-tooltip.press-escape-to-close`). Every gate passed: Storybook builds succeed with
+ * raw keys on screen, and nothing compared the configured language to the served folder.
+ *
+ * ## What it reads
+ *
+ * - Every `.storybook/main.ts` under `apps/` and `libs/`. The `staticDirs` entry whose `to` is
+ *   `i18n/@hylandsoftware/satori-ui` names the folder that is served there.
+ * - Every `.ts` file in that `.storybook/` and every `*.stories.ts` under the project's `src/`.
+ *   A project is checked when one of them calls `provideAndConfigureSatoriTranslations`. Each
+ *   such call's `fallbackLang`, and each `….use(<lang>)` on a `TranslateService`, is a language
+ *   the loader will request.
+ *
+ * A language passes when the folder has `<lang>.json` or, for a regional code, the base
+ * language's file: upstream's loader asks for `en-US.json` and falls back to `en.json` on a
+ * failure. `languages.json` is the vendor's locale manifest, not a catalogue.
+ *
+ * Scope: the satori-ui path only. Other paths added with `provideSatoriTranslationPaths` (the
+ * app's own catalogue, served at `i18n/`) are this product's catalogues, and a missing one shows
+ * English rather than raw keys.
+ */
+function checkStorybookSatoriCatalogues() {
+  const mains = [
+    ...walk('apps', (path) => path.endsWith('/.storybook/main.ts')),
+    ...walk('libs', (path) => path.endsWith('/.storybook/main.ts')),
+  ];
+  let checked = 0;
+
+  for (const main of mains) {
+    const storybookDir = dirname(main);
+    const projectRoot = dirname(storybookDir);
+    const sources = [
+      ...walk(storybookDir, (path) => path.endsWith('.ts')),
+      ...walk(`${projectRoot}/src`, (path) => path.endsWith('.stories.ts')),
+    ];
+
+    /** @type {{ file: string, lang: string, via: string }[]} */
+    const requested = [];
+    let usesSatoriLoader = false;
+    let legible = true;
+
+    for (const file of sources) {
+      const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+      const visit = (node) => {
+        if (ts.isCallExpression(node)) {
+          const callee = node.expression;
+          if (ts.isIdentifier(callee) && callee.text === 'provideAndConfigureSatoriTranslations') {
+            usesSatoriLoader = true;
+            const [config] = node.arguments;
+            if (!config || !ts.isObjectLiteralExpression(config)) {
+              fail(
+                `${file} calls \`provideAndConfigureSatoriTranslations\` with an argument ` +
+                  '`checkStorybookSatoriCatalogues` cannot read as an object literal, so it ' +
+                  'cannot tell which fallback language Satori will request.',
+              );
+              legible = false;
+            } else {
+              for (const property of config.properties) {
+                const name =
+                  ts.isPropertyAssignment(property) &&
+                  (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+                    ? property.name.text
+                    : null;
+                if (name === null) {
+                  fail(
+                    `${file} passes \`provideAndConfigureSatoriTranslations\` a member this gate ` +
+                      `cannot read statically (\`${property.getText().slice(0, 60)}\`). Write ` +
+                      'every member as a literal key and value.',
+                  );
+                  legible = false;
+                } else if (name === 'settings') {
+                  fail(
+                    `${file} passes \`settings\` to \`provideAndConfigureSatoriTranslations\`, ` +
+                      "which changes the loader's prefix or suffix. " +
+                      '`checkStorybookSatoriCatalogues` assumes the default `./i18n/<path>/<lang>.json`; ' +
+                      'teach it the new shape rather than leaving it checking the wrong URL.',
+                  );
+                  legible = false;
+                } else if (name === 'fallbackLang') {
+                  if (ts.isStringLiteral(property.initializer)) {
+                    requested.push({
+                      file,
+                      lang: property.initializer.text,
+                      via: '`fallbackLang`',
+                    });
+                  } else {
+                    fail(
+                      `${file} sets Satori's \`fallbackLang\` to ` +
+                        `\`${property.initializer.getText().slice(0, 60)}\`, which is not a ` +
+                        'string literal, so this gate cannot tell which catalogue it requests.',
+                    );
+                    legible = false;
+                  }
+                }
+              }
+            }
+          }
+          if (
+            ts.isPropertyAccessExpression(callee) &&
+            callee.name.text === 'use' &&
+            callee.expression.getText().includes('TranslateService')
+          ) {
+            const [lang] = node.arguments;
+            if (lang && ts.isStringLiteral(lang)) {
+              requested.push({ file, lang: lang.text, via: '`TranslateService.use()`' });
+            } else {
+              fail(
+                `${file} calls \`TranslateService.use()\` with ` +
+                  `\`${lang ? lang.getText().slice(0, 60) : 'no argument'}\`, which is not a ` +
+                  'string literal, so this gate cannot tell which catalogue Satori is asked for.',
+              );
+              legible = false;
+            }
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+    }
+
+    if (!usesSatoriLoader || !legible) continue;
+    checked += 1;
+
+    // Where `main.ts` serves the satori-ui catalogues from.
+    const mainSource = ts.createSourceFile(main, read(main), ts.ScriptTarget.Latest, true);
+    let staticDirs;
+    const findStaticDirs = (node) => {
+      if (
+        ts.isPropertyAssignment(node) &&
+        (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
+        node.name.text === 'staticDirs'
+      ) {
+        staticDirs = node.initializer;
+      }
+      ts.forEachChild(node, findStaticDirs);
+    };
+    findStaticDirs(mainSource);
+
+    const trim = (path) => path.replace(/^\.?\/+/, '').replace(/\/+$/, '');
+    const servedFrom = [];
+    if (staticDirs && ts.isArrayLiteralExpression(staticDirs)) {
+      for (const element of staticDirs.elements) {
+        if (ts.isStringLiteral(element)) continue; // served at the root, not at the catalogue path
+        if (!ts.isObjectLiteralExpression(element)) {
+          fail(
+            `${main} has a \`staticDirs\` entry \`checkStorybookSatoriCatalogues\` cannot read ` +
+              `(\`${element.getText().slice(0, 60)}\`), so it cannot tell what is served at ` +
+              `${SATORI_STORYBOOK_CATALOGUE_DIR}.`,
+          );
+          legible = false;
+          continue;
+        }
+        const member = (name) =>
+          element.properties.find(
+            (property) =>
+              ts.isPropertyAssignment(property) &&
+              (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+              property.name.text === name,
+          )?.initializer;
+        const to = member('to');
+        const from = member('from');
+        if (!to || !ts.isStringLiteral(to) || trim(to.text) !== SATORI_STORYBOOK_CATALOGUE_DIR) {
+          continue;
+        }
+        if (!from || !ts.isStringLiteral(from)) {
+          fail(
+            `${main} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from a \`from\` that is not a ` +
+              'string literal, so this gate cannot find the folder.',
+          );
+          legible = false;
+          continue;
+        }
+        servedFrom.push(toPosixRel(join(storybookDir, from.text)));
+      }
+    } else if (staticDirs) {
+      fail(
+        `${main} declares \`staticDirs\` as something other than an array literal, so ` +
+          '`checkStorybookSatoriCatalogues` cannot tell what is served.',
+      );
+      legible = false;
+    }
+    if (!legible) continue;
+
+    if (servedFrom.length === 0) {
+      fail(
+        `${projectRoot}'s Storybook configures Satori's translation loader, but ${main} serves ` +
+          `nothing at ${SATORI_STORYBOOK_CATALOGUE_DIR}, so every \`sat.*\` request 404s and the ` +
+          'stories render raw keys. Add a `staticDirs` entry copying ' +
+          'node_modules/@hylandsoftware/satori-ui/i18n there.',
+      );
+      continue;
+    }
+
+    const served = new Set();
+    let judgeable = true;
+    for (const dir of servedFrom) {
+      if (dir.startsWith('..')) {
+        fail(
+          `${main} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, outside the repository.`,
+        );
+        judgeable = false;
+        continue;
+      }
+      if (!fileExists(dir)) {
+        const segments = dir.split('/');
+        const index = segments.indexOf('node_modules');
+        const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
+        const packageRoot = index === -1 ? null : segments.slice(0, index + span).join('/');
+        if (packageRoot && !fileExists(packageRoot)) {
+          warn(
+            `${packageRoot} is not installed, so the languages ${main} asks Satori for were not ` +
+              'checked against it.',
+          );
+        } else {
+          fail(
+            `${main} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which does not exist. ` +
+              'Either the path is a typo or the package no longer ships that folder.',
+          );
+        }
+        judgeable = false;
+        continue;
+      }
+      for (const entry of readdirSync(join(repoRoot, dir))) {
+        if (entry.endsWith('.json') && entry !== VENDOR_LOCALES_MANIFEST) {
+          served.add(entry.slice(0, -'.json'.length));
+        }
+      }
+    }
+    if (!judgeable) continue;
+
+    for (const { file, lang, via } of requested) {
+      const parts = lang.split(/[-_]/);
+      const baseLang = parts.length > 1 ? parts[0] : null;
+      if (served.has(lang) || (baseLang !== null && served.has(baseLang))) continue;
+      fail(
+        `${file} asks Satori's translation loader for "${lang}" (${via}), but the Storybook ` +
+          `serves no ${lang}.json${baseLang ? ` or ${baseLang}.json` : ''} at ` +
+          `${SATORI_STORYBOOK_CATALOGUE_DIR} (from ${servedFrom.join(' + ')}; it has ` +
+          `${[...served].sort().join(', ') || 'no catalogue'}). Every \`sat.*\` key in the stories ` +
+          'renders raw. Use a language that folder ships — satori-ui 1.0.0 ships regional codes ' +
+          'only, such as en-US.',
+      );
+    }
+  }
+
+  if (checked === 0) {
+    warn(
+      'No Storybook under apps/ or libs/ uses `provideAndConfigureSatoriTranslations`, so ' +
+        '`checkStorybookSatoriCatalogues` asserted nothing. That is legitimate if none does.',
+    );
+  }
+}
+
 /**
  * The Crowdin config points at catalogues that exist, and cannot reach `node_modules`.
  *
@@ -12987,6 +13253,7 @@ const GUARDRAILS = [
   checkAdvertisedLocalesShip,
   checkShippedCatalogueLanguages,
   checkUpstreamCatalogueLanguages,
+  checkStorybookSatoriCatalogues,
   checkCrowdinConfig,
   checkPackagedConfigIsNotADemo,
   checkInstallerOwnsNoCustomerFile,

@@ -82,6 +82,17 @@ bump, kept for its reasoning; each part says how it turned out.
   the app catalogue path still loads `/i18n/en.json` after one expected `/i18n/en-US.json` 404.
   Checked in the built Storybook: no raw keys, 13 Satori elements, 10 SVG icons, none blank. The
   `satori-components` Storybook builds (446 entries) and does not use Satori's providers.
+- **That Storybook regression is now a guardrail.** No gate rendered the Satori Storybook, and a
+  build succeeds with raw keys on screen. `checkStorybookSatoriCatalogues` (in `guardrails`)
+  reads each Storybook's `staticDirs` and every `fallbackLang` / `TranslateService.use()` value in
+  its config and stories, and fails when Satori's loader would find no file for a language (exact
+  code, then base language, as the loader does). With the old `en` values put back, it failed on
+  all three places, including the stories decorator first missed by hand. The 8 selftest controls
+  were checked by weakening the guardrail two ways — no stories-file scan, no base-language
+  fallback — and each was caught.
+- **A stale engineering doc, corrected:** `documentation/30-engineering/07-extensibility-contract.md`
+  said satori-ui ships fifteen catalogues, bare names included. It now gives 1.0.0's eight
+  regional files and the `aliases` mapping.
 - **The icon sprite is now a gate requirement, and it has been seen to fail.** No gate checked
   `satori-icons/satori-icons.svg`, which 1.0.0 downloads at startup (DS-2829); a broken
   `angular.json` glob would have shipped blank icons with every gate green. The `bundle` gate now
