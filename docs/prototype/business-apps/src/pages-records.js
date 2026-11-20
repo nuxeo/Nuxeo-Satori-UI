@@ -47,7 +47,9 @@ P.claim = (r) => {
   if (!c) return P.notFound();
   const m = MEMBERS[c.member], pr = PROVIDERS[c.provider];
   const task = Object.entries(TASKS).find(([, t]) => t.target === id && !t.done);
-  const order = ['submitted', 'inReview', c.state === 'denied' ? 'denied' : 'approved', 'paid', 'closed'];
+  // A denied claim is never paid: its path is Denied, then Closed. A closed claim keeps the path it took.
+  const deniedPath = c.state === 'denied' || (c.state === 'closed' && c.denial);
+  const order = deniedPath ? ['submitted', 'inReview', 'denied', 'closed'] : ['submitted', 'inReview', 'approved', 'paid', 'closed'];
   const idx = c.state === 'pended' ? 1 : order.indexOf(c.state);
   const stepper = `<div class="step" aria-label="Claim lifecycle">${order.map((s, i) => `<div class="${i < idx ? 'done' : i === idx ? 'cur' : ''}">${i === 1 && c.state === 'pended' ? 'Pended' : CLAIM_STATE_LABEL[s]}</div>`).join('')}</div>`;
   const ro = ['paid', 'closed'].includes(c.state);

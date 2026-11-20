@@ -25,6 +25,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pnav a{width:52px;min-height:52px;border-radius:12px;color:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;text-decoration:none;font:var(--mat-sys-label-small);gap:2px}
 .pnav a:hover{background:color-mix(in srgb,var(--mat-sys-on-primary) 8%,transparent)}.pnav a[aria-current=page]{background:color-mix(in srgb,var(--mat-sys-on-primary) 16%,transparent)}
 .pnav .sp{flex:1}
+/* The rail is the primary colour, so the global primary focus ring would vanish on it. */
+.pnav a:focus-visible{outline-color:var(--mat-sys-on-primary)}
 .avatar{width:32px;height:32px;border-radius:50%;background:var(--sat-sys-cat-teal-container);color:var(--sat-sys-on-cat-teal-container);display:inline-flex;align-items:center;justify-content:center;font:var(--mat-sys-label-medium);flex:none}
 .avatar.sm{width:24px;height:24px;font:var(--mat-sys-label-small)}
 .hdr{display:flex;align-items:center;gap:12px;min-height:64px;padding:0 24px;border-bottom:1px solid var(--mat-sys-outline-variant);background:var(--mat-sys-surface);position:sticky;top:0;z-index:5;flex-wrap:wrap}
@@ -183,6 +185,8 @@ tr.sel td{background:color-mix(in srgb,var(--mat-sys-primary) 8%,transparent)}
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:30}
 #toast div{background:var(--mat-sys-inverse-surface);color:var(--mat-sys-inverse-on-surface);padding:0 16px;min-height:48px;border-radius:4px;margin-top:8px;display:flex;gap:16px;align-items:center;box-shadow:var(--mat-sys-level3)}
 #toast button{border:0;background:none;color:var(--mat-sys-inverse-primary);height:36px;padding:0 8px}
+/* On the dark toast the primary ring is about 2:1; the inverse primary is the toast's own accent. */
+#toast button:focus-visible{outline-color:var(--mat-sys-inverse-primary)}
 .meter{height:8px;background:var(--mat-sys-surface-container-highest);border-radius:4px;overflow:hidden}.meter>i{display:block;height:100%;background:var(--mat-sys-primary)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .muted{color:var(--mat-sys-on-surface-variant)}

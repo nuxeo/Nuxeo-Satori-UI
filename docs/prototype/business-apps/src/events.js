@@ -6,13 +6,19 @@ function ask(title, body, okLabel, fn, danger) {
 }
 const logOn = (on, icon, t) => S.log.unshift({ on, icon, t });
 const nextId = (map, prefix) => prefix + (Math.max(0, ...Object.keys(map).map((k) => Number(k.slice(prefix.length)) || 0)) + 1);
+// Put a record back exactly as its snapshot had it: a field the change added (a denial reason, a
+// payment) goes too, which Object.assign alone would leave behind.
+function restore(target, snapshot) {
+  for (const key of Object.keys(target)) if (!(key in snapshot)) delete target[key];
+  Object.assign(target, snapshot);
+}
 const personaOpts = (sel, group) => Object.entries(PERSONAS).filter(([, p]) => !group || p.groups.includes(group)).map(([k, p]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(p.n)}, ${esc(p.role)}</option>`).join('');
 function setState(id, to, extra, alsoUndo) {
   const c = CLAIMS[id], before = { ...c };
   c.state = to;
   Object.assign(c, extra || {});
   logOn(id, 'steps', `State changed to ${CLAIM_STATE_LABEL[to]} by ${me().n}`);
-  toast(`${id} moved to ${CLAIM_STATE_LABEL[to]}`, () => { Object.assign(c, before); S.log.shift(); if (alsoUndo) alsoUndo(); });
+  toast(`${id} moved to ${CLAIM_STATE_LABEL[to]}`, () => { restore(c, before); S.log.shift(); if (alsoUndo) alsoUndo(); });
 }
 
 // A move from the claim's own page. One that ends the review (approve, deny, pay, close) closes the
@@ -65,7 +71,7 @@ function completeTask(id) {
         c.allowed = Number(f.allowed);
         TASKS[sid] = { n: 'Approve high-value claim', wf: 'Claim determination', node: 'Supervisor approval', target: t.target, who: 'morgan', due: '2026-11-24' };
         logOn(t.target, 'user_task', `Determined by ${me().n}, allowed ${moneyText(c.allowed)}: sent to Morgan Chen for supervisor approval`);
-        toast(`Over ${moneyText(SUPERVISOR_LIMIT)}: sent to Morgan Chen for approval`, () => { Object.assign(c, before); delete TASKS[sid]; reopen(); S.log.shift(); });
+        toast(`Over ${moneyText(SUPERVISOR_LIMIT)}: sent to Morgan Chen for approval`, () => { restore(c, before); delete TASKS[sid]; reopen(); S.log.shift(); });
       } else if (f.decision === 'approve') setState(t.target, 'approved', { allowed: Number(f.allowed) }, reopen);
       else if (f.decision === 'deny') setState(t.target, 'denied', { denial: f.reason, allowed: 0 }, reopen);
       else setState(t.target, 'pended', null, reopen);
@@ -97,11 +103,11 @@ document.addEventListener('click', (ev) => {
     case 'ok': { const keep = onOk && onOk($('#modal')) === false; if (!keep) { closeModal(); render(); } break; }
     case 'toast': toast(el.dataset.msg); break;
     case 'take': {
-      const c = CLAIMS[id];
+      const c = CLAIMS[id], before = { ...c };
       c.assignee = S.persona;
       if (c.state === 'submitted') c.state = 'inReview';
       logOn(id, 'user_task', `Taken by ${me().n}`);
-      toast(`${id} is yours`, () => { c.assignee = null; c.state = 'submitted'; S.log.shift(); });
+      toast(`${id} is yours`, () => { restore(c, before); S.log.shift(); });
       render();
       break;
     }
