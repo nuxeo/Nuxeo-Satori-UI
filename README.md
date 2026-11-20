@@ -119,10 +119,10 @@ configuration, or with your own code, and upgrades never overwrite your changes.
 - 🔌 **Optional server-side capabilities**: Knowledge Discovery and the ARender annotation viewer
   each need a separate server component. Without them those features are unavailable and the rest
   of the application works normally. See [docs/knowledge-discovery.md](docs/knowledge-discovery.md).
-- 🤖 **AI features** (natural-language search, summaries, tag suggestions, chat) are **disabled in
+- 🚫 **AI features** (natural-language search, summaries, tag suggestions, chat) are **inactive in
   this release**: the `AI_FEATURES_ENABLED` flag is off and the AI gateway refuses operations.
   Installing the AI backend does not enable them; turning them on needs a code change and a
-  release. See [docs/ai-features.md](docs/ai-features.md).
+  release.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
