@@ -222,5 +222,17 @@ document.addEventListener('keydown', (e) => {
     else if (!e.shiftKey && i === els.length - 1) { e.preventDefault(); els[0].focus(); }
   }
 });
-window.addEventListener('hashchange', () => { S.sel.clear(); render(); });
+// `#main` is the skip link's target, never a page. The click handler stops the jump, but the
+// fragment also arrives from a new tab, a bookmark or the address bar: give the page back its
+// previous address and move focus to the content, as the skip link means to.
+window.addEventListener('hashchange', () => {
+  if (location.hash === '#main') {
+    history.replaceState(null, '', renderedHash || '#/start');
+    $('#main').focus();
+    return;
+  }
+  S.sel.clear();
+  render();
+});
+if (location.hash === '#main') history.replaceState(null, '', '#/start');
 render();
