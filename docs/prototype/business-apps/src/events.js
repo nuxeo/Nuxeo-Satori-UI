@@ -20,7 +20,7 @@ function completeTask(id) {
   if (t.node === 'Determine' && f.decision === 'approve') {
     const v = Number(f.allowed), billed = CLAIMS[t.target].billed;
     if (f.allowed === '' || Number.isNaN(v)) e.allowed = 'Enter the allowed amount.';
-    else if (v > billed) e.allowed = `The allowed amount cannot be more than the billed ${money(billed).replace(/<[^>]+>/g, '')}.`;
+    else if (v > billed) e.allowed = `The allowed amount cannot be more than the billed ${moneyText(billed)}.`;
   }
   if (t.node === 'Determine' && f.decision === 'deny' && !f.reason) e.reason = 'Choose a denial reason. It is required when you deny a claim.';
   f.errors = e;
@@ -126,7 +126,7 @@ document.addEventListener('click', (ev) => {
     }
     case 'edit-claim': {
       const c = CLAIMS[id];
-      ask(`Edit ${id}`, `<label class="f"><span>Allowed amount, USD (at most ${money(c.billed).replace(/<[^>]+>/g, '')})</span><input type="number" id="al" value="${c.allowed ?? ''}"></label><div class="err" id="ale"></div>${c.state === 'denied' ? `<label class="f"><span>Denial reason (shown because the claim is denied)</span><select>${DENIAL_REASONS.map(([k, l]) => `<option ${k === c.denial ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}`, 'Save', (d) => {
+      ask(`Edit ${id}`, `<label class="f"><span>Allowed amount, USD (at most ${moneyText(c.billed)})</span><input type="number" id="al" value="${c.allowed ?? ''}"></label><div class="err" id="ale"></div>${c.state === 'denied' ? `<label class="f"><span>Denial reason (shown because the claim is denied)</span><select>${DENIAL_REASONS.map(([k, l]) => `<option ${k === c.denial ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}`, 'Save', (d) => {
         const f = d.querySelector('#al'), v = Number(f.value);
         if (f.value !== '' && v > c.billed) { f.setAttribute('aria-invalid', 'true'); d.querySelector('#ale').textContent = 'The allowed amount cannot be more than the billed amount.'; f.focus(); return false; }
         c.allowed = f.value === '' ? null : v;

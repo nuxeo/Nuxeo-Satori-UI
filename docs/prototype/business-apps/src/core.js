@@ -12,7 +12,10 @@ const inGroup = (groups) => !groups || !groups.length || groups.some((g) => me()
 const appOf = (p) => (p === 'sam' ? APPS[1] : p === 'riley' ? APPS[2] : APPS[0]);
 
 // ---- formatting widgets (Step 2: named widgets and registered computations)
-const money = (n) => (n == null ? '<span class="muted">—</span>' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+// Plain text, for messages and attributes; `money` wraps it for table cells. Built up, never stripped down:
+// removing tags from HTML with a pattern is how markup slips through (CodeQL js/incomplete-multi-character-sanitization).
+const moneyText = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (n) => (n == null ? '<span class="muted">—</span>' : moneyText(n));
 const d8 = (s) => (s ? new Date(s + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '—');
 const ageOf = (dob) => {
   const b = new Date(dob + 'T12:00:00Z');
