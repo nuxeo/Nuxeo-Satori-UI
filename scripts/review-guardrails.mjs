@@ -5249,6 +5249,9 @@ function checkStorybookSatoriCatalogues() {
               input: asset.input,
               output: typeof asset.output === 'string' ? asset.output : '',
               glob: typeof asset.glob === 'string' ? asset.glob : '**/*',
+              // Kept so it can be refused below: an exclusion removes files the directory listing
+              // would otherwise count as served (review on #602).
+              ignore: Array.isArray(asset.ignore) ? asset.ignore : [],
             })),
         );
       }
@@ -5439,6 +5442,23 @@ function checkStorybookSatoriCatalogues() {
           legible = false;
           continue;
         }
+        // The whole entry must be statically legible: a spread, shorthand, method or computed key
+        // can supply or override `from`/`to` at run time, so the mount read here would not be the
+        // one Storybook uses (review on #602) — the rule `checkUpstreamCatalogueLanguages` applies.
+        const illegible = element.properties.find(
+          (property) =>
+            !ts.isPropertyAssignment(property) ||
+            (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name)),
+        );
+        if (illegible) {
+          fail(
+            `${main} has a \`staticDirs\` entry with a member this gate cannot read statically ` +
+              `(\`${illegible.getText().slice(0, 60)}\`), which can override \`from\` or \`to\`. ` +
+              'Write every member as a literal key and value.',
+          );
+          legible = false;
+          continue;
+        }
         const member = (name) =>
           element.properties.find(
             (property) =>
@@ -5484,6 +5504,18 @@ function checkStorybookSatoriCatalogues() {
         const output = trim(asset.output);
         if (!covers(output)) continue;
         if (FLAT_GLOBS.has(asset.glob) && output !== SATORI_STORYBOOK_CATALOGUE_DIR) continue;
+        // Refused rather than approximated: honouring `ignore` means reimplementing Angular's
+        // glob matching here, and every approximation of that has let a broken build pass.
+        if (asset.ignore.length > 0) {
+          fail(
+            `${label} serves \`${asset.input}\` at "${asset.output}" with \`ignore\` ` +
+              `${JSON.stringify(asset.ignore)}, which \`checkStorybookSatoriCatalogues\` does not ` +
+              `apply — so it cannot tell which catalogues reach ${SATORI_STORYBOOK_CATALOGUE_DIR}. ` +
+              'Serve the catalogues through an entry without `ignore`, or teach the gate to apply it.',
+          );
+          buildLegible = false;
+          continue;
+        }
         if (!RECURSIVE_GLOBS.has(asset.glob) && !FLAT_GLOBS.has(asset.glob)) {
           fail(
             `${label} serves \`${asset.input}\` at "${asset.output}" with glob ` +

@@ -13087,6 +13087,39 @@ expectGreen(
   },
 );
 
+// Review on #602, fourth round. An asset's `ignore` list was dropped, so an excluded catalogue was
+// still counted as served; it is now refused rather than approximated.
+expectRed(
+  'a builder asset whose ignore list excludes the requested catalogue',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProjectWith({
+      configDir: `${SB}/.storybook`,
+      assets: [{ ...SB_VENDOR_ASSET, ignore: ['en-US.json'] }],
+    }),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /with `ignore` \["en-US\.json"\], which `checkStorybookSatoriCatalogues` does not apply/,
+);
+
+// …and a spread in a `staticDirs` entry can override the `to` this gate read.
+expectRed(
+  'a staticDirs entry whose spread can override from or to',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../${SB_VENDOR}', to: 'i18n/@hylandsoftware/satori-ui', ...overrides }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /`staticDirs` entry with a member this gate cannot read statically \(`\.\.\.overrides`\)/,
+);
+
 // A clean checkout without GitHub Packages has no satori-ui to compare against: say so, stay green.
 expectWarn(
   'a served folder whose package is not installed',
