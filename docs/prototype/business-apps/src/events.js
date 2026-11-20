@@ -120,11 +120,17 @@ document.addEventListener('click', (ev) => {
     }
     case 'bulk-all': {
       const n = Number(el.dataset.n);
-      ask(`Update all ${n} results?`, `<label class="f"><span>Set</span><select><option>Assignee to Dana Lee</option><option>Priority to high</option></select></label><p class="muted">Runs on the server over the queue’s whole query, through the Bulk Action Framework, not only the rows on screen.</p><div class="meter" id="bm" hidden><i style="width:0"></i></div>`, 'Run', (d) => {
+      ask(`Update all ${n} results?`, `<label class="f"><span>Set</span><select><option>Assignee to Dana Lee</option><option>Priority to high</option></select></label><p class="muted">Runs on the server over the queue’s whole query, through the Bulk Action Framework, not only the rows on screen.</p><div class="meter" id="bm" role="progressbar" aria-label="Updating results" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><i style="width:0"></i></div>`, 'Run', (d) => {
         const m = d.querySelector('#bm'), bar = m.querySelector('i');
         m.hidden = false;
         let p = 0;
-        const t = setInterval(() => { p += 25; bar.style.width = p + '%'; if (p >= 100) { clearInterval(t); closeModal(); S.sel.clear(); render(); toast(`Updated ${n} items`); } }, 250);
+        d.querySelector('[data-act=ok]').disabled = true;
+        const t = setInterval(() => {
+          // Closed mid-run (Cancel, Escape): stop, and say nothing changed rather than report success.
+          if (!m.isConnected) { clearInterval(t); toast('Stopped before it finished. Nothing was changed.'); return; }
+          p += 25; bar.style.width = p + '%'; m.setAttribute('aria-valuenow', String(p));
+          if (p >= 100) { clearInterval(t); closeModal(); S.sel.clear(); render(); toast(`Updated ${n} items`); }
+        }, 250);
         return false;
       });
       break;

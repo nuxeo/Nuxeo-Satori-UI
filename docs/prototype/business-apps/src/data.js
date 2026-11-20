@@ -136,9 +136,9 @@ const TASKS = {
 // Each queue is a server page provider plus columns plus actions, shown to some groups (Step 3).
 const QUEUES = [
   { id: 'unassigned', n: 'Unassigned claims', pp: 'claims_unassigned', groups: ['claims-adjusters', 'claims-supervisors'], of: 'claim', test: (c) => !c.assignee && ['submitted', 'inReview'].includes(c.state) },
-  { id: 'mine', n: 'My open claims', pp: 'claims_my_open', groups: ['claims-adjusters'], of: 'claim', test: (c, p) => c.assignee === p && !['paid', 'closed', 'denied'].includes(c.state) },
+  { id: 'mine', n: 'My open claims', pp: 'claims_my_open', groups: ['claims-adjusters'], of: 'claim', test: (c, p) => c.assignee === p && OPEN_STATES.includes(c.state) },
   { id: 'highvalue', n: 'Over $5,000, awaiting review', pp: 'claims_high_value_review', groups: ['claims-supervisors'], of: 'claim', test: (c) => c.billed > 5000 && ['inReview', 'pended'].includes(c.state) },
-  { id: 'appeals', n: 'Appeals due in 14 days', pp: 'cases_appeals_due', groups: ['appeals'], of: 'case', test: (c) => c.type === 'Appeal' && c.state !== 'closed' },
+  { id: 'appeals', n: 'Appeals due in 14 days', pp: 'cases_appeals_due', groups: ['appeals'], of: 'case', test: (c) => c.type === 'Appeal' && c.state !== 'closed' && daysTo(c.due) <= 14 },
   { id: 'callbacks', n: 'Member callbacks', pp: 'cases_callbacks', groups: ['member-services'], of: 'case', test: (c) => c.type === 'Grievance' },
 ];
 

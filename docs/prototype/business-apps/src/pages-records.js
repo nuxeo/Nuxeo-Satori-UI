@@ -57,7 +57,7 @@ P.claim = (r) => {
   const refs = Object.entries(CASES).filter(([, k]) => k.claim === id);
   const log = S.log.filter((x) => x.on === id);
   return ptags(['s2', 's4', 's5', 'b5']) +
-    `<div class="rec"><div class="ricon">${ic('health_record')}</div><div><h1>${id}</h1><div class="crumbs">Claim · ${mLink(c.member)} · ${esc(pr.n)}</div></div>${claimState(c.state)}${sla(c.due)}<span class="gap"></span>${trans}
+    `<div class="rec"><div class="ricon">${ic('health_record')}</div><div><h1>${id}</h1><div class="crumbs">Claim · ${mLink(c.member)} · ${esc(pr.n)}</div></div>${claimState(c.state)}${OPEN_STATES.includes(c.state) ? sla(c.due) : ''}<span class="gap"></span>${trans}
       <button data-act="op-records" data-id="${id}">${ic('send', 1)}Request medical records</button><button class="icon" data-act="edit-claim" data-id="${id}" aria-label="Edit claim" ${ro ? 'disabled title="Read-only once paid or closed"' : ''}>${ic('pencil')}</button></div>
     ${stepper}
     ${task && task[1].who === S.persona ? `<div class="banner">${ic('user_task')}<span>You have a task on this claim: <strong>${esc(task[1].n)}</strong>, ${sla(task[1].due)}</span><span class="gap"></span><a href="#/task/${task[0]}"><button class="primary sm">Open the task form</button></a></div>` : ''}

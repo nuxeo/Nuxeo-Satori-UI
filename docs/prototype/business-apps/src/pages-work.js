@@ -12,11 +12,11 @@ function recLink(id) {
   return [`<a href="#/provider/${id}">${esc(PROVIDERS[id].n)}</a>`, 'Provider · NPI ' + PROVIDERS[id].npi, 'physician'];
 }
 function kpis() {
-  const g = me().groups, my = Object.values(CLAIMS).filter((c) => c.assignee === S.persona && !['paid', 'closed', 'denied'].includes(c.state));
+  const g = me().groups, my = Object.values(CLAIMS).filter((c) => c.assignee === S.persona && OPEN_STATES.includes(c.state));
   const k = (label, value, foot, h, tone) => `<a class="kpi ${tone || ''}" href="${h}"><span>${label}</span><strong>${value}</strong><em>${foot}</em></a>`;
   if (g.includes('claims-supervisors')) {
     const hv = queueItems(QUEUES[2]);
-    return k('Awaiting my approval', myTasks().length, 'Supervisor approval step', '#/home') + k('Over $5,000 in review', hv.length, money(hv.reduce((s, c) => s + c.billed, 0)) + ' billed', '#/queue/highvalue') + k('Team overdue', Object.values(CLAIMS).filter((c) => c.due && daysTo(c.due) < 0 && !['paid', 'closed'].includes(c.state)).length, 'Past determination date', '#/reports', 'bad') + k('Days to determine', '6.2', 'Average, last 30 days', '#/reports');
+    return k('Awaiting my approval', myTasks().length, 'Supervisor approval step', '#/home') + k('Over $5,000 in review', hv.length, money(hv.reduce((s, c) => s + c.billed, 0)) + ' billed', '#/queue/highvalue') + k('Team overdue', Object.values(CLAIMS).filter((c) => c.due && daysTo(c.due) < 0 && OPEN_STATES.includes(c.state)).length, 'Past determination date', '#/reports', 'bad') + k('Days to determine', '6.2', 'Average, last 30 days', '#/reports');
   }
   if (g.includes('claims-adjusters')) {
     return k('My open claims', my.length, 'Assigned to you', '#/queue/mine') + k('Due this week', my.filter((c) => c.due && daysTo(c.due) >= 0 && daysTo(c.due) <= 7).length, 'Determination date', '#/queue/mine', 'warn') + k('Overdue', my.filter((c) => c.due && daysTo(c.due) < 0).length, 'Past determination date', '#/queue/mine', 'bad') + k('Unassigned', queueItems(QUEUES[0]).length, 'Waiting in the team queue', '#/queue/unassigned');
@@ -57,6 +57,7 @@ P.queue = (r) => {
   if (!q) return P.notFound();
   if (!inGroup(q.groups)) return head(esc(q.n)) + `<div class="banner warn">${ic('lock')}This queue is shown to ${q.groups.join(', ')}. You are viewing as ${esc(me().n)}.</div>`;
   const it = queueItems(q), sel = S.sel;
+  for (const picked of [...sel]) if (!it.some((x) => x.id === picked)) sel.delete(picked);
   const bulk = sel.size ? `<div class="banner"><strong>${sel.size} selected</strong><span class="gap"></span><button class="sm tonal" data-act="bulk-assign">${ic('reassign', 1)}Assign</button><button class="sm tonal" data-act="bulk-all" data-n="${it.length}">${ic('bolt_circle', 1)}Update all ${it.length} results</button><button class="sm" data-act="csv">${ic('download', 1)}Export CSV</button></div>` : '';
   let table;
   if (q.of === 'claim') {
