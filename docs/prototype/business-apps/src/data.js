@@ -72,6 +72,11 @@ const CLAIM_TRANSITIONS = {
   closed: [],
 };
 
+// A task works on a claim only while the claim is still being decided.
+const OPEN_STATES = ['submitted', 'inReview', 'pended'];
+// Claim determination: over this billed amount, an approval is the supervisor's step.
+const SUPERVISOR_LIMIT = 5000;
+
 const CLAIMS = {
   'CLAIM-000132': { member: 'MEMBER-100048', provider: 'PRV-201', billed: 9087, allowed: 8650, paid: 8650, svc: '2025-01-10', rcvd: '2025-01-14', state: 'paid', assignee: null, due: null, dx: 'E11.9', lines: [['J1817', 'Insulin, 50 units', 9087]], docs: ['DOC-1'] },
   'CLAIM-000130': { member: 'MEMBER-100048', provider: 'PRV-202', billed: 9723, allowed: 9100, paid: 9100, svc: '2025-05-04', rcvd: '2025-05-09', state: 'paid', assignee: null, due: null, dx: 'I10', lines: [['99215', 'Office visit, high complexity', 410], ['93306', 'Echocardiogram', 9313]], docs: [] },

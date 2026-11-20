@@ -51,7 +51,8 @@ P.claim = (r) => {
   const idx = c.state === 'pended' ? 1 : order.indexOf(c.state);
   const stepper = `<div class="step" aria-label="Claim lifecycle">${order.map((s, i) => `<div class="${i < idx ? 'done' : i === idx ? 'cur' : ''}">${i === 1 && c.state === 'pended' ? 'Pended' : CLAIM_STATE_LABEL[s]}</div>`).join('')}</div>`;
   const ro = ['paid', 'closed'].includes(c.state);
-  const trans = (CLAIM_TRANSITIONS[c.state] || []).map(([t, l, to]) => `<button class="${t === 'approve' ? 'primary' : ''}" data-act="transition" data-id="${id}" data-to="${to}" data-t="${t}">${esc(l)}</button>`).join('');
+  const supervisorOnly = c.billed > SUPERVISOR_LIMIT && !inGroup(['claims-supervisors']);
+  const trans = (CLAIM_TRANSITIONS[c.state] || []).map(([t, l, to]) => `<button class="${t === 'approve' ? 'primary' : ''}" data-act="transition" data-id="${id}" data-to="${to}" data-t="${t}" ${t === 'approve' && supervisorOnly ? `disabled title="Over ${moneyText(SUPERVISOR_LIMIT)}, approval is the supervisor's step"` : ''}>${esc(l)}</button>`).join('');
   const total = c.lines.reduce((s, l) => s + l[2], 0);
   const refs = Object.entries(CASES).filter(([, k]) => k.claim === id);
   const log = S.log.filter((x) => x.on === id);

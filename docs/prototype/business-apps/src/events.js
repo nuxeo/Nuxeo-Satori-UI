@@ -15,8 +15,22 @@ function setState(id, to, extra, alsoUndo) {
   toast(`${id} moved to ${CLAIM_STATE_LABEL[to]}`, () => { Object.assign(c, before); S.log.shift(); if (alsoUndo) alsoUndo(); });
 }
 
+// A move from the claim's own page. One that ends the review (approve, deny, pay, close) closes the
+// claim's open tasks too, in the same undo, so no task is left that could move the claim back.
+function moveFromPage(id, to, extra) {
+  const closing = OPEN_STATES.includes(to) ? [] : Object.values(TASKS).filter((t) => t.target === id && !t.done);
+  closing.forEach((t) => { t.done = true; t.closedByState = to; });
+  setState(id, to, extra, () => closing.forEach((t) => { t.done = false; delete t.closedByState; }));
+}
+
 function completeTask(id) {
   const t = TASKS[id], f = S.tf[id], e = {};
+  const claim = t.target.startsWith('CLAIM') ? CLAIMS[t.target] : null;
+  if (claim && !OPEN_STATES.includes(claim.state)) {
+    f.errors = { decision: `${t.target} is ${CLAIM_STATE_LABEL[claim.state]}, so this task no longer applies.` };
+    render();
+    return;
+  }
   if (!f.decision) e.decision = 'Choose a decision.';
   if (t.node === 'Determine' && f.decision === 'approve') {
     const v = Number(f.allowed), billed = CLAIMS[t.target].billed;
@@ -37,10 +51,23 @@ function completeTask(id) {
   if (t.target.startsWith('CLAIM')) {
     const c = CLAIMS[t.target];
     if (t.node === 'Determine') {
-      if (f.decision === 'approve') setState(t.target, 'approved', { allowed: Number(f.allowed) }, reopen);
+      if (f.decision === 'approve' && c.billed > SUPERVISOR_LIMIT) {
+        // The workflow's next step is supervisor approval, so the claim stays in review until it is done.
+        const before = { ...c }, sid = nextId(TASKS, 'T-');
+        c.allowed = Number(f.allowed);
+        TASKS[sid] = { n: 'Approve high-value claim', wf: 'Claim determination', node: 'Supervisor approval', target: t.target, who: 'morgan', due: '2026-11-24' };
+        logOn(t.target, 'user_task', `Determined by ${me().n}, allowed ${moneyText(c.allowed)}: sent to Morgan Chen for supervisor approval`);
+        toast(`Over ${moneyText(SUPERVISOR_LIMIT)}: sent to Morgan Chen for approval`, () => { Object.assign(c, before); delete TASKS[sid]; reopen(); S.log.shift(); });
+      } else if (f.decision === 'approve') setState(t.target, 'approved', { allowed: Number(f.allowed) }, reopen);
       else if (f.decision === 'deny') setState(t.target, 'denied', { denial: f.reason, allowed: 0 }, reopen);
       else setState(t.target, 'pended', null, reopen);
-    } else setState(t.target, f.decision === 'approve' ? 'approved' : 'inReview', f.decision === 'approve' ? { allowed: c.billed } : {}, reopen);
+    } else if (f.decision === 'approve') setState(t.target, 'approved', { allowed: c.allowed ?? c.billed }, reopen);
+    else {
+      // Returned: the determination goes back to the adjuster as a task of its own.
+      const rid = nextId(TASKS, 'T-');
+      TASKS[rid] = { n: 'Determine claim', wf: 'Claim determination', node: 'Determine', target: t.target, who: c.assignee || 'dana', due: '2026-11-25' };
+      setState(t.target, 'inReview', {}, () => { reopen(); delete TASKS[rid]; });
+    }
   } else {
     logOn(t.target, 'circle_check', `${t.n} completed by ${me().n}: ${f.decision}`);
     toast(`${t.n} completed`, () => { reopen(); S.log.shift(); });
@@ -98,9 +125,9 @@ document.addEventListener('click', (ev) => {
         ask(`Deny ${id}?`, `<label class="f"><span>Denial reason (required)</span><select id="dr"><option value="">Choose a reason</option>${DENIAL_REASONS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select></label><div class="err" id="dre"></div><p class="muted">The member gets a denial letter with appeal rights.</p>`, 'Deny', (d) => {
           const v = d.querySelector('#dr').value;
           if (!v) { d.querySelector('#dr').setAttribute('aria-invalid', 'true'); d.querySelector('#dre').textContent = 'Choose a reason.'; d.querySelector('#dr').focus(); return false; }
-          setState(id, to, { denial: v, allowed: 0 });
+          moveFromPage(id, to, { denial: v, allowed: 0 });
         }, true);
-      } else { setState(id, to); render(); }
+      } else { moveFromPage(id, to); render(); }
       break;
     }
     case 'op-records': {
@@ -120,21 +147,24 @@ document.addEventListener('click', (ev) => {
       break;
     case 'edit-member': {
       const m = MEMBERS[id];
-      ask(`Edit ${esc(m.first + ' ' + m.last)}`, `<div class="grid2" style="gap:0 12px"><label class="f"><span>First name (required)</span><input type="text" id="fn" value="${esc(m.first)}"></label><label class="f"><span>Last name (required)</span><input type="text" value="${esc(m.last)}"></label></div><label class="f"><span>Date of birth</span><input type="date" value="${m.dob}"></label><label class="f"><span>Phone</span><input type="text" value="${esc(m.phone)}"></label><label class="f"><span>Street</span><input type="text" value="${esc(m.street)}"></label><div class="grid2" style="gap:0 12px"><label class="f"><span>City</span><input type="text" value="${esc(m.city)}"></label><label class="f"><span>ZIP (5 digits)</span><input type="text" id="zip" value="${m.zip}"></label></div><div class="err" id="zipe"></div>`, 'Save', (d) => {
-        const z = d.querySelector('#zip');
-        if (!/^\d{5}$/.test(z.value)) { z.setAttribute('aria-invalid', 'true'); d.querySelector('#zipe').textContent = 'Enter a 5-digit ZIP code.'; z.focus(); return false; }
-        m.zip = z.value;
-        m.first = d.querySelector('#fn').value || m.first;
+      ask(`Edit ${esc(m.first + ' ' + m.last)}`, `<div class="grid2" style="gap:0 12px"><label class="f"><span>First name (required)</span><input type="text" id="fn" value="${esc(m.first)}"></label><label class="f"><span>Last name (required)</span><input type="text" id="ln" value="${esc(m.last)}"></label></div><div class="err" id="namee"></div><label class="f"><span>Date of birth</span><input type="date" id="dob" value="${m.dob}"></label><label class="f"><span>Phone</span><input type="text" id="ph" value="${esc(m.phone)}"></label><label class="f"><span>Street</span><input type="text" id="st" value="${esc(m.street)}"></label><div class="grid2" style="gap:0 12px"><label class="f"><span>City</span><input type="text" id="ct" value="${esc(m.city)}"></label><label class="f"><span>ZIP (5 digits)</span><input type="text" id="zip" value="${m.zip}"></label></div><div class="err" id="zipe"></div>`, 'Save', (d) => {
+        const q = (s) => d.querySelector(s), fn = q('#fn'), ln = q('#ln'), z = q('#zip');
+        for (const [el, msg] of [[fn, 'Enter a first name.'], [ln, 'Enter a last name.']]) {
+          if (!el.value.trim()) { el.setAttribute('aria-invalid', 'true'); q('#namee').textContent = msg; el.focus(); return false; }
+        }
+        if (!/^\d{5}$/.test(z.value)) { z.setAttribute('aria-invalid', 'true'); q('#zipe').textContent = 'Enter a 5-digit ZIP code.'; z.focus(); return false; }
+        Object.assign(m, { first: fn.value.trim(), last: ln.value.trim(), dob: q('#dob').value || m.dob, phone: q('#ph').value.trim(), street: q('#st').value.trim(), city: q('#ct').value.trim(), zip: z.value });
         toast('Saved. Only the changed properties were sent.');
       });
       break;
     }
     case 'edit-claim': {
       const c = CLAIMS[id];
-      ask(`Edit ${id}`, `<label class="f"><span>Allowed amount, USD (at most ${moneyText(c.billed)})</span><input type="number" id="al" value="${c.allowed ?? ''}"></label><div class="err" id="ale"></div>${c.state === 'denied' ? `<label class="f"><span>Denial reason (shown because the claim is denied)</span><select>${DENIAL_REASONS.map(([k, l]) => `<option ${k === c.denial ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}`, 'Save', (d) => {
+      ask(`Edit ${id}`, `<label class="f"><span>Allowed amount, USD (at most ${moneyText(c.billed)})</span><input type="number" id="al" value="${c.allowed ?? ''}"></label><div class="err" id="ale"></div>${c.state === 'denied' ? `<label class="f"><span>Denial reason (shown because the claim is denied)</span><select id="dr2">${DENIAL_REASONS.map(([k, l]) => `<option value="${k}" ${k === c.denial ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}`, 'Save', (d) => {
         const f = d.querySelector('#al'), v = Number(f.value);
         if (f.value !== '' && v > c.billed) { f.setAttribute('aria-invalid', 'true'); d.querySelector('#ale').textContent = 'The allowed amount cannot be more than the billed amount.'; f.focus(); return false; }
         c.allowed = f.value === '' ? null : v;
+        if (c.state === 'denied') c.denial = d.querySelector('#dr2').value;
         toast('Saved');
       });
       break;

@@ -8,11 +8,12 @@ P.task = (r) => {
   if (!t) return P.notFound();
   const f = (S.tf[id] = S.tf[id] || { decision: '', allowed: '', reason: '', comment: '', errors: {} });
   const isClaim = t.target.startsWith('CLAIM'), c = isClaim ? CLAIMS[t.target] : CASES[t.target];
+  const stale = isClaim && !t.done && !OPEN_STATES.includes(c.state);
   const e = f.errors, er = (k) => (e[k] ? `<div class="err" id="e-${k}">${esc(e[k])}</div>` : '');
   let form = '';
   if (t.node === 'Determine') {
     form = `<div class="f"><span>Decision (required)</span>${radio('decision', [['approve', 'Approve'], ['deny', 'Deny'], ['pend', 'Pend for information']], f.decision)}</div>${er('decision')}
-      ${f.decision === 'approve' ? `<label class="f"><span>Allowed amount, USD (required, at most the billed ${money(c.billed)})</span><input type="number" data-act="tfv" data-k="allowed" value="${esc(f.allowed)}" ${e.allowed ? 'aria-invalid="true" aria-describedby="e-allowed"' : ''}></label>${er('allowed')}` : ''}
+      ${f.decision === 'approve' ? `<label class="f"><span>Allowed amount, USD (required, at most the billed ${money(c.billed)})</span><input type="number" data-act="tfv" data-k="allowed" value="${esc(f.allowed)}" ${e.allowed ? 'aria-invalid="true" aria-describedby="e-allowed"' : ''}></label>${er('allowed')}${c.billed > SUPERVISOR_LIMIT ? `<p class="help">Over ${moneyText(SUPERVISOR_LIMIT)}, approving sends the claim to a supervisor (step “Supervisor approval”).</p>` : ''}` : ''}
       ${f.decision === 'deny' ? `<label class="f"><span>Denial reason (required when denying)</span><select data-act="tfv" data-k="reason" ${e.reason ? 'aria-invalid="true" aria-describedby="e-reason"' : ''}><option value="">Choose a reason</option>${DENIAL_REASONS.map(([k, l]) => `<option value="${k}" ${f.reason === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>${er('reason')}<p class="help">Shown only when the decision is Deny: a field rule in the task layout.</p>` : ''}
       ${f.decision ? `<label class="f"><span>Letter to send</span><select data-act="noop"><option>${f.decision === 'deny' ? 'Denial with appeal rights' : f.decision === 'approve' ? 'Approval and payment notice' : 'Request for information'}</option></select></label>` : ''}`;
   } else if (t.node === 'Supervisor approval') {
@@ -26,11 +27,11 @@ P.task = (r) => {
     ? `<dl class="kv"><div><dt>Member</dt><dd>${mLink(c.member)}</dd></div><div><dt>Provider</dt><dd>${pLink(c.provider)}</dd></div><div><dt>Billed</dt><dd>${money(c.billed)}</dd></div><div><dt>Diagnosis</dt><dd>${c.dx}</dd></div><div><dt>Lines</dt><dd>${c.lines.map((l) => l[0]).join(', ')}</dd></div></dl>${c.flag ? `<div class="banner warn" style="margin-top:12px">${ic('flag')}${esc(c.flag)}</div>` : ''}`
     : `<dl class="kv"><div><dt>Member</dt><dd>${mLink(c.member)}</dd></div><div><dt>Type</dt><dd>${c.type}</dd></div><div><dt>Deadline</dt><dd>${sla(c.due)}</dd></div></dl>`;
   return head(esc(t.n), `${esc(t.wf)} · step “${esc(t.node)}” · on ${tLink(t.target)} · ${sla(t.due)}`, ['s4', 's2']) +
-    (t.done ? `<div class="banner ok">${ic('circle_check')}Completed. The claim moved on.</div>` : '') +
+    (t.done ? (t.closedByState ? `<div class="banner">${ic('info')}Closed when ${t.target} moved to ${CLAIM_STATE_LABEL[t.closedByState]} from its own page.</div>` : `<div class="banner ok">${ic('circle_check')}Completed. The claim moved on.</div>`) : stale ? `<div class="banner warn">${ic('info')}${t.target} is ${CLAIM_STATE_LABEL[c.state]}, so this task no longer applies.</div>` : '') +
     `<div class="split"><div class="card"><h2>Task form</h2>${t.who !== S.persona ? `<div class="banner warn">${ic('lock')}Assigned to ${esc(pName(t.who))}. You can read it but not complete it.</div>` : ''}
       ${form}<label class="f"><span>Comment (type @ to mention someone)</span><textarea data-act="tfv" data-k="comment">${esc(f.comment)}</textarea></label>
       ${Object.keys(e).length ? `<div class="banner err" role="alert">${ic('critical')}${Object.keys(e).length} field${Object.keys(e).length > 1 ? 's' : ''} to correct.</div>` : ''}
-      <div class="row"><button class="primary" data-act="complete" data-id="${id}" ${t.done || t.who !== S.persona ? 'disabled' : ''}>Complete task</button><button data-act="reassign" data-id="${id}">${ic('reassign', 1)}Reassign</button></div></div>
+      <div class="row"><button class="primary" data-act="complete" data-id="${id}" ${t.done || stale || t.who !== S.persona ? 'disabled' : ''}>Complete task</button><button data-act="reassign" data-id="${id}">${ic('reassign', 1)}Reassign</button></div></div>
     <div><div class="card"><h2>${isClaim ? 'Claim' : 'Case'} at a glance</h2>${facts}</div><div class="card"><h2>Documents</h2>${(isClaim ? c.docs : Object.keys(DOCS).filter((d) => DOCS[d].case === t.target)).map((d) => `<div class="field">${ic('pdf', 1)}<span style="flex:1">${esc(DOCS[d].n)}</span><button class="sm link" data-act="preview" data-id="${d}">Preview</button></div>`).join('') || '<p class="muted">None attached.</p>'}</div></div></div>` +
     note('<strong>Plan:</strong> this form is built from the workflow step’s own variables, not hard-coded (Step 4). The denial reason appears only for a denial, and the allowed amount cannot exceed the billed amount: a field rule and a cross-field check (Step 2). Checked on Nuxeo 2025: each task names its step’s variable schema (<code>taskInfo.schemas</code> → <code>var_&lt;node&gt;</code>) and its layout, so this is client work. <a href="#/start/feasibility">Feasibility</a>.');
 };
@@ -81,7 +82,7 @@ P.reports = () => {
   const aging = [['0–7 days', 3], ['8–14', 2], ['15–30', 1], ['31+', 1]];
   return head('Reports', 'Built from search aggregates. Every bar opens the list behind it.', ['b5', 's3']) +
     `<div class="kpis"><a class="kpi" href="#/claims"><span>Claims received, November</span><strong>184</strong><em>+12% on October</em></a><a class="kpi" href="#/claims"><span>Determined within 30 days</span><strong>96%</strong><em>Target 95%</em></a><a class="kpi warn" href="#/queue/highvalue"><span>Pended for information</span><strong>14</strong><em>Median 6 days pended</em></a><a class="kpi" href="#/queue/appeals"><span>Appeals overturned</span><strong>18%</strong><em>Last 90 days</em></a></div>
-    <div class="grid2"><div class="card"><h2>Claims by state</h2><div class="bars">${by.map(([s, n]) => `<a href="#/claims">${CLAIM_STATE_LABEL[s]}<i style="width:${(n / max) * 100}%"></i><span>${n}</span></a>`).join('')}</div></div>
+    <div class="grid2"><div class="card"><h2>Claims by state</h2><div class="bars">${by.map(([s, n]) => `<a href="#/claims/${s}">${CLAIM_STATE_LABEL[s]}<i style="width:${(n / max) * 100}%"></i><span>${n}</span></a>`).join('')}</div></div>
     <div class="card"><h2>Open claims by age</h2><div class="vbars">${aging.map(([l, n]) => `<div><span>${n}</span><i style="height:${n * 30}px"></i>${l}</div>`).join('')}</div></div>
     <div class="card"><h2>Billed by provider, open claims</h2><div class="bars">${Object.entries(PROVIDERS).map(([pid, p]) => { const v = Object.values(CLAIMS).filter((c) => c.provider === pid && !['paid', 'closed'].includes(c.state)).reduce((s, c) => s + c.billed, 0); return `<a href="#/provider/${pid}">${esc(p.n)}<i style="width:${(v / 33000) * 100}%"></i><span>$${Math.round(v / 1000)}k</span></a>`; }).join('')}</div></div>
     <div class="card"><h2>Scheduled exports</h2><div class="field">${ic('calendar', 1)}<span style="flex:1">Monthly timeliness report to the compliance team</span><span class="muted">1st of the month, CSV</span></div><div class="field">${ic('calendar', 1)}<span style="flex:1">Weekly pended-claims list</span><span class="muted">Mondays, CSV</span></div></div></div>`;
@@ -97,7 +98,7 @@ P.notifications = () => {
 
 // ---- several apps on one server, chosen by group (section 5)
 P.apps = () => head('Apps on this server', 'One Nuxeo, several purpose-built apps. Each has its own navigation, home and branding, and shows only to its groups.', ['b5', 's0']) +
-  `<div class="apps">${APPS.map((a) => `<a href="#/home" data-act="${a.id === 'documents' ? 'go-docs' : 'go-app'}" data-id="${a.id}">${ic(a.icon)}<span><strong>${esc(a.n)}</strong><br><span class="muted">${esc(a.d)}</span><br><span class="badge">${a.groups.length ? a.groups.join(', ') : 'everyone'}</span></span></a>`).join('')}</div>` +
+  `<div class="apps">${APPS.map((a) => `<a href="${a.id === 'documents' ? '#/more' : '#/home'}" data-act="${a.id === 'documents' ? 'go-docs' : 'go-app'}" data-id="${a.id}">${ic(a.icon)}<span><strong>${esc(a.n)}</strong><br><span class="muted">${esc(a.d)}</span><br><span class="badge">${a.groups.length ? a.groups.join(', ') : 'everyone'}</span></span></a>`).join('')}</div>` +
   note('Today the server serves one app, and presets switch branding per browser on demo servers only. This page is a later decision (section 9).');
 
 // ---- the ECM side stays available, but is not the default experience
