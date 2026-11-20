@@ -12866,6 +12866,61 @@ export const init = () => inject(TranslateService).use(lang);
   },
 );
 
+// Review on #602: only an entry mounted exactly at the catalogue path was read, so three valid
+// ways of serving it were reported as "serves nothing". Each must stay green, and a folder found
+// through them must still be judged.
+const SB_PUBLIC_CATALOGUE = (dir) => ({
+  [`${SB}/public/${dir}/en-US.json`]: '{}\n',
+  [`${SB}/public/${dir}/languages.json`]: '{ "locales": ["en-US"] }\n',
+});
+
+falsePositiveControls += 1;
+expectGreen(
+  'catalogues served through a plain-string staticDirs entry mounted at the root',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_PUBLIC_CATALOGUE('i18n/@hylandsoftware/satori-ui'),
+    [`${SB}/.storybook/main.ts`]: sbMain(`['../public']`),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'catalogues served through an object entry mounted above the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_PUBLIC_CATALOGUE('@hylandsoftware/satori-ui'),
+    [`${SB}/.storybook/main.ts`]: sbMain(`[{ from: '../public', to: 'i18n' }]`),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  "catalogues served through the 'from:to' string form",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `['../../../../${SB_VENDOR}:/i18n/@hylandsoftware/satori-ui']`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+expectRed(
+  'a folder mounted above the catalogue path that lacks the requested language',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB}/public/@hylandsoftware/satori-ui/fr-FR.json`]: '{}\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(`[{ from: '../public', to: 'i18n' }]`),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /asks Satori's translation loader for "en-US"[\s\S]*serves no en-US\.json or en\.json[\s\S]*it has fr-FR/,
+);
+
 // A clean checkout without GitHub Packages has no satori-ui to compare against: say so, stay green.
 expectWarn(
   'a served folder whose package is not installed',

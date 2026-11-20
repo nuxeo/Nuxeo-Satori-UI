@@ -5289,10 +5289,38 @@ function checkStorybookSatoriCatalogues() {
     findStaticDirs(mainSource);
 
     const trim = (path) => path.replace(/^\.?\/+/, '').replace(/\/+$/, '');
-    const servedFrom = [];
+    /**
+     * The folders whose `.json` files are served at the catalogue path.
+     *
+     * A `staticDirs` entry serves `from` at `to` (an object), or at the root (a plain string), or
+     * at the part after the last `:` (the `'from:to'` string form). The catalogue path is served by
+     * an entry mounted exactly there, and also by one mounted above it whose folder contains the
+     * rest of the path: `{ from: '../public', to: 'i18n' }` serves
+     * `../public/@hylandsoftware/satori-ui` there. Only an exact mount is required to exist — one
+     * mounted above may hold no catalogue folder at all, and then serves nothing at that path.
+     */
+    const mounts = [];
+    const addMount = (fromText, toText) => {
+      const to = trim(toText);
+      const from = toPosixRel(join(storybookDir, fromText));
+      if (to === SATORI_STORYBOOK_CATALOGUE_DIR) {
+        mounts.push({ dir: from, exact: true });
+      } else if (to === '' || SATORI_STORYBOOK_CATALOGUE_DIR.startsWith(`${to}/`)) {
+        const rest =
+          to === ''
+            ? SATORI_STORYBOOK_CATALOGUE_DIR
+            : SATORI_STORYBOOK_CATALOGUE_DIR.slice(to.length + 1);
+        mounts.push({ dir: toPosixRel(join(from, rest)), exact: false });
+      }
+    };
     if (staticDirs && ts.isArrayLiteralExpression(staticDirs)) {
       for (const element of staticDirs.elements) {
-        if (ts.isStringLiteral(element)) continue; // served at the root, not at the catalogue path
+        if (ts.isStringLiteral(element) || ts.isNoSubstitutionTemplateLiteral(element)) {
+          const separator = element.text.lastIndexOf(':');
+          if (separator === -1) addMount(element.text, '');
+          else addMount(element.text.slice(0, separator), element.text.slice(separator + 1));
+          continue;
+        }
         if (!ts.isObjectLiteralExpression(element)) {
           fail(
             `${main} has a \`staticDirs\` entry \`checkStorybookSatoriCatalogues\` cannot read ` +
@@ -5311,18 +5339,16 @@ function checkStorybookSatoriCatalogues() {
           )?.initializer;
         const to = member('to');
         const from = member('from');
-        if (!to || !ts.isStringLiteral(to) || trim(to.text) !== SATORI_STORYBOOK_CATALOGUE_DIR) {
-          continue;
-        }
-        if (!from || !ts.isStringLiteral(from)) {
+        if ((to && !ts.isStringLiteral(to)) || !from || !ts.isStringLiteral(from)) {
           fail(
-            `${main} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from a \`from\` that is not a ` +
-              'string literal, so this gate cannot find the folder.',
+            `${main} has a \`staticDirs\` entry whose \`from\` or \`to\` is not a string literal ` +
+              `(\`${element.getText().slice(0, 60)}\`), so this gate cannot tell whether it ` +
+              `serves ${SATORI_STORYBOOK_CATALOGUE_DIR}.`,
           );
           legible = false;
           continue;
         }
-        servedFrom.push(toPosixRel(join(storybookDir, from.text)));
+        addMount(from.text, to ? to.text : '');
       }
     } else if (staticDirs) {
       fail(
@@ -5333,27 +5359,22 @@ function checkStorybookSatoriCatalogues() {
     }
     if (!legible) continue;
 
-    if (servedFrom.length === 0) {
-      fail(
-        `${projectRoot}'s Storybook configures Satori's translation loader, but ${main} serves ` +
-          `nothing at ${SATORI_STORYBOOK_CATALOGUE_DIR}, so every \`sat.*\` request 404s and the ` +
-          'stories render raw keys. Add a `staticDirs` entry copying ' +
-          'node_modules/@hylandsoftware/satori-ui/i18n there.',
-      );
-      continue;
-    }
-
     const served = new Set();
+    const servedFrom = [];
     let judgeable = true;
-    for (const dir of servedFrom) {
+    for (const { dir, exact } of mounts) {
       if (dir.startsWith('..')) {
-        fail(
-          `${main} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, outside the repository.`,
-        );
-        judgeable = false;
+        if (exact) {
+          fail(
+            `${main} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, outside the repository.`,
+          );
+          judgeable = false;
+        }
         continue;
       }
       if (!fileExists(dir)) {
+        // A mount above the catalogue path whose folder has no catalogue folder serves nothing there.
+        if (!exact) continue;
         const segments = dir.split('/');
         const index = segments.indexOf('node_modules');
         const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
@@ -5372,6 +5393,7 @@ function checkStorybookSatoriCatalogues() {
         judgeable = false;
         continue;
       }
+      servedFrom.push(dir);
       for (const entry of readdirSync(join(repoRoot, dir))) {
         if (entry.endsWith('.json') && entry !== VENDOR_LOCALES_MANIFEST) {
           served.add(entry.slice(0, -'.json'.length));
@@ -5379,6 +5401,16 @@ function checkStorybookSatoriCatalogues() {
       }
     }
     if (!judgeable) continue;
+
+    if (servedFrom.length === 0) {
+      fail(
+        `${projectRoot}'s Storybook configures Satori's translation loader, but ${main} serves ` +
+          `nothing at ${SATORI_STORYBOOK_CATALOGUE_DIR}, so every \`sat.*\` request 404s and the ` +
+          'stories render raw keys. Add a `staticDirs` entry copying ' +
+          'node_modules/@hylandsoftware/satori-ui/i18n there.',
+      );
+      continue;
+    }
 
     for (const { file, lang, via } of requested) {
       const parts = lang.split(/[-_]/);
