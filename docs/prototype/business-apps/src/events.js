@@ -52,6 +52,7 @@ function completeTask(id) {
     else if (v > billed) e.allowed = `The allowed amount cannot be more than the billed ${moneyText(billed)}.`;
   }
   if (t.node === 'Determine' && f.decision === 'deny' && !f.reason) e.reason = 'Choose a denial reason. It is required when you deny a claim.';
+  if (t.node === 'Supervisor approval' && f.decision === 'approve' && claim && !((claim.allowed ?? claim.billed) > 0)) e.decision = 'The allowed amount is $0.00, so there is nothing to approve. Return it to the adjuster.';
   f.errors = e;
   if (Object.keys(e).length) {
     render();
@@ -69,12 +70,18 @@ function completeTask(id) {
         // The workflow's next step is supervisor approval, so the claim stays in review until it is done.
         const before = { ...c }, sid = nextId(TASKS, 'T-');
         c.allowed = Number(f.allowed);
+        // A decision ends the wait for information: a pended claim is back in review (the snapshot undoes it).
+        if (c.state === 'pended') c.state = 'inReview';
         TASKS[sid] = { n: 'Approve high-value claim', wf: 'Claim determination', node: 'Supervisor approval', target: t.target, who: 'morgan', due: '2026-11-24' };
         logOn(t.target, 'user_task', `Determined by ${me().n}, allowed ${moneyText(c.allowed)}: sent to Morgan Chen for supervisor approval`);
         toast(`Over ${moneyText(SUPERVISOR_LIMIT)}: sent to Morgan Chen for approval`, () => { restore(c, before); delete TASKS[sid]; reopen(); S.log.shift(); });
       } else if (f.decision === 'approve') setState(t.target, 'approved', { allowed: Number(f.allowed) }, reopen);
       else if (f.decision === 'deny') setState(t.target, 'denied', { denial: f.reason, allowed: 0 }, reopen);
-      else setState(t.target, 'pended', null, reopen);
+      else {
+        // Pending waits for information; it is not a decision, so the determination task stays open.
+        t.done = false;
+        setState(t.target, 'pended', null);
+      }
     } else if (f.decision === 'approve') setState(t.target, 'approved', { allowed: c.allowed ?? c.billed }, reopen);
     else {
       // Returned: the determination goes back to the adjuster as a task of its own.
@@ -150,6 +157,15 @@ document.addEventListener('click', (ev) => {
           if (!v) { d.querySelector('#dr').setAttribute('aria-invalid', 'true'); d.querySelector('#dre').textContent = 'Choose a reason.'; d.querySelector('#dr').focus(); return false; }
           moveFromPage(id, to, { denial: v, allowed: 0 });
         }, true);
+      } else if (el.dataset.t === 'approve') {
+        // An approval says what it pays: the amount is shown, can be changed, and must be above $0.00.
+        const c = CLAIMS[id];
+        ask(`Approve ${id}?`, `<label class="f"><span>Allowed amount, USD (above $0.00, at most ${moneyText(c.billed)})</span><input type="number" min="0.01" step="0.01" id="aa" value="${c.allowed ?? c.billed}"></label><div class="err" id="aae"></div><p class="muted">${c.allowed == null ? 'No allowed amount was set, so this starts from the billed amount.' : 'The amount set during the determination.'} Marking the claim paid pays this amount.</p>`, 'Approve', (d) => {
+          const f = d.querySelector('#aa'), v = Number(f.value);
+          const bad = f.value === '' || Number.isNaN(v) || v <= 0 ? 'Enter an amount above $0.00. To pay nothing, deny the claim instead.' : v > c.billed ? 'The allowed amount cannot be more than the billed amount.' : '';
+          if (bad) { f.setAttribute('aria-invalid', 'true'); d.querySelector('#aae').textContent = bad; f.focus(); return false; }
+          moveFromPage(id, to, { allowed: v });
+        });
       } else {
         // Paying records the payment: the allowed amount, or the billed amount when none was set.
         // It rides in the same state change, so the same Undo takes it back.
@@ -192,6 +208,8 @@ document.addEventListener('click', (ev) => {
       ask(`Edit ${id}`, `<label class="f"><span>Allowed amount, USD (at most ${moneyText(c.billed)})</span><input type="number" min="0" step="0.01" id="al" value="${c.allowed ?? ''}"></label><div class="err" id="ale"></div>${c.state === 'denied' ? `<label class="f"><span>Denial reason (shown because the claim is denied)</span><select id="dr2">${DENIAL_REASONS.map(([k, l]) => `<option value="${k}" ${k === c.denial ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}`, 'Save', (d) => {
         const f = d.querySelector('#al'), v = Number(f.value);
         if (f.value !== '' && (Number.isNaN(v) || v < 0)) { f.setAttribute('aria-invalid', 'true'); d.querySelector('#ale').textContent = 'The allowed amount cannot be below $0.00.'; f.focus(); return false; }
+        // $0.00 belongs to a denied claim; on any other it would approve a zero payment.
+        if (f.value !== '' && v === 0 && c.state !== 'denied') { f.setAttribute('aria-invalid', 'true'); d.querySelector('#ale').textContent = 'Only a denied claim has an allowed amount of $0.00. To pay nothing, deny the claim.'; f.focus(); return false; }
         if (f.value !== '' && v > c.billed) { f.setAttribute('aria-invalid', 'true'); d.querySelector('#ale').textContent = 'The allowed amount cannot be more than the billed amount.'; f.focus(); return false; }
         c.allowed = f.value === '' ? null : v;
         if (c.state === 'denied') c.denial = d.querySelector('#dr2').value;
@@ -202,7 +220,13 @@ document.addEventListener('click', (ev) => {
     case 'start-case':
       ask('Start a case', `<label class="f"><span>Type</span><select id="ct"><option>Grievance</option><option>Appeal</option></select></label><label class="f"><span>About claim</span><select id="cc">${Object.entries(CLAIMS).filter(([, c]) => c.member === id).map(([k]) => `<option>${k}</option>`).join('')}</select></label>`, 'Start', (d) => {
         const n = nextId(CASES, 'CASE-');
-        CASES[n] = { title: d.querySelector('#ct').value + ' for ' + mName(id), type: d.querySelector('#ct').value, member: id, claim: d.querySelector('#cc').value, state: 'open', rcvd: '2026-11-21', due: '2026-12-21', assignee: S.persona, hold: false, determination: null, people: [[S.persona, 'Owner']], checklist: [['Member statement', null]], timeline: [['2026-11-21', 'gavel', 'Case started from the member page', me().n]] };
+        // A case starts with its first task, owned by the team that works that kind of case, so it
+        // cannot sit with nothing to move it on.
+        const type = d.querySelector('#ct').value, appeal = type === 'Appeal', owner = appeal ? 'sam' : 'riley';
+        CASES[n] = { title: type + ' for ' + mName(id), type, member: id, claim: d.querySelector('#cc').value, state: 'open', rcvd: '2026-11-21', due: '2026-12-21', assignee: owner, hold: false, determination: null, people: [[owner, appeal ? 'Case specialist' : 'Member services']], checklist: [['Member statement', null]], timeline: [['2026-11-21', 'gavel', `Case started from the member page by ${me().n}`, me().n]] };
+        TASKS[nextId(TASKS, 'T-')] = appeal
+          ? { n: 'Medical review', wf: 'Appeal review', node: 'Medical review', target: n, who: owner, due: '2026-12-05' }
+          : { n: 'Call the member back', wf: 'Grievance handling', node: 'Callback', target: n, who: owner, due: '2026-11-24' };
         setTimeout(() => (location.hash = '#/case/' + n));
         toast(`${n} started`);
       });

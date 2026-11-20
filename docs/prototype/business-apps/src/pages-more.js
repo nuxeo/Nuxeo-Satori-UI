@@ -18,7 +18,8 @@ P.task = (r) => {
       ${f.decision === 'deny' ? `<label class="f"><span>Denial reason (required when denying)</span><select data-act="tfv" data-k="reason" ${e.reason ? 'aria-invalid="true" aria-describedby="e-reason"' : ''}><option value="">Choose a reason</option>${DENIAL_REASONS.map(([k, l]) => `<option value="${k}" ${f.reason === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>${er('reason')}<p class="help">Shown only when the decision is Deny: a field rule in the task layout.</p>` : ''}
       ${f.decision ? `<label class="f"><span>Letter to send</span><select data-act="noop"><option>${f.decision === 'deny' ? 'Denial with appeal rights' : f.decision === 'approve' ? 'Approval and payment notice' : 'Request for information'}</option></select></label>` : ''}`;
   } else if (t.node === 'Supervisor approval') {
-    form = `<div class="f"><span>Decision (required)</span>${radio('decision', [['approve', 'Approve payment'], ['return', 'Return to the adjuster']], f.decision)}</div>${er('decision')}`;
+    // The approver sees what the approval pays, not just a button.
+    form = `<p>Approving pays <strong>${moneyText(c.allowed ?? c.billed)}</strong> of the ${moneyText(c.billed)} billed${c.allowed == null ? ': no allowed amount was set, so this is the billed amount' : ', as determined'}.</p><div class="f"><span>Decision (required)</span>${radio('decision', [['approve', 'Approve payment'], ['return', 'Return to the adjuster']], f.decision)}</div>${er('decision')}`;
   } else if (t.node === 'Medical review') {
     form = `<div class="f"><span>Recommendation (required)</span>${radio('decision', [['uphold', 'Uphold the denial'], ['overturn', 'Overturn the denial']], f.decision)}</div>${er('decision')}<label class="sw" style="margin:8px 0"><input type="checkbox" data-act="noop"><span>I attest that I reviewed the medical records</span></label>`;
   } else {
