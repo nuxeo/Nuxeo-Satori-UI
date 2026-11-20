@@ -87,7 +87,7 @@ sdsc check all --json  →  adoption-data/<product>/        → Dashboard reads
 2. **Ask the Satori team** to add this product to `adoption-data/repos.json` in the dashboard
    repo. Provide:
    - Product name: `Nuxeo-UI`
-   - Snapshot contract version: `0.0.0` (current)
+   - Snapshot contract version: `1.0.0` (what `satori-design-system-checker@1.0.0` writes as `__version__`; the alpha checkers wrote `0.0.0`)
    - Any KPI exclusions (none currently)
 
 3. **Set up CI** to push dated snapshots:
