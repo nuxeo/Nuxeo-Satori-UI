@@ -29,12 +29,18 @@ export async function aWorkspacePath(api: APIRequestContext): Promise<string> {
     'no Workspace exists, so nothing can be created for the spec',
   ).toBeGreaterThan(0);
   for (const entry of entries) {
-    // The `/@permissions`-free check: attempt a harmless create and keep the first that works.
+    // System areas (`/management/...`) are not for test content. A workspace is usable only if
+    // the account can create in it AND write to what it created: restoring from the trash needs
+    // Write, and on some workspaces the account can add children but not restore them (403).
+    if (entry.path.startsWith('/management')) continue;
     const probe = await createFile(api, entry.path, `e2e-probe-${randomUUID().slice(0, 8)}`);
-    if (probe) {
-      await removeDoc(api, probe.uid);
-      return entry.path;
-    }
+    if (!probe) continue;
+    const read = await api.get(`/nuxeo/api/v1/id/${probe.uid}`, {
+      headers: { 'X-NXenrichers.document': 'permissions' },
+    });
+    const permissions: string[] = (await read.json()).contextParameters?.permissions ?? [];
+    await removeDoc(api, probe.uid);
+    if (permissions.includes('Write')) return entry.path;
   }
   throw new Error('the test account cannot create a File in any Workspace on this instance');
 }

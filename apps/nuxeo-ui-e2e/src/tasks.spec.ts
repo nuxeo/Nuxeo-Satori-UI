@@ -23,15 +23,17 @@ test.describe('tasks', () => {
     const tasks: unknown[] = await response.json();
 
     await page.goto('/#/tasks', { waitUntil: 'networkidle' });
-    const host = page.locator('lib-task-list');
-    await expect(host).toContainText('My Tasks');
-    await expect(host.locator('.task-error')).toHaveCount(0);
+    await expect(page.locator('lib-tasks-page')).toBeVisible();
+    // The list lives in the navigation drawer's tasks panel, not in the page itself.
+    const panel = page.locator('.tasks-panel-wrap');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.error')).toHaveCount(0);
 
     if (tasks.length === 0) {
-      await expect(host.locator('.task-empty')).toBeVisible();
-      await expect(host.locator('.task-card')).toHaveCount(0);
+      await expect(panel).toContainText('No pending tasks');
+      await expect(panel.locator('.task-item')).toHaveCount(0);
     } else {
-      await expect(host.locator('.task-card')).toHaveCount(tasks.length);
+      await expect(panel.locator('.task-item')).toHaveCount(tasks.length);
     }
   });
 });

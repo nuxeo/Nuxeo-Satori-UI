@@ -41,6 +41,8 @@ test.describe('collections', () => {
   test('an unknown collection id does not render a collection', async ({ signedIn: page }) => {
     await page.goto(`/#/collections/${randomUUID()}`, { waitUntil: 'networkidle' });
     await expect(page.locator('app-shell')).toBeVisible();
-    await expect(page.locator('lib-collection-detail nxs-error-state')).toBeVisible();
+    await expect(page.locator('lib-collection-detail .unavailable-title')).toHaveText(
+      'Collection not found',
+    );
   });
 });
