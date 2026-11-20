@@ -49,7 +49,13 @@ test.describe('trash', () => {
     await expect(row, 'the trashed document should be listed as a row').toBeVisible();
 
     await row.getByRole('checkbox').check();
+    const untrash = page.waitForResponse((r) => r.url().includes('Document.Untrash'));
     await page.locator('.nxs-trash-list__restore-selected').click();
+    const answer = await untrash;
+    expect(
+      answer.status(),
+      `the app's restore request answered ${answer.status()}: ${(await answer.text()).slice(0, 300)}`,
+    ).toBe(200);
 
     // The claim is about the repository: poll it, since the UI answer arrives before the write
     // is visible to a second read on a clustered instance.

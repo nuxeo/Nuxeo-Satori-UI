@@ -13,36 +13,18 @@ export interface MadeDoc {
   title: string;
 }
 
-/** A workspace the test account can create in, discovered rather than named. */
+/**
+ * The test account's own personal workspace. It owns everything it creates there, so the specs
+ * that write do not depend on the permissions of whatever shared workspace an instance has.
+ */
 export async function aWorkspacePath(api: APIRequestContext): Promise<string> {
-  const response = await api.get('/nuxeo/api/v1/search/lang/NXQL/execute', {
-    params: {
-      query: 'SELECT * FROM Workspace WHERE ecm:isTrashed = 0 AND ecm:isVersion = 0',
-      pageSize: 20,
-    },
+  const response = await api.post('/nuxeo/api/v1/automation/UserWorkspace.Get', {
+    data: { params: {}, context: {} },
   });
-  expect(response.status(), 'the NXQL query for a workspace should answer').toBe(200);
-  const entries: { path: string; contextParameters?: unknown }[] =
-    (await response.json()).entries ?? [];
-  expect(
-    entries.length,
-    'no Workspace exists, so nothing can be created for the spec',
-  ).toBeGreaterThan(0);
-  for (const entry of entries) {
-    // System areas (`/management/...`) are not for test content. A workspace is usable only if
-    // the account can create in it AND write to what it created: restoring from the trash needs
-    // Write, and on some workspaces the account can add children but not restore them (403).
-    if (entry.path.startsWith('/management')) continue;
-    const probe = await createFile(api, entry.path, `e2e-probe-${randomUUID().slice(0, 8)}`);
-    if (!probe) continue;
-    const read = await api.get(`/nuxeo/api/v1/id/${probe.uid}`, {
-      headers: { 'X-NXenrichers.document': 'permissions' },
-    });
-    const permissions: string[] = (await read.json()).contextParameters?.permissions ?? [];
-    await removeDoc(api, probe.uid);
-    if (permissions.includes('Write')) return entry.path;
-  }
-  throw new Error('the test account cannot create a File in any Workspace on this instance');
+  expect(response.status(), 'UserWorkspace.Get should answer for the test account').toBe(200);
+  const path: string | undefined = (await response.json()).path;
+  expect(path, 'the account should have a personal workspace').toBeTruthy();
+  return path!;
 }
 
 export async function createFile(

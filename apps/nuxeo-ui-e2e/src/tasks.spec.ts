@@ -20,7 +20,8 @@ test.describe('tasks', () => {
   test('lists the pending tasks the repository reports', async ({ signedIn: page }) => {
     const response = await api.get('/nuxeo/api/v1/task');
     expect(response.status(), 'the task endpoint should answer').toBe(200);
-    const tasks: unknown[] = await response.json();
+    const body = await response.json();
+    const tasks: unknown[] = Array.isArray(body) ? body : (body.entries ?? []);
 
     await page.goto('/#/tasks', { waitUntil: 'networkidle' });
     await expect(page.locator('lib-tasks-page')).toBeVisible();
