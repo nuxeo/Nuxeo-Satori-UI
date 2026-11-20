@@ -3,6 +3,9 @@
 [![CI](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/ci.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/codeql.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/codeql.yml)
 [![A11y](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/a11y.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/a11y.yml)
+[![SonarCloud](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/sonarcloud.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/sonarcloud.yml)
+[![Storybook](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/storybook-pages.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/storybook-pages.yml)
+[![Dependency review](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/workflows/dependency-review.yml)
 
 A modern web interface for [Nuxeo](https://www.nuxeo.com/) content repositories, delivered as a
 Nuxeo Marketplace package. Built with Angular 22 on the Hyland Satori design system, and
