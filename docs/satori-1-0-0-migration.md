@@ -74,6 +74,18 @@ bump, kept for its reasoning; each part says how it turned out.
   - **Not covered:** the NXQL search page's `sat-accordion`. The browser session was the
     `Anonymous` user, Administration redirects without admin rights, and the run did not sign in
     as an administrator.
+  - **Breadcrumbs `NG0956` (support log, DS-2662) — checked 2026-11-20, not a 1.0.0 regression.**
+    Moving between folders logs one dev-mode `NG0956` warning per new trail ("track by identity
+    caused re-creation of the entire collection of size 1"). The stack trace points at our
+    wrapper, `NxsSatoriBreadcrumbsComponent`, not at `sat-breadcrumbs`. Its template remounts
+    `sat-breadcrumbs` on purpose — `@for (trail of [satoriItems()]; track trail)` — so each new trail
+    is measured. That was added in `ca722912d` (NXSAT-308, 13 Oct), when Satori fitted a trail only
+    at start-up and on resize, and this branch does not change it. **satori-ui 1.0.0 now re-fits
+    when `items` changes** (an `effect()` in `breadcrumbs.ts` at `v1.0.0` resets and re-runs
+    truncation on every `items` or `variant` change), so the remount — and the warning — are
+    probably no longer needed. Not removed here: the remount was justified by a real overflow
+    (a long trail at 1440px after navigating), and its spec asserts only that a new instance is
+    created. Removing it needs that overflow re-proven on 1.0.0 first.
 - **The Satori Storybook had the same regression — fixed.** `.storybook/preview.ts` and
   `primitives.satori.stories.ts` configured Satori's own loader with `en`, which requested
   `i18n/@hylandsoftware/satori-ui/en.json` (404). Stories showed raw keys
