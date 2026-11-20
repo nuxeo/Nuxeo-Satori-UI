@@ -116,11 +116,13 @@ configuration, or with your own code, and upgrades never overwrite your changes.
   scan runs locally against a Nuxeo.
 - 🎛️ **Customisable**: four layers, from settings to your own code, with upgrade-safe overrides.
 - 🧩 **Extensible**: a registry of extension points for menus, actions, tabs and columns.
-- 🤖 **Optional server-side capabilities**: AI features (natural-language search, summaries, tag
-  suggestions, chat), Knowledge Discovery and the ARender annotation viewer each need a separate
-  server component. Without them those features are unavailable and the rest of the application
-  works normally. See [docs/ai-features.md](docs/ai-features.md) and
-  [docs/knowledge-discovery.md](docs/knowledge-discovery.md).
+- 🔌 **Optional server-side capabilities**: Knowledge Discovery and the ARender annotation viewer
+  each need a separate server component. Without them those features are unavailable and the rest
+  of the application works normally. See [docs/knowledge-discovery.md](docs/knowledge-discovery.md).
+- 🤖 **AI features** (natural-language search, summaries, tag suggestions, chat) are **disabled in
+  this release**: the `AI_FEATURES_ENABLED` flag is off and the AI gateway refuses operations.
+  Installing the AI backend does not enable them; turning them on needs a code change and a
+  release. See [docs/ai-features.md](docs/ai-features.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -354,13 +356,13 @@ Every command runs the same in PowerShell, macOS and Linux terminals.
 
 ## 🧪 Testing
 
-| Level         | Command                    | Notes                                                                                                                                                           |
-| ------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit          | `npx nx test <project>`    | Vitest. Runs without a backend                                                                                                                                  |
-| Integration   | `npm run beta:integration` | Runs against a live Nuxeo; needs `NUXEO_USER` and `NUXEO_PASS`                                                                                                  |
-| End to end    | `npm run beta:e2e`         | Playwright against the running app                                                                                                                              |
-| Accessibility | `npm run a11y`             | Static template-lint scan, ratcheted against a baseline. It is a regression check, not proof of WCAG 2.1 AA; the live axe scan needs a running Nuxeo            |
-| Coverage      | `npm run beta:coverage`    | Ratchet: fails if a project's coverage drops below its recorded baseline, with higher floors for listed projects. The 90% target is not yet enforced everywhere |
+| Level         | Command                    | Notes                                                                                                                                                                                                                                                                                         |
+| ------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit          | `npx nx test <project>`    | Vitest. Runs without a backend                                                                                                                                                                                                                                                                |
+| Integration   | `npm run beta:integration` | Runs against a live Nuxeo and **creates and deletes documents and users**. Needs `NUXEO_USER`, `NUXEO_PASS` and `INTEGRATION_ALLOWED_HOSTS` (e.g. `localhost:8080`); with the allowlist unset it refuses every host. See [libs/integration-tests/README.md](libs/integration-tests/README.md) |
+| End to end    | `npm run beta:e2e`         | Playwright against the running app                                                                                                                                                                                                                                                            |
+| Accessibility | `npm run a11y`             | Static template-lint scan, ratcheted against a baseline. It is a regression check, not proof of WCAG 2.1 AA; the live axe scan needs a running Nuxeo                                                                                                                                          |
+| Coverage      | `npm run beta:coverage`    | Ratchet: fails if a project's coverage drops below its recorded baseline, with higher floors for listed projects. The 90% target is not yet enforced everywhere                                                                                                                               |
 
 Test standards are in [AGENTS/05-test-standards.md](AGENTS/05-test-standards.md).
 

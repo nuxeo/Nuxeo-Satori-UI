@@ -246,7 +246,7 @@ outside the repo). Summary: `audit/logs/inventory.txt`.
 
 ### 3.1 Counts
 
-- **184 `*.spec.ts` files** — 179 in-process, 5 Playwright.
+- **184 `*.spec.ts` files** — 179 in-process, 5 Playwright. The per-project list below covers the 152 files in projects that still exist; the other 32 files (453 tests) belonged to a project since retired, so the list does not sum to 184.
 - **Per project** (files / static case count / lines): `nuxeo-client` 45/665/10,204 ·
   `document-detail` 22/554/10,334 · `nuxeo-ui` 18/120/2,699 ·
   `browse` 12/403/8,219 · `ui` 11/141/2,289 · `shared-extensions` 10/93/1,595 ·
@@ -330,7 +330,7 @@ stderr for every command is in `~/Desktop/agentic-ui-evidence/NXSAT-286/audit/lo
 
 **161 files, 2,881 tests, 2,881 passed, 0 failed, 0 skipped.**
 
-Per project (files / tests / Vitest-reported duration):
+Per project (files / tests / Vitest-reported duration). This breakdown excludes a project since retired (32 files, 453 tests), which the headline totals still include:
 
 - `nuxeo-client` 45 / 724 / 12.56 s
 - `document-detail` 22 / 560 / 6.80 s
