@@ -1486,6 +1486,8 @@ prefers `dc:source` (rarely auto-filled) and falls back to `dc:rights` when
 
 The create form opens empty and sends only the fields the user filled in, so every untouched field — an unticked checkbox included — takes its server default from Step 1, and a default cannot be cleared at creation (NXSAT-630).
 
+**Which types are blob-holding:** File, Picture, Audio and Video, and any type that extends one of them or carries the `file` schema itself — a customer's `RentalContract extends File`, for instance. The dialog reads the type hierarchy from Nuxeo's content model through `ContentModelService` (`GET /nuxeo/api/v1/config/types`, `/config/facets` and `/config/schemas`, cached for the application's lifetime). Until it arrives, or if the server refuses it, only the four stock names count. The same rule decides which types the Import tab offers for files.
+
 ---
 
 ## 28. Application Configuration — Bootstrap and Manifest (NXSAT-312)

@@ -35,7 +35,7 @@ import {
   viewChild,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -46,7 +46,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { FormsModule } from '@angular/forms';
-import { finalize, forkJoin } from 'rxjs';
+import { catchError, finalize, forkJoin, map, of } from 'rxjs';
 
 import {
   BrowseService,
@@ -59,7 +59,8 @@ import {
   docTypeLabel,
   directoryPickerLabel,
   filterDirectoryPickerEntries,
-  isBlobHoldingDocType,
+  ContentModelService,
+  type NuxeoDoctypeDefinition,
   isDomainParentType,
   isFolderishDocument,
   isRepositoryRootPath,
@@ -87,6 +88,10 @@ import {
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
 import { utcMidnightOf } from '../calendar-day';
+import { typeHoldsMainBlob } from './main-blob-type';
+
+/** No content model yet, or none the server would give: the stock type names decide alone. */
+const NO_DOCTYPES: Readonly<Record<string, NuxeoDoctypeDefinition>> = {};
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */
@@ -246,6 +251,22 @@ export class CreateImportDialogComponent implements OnInit {
   private readonly browse = inject(BrowseService);
   private readonly directoryService = inject(DirectoryService);
   private readonly toast = inject(NxsToastService);
+  private readonly contentModel = inject(ContentModelService);
+
+  /**
+   * Nuxeo's doctypes, to tell which types keep a main file (`typeHoldsMainBlob`). The content
+   * model — `/config/types`, `/config/facets` and `/config/schemas` — is read once and cached
+   * for the application's lifetime. Empty until it arrives, or if the server refuses it: the
+   * check then falls back to the stock type names, so File, Picture, Audio and Video never wait
+   * on it.
+   */
+  private readonly doctypes = toSignal(
+    this.contentModel.getContentModel().pipe(
+      map((model): Readonly<Record<string, NuxeoDoctypeDefinition>> => model.doctypes),
+      catchError(() => of(NO_DOCTYPES)),
+    ),
+    { initialValue: NO_DOCTYPES },
+  );
 
   private folderContextRequestId = 0;
   private locationSuggestionsRequestId = 0;
@@ -347,17 +368,17 @@ export class CreateImportDialogComponent implements OnInit {
 
   readonly hasContentField = computed(() => {
     const type = this.selectedDocType()?.type;
-    return type ? isBlobHoldingDocType(type) : false;
+    return type ? this.holdsMainBlob(type) : false;
   });
 
   readonly createMissingMainFile = computed(() => {
     const type = this.selectedDocType()?.type;
-    return type ? isBlobHoldingDocType(type) && !this.mainFile() : false;
+    return type ? this.holdsMainBlob(type) && !this.mainFile() : false;
   });
 
   readonly mainFileUploadPending = computed(() => {
     const type = this.selectedDocType()?.type;
-    if (!type || !isBlobHoldingDocType(type)) return false;
+    if (!type || !this.holdsMainBlob(type)) return false;
     const file = this.mainFile();
     if (!file) return false;
     return this.mainFileUploading() || !this.mainFileUploadComplete();
@@ -372,16 +393,24 @@ export class CreateImportDialogComponent implements OnInit {
   readonly createFormReady = computed(() => this.layoutForm()?.ready() ?? false);
 
   readonly importBlobTypeOptions = computed(() =>
-    this.creatableTypes().filter((dt) => isBlobHoldingDocType(dt.type)),
+    this.creatableTypes().filter((dt) => this.holdsMainBlob(dt.type)),
   );
 
   readonly importBlobTypeNames = computed(() => this.importBlobTypeOptions().map((dt) => dt.type));
 
-  /** Dublin Core metadata fields for blob-holding import types (File, Picture, Audio, Video). */
+  /**
+   * Dublin Core metadata fields for blob-holding import types: File, Picture, Audio, Video and
+   * any type that extends one of them or carries the `file` schema.
+   */
   readonly showImportBlobMetadataFields = computed(() => {
     const type = this.importDocType();
-    return !!type && isBlobHoldingDocType(type);
+    return !!type && this.holdsMainBlob(type);
   });
+
+  /** Whether `type` keeps a main file, by its ancestry in Nuxeo's content model. */
+  private holdsMainBlob(type: string): boolean {
+    return typeHoldsMainBlob(type, this.doctypes());
+  }
 
   readonly canEditImportPrevious = computed(() => this.importFileIndex() > 0);
 
@@ -1002,6 +1031,20 @@ export class CreateImportDialogComponent implements OnInit {
     this.contentError.set(null);
   }
 
+  /**
+   * The type a staged file starts as. `resolveImportBlobDocType` infers one of the stock types
+   * from the MIME type and falls back to `File`, which is right whenever this folder allows a
+   * stock type. Where it allows only a type that extends one — a folder that takes
+   * `RentalContract` and not `File` — that fallback names a type the server would refuse, so
+   * the first allowed blob type is used instead.
+   */
+  private importDocTypeFor(file: File, allowedTypes: readonly string[]): string {
+    const resolved = resolveImportBlobDocType(file, allowedTypes);
+    return allowedTypes.length === 0 || allowedTypes.includes(resolved)
+      ? resolved
+      : allowedTypes[0];
+  }
+
   startImportProperties(): void {
     if (this.importRestricted()) return;
     const files = this.uploads.pending();
@@ -1011,7 +1054,7 @@ export class CreateImportDialogComponent implements OnInit {
     const entries: StagedImportFile[] = files.map((file) => ({
       file,
       checked: true,
-      docType: resolveImportBlobDocType(file, allowedTypes),
+      docType: this.importDocTypeFor(file, allowedTypes),
       visited: false,
       state: defaultImportPropertiesState(file),
     }));
@@ -1241,7 +1284,7 @@ export class CreateImportDialogComponent implements OnInit {
     const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
     const name = sanitizeDocumentName(title);
     const mainFile = this.mainFile();
-    const hasBlob = isBlobHoldingDocType(docType.type);
+    const hasBlob = this.holdsMainBlob(docType.type);
 
     if (hasBlob && !mainFile) {
       this.contentError.set(
