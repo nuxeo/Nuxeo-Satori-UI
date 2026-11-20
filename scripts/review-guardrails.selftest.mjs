@@ -12921,6 +12921,75 @@ expectRed(
   /asks Satori's translation loader for "en-US"[\s\S]*serves no en-US\.json or en\.json[\s\S]*it has fr-FR/,
 );
 
+// Review on #602: the gate found Storybooks only by a `.storybook/main.*` path, so one whose
+// target sets `configDir` elsewhere was never read — green while its catalogue requests 404. The
+// builder's `assets` option, which serves files too, was not read either.
+const sbProject = (options) =>
+  `${JSON.stringify(
+    {
+      name: 'sb-satori',
+      targets: {
+        'build-storybook': { executor: '@storybook/angular:build-storybook', options },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+
+expectRed(
+  'a Storybook configured through a target configDir not named .storybook',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProject({ configDir: `${SB}/.storybook-satori` }),
+    [`${SB}/.storybook-satori/main.ts`]: sbMain(),
+    [`${SB}/.storybook-satori/preview.ts`]: sbPreview(`'en'`),
+  },
+  null,
+  /\.storybook-satori\/preview\.ts asks Satori's translation loader for "en"/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  "catalogues served only through the builder's assets option",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProject({
+      configDir: `${SB}/.storybook`,
+      assets: [{ glob: '**/*', input: SB_VENDOR, output: 'i18n/@hylandsoftware/satori-ui' }],
+    }),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+expectRed(
+  'a builder asset glob the gate cannot interpret, covering the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProject({
+      configDir: `${SB}/.storybook`,
+      assets: [{ glob: 'en-*.json', input: SB_VENDOR, output: 'i18n/@hylandsoftware/satori-ui' }],
+    }),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /with glob `en-\*\.json`, which `checkStorybookSatoriCatalogues` cannot interpret/,
+);
+
+expectWarn(
+  'a target configDir that holds no main file',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB}/project.json`]: sbProject({ configDir: `${SB}/.storybook-missing` }),
+  },
+  null,
+  /names libs\/shared\/sb-satori\/\.storybook-missing as its `configDir`, but it holds no main file/,
+);
+
 // A clean checkout without GitHub Packages has no satori-ui to compare against: say so, stay green.
 expectWarn(
   'a served folder whose package is not installed',

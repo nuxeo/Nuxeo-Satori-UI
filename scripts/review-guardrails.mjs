@@ -5094,9 +5094,11 @@ const SATORI_STORYBOOK_CATALOGUE_DIR = 'i18n/@hylandsoftware/satori-ui';
  *
  * ## What it reads
  *
- * - Every `.storybook/main.ts` under `apps/` and `libs/`. The `staticDirs` entry whose `to` is
- *   `i18n/@hylandsoftware/satori-ui` names the folder that is served there.
- * - Every `.ts` file in that `.storybook/` and every `*.stories.ts` under the project's `src/`.
+ * - Every Storybook config directory under `apps/` and `libs/`: each `.storybook/` with a main
+ *   file, and each `configDir` a Storybook-executor target in a `project.json` names. What is
+ *   served at `i18n/@hylandsoftware/satori-ui` comes from that main file's `staticDirs` (any entry
+ *   whose mount covers the path) and from the targets' object-form `assets`.
+ * - Every script in that config directory and every `*.stories.*` under the project's `src/`.
  *   A project is checked when one of them calls `provideAndConfigureSatoriTranslations`. Each
  *   such call's `fallbackLang`, and each `….use(<lang>)` on a `TranslateService`, is a language
  *   the loader will request.
@@ -5162,18 +5164,81 @@ function checkStorybookSatoriCatalogues() {
     return node.getText().includes('TranslateService');
   };
 
-  const mains = [
-    ...walk('apps', (path) => path.endsWith('/.storybook/main.ts')),
-    ...walk('libs', (path) => path.endsWith('/.storybook/main.ts')),
-  ];
+  /**
+   * Every Storybook config directory, and the `assets` its targets serve.
+   *
+   * Found two ways, because each alone misses one. By name (`.storybook/main.*`), which finds a
+   * Storybook nothing builds yet; and from every `project.json` target run by a Storybook
+   * executor, whose `configDir` — in `options` or any configuration — may name a directory that
+   * is not called `.storybook`. Reading only the first let a Storybook configured through a
+   * target pass unchecked while its catalogue requests 404 (review on #602).
+   *
+   * The builder's `assets` option serves `{ glob, input, output }` patterns as well, so those
+   * count as mounts too. A plain-string asset is a single file copied by Angular's rules and is
+   * not read here; it can only add files, never hide one.
+   */
+  const MAIN_NAMES = ['main.ts', 'main.mts', 'main.js', 'main.mjs', 'main.cjs'];
+  const trimSlashes = (path) => path.replace(/^\.?\/+/, '').replace(/\/+$/, '');
+  /** @type {Map<string, { input: string, output: string, glob: string, target: string }[]>} */
+  const configDirs = new Map();
+  const addConfigDir = (dir) => {
+    const key = trimSlashes(toPosixRel(dir));
+    if (!configDirs.has(key)) configDirs.set(key, []);
+    return configDirs.get(key);
+  };
+  for (const main of [
+    ...walk('apps', (path) => MAIN_NAMES.some((name) => path.endsWith(`/.storybook/${name}`))),
+    ...walk('libs', (path) => MAIN_NAMES.some((name) => path.endsWith(`/.storybook/${name}`))),
+  ]) {
+    addConfigDir(dirname(main));
+  }
+  for (const projectFile of [
+    ...walk('apps', (path) => path.endsWith('/project.json')),
+    ...walk('libs', (path) => path.endsWith('/project.json')),
+  ]) {
+    let project;
+    try {
+      project = JSON.parse(read(projectFile));
+    } catch {
+      continue; // Malformed project files are another gate's concern; nothing here to read.
+    }
+    for (const [name, target] of Object.entries(project?.targets ?? {})) {
+      if (typeof target?.executor !== 'string' || !/storybook/i.test(target.executor)) continue;
+      for (const options of [target.options, ...Object.values(target.configurations ?? {})]) {
+        if (!options || typeof options !== 'object') continue;
+        // A configuration without `configDir` inherits the target's, as the builder does.
+        const configDir = options.configDir ?? target.options?.configDir;
+        if (typeof configDir !== 'string') continue;
+        const assets = addConfigDir(configDir);
+        for (const asset of options.assets ?? []) {
+          if (asset && typeof asset === 'object' && typeof asset.input === 'string') {
+            assets.push({
+              input: asset.input,
+              output: typeof asset.output === 'string' ? asset.output : '',
+              glob: typeof asset.glob === 'string' ? asset.glob : '**/*',
+              target: `${projectFile}#${name}`,
+            });
+          }
+        }
+      }
+    }
+  }
   let checked = 0;
 
-  for (const main of mains) {
-    const storybookDir = dirname(main);
+  for (const [storybookDir, assetMounts] of configDirs) {
+    const mainName = MAIN_NAMES.find((name) => fileExists(`${storybookDir}/${name}`));
+    if (!mainName) {
+      warn(
+        `A Storybook target names ${storybookDir} as its \`configDir\`, but it holds no main ` +
+          'file, so `checkStorybookSatoriCatalogues` could not read what it serves.',
+      );
+      continue;
+    }
+    const main = `${storybookDir}/${mainName}`;
     const projectRoot = dirname(storybookDir);
     const sources = [
-      ...walk(storybookDir, (path) => path.endsWith('.ts')),
-      ...walk(`${projectRoot}/src`, (path) => path.endsWith('.stories.ts')),
+      ...walk(storybookDir, (path) => /\.(m?[jt]s|cjs)$/.test(path)),
+      ...walk(`${projectRoot}/src`, (path) => /\.stories\.(m?[jt]s|cjs)$/.test(path)),
     ];
 
     /** @type {{ file: string, lang: string, via: string }[]} */
@@ -5300,12 +5365,18 @@ function checkStorybookSatoriCatalogues() {
      * mounted above may hold no catalogue folder at all, and then serves nothing at that path.
      */
     const mounts = [];
-    const addMount = (fromText, toText) => {
+    /** Whether a mount at `to` can serve the catalogue path at all. */
+    const covers = (to) =>
+      to === SATORI_STORYBOOK_CATALOGUE_DIR ||
+      to === '' ||
+      SATORI_STORYBOOK_CATALOGUE_DIR.startsWith(`${to}/`);
+    // `staticDirs` paths are relative to the config directory; builder `assets` to the workspace.
+    const addMount = (fromText, toText, base = storybookDir) => {
       const to = trim(toText);
-      const from = toPosixRel(join(storybookDir, fromText));
+      const from = toPosixRel(join(base, fromText));
       if (to === SATORI_STORYBOOK_CATALOGUE_DIR) {
         mounts.push({ dir: from, exact: true });
-      } else if (to === '' || SATORI_STORYBOOK_CATALOGUE_DIR.startsWith(`${to}/`)) {
+      } else if (covers(to)) {
         const rest =
           to === ''
             ? SATORI_STORYBOOK_CATALOGUE_DIR
@@ -5313,6 +5384,22 @@ function checkStorybookSatoriCatalogues() {
         mounts.push({ dir: toPosixRel(join(from, rest)), exact: false });
       }
     };
+    // The globs that copy a folder's top-level `.json` files, and so its catalogues, unchanged.
+    const COPIES_CATALOGUES = new Set(['**/*', '**', '*', '*.json', '**/*.json']);
+    for (const asset of assetMounts) {
+      if (!covers(trim(asset.output))) continue;
+      if (!COPIES_CATALOGUES.has(asset.glob)) {
+        fail(
+          `${asset.target} serves \`${asset.input}\` at "${asset.output}" with glob ` +
+            `\`${asset.glob}\`, which \`checkStorybookSatoriCatalogues\` cannot interpret — so it ` +
+            `cannot tell which catalogues reach ${SATORI_STORYBOOK_CATALOGUE_DIR}. Teach the gate ` +
+            'that glob rather than leaving it asserting nothing.',
+        );
+        legible = false;
+        continue;
+      }
+      addMount(asset.input, asset.output, '');
+    }
     if (staticDirs && ts.isArrayLiteralExpression(staticDirs)) {
       for (const element of staticDirs.elements) {
         if (ts.isStringLiteral(element) || ts.isNoSubstitutionTemplateLiteral(element)) {
