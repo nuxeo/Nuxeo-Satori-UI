@@ -10,7 +10,6 @@ audience: product
 # Product Overview
 
 > **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
 > The rest of the page as of 2026-08-24 · `77265f9`.
 > Grounded in the repository and in
 > [RFC: Nuxeo Satori Beta](https://hyland.atlassian.net/wiki/spaces/~71202090f2a61ef96d4f57a5104efe296c1f5b/pages/4256993484)
@@ -32,7 +31,7 @@ Enterprise Nuxeo customers have no modern, first-party way to build a custom, on
 content UI. They either fight the ageing Polymer stack of the existing Nuxeo Web UI, which
 the RFC calls "a customisation dead end", or go fully headless and rebuild everything from
 scratch. Satori is a deep core ECM slice — browse, folder tree, search, document detail,
-metadata, permissions, versions, upload and CRUD — built on real `adf-hx` components and
+metadata, permissions, versions, upload and CRUD — built on `nxs-` Satori components and
 delivered as a Nuxeo marketplace package. Its distinguishing feature is not the screens: it
 is a **four-layer customisation contract** in which the first two layers need no code and no
 rebuild, the third is the customer's own npm library against our published API, and the
@@ -132,7 +131,7 @@ the API-surface gate and the upgrade rehearsal exist.**
 | A deep ECM slice works against real Nuxeo                                           | 9 feature libraries, ~53.6k lines; 12 E2E specs on browse, search, document detail and auth                                                                                                                |
 | Configuration alone changes the app, with no rebuild of the application             | `phase-1-config` evidence, 39 checks: a swapped configuration response changes the app while the bundle stays byte-identical. Installing it as a package: NXSAT-312 rehearsal (`docs/demo-deck-claims.md`) |
 | A manifest edit changes the addressable surface, with no rebuild of the application | `phase-2-registry` evidence, 46 checks, by the same swapped-response method                                                                                                                                |
-| Real adf-hx components render against Nuxeo                                         | `phase-3-adf-hx` evidence, 55 checks; 12 API ports bound                                                                                                                                                   |
+| Nuxeo-owned `nxs-` components render against Nuxeo                                  | Phase 3 (component adoption) evidence, 55 checks                                                                                                                                                           |
 | The platform is an installable, publishable package                                 | `phase-4-platform`, 25 checks; `npm publish --dry-run` passes                                                                                                                                              |
 | Generators produce **live** registrations                                           | `phase-5-harness`, 27 checks                                                                                                                                                                               |
 | A Layer 0/1/2 customisation **survives an upgrade**                                 | `npm run beta:upgrade`, 8 assertions                                                                                                                                                                       |
@@ -169,8 +168,8 @@ the API-surface gate and the upgrade rehearsal exist.**
    survives.
 4. **The AI harness ships to the customer.** Generators and a runnable guardrail are inside
    the package, so a customer's own agent can produce and verify conforming extensions.
-5. **Built on real `adf-hx`**, so component-level investment is shared with Alfresco rather
-   than duplicated.
+5. **Built on `nxs-` components** owned in one library, so UI building blocks are restyled,
+   tested and versioned in one place.
 
 ---
 
@@ -178,10 +177,10 @@ the API-surface gate and the upgrade rehearsal exist.**
 
 Worth knowing if you are reading the RFC alongside the code.
 
-| RFC planned                                                                                                                   | What shipped                                                                                                                                                                                                                                    |
-| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Five or more npm packages** — `@nuxeo-satori/nuxeo-client`, `/adf-hx-bridge`, `/extensions`, `/ui`, `/feature-*` (RFC §5.2) | **One** package, `@nuxeo/satori-platform`, with 4 secondary entry points. Simpler to version and to support; the bridge was deliberately never published, keeping adf-hx types out of the public API, and was removed on 2026-10-14 (NXSAT-635) |
-| **Three repositories** — the monorepo, `nuxeo-satori-app-template`, `nuxeo-satori-extension-starter` (RFC §5.1)               | **One** monorepo. The template is `apps/nuxeo-satori-template`; the starter is `libs/extensions/acme-extensions`                                                                                                                                |
+| RFC planned                                                                                                     | What shipped                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Five or more npm packages** — `@nuxeo-satori/nuxeo-client`, `/extensions`, `/ui`, `/feature-*` (RFC §5.2)     | **One** package, `@nuxeo/satori-platform`, with 4 secondary entry points. Simpler to version and to support      |
+| **Three repositories** — the monorepo, `nuxeo-satori-app-template`, `nuxeo-satori-extension-starter` (RFC §5.1) | **One** monorepo. The template is `apps/nuxeo-satori-template`; the starter is `libs/extensions/acme-extensions` |
 
 Neither is a defect — both are simplifications — but the RFC has not been revised, so the
 two documents disagree. Flagged in

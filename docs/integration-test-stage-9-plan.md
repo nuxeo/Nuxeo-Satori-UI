@@ -148,7 +148,7 @@ workflow below for why.
 
 ### Phase 3
 
-- `phase-3-adf-hx.mjs` — adf-hx component adoption
+- Phase 3 (component adoption) steps file
 - `phase-3-search.mjs` — search
 
 ### Phase 4
@@ -166,7 +166,7 @@ workflow below for why.
 ### Not phases, so not on this schedule
 
 - `_template.mjs` — the template a new steps file is copied from
-- `nxsat-227-i18n.mjs`, `pilot-documentlist-columns.mjs`, `showcase-adf-hx.mjs` — per-ticket
+- `nxsat-227-i18n.mjs`, `pilot-documentlist-columns.mjs` — per-ticket
   and demo captures, run on demand
 
 ### Separate gates, not evidence steps
@@ -237,7 +237,7 @@ jobs:
           EVIDENCE_HEADLESS: '1'
         run: |
           for phase in phase-0-baseline phase-0-no-backend phase-1-config \
-                       phase-1-tag-styles phase-2-registry phase-3-adf-hx \
+                       phase-1-tag-styles phase-2-registry \
                        phase-3-search phase-4-platform phase-5-harness phase-6-a11y; do
             npm run beta:evidence -- "$phase"
           done

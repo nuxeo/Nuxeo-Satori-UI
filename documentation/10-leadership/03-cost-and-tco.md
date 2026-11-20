@@ -41,33 +41,32 @@ inference cost against Satori is double-counting or mis-attributing.
 
 ### 2.1 Infrastructure and runtime
 
-| Driver                | What influences it                                                                         | Measurable how         | Known today                           |
-| --------------------- | ------------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------- |
-| Static asset delivery | Bundle size. Ceiling is **6 MiB** total shipped JS+CSS, currently ~4.90 MB                 | CI prints it every run | **Measured.** Headroom ~1.0 MB        |
-| Initial page weight   | Eager bundle. Deliberately raised to **2.86 MB** (from 1.71 MB) when adf-core became eager | `angular.json` budget  | **Measured**, with the trade recorded |
-| Nuxeo API load        | Requests per user action; no client-side caching layer exists                              | Nuxeo access logs      | Not measured                          |
-| OpenSearch load       | Search and aggregation volume                                                              | OpenSearch metrics     | Not measured                          |
-| ARender               | Licensing + container resource                                                             | Vendor terms           | **Not verified in repository**        |
-| Storage               | Nuxeo's, unchanged by this UI                                                              | —                      | Out of scope                          |
+| Driver                | What influences it                                                         | Measurable how         | Known today                           |
+| --------------------- | -------------------------------------------------------------------------- | ---------------------- | ------------------------------------- |
+| Static asset delivery | Bundle size. Ceiling is **6 MiB** total shipped JS+CSS, currently ~4.90 MB | CI prints it every run | **Measured.** Headroom ~1.0 MB        |
+| Initial page weight   | Eager initial bundle, held to a size budget                                | `angular.json` budget  | **Measured**, with the trade recorded |
+| Nuxeo API load        | Requests per user action; no client-side caching layer exists              | Nuxeo access logs      | Not measured                          |
+| OpenSearch load       | Search and aggregation volume                                              | OpenSearch metrics     | Not measured                          |
+| ARender               | Licensing + container resource                                             | Vendor terms           | **Not verified in repository**        |
+| Storage               | Nuxeo's, unchanged by this UI                                              | —                      | Out of scope                          |
 
 > The bundle-size ceiling was raised from 5 to 6 MiB on 2026-08-24 with the reasoning recorded
-> at the value, and it explicitly notes it **defers** the real fix: adf-core should be lazy.
-> That deferred work is a cost item.
+> at the value.
 
 ### 2.2 Engineering — build
 
 The RFC's estimates, by delivery mode, for the seven phases:
 
-| Phase               | Focused       | AI-assisted | Autonomous  |
-| ------------------- | ------------- | ----------- | ----------- |
-| 0 — Unblock         | 2–4 d         | 1–2 d       | 1–2 d       |
-| 1 — Layer 0         | 12–18 d       | 7–11 d      | 4–7 d       |
-| 2 — Layer 1         | 15–22 d       | 9–14 d      | 6–10 d      |
-| 3 — adf-hx adoption | 30–45 d       | 20–29 d     | 12–20 d     |
-| 4 — Layer 2         | 18–26 d       | 11–16 d     | 7–11 d      |
-| 5 — Layer 3         | 8–12 d        | 4–7 d       | 2–4 d       |
-| 6 — Quality & proof | 20–30 d       | 12–18 d     | 7–12 d      |
-| **Total**           | **105–157 d** | **64–97 d** | **39–66 d** |
+| Phase                  | Focused       | AI-assisted | Autonomous  |
+| ---------------------- | ------------- | ----------- | ----------- |
+| 0 — Unblock            | 2–4 d         | 1–2 d       | 1–2 d       |
+| 1 — Layer 0            | 12–18 d       | 7–11 d      | 4–7 d       |
+| 2 — Layer 1            | 15–22 d       | 9–14 d      | 6–10 d      |
+| 3 — Component adoption | 30–45 d       | 20–29 d     | 12–20 d     |
+| 4 — Layer 2            | 18–26 d       | 11–16 d     | 7–11 d      |
+| 5 — Layer 3            | 8–12 d        | 4–7 d       | 2–4 d       |
+| 6 — Quality & proof    | 20–30 d       | 12–18 d     | 7–12 d      |
+| **Total**              | **105–157 d** | **64–97 d** | **39–66 d** |
 
 **These are estimates from the RFC, not actuals.** No time tracking exists in this repository,
 so the realised cost of Phases 0–5 is unknown. That is a measurable gap: the git history has
@@ -212,8 +211,7 @@ Ranked by decision value per unit of effort.
   unmeasured — and that is the number the business case depends on.
 - **We do know the shape:** verification dominates, review is the constraint, and the harness
   is a permanent maintenance line item.
-- **We know one hard number:** the shipped bundle is 4.90 MB against a 6 MiB ceiling, and the
-  real fix (lazy adf-core) is deferred.
+- **We know one hard number:** the shipped bundle is 4.90 MB against a 6 MiB ceiling.
 - **Runtime AI cost is not ours** — and any model that assumes it is will be wrong.
 
 The cheapest way to make this page quantitative is measurement #1. Everything downstream of it
