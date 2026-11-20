@@ -6,7 +6,7 @@ function ask(title, body, okLabel, fn, danger) {
 }
 const logOn = (on, icon, t) => S.log.unshift({ on, icon, t });
 const nextId = (map, prefix) => prefix + (Math.max(0, ...Object.keys(map).map((k) => Number(k.slice(prefix.length)) || 0)) + 1);
-const personaOpts = (sel) => Object.entries(PERSONAS).map(([k, p]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(p.n)}, ${esc(p.role)}</option>`).join('');
+const personaOpts = (sel, group) => Object.entries(PERSONAS).filter(([, p]) => !group || p.groups.includes(group)).map(([k, p]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(p.n)}, ${esc(p.role)}</option>`).join('');
 function setState(id, to, extra, alsoUndo) {
   const c = CLAIMS[id], before = { ...c };
   c.state = to;
@@ -25,6 +25,12 @@ function moveFromPage(id, to, extra) {
 
 function completeTask(id) {
   const t = TASKS[id], f = S.tf[id], e = {};
+  const need = STEP_GROUPS[t.node];
+  if (need && !me().groups.includes(need)) {
+    f.errors = { decision: `Only ${need} can complete “${t.node}”.` };
+    render();
+    return;
+  }
   const claim = t.target.startsWith('CLAIM') ? CLAIMS[t.target] : null;
   if (claim && !OPEN_STATES.includes(claim.state)) {
     f.errors = { decision: `${t.target} is ${CLAIM_STATE_LABEL[claim.state]}, so this task no longer applies.` };
@@ -99,8 +105,11 @@ document.addEventListener('click', (ev) => {
     }
     case 'assign': case 'reassign': case 'bulk-assign': {
       const ids = a === 'bulk-assign' ? [...S.sel] : a === 'reassign' ? [TASKS[id].target] : [id];
-      ask('Assign to', `<label class="f"><span>Person</span><select id="as">${personaOpts('dana')}</select></label><p class="muted">${ids.length} item${ids.length > 1 ? 's' : ''}. The server refuses it if the workflow step does not allow reassignment.</p>`, 'Assign', (d) => {
+      const need = a === 'reassign' ? STEP_GROUPS[TASKS[id].node] : null;
+      ask('Assign to', `<label class="f"><span>Person</span><select id="as">${personaOpts(need ? 'morgan' : 'dana', need)}</select></label>${need ? `<p class="help" style="margin-left:0">“${esc(TASKS[id].node)}” belongs to ${need}: only its members are offered.</p>` : ''}<p class="muted">${ids.length} item${ids.length > 1 ? 's' : ''}. The server refuses it if the workflow step does not allow reassignment.</p>`, 'Assign', (d) => {
         const p = d.querySelector('#as').value;
+        // The list above is only what is offered; the check is here, as a server would make it.
+        if (need && !PERSONAS[p].groups.includes(need)) { toast(`${PERSONAS[p].n} is not in ${need}`); return false; }
         ids.forEach((x) => { if (CLAIMS[x]) CLAIMS[x].assignee = p; if (a === 'reassign') TASKS[id].who = p; logOn(x, 'reassign', `Assigned to ${PERSONAS[p].n} by ${me().n}`); });
         S.sel.clear();
         toast(`Assigned to ${PERSONAS[p].n}`);

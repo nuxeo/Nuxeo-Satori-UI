@@ -9,6 +9,7 @@ P.task = (r) => {
   const f = (S.tf[id] = S.tf[id] || { decision: '', allowed: '', reason: '', comment: '', errors: {} });
   const isClaim = t.target.startsWith('CLAIM'), c = isClaim ? CLAIMS[t.target] : CASES[t.target];
   const stale = isClaim && !t.done && !OPEN_STATES.includes(c.state);
+  const need = STEP_GROUPS[t.node], notMine = !!need && !inGroup([need]);
   const e = f.errors, er = (k) => (e[k] ? `<div class="err" id="e-${k}">${esc(e[k])}</div>` : '');
   let form = '';
   if (t.node === 'Determine') {
@@ -28,10 +29,10 @@ P.task = (r) => {
     : `<dl class="kv"><div><dt>Member</dt><dd>${mLink(c.member)}</dd></div><div><dt>Type</dt><dd>${c.type}</dd></div><div><dt>Deadline</dt><dd>${sla(c.due)}</dd></div></dl>`;
   return head(esc(t.n), `${esc(t.wf)} · step “${esc(t.node)}” · on ${tLink(t.target)} · ${sla(t.due)}`, ['s4', 's2']) +
     (t.done ? (t.closedByState ? `<div class="banner">${ic('info')}Closed when ${t.target} moved to ${CLAIM_STATE_LABEL[t.closedByState]} from its own page.</div>` : `<div class="banner ok">${ic('circle_check')}Completed. The claim moved on.</div>`) : stale ? `<div class="banner warn">${ic('info')}${t.target} is ${CLAIM_STATE_LABEL[c.state]}, so this task no longer applies.</div>` : '') +
-    `<div class="split"><div class="card"><h2>Task form</h2>${t.who !== S.persona ? `<div class="banner warn">${ic('lock')}Assigned to ${esc(pName(t.who))}. You can read it but not complete it.</div>` : ''}
+    `<div class="split"><div class="card"><h2>Task form</h2>${notMine ? `<div class="banner warn">${ic('lock')}“${esc(t.node)}” is for ${need}. You can read it but not complete it.</div>` : t.who !== S.persona ? `<div class="banner warn">${ic('lock')}Assigned to ${esc(pName(t.who))}. You can read it but not complete it.</div>` : ''}
       ${form}<label class="f"><span>Comment (type @ to mention someone)</span><textarea data-act="tfv" data-k="comment">${esc(f.comment)}</textarea></label>
       ${Object.keys(e).length ? `<div class="banner err" role="alert">${ic('critical')}${Object.keys(e).length} field${Object.keys(e).length > 1 ? 's' : ''} to correct.</div>` : ''}
-      <div class="row"><button class="primary" data-act="complete" data-id="${id}" ${t.done || stale || t.who !== S.persona ? 'disabled' : ''}>Complete task</button><button data-act="reassign" data-id="${id}">${ic('reassign', 1)}Reassign</button></div></div>
+      <div class="row"><button class="primary" data-act="complete" data-id="${id}" ${t.done || stale || notMine || t.who !== S.persona ? 'disabled' : ''}>Complete task</button><button data-act="reassign" data-id="${id}">${ic('reassign', 1)}Reassign</button></div></div>
     <div><div class="card"><h2>${isClaim ? 'Claim' : 'Case'} at a glance</h2>${facts}</div><div class="card"><h2>Documents</h2>${(isClaim ? c.docs : Object.keys(DOCS).filter((d) => DOCS[d].case === t.target)).map((d) => `<div class="field">${ic('pdf', 1)}<span style="flex:1">${esc(DOCS[d].n)}</span><button class="sm link" data-act="preview" data-id="${d}">Preview</button></div>`).join('') || '<p class="muted">None attached.</p>'}</div></div></div>` +
     note('<strong>Plan:</strong> this form is built from the workflow step’s own variables, not hard-coded (Step 4). The denial reason appears only for a denial, and the allowed amount cannot exceed the billed amount: a field rule and a cross-field check (Step 2). Checked on Nuxeo 2025: each task names its step’s variable schema (<code>taskInfo.schemas</code> → <code>var_&lt;node&gt;</code>) and its layout, so this is client work. <a href="#/start/feasibility">Feasibility</a>.');
 };
