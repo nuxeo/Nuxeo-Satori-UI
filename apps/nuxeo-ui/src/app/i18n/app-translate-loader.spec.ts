@@ -94,6 +94,42 @@ describe('AppTranslateLoader', () => {
   });
 
   /**
+   * Every bare code satori-ui shipped before 1.0.0, against the regional file it must now reach.
+   *
+   * Written out here rather than derived from `UPSTREAM_FOLDERS` or `upstreamCatalogueFor`, because
+   * a check computed from the same table as the loader cannot notice a row going missing: delete
+   * `de` from `aliases` and both sides expect no request, so the invariant test below still passes
+   * and so does the dangling-alias check, which only sees aliases that exist. This list is the
+   * independent statement of what each language must fetch.
+   */
+  const EXPECTED_SATORI_CATALOGUE: Readonly<Record<string, string>> = {
+    de: 'de-DE',
+    en: 'en-US',
+    es: 'es-ES',
+    fr: 'fr-FR',
+    it: 'it-IT',
+    pl: 'pl-PL',
+    pt: 'pt-PT',
+  };
+
+  for (const [lang, catalogue] of Object.entries(EXPECTED_SATORI_CATALOGUE)) {
+    it(`asks satori-ui for ${catalogue}.json when the application is in ${lang}`, () => {
+      configure();
+      loader.getTranslation(lang).subscribe();
+
+      const upstream = httpMock
+        .match(() => true)
+        .map((request) => {
+          request.flush({});
+          return request.request.url;
+        })
+        .filter((url) => url.startsWith('assets/satori-ui/'));
+
+      expect(upstream).toEqual([`assets/satori-ui/i18n/${catalogue}.json`]);
+    });
+  }
+
+  /**
    * An alias pointing at a catalogue the folder does not list would be skipped silently by
    * `upstreamCatalogueFor`, leaving that language's `sat.*` keys in English with no error. The
    * guardrail keeps `languages` equal to the installed files, so this check is what ties the

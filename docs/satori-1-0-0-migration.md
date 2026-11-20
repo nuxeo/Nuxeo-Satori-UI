@@ -1,16 +1,27 @@
 # Satori `1.0.0-alpha.201` → `1.0.0` — migration plan
 
-**Status (2026-11-19):** bumped on `fix/satori-design-system-1-0-0-ebf667`, not yet merged.
+**Status (2026-11-20):** bumped on `fix/satori-design-system-1-0-0-ebf667`, in review as
+nuxeo/Nuxeo-Satori-UI#602, not yet merged. The Outcome section below is the record of what was
+done. Everything after it — blockers, impact table, steps — is the plan as written before the
+bump, kept for its reasoning; each part says how it turned out.
 
 ## Outcome
 
 - `satori-ui`, `satori-lint`, `satori-design-system-checker` and `satori-migrations` are pinned
   to exactly `1.0.0`. `update-satori` rewrote them to `~1.0.0`; the exact pins were put back,
   matching every earlier Satori pin in this repo.
-- Lockfile: npm install on Node 24, then an entry-by-entry diff against the pre-bump lock. Every
-  removed, added or changed entry sits under a Satori package, plus one new transitive dependency
-  (`@isaacs/nonrecursive-glob-match`) and `satori-illustrations` 0.5.0 → 0.6.1. No `@emnapi/*`
-  entry was pruned. The `lockfile` and `lockfile-selftest` gates pass.
+- Lockfile: `npm install` on Node 24, then a diff against the pre-bump lock in three parts.
+  - **Dependency changes** (entries added or removed, or with a new `version`): all under a
+    Satori package, plus one new transitive dependency (`@isaacs/nonrecursive-glob-match`) and
+    `satori-illustrations` 0.5.0 → 0.6.1.
+  - **npm metadata outside Satori:** 83 entries changed only their `peer` flag (81 cleared,
+    including `@angular/*`, `rxjs` and `typescript`; 2 set, `@types/hammerjs` and `csstype`). Their
+    `version`, `resolved` and `integrity` are unchanged. The flag only affects
+    `npm install --omit=peer`, which nothing in this repository runs. Why npm recomputed it was
+    not established. The first version of this record compared versions only and missed these.
+  - **Order:** `@emnapi/runtime`, restored by hand at the end of the lock in `1a9bd4572`, moved to
+    its sorted position. Its content is unchanged and no `@emnapi/*` entry was pruned.
+  - The `lockfile` and `lockfile-selftest` gates pass.
 - `update-satori --from=1.0.0-alpha.201 --to=1.0.0`: 16 of 18 migrators found nothing.
   `migrate-satori-ui-submodule-imports` reported an update to
   `document-detail-slots.spec.ts`, but the only change was Prettier reflowing one line; the file
@@ -108,14 +119,21 @@ restored in the lockfile, and the Material expansion panel was replaced with `sa
    `SatAvatarModule`, `SatLogoModule` and `SatTagModule` are all in their `public-api.ts` at
    `v1.0.0`.
 
-**Still open:** installing. `SATORI_GH_READONLY_TOKEN` is rejected by GitHub itself (401 on
-`/user`), so it has expired or been revoked. The lockfile cannot be regenerated until it is
-replaced with a token that has `read:packages`.
+**Install — resolved 2026-11-19.** This was the last open blocker: the
+`SATORI_GH_READONLY_TOKEN` in use had expired (GitHub answered 401 on `/user`). Once it was
+replaced with a token holding `read:packages`, the four packages resolved to `1.0.0` from GitHub
+Packages, and the lockfile was regenerated as described in Outcome. Nothing in this section
+remains to do.
 
 ## Breaking changes → impact here
 
 Key: **none** = the search found nothing to change; **verify** = check after install;
 **manual** = a code change the schematics will not make.
+
+After the install, every **verify** row was settled. The two still marked **verify** below,
+DS-1108 and DS-885, were confirmed by their own migrators in the `update-satori` run ("No
+deprecated override calls found", "No deprecated language config 'default' usage found"). The
+only **manual** change needed was DS-2803, which is described in Outcome.
 
 | Change                                                                                                                             | Migrator                                                     | Impact here                                                                                                                                                                                                                                                                                                                                          |
 | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -145,6 +163,20 @@ Figma-only changes (Card slots, Expansion Panel and Toolbar removed, Chip varian
 code changes. Design files that still use those components need a separate design pass.
 
 ## Steps
+
+The plan as written before the bump. How each step turned out, as of 2026-11-20:
+
+| Step                         | Status                                                                                                                                                                                                               |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 Unblock                    | Done — see Blockers                                                                                                                                                                                                  |
+| 2 Branch + bump              | Done — see Outcome. No companion-package bump was needed                                                                                                                                                             |
+| 3 Schematics                 | Done — dry run, then real run; one formatting-only change reverted                                                                                                                                                   |
+| 4 Manual fixes               | Done — the translation-catalogue mapping (DS-2803) was the only one                                                                                                                                                  |
+| 5 Gate                       | Done locally — 40 of 41 gates pass; `code-scanning` runs on the PR                                                                                                                                                   |
+| 6 Real-app check             | **Partial** — the shell, platform nav, icons and three languages were checked in the running app. Not done: both Storybooks, an RTL language, the other listed components, and evidence under `agentic-ui-evidence/` |
+| 7 Prove the icon check fails | **Not done** — negative controls were run for the translation fix, not for the icon sprite                                                                                                                           |
+| 8 Docs                       | **Partial** — versions and score updated. The deprecated-icon renames were not added to `docs/extension-reference.md` (no deprecated name is in use here, but customer manifests could supply one)                   |
+| 9 Adversarial review         | **Open**                                                                                                                                                                                                             |
 
 1. **Unblock** — resolve the three blockers above. Record the registry decision in
    `docs/adf-hx-beta-plan.md` if it changes.
