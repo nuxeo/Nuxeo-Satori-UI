@@ -4,11 +4,27 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 **Base URL:** `/nuxeo` (proxied to `http://localhost:8080` in development via `apps/nuxeo-ui/proxy.conf.json`)
 
-**Authentication:** `nuxeoAuthInterceptor` (see `apps/nuxeo-ui/src/app/auth/nuxeo-auth.interceptor.ts`) authenticates `/nuxeo/**` requests from the session in force: it adds `Authorization: Basic <credentials>` after a password sign-in, while an SSO session — and a share link, once its token has been exchanged for one — travels as the browser's cookies. The share token's own header is added only while that exchange is in progress. With no session in force it adds no header, but still sends the request with credentials, so the browser attaches any cookies it holds. The sign-in request is the one that arrives already authenticated: `AuthService.login()` sets the typed credentials as its own Basic header, and the interceptor keeps that header and sends the request without cookies. The configuration requests never reach it: the two of §28, which `AppConfigService` sends, and the layout index and files of §29, which `DocumentLayoutService` sends, both skip the interceptors. They carry no `Authorization` header, but they are not anonymous: being same-origin, they still carry the browser's cookies.
+**Authentication:** `nuxeoAuthInterceptor` (see `apps/nuxeo-ui/src/app/auth/nuxeo-auth.interceptor.ts`) authenticates `/nuxeo/**` requests from the session in force: it adds `Authorization: Basic <credentials>` after a password sign-in, while an SSO session — and a share link, once its token has been exchanged for one — travels as the browser's cookies. The share token's own header is added only while that exchange is in progress. With no session in force it adds no header, but still sends the request with credentials, so the browser attaches any cookies it holds. The sign-in request is the one that arrives already authenticated: `AuthService.login()` sets the typed credentials as its own Basic header, and the interceptor keeps that header and sets `withCredentials` to false (same-origin cookies can still be attached by the browser). The configuration requests never reach it: the two of §28, which `AppConfigService` sends, and the layout index and files of §29, which `DocumentLayoutService` sends, both skip the interceptors. They carry no `Authorization` header, but they are not anonymous: being same-origin, they still carry the browser's cookies.
 
 ---
 
 ## 1. Login (Validate Credentials)
+
+Password login and hydration clear stale cookies using `GET /nuxeo/logout` with
+`X-Requested-With: XMLHttpRequest`. Nuxeo may answer this logout with 401; it is an expected logout
+result, not a failure of the next password login. `/me` must return the requested username before
+Satori accepts it. Same-origin XHR can still send cookies when `withCredentials` is false.
+
+**Browser-session preparation for NEV:** `AuthService.ensureBrowserSession()` verifies
+`GET /nuxeo/api/v1/me` using only cookies before every preview or comparison launch. If the response
+is 401 and the user has a Basic session, it first requests `GET /nuxeo/login.jsp` without Basic or a
+share-token header to allocate an HTTP session, then calls `/me` with Basic and cookies. Standard
+Nuxeo Basic authentication is stateless when no session exists. A final cookie-only `/me` must return
+the same username; a successful HTML response is not proof of authentication. This sequence is bounded
+to ten seconds. Network/server failures, another user's cookie, or an unverified session prevent NEV
+launch and allow the built-in preview fallback. SSO sessions are verified without attempting a
+password-based repair. The login page is also requested before the existing post-login/hydration
+session-establishment call so browser resource loads can authenticate.
 
 | Field           | Value                                                        |
 | --------------- | ------------------------------------------------------------ |

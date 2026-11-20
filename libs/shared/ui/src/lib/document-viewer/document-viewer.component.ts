@@ -4,6 +4,7 @@ import {
   output,
   computed,
   signal,
+  linkedSignal,
   ChangeDetectionStrategy,
   ElementRef,
   viewChild,
@@ -199,15 +200,26 @@ export class DocumentViewerComponent {
   readonly arenderUrl = input<SafeResourceUrl | null>(null);
   /** When this changes, the ARender iframe is destroyed and recreated. */
   readonly arenderReloadId = input(0);
-  /** When the open document changes, exit ARender mode so the user does not keep a stale viewer. */
+  /** When the open document changes, reset the user's standard-preview override. */
   readonly viewerDocUid = input<string>('');
   /**
-   * When true (Annotations tab), the main area only shows ARender or a “not available” state,
-   * matching Nuxeo Web UI’s Annotations tab.
+   * When true (Annotations tab), prefer ARender or its unavailable state until the user
+   * explicitly chooses the standard preview.
    */
   readonly annotationsTab = input(false);
   /** Prefer NEV in the View tab, falling back to built-in content when no URL is available. */
   readonly preferARender = input(false);
+  readonly arenderLoading = input(false);
+  readonly retryARenderClicked = output<void>();
+  // A manual fallback belongs to this document, not the next one opened in the same component.
+  readonly standardPreview = linkedSignal({ source: this.viewerDocUid, computation: () => false });
+  readonly enhancedViewerRequested = computed(() => this.annotationsTab() || this.preferARender());
+
+  retryARender(): void {
+    if (this.arenderLoading()) return;
+    this.standardPreview.set(false);
+    this.retryARenderClicked.emit();
+  }
 
   /** When true, show Replace / Remove actions for the primary blob in the footer toolbar. */
   readonly showMainFileControls = input(false);
@@ -288,17 +300,20 @@ export class DocumentViewerComponent {
     return 'none';
   });
 
-  /** Annotations always uses NEV; the View tab opts in only when a usable URL exists. */
+  /** Both tabs can use NEV when a URL exists, unless the user chooses the standard preview. */
   readonly showARenderViewer = computed(
-    () => (this.annotationsTab() || this.preferARender()) && this.arenderUrl() !== null,
+    () => this.enhancedViewerRequested() && !this.standardPreview() && this.arenderUrl() !== null,
   );
 
   readonly showImageToolbar = computed(
-    () => !this.annotationsTab() && !this.showARenderViewer() && this.contentType() === 'image',
+    () =>
+      (!this.annotationsTab() || this.standardPreview()) &&
+      !this.showARenderViewer() &&
+      this.contentType() === 'image',
   );
   readonly showVideoStoryboard = computed(
     () =>
-      !this.annotationsTab() &&
+      (!this.annotationsTab() || this.standardPreview()) &&
       !this.showARenderViewer() &&
       this.contentType() === 'video' &&
       this.storyboard().length > 0,
@@ -318,14 +333,14 @@ export class DocumentViewerComponent {
   private readonly seekToTimecode = (timecode: number): void => this.seekTo(timecode);
   readonly showPictureCards = computed(
     () =>
-      !this.annotationsTab() &&
+      (!this.annotationsTab() || this.standardPreview()) &&
       !this.showARenderViewer() &&
       this.contentType() === 'image' &&
       this.pictureInfo() !== null,
   );
   readonly showVideoInfoCard = computed(
     () =>
-      !this.annotationsTab() &&
+      (!this.annotationsTab() || this.standardPreview()) &&
       !this.showARenderViewer() &&
       this.contentType() === 'video' &&
       this.videoInfo() !== null,

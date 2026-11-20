@@ -11,6 +11,7 @@ import {
   switchMap,
   tap,
   throwError,
+  timeout,
 } from 'rxjs';
 
 import {
@@ -21,7 +22,7 @@ import {
   rememberSharedDocumentLanding,
   stripShareTokenFromBrowserUrl,
 } from './share-token.util';
-import { NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
+import { NUXEO_COOKIE_SESSION_ONLY, NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
 
 import {
   BrowseContextService,
@@ -351,10 +352,8 @@ export class AuthService {
    * attempted once per page load instead of on every login and every hydration. Each failed
    * attempt put a console error in front of whoever was debugging something else.
    *
-   * Remembering it does not weaken the guard: where the endpoint is absent it never cleared
-   * anything to begin with. What keeps a stale cookie from overriding Basic auth on this path is
-   * that the login probe and `fetchMe()` both run without `withCredentials`, so no cookie is sent;
-   * `establishBasicAuthBrowserSession()` is the one call that deliberately opts in.
+   * Same-origin XHR sends cookies even without `withCredentials`, so password login also checks
+   * that the returned principal matches the requested user before accepting the response.
    */
   private clearStaleNuxeoCookieSession(): Observable<void> {
     if (AuthService.nuxeoLogoutEndpointAbsent) {
@@ -362,6 +361,7 @@ export class AuthService {
     }
     return this.http
       .get(this.apiUrl('/nuxeo/logout'), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
         withCredentials: true,
         responseType: 'text',
       })
@@ -377,6 +377,9 @@ export class AuthService {
   }
 
   private applyBasicSessionFromMe(existing: BasicStoredSession, me: unknown): void {
+    if (readUsernameFromMe(me) !== existing.username) {
+      throw new HttpErrorResponse({ status: 401, statusText: 'Unexpected authenticated user' });
+    }
     const flags = readSessionFlagsFromMe(me);
     this.state.set({
       kind: 'basic',
@@ -400,19 +403,76 @@ export class AuthService {
    * (JSESSIONID) so embedded note `<img src="/nuxeo/nxfile/...">` loads without headers.
    */
   private establishBasicAuthBrowserSession(): Observable<void> {
-    if (this.state()?.kind !== 'basic') {
+    const session = this.state();
+    if (session?.kind !== 'basic') {
       return of(undefined);
     }
+    // BASIC_AUTH is stateless on standard Nuxeo deployments. It only caches the principal
+    // when a session already exists. The login page creates that session without credentials.
     return this.http
-      .get(this.apiUrl('/nuxeo/api/v1/me'), {
-        headers: { Accept: 'application/json' },
+      .get(this.apiUrl('/nuxeo/login.jsp'), {
+        responseType: 'text',
         withCredentials: true,
-        context: new HttpContext().set(NUXEO_ESTABLISH_BROWSER_SESSION, true),
+        context: new HttpContext().set(NUXEO_COOKIE_SESSION_ONLY, true),
       })
       .pipe(
+        switchMap(() =>
+          this.state() !== session
+            ? of(undefined)
+            : this.http.get(this.apiUrl('/nuxeo/api/v1/me'), {
+                headers: { Accept: 'application/json' },
+                withCredentials: true,
+                context: new HttpContext().set(NUXEO_ESTABLISH_BROWSER_SESSION, true),
+              }),
+        ),
+        timeout(10000),
         map(() => undefined),
         catchError(() => of(undefined)),
       );
+  }
+
+  /** Verify the same user's cookie session before an iframe starts its OAuth flow. */
+  ensureBrowserSession(): Observable<boolean> {
+    return defer(() => {
+      const session = this.state();
+      if (!session) return of(false);
+      const readCookieUser = () =>
+        this.http
+          .get<unknown>(this.apiUrl('/nuxeo/api/v1/me'), {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            withCredentials: true,
+            context: new HttpContext().set(NUXEO_COOKIE_SESSION_ONLY, true),
+          })
+          .pipe(
+            map((me) => {
+              const username = readUsernameFromMe(me);
+              if (!username) throw new Error('Missing browser session identity');
+              return username;
+            }),
+            catchError((error: unknown) =>
+              error instanceof HttpErrorResponse && error.status === 401
+                ? of(null)
+                : throwError(() => error),
+            ),
+          );
+      const matchesSession = (username: string | null) =>
+        this.state() === session && username === session.username;
+
+      return readCookieUser().pipe(
+        switchMap((username) => {
+          if (matchesSession(username)) return of(true);
+          // Do not overwrite another user's cookie, repair SSO with invented credentials, or
+          // continue an old request after sign-out/account switching.
+          if (username || session.kind !== 'basic' || this.state() !== session) return of(false);
+          return this.establishBasicAuthBrowserSession().pipe(
+            switchMap(() => (this.state() === session ? readCookieUser() : of(null))),
+            map(matchesSession),
+          );
+        }),
+        timeout(10000),
+        catchError(() => of(false)),
+      );
+    });
   }
 
   private isInvalidBasicAuthResponse(err: unknown): boolean {
@@ -715,6 +775,12 @@ export class AuthService {
           .get<unknown>(this.apiUrl('/nuxeo/api/v1/me'), { headers, withCredentials: false })
           .pipe(
             tap((me) => {
+              if (readUsernameFromMe(me) !== trimmed) {
+                throw new HttpErrorResponse({
+                  status: 401,
+                  statusText: 'Unexpected authenticated user',
+                });
+              }
               const flags = readSessionFlagsFromMe(me);
               const session: BasicStoredSession = {
                 kind: 'basic',

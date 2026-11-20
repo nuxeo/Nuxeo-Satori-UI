@@ -218,7 +218,7 @@ export { UserService } from './lib/services/user.service';
 export { TagService } from './lib/services/tag.service';
 export { NuxeoDriveService } from './lib/services/nuxeo-drive.service';
 export { ARenderService } from './lib/services/arender.service';
-export { ARENDER_CONFIG, type ARenderConfig } from './lib/arender.config';
+export { ARENDER_CONFIG, ARENDER_PREPARE_SESSION, type ARenderConfig } from './lib/arender.config';
 export {
   SettingsService,
   type LocalPermissionRow,

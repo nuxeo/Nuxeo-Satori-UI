@@ -6,7 +6,11 @@ import { MAT_FAB_DEFAULT_OPTIONS } from '@angular/material/button';
 import { TranslateLoader, provideTranslateService } from '@ngx-translate/core';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
-import { CURRENT_USERNAME, ADMIN_ACCESS_CHECKS } from '@nuxeo/satori-platform/nuxeo-client';
+import {
+  CURRENT_USERNAME,
+  ADMIN_ACCESS_CHECKS,
+  ARENDER_PREPARE_SESSION,
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { provideNxsComponents, provideNxsTagWrites } from '@nuxeo/satori-platform/components';
 import { provideNxsSatoriComponents } from '@nuxeo/satori-platform/components-satori';
 import { nuxeoAuthInterceptor } from './auth/nuxeo-auth.interceptor';
@@ -52,6 +56,13 @@ export const appConfig: ApplicationConfig = {
     },
     provideAnimations(),
     provideHttpClient(withXhr(), withInterceptors([nuxeoAuthInterceptor])),
+    {
+      provide: ARENDER_PREPARE_SESSION,
+      useFactory: () => {
+        const auth = inject(AuthService);
+        return () => auth.ensureBrowserSession();
+      },
+    },
     provideRouter(routes, withComponentInputBinding(), withHashLocation()),
     provideSatori(),
     {

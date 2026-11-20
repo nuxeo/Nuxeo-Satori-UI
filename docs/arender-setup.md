@@ -69,6 +69,19 @@ This guide walks through setting up the ARender document viewer for the Annotati
 
 **Current (NEV 2026):**
 
+Before requesting a preview or comparison URL, Satori verifies that Nuxeo's browser-cookie
+session belongs to the current Satori user. Basic API authentication alone does not establish
+that session on a standard Nuxeo server. For a missing Basic-user session, Satori requests
+`/nuxeo/login.jsp` to create the session container, authenticates `/nuxeo/api/v1/me`, and verifies
+`/me` again without an Authorization header. An existing session for another user, an uncertain
+response, or a timeout refuses the viewer launch and leaves the standard preview available.
+SSO sessions are verified through their existing cookies; Satori does not replace SSO login.
+
+Both the Nuxeo and NEV origins still need valid, browser-trusted certificates and a correctly
+registered OAuth client/callback. This session check does not bypass TLS or browser cookie
+restrictions. For the local self-signed setup, each host's browser warning must be handled
+separately before testing. The NEV root page is not a separate login step.
+
 1. The Angular app calls `Document.ARenderGetPreviewerUrl` on Nuxeo, which returns
    `https://<viewer>/?documentId=<repository>,<uid>,<xpath>,<digest>`. The client cannot build this
    itself — the blob digest is not computable in a browser.
@@ -334,3 +347,29 @@ the built-in viewer by default. A deployment can select NEV using the `preferARe
 `extensions.slots.tabs` entry `app.tabs.view`; see [the extension reference](extension-reference.md#select-nev-for-the-packaged-view-tab-nxsat-698)
 for the manifest and MIME rules. Null previewer URLs fall back to built-in content; Notes keep
 their editor. This does not require a registered NEV `documentView` component.
+
+### Recovering when the enhanced viewer does not open
+
+The View tab (when opted into NEV) and Annotations tab expose recovery controls outside the
+embedded viewer. **Try again** requests a fresh previewer URL for the current document and
+recreates the viewer. Connection and URL-resolution attempts time out after 15 seconds so that
+a stalled request does not leave retry disabled indefinitely. This timeout does not measure
+document conversion or rendering inside NEV.
+
+**Open standard preview** uses the existing built-in preview for the same document, when a
+preview is available. The notice explains that annotation tools are unavailable in this mode.
+The user's fallback choice is reset when another document is opened. **Try again** returns
+from the standard preview to NEV.
+
+These controls do not infer authentication success or document-rendering success from an iframe
+load event. NEV can show its own error page inside a cross-origin frame; the recovery controls
+remain accessible outside that frame. This does not bypass authentication, permissions, or
+browser certificate checks.
+
+For deployments that expose the viewer's bare root URL, the reverse proxy can serve a friendly
+landing page for `GET /` and `HEAD /` with no query string. Link that page to Satori and explain
+that users should open a document there. Keep document URLs with query parameters, viewer assets,
+and OAuth callback paths routed to NEV. This is a deployment customization, not part of the
+Satori application bundle. Caddy supports this through its
+[request matchers](https://caddyserver.com/docs/caddyfile/matchers#query) and
+[static response directive](https://caddyserver.com/docs/caddyfile/directives/respond).
