@@ -103,6 +103,9 @@
             },
             "development": {
               "buildTarget": "nuxeo-ui:build:development"
+            },
+            "remote": {
+              "proxyConfig": "apps/nuxeo-ui/proxy.remote.conf.mjs"
             }
           },
           "defaultConfiguration": "development"

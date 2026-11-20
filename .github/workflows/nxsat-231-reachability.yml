@@ -4,7 +4,7 @@ name: NXSAT-231 reachability
 
 on:
   push:
-    branches: ['fix/nxsat-231-analysis-fd8bfd']
+    branches: ['fix/**']
     paths: ['.github/workflows/nxsat-231-reachability.yml']
   workflow_dispatch:
 
