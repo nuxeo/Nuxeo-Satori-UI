@@ -1,4 +1,4 @@
-import { expect, newNuxeoApiContext, test } from './fixtures';
+import { expect, newNuxeoApiContext, nuxeoCredentials, test } from './fixtures';
 import { type APIRequestContext } from '@playwright/test';
 
 /**
@@ -18,7 +18,11 @@ test.afterAll(async () => {
 
 test.describe('tasks', () => {
   test('lists the pending tasks the repository reports', async ({ signedIn: page }) => {
-    const response = await api.get('/nuxeo/api/v1/task');
+    // The same query the app makes (`TaskService.getUserTasks`): scoped to the user, page of 50.
+    // The unscoped `/task` returns tasks the drawer deliberately does not list.
+    const response = await api.get('/nuxeo/api/v1/task', {
+      params: { userId: nuxeoCredentials().username, pageSize: 50 },
+    });
     expect(response.status(), 'the task endpoint should answer').toBe(200);
     const body = await response.json();
     const tasks: unknown[] = Array.isArray(body) ? body : (body.entries ?? []);
