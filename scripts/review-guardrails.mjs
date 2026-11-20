@@ -5112,18 +5112,72 @@ const SATORI_STORYBOOK_CATALOGUE_DIR = 'i18n/@hylandsoftware/satori-ui';
  * English rather than raw keys.
  */
 function checkStorybookSatoriCatalogues() {
+  /**
+   * The local names a file gives Satori's loader and ngx-translate's service.
+   *
+   * Read from its imports, because an alias (`import { provideAndConfigureSatoriTranslations as
+   * satoriI18n }`) or a namespace import (`import * as satori from …`) otherwise hid a Storybook
+   * from this gate entirely (review on #602). The canonical names are always included, so a file
+   * that uses them without importing — a fixture, or a re-export — is still read.
+   */
+  const LOADER = 'provideAndConfigureSatoriTranslations';
+  const SERVICE = 'TranslateService';
+  const importedNames = (source) => {
+    const names = {
+      loader: new Set([LOADER]),
+      loaderNamespaces: new Set(),
+      service: new Set([SERVICE]),
+      serviceNamespaces: new Set(),
+    };
+    for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+        continue;
+      }
+      const from = statement.moduleSpecifier.text;
+      const kind =
+        from === '@hylandsoftware/satori-ui' || from.startsWith('@hylandsoftware/satori-ui/')
+          ? 'loader'
+          : from === '@ngx-translate/core'
+            ? 'service'
+            : null;
+      const bindings = statement.importClause?.namedBindings;
+      if (!kind || !bindings) continue;
+      if (ts.isNamespaceImport(bindings)) {
+        names[`${kind}Namespaces`].add(bindings.name.text);
+      } else {
+        for (const element of bindings.elements) {
+          const imported = (element.propertyName ?? element.name).text;
+          if (imported === (kind === 'loader' ? LOADER : SERVICE))
+            names[kind].add(element.name.text);
+        }
+      }
+    }
+    return names;
+  };
+
+  /** Whether `node` names `kind`'s symbol: a local alias, or `namespace.<canonical name>`. */
+  const refersTo = (node, kind, names) => {
+    if (!node) return false;
+    const canonical = kind === 'loader' ? LOADER : SERVICE;
+    if (ts.isIdentifier(node)) return names[kind].has(node.text);
+    if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+      return node.name.text === canonical && names[`${kind}Namespaces`].has(node.expression.text);
+    }
+    if (ts.isQualifiedName(node) && ts.isIdentifier(node.left)) {
+      return node.right.text === canonical && names[`${kind}Namespaces`].has(node.left.text);
+    }
+    return false;
+  };
+
   /** Whether `node` is `inject(TranslateService)`, or a type annotation naming `TranslateService`. */
-  const namesTranslateService = (node) =>
+  const namesTranslateService = (node, names) =>
     !!node &&
     ((ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
       node.expression.text === 'inject' &&
       node.arguments.length > 0 &&
-      ts.isIdentifier(node.arguments[0]) &&
-      node.arguments[0].text === 'TranslateService') ||
-      (ts.isTypeReferenceNode(node) &&
-        ts.isIdentifier(node.typeName) &&
-        node.typeName.text === 'TranslateService'));
+      refersTo(node.arguments[0], 'service', names)) ||
+      (ts.isTypeReferenceNode(node) && refersTo(node.typeName, 'service', names)));
 
   /**
    * Every name in `source` bound to a `TranslateService`: a variable, a class field or a
@@ -5131,7 +5185,7 @@ function checkStorybookSatoriCatalogues() {
    * with `inject(TranslateService)`. By name within the file, not by scope — a same-named
    * unrelated binding would be checked too, which errs toward checking, never toward skipping.
    */
-  const translateServiceNames = (source) => {
+  const translateServiceNames = (source, imported) => {
     const names = new Set();
     const visit = (node) => {
       if (
@@ -5139,7 +5193,8 @@ function checkStorybookSatoriCatalogues() {
           ts.isPropertyDeclaration(node) ||
           ts.isParameter(node)) &&
         ts.isIdentifier(node.name) &&
-        (namesTranslateService(node.type) || namesTranslateService(node.initializer))
+        (namesTranslateService(node.type, imported) ||
+          namesTranslateService(node.initializer, imported))
       ) {
         names.add(node.name.text);
       }
@@ -5150,18 +5205,24 @@ function checkStorybookSatoriCatalogues() {
   };
 
   /** Whether `expression` — the receiver of a `.use()` call — is a `TranslateService`. */
-  const isTranslateService = (expression, names) => {
+  const isTranslateService = (expression, names, imported) => {
     let node = expression;
     while (ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node)) {
       node = node.expression;
     }
-    if (namesTranslateService(node)) return true;
+    if (namesTranslateService(node, imported)) return true;
     if (ts.isIdentifier(node)) return names.has(node.text);
     if (ts.isPropertyAccessExpression(node) && node.expression.kind === ts.SyntaxKind.ThisKeyword) {
       return names.has(node.name.text);
     }
     // `TestBed.inject(TranslateService)` and other spellings that name the class directly.
-    return node.getText().includes('TranslateService');
+    if (
+      ts.isCallExpression(node) &&
+      node.arguments.some((arg) => refersTo(arg, 'service', imported))
+    ) {
+      return true;
+    }
+    return node.getText().includes(SERVICE);
   };
 
   /**
@@ -5291,11 +5352,12 @@ function checkStorybookSatoriCatalogues() {
 
     for (const file of sources) {
       const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
-      const serviceNames = translateServiceNames(source);
+      const imported = importedNames(source);
+      const serviceNames = translateServiceNames(source, imported);
       const visit = (node) => {
         if (ts.isCallExpression(node)) {
           const callee = node.expression;
-          if (ts.isIdentifier(callee) && callee.text === 'provideAndConfigureSatoriTranslations') {
+          if (refersTo(callee, 'loader', imported)) {
             usesSatoriLoader = true;
             const [config] = node.arguments;
             if (!config || !ts.isObjectLiteralExpression(config)) {
@@ -5349,7 +5411,7 @@ function checkStorybookSatoriCatalogues() {
           if (
             ts.isPropertyAccessExpression(callee) &&
             callee.name.text === 'use' &&
-            isTranslateService(callee.expression, serviceNames)
+            isTranslateService(callee.expression, serviceNames, imported)
           ) {
             const [lang] = node.arguments;
             if (lang && ts.isStringLiteral(lang)) {
@@ -5377,18 +5439,71 @@ function checkStorybookSatoriCatalogues() {
 
     // Where `main.ts` serves the satori-ui catalogues from.
     const mainSource = ts.createSourceFile(main, read(main), ts.ScriptTarget.Latest, true);
-    let staticDirs;
+    /**
+     * Every place `main` sets `staticDirs`: a property, a shorthand or method, or a later
+     * `config.staticDirs = …`. Reading only the last property let a second definition, or a spread
+     * after it, decide what Storybook serves while this gate judged another value (review on #602).
+     */
+    const definitions = [];
+    const isStaticDirsName = (name) =>
+      !!name && (ts.isIdentifier(name) || ts.isStringLiteral(name)) && name.text === 'staticDirs';
     const findStaticDirs = (node) => {
       if (
-        ts.isPropertyAssignment(node) &&
-        (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
-        node.name.text === 'staticDirs'
+        (ts.isPropertyAssignment(node) ||
+          ts.isShorthandPropertyAssignment(node) ||
+          ts.isMethodDeclaration(node) ||
+          ts.isGetAccessorDeclaration(node)) &&
+        isStaticDirsName(node.name)
       ) {
-        staticDirs = node.initializer;
+        definitions.push(node);
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ((ts.isPropertyAccessExpression(node.left) && node.left.name.text === 'staticDirs') ||
+          (ts.isElementAccessExpression(node.left) &&
+            isStaticDirsName(node.left.argumentExpression)))
+      ) {
+        definitions.push(node);
       }
       ts.forEachChild(node, findStaticDirs);
     };
     findStaticDirs(mainSource);
+
+    let staticDirs;
+    if (definitions.length > 1) {
+      fail(
+        `${main} sets \`staticDirs\` ${definitions.length} times, so ` +
+          '`checkStorybookSatoriCatalogues` cannot tell which value Storybook uses. Define it once.',
+      );
+      legible = false;
+    } else if (definitions.length === 1) {
+      const [definition] = definitions;
+      if (!ts.isPropertyAssignment(definition)) {
+        fail(
+          `${main} sets \`staticDirs\` in a form this gate cannot read ` +
+            `(\`${definition.getText().slice(0, 60)}\`). Write it as \`staticDirs: [ … ]\` in the ` +
+            'exported configuration.',
+        );
+        legible = false;
+      } else {
+        // A spread after it in the same object can replace it; one before it cannot.
+        const members = definition.parent.properties;
+        const overriding = members
+          .slice(members.indexOf(definition) + 1)
+          .find((member) => !ts.isPropertyAssignment(member) && !ts.isMethodDeclaration(member));
+        if (overriding) {
+          fail(
+            `${main} sets \`staticDirs\` and then \`${overriding.getText().slice(0, 60)}\` in the ` +
+              'same object, which can replace it, so this gate cannot tell which value Storybook ' +
+              'uses. Put the spread before `staticDirs`, or define `staticDirs` once, last.',
+          );
+          legible = false;
+        } else {
+          staticDirs = definition.initializer;
+        }
+      }
+    }
+    if (!legible) continue;
 
     const trim = (path) => path.replace(/^\.?\/+/, '').replace(/\/+$/, '');
     /**

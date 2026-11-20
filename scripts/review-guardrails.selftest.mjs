@@ -13120,6 +13120,98 @@ expectRed(
   /`staticDirs` entry with a member this gate cannot read statically \(`\.\.\.overrides`\)/,
 );
 
+// Review on #602, fifth round. Names were matched literally, so an aliased or namespaced import
+// hid the Satori loader (and the whole Storybook) from the gate, and an aliased TranslateService
+// hid the active language.
+const SB_SATORI_MAIN = sbMain();
+
+expectRed(
+  "Satori's loader imported under an alias",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: SB_SATORI_MAIN,
+    [`${SB}/.storybook/preview.ts`]: `import { provideAndConfigureSatoriTranslations as satoriI18n } from '@hylandsoftware/satori-ui/translations';
+export const providers = [satoriI18n({ fallbackLang: 'en' })];
+`,
+  },
+  null,
+  /preview\.ts asks Satori's translation loader for "en" \(`fallbackLang`\)/,
+);
+
+expectRed(
+  "Satori's loader reached through a namespace import",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: SB_SATORI_MAIN,
+    [`${SB}/.storybook/preview.ts`]: `import * as satori from '@hylandsoftware/satori-ui/translations';
+export const providers = [satori.provideAndConfigureSatoriTranslations({ fallbackLang: 'en' })];
+`,
+  },
+  null,
+  /preview\.ts asks Satori's translation loader for "en" \(`fallbackLang`\)/,
+);
+
+expectRed(
+  'TranslateService imported under an alias',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: SB_SATORI_MAIN,
+    [`${SB}/.storybook/preview.ts`]: `import { TranslateService as Translations } from '@ngx-translate/core';
+export const providers = [
+  provideAndConfigureSatoriTranslations({ fallbackLang: 'en-US' }),
+  { useValue: () => inject(Translations).use('en') },
+];
+`,
+  },
+  null,
+  /asks Satori's translation loader for "en" \(`TranslateService\.use\(\)`\)/,
+);
+
+// …and `staticDirs` judged from one definition while another decides what Storybook serves.
+const SB_SATORI_DIR = `{ from: '../../../../${SB_VENDOR}', to: 'i18n/@hylandsoftware/satori-ui' }`;
+
+expectRed(
+  'a spread after staticDirs that can replace it',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const config = { staticDirs: [${SB_SATORI_DIR}], ...overrides };
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /sets `staticDirs` and then `\.\.\.overrides` in the same object, which can replace it/,
+);
+
+expectRed(
+  'staticDirs set twice',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const config = { staticDirs: [${SB_SATORI_DIR}] };
+config.staticDirs = [];
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /sets `staticDirs` 2 times/,
+);
+
+// A spread before `staticDirs` cannot replace it — the explicit value wins — so it must stay green.
+falsePositiveControls += 1;
+expectGreen('a spread before staticDirs', 'checkStorybookSatoriCatalogues', {
+  ...SB_VENDOR_1_0_0,
+  [`${SB}/.storybook/main.ts`]: `const config = { ...base, staticDirs: [${SB_SATORI_DIR}] };
+export default config;
+`,
+  [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+});
+
 // A clean checkout without GitHub Packages has no satori-ui to compare against: say so, stay green.
 expectWarn(
   'a served folder whose package is not installed',
