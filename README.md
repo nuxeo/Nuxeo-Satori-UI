@@ -63,8 +63,8 @@ customisable by configuration or with your own code.
 - **Governance** — versions, permissions, history, comments, tags, collections, favourites and
   publishing.
 - **Work** — workflow tasks, plus administration of users, groups and vocabularies.
-- **Localised** — English, French, German, Japanese, Dutch, Thai and Simplified Chinese.
-- **Accessible** — WCAG 2.1 AA is the quality bar, checked in CI.
+- **Localised** — English, French, German, Japanese and Dutch.
+- **Accessible** — WCAG 2.1 AA is the quality bar. CI runs a static template scan; the live axe scan runs locally against a Nuxeo.
 - **Optional server-side capabilities** — AI features (natural-language search, summaries, tag
   suggestions, chat), Knowledge Discovery and the ARender annotation viewer each need a separate
   server component. Without them those features are unavailable and the rest of the application
@@ -85,9 +85,11 @@ libs/shared/*          Nuxeo client, Satori components, extensions, AI client, u
 Nuxeo server           Dev-server proxy locally, same origin in production
 ```
 
-- UI is built on the `nxs-` components in [`libs/shared/satori-components`](libs/shared/satori-components),
-  a wrapper layer over `@hylandsoftware/satori-ui`. Features use the wrappers and never import
-  the design system directly.
+- UI is built on the `nxs-` components. [`libs/shared/satori-components`](libs/shared/satori-components)
+  holds the Angular Material-backed implementations, and
+  [`libs/shared/satori-components-satori`](libs/shared/satori-components-satori) supplies optional
+  implementations on `@hylandsoftware/satori-ui`. Adoption is in progress: some feature code
+  still imports `@hylandsoftware/satori-ui` directly.
 - Module boundaries are enforced by `@nx/enforce-module-boundaries` rules in
   [`eslint.config.mjs`](eslint.config.mjs); every project carries `scope:` and `type:` tags.
 - Full detail: [docs/architecture.md](docs/architecture.md) and
@@ -114,17 +116,17 @@ Nuxeo server           Dev-server proxy locally, same origin in production
 
 ## Technology stack
 
-| Area             | Technology                                                                |
-| ---------------- | ------------------------------------------------------------------------- |
-| Framework        | Angular ~22.2 (standalone components, signals), TypeScript, RxJS          |
-| Monorepo         | Nx 23, enforced module boundaries and tags                                |
-| UI               | `@hylandsoftware/satori-ui`, Angular Material, in-house `nxs-` components |
-| i18n             | `@ngx-translate/core`, Crowdin                                            |
-| Unit tests       | Vitest                                                                    |
-| E2E and a11y     | Playwright and axe-core (installed on demand, not a tracked dependency)   |
-| Quality          | ESLint, Prettier, Husky, lint-staged, SonarCloud, CodeQL                  |
-| Server packaging | Java 17+ and Maven 3.9+ (Nuxeo Marketplace package and OSGi bundle)       |
-| Local backend    | Nuxeo Server and OpenSearch in Docker; optional ARender and Mailpit       |
+| Area             | Technology                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| Framework        | Angular ~22.2 (standalone components, signals), TypeScript, RxJS                            |
+| Monorepo         | Nx 23, enforced module boundaries and tags                                                  |
+| UI               | `@hylandsoftware/satori-ui`, Angular Material, in-house `nxs-` components                   |
+| i18n             | `@ngx-translate/core`, Crowdin                                                              |
+| Unit tests       | Vitest                                                                                      |
+| E2E and a11y     | Playwright, axe-core and Angular template lint (Playwright and axe are installed on demand) |
+| Quality          | ESLint, Prettier, Husky, lint-staged, SonarCloud, CodeQL                                    |
+| Server packaging | JDK 21 and Maven 3.9+ (Nuxeo Marketplace package and OSGi bundle)                           |
+| Local backend    | Nuxeo Server and OpenSearch in Docker; optional ARender and Mailpit                         |
 
 The full matrix, with the reason for each choice, is in
 [Technology stack](documentation/30-engineering/05-technology-stack.md).
@@ -192,13 +194,13 @@ Every command above runs the same in PowerShell, macOS and Linux terminals.
 
 ## Testing
 
-| Level         | Command                    | Notes                                                          |
-| ------------- | -------------------------- | -------------------------------------------------------------- |
-| Unit          | `npx nx test <project>`    | Vitest. Runs without a backend                                 |
-| Integration   | `npm run beta:integration` | Runs against a live Nuxeo; needs `NUXEO_USER` and `NUXEO_PASS` |
-| End to end    | `npm run beta:e2e`         | Playwright against the running app                             |
-| Accessibility | `npm run a11y`             | axe-core scan; WCAG 2.1 AA is the bar                          |
-| Coverage      | `npm run beta:coverage`    | Enforces the coverage target                                   |
+| Level         | Command                    | Notes                                                                                                                                                           |
+| ------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit          | `npx nx test <project>`    | Vitest. Runs without a backend                                                                                                                                  |
+| Integration   | `npm run beta:integration` | Runs against a live Nuxeo; needs `NUXEO_USER` and `NUXEO_PASS`                                                                                                  |
+| End to end    | `npm run beta:e2e`         | Playwright against the running app                                                                                                                              |
+| Accessibility | `npm run a11y`             | Static template-lint scan, ratcheted against a baseline. It is a regression check, not proof of WCAG 2.1 AA; the live axe scan needs a running Nuxeo            |
+| Coverage      | `npm run beta:coverage`    | Ratchet: fails if a project's coverage drops below its recorded baseline, with higher floors for listed projects. The 90% target is not yet enforced everywhere |
 
 Test standards are in [AGENTS/05-test-standards.md](AGENTS/05-test-standards.md).
 
@@ -231,8 +233,8 @@ Three artifacts ship from this repository:
 | `@nuxeo/satori-platform` | `npx nx build platform`            | The npm package customers extend the product with             |
 
 ```bash
-npx nx build nuxeo-ui --configuration=production   # Angular application
-mvn package                                        # Marketplace ZIP (Java 17+, Maven 3.9+)
+npx nx build nuxeo-ui --configuration=production --base-href=/nuxeo/agentic-ui/   # Angular application
+mvn clean package -pl nuxeo-agentic-ui-package -am                                # Marketplace ZIP (JDK 21, Maven 3.9+)
 npx nx build platform                              # dist/libs/platform
 ```
 
@@ -250,7 +252,7 @@ Credentials come from the environment only. Never hard-code them or put them in 
 
 ## Internationalisation
 
-The UI ships in English, French, German, Japanese, Dutch, Thai and Simplified Chinese. Strings
+The UI ships in English, French, German, Japanese and Dutch. Strings
 are managed in Crowdin (see [`crowdin-conf.yml`](crowdin-conf.yml)); push, pull and status run
 as GitHub Actions workflows.
 

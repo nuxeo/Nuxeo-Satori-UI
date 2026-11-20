@@ -236,6 +236,8 @@ jobs:
           APP_URL: http://localhost:4200
           EVIDENCE_HEADLESS: '1'
         run: |
+          # The Phase 3 browse capture also belongs in this loop; it is added back
+          # under its own id when the harness step is renamed.
           for phase in phase-0-baseline phase-0-no-backend phase-1-config \
                        phase-1-tag-styles phase-2-registry \
                        phase-3-search phase-4-platform phase-5-harness phase-6-a11y; do

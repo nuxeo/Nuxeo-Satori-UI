@@ -240,7 +240,7 @@ verified anything.
 | Command                                           | Purpose                                         |
 | ------------------------------------------------- | ----------------------------------------------- |
 | `npm run beta:slides`                             | Export the deck (`tools/video/export-pptx.mjs`) |
-| `npm run beta:evidence -- showcase`               | Presentation-quality screenshots — not a gate   |
+| `npm run beta:evidence -- showcase`               | **Unavailable** until its steps are migrated    |
 | `node scripts/beta-harness/annotate-showcase.mjs` | Annotated comparison artifact                   |
 
 ---

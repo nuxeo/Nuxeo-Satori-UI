@@ -107,7 +107,7 @@ across 190 sites — the same operation already done once, verified by running
 | Peers are declared                               | 10 peers; every specifier in the emitted `.d.ts` is a peer or a sibling entry point |
 | **`npm publish` is not refused**                 | `npm run beta:publishable` — a real `--dry-run` on a copy of the built bytes        |
 
-**No third-party UI package is a peer.** The extension engine has its own `filterEnabled`, `sortByOrder` and `mergeObjects`. `beta:publishable` refuses a bundle that imports a package the built `package.json` declares nowhere, so it catches a peer dropped while something still imports it. It cannot tell you a peer is no longer needed.
+**The extension engine has no third-party UI dependency.** It has its own `filterEnabled`, `sortByOrder` and `mergeObjects`. Angular Material and CDK remain required peers, and `@hylandsoftware/satori-ui` is an optional peer, so consumers still install the UI packages they use. `beta:publishable` refuses a bundle that imports a package the built `package.json` declares nowhere, so it catches a peer dropped while something still imports it. It cannot tell you a peer is no longer needed.
 
 ### The row that was missing, and what it cost
 
