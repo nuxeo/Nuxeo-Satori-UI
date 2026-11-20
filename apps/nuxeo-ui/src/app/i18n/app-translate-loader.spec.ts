@@ -171,6 +171,11 @@ describe('AppTranslateLoader', () => {
    * whatever `UPSTREAM_FOLDERS` happens to hold.
    */
   describe('upstreamCatalogueFor', () => {
+    // No HTTP here, but the suite's `afterEach` calls `httpMock.verify()` and only `configure()`
+    // assigns `httpMock`. Karma runs specs in random order, so without this these failed in CI
+    // whenever one of them ran before any other spec — and passed locally by the luck of the order.
+    beforeEach(() => configure());
+
     const folder = (languages: string[], aliases?: Record<string, string>) => ({
       path: 'assets/vendor',
       languages,
