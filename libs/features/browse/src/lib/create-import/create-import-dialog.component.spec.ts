@@ -28,6 +28,7 @@ import {
   type DirectoryEntry,
   type ImportProgress,
   type L10nDirectoryEntry,
+  type NuxeoContentModel,
   type NuxeoDoctypeDefinition,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -117,6 +118,13 @@ function useDoctypes(doctypes: Record<string, NuxeoDoctypeDefinition>): void {
   mockContentModelService.getContentModel.mockReturnValue(
     of({ doctypes, facets: [], schemas: [] }),
   );
+}
+
+/** A content model that has not answered yet; call the result to make it answer. */
+function useUnansweredContentModel(): (doctypes: Record<string, NuxeoDoctypeDefinition>) => void {
+  const pending = new Subject<NuxeoContentModel>();
+  mockContentModelService.getContentModel.mockReturnValue(pending.asObservable());
+  return (doctypes) => pending.next({ doctypes, facets: [], schemas: [] });
 }
 
 // `vi.clearAllMocks()` keeps a mock's implementation, so a test that names a type hierarchy
@@ -1055,6 +1063,22 @@ describe('CreateImportDialogComponent domain create (NXSAT-199)', () => {
     expect(createButton()?.disabled).toBe(true);
 
     form.ready.set(true);
+    fixture.detectChanges();
+    expect(createButton()?.disabled).toBe(false);
+  });
+
+  it('keeps Create disabled for a type outside the stock four until the content model answers', async () => {
+    const answer = useUnansweredContentModel();
+    await createDialog();
+    component.startCreateFromType({ type: 'Domain', label: 'Domain' });
+    fixture.detectChanges();
+    expect(createButton()?.disabled).toBe(true);
+
+    component.createDocument();
+    expect(stubForm(fixture).validate).not.toHaveBeenCalled();
+    expect(mockImportService.createChildDocument).not.toHaveBeenCalled();
+
+    answer({ Domain: { parent: 'Folder' }, Folder: { parent: 'Document' } });
     fixture.detectChanges();
     expect(createButton()?.disabled).toBe(false);
   });
@@ -2039,6 +2063,58 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       component.startImportProperties();
       expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
     });
+
+    it('decides on a type outside the stock four only once the content model answers', async () => {
+      const answer = useUnansweredContentModel();
+      await createDialog();
+      component.startCreateFromType({ type: 'RentalContract', label: 'Rental Contract' });
+      expect(component.mainFileUnsettled()).toBe(true);
+      expect(component.hasContentField()).toBe(false);
+
+      answer(RENTAL_CONTRACT_DOCTYPES);
+      expect(component.mainFileUnsettled()).toBe(false);
+      expect(component.hasContentField()).toBe(true);
+      expect(component.createMissingMainFile()).toBe(true);
+    });
+
+    it('never waits for the content model on a stock type that keeps a file', async () => {
+      useUnansweredContentModel();
+      await createDialog();
+      component.startCreateFromType(pictureType());
+      expect(component.mainFileUnsettled()).toBe(false);
+      expect(component.hasContentField()).toBe(true);
+    });
+
+    it("waits for it before choosing imported files' types where no stock type is allowed", async () => {
+      const answer = useUnansweredContentModel();
+      await createDialog();
+      component.creatableTypes.set([
+        { type: 'RentalContract', label: 'Rental Contract' },
+        { type: 'Folder', label: 'Folder' },
+      ]);
+      component.uploads.stage([jpegFile('lease.jpg')]);
+      expect(component.importTypesUnsettled()).toBe(true);
+      component.startImportProperties();
+      expect(component.importEntries()).toEqual([]);
+
+      answer(RENTAL_CONTRACT_DOCTYPES);
+      expect(component.importTypesUnsettled()).toBe(false);
+      component.startImportProperties();
+      expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
+    });
+
+    it('does not hold imported files back where a stock type is allowed', async () => {
+      useUnansweredContentModel();
+      await createDialog();
+      component.creatableTypes.set([
+        { type: 'File', label: 'File' },
+        { type: 'RentalContract', label: 'Rental Contract' },
+      ]);
+      component.uploads.stage([jpegFile('scan.jpg')]);
+      expect(component.importTypesUnsettled()).toBe(false);
+      component.startImportProperties();
+      expect(component.importEntries().map((entry) => entry.docType)).toEqual(['File']);
+    });
   });
 
   describe('import wizard navigation', () => {
@@ -2309,6 +2385,70 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(component.contentError()).toBe('Please wait for the file upload to finish.');
       expect(m.createBlobHoldingDocumentReliable).not.toHaveBeenCalled();
       stall.complete();
+    });
+
+    describe('a type that extends File', () => {
+      const rentalContract = { type: 'RentalContract', label: 'Rental Contract' };
+
+      it('refuses to create it with no file attached', async () => {
+        useDoctypes(RENTAL_CONTRACT_DOCTYPES);
+        await createDialog();
+        component.startCreateFromType(rentalContract);
+        stubForm(fixture).properties = { 'dc:title': 'Lease' };
+
+        component.createDocument();
+
+        expect(component.contentError()).toBe('A file is required for this document type.');
+        expect(m.createBlobHoldingDocumentReliable).not.toHaveBeenCalled();
+        expect(m.createChildDocument).not.toHaveBeenCalled();
+      });
+
+      it('refuses to create it while its file is still uploading', async () => {
+        useDoctypes(RENTAL_CONTRACT_DOCTYPES);
+        await createDialog();
+        const stall = new Subject<{ batchId: string; fileIndex: number }>();
+        m.stageFileInBatch.mockReturnValue(stall.asObservable());
+        component.startCreateFromType(rentalContract);
+        stubForm(fixture).properties = { 'dc:title': 'Lease' };
+        component.onMainFileInputChange(
+          changeEvent(inputWith('c:/lease.jpg', [jpegFile('lease.jpg')])),
+        );
+
+        component.createDocument();
+
+        expect(component.contentError()).toBe('Please wait for the file upload to finish.');
+        expect(m.createBlobHoldingDocumentReliable).not.toHaveBeenCalled();
+        expect(m.createChildDocument).not.toHaveBeenCalled();
+        stall.complete();
+      });
+
+      it('creates it with the chosen file and its staged batch once the upload is done', async () => {
+        useDoctypes(RENTAL_CONTRACT_DOCTYPES);
+        await createDialog();
+        m.createBlobHoldingDocumentReliable.mockReturnValue(
+          of({ ...folder('Lease'), type: 'RentalContract' }),
+        );
+        component.startCreateFromType(rentalContract);
+        stubForm(fixture).properties = { 'dc:title': 'Lease' };
+        const lease = jpegFile('lease.jpg');
+        component.onMainFileInputChange(changeEvent(inputWith('c:/lease.jpg', [lease])));
+        await flushAsync();
+        expect(component.mainFileUploadComplete()).toBe(true);
+
+        component.createDocument();
+        await flushAsync();
+
+        expect(m.createBlobHoldingDocumentReliable).toHaveBeenCalledWith(
+          WS_PATH,
+          'Lease',
+          'RentalContract',
+          expect.objectContaining({ 'dc:title': 'Lease' }),
+          lease,
+          { batchId: 'batch-1', fileIndex: 0 },
+          expect.any(Object),
+        );
+        expect(m.createChildDocument).not.toHaveBeenCalled();
+      });
     });
 
     it('does nothing without a selected type', async () => {

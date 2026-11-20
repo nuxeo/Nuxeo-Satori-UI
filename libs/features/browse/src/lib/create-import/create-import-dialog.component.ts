@@ -61,6 +61,7 @@ import {
   filterDirectoryPickerEntries,
   ContentModelService,
   type NuxeoDoctypeDefinition,
+  isBlobHoldingDocType,
   isDomainParentType,
   isFolderishDocument,
   isRepositoryRootPath,
@@ -256,16 +257,38 @@ export class CreateImportDialogComponent implements OnInit {
   /**
    * Nuxeo's doctypes, to tell which types keep a main file (`typeHoldsMainBlob`). The content
    * model — `/config/types`, `/config/facets` and `/config/schemas` — is read once and cached
-   * for the application's lifetime. Empty until it arrives, or if the server refuses it: the
-   * check then falls back to the stock type names, so File, Picture, Audio and Video never wait
-   * on it.
+   * for the application's lifetime. `null` until it has answered; empty if the server refused
+   * it, when the check falls back to the stock type names.
    */
-  private readonly doctypes = toSignal(
+  private readonly answeredDoctypes = toSignal(
     this.contentModel.getContentModel().pipe(
       map((model): Readonly<Record<string, NuxeoDoctypeDefinition>> => model.doctypes),
       catchError(() => of(NO_DOCTYPES)),
     ),
-    { initialValue: NO_DOCTYPES },
+    { initialValue: null },
+  );
+
+  /**
+   * The selected type is none of the stock four, and the content model that says whether it
+   * extends one, or carries the `file` schema, has not answered yet — which happens only in the
+   * session's first dialog, until its three cached reads return. Create waits rather than guess,
+   * so a type that extends File is never created without its file. File, Picture, Audio and Video
+   * never wait; any other type, Folder included, can, since only the content model rules it out.
+   */
+  readonly mainFileUnsettled = computed(() => {
+    const type = this.selectedDocType()?.type;
+    return !!type && !isBlobHoldingDocType(type) && this.answeredDoctypes() === null;
+  });
+
+  /**
+   * Import's properties step cannot yet choose each file's starting type: this folder allows none
+   * of the stock four, and the content model that names the types extending them has not
+   * answered. Where a stock type is allowed, files start as one and do not wait.
+   */
+  readonly importTypesUnsettled = computed(
+    () =>
+      this.answeredDoctypes() === null &&
+      !this.creatableTypes().some((dt) => isBlobHoldingDocType(dt.type)),
   );
 
   private folderContextRequestId = 0;
@@ -409,7 +432,7 @@ export class CreateImportDialogComponent implements OnInit {
 
   /** Whether `type` keeps a main file, by its ancestry in Nuxeo's content model. */
   private holdsMainBlob(type: string): boolean {
-    return typeHoldsMainBlob(type, this.doctypes());
+    return typeHoldsMainBlob(type, this.answeredDoctypes() ?? NO_DOCTYPES);
   }
 
   readonly canEditImportPrevious = computed(() => this.importFileIndex() > 0);
@@ -1046,7 +1069,7 @@ export class CreateImportDialogComponent implements OnInit {
   }
 
   startImportProperties(): void {
-    if (this.importRestricted()) return;
+    if (this.importRestricted() || this.importTypesUnsettled()) return;
     const files = this.uploads.pending();
     if (files.length === 0) return;
 
@@ -1274,7 +1297,7 @@ export class CreateImportDialogComponent implements OnInit {
     const path = this.parentPath();
     const docType = this.selectedDocType();
     const form = this.layoutForm();
-    if (!path || !docType || !form?.ready()) return;
+    if (!path || !docType || !form?.ready() || this.mainFileUnsettled()) return;
 
     this.error.set(null);
     if (!form.validate()) return;
