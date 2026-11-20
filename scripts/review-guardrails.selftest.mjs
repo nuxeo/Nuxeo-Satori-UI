@@ -12804,6 +12804,68 @@ expectGreen(
   },
 );
 
+// Review on #602: `.use()` was recognised only when its receiver's text named `TranslateService`,
+// so moving the service into a variable or a field — an ordinary DI refactor — made the
+// active-language control green while the loader still asked for the removed `en.json`.
+const SATORI_LOADER = `provideAndConfigureSatoriTranslations({ fallbackLang: 'en-US' })`;
+
+expectRed(
+  'an active language set through a variable bound to inject(TranslateService)',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: `const providers = [
+  ${SATORI_LOADER},
+  {
+    useValue: () => {
+      const translate = inject(TranslateService);
+      translate.use('en');
+    },
+  },
+];
+export default providers;
+`,
+  },
+  null,
+  /preview\.ts asks Satori's translation loader for "en" \(`TranslateService\.use\(\)`\)/,
+);
+
+expectRed(
+  'an active language set through a class field typed TranslateService',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: `export const providers = [${SATORI_LOADER}];
+class LanguageInitializer {
+  private readonly translate: TranslateService = inject(TranslateService);
+  start(): void {
+    this.translate.use('en');
+  }
+}
+`,
+  },
+  null,
+  /preview\.ts asks Satori's translation loader for "en" \(`TranslateService\.use\(\)`\)/,
+);
+
+// The other review point: a non-literal `.use()` was reported before the project was known to use
+// Satori's loader, so a Storybook on the application's own loader failed for switching language
+// at run time — which it is free to do, since it never asks Satori for a catalogue.
+falsePositiveControls += 1;
+expectGreen(
+  'a Storybook without Satori translations switching to a dynamic language',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: `const lang = navigator.language;
+export const init = () => inject(TranslateService).use(lang);
+`,
+  },
+);
+
 // A clean checkout without GitHub Packages has no satori-ui to compare against: say so, stay green.
 expectWarn(
   'a served folder whose package is not installed',

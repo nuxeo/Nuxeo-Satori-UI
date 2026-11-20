@@ -5110,6 +5110,58 @@ const SATORI_STORYBOOK_CATALOGUE_DIR = 'i18n/@hylandsoftware/satori-ui';
  * English rather than raw keys.
  */
 function checkStorybookSatoriCatalogues() {
+  /** Whether `node` is `inject(TranslateService)`, or a type annotation naming `TranslateService`. */
+  const namesTranslateService = (node) =>
+    !!node &&
+    ((ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'inject' &&
+      node.arguments.length > 0 &&
+      ts.isIdentifier(node.arguments[0]) &&
+      node.arguments[0].text === 'TranslateService') ||
+      (ts.isTypeReferenceNode(node) &&
+        ts.isIdentifier(node.typeName) &&
+        node.typeName.text === 'TranslateService'));
+
+  /**
+   * Every name in `source` bound to a `TranslateService`: a variable, a class field or a
+   * parameter (constructor parameter properties included), typed `TranslateService` or initialised
+   * with `inject(TranslateService)`. By name within the file, not by scope — a same-named
+   * unrelated binding would be checked too, which errs toward checking, never toward skipping.
+   */
+  const translateServiceNames = (source) => {
+    const names = new Set();
+    const visit = (node) => {
+      if (
+        (ts.isVariableDeclaration(node) ||
+          ts.isPropertyDeclaration(node) ||
+          ts.isParameter(node)) &&
+        ts.isIdentifier(node.name) &&
+        (namesTranslateService(node.type) || namesTranslateService(node.initializer))
+      ) {
+        names.add(node.name.text);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    return names;
+  };
+
+  /** Whether `expression` — the receiver of a `.use()` call — is a `TranslateService`. */
+  const isTranslateService = (expression, names) => {
+    let node = expression;
+    while (ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node)) {
+      node = node.expression;
+    }
+    if (namesTranslateService(node)) return true;
+    if (ts.isIdentifier(node)) return names.has(node.text);
+    if (ts.isPropertyAccessExpression(node) && node.expression.kind === ts.SyntaxKind.ThisKeyword) {
+      return names.has(node.name.text);
+    }
+    // `TestBed.inject(TranslateService)` and other spellings that name the class directly.
+    return node.getText().includes('TranslateService');
+  };
+
   const mains = [
     ...walk('apps', (path) => path.endsWith('/.storybook/main.ts')),
     ...walk('libs', (path) => path.endsWith('/.storybook/main.ts')),
@@ -5126,11 +5178,18 @@ function checkStorybookSatoriCatalogues() {
 
     /** @type {{ file: string, lang: string, via: string }[]} */
     const requested = [];
+    /**
+     * Problems with `.use()` calls, held until the project is known to use Satori's loader. A
+     * Storybook on any other loader may switch language however it likes — it never asks Satori
+     * for a catalogue — so reporting them before that is known rejected a correct setup.
+     */
+    const usageProblems = [];
     let usesSatoriLoader = false;
     let legible = true;
 
     for (const file of sources) {
       const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+      const serviceNames = translateServiceNames(source);
       const visit = (node) => {
         if (ts.isCallExpression(node)) {
           const callee = node.expression;
@@ -5188,18 +5247,17 @@ function checkStorybookSatoriCatalogues() {
           if (
             ts.isPropertyAccessExpression(callee) &&
             callee.name.text === 'use' &&
-            callee.expression.getText().includes('TranslateService')
+            isTranslateService(callee.expression, serviceNames)
           ) {
             const [lang] = node.arguments;
             if (lang && ts.isStringLiteral(lang)) {
               requested.push({ file, lang: lang.text, via: '`TranslateService.use()`' });
             } else {
-              fail(
+              usageProblems.push(
                 `${file} calls \`TranslateService.use()\` with ` +
                   `\`${lang ? lang.getText().slice(0, 60) : 'no argument'}\`, which is not a ` +
                   'string literal, so this gate cannot tell which catalogue Satori is asked for.',
               );
-              legible = false;
             }
           }
         }
@@ -5208,7 +5266,11 @@ function checkStorybookSatoriCatalogues() {
       visit(source);
     }
 
-    if (!usesSatoriLoader || !legible) continue;
+    // Not Satori's loader: nothing below applies, and nothing above about `.use()` is a defect.
+    if (!usesSatoriLoader) continue;
+    for (const problem of usageProblems) fail(problem);
+    if (usageProblems.length > 0) legible = false;
+    if (!legible) continue;
     checked += 1;
 
     // Where `main.ts` serves the satori-ui catalogues from.
