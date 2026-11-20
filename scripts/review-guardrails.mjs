@@ -5179,18 +5179,32 @@ function checkStorybookSatoriCatalogues() {
    */
   const MAIN_NAMES = ['main.ts', 'main.mts', 'main.js', 'main.mjs', 'main.cjs'];
   const trimSlashes = (path) => path.replace(/^\.?\/+/, '').replace(/\/+$/, '');
-  /** @type {Map<string, { input: string, output: string, glob: string, target: string }[]>} */
+  /**
+   * Config directory → the project that owns it, and each build that uses it.
+   *
+   * A build is a Storybook target, or one configuration of it, with its *effective* `assets`: a
+   * configuration's own array **replaces** the target's, as Angular does, and only one that sets
+   * none inherits it. Pooling them per config directory let one build's assets hide another's
+   * missing catalogues (review on #602), so each is judged on its own.
+   *
+   * @type {Map<string, { projectRoot: string, builds: Map<string, { input: string, output: string, glob: string }[]> }>}
+   */
   const configDirs = new Map();
-  const addConfigDir = (dir) => {
+  const entryFor = (dir, projectRoot) => {
     const key = trimSlashes(toPosixRel(dir));
-    if (!configDirs.has(key)) configDirs.set(key, []);
-    return configDirs.get(key);
+    if (!configDirs.has(key)) {
+      configDirs.set(key, { projectRoot: projectRoot ?? dirname(key), builds: new Map() });
+    }
+    const entry = configDirs.get(key);
+    // A `project.json` knows its root; the parent of a config directory is only a guess at it.
+    if (projectRoot) entry.projectRoot = projectRoot;
+    return entry;
   };
   for (const main of [
     ...walk('apps', (path) => MAIN_NAMES.some((name) => path.endsWith(`/.storybook/${name}`))),
     ...walk('libs', (path) => MAIN_NAMES.some((name) => path.endsWith(`/.storybook/${name}`))),
   ]) {
-    addConfigDir(dirname(main));
+    entryFor(dirname(main));
   }
   for (const projectFile of [
     ...walk('apps', (path) => path.endsWith('/project.json')),
@@ -5202,30 +5216,47 @@ function checkStorybookSatoriCatalogues() {
     } catch {
       continue; // Malformed project files are another gate's concern; nothing here to read.
     }
+    const projectRoot = trimSlashes(
+      typeof project?.root === 'string' ? project.root : dirname(projectFile),
+    );
     for (const [name, target] of Object.entries(project?.targets ?? {})) {
       if (typeof target?.executor !== 'string' || !/storybook/i.test(target.executor)) continue;
-      for (const options of [target.options, ...Object.values(target.configurations ?? {})]) {
+      const base = target.options && typeof target.options === 'object' ? target.options : {};
+      const builds = [
+        [`${projectFile}#${name}`, base],
+        ...Object.entries(target.configurations ?? {}).map(([configuration, options]) => [
+          `${projectFile}#${name}:${configuration}`,
+          options,
+        ]),
+      ];
+      for (const [label, options] of builds) {
         if (!options || typeof options !== 'object') continue;
         // A configuration without `configDir` inherits the target's, as the builder does.
-        const configDir = options.configDir ?? target.options?.configDir;
+        const configDir = options.configDir ?? base.configDir;
         if (typeof configDir !== 'string') continue;
-        const assets = addConfigDir(configDir);
-        for (const asset of options.assets ?? []) {
-          if (asset && typeof asset === 'object' && typeof asset.input === 'string') {
-            assets.push({
+        const assets = Array.isArray(options.assets)
+          ? options.assets
+          : Array.isArray(base.assets)
+            ? base.assets
+            : [];
+        entryFor(configDir, projectRoot).builds.set(
+          label,
+          assets
+            .filter(
+              (asset) => asset && typeof asset === 'object' && typeof asset.input === 'string',
+            )
+            .map((asset) => ({
               input: asset.input,
               output: typeof asset.output === 'string' ? asset.output : '',
               glob: typeof asset.glob === 'string' ? asset.glob : '**/*',
-              target: `${projectFile}#${name}`,
-            });
-          }
-        }
+            })),
+        );
       }
     }
   }
   let checked = 0;
 
-  for (const [storybookDir, assetMounts] of configDirs) {
+  for (const [storybookDir, { projectRoot, builds }] of configDirs) {
     const mainName = MAIN_NAMES.find((name) => fileExists(`${storybookDir}/${name}`));
     if (!mainName) {
       warn(
@@ -5235,10 +5266,13 @@ function checkStorybookSatoriCatalogues() {
       continue;
     }
     const main = `${storybookDir}/${mainName}`;
-    const projectRoot = dirname(storybookDir);
+    // Stories anywhere in the owning project, not under the config directory's parent: a nested
+    // `configDir` such as `config/storybook` has no `src` beside it (review on #602).
     const sources = [
-      ...walk(storybookDir, (path) => /\.(m?[jt]s|cjs)$/.test(path)),
-      ...walk(`${projectRoot}/src`, (path) => /\.stories\.(m?[jt]s|cjs)$/.test(path)),
+      ...new Set([
+        ...walk(storybookDir, (path) => /\.(m?[jt]s|cjs)$/.test(path)),
+        ...walk(projectRoot, (path) => /\.stories\.(m?[jt]s|cjs)$/.test(path)),
+      ]),
     ];
 
     /** @type {{ file: string, lang: string, via: string }[]} */
@@ -5364,48 +5398,36 @@ function checkStorybookSatoriCatalogues() {
      * `../public/@hylandsoftware/satori-ui` there. Only an exact mount is required to exist — one
      * mounted above may hold no catalogue folder at all, and then serves nothing at that path.
      */
-    const mounts = [];
     /** Whether a mount at `to` can serve the catalogue path at all. */
     const covers = (to) =>
       to === SATORI_STORYBOOK_CATALOGUE_DIR ||
       to === '' ||
       SATORI_STORYBOOK_CATALOGUE_DIR.startsWith(`${to}/`);
     // `staticDirs` paths are relative to the config directory; builder `assets` to the workspace.
-    const addMount = (fromText, toText, base = storybookDir) => {
+    const mountFor = (fromText, toText, base = storybookDir) => {
       const to = trim(toText);
       const from = toPosixRel(join(base, fromText));
-      if (to === SATORI_STORYBOOK_CATALOGUE_DIR) {
-        mounts.push({ dir: from, exact: true });
-      } else if (covers(to)) {
-        const rest =
-          to === ''
-            ? SATORI_STORYBOOK_CATALOGUE_DIR
-            : SATORI_STORYBOOK_CATALOGUE_DIR.slice(to.length + 1);
-        mounts.push({ dir: toPosixRel(join(from, rest)), exact: false });
-      }
+      if (to === SATORI_STORYBOOK_CATALOGUE_DIR) return { dir: from, exact: true };
+      if (!covers(to)) return null;
+      const rest =
+        to === ''
+          ? SATORI_STORYBOOK_CATALOGUE_DIR
+          : SATORI_STORYBOOK_CATALOGUE_DIR.slice(to.length + 1);
+      return { dir: toPosixRel(join(from, rest)), exact: false };
     };
-    // The globs that copy a folder's top-level `.json` files, and so its catalogues, unchanged.
-    const COPIES_CATALOGUES = new Set(['**/*', '**', '*', '*.json', '**/*.json']);
-    for (const asset of assetMounts) {
-      if (!covers(trim(asset.output))) continue;
-      if (!COPIES_CATALOGUES.has(asset.glob)) {
-        fail(
-          `${asset.target} serves \`${asset.input}\` at "${asset.output}" with glob ` +
-            `\`${asset.glob}\`, which \`checkStorybookSatoriCatalogues\` cannot interpret — so it ` +
-            `cannot tell which catalogues reach ${SATORI_STORYBOOK_CATALOGUE_DIR}. Teach the gate ` +
-            'that glob rather than leaving it asserting nothing.',
-        );
-        legible = false;
-        continue;
-      }
-      addMount(asset.input, asset.output, '');
-    }
+
+    // `staticDirs` is shared by every build of this config directory.
+    const staticMounts = [];
+    const addStatic = (fromText, toText) => {
+      const mount = mountFor(fromText, toText);
+      if (mount) staticMounts.push(mount);
+    };
     if (staticDirs && ts.isArrayLiteralExpression(staticDirs)) {
       for (const element of staticDirs.elements) {
         if (ts.isStringLiteral(element) || ts.isNoSubstitutionTemplateLiteral(element)) {
           const separator = element.text.lastIndexOf(':');
-          if (separator === -1) addMount(element.text, '');
-          else addMount(element.text.slice(0, separator), element.text.slice(separator + 1));
+          if (separator === -1) addStatic(element.text, '');
+          else addStatic(element.text.slice(0, separator), element.text.slice(separator + 1));
           continue;
         }
         if (!ts.isObjectLiteralExpression(element)) {
@@ -5435,7 +5457,7 @@ function checkStorybookSatoriCatalogues() {
           legible = false;
           continue;
         }
-        addMount(from.text, to ? to.text : '');
+        addStatic(from.text, to ? to.text : '');
       }
     } else if (staticDirs) {
       fail(
@@ -5446,71 +5468,104 @@ function checkStorybookSatoriCatalogues() {
     }
     if (!legible) continue;
 
-    const served = new Set();
-    const servedFrom = [];
-    let judgeable = true;
-    for (const { dir, exact } of mounts) {
-      if (dir.startsWith('..')) {
-        if (exact) {
+    // Globs that copy every catalogue, at any depth, and globs that copy only the folder's own
+    // top-level files. A flat glob mounted above the catalogue path copies no subfolder, so it
+    // serves nothing there (review on #602) — it counts only when mounted exactly at the path.
+    const RECURSIVE_GLOBS = new Set(['**/*', '**', '**/*.json']);
+    const FLAT_GLOBS = new Set(['*', '*.json']);
+
+    // A config directory found only by name has no target, and is judged on `staticDirs` alone.
+    const judged = builds.size > 0 ? [...builds] : [[null, []]];
+    for (const [label, assets] of judged) {
+      const where = label ? ` (as built by ${label})` : '';
+      const mounts = [...staticMounts];
+      let buildLegible = true;
+      for (const asset of assets) {
+        const output = trim(asset.output);
+        if (!covers(output)) continue;
+        if (FLAT_GLOBS.has(asset.glob) && output !== SATORI_STORYBOOK_CATALOGUE_DIR) continue;
+        if (!RECURSIVE_GLOBS.has(asset.glob) && !FLAT_GLOBS.has(asset.glob)) {
           fail(
-            `${main} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, outside the repository.`,
+            `${label} serves \`${asset.input}\` at "${asset.output}" with glob ` +
+              `\`${asset.glob}\`, which \`checkStorybookSatoriCatalogues\` cannot interpret — so ` +
+              `it cannot tell which catalogues reach ${SATORI_STORYBOOK_CATALOGUE_DIR}. Teach the ` +
+              'gate that glob rather than leaving it asserting nothing.',
           );
+          buildLegible = false;
+          continue;
+        }
+        const mount = mountFor(asset.input, asset.output, '');
+        if (mount) mounts.push(mount);
+      }
+      if (!buildLegible) continue;
+
+      const served = new Set();
+      const servedFrom = [];
+      let judgeable = true;
+      for (const { dir, exact } of mounts) {
+        if (dir.startsWith('..')) {
+          if (exact) {
+            fail(
+              `${main}${where} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, outside the ` +
+                'repository.',
+            );
+            judgeable = false;
+          }
+          continue;
+        }
+        if (!fileExists(dir)) {
+          // A mount above the catalogue path with no catalogue folder serves nothing there.
+          if (!exact) continue;
+          const segments = dir.split('/');
+          const index = segments.indexOf('node_modules');
+          const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
+          const packageRoot = index === -1 ? null : segments.slice(0, index + span).join('/');
+          if (packageRoot && !fileExists(packageRoot)) {
+            warn(
+              `${packageRoot} is not installed, so the languages ${main} asks Satori for were ` +
+                `not checked against it${where}.`,
+            );
+          } else {
+            fail(
+              `${main}${where} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which does ` +
+                'not exist. Either the path is a typo or the package no longer ships that folder.',
+            );
+          }
           judgeable = false;
+          continue;
         }
+        servedFrom.push(dir);
+        for (const entry of readdirSync(join(repoRoot, dir))) {
+          if (entry.endsWith('.json') && entry !== VENDOR_LOCALES_MANIFEST) {
+            served.add(entry.slice(0, -'.json'.length));
+          }
+        }
+      }
+      if (!judgeable) continue;
+
+      if (servedFrom.length === 0) {
+        fail(
+          `${projectRoot}'s Storybook configures Satori's translation loader, but ${main}${where} ` +
+            `serves nothing at ${SATORI_STORYBOOK_CATALOGUE_DIR}, so every \`sat.*\` request ` +
+            '404s and the stories render raw keys. Add a `staticDirs` entry copying ' +
+            'node_modules/@hylandsoftware/satori-ui/i18n there.',
+        );
         continue;
       }
-      if (!fileExists(dir)) {
-        // A mount above the catalogue path whose folder has no catalogue folder serves nothing there.
-        if (!exact) continue;
-        const segments = dir.split('/');
-        const index = segments.indexOf('node_modules');
-        const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
-        const packageRoot = index === -1 ? null : segments.slice(0, index + span).join('/');
-        if (packageRoot && !fileExists(packageRoot)) {
-          warn(
-            `${packageRoot} is not installed, so the languages ${main} asks Satori for were not ` +
-              'checked against it.',
-          );
-        } else {
-          fail(
-            `${main} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which does not exist. ` +
-              'Either the path is a typo or the package no longer ships that folder.',
-          );
-        }
-        judgeable = false;
-        continue;
-      }
-      servedFrom.push(dir);
-      for (const entry of readdirSync(join(repoRoot, dir))) {
-        if (entry.endsWith('.json') && entry !== VENDOR_LOCALES_MANIFEST) {
-          served.add(entry.slice(0, -'.json'.length));
-        }
-      }
-    }
-    if (!judgeable) continue;
 
-    if (servedFrom.length === 0) {
-      fail(
-        `${projectRoot}'s Storybook configures Satori's translation loader, but ${main} serves ` +
-          `nothing at ${SATORI_STORYBOOK_CATALOGUE_DIR}, so every \`sat.*\` request 404s and the ` +
-          'stories render raw keys. Add a `staticDirs` entry copying ' +
-          'node_modules/@hylandsoftware/satori-ui/i18n there.',
-      );
-      continue;
-    }
-
-    for (const { file, lang, via } of requested) {
-      const parts = lang.split(/[-_]/);
-      const baseLang = parts.length > 1 ? parts[0] : null;
-      if (served.has(lang) || (baseLang !== null && served.has(baseLang))) continue;
-      fail(
-        `${file} asks Satori's translation loader for "${lang}" (${via}), but the Storybook ` +
-          `serves no ${lang}.json${baseLang ? ` or ${baseLang}.json` : ''} at ` +
-          `${SATORI_STORYBOOK_CATALOGUE_DIR} (from ${servedFrom.join(' + ')}; it has ` +
-          `${[...served].sort().join(', ') || 'no catalogue'}). Every \`sat.*\` key in the stories ` +
-          'renders raw. Use a language that folder ships — satori-ui 1.0.0 ships regional codes ' +
-          'only, such as en-US.',
-      );
+      for (const { file, lang, via } of requested) {
+        const parts = lang.split(/[-_]/);
+        const baseLang = parts.length > 1 ? parts[0] : null;
+        if (served.has(lang) || (baseLang !== null && served.has(baseLang))) continue;
+        fail(
+          `${file} asks Satori's translation loader for "${lang}" (${via}), but the Storybook` +
+            `${where} serves no ${lang}.json${baseLang ? ` or ${baseLang}.json` : ''} at ` +
+            `${SATORI_STORYBOOK_CATALOGUE_DIR} (from ${servedFrom.join(' + ')}; it has ` +
+            `${[...served].sort().join(', ') || 'no catalogue'}). Every \`sat.*\` key in the ` +
+            'stories renders raw. Use a language that folder ships — satori-ui 1.0.0 ships ' +
+            'regional codes only, such as en-US.',
+        );
+      }
     }
   }
 

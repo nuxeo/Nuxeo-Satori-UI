@@ -12990,6 +12990,103 @@ expectWarn(
   /names libs\/shared\/sb-satori\/\.storybook-missing as its `configDir`, but it holds no main file/,
 );
 
+// Review on #602, third round. Each control below passed a broken setup, or rejected a working one,
+// under the previous version of the gate.
+const SB_VENDOR_ASSET = {
+  glob: '**/*',
+  input: SB_VENDOR,
+  output: 'i18n/@hylandsoftware/satori-ui',
+};
+
+/** A `project.json` with one Storybook target, its options and its configurations. */
+const sbProjectWith = (options, configurations) =>
+  `${JSON.stringify(
+    {
+      name: 'sb-satori',
+      root: SB,
+      targets: {
+        'build-storybook': {
+          executor: '@storybook/angular:build-storybook',
+          options,
+          ...(configurations ? { configurations } : {}),
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+
+// A configuration's `assets` replaces the target's. Pooled, the base array supplied the files to a
+// `ci` build that serves none of them, so its requests 404 while the gate passed.
+expectRed(
+  "a configuration whose empty assets array removes the target's catalogues",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProjectWith(
+      { configDir: `${SB}/.storybook`, assets: [SB_VENDOR_ASSET] },
+      { ci: { assets: [] } },
+    ),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /\(as built by libs\/shared\/sb-satori\/project\.json#build-storybook:ci\) serves nothing at/,
+);
+
+// A nested `configDir` has no `src` beside it: stories were looked for in `config/src`, so an
+// invalid fallback in a stories decorator was never read.
+expectRed(
+  "a nested configDir whose project's stories ask for an unserved language",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProjectWith({
+      configDir: `${SB}/config/storybook`,
+      assets: [SB_VENDOR_ASSET],
+    }),
+    [`${SB}/config/storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/config/storybook/preview.ts`]: sbPreview(`'en-US'`),
+    [`${SB}/src/lib/primitives.stories.ts`]: sbStories(`'en'`),
+  },
+  null,
+  /src\/lib\/primitives\.stories\.ts asks Satori's translation loader for "en"/,
+);
+
+// `*.json` copies only the folder's own files. Mounted above the catalogue path it copies no
+// `@hylandsoftware/satori-ui/` subfolder, so nothing is served there.
+expectRed(
+  'a flat asset glob mounted above the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB}/public/@hylandsoftware/satori-ui/en-US.json`]: '{}\n',
+    [`${SB}/project.json`]: sbProjectWith({
+      configDir: `${SB}/.storybook`,
+      assets: [{ glob: '*.json', input: `${SB}/public`, output: 'i18n' }],
+    }),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /serves nothing at i18n\/@hylandsoftware\/satori-ui/,
+);
+
+// …and the same flat glob mounted exactly at the path does copy the catalogues.
+falsePositiveControls += 1;
+expectGreen(
+  'a flat asset glob mounted exactly at the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProjectWith({
+      configDir: `${SB}/.storybook`,
+      assets: [{ glob: '*.json', input: SB_VENDOR, output: 'i18n/@hylandsoftware/satori-ui' }],
+    }),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
 // A clean checkout without GitHub Packages has no satori-ui to compare against: say so, stay green.
 expectWarn(
   'a served folder whose package is not installed',
