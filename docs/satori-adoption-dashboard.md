@@ -15,17 +15,17 @@ npx sdsc check all --json     # the snapshot the dashboard reads
 
 Measured 2026-11-20 with `satori-design-system-checker@1.0.0`, from `npx sdsc check all --json`:
 
-| Metric                | Value                                 | Check |
-| --------------------- | ------------------------------------- | ----- |
-| **Adoption Score**    | **89.61**                             |       |
-| Angular version       | 22.2.3                                | ✅    |
-| Satori UI version     | 1.0.0                                 | ✅    |
-| Design language       | all 6 MDS2 checks + Satori theme pass | ✅    |
-| CIC Nav               | not used — costs 10 points, see ‡     | ❌‡   |
-| Icons                 | 6 Material font, 444 Satori           | ❌\*  |
-| Componentry           | 0 legacy of 1,517 components          | ✅    |
-| DS-internal overrides | 4 unsuppressed (0.23 per 1k LOC)      | ❌†   |
-| A11y overrides        | 0 — not penalised                     | —     |
+| Metric                | Value                             | Check |
+| --------------------- | --------------------------------- | ----- |
+| **Adoption Score**    | **89.61**                         |       |
+| Angular version       | 22.2.3                            | ✅    |
+| Satori UI version     | 1.0.0                             | ✅    |
+| Design language       | 6 MDS2 checks + Satori theme pass | ✅    |
+| ↳ same KPI: CIC Nav   | not used — costs 10 points, see ‡ | ❌‡   |
+| Icons                 | 6 Material font, 444 Satori       | ❌\*  |
+| Componentry           | 0 legacy of 1,517 components      | ✅    |
+| DS-internal overrides | 4 unsuppressed (0.23 per 1k LOC)  | ❌†   |
+| A11y overrides        | 0 — not penalised                 | —     |
 
 ‡ **The drop from 99.69 is the checker, not the code.** On the same tree, the
 `1.0.0-alpha.171` checker scores 99.61 and `1.0.0` scores 89.61, with identical icon, component
@@ -123,16 +123,21 @@ sdsc check all --json  →  adoption-data/<product>/        → Dashboard reads
 
 ## Score Breakdown
 
-The score weights six KPIs. Four pass outright; two have a remainder:
+The score weights six KPIs. With `satori-design-system-checker@1.0.0` (measured 2026-11-20), three
+pass outright and three have a remainder:
 
-| KPI                    | Check | Remainder               | Is it work?                    |
-| ---------------------- | ----- | ----------------------- | ------------------------------ |
-| Angular version        | ✅    | —                       | Already compliant              |
-| Satori UI version      | ✅    | —                       | Already compliant              |
-| Design language (MDS3) | ✅    | —                       | All MDS2 checks passing        |
-| Icon adoption          | ❌    | 6 Material font icons   | Mostly **no** — see below      |
-| Componentry            | ✅    | —                       | No legacy component violations |
-| Styling hygiene        | ❌    | 1 unsuppressed override | Yes, but read the caveat below |
+| KPI               | Check | Remainder                                        | Is it work?                                                   |
+| ----------------- | ----- | ------------------------------------------------ | ------------------------------------------------------------- |
+| Angular version   | ✅    | —                                                | Already compliant                                             |
+| Satori UI version | ✅    | —                                                | Already compliant (1.0.0)                                     |
+| Design language   | ❌    | CIC Nav not used — 9 of 12 check weight, −10 pts | **No** code work; an excusal decision, see ‡ in Current State |
+| Icon adoption     | ❌    | 6 Material font icons                            | Mostly **no** — see below                                     |
+| Componentry       | ✅    | —                                                | No legacy component violations                                |
+| Styling hygiene   | ❌    | 4 unsuppressed overrides                         | Yes, but read the caveat below                                |
+
+Design language here means all six MDS2 checks and the Satori theme, which pass, plus CIC Nav
+use, which this product does not have. Under the alpha checkers this KPI passed outright, and
+the table had four passing KPIs.
 
 The per-KPI weights are the checker's, not ours, so this table deliberately gives raw counts rather
 than percentages. An earlier version quoted "0%" and "~82%" against figures that no longer held,
@@ -188,7 +193,10 @@ score and would render blank on a Satori-only host.
 
 ### What is actually left — and what "1 override" does not mean
 
-The checker's `cssOverridesCount: 1` is **one unsuppressed finding**, not one override in the
+_This section is the audit of the 2026-10-28 measurement. On 2026-11-20 the count was 4
+unsuppressed overrides; the three new findings have not been audited here._
+
+The checker's `cssOverridesCount: 1` was **one unsuppressed finding**, not one override in the
 codebase. There are **154 `stylelint-disable-next-line` suppressions of
 `no-ds-internals-overrides`, across 32 files** — `browse.scss`, `tabs.component.scss`,
 `document-detail.scss`, `tasks-page.component.scss`, `note-editor.scss` and more.
