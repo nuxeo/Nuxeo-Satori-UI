@@ -71,9 +71,18 @@ bump, kept for its reasoning; each part says how it turned out.
     main content to the left (screenshot checked). Strings fall back to English because neither
     the app nor satori-ui ships Arabic, so `i18n/ar.json` 404s (the app's own catalogue, an
     existing fallback) and no satori-ui file is requested.
-  - **Not covered:** the NXQL search page's `sat-accordion`. The browser session was the
-    `Anonymous` user, Administration redirects without admin rights, and the run did not sign in
-    as an administrator.
+  - **NXQL search page `sat-accordion` — checked 2026-11-20, signed in as the local administrator.**
+    The "Filters" header is a `role="button"` with `aria-expanded` and `aria-controls`; the region
+    is `role="region"`, labelled "Filters". Click, Enter and Space each toggle it. Collapsed, the
+    region is 0px, `visibility: hidden` and `inert`; expanded, it is 55px, visible and not inert.
+    Both states were confirmed by screenshot, and the console stayed free of warnings and errors.
+    (Measuring while the 225ms transition is still running reads the old state: let it finish.)
+  - **Breadcrumbs at the admin's deepest trails (depth 4), no resize between navigations:** at
+    1440px every trail is on one line and fits; at 640px, `perm-fixture`'s trail collapses two
+    crumbs behind "show more" and fits, and going back restores the shorter trail in full. No
+    `NG0956`. Not covered: the parity check `crumb.truncation`'s single over-long crumb (ellipsis
+    plus full title). No existing title is long enough, and the parity run needs its own seeded
+    Nuxeo (`nxsat-308-parity/start-parity-nuxeo.sh`).
   - **Breadcrumbs `NG0956` (support log, DS-2662) — found and removed, 2026-11-20.** Moving
     between folders logged one dev-mode `NG0956` warning per new trail ("track by identity caused
     re-creation of the entire collection of size 1"). The stack trace pointed at our wrapper,
@@ -225,17 +234,17 @@ code changes. Design files that still use those components need a separate desig
 
 The plan as written before the bump. How each step turned out, as of 2026-11-20:
 
-| Step                         | Status                                                                                                                                                                                                                                                                                              |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 Unblock                    | Done — see Blockers                                                                                                                                                                                                                                                                                 |
-| 2 Branch + bump              | Done — see Outcome. No companion-package bump was needed                                                                                                                                                                                                                                            |
-| 3 Schematics                 | Done — dry run, then real run; one formatting-only change reverted                                                                                                                                                                                                                                  |
-| 4 Manual fixes               | Done — the translation-catalogue mapping (DS-2803) was the only one                                                                                                                                                                                                                                 |
-| 5 Gate                       | Done locally — 40 of 41 gates pass; `code-scanning` runs on the PR                                                                                                                                                                                                                                  |
-| 6 Real-app check             | **Done, one gap** — shell, nav, icons, Browse, Contracts, Trash, Tasks, Favorites, Search, document detail and tabs, three languages and RTL (`ar`), both Storybooks. Not covered: the admin-only NXQL accordion (no admin session). Recorded here rather than as harness evidence (no credentials) |
-| 7 Prove the icon check fails | **Done** — the `bundle` gate now requires the sprite; it failed with the glob broken and passed restored                                                                                                                                                                                            |
-| 8 Docs                       | **Done** — versions, score, and the removed icon names in `docs/extension-reference.md`                                                                                                                                                                                                             |
-| 9 Adversarial review         | **Open**                                                                                                                                                                                                                                                                                            |
+| Step                         | Status                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 Unblock                    | Done — see Blockers                                                                                                                                                                                                                                                                                                                                      |
+| 2 Branch + bump              | Done — see Outcome. No companion-package bump was needed                                                                                                                                                                                                                                                                                                 |
+| 3 Schematics                 | Done — dry run, then real run; one formatting-only change reverted                                                                                                                                                                                                                                                                                       |
+| 4 Manual fixes               | Done — the translation-catalogue mapping (DS-2803) was the only one                                                                                                                                                                                                                                                                                      |
+| 5 Gate                       | Done locally — 40 of 41 gates pass; `code-scanning` runs on the PR                                                                                                                                                                                                                                                                                       |
+| 6 Real-app check             | **Done** — shell, nav, icons, Browse, Contracts, Trash, Tasks, Favorites, Search, document detail and tabs, three languages and RTL (`ar`), both Storybooks, and (as admin) the NXQL accordion. Not covered: the parity `crumb.truncation` single over-long crumb, which needs the dedicated parity Nuxeo. Recorded here rather than as harness evidence |
+| 7 Prove the icon check fails | **Done** — the `bundle` gate now requires the sprite; it failed with the glob broken and passed restored                                                                                                                                                                                                                                                 |
+| 8 Docs                       | **Done** — versions, score, and the removed icon names in `docs/extension-reference.md`                                                                                                                                                                                                                                                                  |
+| 9 Adversarial review         | **Open**                                                                                                                                                                                                                                                                                                                                                 |
 
 1. **Unblock** — resolve the three blockers above. Record the registry decision in
    `docs/adf-hx-beta-plan.md` if it changes.
