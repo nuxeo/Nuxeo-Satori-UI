@@ -484,16 +484,16 @@ overwrite it. The registered extension IDs are listed in
 
 ## 🩺 Troubleshooting
 
-| Symptom                                      | Cause and fix                                                                                        |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `npm ci` fails with `E401` or `E404`         | `SATORI_GH_READONLY_TOKEN` is missing or lacks `read:packages` on the Hyland organisation            |
-| `npm ci` passes locally, fails in CI         | A bare `npm install` pruned Linux-only entries. Restore the lockfile and run `npm run beta:lockfile` |
-| Build refuses to start                       | Wrong Node version. Run `nvm use` (Node 24)                                                          |
-| Empty lists, or 403 on `/nuxeo/api`          | Nuxeo isn't running on `:8080`, or the session is unauthenticated                                    |
-| HTTP 500 from `AI.*` operations              | The AI backend is a separate Nuxeo package that isn't installed. Expected without it                 |
-| Rich-format preview fails                    | ARender isn't running. Start its compose stack                                                       |
-| Permission emails don't arrive               | No SMTP locally. Start Mailpit                                                                       |
-| Config change has no effect under `nx serve` | Run `npm run config:dev` and restart the dev server                                                  |
+| Symptom                                      | Cause and fix                                                                                                                                                                                               |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm ci` fails with `E401` or `E404`         | `SATORI_GH_READONLY_TOKEN` is missing or lacks `read:packages` on the Hyland organisation                                                                                                                   |
+| `npm ci` passes locally, fails in CI         | A bare `npm install` pruned Linux-only entries. Restore the lockfile and run `npm run beta:lockfile`                                                                                                        |
+| Build refuses to start                       | Wrong Node version. Run `nvm use` (Node 24)                                                                                                                                                                 |
+| Empty lists, or 403 on `/nuxeo/api`          | Nuxeo isn't running on `:8080`, or the session is unauthenticated                                                                                                                                           |
+| HTTP 500 from `AI.*` operations              | The AI backend is a separate Nuxeo package that isn't installed. Expected without it                                                                                                                        |
+| Rich-format preview fails                    | ARender isn't running. Start its compose stack                                                                                                                                                              |
+| Permission emails don't arrive               | No SMTP locally. Start Mailpit                                                                                                                                                                              |
+| Config change has no effect under `nx serve` | Re-run `npm run config:dev` **with your fragments** (`-- --bootstrap <file> --manifest <file>`), then restart the dev server. Without arguments it writes the defaults only and discards your customisation |
 
 More rows: [Deployment and troubleshooting](documentation/30-engineering/13-deployment-and-troubleshooting.md).
 
