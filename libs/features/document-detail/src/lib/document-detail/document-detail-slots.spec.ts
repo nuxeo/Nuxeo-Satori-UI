@@ -1095,6 +1095,35 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(body().querySelector('button[aria-label="Open with Nuxeo Drive"]')).toBeTruthy();
     });
 
+    it.each(['application/pdf', 'image/png'])(
+      'keeps the built-in viewer and diagnoses a misspelt NEV opt-in for %s (NXSAT-857)',
+      async (mime) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+          await render(
+            optIn({ type: 'app.rules.hasMimeTyp', parameters: ['application/pdf'] }),
+            doc({
+              properties: {
+                'file:content': { name: 'test', 'mime-type': mime, digest: 'd', data: '/blob' },
+              },
+            }),
+            {},
+            [],
+            { available: true, url },
+          );
+          expect(viewer().preferARender()).toBe(false);
+          expect(body().querySelector('.arender-frame')).toBeNull();
+          expect(warn).toHaveBeenCalledWith(
+            expect.stringMatching(
+              /\[agentic-ui-extensions\].*app\.tabs\.view\.preferARender.*app\.rules\.hasMimeTyp/,
+            ),
+          );
+        } finally {
+          warn.mockRestore();
+        }
+      },
+    );
+
     it.each([
       { rule: 'core.false', mime: 'application/pdf', expected: false },
       { rule: 'core.true', mime: 'image/png', expected: true },

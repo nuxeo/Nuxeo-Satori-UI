@@ -47,6 +47,7 @@ export class AppExtensionsService {
   private readonly appConfig = inject(AppConfigService);
   private readonly slots = inject(ExtensionSlotRegistry);
   private readonly rules = inject(ExtensionRuleRegistry);
+  private readonly notedOptInRefusals = new Set<string>();
 
   /** The merged Layer 1 config, recomputed when the manifest signal changes. */
   private readonly resolved = computed<ResolvedExtensionLayers>(() =>
@@ -246,6 +247,20 @@ export class AppExtensionsService {
   /** Evaluate a rule reference directly, for a template that gates one control. */
   evaluateRule(rule: ExtensionRule | null | undefined, context: ExtensionRuleContext): boolean {
     return this.rules.evaluate(rule, context);
+  }
+
+  /** Evaluate an explicit feature opt-in, refusing invalid rules without changing visibility rules. */
+  evaluateOptInRule(
+    rule: ExtensionRule | null | undefined,
+    context: ExtensionRuleContext,
+    setting: string,
+  ): boolean {
+    return this.rules.evaluateOptIn(rule, context, (reason) => {
+      const message = `${setting}: ${reason}; opt-in disabled`;
+      if (this.notedOptInRefusals.has(message)) return;
+      this.notedOptInRefusals.add(message);
+      warn(message);
+    });
   }
 
   /**
