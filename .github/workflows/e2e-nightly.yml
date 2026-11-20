@@ -16,7 +16,10 @@ on:
   # TEMPORARY: lets the workflow run from this branch before it exists on main. Remove before merge.
   push:
     branches: ['fix/**']
-    paths: ['.github/workflows/e2e-nightly.yml']
+    paths:
+      - '.github/workflows/e2e-nightly.yml'
+      - 'apps/nuxeo-ui/proxy.remote.conf.mjs'
+      - 'apps/nuxeo-ui-e2e/**'
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:

@@ -27,6 +27,11 @@ export default {
     secure: true,
     changeOrigin: true,
     autoRewrite: true,
+    // `autoRewrite` fixes the host of a redirect `Location` but keeps the scheme, and a hosted
+    // Nuxeo answers with `https://`. The browser then followed `https://localhost:4200/...` to a
+    // dev server that speaks plain http, and the e2e identity guard saw API calls leave for a
+    // foreign origin (first nightly run, NXSAT-231). The dev server is http, so say so.
+    protocolRewrite: 'http',
     headers: { 'X-NXproperties': '*' },
   },
 };
