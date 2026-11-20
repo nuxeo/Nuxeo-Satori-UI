@@ -13187,6 +13187,37 @@ export default config;
   /sets `staticDirs` and then `\.\.\.overrides` in the same object, which can replace it/,
 );
 
+// Review on #602, sixth round: a computed key after `staticDirs` may be `staticDirs` itself…
+expectRed(
+  'a computed key after staticDirs that can replace it',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const key = 'staticDirs';
+const config = { staticDirs: [${SB_SATORI_DIR}], [key]: [] };
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /sets `staticDirs` and then `\[key\]: \[\]` in the same object, which can replace it/,
+);
+
+// …while a shorthand, or a computed key that is a literal naming something else, cannot.
+falsePositiveControls += 1;
+expectGreen(
+  'a shorthand and a literal computed key after staticDirs',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const addons = [];
+const config = { staticDirs: [${SB_SATORI_DIR}], addons, ['framework']: {} };
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
 expectRed(
   'staticDirs set twice',
   'checkStorybookSatoriCatalogues',

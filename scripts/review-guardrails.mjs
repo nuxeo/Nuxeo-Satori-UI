@@ -5486,11 +5486,19 @@ function checkStorybookSatoriCatalogues() {
         );
         legible = false;
       } else {
-        // A spread after it in the same object can replace it; one before it cannot.
+        // A member after it can replace it when it is a spread, or has a computed key that is not a
+        // literal naming something else (`[key]: []` may be `staticDirs`). A shorthand or ordinary
+        // named member cannot — a shorthand `staticDirs` is already counted as a definition — and
+        // nothing before it can, because the explicit value wins (review on #602).
+        const canReplace = (member) => {
+          if (ts.isSpreadAssignment(member)) return true;
+          const name = member.name;
+          if (!name || !ts.isComputedPropertyName(name)) return false;
+          const key = name.expression;
+          return !(ts.isStringLiteralLike(key) && key.text !== 'staticDirs');
+        };
         const members = definition.parent.properties;
-        const overriding = members
-          .slice(members.indexOf(definition) + 1)
-          .find((member) => !ts.isPropertyAssignment(member) && !ts.isMethodDeclaration(member));
+        const overriding = members.slice(members.indexOf(definition) + 1).find(canReplace);
         if (overriding) {
           fail(
             `${main} sets \`staticDirs\` and then \`${overriding.getText().slice(0, 60)}\` in the ` +
