@@ -147,6 +147,60 @@ describe('AppTranslateLoader', () => {
   });
 
   /**
+   * A deployment can be set to a regional code itself (`defaultLanguage: 'fr-FR'`). That must
+   * reach the same file directly, without passing through `aliases`, and the app's own catalogue
+   * keeps the code as given.
+   */
+  it('asks satori-ui for a regional code by its own name', () => {
+    configure();
+    loader.getTranslation('fr-FR').subscribe();
+
+    const upstream = httpMock
+      .match(() => true)
+      .map((request) => {
+        request.flush({});
+        return request.request.url;
+      })
+      .filter((url) => url.startsWith('assets/satori-ui/'));
+
+    expect(upstream).toEqual(['assets/satori-ui/i18n/fr-FR.json']);
+  });
+
+  /**
+   * The resolution rule on folders built here, so each case is stated rather than inherited from
+   * whatever `UPSTREAM_FOLDERS` happens to hold.
+   */
+  describe('upstreamCatalogueFor', () => {
+    const folder = (languages: string[], aliases?: Record<string, string>) => ({
+      path: 'assets/vendor',
+      languages,
+      aliases,
+    });
+
+    it('resolves a shipped regional code to itself', () => {
+      expect(upstreamCatalogueFor(folder(['en-US', 'fr-FR']), 'fr-FR')).toBe('fr-FR');
+    });
+
+    it('prefers a file shipped under the requested name over a conflicting alias', () => {
+      // A vendor that ships `en.json` again must be asked for it, even with `en` still aliased.
+      expect(upstreamCatalogueFor(folder(['en', 'en-US'], { en: 'en-US' }), 'en')).toBe('en');
+    });
+
+    it('follows an alias when the requested name is not shipped', () => {
+      expect(upstreamCatalogueFor(folder(['en-US'], { en: 'en-US' }), 'en')).toBe('en-US');
+    });
+
+    it('ignores an alias whose target is not shipped', () => {
+      expect(upstreamCatalogueFor(folder(['en-US'], { en: 'en-GB' }), 'en')).toBeNull();
+    });
+
+    it('does not fall back from an unshipped regional code to its base language', () => {
+      // `pt-BR` is neither shipped nor aliased, so Portuguese strings are not substituted for it.
+      expect(upstreamCatalogueFor(folder(['pt-PT'], { pt: 'pt-PT' }), 'pt-BR')).toBeNull();
+    });
+  });
+
+  /**
    * `@hylandsoftware/satori-ui` ships catalogues for de, en, es, fr, it, pl and pt only (as
    * regional files since 1.0.0, reached through `aliases`), while
    * `availableLanguages` advertises en, fr, de, ja, nl, th and zh. Requesting the folder for a
