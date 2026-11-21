@@ -129,7 +129,7 @@ document.addEventListener('click', (ev) => {
   if (!el) return;
   const a = el.dataset.act, id = el.dataset.id;
   if (a === 'dia-bg') { if (ev.target === el) closeModal(); return; }
-  if (['pick', 'hold', 'tf', 'persona', 'ltype', 'noop', 'tfv', 'damf', 'pick-asset', 'pin-note', 'pin-pos'].includes(a)) return; // handled on change
+  if (['pick', 'hold', 'tf', 'persona', 'ltype', 'noop', 'tfv', 'damf', 'pick-asset', 'pin-note', 'pin-pos', 'vnote-t', 'vnote-x'].includes(a)) return; // handled on change
   if (el.tagName === 'A' && a !== 'read' && a !== 'go-app' && a !== 'go-docs') ev.preventDefault();
   switch (a) {
     case 'close': closeModal(); break;
