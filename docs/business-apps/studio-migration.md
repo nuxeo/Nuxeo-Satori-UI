@@ -60,21 +60,27 @@ zip holds four files; the bundle holds 36.
 | Search screen      | A form and a results layout with three views (data table, thumbnail grid, justified grid), columns and sort options                                                                                    | `web/nuxeo.war/ui/search/<provider>/`      |
 | Slot contributions | 4: a button in `DOCUMENT_ACTIONS`, a menu entry in `DRAWER_ITEMS`, its search page in `DRAWER_PAGES`, a theme in `THEMES`                                                                              | `ui/nuxeo-<project>-bundle.html`           |
 | Custom code        | None: the custom bundle holds only its header comment                                                                                                                                                  | `ui/nuxeo-<project>-custom-bundle.html`    |
-| Dashboard          | A replacement home with 4 cards: latest edited documents (twice), tasks, recently viewed                                                                                                               | `ui/nuxeo-home.html`                       |
-| Theme              | 105 `--nuxeo-*` custom properties and a logo                                                                                                                                                           | `ui/themes/<name>/`                        |
+| Dashboard          | A replacement home with 5 cards: latest edited documents (twice), tasks, recently viewed, favourites                                                                                                   | `ui/nuxeo-home.html`                       |
+| Theme              | 105 custom properties, 52 of them Web UI's `--nuxeo-*` and 53 Polymer's (42 `--paper-*`), and a logo                                                                                                   | `ui/themes/<name>/`                        |
 | Translations       | 13 keys in `messages.json` (type, schema field and search labels) and a `messages.properties` for the old JSF UI                                                                                       | `data/i18n/`                               |
 | Images             | A login background                                                                                                                                                                                     | `web/nuxeo.war/img/`                       |
 | Studio's own model | Types, schemas and page providers in Studio's XML; its layouts are Modeler's JSF-era layouts, not the Web UI ones                                                                                      | `.metadata/`                               |
 
-**Elements used**, 29 distinct, by count: `nuxeo-input` (31), `nuxeo-data-table-column` (15),
+**Elements used**, 27 distinct besides the two wrappers every file has (`dom-module` and
+`custom-style`), by count: `nuxeo-input` (31), `nuxeo-data-table-column` (15),
 `nuxeo-data-table`, `nuxeo-date-picker`, `nuxeo-card` and `nuxeo-document-thumbnail` (5 each),
 `nuxeo-user-tag`, `nuxeo-slot-content`, `nuxeo-page-provider` and `nuxeo-date` (4 each),
 `nuxeo-user-suggestion` and `nuxeo-directory-suggestion` (3 each), `nuxeo-document-viewer` (2),
 and one each of `nuxeo-search-form`, `nuxeo-results`, `nuxeo-data-grid`, `nuxeo-justified-grid`,
 `nuxeo-operation-button`, `nuxeo-menu-icon`, `nuxeo-tasks-list`, `nuxeo-document-storage`,
-`nuxeo-theme` and a few more. Every layout is a Polymer `dom-module` annotated with its document
+`nuxeo-theme`, `nuxeo-document-grid-thumbnail`, `nuxeo-justified-grid-item`, `nuxeo-operation`,
+`nuxeo-page` and `nuxeo-tag`. Every layout is a Polymer `dom-module` annotated with its document
 type (`@doctype AdmissionForm`) or page provider (`@search GetAdmissionForms`), and binds fields as
-`document.properties.<prefix>:<field>` on elements marked `role="widget"`.
+`document.properties.<prefix>:<field>` on elements marked `role="widget"`. A search form binds
+`params.<name>` instead, and its results layout carries no annotation of its own.
+
+The figures in this section are what the `inventory` command of
+[`tools/studio-migration`](../../tools/studio-migration/README.md) reads from the package.
 
 **What the sample teaches, beyond the format:**
 
@@ -88,6 +94,10 @@ type (`@doctype AdmissionForm`) or page provider (`@search GetAdmissionForms`), 
 - **Studio's `.metadata` cannot be trusted for layouts.** It holds Modeler's JSF layouts (Title
   and Description only), while the Web UI files carry the real fields. Its page provider models do
   match the server contributions, so they can cross-check those.
+- **`studio-registries.json` is the project's own model, not Studio's catalogue.** It lists the
+  project's types, schemas, page providers, images and translations. The slots a contribution can
+  target come from Web UI itself, which declares 23 in version 2025.21, and the elements from the
+  packages that use them.
 - **This sample has no conditions.** No filter, no `dom-if`, no JavaScript expression. The harness
   needs samples that do (section 7).
 
@@ -106,7 +116,8 @@ not migrate, and the report says why and what to do instead.
 | Machine-generated labels ("Hfs Fields Hfs S Object Id")                                                                                           | A tidy label, kept as a translation                                                                      | Agent proposes |
 | Repeated fields, repeated dashboard cards                                                                                                         | Kept once                                                                                                | Reported       |
 | Search form and results: predicates, columns, sorts, views                                                                                        | A search form and a list over the same page provider, with typed columns, sorts and a table or grid view | Automatic      |
-| Slot contributions in mapped slots (`DOCUMENT_ACTIONS`, listing and selection actions, tabs, drawer items and pages)                              | Entries in the matching slot (`toolbar`, `rowActions`, `bulk-actions`, `tabs`, `navbar` with a page)     | Automatic      |
+| Slot contributions in mapped slots (`DOCUMENT_ACTIONS`, selection actions, tabs, drawer items and pages)                                          | Entries in the matching slot (`toolbar`, `bulk-actions`, `tabs`, `navbar` and its `sidebar`)             | Automatic      |
+| Application pages (`PAGES`)                                                                                                                       | Routes, once what each page shows is mapped                                                              | Agent proposes |
 | Contributions in slots the app lacks (user menu, administration, create popup, collection, blob and upload actions, trash, publishing, analytics) | A runtime slot first, decided per slot by demand (parity plan 10.2)                                      | Reported       |
 | `nuxeo-operation-button` with an operation and parameters                                                                                         | An action bound to the same operation, if it is on the allow-list                                        | Automatic      |
 | A button with no operation, or one not on the allow-list                                                                                          | Nothing until someone decides                                                                            | Reported       |
@@ -125,8 +136,15 @@ not migrate, and the report says why and what to do instead.
 | HTML blocks with inline scripts, uploaded CSS                                                                                                     | Nothing (parity decisions 2 and 5)                                                                       | Reported       |
 | Features of the JSF UI                                                                                                                            | Out of scope: Studio is retiring them                                                                    | —              |
 
-**Widgets**, from the elements seen in the sample and in Studio's catalogue. The full catalogue is
-built in phase M0 from Studio's registries and the customers' packages.
+Every slot, and where a contribution to it goes, is in
+[`tools/studio-migration/catalogue/slots.json`](../../tools/studio-migration/catalogue/slots.json).
+The toolbar of a list of results (`RESULTS_ACTIONS`) is among the slots the app lacks: it is not a
+menu on each row, so it does not go to `rowActions`.
+
+**Widgets**, from the elements seen in the sample and in Studio's catalogue. Every element and what
+it becomes is in
+[`tools/studio-migration/catalogue/elements.json`](../../tools/studio-migration/catalogue/elements.json),
+which grows with each package that arrives.
 
 | Web UI element                        | Widget                                 |
 | ------------------------------------- | -------------------------------------- |
@@ -226,8 +244,9 @@ For the sample, the report would list:
 
 - the 10 document layouts and the search screen, converted;
 - 4 slot contributions, of which the button with no operation is reported;
-- the dashboard's 4 cards, with the repeated one reported;
-- the theme's 105 properties against the token map;
+- the dashboard's 5 cards, with the repeated one reported;
+- the import layout's second Title and Description, reported;
+- the theme's 105 properties against the token map, 8 of them set a token in its first version;
 - 13 translations;
 - the model files, which need no conversion.
 
@@ -247,13 +266,21 @@ phase evidence. The summary goes into the pull request that adds the migrated pa
 
 These sit inside the [development plan](development-plan.md):
 
-| Phase | When (development plan) | Delivers                                                                                                                                                                              |
-| ----- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0    | Phase 0                 | The catalogue: Studio's slots and elements from its registries, the sample and at least two real packages, the first theme token map; the harness skeleton with its negative controls |
-| M1    | Phase 4                 | The declarative track for layouts, search screens, slots, the dashboard, the theme and translations, with harness checks 1 to 8 and 10. The first migrated package is demoed          |
-| M2    | Phase 4                 | Conditions (structured, and the known JavaScript patterns) with truth tables; task forms, tabs and layout blocks                                                                      |
-| M3    | Phase 6                 | The code track: custom elements to plugins, with check 9                                                                                                                              |
-| M4    | Phase 10                | Migration at scale: many packages in one run, a self-service upload that validates a package and returns its report, and a support playbook                                           |
+| Phase | When (development plan) | Delivers                                                                                                                                                                           |
+| ----- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0    | Phase 0                 | The catalogue: the slots Web UI declares and the elements of the sample and at least two real packages, the first theme token map; the harness skeleton with its negative controls |
+| M1    | Phase 4                 | The declarative track for layouts, search screens, slots, the dashboard, the theme and translations, with harness checks 1 to 8 and 10. The first migrated package is demoed       |
+| M2    | Phase 4                 | Conditions (structured, and the known JavaScript patterns) with truth tables; task forms, tabs and layout blocks                                                                   |
+| M3    | Phase 6                 | The code track: custom elements to plugins, with check 9                                                                                                                           |
+| M4    | Phase 10                | Migration at scale: many packages in one run, a self-service upload that validates a package and returns its report, and a support playbook                                        |
+
+**Where M0 stands, 22 November 2026:**
+
+- **Built:** the package reader, the inventory and the first catalogue, in
+  [`tools/studio-migration`](../../tools/studio-migration/README.md). On the sample, the reader
+  finds all 40 files and the four mistakes section 2 lists.
+- **Next:** the harness skeleton.
+- **Waiting:** only one real package has arrived, and the catalogue needs at least two more.
 
 ## 11. Limits
 

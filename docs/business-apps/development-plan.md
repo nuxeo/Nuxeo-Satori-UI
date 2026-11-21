@@ -3,9 +3,9 @@
 The phased plan that builds the [architecture](architecture.md), from foundations to general
 availability. Each phase ends in a demo the team can watch on a shared server.
 
-Status, 21 November 2026: **ready for review, not started.** No code is built from it until the
-phase 0 decisions are taken. Estimates are a first pass, to refine in phase 0 with the people who
-will do the work.
+Status, 22 November 2026: **phase 0 started.** Code is built only where no open decision bears on
+it, beginning with migration M0 (`tools/studio-migration`). The rest waits for the phase 0
+decisions. Estimates are a first pass, to refine in phase 0 with the people who will do the work.
 
 ## The short version
 
