@@ -41,6 +41,9 @@ function personaFor(h) {
   if (!h.startsWith('#/') || /^#\/(start|build)(\/|$)/.test(h)) return '';
   const task = (h.match(/^#\/task\/(T-\d+)/) || [])[1];
   if (task && DAM_TASK_AS[task]) return DAM_TASK_AS[task];
+  // A queue opens as the first person whose groups may see it, so a link never lands on its locked page.
+  const queue = QUEUES.find((x) => x.id === (h.match(/^#\/queue\/([\w-]+)/) || [])[1]);
+  if (queue) return (Object.entries(PERSONAS).find(([, p]) => queue.groups.some((g) => p.groups.includes(g))) || ['dana'])[0];
   if (/^#\/(assets?|products?|shares?)(\/|$)/.test(h)) return 'priya';
   return /CASE|inbox/.test(h) ? 'sam' : 'dana';
 }
