@@ -9,8 +9,12 @@
  * unconfigured nightly look like a Nuxeo outage, and a fallback to a hosted URL would point
  * a destructive suite at an environment nobody named.
  *
- * Unlike the local file this sends no `Origin` override. That header exists to satisfy a local
- * Nuxeo's CORS rules; forged against a hosted instance it would just be wrong.
+ * `Origin` is set to the Nuxeo origin itself, as the local file does and for the same reason: a
+ * hosted Nuxeo's CORS filter answers a browser POST carrying `Origin: http://localhost:4200`
+ * with an HTTP 403 page (first full E2E run, NXSAT-231: the app's `Document.Untrash` was
+ * refused while the same call from an API context, which sends no Origin, succeeded). Reads
+ * are unaffected, which is why only the write-path specs saw it. The browser still believes it
+ * is talking to its own origin; only the upstream hop is rewritten.
  */
 const target = process.env.NUXEO_PROXY_TARGET;
 
@@ -32,6 +36,6 @@ export default {
     // dev server that speaks plain http, and the e2e identity guard saw API calls leave for a
     // foreign origin (first nightly run, NXSAT-231). The dev server is http, so say so.
     protocolRewrite: 'http',
-    headers: { 'X-NXproperties': '*' },
+    headers: { 'X-NXproperties': '*', Origin: target },
   },
 };

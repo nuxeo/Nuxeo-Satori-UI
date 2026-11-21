@@ -1,5 +1,6 @@
 import { expect, expectSurfaceWithData, newNuxeoApiContext, test } from './fixtures';
 import { type APIRequestContext } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Document detail — metadata, permissions and the tab surfaces.
@@ -88,11 +89,16 @@ test.describe('document detail', () => {
   test('an unknown document id does not render a document', async ({ signedIn: page }) => {
     // The negative path. A detail page that renders something for any id is not fetching.
     const domain = domainOf((await aDocument()).path);
-    await page.goto('/#/doc/00000000-0000-0000-0000-000000000000', {
-      waitUntil: 'networkidle',
-    });
+    // A fresh random id, not the all-zero one: a hosted (DBS) Nuxeo gives its repository Root
+    // exactly that id, so the literal resolved to a real document there and the app, correctly,
+    // showed it. Random v4 ids cannot collide with a stored document.
+    await page.goto(`/#/doc/${randomUUID()}`, { waitUntil: 'networkidle' });
 
     await expect(page.locator('app-shell')).toBeVisible();
-    await expect(page.locator('lib-document-detail')).not.toContainText(domain);
+    // Assert what the app does for a missing document — an error state — rather than only the
+    // absence of one document's text, which also passes on a blank page.
+    const detail = page.locator('lib-document-detail');
+    await expect(detail.locator('nxs-error-state')).toBeVisible();
+    await expect(detail).not.toContainText(domain);
   });
 });
