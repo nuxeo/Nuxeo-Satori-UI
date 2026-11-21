@@ -35,6 +35,7 @@ function moveFromPage(id, to, extra) {
 }
 
 function completeTask(id) {
+  if (TASKS[id].target.startsWith('AST')) return completeAssetTask(id);
   const t = TASKS[id], f = S.tf[id], e = {};
   const need = STEP_GROUPS[t.node];
   if (need && !me().groups.includes(need)) {
@@ -127,7 +128,7 @@ document.addEventListener('click', (ev) => {
   if (!el) return;
   const a = el.dataset.act, id = el.dataset.id;
   if (a === 'dia-bg') { if (ev.target === el) closeModal(); return; }
-  if (['pick', 'hold', 'tf', 'persona', 'ltype', 'noop', 'tfv'].includes(a)) return; // handled on change
+  if (['pick', 'hold', 'tf', 'persona', 'ltype', 'noop', 'tfv', 'damf', 'pick-asset', 'pin-note'].includes(a)) return; // handled on change
   if (el.tagName === 'A' && a !== 'read' && a !== 'go-app' && a !== 'go-docs') ev.preventDefault();
   switch (a) {
     case 'close': closeModal(); break;
@@ -318,8 +319,9 @@ document.addEventListener('click', (ev) => {
       render();
       break;
     }
-    case 'go-app': S.persona = { claims: 'dana', appeals: 'sam', service: 'riley' }[id] || 'dana'; S.sel.clear(); render(); break;
+    case 'go-app': S.persona = { claims: 'dana', appeals: 'sam', service: 'riley', brand: 'priya', licensing: 'jo' }[id] || 'dana'; S.sel.clear(); render(); break;
     case 'go-docs': break;
+    default: if (DAM_ACTS[a]) DAM_ACTS[a](el, ev);
   }
 });
 
@@ -327,18 +329,36 @@ document.addEventListener('change', (ev) => {
   const el = ev.target.closest('[data-act]');
   if (!el) return;
   const a = el.dataset.act;
-  if (a === 'persona') { S.persona = el.value; S.sel.clear(); render(); toast(`Viewing as ${me().n}, ${me().role}`); }
+  if (a === 'persona') {
+    // Another demo is another customer: start it from its own home rather than on the other one's page.
+    const kit = me().kit;
+    S.persona = el.value;
+    S.sel.clear();
+    S.asel.clear();
+    if (me().kit !== kit && ['app', 'share'].includes(modeOf(route())) && location.hash !== '#/home') location.hash = '#/home';
+    else render();
+    toast(`Viewing as ${me().n}, ${me().role}`);
+  }
   else if (a === 'pick') { S.sel[el.checked ? 'add' : 'delete'](el.dataset.id); render(); }
   else if (a === 'hold') { const k = CASES[el.dataset.id]; k.hold = el.checked; logOn(el.dataset.id, 'governance', `Legal hold ${k.hold ? 'set' : 'lifted'} by ${me().n}`); toast(k.hold ? 'Legal hold set: nothing in this case can be deleted' : 'Legal hold lifted'); render(); }
   else if (a === 'tf') { const tid = route()[1]; S.tf[tid].decision = el.value; S.tf[tid].errors = {}; render(); const r = $(`#main input[name=decision][value="${el.value}"]`); r && r.focus(); }
+  else if (DAM_CHANGE[a]) DAM_CHANGE[a](el);
   else if (a === 'ltype') { S.layoutType = el.value; const L = LAYOUTS[el.value]; S.layoutField = L ? (L.flatMap((c) => c.f || [])[0] || [''])[0] : ''; render(); }
 });
 document.addEventListener('input', (ev) => {
   const el = ev.target.closest('[data-act=tfv]');
   if (el) S.tf[route()[1]][el.dataset.k] = el.value;
+  const d = ev.target.closest('[data-act]');
+  if (d && DAM_INPUT[d.dataset.act]) DAM_INPUT[d.dataset.act](d);
 });
 document.addEventListener('submit', (ev) => {
-  if (ev.target.dataset.act === 'gsearch') { ev.preventDefault(); location.hash = '#/search'; }
+  const act = ev.target.dataset.act;
+  if (act === 'damq' || (act === 'gsearch' && me().kit === 'dam')) {
+    ev.preventDefault();
+    S.damq = ev.target.querySelector('input').value;
+    if (location.hash !== '#/assets') location.hash = '#/assets';
+    else render();
+  } else if (act === 'gsearch') { ev.preventDefault(); location.hash = '#/search'; }
 });
 document.addEventListener('keydown', (e) => {
   const m = $('#modal').firstChild;
@@ -361,6 +381,7 @@ window.addEventListener('hashchange', () => {
     return;
   }
   S.sel.clear();
+  S.asel.clear();
   render();
 });
 if (location.hash === '#main') history.replaceState(null, '', '#/start');

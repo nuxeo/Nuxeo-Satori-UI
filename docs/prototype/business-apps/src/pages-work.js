@@ -6,12 +6,15 @@ const RECENT = {
   riley: ['CASE-2042', 'MEMBER-100048'],
 };
 function recLink(id) {
+  if (id.startsWith('AST')) return [aLink(id), 'Asset · ' + esc(PRODUCTS[ASSETS[id].product].n), ASSETS[id].kind === 'video' ? 'videocam' : 'image'];
+  if (id.startsWith('PRD')) return [prLink(id), 'Product · ' + esc(PRODUCTS[id].style), 'box'];
   if (id.startsWith('CLAIM')) return [cLink(id), 'Claim · ' + esc(mName(CLAIMS[id].member)), 'health_record'];
   if (id.startsWith('CASE')) return [kLink(id), esc(CASES[id].type) + ' · ' + esc(mName(CASES[id].member)), 'gavel'];
   if (id.startsWith('MEMBER')) return [mLink(id), 'Member · ' + id, 'user'];
   return [`<a href="#/provider/${id}">${esc(PROVIDERS[id].n)}</a>`, 'Provider · NPI ' + PROVIDERS[id].npi, 'physician'];
 }
 function kpis() {
+  if (me().kit === 'dam') return damKpis();
   const g = me().groups, my = Object.values(CLAIMS).filter((c) => c.assignee === S.persona && OPEN_STATES.includes(c.state));
   const k = (label, value, foot, h, tone) => `<a class="kpi ${tone || ''}" href="${h}"><span>${label}</span><strong>${value}</strong><em>${foot}</em></a>`;
   if (g.includes('claims-supervisors')) {
@@ -41,9 +44,11 @@ P.home = () => {
       <div class="card ai"><h2>${ic('ai')}Today, in short</h2><p>${esc(aiBrief())}</p><p class="muted" style="margin:0">Needs the AI package, which is off today. Shown so the place is designed in (section 5, AI on the record).</p></div>
       <div class="card"><h2>Recently worked</h2><ul class="tl">${recent}</ul></div>
     </div></div>` +
-    note('<strong>Plan:</strong> a home per group (Step 3). Change “Viewing as” in the header to see an adjuster, a supervisor, a case specialist and member services get different cards, queues and menus from one configuration, through rules on each card (section 11, disagreement 1).');
+    (me().kit === 'dam' ? note('<strong>Plan:</strong> the same home as the claims app, from another starter kit (section 14). The cards, queues and menu come from the rules for each group: the brand team, creative review, and an outside licensor who sees only what was sent to it.') : '') +
+    (me().kit === 'dam' ? '' : note('<strong>Plan:</strong> a home per group (Step 3). Change “Viewing as” in the header to see an adjuster, a supervisor, a case specialist and member services get different cards, queues and menus from one configuration, through rules on each card (section 11, disagreement 1).'));
 };
 function aiBrief() {
+  if (me().kit === 'dam') return damBrief();
   const g = me().groups;
   if (g.includes('claims-supervisors')) return 'CLAIM-000141 ($15,880) is pended for medical records and waits for your approval tomorrow. One claim on the team is past its determination date.';
   if (g.includes('claims-adjusters')) return 'You have 2 claims to determine. CLAIM-000143 is 2 days overdue. CLAIM-000131 is flagged: the knee replacement is billed at 2.4 times this provider’s average. Two new claims are unassigned.';
@@ -62,13 +67,20 @@ P.queue = (r) => {
   let table;
   if (q.of === 'claim') {
     table = `<table><thead><tr><th><span class="sr">Select</span></th><th>Claim</th><th>Member</th><th>Provider</th><th class="num">Billed</th><th>State</th><th>Received</th><th>Determination</th><th>Assignee</th><th><span class="sr">Actions</span></th></tr></thead><tbody>${it.map((c) => `<tr class="${sel.has(c.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="pick" data-id="${c.id}" ${sel.has(c.id) ? 'checked' : ''} aria-label="Select ${c.id}"></td><td>${cLink(c.id)}${c.flag ? ` <span class="badge" title="${esc(c.flag)}">${ic('flag', 1)}Flag</span>` : ''}</td><td>${mLink(c.member)}</td><td>${pLink(c.provider)}</td><td class="num">${money(c.billed)}</td><td>${claimState(c.state)}</td><td>${d8(c.rcvd)}</td><td>${sla(c.due)}</td><td>${who(c.assignee)}</td><td>${c.assignee ? `<button class="sm link" data-act="assign" data-id="${c.id}">Reassign</button>` : `<button class="sm tonal" data-act="take" data-id="${c.id}">Take it</button>`}</td></tr>`).join('')}</tbody></table>`;
-  } else {
+  } else if (q.of === 'case') {
     table = `<table><thead><tr><th>Case</th><th>Type</th><th>Member</th><th>Claim</th><th>State</th><th>Received</th><th>Regulatory deadline</th><th>Missing</th><th>Assignee</th></tr></thead><tbody>${it.map((c) => `<tr><td>${kLink(c.id)}</td><td>${esc(c.type)}</td><td>${mLink(c.member)}</td><td>${cLink(c.claim)}</td><td>${caseState(c.state)}</td><td>${d8(c.rcvd)}</td><td>${sla(c.due)}</td><td>${c.checklist.filter((x) => !x[1]).length} documents</td><td>${who(c.assignee)}</td></tr>`).join('')}</tbody></table>`;
+  } else if (q.of === 'asset') {
+    // The open task on each asset says who has it now.
+    const task = (aid) => Object.values(TASKS).find((t) => t.target === aid && !t.done);
+    table = `<table><thead><tr><th><span class="sr">Preview</span></th><th>Asset</th><th>Product</th><th>State</th><th>Rights</th><th>Live in</th><th>With</th></tr></thead><tbody>${it.map((x) => { const t = task(x.id); return `<tr><td><span class="mini ${x.kind}">${damArt(x)}</span></td><td>${me().external ? esc(x.n) : aLink(x.id)}</td><td>${esc(PRODUCTS[x.product].n)}</td><td>${assetState(x.state)}</td><td>${rightsBadge(x)}</td><td>${x.usage.length ? x.usage.map((u) => esc(u[0])).join(', ') : '<span class="muted">Nowhere</span>'}</td><td>${t ? `<a href="#/task/${Object.keys(TASKS).find((k) => TASKS[k] === t)}">${esc(t.n)}</a><br>${who(t.who)}` : '<span class="muted">No open task</span>'}</td></tr>`; }).join('')}</tbody></table>`;
+  } else {
+    table = `<table><thead><tr><th>Product</th><th>Style</th><th>Launch</th><th class="num">Shots approved</th><th>Missing</th></tr></thead><tbody>${it.map((x) => { const st = shotStatus(x.id); return `<tr><td>${prLink(x.id)}</td><td>${esc(x.style)}</td><td>${d8(x.launch)}</td><td class="num">${st.filter((s) => s.status === 'ok').length} of ${st.length}</td><td>${x.colorways.map((cw) => { const m = missingShots(x.id).filter((s) => s.colorway === cw).map((s) => s.shot); return m.length ? `<strong>${esc(cw)}:</strong> ${m.map(esc).join(', ')}` : ''; }).filter(Boolean).join('<br>')}</td></tr>`; }).join('')}</tbody></table>`;
   }
-  const facets = q.of === 'claim' ? [['State', [...new Set(it.map((c) => CLAIM_STATE_LABEL[c.state]))]], ['Provider', [...new Set(it.map((c) => PROVIDERS[c.provider].n))]], ['Billed', ['Under $1,000', '$1,000 to $5,000', 'Over $5,000']]] : [['Type', ['Appeal', 'Grievance']], ['Missing documents', ['Yes', 'No']]];
+  const facets = q.of === 'asset' || q.of === 'product' ? [] : q.of === 'claim' ? [['State', [...new Set(it.map((c) => CLAIM_STATE_LABEL[c.state]))]], ['Provider', [...new Set(it.map((c) => PROVIDERS[c.provider].n))]], ['Billed', ['Under $1,000', '$1,000 to $5,000', 'Over $5,000']]] : [['Type', ['Appeal', 'Grievance']], ['Missing documents', ['Yes', 'No']]];
   return head(esc(q.n), `${it.length} item${it.length === 1 ? '' : 's'} · page provider <code>${q.pp}</code> · shown to ${q.groups.join(', ')}`, ['s3', 's5', 'b5']) +
     `<div class="row" style="margin-bottom:12px">${facets.map(([f, vals]) => `<label class="f" style="margin:8px 0;width:220px"><span>${f}</span><select aria-label="${f}"><option>Any</option>${vals.map((v) => `<option>${esc(v)}</option>`).join('')}</select></label>`).join('')}</div>${bulk}<div class="card" style="padding:4px 8px">${it.length ? table : '<p class="muted" style="padding:16px">The queue is empty.</p>'}</div>` +
-    note('<strong>Plan:</strong> a work queue is a server page provider plus typed columns plus actions (Step 3). <em>Take it</em> and <em>Assign</em> are row actions; <em>Update all results</em> runs over the whole query through the Bulk Action Framework, not just the rows on screen (section 5).');
+    (q.of === 'asset' || q.of === 'product' ? note('<strong>Plan:</strong> the same queue as the claims app (Step 3): a server page provider, typed columns and the open task. For assets the columns are a preview, the lifecycle state, the rights badge and where the asset is live.') : '') +
+    (q.of === 'asset' || q.of === 'product' ? '' : note('<strong>Plan:</strong> a work queue is a server page provider plus typed columns plus actions (Step 3). <em>Take it</em> and <em>Assign</em> are row actions; <em>Update all results</em> runs over the whole query through the Bulk Action Framework, not just the rows on screen (section 5).'));
 };
 
 // ---- record lists, generated from each type's schemas unless a layout names the columns (Step 1)

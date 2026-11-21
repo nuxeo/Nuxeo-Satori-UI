@@ -6,6 +6,7 @@ S.tf = {};
 P.task = (r) => {
   const id = r[1], t = TASKS[id];
   if (!t) return P.notFound();
+  if (t.target.startsWith('AST')) return P.assetTask(r);
   // A draft belongs to this task, not to its id: an id freed by Undo and reused by a new task must
   // not hand the new task the old one's choices.
   const f = (S.tf[id] = S.tf[id] && S.tf[id].task === t ? S.tf[id] : { task: t, decision: '', allowed: '', reason: '', comment: '', errors: {} });
@@ -112,7 +113,7 @@ P.notifications = () => {
 
 // ---- several apps on one server, chosen by group (section 5)
 P.apps = () => head('Apps on this server', 'One Nuxeo, several purpose-built apps. Each has its own navigation, home and branding, and shows only to its groups.', ['b5', 's0']) +
-  `<div class="apps">${APPS.map((a) => `<a href="${a.id === 'documents' ? '#/more' : '#/home'}" data-act="${a.id === 'documents' ? 'go-docs' : 'go-app'}" data-id="${a.id}">${ic(a.icon)}<span><strong>${esc(a.n)}</strong><br><span class="muted">${esc(a.d)}</span><br><span class="badge">${a.groups.length ? a.groups.join(', ') : 'everyone'}</span></span></a>`).join('')}</div>` +
+  `<div class="apps">${APPS.filter((a) => (a.kit === me().kit || a.kit === 'any') && !a.external).map((a) => `<a href="${a.id === 'documents' ? '#/more' : '#/home'}" data-act="${a.id === 'documents' ? 'go-docs' : 'go-app'}" data-id="${a.id}">${ic(a.icon)}<span><strong>${esc(a.n)}</strong><br><span class="muted">${esc(a.d)}</span><br><span class="badge">${a.groups.length ? a.groups.join(', ') : 'everyone'}</span></span></a>`).join('')}</div>` +
   note('Today the server serves one app, and presets switch branding per browser on demo servers only. This page is a later decision (section 9).');
 
 // ---- the ECM side stays available, but is not the default experience
