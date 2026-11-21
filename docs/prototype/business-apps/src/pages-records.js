@@ -28,7 +28,26 @@ P.member = (r) => {
   const claimT = `<div class="card"><div class="row sp"><h2>Claims</h2><span class="badge" title="Related-records widget">claims_for_member · member = this record</span></div><table><thead><tr><th>Claim ID</th><th class="num">Amount</th><th>Provider</th><th>Provider NPI</th><th><button class="link" data-act="toast" data-msg="Sorted by service date">Service date ↓</button></th><th>State</th></tr></thead><tbody>${claims.sort((a, b) => b[1].svc.localeCompare(a[1].svc)).map(([cid, c]) => `<tr><td>${cLink(cid)}</td><td class="num">${money(c.billed)}</td><td>${pLink(c.provider)}</td><td>${PROVIDERS[c.provider].npi}</td><td>${d8(c.svc)}</td><td>${claimState(c.state)}</td></tr>`).join('')}</tbody></table></div>`;
   const caseT = `<div class="card"><div class="row sp"><h2>Cases</h2><span class="badge">cases_for_member · member = this record</span></div>${cases.length ? `<table><thead><tr><th>ID</th><th>Type</th><th>Claim</th><th>Received</th><th>State</th><th>Determination</th></tr></thead><tbody>${cases.map(([kid, c]) => `<tr><td>${kLink(kid)}</td><td>${c.type}</td><td>${cLink(c.claim)}</td><td>${d8(c.rcvd)}</td><td>${caseState(c.state)}</td><td>${c.determination || '<span class="muted">Pending</span>'}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No cases.</p>'}</div>`;
   const docT = `<div class="card"><div class="row sp"><h2>Documents</h2><button class="sm tonal" data-act="upload" data-on="${id}">${ic('upload', 1)}Add document</button></div><table><thead><tr><th>Name</th><th>Category</th><th>Size</th><th></th></tr></thead><tbody>${docs.map(([did]) => docRow(did)).join('')}</tbody></table><div class="drop" style="margin-top:12px">Drop a file here: it is filed under this member, and its category is suggested from its content.</div></div>`;
-  const activity = `<div class="card"><h2>Activity</h2><ul class="tl"><li>${ic('phone')}<div>Member called about the January pharmacy charge · ${kLink('CASE-2042')}</div><time>Nov 15</time></li><li>${ic('health_record')}<div>${cLink('CLAIM-000131')} received from Summit Health Partners</div><time>Nov 10</time></li><li>${ic('mail')}<div>Explanation of benefits sent for ${cLink('CLAIM-000130')}</div><time>May 20, 2025</time></li></ul></div>`;
+  // This member's own records, newest first, after anything changed on them in this session.
+  const mine = new Set([...claims.map(([cid]) => cid), ...cases.map(([kid]) => kid)]);
+  const recentChanges = S.log.filter((x) => mine.has(x.on)).map((x) => `<li>${ic(x.icon)}<div>${tLink(x.on)}: ${esc(x.t)}</div><time>Just now</time></li>`);
+  const history = [
+    ...claims.map(([cid, cl]) => [cl.rcvd, `<li>${ic('health_record')}<div>${cLink(cid)} received from ${esc(PROVIDERS[cl.provider].n)}</div><time>${d8(cl.rcvd)}</time></li>`]),
+    ...cases.map(([kid, k]) => [k.rcvd, `<li>${ic('gavel')}<div>${kLink(kid)} opened: ${esc(k.title)}</div><time>${d8(k.rcvd)}</time></li>`]),
+  ].sort((x, y) => y[0].localeCompare(x[0])).map((x) => x[1]);
+  const activity = `<div class="card"><h2>Activity</h2><ul class="tl">${[...recentChanges, ...history].join('') || '<li><span></span><span class="muted">Nothing yet.</span><span></span></li>'}</ul></div>`;
+  // The same records, summarised. Written from the data, so it describes this member and stays true.
+  const years = TODAY.getUTCFullYear() - Number(m.since.slice(0, 4));
+  const paidClaims = claims.filter(([, cl]) => cl.paid);
+  const underReview = claims.filter(([, cl]) => OPEN_STATES.includes(cl.state));
+  const openCases = cases.filter(([, k]) => !['decided', 'closed'].includes(k.state));
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const summary = [
+    `Member for ${plural(years, 'year')}.`,
+    paidClaims.length ? `${plural(paidClaims.length, 'claim')} paid (${moneyText(paidClaims.reduce((s, [, cl]) => s + cl.paid, 0))}).` : 'No claims paid yet.',
+    underReview.length ? `${plural(underReview.length, 'claim')} under review${underReview.some(([, cl]) => cl.flag) ? ', one flagged for an unusual amount' : ''}.` : '',
+    openCases.length ? `${plural(openCases.length, 'open case')}: ${openCases.map(([, k]) => k.type.toLowerCase()).join(', ')}.` : '',
+  ].filter(Boolean).join(' ');
   const body = tab === 'claims' ? claimT : tab === 'cases' ? caseT : tab === 'documents' ? docT : tab === 'activity' ? activity : info + claimT + caseT;
   return ptags(['qw', 's1', 's2', 'b5']) +
     `<div class="rec"><div class="ricon">${ic('user')}</div><div><h1>${esc(m.first + ' ' + m.last)}</h1><div class="crumbs">Member · ${id} · ${esc(m.plan)}</div></div><span class="st ok">Active</span><span class="gap"></span>
@@ -36,7 +55,7 @@ P.member = (r) => {
     <div class="facts"><div><span>Age</span><strong>${ageOf(m.dob)}</strong></div><div><span>Open claims</span><strong>${claims.filter(([, c]) => !['paid', 'closed'].includes(c.state)).length}</strong></div><div><span>Paid to date</span><strong>${money(claims.reduce((s, [, c]) => s + (c.paid || 0), 0))}</strong></div><div><span>Risk</span><strong>${esc(m.risk)}</strong></div></div>
     ${tabsFor('member/' + id, tab, [['', 'Overview'], ['claims', `Claims (${claims.length})`], ['cases', `Cases (${cases.length})`], ['documents', `Documents (${docs.length})`], ['activity', 'Activity']])}
     <div class="split"><div>${body}</div><div>
-      <div class="card ai"><h2>${ic('summary', 1)}Summary</h2><p>Member for 7 years. 2 claims paid in 2025 (${money(17750)}). One claim in review for a knee replacement, billed above the provider’s average. One open grievance about a pharmacy charge.</p><p class="muted" style="margin:0">Needs the AI package (off today).</p></div>
+      <div class="card ai"><h2>${ic('summary', 1)}Summary</h2><p>${esc(summary)}</p><p class="muted" style="margin:0">Needs the AI package (off today).</p></div>
       ${infoPanel({ state: '<span class="st ok">Active</span>', tags: ['Gold PPO'] })}</div></div>` +
     note('<strong>Plan:</strong> the Member page from the Payers demo, from a layout file and no code (Step 2). Age is a registered computation, the address and contact blocks are combined fields, the Claims and Cases tables are related-records widgets that pass this member to the query, and HICN is masked for member services (switch to Riley). Compare it with <a href="#/start/before-after">today’s page</a>.');
 };

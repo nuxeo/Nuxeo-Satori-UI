@@ -96,7 +96,8 @@ const unread = () => NOTIFS.filter((n, i) => n.to === S.persona && n.unread && !
 
 function shell(r) {
   const mode = modeOf(r);
-  const link = (h, icon, label, cur) => `<a href="${h}" ${cur ? 'aria-current="page"' : ''}>${ic(icon)}<span>${label}</span></a>`;
+  // The rail marks the current mode, not the page, so it says "true"; the menu below names the page.
+  const link = (h, icon, label, cur) => `<a href="${h}" ${cur ? 'aria-current="true"' : ''}>${ic(icon)}<span>${label}</span></a>`;
   $('#pnav').innerHTML = `<div class="app-ic">${ic('nuxeo')}</div>` + link('#/start', 'help', 'Guide', mode === 'start') + link('#/home', 'apps', 'App', mode === 'app') + link('#/build/agent', 'build', 'Build', mode === 'build') + `<span class="sp"></span><span class="avatar" title="${esc(mode === 'build' ? BUILDER.n : me().n)}">${mode === 'build' ? BUILDER.ini : me().ini}</span>`;
   const personaSel = `<label class="f" style="margin:0;width:230px"><span>Viewing as</span><select data-act="persona" aria-label="Viewing as">${Object.entries(PERSONAS).map(([k, p]) => `<option value="${k}" ${k === S.persona ? 'selected' : ''}>${esc(p.n)}, ${esc(p.role)}</option>`).join('')}</select></label>`;
   if (mode === 'app') {
@@ -110,7 +111,9 @@ function shell(r) {
     $('#hdr').innerHTML = `<span class="ttl">Prototype guide</span><span class="muted">From a file browser to business applications</span><span class="gap"></span>${personaSel}`;
   }
   const cur = r.join('/');
-  const a = (h, icon, label, extra) => `<a href="#/${h}" ${cur === h || (h !== 'home' && cur.startsWith(h + '/')) ? 'aria-current="page"' : ''}>${ic(icon)}<span>${label}</span>${extra || ''}</a>`;
+  // One current page. A list also owns its filtered views (claims/denied), but "Start here" is a page
+  // of its own, not the parent of the guide pages beside it.
+  const a = (h, icon, label, extra) => `<a href="#/${h}" ${cur === h || (h !== 'home' && h !== 'start' && cur.startsWith(h + '/')) ? 'aria-current="page"' : ''}>${ic(icon)}<span>${label}</span>${extra || ''}</a>`;
   let nav = '';
   if (mode === 'app') {
     const rec = [['members', 'users', 'Members'], ['claims', 'health_record', 'Claims'], ['cases', 'gavel', 'Cases'], ['providers', 'physician', 'Providers']];

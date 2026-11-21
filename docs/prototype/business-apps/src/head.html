@@ -23,7 +23,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pnav{background:var(--sat-platform-nav-background,var(--mat-sys-primary));color:var(--mat-sys-on-primary);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:6px;position:sticky;top:0;height:100vh}
 .pnav .app-ic{width:40px;height:40px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
 .pnav a{width:52px;min-height:52px;border-radius:12px;color:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;text-decoration:none;font:var(--mat-sys-label-small);gap:2px}
-.pnav a:hover{background:color-mix(in srgb,var(--mat-sys-on-primary) 8%,transparent)}.pnav a[aria-current=page]{background:color-mix(in srgb,var(--mat-sys-on-primary) 16%,transparent)}
+.pnav a:hover{background:color-mix(in srgb,var(--mat-sys-on-primary) 8%,transparent)}.pnav a[aria-current=true]{background:color-mix(in srgb,var(--mat-sys-on-primary) 16%,transparent)}
 .pnav .sp{flex:1}
 /* The rail is the primary colour, so the global primary focus ring would vanish on it. */
 .pnav a:focus-visible{outline-color:var(--mat-sys-on-primary)}
