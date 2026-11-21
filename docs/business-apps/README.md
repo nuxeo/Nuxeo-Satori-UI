@@ -18,7 +18,10 @@ Designer, the development plan and its decisions. Start here when you pick this 
 - **Where the work happens:** on the integration branch `integration/enterprise-grade-app`, created
   from `main` on 21 November 2026. Every pull request for this work targets it, `main` is merged
   into it at least daily, and it reaches `main` in one final pull request
-  ([AGENTS/06-git-workflow.md](../../AGENTS/06-git-workflow.md)). Run the local gate against it:
+  ([AGENTS/06-git-workflow.md](../../AGENTS/06-git-workflow.md)). Since 22 November 2026 it has
+  `main`'s protection, the `main_branch` ruleset. Every pull request into it needs an approving
+  review. The daily merge of `main` goes in through a pull request merged with a merge commit,
+  never squashed, unless an admin pushes it. Run the local gate against it:
   `SANITIZER_AUDIT_BASE_REF=origin/integration/enterprise-grade-app npm run beta:gate -- --base origin/integration/enterprise-grade-app`.
 - **Kept outside this public repository:** the names of the twenty accounts, kept with the team;
   and a narrated demo video of the Payers flow, made locally.
