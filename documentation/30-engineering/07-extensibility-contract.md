@@ -73,16 +73,19 @@ An advertised language is **two** promises, and only one of them is ours to keep
 
 The application's own catalogue is ours, and every advertised language has a complete one —
 `checkAdvertisedLocalesShip` fails a configuration that advertises a language without one. The
-shared-component strings are the vendor's, and `@hylandsoftware/satori-ui` ships **fifteen**
-catalogues: `de en es fr it pl pt` plus the regional variants `de-DE`, `en-AU`, `en-US`,
-`es-ES`, `fr-FR`, `it-IT`, `pl-PL` and `pt-PT`.
+shared-component strings are the vendor's. `@hylandsoftware/satori-ui` 1.0.0 ships **eight**
+catalogues, all regional — `de-DE`, `en-AU`, `en-US`, `es-ES`, `fr-FR`, `it-IT`, `pl-PL` and
+`pt-PT` — plus `languages.json`, a manifest of those locales. Earlier versions also shipped the
+bare names (`de en es fr it pl pt`); 1.0.0 dropped them.
 
-**The match is exact on the catalogue filename**, which is the part worth knowing. A deployment
-set to `en-US` or `fr-FR` is covered, because those files exist. One set to `pt-BR` is **not**,
-even though `pt` exists — nothing falls back from a regional variant to its base language, so
-`pt-BR` is in the same position as a language the vendor never shipped. **Any locale id outside
-those fifteen renders every `sat.*` string in English** — including the accessible names on the
-navigation rail — inside an otherwise translated application. Tracked upstream as
+**The match is on the catalogue filename, with one mapping on top**, which is the part worth
+knowing. The bare codes `de en es fr it pl pt` reach their regional file through `aliases` in
+`UPSTREAM_FOLDERS` (`en` → `en-US`, `fr` → `fr-FR`, …). A deployment set to `en-US` or `fr-FR` is
+covered, because those files exist. One set to `pt-BR` is **not**: it is neither a shipped file
+nor an alias — nothing falls back from a regional variant to its base language — so `pt-BR` is
+in the same position as a language the vendor never shipped. **Any other locale id renders every
+`sat.*` string in English** — including the accessible names on the navigation rail — inside an
+otherwise translated application. Tracked upstream as
 [DS-2803](https://hyland.atlassian.net/browse/DS-2803); it cannot be closed in this repository,
 because the strings are the vendor's to author.
 

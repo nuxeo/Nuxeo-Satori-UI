@@ -12489,6 +12489,36 @@ expectGreen(
   },
 );
 
+// satori-ui 1.0.0 (DS-2803) ships `languages.json`, a manifest of its locales, beside the
+// catalogues. Read as a catalogue it demanded a language called "languages", so the real 1.0.0
+// folder failed the gate with a correct loader. It must stay green with the manifest present.
+falsePositiveControls += 1;
+expectGreen(
+  'a vendor locales manifest beside the catalogues is not a language',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [`${VENDOR_I18N}/languages.json`]: '{ "locales": ["de", "en", "fr"] }\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+// And the exclusion must not turn into a blind spot: the manifest is skipped as a served file,
+// so a loader that requests it as a language is still a request for a catalogue nothing serves.
+expectRed(
+  'a loader listing the locales manifest as a language',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [`${VENDOR_I18N}/languages.json`]: '{ "locales": ["de", "en", "fr"] }\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr', 'languages'])),
+  },
+  null,
+  /lists languages in `languages`[\s\S]*build serves[\s\S]*no catalogue for it/,
+);
+
 // Round 4: a non-object entry, or one whose `path` is computed, was silently SKIPPED. The
 // loader iterates the real array and would request that folder, so its languages went unchecked
 // while the gate passed on the entries it could read. Each control pairs the malformed entry
@@ -12643,6 +12673,586 @@ expectGreen(
     ...VENDOR_FILES,
     [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
   },
+);
+
+/* ---------------- checkStorybookSatoriCatalogues ---------------- */
+
+/**
+ * satori-ui 1.0.0 dropped `en.json`, and the Satori-backed Storybook still asked Satori's own
+ * loader for `en` — through `.storybook/preview.ts` AND through the stories file's decorator, the
+ * second of which a hand fix missed at first. Stories rendered raw `sat.*` keys and every gate was
+ * green. These controls pin the comparison: each place a language can be requested, the served
+ * folder it is judged against, and the loader's base-language fallback.
+ */
+const SB = 'libs/shared/sb-satori';
+const SB_VENDOR = 'node_modules/@hylandsoftware/satori-ui/i18n';
+
+/** `main.ts` serving the vendor folder where Satori's loader looks, or `staticDirs` as given. */
+const sbMain = (
+  staticDirs = `[{ from: '../../../../${SB_VENDOR}', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+) =>
+  `const config = { stories: ['../src/**/*.stories.ts'], staticDirs: ${staticDirs} };\nexport default config;\n`;
+
+/** `preview.ts` configuring Satori's loader with `fallback` and switching to `active`. */
+const sbPreview = (fallback, active = fallback) =>
+  `import { provideAndConfigureSatoriTranslations } from '@hylandsoftware/satori-ui/translations';
+const providers = [
+  provideAndConfigureSatoriTranslations({ fallbackLang: ${fallback} }),
+  { useValue: () => inject(TranslateService).use(${active}) },
+];
+export default providers;
+`;
+
+/** A stories file with its own decorator, the shape `primitives.satori.stories.ts` has. */
+const sbStories = (fallback) =>
+  `const meta = { decorators: [provideAndConfigureSatoriTranslations({ fallbackLang: ${fallback} })] };
+export default meta;
+`;
+
+/** A vendor folder shipping 1.0.0's shape: regional catalogues and the locale manifest. */
+const SB_VENDOR_1_0_0 = {
+  [`${SB_VENDOR}/en-US.json`]: '{}\n',
+  [`${SB_VENDOR}/fr-FR.json`]: '{}\n',
+  [`${SB_VENDOR}/languages.json`]: '{ "locales": ["en-US", "fr-FR"] }\n',
+};
+
+expectRed(
+  'a Storybook preview asking Satori for a language the served folder does not ship',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en'`),
+  },
+  null,
+  /preview\.ts asks Satori's translation loader for "en" \(`fallbackLang`\)[\s\S]*serves no en\.json/,
+);
+
+// The active language is requested as well as the fallback, so fixing only one is still red.
+expectRed(
+  'a preview whose fallback is served but whose active language is not',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`, `'en'`),
+  },
+  null,
+  /asks Satori's translation loader for "en" \(`TranslateService\.use\(\)`\)/,
+);
+
+// The place the hand fix missed: a stories file's own decorator.
+expectRed(
+  "a stories file's decorator asking Satori for an unserved language",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+    [`${SB}/src/lib/primitives.stories.ts`]: sbStories(`'en'`),
+  },
+  null,
+  /primitives\.stories\.ts asks Satori's translation loader for "en"/,
+);
+
+expectRed(
+  'Satori translations configured with nothing served at the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(`[{ from: '../../../../${SB_VENDOR}', to: 'i18n' }]`),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /serves nothing at i18n\/@hylandsoftware\/satori-ui/,
+);
+
+expectRed(
+  'a fallback language this gate cannot read',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview('LANG', `'en-US'`),
+  },
+  null,
+  /sets Satori's `fallbackLang` to `LANG`, which is not a string literal/,
+);
+
+// The loader's own rule: `en-US` falls back to `en.json`, so a folder of bare names serves it.
+// Without this control the gate could demand an exact match and reject a working setup.
+falsePositiveControls += 1;
+expectGreen(
+  'a regional language served by its base-language catalogue',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB_VENDOR}/en.json`]: '{}\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'the 1.0.0 folder with every requested language regional, manifest present',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`, `'fr-FR'`),
+    [`${SB}/src/lib/primitives.stories.ts`]: sbStories(`'en-US'`),
+  },
+);
+
+// Review on #602: `.use()` was recognised only when its receiver's text named `TranslateService`,
+// so moving the service into a variable or a field — an ordinary DI refactor — made the
+// active-language control green while the loader still asked for the removed `en.json`.
+const SATORI_LOADER = `provideAndConfigureSatoriTranslations({ fallbackLang: 'en-US' })`;
+
+expectRed(
+  'an active language set through a variable bound to inject(TranslateService)',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: `const providers = [
+  ${SATORI_LOADER},
+  {
+    useValue: () => {
+      const translate = inject(TranslateService);
+      translate.use('en');
+    },
+  },
+];
+export default providers;
+`,
+  },
+  null,
+  /preview\.ts asks Satori's translation loader for "en" \(`TranslateService\.use\(\)`\)/,
+);
+
+expectRed(
+  'an active language set through a class field typed TranslateService',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: `export const providers = [${SATORI_LOADER}];
+class LanguageInitializer {
+  private readonly translate: TranslateService = inject(TranslateService);
+  start(): void {
+    this.translate.use('en');
+  }
+}
+`,
+  },
+  null,
+  /preview\.ts asks Satori's translation loader for "en" \(`TranslateService\.use\(\)`\)/,
+);
+
+// The other review point: a non-literal `.use()` was reported before the project was known to use
+// Satori's loader, so a Storybook on the application's own loader failed for switching language
+// at run time — which it is free to do, since it never asks Satori for a catalogue.
+falsePositiveControls += 1;
+expectGreen(
+  'a Storybook without Satori translations switching to a dynamic language',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: `const lang = navigator.language;
+export const init = () => inject(TranslateService).use(lang);
+`,
+  },
+);
+
+// Review on #602: only an entry mounted exactly at the catalogue path was read, so three valid
+// ways of serving it were reported as "serves nothing". Each must stay green, and a folder found
+// through them must still be judged.
+const SB_PUBLIC_CATALOGUE = (dir) => ({
+  [`${SB}/public/${dir}/en-US.json`]: '{}\n',
+  [`${SB}/public/${dir}/languages.json`]: '{ "locales": ["en-US"] }\n',
+});
+
+falsePositiveControls += 1;
+expectGreen(
+  'catalogues served through a plain-string staticDirs entry mounted at the root',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_PUBLIC_CATALOGUE('i18n/@hylandsoftware/satori-ui'),
+    [`${SB}/.storybook/main.ts`]: sbMain(`['../public']`),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'catalogues served through an object entry mounted above the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_PUBLIC_CATALOGUE('@hylandsoftware/satori-ui'),
+    [`${SB}/.storybook/main.ts`]: sbMain(`[{ from: '../public', to: 'i18n' }]`),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  "catalogues served through the 'from:to' string form",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `['../../../../${SB_VENDOR}:/i18n/@hylandsoftware/satori-ui']`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+expectRed(
+  'a folder mounted above the catalogue path that lacks the requested language',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB}/public/@hylandsoftware/satori-ui/fr-FR.json`]: '{}\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(`[{ from: '../public', to: 'i18n' }]`),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /asks Satori's translation loader for "en-US"[\s\S]*serves no en-US\.json or en\.json[\s\S]*it has fr-FR/,
+);
+
+// Review on #602: the gate found Storybooks only by a `.storybook/main.*` path, so one whose
+// target sets `configDir` elsewhere was never read — green while its catalogue requests 404. The
+// builder's `assets` option, which serves files too, was not read either.
+const sbProject = (options) =>
+  `${JSON.stringify(
+    {
+      name: 'sb-satori',
+      targets: {
+        'build-storybook': { executor: '@storybook/angular:build-storybook', options },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+
+expectRed(
+  'a Storybook configured through a target configDir not named .storybook',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProject({ configDir: `${SB}/.storybook-satori` }),
+    [`${SB}/.storybook-satori/main.ts`]: sbMain(),
+    [`${SB}/.storybook-satori/preview.ts`]: sbPreview(`'en'`),
+  },
+  null,
+  /\.storybook-satori\/preview\.ts asks Satori's translation loader for "en"/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  "catalogues served only through the builder's assets option",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProject({
+      configDir: `${SB}/.storybook`,
+      assets: [{ glob: '**/*', input: SB_VENDOR, output: 'i18n/@hylandsoftware/satori-ui' }],
+    }),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+expectRed(
+  'a builder asset glob the gate cannot interpret, covering the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProject({
+      configDir: `${SB}/.storybook`,
+      assets: [{ glob: 'en-*.json', input: SB_VENDOR, output: 'i18n/@hylandsoftware/satori-ui' }],
+    }),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /with glob `en-\*\.json`, which `checkStorybookSatoriCatalogues` cannot interpret/,
+);
+
+expectWarn(
+  'a target configDir that holds no main file',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB}/project.json`]: sbProject({ configDir: `${SB}/.storybook-missing` }),
+  },
+  null,
+  /names libs\/shared\/sb-satori\/\.storybook-missing as its `configDir`, but it holds no main file/,
+);
+
+// Review on #602, third round. Each control below passed a broken setup, or rejected a working one,
+// under the previous version of the gate.
+const SB_VENDOR_ASSET = {
+  glob: '**/*',
+  input: SB_VENDOR,
+  output: 'i18n/@hylandsoftware/satori-ui',
+};
+
+/** A `project.json` with one Storybook target, its options and its configurations. */
+const sbProjectWith = (options, configurations) =>
+  `${JSON.stringify(
+    {
+      name: 'sb-satori',
+      root: SB,
+      targets: {
+        'build-storybook': {
+          executor: '@storybook/angular:build-storybook',
+          options,
+          ...(configurations ? { configurations } : {}),
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+
+// A configuration's `assets` replaces the target's. Pooled, the base array supplied the files to a
+// `ci` build that serves none of them, so its requests 404 while the gate passed.
+expectRed(
+  "a configuration whose empty assets array removes the target's catalogues",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProjectWith(
+      { configDir: `${SB}/.storybook`, assets: [SB_VENDOR_ASSET] },
+      { ci: { assets: [] } },
+    ),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /\(as built by libs\/shared\/sb-satori\/project\.json#build-storybook:ci\) serves nothing at/,
+);
+
+// A nested `configDir` has no `src` beside it: stories were looked for in `config/src`, so an
+// invalid fallback in a stories decorator was never read.
+expectRed(
+  "a nested configDir whose project's stories ask for an unserved language",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProjectWith({
+      configDir: `${SB}/config/storybook`,
+      assets: [SB_VENDOR_ASSET],
+    }),
+    [`${SB}/config/storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/config/storybook/preview.ts`]: sbPreview(`'en-US'`),
+    [`${SB}/src/lib/primitives.stories.ts`]: sbStories(`'en'`),
+  },
+  null,
+  /src\/lib\/primitives\.stories\.ts asks Satori's translation loader for "en"/,
+);
+
+// `*.json` copies only the folder's own files. Mounted above the catalogue path it copies no
+// `@hylandsoftware/satori-ui/` subfolder, so nothing is served there.
+expectRed(
+  'a flat asset glob mounted above the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB}/public/@hylandsoftware/satori-ui/en-US.json`]: '{}\n',
+    [`${SB}/project.json`]: sbProjectWith({
+      configDir: `${SB}/.storybook`,
+      assets: [{ glob: '*.json', input: `${SB}/public`, output: 'i18n' }],
+    }),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /serves nothing at i18n\/@hylandsoftware\/satori-ui/,
+);
+
+// …and the same flat glob mounted exactly at the path does copy the catalogues.
+falsePositiveControls += 1;
+expectGreen(
+  'a flat asset glob mounted exactly at the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProjectWith({
+      configDir: `${SB}/.storybook`,
+      assets: [{ glob: '*.json', input: SB_VENDOR, output: 'i18n/@hylandsoftware/satori-ui' }],
+    }),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+// Review on #602, fourth round. An asset's `ignore` list was dropped, so an excluded catalogue was
+// still counted as served; it is now refused rather than approximated.
+expectRed(
+  'a builder asset whose ignore list excludes the requested catalogue',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/project.json`]: sbProjectWith({
+      configDir: `${SB}/.storybook`,
+      assets: [{ ...SB_VENDOR_ASSET, ignore: ['en-US.json'] }],
+    }),
+    [`${SB}/.storybook/main.ts`]: sbMain('[]'),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /with `ignore` \["en-US\.json"\], which `checkStorybookSatoriCatalogues` does not apply/,
+);
+
+// …and a spread in a `staticDirs` entry can override the `to` this gate read.
+expectRed(
+  'a staticDirs entry whose spread can override from or to',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../${SB_VENDOR}', to: 'i18n/@hylandsoftware/satori-ui', ...overrides }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /`staticDirs` entry with a member this gate cannot read statically \(`\.\.\.overrides`\)/,
+);
+
+// Review on #602, fifth round. Names were matched literally, so an aliased or namespaced import
+// hid the Satori loader (and the whole Storybook) from the gate, and an aliased TranslateService
+// hid the active language.
+const SB_SATORI_MAIN = sbMain();
+
+expectRed(
+  "Satori's loader imported under an alias",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: SB_SATORI_MAIN,
+    [`${SB}/.storybook/preview.ts`]: `import { provideAndConfigureSatoriTranslations as satoriI18n } from '@hylandsoftware/satori-ui/translations';
+export const providers = [satoriI18n({ fallbackLang: 'en' })];
+`,
+  },
+  null,
+  /preview\.ts asks Satori's translation loader for "en" \(`fallbackLang`\)/,
+);
+
+expectRed(
+  "Satori's loader reached through a namespace import",
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: SB_SATORI_MAIN,
+    [`${SB}/.storybook/preview.ts`]: `import * as satori from '@hylandsoftware/satori-ui/translations';
+export const providers = [satori.provideAndConfigureSatoriTranslations({ fallbackLang: 'en' })];
+`,
+  },
+  null,
+  /preview\.ts asks Satori's translation loader for "en" \(`fallbackLang`\)/,
+);
+
+expectRed(
+  'TranslateService imported under an alias',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: SB_SATORI_MAIN,
+    [`${SB}/.storybook/preview.ts`]: `import { TranslateService as Translations } from '@ngx-translate/core';
+export const providers = [
+  provideAndConfigureSatoriTranslations({ fallbackLang: 'en-US' }),
+  { useValue: () => inject(Translations).use('en') },
+];
+`,
+  },
+  null,
+  /asks Satori's translation loader for "en" \(`TranslateService\.use\(\)`\)/,
+);
+
+// …and `staticDirs` judged from one definition while another decides what Storybook serves.
+const SB_SATORI_DIR = `{ from: '../../../../${SB_VENDOR}', to: 'i18n/@hylandsoftware/satori-ui' }`;
+
+expectRed(
+  'a spread after staticDirs that can replace it',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const config = { staticDirs: [${SB_SATORI_DIR}], ...overrides };
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /sets `staticDirs` and then `\.\.\.overrides` in the same object, which can replace it/,
+);
+
+// Review on #602, sixth round: a computed key after `staticDirs` may be `staticDirs` itself…
+expectRed(
+  'a computed key after staticDirs that can replace it',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const key = 'staticDirs';
+const config = { staticDirs: [${SB_SATORI_DIR}], [key]: [] };
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /sets `staticDirs` and then `\[key\]: \[\]` in the same object, which can replace it/,
+);
+
+// …while a shorthand, or a computed key that is a literal naming something else, cannot.
+falsePositiveControls += 1;
+expectGreen(
+  'a shorthand and a literal computed key after staticDirs',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const addons = [];
+const config = { staticDirs: [${SB_SATORI_DIR}], addons, ['framework']: {} };
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+expectRed(
+  'staticDirs set twice',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const config = { staticDirs: [${SB_SATORI_DIR}] };
+config.staticDirs = [];
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /sets `staticDirs` 2 times/,
+);
+
+// A spread before `staticDirs` cannot replace it — the explicit value wins — so it must stay green.
+falsePositiveControls += 1;
+expectGreen('a spread before staticDirs', 'checkStorybookSatoriCatalogues', {
+  ...SB_VENDOR_1_0_0,
+  [`${SB}/.storybook/main.ts`]: `const config = { ...base, staticDirs: [${SB_SATORI_DIR}] };
+export default config;
+`,
+  [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+});
+
+// A clean checkout without GitHub Packages has no satori-ui to compare against: say so, stay green.
+expectWarn(
+  'a served folder whose package is not installed',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en'`),
+  },
+  null,
+  /node_modules\/@hylandsoftware\/satori-ui is not installed/,
 );
 
 /* ---------------- checkGateInventory ---------------- */

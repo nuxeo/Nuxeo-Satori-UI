@@ -788,7 +788,7 @@ you are reading history. Browse and search now use the `nxs-` components in
 | `@alfresco/adf-extensions`          | 9.0.0               | public npm           | **Removed in NXSAT-637**                                    |
 | `@alfresco/js-api`                  | 10.0.0              | devDependency        | **Removed in NXSAT-637**                                    |
 | `@hylandsoftware/hxcs-js-client`    | 2.0.111             | GitHub Packages      | **Removed in NXSAT-637**                                    |
-| `@hylandsoftware/satori-ui`         | 0.4.2 (`^0.4.2`)    | GitHub Packages      | Hyland design system; deliberately absent from the template |
+| `@hylandsoftware/satori-ui`         | 1.0.0 (`1.0.0`)     | GitHub Packages      | Hyland design system; deliberately absent from the template |
 
 Authentication for installs is `SATORI_GH_READONLY_TOKEN` with `read:packages` on the Hyland org.
 `.npmrc` maps `@hylandsoftware` to `https://npm.pkg.github.com`; the `@alfresco` mapping went with
@@ -1300,8 +1300,8 @@ before relying on it.
 | `rxjs`                                                                                     | 7.8.2 (`~7.8.0`)   |
 | `zone.js`                                                                                  | 0.16.3 (`~0.16.3`) |
 | `tslib`                                                                                    | `^2.3.0`           |
-| `@hylandsoftware/satori-ui`                                                                | 0.4.2 (`^0.4.2`)   |
-| `@ngx-translate/core`                                                                      | 17.0.0 (`^17.0.0`) |
+| `@hylandsoftware/satori-ui`                                                                | 1.0.0 (`1.0.0`)    |
+| `@ngx-translate/core`                                                                      | 18.0.0 (`18.0.0`)  |
 | `quill`                                                                                    | 2.0.3 (`^2.0.3`)   |
 | `dompurify`                                                                                | 3.4.17 (`^3.4.16`) |
 | `date-fns`                                                                                 | 2.30.0 (`^2.30.0`) |

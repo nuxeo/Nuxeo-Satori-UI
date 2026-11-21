@@ -451,6 +451,10 @@ DocumentService`. The chain, read from the published bundle:
   catalogues; with adf-hx removed, none ships. Its `REQUIRED_FILES` are the two catalogues
   `AppTranslateLoader` fetches at runtime, the app's `i18n/en.json` and satori-ui's
   `assets/satori-ui/i18n/en.json`, each checked by a key the app renders (PR #419).
+  _Changed by the Satori 1.0.0 bump (2026-11):_ satori-ui 1.0.0 ships regional catalogues only
+  (`en-US.json`, `fr-FR.json`, …) plus a `languages.json` locale manifest. `UPSTREAM_FOLDERS`
+  lists those files and maps the app's bare codes to them through `aliases`, so the required
+  satori-ui file is now `assets/satori-ui/i18n/en-US.json`. See `docs/satori-1-0-0-migration.md`.
 - **`AsyncPipe` must be provided for any adf-hx component that renders a user.**
   `UserResolverPipe` calls `inject(AsyncPipe)` in its constructor and `AsyncPipe` carries no
   `providedIn`. Missing, it throws `NG0201` **while rendering** — the component's shell appears
