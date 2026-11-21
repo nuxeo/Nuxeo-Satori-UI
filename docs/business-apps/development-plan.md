@@ -45,6 +45,12 @@ will do the work.
   - an independent adversarial review is done, as this repository requires before any phase is
     signed off;
   - the evidence is filed outside the repository, and the docs are updated.
+- **Advisory checks wait for phase 10.** Until the plan is implemented, SonarCloud, the
+  accessibility checks and the security scans run on every pull request, but nobody chases them:
+  no phase waits for them or fixes what they report, and phase 10 brings them back to green
+  before the final pull request to `main` ([decision log](decisions.md), 22 November 2026). The
+  one that still blocks is CodeQL: the branch's ruleset stops a merge with a high-severity
+  finding.
 - **No phase starts without its inputs** (section 6). Missing inputs are escalated in the phase
   before.
 - **Each phase updates the scoreboard**, the prototype's "Every account" page, and the coverage in
@@ -202,8 +208,7 @@ Payers model.
 
 - a presales engineer rebuilds the Member page from an empty package in one day or less (the first
   half of the acceptance test);
-- the kit's demo script passes end to end;
-- the screens pass the accessibility checks.
+- the kit's demo script passes end to end.
 
 **Needs:** the Payers model (phase 0).
 
@@ -518,6 +523,8 @@ files itself.
 **Builds:**
 
 - every new surface's security review, closed;
+- SonarCloud, the accessibility checks and the security scans back to green, since no earlier
+  phase chases them;
 - the WCAG 2.1 AA and Section 508 conformance report;
 - performance budgets in CI;
 - telemetry and the diagnostics page;

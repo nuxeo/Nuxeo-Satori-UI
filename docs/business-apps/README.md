@@ -23,6 +23,10 @@ Designer, the development plan and its decisions. Start here when you pick this 
   review. The daily merge of `main` goes in through a pull request merged with a merge commit,
   never squashed, unless an admin pushes it. Run the local gate against it:
   `SANITIZER_AUDIT_BASE_REF=origin/integration/enterprise-grade-app npm run beta:gate -- --base origin/integration/enterprise-grade-app`.
+- **Checks:** the repository's own gates (lockfile, guardrails, lint, test, build, typecheck) must
+  pass. Until the plan is implemented, SonarCloud, the accessibility checks and the security scans
+  run but are not chased; phase 10 brings them back to green. CodeQL still blocks a merge with a
+  high-severity finding, through the ruleset ([decision log](decisions.md)).
 - **Kept outside this public repository:** the names of the twenty accounts, kept with the team;
   and a narrated demo video of the Payers flow, made locally.
 
