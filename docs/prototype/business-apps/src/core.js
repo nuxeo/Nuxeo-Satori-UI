@@ -144,7 +144,9 @@ function shell(r) {
 const FOCUS_KEYS = ['data-act', 'data-id', 'data-i', 'data-k', 'data-f', 'name', 'value'];
 function focusKeyOf(node) {
   if (!node || !node.closest || !node.closest('#main, #hdr, #nav')) return null;
-  const parts = FOCUS_KEYS.filter((k) => node.hasAttribute(k)).map((k) => `[${k}="${CSS.escape(node.getAttribute(k))}"]`);
+  // `value` tells one radio or checkbox from its siblings. On a field it is what the person typed, which
+  // the redraw writes back, so it would no longer match and focus would be lost.
+  const parts = FOCUS_KEYS.filter((k) => node.hasAttribute(k) && (k !== 'value' || node.type === 'radio' || node.type === 'checkbox')).map((k) => `[${k}="${CSS.escape(node.getAttribute(k))}"]`);
   return parts.length ? node.tagName.toLowerCase() + parts.join('') : null;
 }
 let renderedHash = null;

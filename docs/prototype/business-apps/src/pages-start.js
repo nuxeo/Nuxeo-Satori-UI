@@ -33,8 +33,18 @@ const PAGES = [
   ['Guide', '#/start/feasibility', 'Feasibility: every capability checked', ['s0', 'dec']],
   ['Guide', '#/start/decisions', 'Decisions', ['dec']],
 ];
-// A guide link into the app opens it as the person the page is for, so a Payers page never shows under the brand demo.
-const asWho = (g, h, who) => { const p = who || (g === 'App' ? (/CASE|inbox/.test(h) ? 'sam' : 'dana') : ''); return p ? `data-act="go-as" data-p="${p}"` : ''; };
+// A guide link into the app opens it as the person the page is for, so a page of one demo never shows
+// under the other, and an outside user is never sent to a page that is not shared with them. Guide and
+// Build links stay as they are.
+const DAM_TASK_AS = { 'T-601': 'leo', 'T-602': 'leo', 'T-603': 'jo', 'T-604': 'priya' };
+function personaFor(h) {
+  if (!h.startsWith('#/') || /^#\/(start|build)(\/|$)/.test(h)) return '';
+  const task = (h.match(/^#\/task\/(T-\d+)/) || [])[1];
+  if (task && DAM_TASK_AS[task]) return DAM_TASK_AS[task];
+  if (/^#\/(assets?|products?|shares?)(\/|$)/.test(h)) return 'priya';
+  return /CASE|inbox/.test(h) ? 'sam' : 'dana';
+}
+const asLink = (h, who) => { const p = who || personaFor(h); return p ? `data-act="go-as" data-p="${p}"` : ''; };
 P.start = () => head('Nuxeo as a platform for business applications', 'A clickable prototype of the plan in <code>docs/presales-business-apps-plan.md</code>. It starts from the business record and the work done on it, not from the folder and the file.', ['s0']) +
   `<div class="grid2"><div class="card"><h2>Three parts</h2>
     <p><a href="#/home"><strong>App</strong></a>: what a claims adjuster, a supervisor, an appeals specialist and member services use every day. Switch who you are with “Viewing as”, which also holds a second demo: a brand team&rsquo;s assets (DAM) for another fictional customer.</p>
@@ -62,13 +72,13 @@ P.start = () => head('Nuxeo as a platform for business applications', 'A clickab
     <li>Share the <a href="#/asset/AST-504" data-act="go-as" data-p="priya">embargoed Slate shot</a> with an agency: the watermark is forced. Open the link as its recipient from <a href="#/shares" data-act="go-as" data-p="priya">Shared links</a>.</li>
     <li>As <strong>Leo</strong>, creative director, <a href="#/task/T-601" data-act="go-as" data-p="leo">review the back shot</a>: click the picture to pin a note, then request changes.</li>
     <li>As <strong>Jo</strong> at Starfield Studios, an outside licensor, <a href="#/task/T-603" data-act="go-as" data-p="jo">approve the licensed tee artwork</a>, then try to open anything else.</li></ol></div>
-  <div class="card" style="padding:4px 8px"><table><thead><tr><th>Part</th><th>Page</th><th>Plan items</th></tr></thead><tbody>${PAGES.map(([g, h, n, t, who]) => `<tr><td>${g}</td><td><a href="${h}" ${asWho(g, h, who)}>${esc(n)}</a></td><td>${t.map((k) => `<span class="ptag ${PLAN[k].when === 'now' ? 'now' : PLAN[k].when === 'later' ? 'later' : ''}">${esc(PLAN[k].t)}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table></div>`;
+  <div class="card" style="padding:4px 8px"><table><thead><tr><th>Part</th><th>Page</th><th>Plan items</th></tr></thead><tbody>${PAGES.map(([g, h, n, t, who]) => `<tr><td>${g}</td><td><a href="${h}" ${asLink(h, who)}>${esc(n)}</a></td><td>${t.map((k) => `<span class="ptag ${PLAN[k].when === 'now' ? 'now' : PLAN[k].when === 'later' ? 'later' : ''}">${esc(PLAN[k].t)}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table></div>`;
 
 P['start/before-after'] = () => head('Member: before and after', 'The same Member record, today in Nuxeo Satori UI and in the target business app.', ['qw', 's0', 's2']) +
   `<div class="grid2"><div class="card"><h2>Today</h2><div class="wire"><div class="wh">MEMBER-100001 · View · Annotations · Permissions · History · Publishing</div><div class="wb"><div>Browse tree<br>Root › Domain › Members</div><div class="empty">Empty file viewer: a Member has no file</div><div>State, version, dates, contributors, tags…<br><br><strong>Member</strong><br>Beneficiary HICN<br>Birth date</div></div></div>
     <ul><li>The main area is a file viewer for a record with no file.</li><li>Business fields sit at the bottom of the side panel, under the schema name.</li><li>No age, no combined address, no amounts, no related claims or cases.</li><li>File tabs (Annotations, Publishing) on a record that has no file.</li></ul></div>
   <div class="card"><h2>Target</h2><div class="wire"><div class="wh">John Smith · Overview · Claims · Cases · Documents · Activity</div><div class="wb" style="grid-template-columns:1fr 150px"><div><strong>Member info</strong>: ID, date of birth (age 74), HICN, Medicare ID, contact, address<br><br><strong>Claims</strong>: amount, provider, NPI, service date, state<br><br><strong>Cases</strong>: type, claim, state, determination</div><div>Summary<br><br>Details<br><br>Comments</div></div></div>
-    <ul><li>Fields in the main area, laid out for the job.</li><li>Computed and combined values from a registered list.</li><li>Related records that pass this member to the query.</li><li>Actions for the work: start a case, generate a letter.</li></ul><a href="#/member/MEMBER-100048"><button class="primary">Open the target page</button></a></div></div>` +
+    <ul><li>Fields in the main area, laid out for the job.</li><li>Computed and combined values from a registered list.</li><li>Related records that pass this member to the query.</li><li>Actions for the work: start a case, generate a letter.</li></ul><a href="#/member/MEMBER-100048" ${asLink('#/member/MEMBER-100048')}><button class="primary">Open the target page</button></a></div></div>` +
   note('The quick win (section 4) closes the first gap alone: for a type with no file, show its layout in the View tab instead of the empty viewer.');
 
 const LANES = [
@@ -78,7 +88,7 @@ const LANES = [
   ['Later', [['s8', '#/build/bridge'], ['b5', '#/inbox']]],
 ];
 P['start/plan'] = () => head('Plan map', 'The order of work from section 8 of the plan, with the page that shows each item.', ['s0']) +
-  `<div class="lane">${LANES.map(([l, items]) => `<div><h2>${l}</h2>${items.map(([k, h]) => `<a class="item" href="${h}"><strong>${esc(PLAN[k].t)}</strong><small>${esc({ qw: 'Record page for types with no file; group rule; wording', s0: 'Glossary, position next to Web UI, scope, backlog', s1: 'Record pages, cases as records, references', s2: 'Widgets, computations, related records', s3: 'Home per group, queues, business navigation', s4: 'Task forms, lifecycle buttons, SLA', s5: 'Automation chains with parameters', ootb: 'Every type works on install', d11: 'What the designer prototype adds', s6: 'Model in, checked package out', s7: 'Payers first, then cases, contracts, DAM', s8: 'Translate Studio Designer layouts', b5: 'Capture, compliance, reports, AI, several apps', p14: 'A demo of its own for every use case, in four waves' }[k])}</small></a>`).join('')}</div>`).join('')}</div>` +
+  `<div class="lane">${LANES.map(([l, items]) => `<div><h2>${l}</h2>${items.map(([k, h]) => `<a class="item" href="${h}" ${asLink(h)}><strong>${esc(PLAN[k].t)}</strong><small>${esc({ qw: 'Record page for types with no file; group rule; wording', s0: 'Glossary, position next to Web UI, scope, backlog', s1: 'Record pages, cases as records, references', s2: 'Widgets, computations, related records', s3: 'Home per group, queues, business navigation', s4: 'Task forms, lifecycle buttons, SLA', s5: 'Automation chains with parameters', ootb: 'Every type works on install', d11: 'What the designer prototype adds', s6: 'Model in, checked package out', s7: 'Payers first, then cases, contracts, DAM', s8: 'Translate Studio Designer layouts', b5: 'Capture, compliance, reports, AI, several apps', p14: 'A demo of its own for every use case, in four waves' }[k])}</small></a>`).join('')}</div>`).join('')}</div>` +
   `<div class="card" style="margin-top:16px"><h2>Acceptance test</h2><p>A presales engineer rebuilds the Payers Member, Claim and Case screens with no Angular code, in two days or less, and a prospect would accept the result.</p></div>`;
 
 const GAPS = [
@@ -91,7 +101,7 @@ const GAPS = [
   ['Previews', 'Whole file downloaded first', '#/claim/CLAIM-000131'], ['Several apps per server', 'One app; demo presets', '#/apps'], ['Notifications', 'Subscribe and unsubscribe', '#/notifications'], ['Developer package', 'Not published', '#/start/decisions'],
 ];
 P['start/gaps'] = () => head('Enterprise gaps', 'The 22 gaps from section 6, what the app does today, and where this prototype shows the answer.', ['s0']) +
-  `<div class="card" style="padding:4px 8px"><table><thead><tr><th>#</th><th>Area</th><th>Today</th><th>In the prototype</th></tr></thead><tbody>${GAPS.map(([a, t, h], i) => `<tr><td>${i + 1}</td><td>${esc(a)}</td><td class="muted">${esc(t)}</td><td><a href="${h}">See it</a></td></tr>`).join('')}</tbody></table></div>` +
+  `<div class="card" style="padding:4px 8px"><table><thead><tr><th>#</th><th>Area</th><th>Today</th><th>In the prototype</th></tr></thead><tbody>${GAPS.map(([a, t, h], i) => `<tr><td>${i + 1}</td><td>${esc(a)}</td><td class="muted">${esc(t)}</td><td><a href="${h}" ${asLink(h)}>See it</a></td></tr>`).join('')}</tbody></table></div>` +
   note('Rows 19 and 22 are engineering work with no screen of their own: streaming previews and publishing <code>@nuxeo/satori-platform</code>.');
 
 P['start/decisions'] = () => head('Decisions', 'What the prototype assumes, and who has to decide it.', ['dec']) +
@@ -133,7 +143,7 @@ const ASKS = [
 ];
 P['start/feasibility'] = () => head('Feasibility', 'Every capability in this prototype, checked on 21 November 2026 against two local Nuxeo 2025 servers with read-only calls, and against the code.', ['s0', 'dec']) +
   `<div class="banner ok">${ic('circle_check')}<span><strong>Nothing here is blocked by the platform.</strong> Most of it is client work; five items need someone else, listed below.</span></div>
-  <div class="card" style="padding:4px 8px"><table><thead><tr><th>Capability</th><th>Verdict</th><th>Evidence</th><th>Who</th></tr></thead><tbody>${FEAS.map(([c, v, tone, e, w, h]) => `<tr><td><a href="${h}">${esc(c)}</a></td><td><span class="st ${tone === 'c' ? '' : tone}">${esc(v)}</span></td><td class="muted">${esc(e)}</td><td>${esc(w)}</td></tr>`).join('')}</tbody></table></div>
+  <div class="card" style="padding:4px 8px"><table><thead><tr><th>Capability</th><th>Verdict</th><th>Evidence</th><th>Who</th></tr></thead><tbody>${FEAS.map(([c, v, tone, e, w, h]) => `<tr><td><a href="${h}" ${asLink(h)}>${esc(c)}</a></td><td><span class="st ${tone === 'c' ? '' : tone}">${esc(v)}</span></td><td class="muted">${esc(e)}</td><td>${esc(w)}</td></tr>`).join('')}</tbody></table></div>
   <div class="grid3">${ASKS.map(([t, items]) => `<div class="card"><h2>${esc(t)}</h2><ol>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></div>`).join('')}</div>
   <div class="card ai"><h2>${ic('ai')}AI with a Claude token</h2><p>Claude runs inside the AI package on the Nuxeo server, so the key never reaches the browser. Model <code>claude-opus-5-5</code>; structured outputs for classification and extraction; the content model cached in the prompt for natural-language search; the Batches API for back-filling a repository. Health data needs approved data terms before real members are sent.</p></div>` +
   note('Full report with evidence: <code>docs/presales-business-apps-feasibility.md</code>.');

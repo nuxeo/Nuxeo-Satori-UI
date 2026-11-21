@@ -90,7 +90,7 @@ function mayUse(a, channel, how) {
   if (a.state === 'archived') return 'The asset is archived.';
   if (r.expired) return `The rights ended on ${d8(r.end)}.`;
   if (!a.rights.channels.includes(channel)) return `The licence covers ${a.rights.channels.join(', ')} only.`;
-  if (how !== 'download' && a.state !== 'approved') return `It is ${ASSET_STATE_LABEL[a.state].toLowerCase()}, not approved.`;
+  if (how !== 'download' && a.state !== 'approved') return `Its state is “${ASSET_STATE_LABEL[a.state]}”, not “Approved”.`;
   if (how === 'publish' && r.embargo) return `Embargoed until ${d8(a.embargo)}.`;
   return '';
 }

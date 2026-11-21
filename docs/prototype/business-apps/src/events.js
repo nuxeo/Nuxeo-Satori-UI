@@ -17,7 +17,8 @@ function dropTask(id) {
   delete TASKS[id];
   delete S.tf[id];
 }
-const personaOpts = (sel, group) => Object.entries(PERSONAS).filter(([, p]) => !group || p.groups.includes(group)).map(([k, p]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(p.n)}, ${esc(p.role)}</option>`).join('');
+// Only people of the record's own demo: each demo is another customer, with its own people.
+const personaOpts = (sel, group, kit = 'payers') => Object.entries(PERSONAS).filter(([, p]) => p.kit === kit && (!group || p.groups.includes(group))).map(([k, p]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(p.n)}, ${esc(p.role)}</option>`).join('');
 function setState(id, to, extra, alsoUndo) {
   const c = CLAIMS[id], before = { ...c };
   c.state = to;
@@ -128,7 +129,7 @@ document.addEventListener('click', (ev) => {
   if (!el) return;
   const a = el.dataset.act, id = el.dataset.id;
   if (a === 'dia-bg') { if (ev.target === el) closeModal(); return; }
-  if (['pick', 'hold', 'tf', 'persona', 'ltype', 'noop', 'tfv', 'damf', 'pick-asset', 'pin-note'].includes(a)) return; // handled on change
+  if (['pick', 'hold', 'tf', 'persona', 'ltype', 'noop', 'tfv', 'damf', 'pick-asset', 'pin-note', 'pin-pos'].includes(a)) return; // handled on change
   if (el.tagName === 'A' && a !== 'read' && a !== 'go-app' && a !== 'go-docs') ev.preventDefault();
   switch (a) {
     case 'close': closeModal(); break;
@@ -149,6 +150,7 @@ document.addEventListener('click', (ev) => {
       ask('Assign to', `<label class="f"><span>Person</span><select id="as">${personaOpts(need ? 'morgan' : 'dana', need)}</select></label>${need ? `<p class="help" style="margin-left:0">“${esc(TASKS[id].node)}” belongs to ${need}: only its members are offered.</p>` : ''}<p class="muted">${ids.length} item${ids.length > 1 ? 's' : ''}. The server refuses it if the workflow step does not allow reassignment.</p>`, 'Assign', (d) => {
         const p = d.querySelector('#as').value;
         // The list above is only what is offered; the check is here, as a server would make it.
+        if (PERSONAS[p].kit !== 'payers') { toast(`${PERSONAS[p].n} works for another customer`); return false; }
         if (need && !PERSONAS[p].groups.includes(need)) { toast(`${PERSONAS[p].n} is not in ${need}`); return false; }
         // Reassigning a task moves that task. The claim's assignee (its adjuster) moves only when the
         // claim itself is assigned, or when the task is the adjuster's own determination: handing the

@@ -30,6 +30,9 @@ const assetState = (s) => `<span class="st ${ASSET_STATE_TONE[s] || ''}">${ASSET
 const rightsBadge = (a) => { const r = rightsOf(a); return `<span class="st ${r.tone}">${esc(r.label)}</span>`; };
 const rendName = (a, key) => (RENDITIONS[a.kind].find((x) => x[0] === key) || [key, key])[1];
 const activeShares = (id) => Object.entries(SHARES).filter(([, s]) => s.assets.includes(id) && !s.revoked && daysTo(s.expires) >= 0);
+// What each review said, round by round, kept on the asset so later rounds show it beside the pins.
+const DECIDED = { approve: 'approved', changes: 'changes requested', renewed: 'renewed', withdraw: 'withdrawn' };
+const reviewItems = (a) => (a.reviews || []).map(([round, by, step, decision, text]) => `<li>${ic('comment')}<div>“${esc(text)}”<div class="muted">${esc(pName(by))}, ${esc(step.toLowerCase())}, round ${round}: ${DECIDED[decision] || esc(decision)}</div></div><span></span></li>`).join('');
 const pinList = (pins, from) => pins.map((p, i) => `<li>${ic('pushpin')}<div><strong>${i + 1}.</strong> ${esc(p[3] || 'No note yet')}<div class="muted">${esc(pName(p[2]))}, round ${p[4]}${from != null && i >= from ? ' · new' : ''}</div></div><span></span></li>`).join('');
 
 function acard(id, pick) {
@@ -70,7 +73,8 @@ P.asset = (r) => {
       : rt.embargo ? `<div class="banner">${ic('lock')}<span><strong>Embargoed until ${d8(a.embargo)}</strong>, the product launch. It can be shared with a watermark, not published.</span></div>` : '';
   const pins = a.pins || [];
   const preview = `<div class="pv ${a.kind}">${damArt(a)}${pins.map((x, i) => `<span class="pin ${x[4] < (a.round || 1) ? 'done' : ''}" style="left:${x[0]}%;top:${x[1]}%" title="${esc(x[3])}">${i + 1}</span>`).join('')}${a.kind === 'video' ? `<span class="play">${ic('triangle_right')}</span>` : ''}</div>` +
-    (a.kind === 'video' ? `<div class="scrub" aria-hidden="true"><i></i>${(a.notes || []).map((n) => `<b style="left:${(toSec(n[0]) / 30) * 100}%"></b>`).join('')}</div><ul class="tl">${(a.notes || []).map((n) => `<li>${ic('comment')}<div><strong>${n[0]}</strong> ${esc(n[2])}<div class="muted">${esc(pName(n[1]))}, round ${n[3]}</div></div><span></span></li>`).join('')}</ul>` : pins.length ? `<ul class="tl" style="margin-top:8px">${pinList(pins)}</ul>` : '');
+    (a.kind === 'video' ? `<div class="scrub" aria-hidden="true"><i></i>${(a.notes || []).map((n) => `<b style="left:${(toSec(n[0]) / 30) * 100}%"></b>`).join('')}</div><ul class="tl">${(a.notes || []).map((n) => `<li>${ic('comment')}<div><strong>${n[0]}</strong> ${esc(n[2])}<div class="muted">${esc(pName(n[1]))}, round ${n[3]}</div></div><span></span></li>`).join('')}</ul>` : pins.length ? `<ul class="tl" style="margin-top:8px">${pinList(pins)}</ul>` : '') +
+    ((a.reviews || []).length ? `<h3>Review comments</h3><ul class="tl">${reviewItems(a)}</ul>` : '');
   const rend = `<table><thead><tr><th>Rendition</th><th>Format</th><th>Covered by</th><th><span class="sr">Download</span></th></tr></thead><tbody>${RENDITIONS[a.kind].map(([k, n, fmt, ch]) => { const why = ext ? 'Not offered to outside reviewers' : mayUse(a, ch, 'download'); return `<tr><td>${esc(n)}</td><td>${esc(fmt)}</td><td>${esc(ch)}</td><td>${why ? `<span class="muted">${esc(why)}</span>` : `<button class="sm link" data-act="dl" data-id="${id}" data-r="${k}">${ic('download', 1)}Download</button>`}</td></tr>`; }).join('')}</tbody></table>`;
   const rights = `<dl class="side-kv"><dt>Channels</dt><dd>${a.rights.channels.map((c) => `<span class="badge">${esc(c)}</span>`).join(' ')}</dd><dt>Regions</dt><dd>${esc(a.rights.regions)}</dd><dt>Licence until</dt><dd>${a.rights.until ? d8(a.rights.until) : 'No end date'}</dd><dt>Model release until</dt><dd>${a.rights.release ? d8(a.rights.release) : 'Not needed'}</dd>${a.embargo ? `<dt>Embargo</dt><dd>Until ${d8(a.embargo)}</dd>` : ''}${a.licensed ? `<dt>Licensed from</dt><dd>${esc(a.licensed)}, whose approval it needs</dd>` : ''}</dl>`;
   const usage = live ? `<table><thead><tr><th>Channel</th><th>Where</th><th>Since</th></tr></thead><tbody>${a.usage.map(([c, w, d]) => `<tr><td>${esc(c)}</td><td>${esc(w)}</td><td>${d8(d)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Not published anywhere yet.</p>';
@@ -105,6 +109,9 @@ P.products = () => head('Products', 'Records with no file. Each lists the shots 
   `<div class="card" style="padding:4px 8px"><table><thead><tr><th>Product</th><th>Style</th><th>Season</th><th>Colourways</th><th class="num">Shots approved</th><th>Launch</th></tr></thead><tbody>${Object.entries(PRODUCTS).map(([id, p]) => { const st = shotStatus(id); return `<tr><td>${prLink(id)}</td><td>${esc(p.style)}</td><td>${esc(p.season)}</td><td>${p.colorways.map(esc).join(', ')}</td><td class="num">${st.filter((x) => x.status === 'ok').length} of ${st.length}</td><td>${d8(p.launch)}</td></tr>`; }).join('')}</tbody></table></div>`;
 
 // ---- share links: outside people, no account
+// A link is made under the rights of its day. Each rendition is checked again, against today's rights and
+// the asset's state, on the recipient's page and on every download: archiving or a lapsed licence stops it.
+const shareWhyNot = (a, key) => { const rd = RENDITIONS[a.kind].find((x) => x[0] === key); return rd ? mayUse(a, rd[3], 'share') : 'That rendition is not offered.'; };
 const shareStatus = (s) => (s.revoked ? ['', 'Revoked'] : daysTo(s.expires) < 0 ? ['', 'Ended'] : ['ok', 'Active']);
 P.shares = () => head('Shared links', 'Links for people outside the company, such as an agency or a retailer. Each has its renditions, a watermark and an end date.', ['p14', 'c13']) +
   `<div class="card" style="padding:4px 8px"><table><thead><tr><th>Link</th><th>Shared with</th><th>Assets</th><th>Renditions</th><th>Ends</th><th>Status</th><th><span class="sr">Open</span></th></tr></thead><tbody>${Object.entries(SHARES).map(([code, s]) => { const [tone, label] = shareStatus(s); return `<tr><td><code>${code}</code></td><td>${esc(s.to)}<br><span class="muted">${esc(s.email)}</span></td><td>${s.assets.map(aLink).join('<br>')}</td><td>${s.renditions.map((k) => esc(rendName(ASSETS[s.assets[0]], k))).join(', ')}${s.watermark ? ' · watermarked' : ''}</td><td>${d8(s.expires)}</td><td><span class="st ${tone}">${label}</span></td><td><a href="#/share/${code}">Open as the recipient</a></td></tr>`; }).join('')}</tbody></table></div>`;
@@ -114,7 +121,7 @@ P.share = (r) => {
   if (!s) return P.notFound();
   const dead = s.revoked ? 'Acme Outdoor revoked this link.' : daysTo(s.expires) < 0 ? `This link ended on ${d8(s.expires)}.` : '';
   return head(`Shared with ${esc(s.to)}`, `From ${esc(pName(s.by))} at Acme Outdoor · ${dead ? 'no longer available' : `available until ${d8(s.expires)}`}`, ['p14', 'c13']) +
-    (dead ? `<div class="banner err">${ic('lock')}${esc(dead)}</div>` : `<div class="agrid">${s.assets.map((id) => { const a = ASSETS[id]; return `<div class="acard"><div class="th">${damArt(a)}${s.watermark ? wmark() : ''}</div><div class="meta"><strong>${esc(a.n)}</strong>${s.renditions.map((k) => `<button class="sm tonal" data-act="share-dl" data-id="${code}" data-a="${id}" data-r="${k}">${ic('download', 1)}${esc(rendName(a, k))}</button>`).join('')}</div></div>`; }).join('')}</div>`) +
+    (dead ? `<div class="banner err">${ic('lock')}${esc(dead)}</div>` : `<div class="agrid">${s.assets.map((id) => { const a = ASSETS[id]; return `<div class="acard"><div class="th">${damArt(a)}${s.watermark ? wmark() : ''}</div><div class="meta"><strong>${esc(a.n)}</strong>${s.renditions.map((k) => { const why = shareWhyNot(a, k); return why ? `<span class="muted">${esc(rendName(a, k))}: not available. ${esc(why)}</span>` : `<button class="sm tonal" data-act="share-dl" data-id="${code}" data-a="${id}" data-r="${k}">${ic('download', 1)}${esc(rendName(a, k))}</button>`; }).join('')}</div></div>`; }).join('')}</div>`) +
     note('<strong>Plan:</strong> what someone outside the company sees from a share link, with no account: these assets, these renditions, a watermark, until the end date (section 13). Each download is recorded on the asset, and revoking the link stops it at once.');
 };
 
@@ -129,10 +136,13 @@ P.assetTask = (r) => {
   const e = f.errors, er = (k) => (e[k] ? `<div class="err" id="e-${k}">${esc(e[k])}</div>` : '');
   const old = a.pins || [], review = t.node !== 'Rights renewal', addable = canDo && review && a.kind !== 'video';
   const pv = `<div class="pv ${a.kind} ${addable ? 'addable' : ''}" ${addable ? 'data-act="pin-add" title="Click the picture to add a pin"' : ''}>${damArt(a)}${[...old, ...f.pins].map((x, i) => `<span class="pin ${i < old.length && x[4] < (a.round || 1) ? 'done' : ''}" style="left:${x[0]}%;top:${x[1]}%">${i + 1}</span>`).join('')}${a.kind === 'video' ? `<span class="play">${ic('triangle_right')}</span>` : ''}</div>`;
-  const newPins = f.pins.map((p, i) => `<div class="field"><span class="pin static">${old.length + i + 1}</span><input type="text" data-act="pin-note" data-i="${i}" value="${esc(p[3])}" placeholder="What should change here?" aria-label="Note for pin ${old.length + i + 1}"><button class="icon" data-act="pin-del" data-i="${i}" aria-label="Remove pin ${old.length + i + 1}">${ic('x_small')}</button></div>`).join('');
+  // Clicking the picture is for a mouse. The button and the two position fields do the same from a
+  // keyboard or a screen reader: add a pin, then say where it goes, as a share of the width and height.
+  const pos = (i, k, label, n) => `<label class="f" style="width:104px;margin:8px 0;flex:none"><span>${label}</span><input type="number" min="0" max="100" step="1" data-act="pin-pos" data-i="${i}" data-k="${k}" value="${n}" aria-label="Pin ${old.length + i + 1}, ${label.toLowerCase()}"></label>`;
+  const newPins = f.pins.map((p, i) => `<div class="field" style="flex-wrap:wrap"><span class="pin static">${old.length + i + 1}</span><input type="text" data-act="pin-note" data-i="${i}" value="${esc(p[3])}" placeholder="What should change here?" aria-label="Note for pin ${old.length + i + 1}" style="flex:1;min-width:180px">${pos(i, 0, 'Across %', p[0])}${pos(i, 1, 'Down %', p[1])}<button class="icon" data-act="pin-del" data-i="${i}" aria-label="Remove pin ${old.length + i + 1}">${ic('x_small')}</button></div>`).join('');
   let form;
   if (review) {
-    form = `${a.kind === 'video' ? '' : `<p class="help" style="margin:0 0 8px">${addable ? 'Click the picture to pin a note to a spot.' : ''}</p>`}${newPins}
+    form = `${addable ? `<div class="row" style="margin:8px 0"><button class="sm tonal" data-act="pin-add-key">${ic('pushpin', 1)}Add a pin</button><span class="help" style="margin:0">Or click the picture where the change is.</span></div>` : ''}${newPins}
       <div class="f"><span>Decision (required)</span>${radio('decision', [['approve', t.node === 'Licensor approval' ? 'Approve for Acme Outdoor' : 'Approve'], ['changes', 'Request changes']], f.decision)}</div>${er('decision')}
       ${t.node === 'Creative review' && a.licensed && f.decision === 'approve' ? `<p class="help">Approving sends it to ${esc(a.licensed)} for licensor approval.</p>` : ''}`;
   } else {
@@ -142,9 +152,9 @@ P.assetTask = (r) => {
   }
   const lock = notMine ? `<div class="banner warn">${ic('lock')}“${esc(t.node)}” is for ${need}. You can read it but not complete it.</div>` : t.who !== S.persona ? `<div class="banner warn">${ic('lock')}Assigned to ${esc(pName(t.who))}. You can read it but not complete it.</div>` : '';
   const glance = `<dl class="side-kv"><dt>Asset</dt><dd>${me().external ? esc(a.n) : aLink(t.target)}</dd><dt>Product</dt><dd>${esc(PRODUCTS[a.product].n)}</dd><dt>Version</dt><dd>${a.v}${a.round ? `, round ${a.round}` : ''}</dd><dt>Rights</dt><dd>${rightsBadge(a)}</dd>${a.licensed ? `<dt>Licence</dt><dd>${esc(a.rights.channels.join(', '))} · ${esc(a.rights.regions)} · until ${d8(a.rights.until)}</dd>` : ''}</dl>`;
-  const earlier = a.kind === 'video' ? (a.notes || []).map((n) => `<li>${ic('comment')}<div><strong>${n[0]}</strong> ${esc(n[2])}<div class="muted">${esc(pName(n[1]))}, round ${n[3]}</div></div><span></span></li>`).join('') : pinList(old);
+  const earlier = (a.kind === 'video' ? (a.notes || []).map((n) => `<li>${ic('comment')}<div><strong>${n[0]}</strong> ${esc(n[2])}<div class="muted">${esc(pName(n[1]))}, round ${n[3]}</div></div><span></span></li>`).join('') : pinList(old)) + reviewItems(a);
   return head(esc(t.n), `${esc(t.wf)} · step “${esc(t.node)}” · on ${me().external ? esc(a.n) : aLink(t.target)} · ${sla(t.due)}`, ['p14', 's4', 'c13']) +
-    (t.done ? `<div class="banner ok">${ic('circle_check')}Completed. The asset moved on.</div>` : stale ? `<div class="banner warn">${ic('info')}${t.target} is ${ASSET_STATE_LABEL[a.state].toLowerCase()}, so this task no longer applies.</div>` : '') +
+    (t.done ? (t.closedByState ? `<div class="banner">${ic('info')}Closed when ${t.target} was ${ASSET_STATE_LABEL[t.closedByState].toLowerCase()} from its own page.</div>` : `<div class="banner ok">${ic('circle_check')}Completed. The asset moved on.</div>`) : stale ? `<div class="banner warn">${ic('info')}${t.target} is ${ASSET_STATE_LABEL[a.state].toLowerCase()}, so this task no longer applies.</div>` : '') +
     `<div class="split"><div class="card"><h2>${review ? 'Review' : 'Rights renewal'}</h2>${lock}${review ? pv : ''}${form}
       <label class="f"><span>Comment${review ? ' (required to request changes without a pin)' : ''}</span><textarea data-act="tfv" data-k="comment" ${e.comment ? 'aria-invalid="true" aria-describedby="e-comment"' : ''}>${esc(f.comment)}</textarea></label>${er('comment')}
       ${Object.keys(e).length ? `<div class="banner err" role="alert">${ic('critical')}${Object.keys(e).length} field${Object.keys(e).length > 1 ? 's' : ''} to correct.</div>` : ''}
@@ -188,7 +198,10 @@ function completeAssetTask(id) {
   const round = a.round || 1;
   t.done = true;
   let nid = null;
+  let closed = [];
   let msg;
+  // The comment is part of the asset's review history, so the next round shows it beside the pins.
+  if (f.comment.trim()) a.reviews = [...(a.reviews || []), [round, S.persona, t.node, f.decision, f.comment.trim()]];
   if (t.node === 'Rights renewal') {
     if (f.decision === 'renewed') {
       a.rights = { ...a.rights, release: f.date };
@@ -196,6 +209,9 @@ function completeAssetTask(id) {
     } else {
       a.state = 'archived';
       a.usage = [];
+      // Archiving ends the asset's other open work too, in the same Undo.
+      closed = Object.values(TASKS).filter((x) => x !== t && x.target === t.target && !x.done);
+      closed.forEach((x) => { x.done = true; x.closedByState = 'archived'; });
       msg = `${t.target} withdrawn everywhere and archived`;
     }
   } else if (f.decision === 'changes') {
@@ -212,7 +228,13 @@ function completeAssetTask(id) {
     msg = t.node === 'Licensor approval' ? `Approved by ${a.licensed}` : `${t.target} approved`;
   }
   logOn(t.target, f.decision === 'changes' ? 'comment' : 'circle_check', `${t.n} completed by ${me().n}: ${f.decision === 'changes' ? 'changes requested' : f.decision}${f.comment.trim() ? `, “${f.comment.trim()}”` : ''}`);
-  toast(msg, () => { restore(a, before); if (nid) dropTask(nid); t.done = false; S.log.shift(); });
+  toast(msg, () => {
+    restore(a, before);
+    if (nid) dropTask(nid);
+    t.done = false;
+    closed.forEach((x) => { x.done = false; delete x.closedByState; });
+    S.log.shift();
+  });
   // An outside reviewer may still open an approved or returned licensed asset; see externalMay.
   location.hash = '#/asset/' + t.target;
 }
@@ -241,8 +263,19 @@ const DAM_ACTS = {
       }, t === 'submit' ? 'Submitted for review' : `Round ${next} submitted for review`, () => dropTask(nid));
     } else if (t === 'archive') {
       const live = a.usage.length;
-      const archive = () => go(() => { a.state = 'archived'; a.usage = []; }, live ? `Archived and withdrawn from ${live} place${live === 1 ? '' : 's'}` : 'Archived');
-      if (live) ask(`Archive ${id}?`, `<p>It is live in ${live} place${live === 1 ? '' : 's'}: ${a.usage.map((u) => esc(u[1])).join('; ')}. Archiving withdraws it from each of them.</p>`, 'Archive', archive, true);
+      // Archiving ends the asset's open work too, as a claim's own lifecycle moves do, in the same Undo.
+      const open = Object.values(TASKS).filter((x) => x.target === id && !x.done);
+      const archive = () => go(() => {
+        a.state = 'archived';
+        a.usage = [];
+        open.forEach((x) => { x.done = true; x.closedByState = 'archived'; });
+      }, live ? `Archived and withdrawn from ${live} place${live === 1 ? '' : 's'}` : 'Archived', () => open.forEach((x) => { x.done = false; delete x.closedByState; }));
+      // Say what archiving ends before it does: where the asset is live, and the work still open on it.
+      const ends = [
+        live ? `It is live in ${live} place${live === 1 ? '' : 's'}, and archiving withdraws it: ${a.usage.map((u) => esc(u[1])).join('; ')}.` : '',
+        open.length ? `It closes the open task${open.length === 1 ? '' : 's'}: ${open.map((x) => esc(x.n)).join(', ')}.` : '',
+      ].filter(Boolean);
+      if (ends.length) ask(`Archive ${id}?`, ends.map((x) => `<p>${x}</p>`).join(''), 'Archive', archive, true);
       else archive();
     } else if (t === 'restore') go(() => { a.state = 'approved'; }, 'Restored');
   },
@@ -302,6 +335,8 @@ const DAM_ACTS = {
   'share-dl'(el) {
     const s = SHARES[el.dataset.id], a = ASSETS[el.dataset.a];
     if (shareStatus(s)[1] !== 'Active') { toast('This link no longer works'); return; }
+    const why = shareWhyNot(a, el.dataset.r);
+    if (why) { toast(`Not available: ${why}`); render(); return; }
     logOn(el.dataset.a, 'download', `${rendName(a, el.dataset.r)} downloaded by ${s.to} through link ${el.dataset.id}`);
     toast(`Downloading ${rendName(a, el.dataset.r)}${s.watermark ? ', watermarked' : ''}`);
   },
@@ -328,13 +363,23 @@ const DAM_ACTS = {
   },
   // A guide link: become the person the page is for, then open it.
   'go-as'(el) {
+    const changed = S.persona !== el.dataset.p;
     S.persona = el.dataset.p;
     S.sel.clear();
     S.asel.clear();
     const h = el.getAttribute('href');
     if (location.hash !== h) location.hash = h;
     else render();
-    toast(`Viewing as ${me().n}, ${me().role}`);
+    if (changed) toast(`Viewing as ${me().n}, ${me().role}`);
+  },
+  // The keyboard way to add a pin: it starts in the middle, and its position fields move it.
+  'pin-add-key'() {
+    const tid = route()[1], f = S.tf[tid];
+    if (!f) return;
+    f.pins.push([50, 50, S.persona, '', ASSETS[TASKS[tid].target].round || 1]);
+    render();
+    const input = $(`#main input[data-act=pin-note][data-i="${f.pins.length - 1}"]`);
+    input && input.focus();
   },
   'pin-del'(el) {
     S.tf[route()[1]].pins.splice(Number(el.dataset.i), 1);
@@ -344,9 +389,15 @@ const DAM_ACTS = {
 const DAM_CHANGE = {
   damf(el) { S.damf[el.dataset.k] = el.value; render(); },
   'pick-asset'(el) { S.asel[el.checked ? 'add' : 'delete'](el.dataset.id); render(); },
+  // A position typed into a field moves the pin when the field is left or Enter is pressed.
+  'pin-pos'() { render(); },
 };
 const DAM_INPUT = {
   'pin-note'(el) { const f = S.tf[route()[1]]; if (f && f.pins[el.dataset.i]) f.pins[el.dataset.i][3] = el.value; },
+  'pin-pos'(el) {
+    const f = S.tf[route()[1]], v = Number(el.value);
+    if (f && f.pins[el.dataset.i] && el.value !== '' && !Number.isNaN(v)) f.pins[el.dataset.i][Number(el.dataset.k)] = Math.min(97, Math.max(3, Math.round(v)));
+  },
 };
 
 // ---- outside users see what was sent to them, and nothing else. The server enforces it; this is the screen.
