@@ -134,10 +134,12 @@ P.assetTask = (r) => {
   const need = STEP_GROUPS[t.node], notMine = !!need && !inGroup([need]);
   const stale = !t.done && a.state !== STEP_STATE[t.node];
   const canDo = !t.done && !stale && !notMine && t.who === S.persona;
-  const e = f.errors, er = (k) => (e[k] ? `<div class="err" id="e-${k}">${esc(e[k])}</div>` : '');
+  // A draft is its owner's: anyone else reads the form empty and disabled (see P.task). A completed task
+  // shows what was saved; its draft is kept only so that Undo can give it back.
+  const v = canDo ? f : { decision: '', comment: '', date: '', pins: [], vnotes: [], errors: {} };
+  const e = v.errors, er = (k) => (e[k] ? `<div class="err" id="e-${k}">${esc(e[k])}</div>` : '');
   const old = a.pins || [], review = t.node !== 'Rights renewal', addable = canDo && review && a.kind !== 'video';
-  // A completed task shows what was saved. Its draft is kept only so that Undo can give it back.
-  const draft = t.done ? [] : f.pins, timedDraft = t.done ? [] : f.vnotes || [];
+  const draft = v.pins, timedDraft = v.vnotes || [];
   const pv = `<div class="pv ${a.kind} ${addable ? 'addable' : ''}" ${addable ? 'data-act="pin-add" title="Click the picture to add a pin"' : ''}>${damArt(a)}${[...old, ...draft].map((x, i) => `<span class="pin ${i < old.length && x[4] < (a.round || 1) ? 'done' : ''}" style="left:${x[0]}%;top:${x[1]}%">${i + 1}</span>`).join('')}${a.kind === 'video' ? `<span class="play">${ic('triangle_right')}</span>` : ''}</div>`;
   // Clicking the picture is for a mouse. The button and the two position fields do the same from a
   // keyboard or a screen reader: add a pin, then say where it goes, as a share of the width and height.
@@ -149,20 +151,20 @@ P.assetTask = (r) => {
   let form;
   if (review) {
     form = `${timed}${addable ? `<div class="row" style="margin:8px 0"><button class="sm tonal" data-act="pin-add-key">${ic('pushpin', 1)}Add a pin</button><span class="help" style="margin:0">Or click the picture where the change is.</span></div>` : ''}${newPins}
-      <div class="f"><span>Decision (required)</span>${radio('decision', [['approve', t.node === 'Licensor approval' ? 'Approve for Acme Outdoor' : 'Approve'], ['changes', 'Request changes']], f.decision)}</div>${er('decision')}
-      ${t.node === 'Creative review' && a.licensed && f.decision === 'approve' ? `<p class="help">Approving sends it to ${esc(a.licensed)} for licensor approval.</p>` : ''}`;
+      <div class="f"><span>Decision (required)</span>${radio('decision', [['approve', t.node === 'Licensor approval' ? 'Approve for Acme Outdoor' : 'Approve'], ['changes', 'Request changes']], v.decision)}</div>${er('decision')}
+      ${t.node === 'Creative review' && a.licensed && v.decision === 'approve' ? `<p class="help">Approving sends it to ${esc(a.licensed)} for licensor approval.</p>` : ''}`;
   } else {
     form = `<p>The model release ends on <strong>${d8(a.rights.release)}</strong>. The asset is live in ${a.usage.length} place${a.usage.length === 1 ? '' : 's'}${a.usage.length ? `: ${a.usage.map((u) => esc(u[1])).join('; ')}` : ''}.</p>
-      <div class="f"><span>Outcome (required)</span>${radio('decision', [['renewed', 'Renewed: enter the new end date'], ['withdraw', 'Not renewed: withdraw it everywhere and archive it']], f.decision)}</div>${er('decision')}
-      ${f.decision === 'renewed' ? `<label class="f"><span>New model release end date (required)</span><input type="date" data-act="tfv" data-k="date" value="${esc(f.date)}" ${e.date ? 'aria-invalid="true" aria-describedby="e-date"' : ''}></label>${er('date')}` : ''}`;
+      <div class="f"><span>Outcome (required)</span>${radio('decision', [['renewed', 'Renewed: enter the new end date'], ['withdraw', 'Not renewed: withdraw it everywhere and archive it']], v.decision)}</div>${er('decision')}
+      ${v.decision === 'renewed' ? `<label class="f"><span>New model release end date (required)</span><input type="date" data-act="tfv" data-k="date" value="${esc(v.date)}" ${e.date ? 'aria-invalid="true" aria-describedby="e-date"' : ''}></label>${er('date')}` : ''}`;
   }
   const lock = notMine ? `<div class="banner warn">${ic('lock')}“${esc(t.node)}” is for ${need}. You can read it but not complete it.</div>` : t.who !== S.persona ? `<div class="banner warn">${ic('lock')}Assigned to ${esc(pName(t.who))}. You can read it but not complete it.</div>` : '';
   const glance = `<dl class="side-kv"><dt>Asset</dt><dd>${me().external ? esc(a.n) : aLink(t.target)}</dd><dt>Product</dt><dd>${esc(PRODUCTS[a.product].n)}</dd><dt>Version</dt><dd>${a.v}${a.round ? `, round ${a.round}` : ''}</dd><dt>Rights</dt><dd>${rightsBadge(a)}</dd>${a.licensed ? `<dt>Licence</dt><dd>${esc(a.rights.channels.join(', '))} · ${esc(a.rights.regions)} · until ${d8(a.rights.until)}</dd>` : ''}</dl>`;
   const earlier = (a.kind === 'video' ? (a.notes || []).map((n) => `<li>${ic('comment')}<div><strong>${n[0]}</strong> ${esc(n[2])}<div class="muted">${esc(pName(n[1]))}, round ${n[3]}</div></div><span></span></li>`).join('') : pinList(old)) + reviewItems(a);
   return head(esc(t.n), `${esc(t.wf)} · step “${esc(t.node)}” · on ${me().external ? esc(a.n) : aLink(t.target)} · ${sla(t.due)}`, ['p14', 's4', 'c13']) +
     (t.done ? (t.closedByState ? `<div class="banner">${ic('info')}Closed when ${t.target} was ${ASSET_STATE_LABEL[t.closedByState].toLowerCase()} from its own page.</div>` : `<div class="banner ok">${ic('circle_check')}Completed. The asset moved on.</div>`) : stale ? `<div class="banner warn">${ic('info')}${t.target} is ${ASSET_STATE_LABEL[a.state].toLowerCase()}, so this task no longer applies.</div>` : '') +
-    `<div class="split"><div class="card"><h2>${review ? 'Review' : 'Rights renewal'}</h2>${lock}${review ? pv + timeline : ''}${form}
-      <label class="f"><span>Comment${review ? ' (required to request changes without a pin)' : ''}</span><textarea data-act="tfv" data-k="comment" ${e.comment ? 'aria-invalid="true" aria-describedby="e-comment"' : ''}>${esc(f.comment)}</textarea></label>${er('comment')}
+    `<div class="split"><div class="card"><h2>${review ? 'Review' : 'Rights renewal'}</h2>${lock}${review ? pv + timeline : ''}<fieldset class="tf" ${canDo ? '' : 'disabled'}>${form}
+      <label class="f"><span>Comment${review ? ' (required to request changes without a pin)' : ''}</span><textarea data-act="tfv" data-k="comment" ${e.comment ? 'aria-invalid="true" aria-describedby="e-comment"' : ''}>${esc(v.comment)}</textarea></label>${er('comment')}</fieldset>
       ${Object.keys(e).length ? `<div class="banner err" role="alert">${ic('critical')}${Object.keys(e).length} field${Object.keys(e).length > 1 ? 's' : ''} to correct.</div>` : ''}
       <div class="row"><button class="primary" data-act="complete" data-id="${id}" ${canDo ? '' : 'disabled'}>Complete task</button></div></div>
     <div><div class="card"><h2>At a glance</h2>${glance}</div>${review ? `<div class="card"><h2>Earlier rounds</h2>${earlier ? `<ul class="tl">${earlier}</ul>` : '<p class="muted">This is the first round.</p>'}</div>` : ''}</div></div>` +
@@ -365,7 +367,7 @@ const DAM_ACTS = {
   },
   'pin-add'(el, ev) {
     const tid = route()[1], f = S.tf[tid];
-    if (!f) return;
+    if (!f || !mayDraft(tid)) return;
     const b = el.getBoundingClientRect();
     const at = (v, lo, size) => Math.min(97, Math.max(3, Math.round(((v - lo) / size) * 100)));
     f.pins.push([at(ev.clientX, b.left, b.width), at(ev.clientY, b.top, b.height), S.persona, '', ASSETS[TASKS[tid].target].round || 1]);
@@ -387,7 +389,7 @@ const DAM_ACTS = {
   // The keyboard way to add a pin: it starts in the middle, and its position fields move it.
   'pin-add-key'() {
     const tid = route()[1], f = S.tf[tid];
-    if (!f) return;
+    if (!f || !mayDraft(tid)) return;
     f.pins.push([50, 50, S.persona, '', ASSETS[TASKS[tid].target].round || 1]);
     render();
     const input = $(`#main input[data-act=pin-note][data-i="${f.pins.length - 1}"]`);
@@ -395,17 +397,19 @@ const DAM_ACTS = {
   },
   'vnote-add'() {
     const f = S.tf[route()[1]];
-    if (!f) return;
+    if (!f || !mayDraft(route()[1])) return;
     (f.vnotes = f.vnotes || []).push(['', '']);
     render();
     const input = $(`#main input[data-act=vnote-t][data-i="${f.vnotes.length - 1}"]`);
     input && input.focus();
   },
   'vnote-del'(el) {
+    if (!mayDraft(route()[1])) return;
     S.tf[route()[1]].vnotes.splice(Number(el.dataset.i), 1);
     render();
   },
   'pin-del'(el) {
+    if (!mayDraft(route()[1])) return;
     S.tf[route()[1]].pins.splice(Number(el.dataset.i), 1);
     render();
   },
@@ -419,12 +423,12 @@ const DAM_CHANGE = {
   'vnote-t'() { render(); },
 };
 const DAM_INPUT = {
-  'pin-note'(el) { const f = S.tf[route()[1]]; if (f && f.pins[el.dataset.i]) f.pins[el.dataset.i][3] = el.value; },
-  'vnote-t'(el) { const f = S.tf[route()[1]]; if (f && f.vnotes[el.dataset.i]) f.vnotes[el.dataset.i][0] = el.value; },
-  'vnote-x'(el) { const f = S.tf[route()[1]]; if (f && f.vnotes[el.dataset.i]) f.vnotes[el.dataset.i][1] = el.value; },
+  'pin-note'(el) { const f = S.tf[route()[1]]; if (f && mayDraft(route()[1]) && f.pins[el.dataset.i]) f.pins[el.dataset.i][3] = el.value; },
+  'vnote-t'(el) { const f = S.tf[route()[1]]; if (f && mayDraft(route()[1]) && f.vnotes[el.dataset.i]) f.vnotes[el.dataset.i][0] = el.value; },
+  'vnote-x'(el) { const f = S.tf[route()[1]]; if (f && mayDraft(route()[1]) && f.vnotes[el.dataset.i]) f.vnotes[el.dataset.i][1] = el.value; },
   'pin-pos'(el) {
     const f = S.tf[route()[1]], v = Number(el.value);
-    if (f && f.pins[el.dataset.i] && el.value !== '' && !Number.isNaN(v)) f.pins[el.dataset.i][Number(el.dataset.k)] = Math.min(97, Math.max(3, Math.round(v)));
+    if (f && mayDraft(route()[1]) && f.pins[el.dataset.i] && el.value !== '' && !Number.isNaN(v)) f.pins[el.dataset.i][Number(el.dataset.k)] = Math.min(97, Math.max(3, Math.round(v)));
   },
 };
 

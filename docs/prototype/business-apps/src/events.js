@@ -35,6 +35,13 @@ function moveFromPage(id, to, extra) {
   setState(id, to, extra, () => closing.forEach((t) => { t.done = false; delete t.closedByState; }));
 }
 
+// Only the person who may complete a task writes its draft. The form is disabled for anyone else, and the
+// same rule holds where the draft is written.
+function mayDraft(tid) {
+  const t = TASKS[tid], need = t && STEP_GROUPS[t.node];
+  return !!t && !t.done && t.who === S.persona && (!need || me().groups.includes(need));
+}
+
 function completeTask(id) {
   if (TASKS[id].target.startsWith('AST')) return completeAssetTask(id);
   const t = TASKS[id], f = S.tf[id], e = {};
@@ -343,13 +350,13 @@ document.addEventListener('change', (ev) => {
   }
   else if (a === 'pick') { S.sel[el.checked ? 'add' : 'delete'](el.dataset.id); render(); }
   else if (a === 'hold') { const k = CASES[el.dataset.id]; k.hold = el.checked; logOn(el.dataset.id, 'governance', `Legal hold ${k.hold ? 'set' : 'lifted'} by ${me().n}`); toast(k.hold ? 'Legal hold set: nothing in this case can be deleted' : 'Legal hold lifted'); render(); }
-  else if (a === 'tf') { const tid = route()[1]; S.tf[tid].decision = el.value; S.tf[tid].errors = {}; render(); const r = $(`#main input[name=decision][value="${el.value}"]`); r && r.focus(); }
+  else if (a === 'tf') { const tid = route()[1]; if (!mayDraft(tid)) return; S.tf[tid].decision = el.value; S.tf[tid].errors = {}; render(); const r = $(`#main input[name=decision][value="${el.value}"]`); r && r.focus(); }
   else if (DAM_CHANGE[a]) DAM_CHANGE[a](el);
   else if (a === 'ltype') { S.layoutType = el.value; const L = LAYOUTS[el.value]; S.layoutField = L ? (L.flatMap((c) => c.f || [])[0] || [''])[0] : ''; render(); }
 });
 document.addEventListener('input', (ev) => {
   const el = ev.target.closest('[data-act=tfv]');
-  if (el) S.tf[route()[1]][el.dataset.k] = el.value;
+  if (el && mayDraft(route()[1])) S.tf[route()[1]][el.dataset.k] = el.value;
   const d = ev.target.closest('[data-act]');
   if (d && DAM_INPUT[d.dataset.act]) DAM_INPUT[d.dataset.act](d);
 });
