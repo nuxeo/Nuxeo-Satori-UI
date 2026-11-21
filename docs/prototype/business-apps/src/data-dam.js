@@ -104,12 +104,13 @@ function shotStatus(pid) {
 }
 const missingShots = (pid) => shotStatus(pid).filter((x) => x.status === 'missing');
 
+// `kit` keeps these out of the builder, which is connected to the Payers demo server.
 QUEUES.push(
-  { id: 'assets-review', n: 'Assets in review', pp: 'assets_in_review', groups: ['creative-review', 'brand-team'], of: 'asset', test: (a) => ['inReview', 'licensorReview'].includes(a.state) },
-  { id: 'assets-rights', n: 'Rights ending in 30 days', pp: 'assets_rights_ending', groups: ['brand-team'], of: 'asset', test: (a) => a.state !== 'archived' && !!rightsOf(a).soon },
-  { id: 'assets-new', n: 'New uploads to describe', pp: 'assets_drafts', groups: ['brand-team'], of: 'asset', test: (a) => a.state === 'draft' },
-  { id: 'products-shots', n: 'Products missing shots', pp: 'products_missing_shots', groups: ['brand-team'], of: 'product', test: (p, who, id) => missingShots(id).length > 0 },
-  { id: 'licensed', n: 'Submissions from Acme Outdoor', pp: 'licensed_submissions', groups: ['licensor-starfield'], of: 'asset', test: (a) => a.licensed === 'Starfield Studios' && a.state === 'licensorReview' },
+  { kit: 'dam', id: 'assets-review', n: 'Assets in review', pp: 'assets_in_review', groups: ['creative-review', 'brand-team'], of: 'asset', test: (a) => ['inReview', 'licensorReview'].includes(a.state) },
+  { kit: 'dam', id: 'assets-rights', n: 'Rights ending in 30 days', pp: 'assets_rights_ending', groups: ['brand-team'], of: 'asset', test: (a) => a.state !== 'archived' && !!rightsOf(a).soon },
+  { kit: 'dam', id: 'assets-new', n: 'New uploads to describe', pp: 'assets_drafts', groups: ['brand-team'], of: 'asset', test: (a) => a.state === 'draft' },
+  { kit: 'dam', id: 'products-shots', n: 'Products missing shots', pp: 'products_missing_shots', groups: ['brand-team'], of: 'product', test: (p, who, id) => missingShots(id).length > 0 },
+  { kit: 'dam', id: 'licensed', n: 'Submissions from Acme Outdoor', pp: 'licensed_submissions', groups: ['licensor-starfield'], of: 'asset', test: (a) => a.licensed === 'Starfield Studios' && a.state === 'licensorReview' },
 );
 
 NOTIFS.push(

@@ -121,7 +121,7 @@ P.share = (r) => {
   if (!s) return P.notFound();
   const dead = s.revoked ? 'Acme Outdoor revoked this link.' : daysTo(s.expires) < 0 ? `This link ended on ${d8(s.expires)}.` : '';
   return head(`Shared with ${esc(s.to)}`, `From ${esc(pName(s.by))} at Acme Outdoor · ${dead ? 'no longer available' : `available until ${d8(s.expires)}`}`, ['p14', 'c13']) +
-    (dead ? `<div class="banner err">${ic('lock')}${esc(dead)}</div>` : `<div class="agrid">${s.assets.map((id) => { const a = ASSETS[id]; return `<div class="acard"><div class="th">${damArt(a)}${s.watermark ? wmark() : ''}</div><div class="meta"><strong>${esc(a.n)}</strong>${s.renditions.map((k) => { const why = shareWhyNot(a, k); return why ? `<span class="muted">${esc(rendName(a, k))}: not available. ${esc(why)}</span>` : `<button class="sm tonal" data-act="share-dl" data-id="${code}" data-a="${id}" data-r="${k}">${ic('download', 1)}${esc(rendName(a, k))}</button>`; }).join('')}</div></div>`; }).join('')}</div>`) +
+    (dead ? `<div class="banner err">${ic('lock')}${esc(dead)}</div>` : `<div class="agrid">${s.assets.map((id) => { const a = ASSETS[id]; const usable = s.renditions.filter((k) => !shareWhyNot(a, k)); if (!usable.length) return `<div class="acard"><div class="th gone">${ic('lock')}<span>No longer available</span></div><div class="meta"><strong>${esc(a.n)}</strong><span class="muted">${esc(shareWhyNot(a, s.renditions[0]))}</span></div></div>`; return `<div class="acard"><div class="th">${damArt(a)}${s.watermark ? wmark() : ''}</div><div class="meta"><strong>${esc(a.n)}</strong>${s.renditions.map((k) => { const why = shareWhyNot(a, k); return why ? `<span class="muted">${esc(rendName(a, k))}: not available. ${esc(why)}</span>` : `<button class="sm tonal" data-act="share-dl" data-id="${code}" data-a="${id}" data-r="${k}">${ic('download', 1)}${esc(rendName(a, k))}</button>`; }).join('')}</div></div>`; }).join('')}</div>`) +
     note('<strong>Plan:</strong> what someone outside the company sees from a share link, with no account: these assets, these renditions, a watermark, until the end date (section 13). Each download is recorded on the asset, and revoking the link stops it at once.');
 };
 
@@ -202,6 +202,8 @@ function completeAssetTask(id) {
   let msg;
   // The comment is part of the asset's review history, so the next round shows it beside the pins.
   if (f.comment.trim()) a.reviews = [...(a.reviews || []), [round, S.persona, t.node, f.decision, f.comment.trim()]];
+  // Pinned notes are feedback whatever the decision: an approval with notes keeps them too.
+  if (notes.length) a.pins = [...(a.pins || []), ...notes.map((p) => [p[0], p[1], S.persona, p[3].trim(), round])];
   if (t.node === 'Rights renewal') {
     if (f.decision === 'renewed') {
       a.rights = { ...a.rights, release: f.date };
@@ -216,7 +218,6 @@ function completeAssetTask(id) {
     }
   } else if (f.decision === 'changes') {
     a.state = 'changes';
-    a.pins = [...(a.pins || []), ...notes.map((p) => [p[0], p[1], S.persona, p[3].trim(), round])];
     msg = t.node === 'Licensor approval' ? `Sent back to Acme Outdoor with ${Math.max(1, notes.length)} note${notes.length > 1 ? 's' : ''}` : `Changes requested on ${t.target}`;
   } else if (t.node === 'Creative review' && a.licensed) {
     a.state = 'licensorReview';
