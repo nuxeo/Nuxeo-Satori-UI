@@ -149,7 +149,15 @@ document.addEventListener('click', (ev) => {
         const p = d.querySelector('#as').value;
         // The list above is only what is offered; the check is here, as a server would make it.
         if (need && !PERSONAS[p].groups.includes(need)) { toast(`${PERSONAS[p].n} is not in ${need}`); return false; }
-        ids.forEach((x) => { if (CLAIMS[x]) CLAIMS[x].assignee = p; if (a === 'reassign') TASKS[id].who = p; logOn(x, 'reassign', `Assigned to ${PERSONAS[p].n} by ${me().n}`); });
+        // Reassigning a task moves that task. The claim's assignee (its adjuster) moves only when the
+        // claim itself is assigned, or when the task is the adjuster's own determination: handing the
+        // supervisor's step to another supervisor must not make the supervisor the claim's adjuster.
+        const movesClaim = a !== 'reassign' || TASKS[id].node === 'Determine';
+        ids.forEach((x) => {
+          if (CLAIMS[x] && movesClaim) CLAIMS[x].assignee = p;
+          if (a === 'reassign') TASKS[id].who = p;
+          logOn(x, 'reassign', a === 'reassign' ? `${TASKS[id].n} reassigned to ${PERSONAS[p].n} by ${me().n}` : `Assigned to ${PERSONAS[p].n} by ${me().n}`);
+        });
         S.sel.clear();
         toast(`Assigned to ${PERSONAS[p].n}`);
       });
