@@ -1,7 +1,7 @@
 // Demo data. Everything is fictional: people, providers, numbers and addresses.
 const TODAY = new Date('2026-11-21T09:00:00Z');
 
-// Plan items, as numbered in docs/presales-business-apps-plan.md.
+// Plan items, as numbered in docs/business-apps/plan.md.
 const PLAN = {
   qw: { t: 'Quick wins', when: 'now' },
   s0: { t: 'Step 0 · Align', when: 'now' },

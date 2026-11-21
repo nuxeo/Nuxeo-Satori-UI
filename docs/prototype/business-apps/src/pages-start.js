@@ -48,7 +48,7 @@ function personaFor(h) {
   return /CASE|inbox/.test(h) ? 'sam' : 'dana';
 }
 const asLink = (h, who) => { const p = who || personaFor(h); return p ? `data-act="go-as" data-p="${p}"` : ''; };
-P.start = () => head('Nuxeo as a platform for business applications', 'A clickable prototype of the plan in <code>docs/presales-business-apps-plan.md</code>. It starts from the business record and the work done on it, not from the folder and the file.', ['s0']) +
+P.start = () => head('Nuxeo as a platform for business applications', 'A clickable prototype of the plan in <code>docs/business-apps/plan.md</code>. It starts from the business record and the work done on it, not from the folder and the file.', ['s0']) +
   `<div class="grid2"><div class="card"><h2>Three parts</h2>
     <p><a href="#/home"><strong>App</strong></a>: what a claims adjuster, a supervisor, an appeals specialist and member services use every day. Switch who you are with “Viewing as”, which also holds a second demo: a brand team&rsquo;s assets (DAM) for another fictional customer.</p>
     <p><a href="#/build/agent"><strong>Build</strong></a>: how a presales engineer makes that app from the Nuxeo data model, without Angular, with an agent and a designer.</p>
@@ -149,7 +149,7 @@ P['start/feasibility'] = () => head('Feasibility', 'Every capability in this pro
   <div class="card" style="padding:4px 8px"><table><thead><tr><th>Capability</th><th>Verdict</th><th>Evidence</th><th>Who</th></tr></thead><tbody>${FEAS.map(([c, v, tone, e, w, h]) => `<tr><td><a href="${h}" ${asLink(h)}>${esc(c)}</a></td><td><span class="st ${tone === 'c' ? '' : tone}">${esc(v)}</span></td><td class="muted">${esc(e)}</td><td>${esc(w)}</td></tr>`).join('')}</tbody></table></div>
   <div class="grid3">${ASKS.map(([t, items]) => `<div class="card"><h2>${esc(t)}</h2><ol>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></div>`).join('')}</div>
   <div class="card ai"><h2>${ic('ai')}AI with a Claude token</h2><p>Claude runs inside the AI package on the Nuxeo server, so the key never reaches the browser. Model <code>claude-opus-5-5</code>; structured outputs for classification and extraction; the content model cached in the prompt for natural-language search; the Batches API for back-filling a repository. Health data needs approved data terms before real members are sent.</p></div>` +
-  note('Full report with evidence: <code>docs/presales-business-apps-feasibility.md</code>.');
+  note('Full report with evidence: <code>docs/business-apps/feasibility.md</code>.');
 
 // ---- every account: the waves in section 14, by use case. This page is public, so it names no account.
 const COVER = [
