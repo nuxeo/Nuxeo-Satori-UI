@@ -31,6 +31,10 @@ To see the plan rather than read it, open the
   configuration without code, page providers as lists and tabs, server-operation buttons, group
   and state rules, and a configurable dashboard. It does not cover the record page, related records
   with the open record as a parameter, computed fields or work queues (section 11).
+- The plan is written around Payers. Checked against twenty other accounts (section 13), the
+  platform steps fit them all, but brand DAM, media, engineering document control and records
+  management need work that no step covers. Section 14 covers every account in four waves,
+  starting with a brand assets kit beside Payers.
 
 ## 1. Pain points
 
@@ -303,6 +307,7 @@ days or less, and a prospect would accept the result.**
   and the demo. Then case management, contract management and DAM/PAM.
 - Each kit is the data model (or presales' Studio project), a config package (record pages,
   queues, home, actions, labels), demo data and a demo script.
+- Section 13 proposes which kits come next, by the number of accounts each one serves.
 
 ### Step 8. A bridge from Studio, later
 
@@ -507,11 +512,18 @@ It has three parts:
   their own home, queues and menu. The pages are: My work, five queues, the Member, Claim, Case
   and Provider record pages, the task forms, Inbox capture, Search, Reports, Notifications, the app
   switcher and the optional ECM functions.
+- **Brand assets (DAM)**: a second demo, for another fictional customer, Acme Outdoor, on the same
+  platform with another starter kit. "Viewing as" also switches to a brand asset manager, a
+  creative director, and a licensor's reviewer, who is an outside user and sees only what was sent
+  to them. The pages are: the asset library, the asset page with renditions, rights and usage,
+  products with the shots each colourway needs, review with pins and rounds, rights renewal, share
+  links, and the view a link's recipient gets (section 14).
 - **Build**: how a presales engineer makes that app without Angular: the app builder agent, the
   data model, the record layout designer, queues and home per group, actions with parameters,
   starter kits and the Studio bridge.
-- **Guide**: the start page with the glossary and a 10-minute demo path, the Member page before
-  and after, the plan map, the 22 enterprise gaps with a link to each answer, and the decisions.
+- **Guide**: the start page with the glossary, a 10-minute Payers demo path and a 5-minute brand
+  assets demo path, the Member page before and after, the plan map, the 22 enterprise gaps with a
+  link to each answer, every account by use case (section 14), and the decisions.
 
 It uses the Satori theme and icons, built the same way as the Studio designer prototype. The built
 `index.html` is not committed, because it carries Satori's compiled theme and icons; the Pages
@@ -525,3 +537,129 @@ node docs/prototype/business-apps/src/build.cjs
 The build needs `sass`, `@hylandsoftware/satori-ui` and `@hylandsoftware/satori-icons` in
 `node_modules`. Set `NODE_MODULES_ROOT` to a checkout that has them if this one does not. It
 refuses to write the file if a page names an icon Satori does not have.
+
+## 13. Beyond Payers: twenty other accounts
+
+The plan is written around the Payers demo. This section checks it against twenty other accounts.
+Each account's use case is inferred from its industry, not from what it runs on Nuxeo today, so
+presales should confirm each row before anyone plans from it. The accounts are counted by group,
+not named, because this repository is public.
+
+- **What fits every account:** platform steps 1 to 6. Record pages from the model, layouts, queues
+  and a home per group, task forms, lifecycle and server actions, and the agent do not depend on
+  the industry.
+- **What is Payers only:** everything concrete. The acceptance test, the demos in section 8, the
+  prototype, and the only starter kit with a design. Step 7 names case management, contracts and
+  DAM/PAM, and says nothing more about them.
+- **Where the gaps are:** brand DAM, media, engineering document control and records management
+  need work that no step covers. Between them they are eight of the twenty accounts.
+
+| Use case                        | Accounts | Covered | What the plan lacks for them                                                                                                                                                                                                            |
+| ------------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Health payers and public health | 3        | Yes     | The public agency: notices in several languages, and public records requests. The pharmacy: prior-authorisation faxes need inbound capture, which waits on a capture path from the platform team                                        |
+| Property and casualty insurance | 4        | Partly  | A P&C claims kit: claimants, damage photos, subrogation. The claim usually lives in a core claims system such as Guidewire; section 5 links to it and syncs its data, but shows nothing live from it. Nordic languages for one insurer  |
+| Banking                         | 2        | Partly  | Onboarding and KYC checklists, disputes, e-signature, and Spanish for one bank. Retention and legal hold are "Later" in section 6; a bank expects them from the start                                                                   |
+| Brand and product DAM           | 4        | Weak    | The file is the business record, and the plan redesigns only records with no file. No asset grid, renditions, video review, proofing, usage rights, share links or brand portal. Licensed apparel: approval rounds with licensors       |
+| Media and entertainment         | 1        | Weak    | Everything in the DAM row, plus rights by territory and release window, localised versions, delivery to distributors, and watermarks on pre-release content                                                                             |
+| Engineering document control    | 2        | No      | Revision and numbering schemes, review and comment cycles, transmittals to contractors and suppliers, CAD and BIM viewing, export-control marking, and French                                                                           |
+| Operations with outside parties | 2        | Partly  | Their records fit the record page: vehicles, deals and titles in automotive; moves, inventories and damage claims in moving. Missing: dealers, agents and drivers as outside users, and e-signature                                     |
+| Records management              | 1        | Partly  | Retention, holds and records declaration are in section 5, but come "Later" in section 6. No physical records (boxes, locations, chain of custody), no disposition review, and no separation between client organisations on one system |
+| Not known                       | 1        | —       | The industry alone does not say what the use case is                                                                                                                                                                                    |
+
+### Proposed additions
+
+These are proposals. Sections 4 and 8 stay as they are until they are agreed. Section 14 puts them
+in order, as four waves.
+
+- **A second acceptance test that is not Payers and starts from files.** For example, a brand
+  team's asset page and approval queue, rebuilt in two days or less. DAM is the largest gap and
+  covers four or five of these accounts.
+- **A record page for files.** Gap 1 fixes types with no file and keeps today's viewer for files.
+  An asset page shows the preview first, then renditions, rights, usage and the products the asset
+  belongs to.
+- **People outside the company:** licensors, distributors, suppliers, contractors, dealers and
+  agents, with scoped access, invitations and expiry. Six of the twenty need it.
+- **Systems of record beyond links.** Section 5 has links by URL template, events and synced data.
+  Insurers and banks also need live data from the core system on the record page, and a Nuxeo
+  panel inside Guidewire, Salesforce or a bank's own front end.
+- **Controlled documents** as a starter kit, for the two engineering accounts.
+- **Records management earlier**, with physical records and separation between client
+  organisations, for the records management account. The banks and the public agency need
+  retention too.
+- **Languages and e-signature in every app:** French, Spanish and the Nordic languages for the UI
+  and the record labels, letters in several languages, and signing as a workflow step.
+- **Starter kits ordered by the accounts each serves:** P&C claims (4), brand DAM (4), payers (3),
+  banking (2), document control (2), case management for the two operations accounts (2),
+  media (1) and records management (1). Contract management serves all of them.
+
+### To confirm with presales
+
+For each account: the use case, the records people work on, who works on them, and the systems the
+app has to work with. Presales offered to walk us through their demos (P11); the table above can be
+the agenda.
+
+## 14. A plan to cover every account
+
+Section 13 found that the platform steps fit every account, but that each kind of account needs a
+starter kit of its own and a few capabilities that no step has yet. This plan gives each group of
+accounts a demo of its own, in four waves. It names groups, not accounts; section 13 maps one to
+the other.
+
+### How the waves work
+
+- **One platform, one kit per use case.** No account gets code of its own. A kit is a data model,
+  a configuration package, demo data and a demo script (Step 7). A capability that one kit needs is
+  built into the platform, where the next kit finds it.
+- **Each wave ends the way the Payers work does:** a demo presales can give, and an acceptance test
+  in the form of section 4's. A presales engineer builds the kit's main screens with no Angular
+  code, in two days or less, and a prospect would accept the result.
+- **The waves follow shared capabilities, not deal size.** Presales knows which accounts matter
+  most this year, so the first step is theirs, and it can reorder the waves.
+
+### First: confirm the accounts
+
+- With presales, confirm each account's use case, records, people, and the systems the app has to
+  work with (section 13). Rank the groups by what is at stake this year.
+- Ask for one model and one set of demo data per group, as the Payers project gave us for wave 1.
+- The account whose use case is not known joins a wave once presales says what it is.
+
+### The waves
+
+| Wave                                    | Groups (accounts)                                                     | Kits                                                  | New capabilities                                                                                                                                                                                                            | Acceptance test                                                                              |
+| --------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1. Prove both shapes                    | Health payers and public health (3); brand and product DAM (4)        | Payers and claims; brand assets                       | A record page for files: preview first, then renditions, rights and usage. An asset library. Review with pins and rounds. Rights checked on every download, share and publish. Share links with a watermark and an end date | The Payers screens, and a product page and an asset page, rebuilt in two days each           |
+| 2. Records that live elsewhere          | Property and casualty insurance (4); banking (2)                      | Property and casualty claims; onboarding and disputes | Live data from the core system on the record page. A Nuxeo panel inside the core system or the CRM. E-signature as a workflow step. Spanish and the Nordic languages. Retention and legal hold, moved up from "Later"       | A property claim page that shows core-system data beside its documents                       |
+| 3. Outside people, controlled documents | Engineering document control (2); operations with outside parties (2) | Controlled documents; case management                 | Outside users with scoped access, invitations and expiry. Revisions, numbering, and review cycles with comment resolution. Transmittals. CAD and BIM viewing through a partner viewer. French                               | A transmittal to an outside contractor, and its comment cycle                                |
+| 4. Media rights, records at scale       | Media and entertainment (1); records management (1)                   | Media assets and rights; records management           | Rights by territory and release window, localised versions, delivery to distributors. Retention schedules, disposition review, physical records. Separation between client organisations on one system                      | A film delivered to a distributor within its window, and a disposition run with its approval |
+
+### What wave 1 already has
+
+The prototype's brand assets demo (section 12) is wave 1's second kit, clickable: an asset library,
+an asset page with renditions, rights and usage, products with the shots each colourway still
+needs, review with pins and rounds, rights renewal, share links, and a licensing portal. Its share
+links and its licensor portal also preview wave 3's outside users.
+
+### Who provides what
+
+- **Presales:** the use cases and the ranking, a model and demo data per group, and a reviewer for
+  each wave's acceptance test.
+- **Platform and backend team:** retention and legal hold on demo servers (wave 2), how outside
+  users sign in and what they may see (wave 3), and whether physical records and client separation
+  exist in the platform or need an add-on (wave 4). Which of these the platform has today is not
+  checked.
+- **Us:** the record page for files, the asset library and the review widget (wave 1); the
+  live-data widget and the embedded panel (wave 2); the outside-user screens and the
+  document-control widgets (wave 3); the rights and records screens (wave 4).
+- **To choose:** an e-signature service (wave 2), and a CAD and BIM viewer (wave 3).
+
+### Decisions this adds to section 9
+
+- Whether outside users are in the Beta scope, and how they sign in.
+- Whether a record whose data lives in another system can have a record page here, and who owns
+  the connector for each core system.
+- Which e-signature service and which CAD viewer come first.
+
+### How we track it
+
+The guide's "Every account" page in the prototype shows each group, its kit and its wave, with a
+link wherever a flow exists. It names no account, because the site is public.

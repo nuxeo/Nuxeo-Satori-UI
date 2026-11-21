@@ -12,10 +12,12 @@ const root = process.env.NODE_MODULES_ROOT || path.resolve(here, '../../../..');
 const nm = path.join(root, 'node_modules');
 const SCRIPTS = [
   'data.js',
+  'data-dam.js',
   'core.js',
   'pages-work.js',
   'pages-records.js',
   'pages-more.js',
+  'pages-dam.js',
   'pages-build.js',
   'pages-build2.js',
   'pages-start.js',

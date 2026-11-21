@@ -6,28 +6,34 @@ S.tf = {};
 P.task = (r) => {
   const id = r[1], t = TASKS[id];
   if (!t) return P.notFound();
+  if (t.target.startsWith('AST')) return P.assetTask(r);
   // A draft belongs to this task, not to its id: an id freed by Undo and reused by a new task must
-  // not hand the new task the old one's choices.
-  const f = (S.tf[id] = S.tf[id] && S.tf[id].task === t ? S.tf[id] : { task: t, decision: '', allowed: '', reason: '', comment: '', errors: {} });
+  // not hand the new task the old one's choices. It also belongs to the owner who wrote it: a task
+  // reassigned to someone else starts empty for them, rather than offering the last owner's choices.
+  const f = (S.tf[id] = S.tf[id] && S.tf[id].task === t && S.tf[id].owner === t.who ? S.tf[id] : { task: t, owner: t.who, decision: '', allowed: '', reason: '', comment: '', errors: {} });
   const isClaim = t.target.startsWith('CLAIM'), c = isClaim ? CLAIMS[t.target] : CASES[t.target];
   const stale = isClaim && !t.done && !OPEN_STATES.includes(c.state);
   const need = STEP_GROUPS[t.node], notMine = !!need && !inGroup([need]);
-  const e = f.errors, er = (k) => (e[k] ? `<div class="err" id="e-${k}">${esc(e[k])}</div>` : '');
+  // A draft is its owner's. Anyone else who opens the task reads the form empty and disabled, never the
+  // owner's unsaved choices, and cannot change what the owner will later complete.
+  const own = !t.done && !stale && !notMine && t.who === S.persona;
+  const v = own ? f : { decision: '', allowed: '', reason: '', comment: '', errors: {} };
+  const e = v.errors, er = (k) => (e[k] ? `<div class="err" id="e-${k}">${esc(e[k])}</div>` : '');
   let form = '';
   if (t.node === 'Determine') {
-    form = `<div class="f"><span>Decision (required)</span>${radio('decision', [['approve', 'Approve'], ['deny', 'Deny'], ['pend', 'Pend for information']], f.decision)}</div>${er('decision')}
-      ${f.decision === 'approve' ? `<label class="f"><span>Allowed amount, USD (required, at most the billed ${money(c.billed)})</span><input type="number" min="0.01" step="0.01" data-act="tfv" data-k="allowed" value="${esc(f.allowed)}" ${e.allowed ? 'aria-invalid="true" aria-describedby="e-allowed"' : ''}></label>${er('allowed')}${c.billed > SUPERVISOR_LIMIT ? `<p class="help">Over ${moneyText(SUPERVISOR_LIMIT)}, approving sends the claim to a supervisor (step “Supervisor approval”).</p>` : ''}` : ''}
-      ${f.decision === 'deny' ? `<label class="f"><span>Denial reason (required when denying)</span><select data-act="tfv" data-k="reason" ${e.reason ? 'aria-invalid="true" aria-describedby="e-reason"' : ''}><option value="">Choose a reason</option>${DENIAL_REASONS.map(([k, l]) => `<option value="${k}" ${f.reason === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>${er('reason')}<p class="help">Shown only when the decision is Deny: a field rule in the task layout.</p>` : ''}
-      ${f.decision ? `<label class="f"><span>Letter to send</span><select data-act="noop"><option>${f.decision === 'deny' ? 'Denial with appeal rights' : f.decision === 'approve' ? 'Approval and payment notice' : 'Request for information'}</option></select></label>` : ''}`;
+    form = `<div class="f"><span>Decision (required)</span>${radio('decision', [['approve', 'Approve'], ['deny', 'Deny'], ['pend', 'Pend for information']], v.decision)}</div>${er('decision')}
+      ${v.decision === 'approve' ? `<label class="f"><span>Allowed amount, USD (required, at most the billed ${money(c.billed)})</span><input type="number" min="0.01" step="0.01" data-act="tfv" data-k="allowed" value="${esc(v.allowed)}" ${e.allowed ? 'aria-invalid="true" aria-describedby="e-allowed"' : ''}></label>${er('allowed')}${c.billed > SUPERVISOR_LIMIT ? `<p class="help">Over ${moneyText(SUPERVISOR_LIMIT)}, approving sends the claim to a supervisor (step “Supervisor approval”).</p>` : ''}` : ''}
+      ${v.decision === 'deny' ? `<label class="f"><span>Denial reason (required when denying)</span><select data-act="tfv" data-k="reason" ${e.reason ? 'aria-invalid="true" aria-describedby="e-reason"' : ''}><option value="">Choose a reason</option>${DENIAL_REASONS.map(([k, l]) => `<option value="${k}" ${v.reason === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>${er('reason')}<p class="help">Shown only when the decision is Deny: a field rule in the task layout.</p>` : ''}
+      ${v.decision ? `<label class="f"><span>Letter to send</span><select data-act="noop"><option>${v.decision === 'deny' ? 'Denial with appeal rights' : v.decision === 'approve' ? 'Approval and payment notice' : 'Request for information'}</option></select></label>` : ''}`;
   } else if (t.node === 'Supervisor approval') {
     // The approver sees what the approval pays, not just a button.
-    form = `<p>Approving pays <strong>${moneyText(c.allowed ?? c.billed)}</strong> of the ${moneyText(c.billed)} billed${c.allowed == null ? ': no allowed amount was set, so this is the billed amount' : ', as determined'}.</p><div class="f"><span>Decision (required)</span>${radio('decision', [['approve', 'Approve payment'], ['return', 'Return to the adjuster']], f.decision)}</div>${er('decision')}`;
+    form = `<p>Approving pays <strong>${moneyText(c.allowed ?? c.billed)}</strong> of the ${moneyText(c.billed)} billed${c.allowed == null ? ': no allowed amount was set, so this is the billed amount' : ', as determined'}.</p><div class="f"><span>Decision (required)</span>${radio('decision', [['approve', 'Approve payment'], ['return', 'Return to the adjuster']], v.decision)}</div>${er('decision')}`;
   } else if (t.node === 'Medical review') {
-    form = `<div class="f"><span>Recommendation (required)</span>${radio('decision', [['uphold', 'Uphold the denial'], ['overturn', 'Overturn the denial']], f.decision)}</div>${er('decision')}<label class="sw" style="margin:8px 0"><input type="checkbox" data-act="noop"><span>I attest that I reviewed the medical records</span></label>`;
+    form = `<div class="f"><span>Recommendation (required)</span>${radio('decision', [['uphold', 'Uphold the denial'], ['overturn', 'Overturn the denial']], v.decision)}</div>${er('decision')}<label class="sw" style="margin:8px 0"><input type="checkbox" data-act="noop"><span>I attest that I reviewed the medical records</span></label>`;
   } else if (t.node === 'Decision') {
-    form = `<p>The medical review recommends: <strong>${t.recommendation === 'overturn' ? 'overturn the denial' : 'uphold the denial'}</strong>.</p><div class="f"><span>Decision (required)</span>${radio('decision', [['uphold', 'Uphold the denial'], ['overturn', 'Overturn the denial']], f.decision)}</div>${er('decision')}<p class="help" style="margin-left:0">The member is sent the decision letter, with its reasons and any further appeal rights.</p>`;
+    form = `<p>The medical review recommends: <strong>${t.recommendation === 'overturn' ? 'overturn the denial' : 'uphold the denial'}</strong>.</p><div class="f"><span>Decision (required)</span>${radio('decision', [['uphold', 'Uphold the denial'], ['overturn', 'Overturn the denial']], v.decision)}</div>${er('decision')}<p class="help" style="margin-left:0">The member is sent the decision letter, with its reasons and any further appeal rights.</p>`;
   } else {
-    form = `<div class="f"><span>Outcome (required)</span>${radio('decision', [['resolved', 'Resolved on the call'], ['follow', 'Needs follow-up']], f.decision)}</div>${er('decision')}`;
+    form = `<div class="f"><span>Outcome (required)</span>${radio('decision', [['resolved', 'Resolved on the call'], ['follow', 'Needs follow-up']], v.decision)}</div>${er('decision')}`;
   }
   const facts = isClaim
     ? `<dl class="kv"><div><dt>Member</dt><dd>${mLink(c.member)}</dd></div><div><dt>Provider</dt><dd>${pLink(c.provider)}</dd></div><div><dt>Billed</dt><dd>${money(c.billed)}</dd></div><div><dt>Diagnosis</dt><dd>${c.dx}</dd></div><div><dt>Lines</dt><dd>${c.lines.map((l) => l[0]).join(', ')}</dd></div></dl>${c.flag ? `<div class="banner warn" style="margin-top:12px">${ic('flag')}${esc(c.flag)}</div>` : ''}`
@@ -35,7 +41,7 @@ P.task = (r) => {
   return head(esc(t.n), `${esc(t.wf)} · step “${esc(t.node)}” · on ${tLink(t.target)} · ${sla(t.due)}`, ['s4', 's2']) +
     (t.done ? (t.closedByState ? `<div class="banner">${ic('info')}Closed when ${t.target} moved to ${CLAIM_STATE_LABEL[t.closedByState]} from its own page.</div>` : `<div class="banner ok">${ic('circle_check')}Completed. The claim moved on.</div>`) : stale ? `<div class="banner warn">${ic('info')}${t.target} is ${CLAIM_STATE_LABEL[c.state]}, so this task no longer applies.</div>` : '') +
     `<div class="split"><div class="card"><h2>Task form</h2>${notMine ? `<div class="banner warn">${ic('lock')}“${esc(t.node)}” is for ${need}. You can read it but not complete it.</div>` : t.who !== S.persona ? `<div class="banner warn">${ic('lock')}Assigned to ${esc(pName(t.who))}. You can read it but not complete it.</div>` : ''}
-      ${form}<label class="f"><span>Comment (type @ to mention someone)</span><textarea data-act="tfv" data-k="comment">${esc(f.comment)}</textarea></label>
+      <fieldset class="tf" ${own ? '' : 'disabled'}>${form}<label class="f"><span>Comment (type @ to mention someone)</span><textarea data-act="tfv" data-k="comment">${esc(v.comment)}</textarea></label></fieldset>
       ${Object.keys(e).length ? `<div class="banner err" role="alert">${ic('critical')}${Object.keys(e).length} field${Object.keys(e).length > 1 ? 's' : ''} to correct.</div>` : ''}
       <div class="row"><button class="primary" data-act="complete" data-id="${id}" ${t.done || stale || notMine || t.who !== S.persona ? 'disabled' : ''}>Complete task</button><button data-act="reassign" data-id="${id}">${ic('reassign', 1)}Reassign</button></div></div>
     <div><div class="card"><h2>${isClaim ? 'Claim' : 'Case'} at a glance</h2>${facts}</div><div class="card"><h2>Documents</h2>${(isClaim ? c.docs : Object.keys(DOCS).filter((d) => DOCS[d].case === t.target)).map((d) => `<div class="field">${ic('pdf', 1)}<span style="flex:1">${esc(DOCS[d].n)}</span><button class="sm link" data-act="preview" data-id="${d}">Preview</button></div>`).join('') || '<p class="muted">None attached.</p>'}</div></div></div>` +
@@ -112,7 +118,7 @@ P.notifications = () => {
 
 // ---- several apps on one server, chosen by group (section 5)
 P.apps = () => head('Apps on this server', 'One Nuxeo, several purpose-built apps. Each has its own navigation, home and branding, and shows only to its groups.', ['b5', 's0']) +
-  `<div class="apps">${APPS.map((a) => `<a href="${a.id === 'documents' ? '#/more' : '#/home'}" data-act="${a.id === 'documents' ? 'go-docs' : 'go-app'}" data-id="${a.id}">${ic(a.icon)}<span><strong>${esc(a.n)}</strong><br><span class="muted">${esc(a.d)}</span><br><span class="badge">${a.groups.length ? a.groups.join(', ') : 'everyone'}</span></span></a>`).join('')}</div>` +
+  `<div class="apps">${APPS.filter((a) => (a.kit === me().kit || a.kit === 'any') && !a.external).map((a) => `<a href="${a.id === 'documents' ? '#/more' : '#/home'}" data-act="${a.id === 'documents' ? 'go-docs' : 'go-app'}" data-id="${a.id}">${ic(a.icon)}<span><strong>${esc(a.n)}</strong><br><span class="muted">${esc(a.d)}</span><br><span class="badge">${a.groups.length ? a.groups.join(', ') : 'everyone'}</span></span></a>`).join('')}</div>` +
   note('Today the server serves one app, and presets switch branding per browser on demo servers only. This page is a later decision (section 9).');
 
 // ---- the ECM side stays available, but is not the default experience

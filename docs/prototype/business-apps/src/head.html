@@ -179,6 +179,7 @@ tr.sel td{background:color-mix(in srgb,var(--mat-sys-primary) 8%,transparent)}
 .apps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .apps a{display:flex;gap:12px;align-items:center;border:1px solid var(--mat-sys-outline-variant);border-radius:12px;padding:14px;text-decoration:none;color:inherit;background:var(--mat-sys-surface-container-lowest)}
 .apps a:hover{border-color:var(--mat-sys-primary)}
+fieldset.tf{border:0;margin:0;padding:0;min-width:0}
 .dia{position:fixed;inset:0;background:color-mix(in srgb,var(--mat-sys-scrim) 32%,transparent);display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
 .dia>div{background:var(--mat-sys-surface-container-high);border-radius:24px;box-shadow:var(--mat-sys-level3);max-width:600px;width:100%;padding:24px;max-height:90vh;overflow:auto}
 .dia h2{font:var(--mat-sys-headline-small);margin-bottom:12px}
@@ -188,6 +189,32 @@ tr.sel td{background:color-mix(in srgb,var(--mat-sys-primary) 8%,transparent)}
 #toast button{border:0;background:none;color:var(--mat-sys-inverse-primary);height:36px;padding:0 8px}
 /* On the dark toast the primary ring is about 2:1; the inverse primary is the toast's own accent. */
 #toast button:focus-visible{outline-color:var(--mat-sys-inverse-primary)}
+/* Brand assets (DAM): a grid of previews, the preview with pins, a film's timeline, a watermark. */
+.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.acard{position:relative;display:flex;flex-direction:column;border:1px solid var(--mat-sys-outline-variant);border-radius:12px;overflow:hidden;background:var(--mat-sys-surface-container-lowest)}
+.acard.sel{border:2px solid var(--mat-sys-primary)}
+.acard .th{position:relative;display:block;aspect-ratio:4/5;overflow:hidden;background:var(--mat-sys-surface-container)}
+.acard .meta{padding:8px 10px 10px;display:flex;flex-direction:column;gap:6px;font:var(--mat-sys-body-small)}
+.acard .meta strong{font:var(--mat-sys-label-large)}
+.acard .meta .st{white-space:normal;height:auto;min-height:24px;padding:2px 10px}
+.acard .th.gone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--mat-sys-on-surface-variant);font:var(--mat-sys-label-large)}
+.acard>input[type=checkbox]{position:absolute;top:8px;left:8px;z-index:2;width:20px;height:20px;margin:0;accent-color:var(--mat-sys-primary)}
+.acard .kind{position:absolute;right:8px;bottom:8px;display:inline-flex;gap:4px;align-items:center;height:24px;padding:0 8px;border-radius:12px;background:color-mix(in srgb,var(--mat-sys-scrim) 55%,transparent);color:var(--mat-sys-on-primary);font:var(--mat-sys-label-small)}
+.art{display:block;width:100%;height:100%}
+.pv{position:relative;max-width:300px;margin:0 auto;border-radius:12px;overflow:hidden;background:var(--mat-sys-surface-container)}
+.pv .art{height:auto;aspect-ratio:4/5}
+.pv.video{max-width:none}.pv.video .art{aspect-ratio:16/9}
+.pv.addable{cursor:crosshair;outline:2px dashed var(--mat-sys-primary);outline-offset:3px}
+.pin{position:absolute;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:2px solid var(--mat-sys-on-primary);background:var(--mat-sys-primary);color:var(--mat-sys-on-primary);font:var(--mat-sys-label-medium);display:flex;align-items:center;justify-content:center;box-shadow:var(--mat-sys-level2)}
+.pv.addable .pin{pointer-events:none}
+.pin.done{background:var(--mat-sys-surface-container-highest);color:var(--mat-sys-on-surface-variant);border-color:var(--mat-sys-outline)}
+.pin.static{position:static;margin:0;flex:none}
+.play{position:absolute;left:50%;top:50%;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;background:color-mix(in srgb,var(--mat-sys-scrim) 55%,transparent);color:var(--mat-sys-on-primary);display:flex;align-items:center;justify-content:center}
+.scrub{position:relative;height:8px;border-radius:4px;background:var(--mat-sys-surface-container-highest);margin:14px 0 6px}
+.scrub>i{position:absolute;left:0;top:0;bottom:0;width:35%;border-radius:4px;background:var(--mat-sys-primary)}
+.scrub>b{position:absolute;top:-5px;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:var(--sat-sys-on-cat-orange-container);border:2px solid var(--mat-sys-surface)}
+.mini{display:block;width:40px;height:50px;border-radius:6px;overflow:hidden}.mini.video{width:64px;height:36px}
+.wm{position:absolute;inset:-30%;display:flex;flex-wrap:wrap;align-content:space-around;justify-content:space-around;gap:18px 28px;transform:rotate(-24deg);pointer-events:none;font:600 12px/1 var(--mat-sys-body-large-font);letter-spacing:.18em;color:color-mix(in srgb,var(--mat-sys-on-surface) 26%,transparent)}
 .meter{height:8px;background:var(--mat-sys-surface-container-highest);border-radius:4px;overflow:hidden}.meter>i{display:block;height:100%;background:var(--mat-sys-primary)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .muted{color:var(--mat-sys-on-surface-variant)}
