@@ -22,6 +22,8 @@ P.task = (r) => {
     form = `<p>Approving pays <strong>${moneyText(c.allowed ?? c.billed)}</strong> of the ${moneyText(c.billed)} billed${c.allowed == null ? ': no allowed amount was set, so this is the billed amount' : ', as determined'}.</p><div class="f"><span>Decision (required)</span>${radio('decision', [['approve', 'Approve payment'], ['return', 'Return to the adjuster']], f.decision)}</div>${er('decision')}`;
   } else if (t.node === 'Medical review') {
     form = `<div class="f"><span>Recommendation (required)</span>${radio('decision', [['uphold', 'Uphold the denial'], ['overturn', 'Overturn the denial']], f.decision)}</div>${er('decision')}<label class="sw" style="margin:8px 0"><input type="checkbox" data-act="noop"><span>I attest that I reviewed the medical records</span></label>`;
+  } else if (t.node === 'Decision') {
+    form = `<p>The medical review recommends: <strong>${t.recommendation === 'overturn' ? 'overturn the denial' : 'uphold the denial'}</strong>.</p><div class="f"><span>Decision (required)</span>${radio('decision', [['uphold', 'Uphold the denial'], ['overturn', 'Overturn the denial']], f.decision)}</div>${er('decision')}<p class="help" style="margin-left:0">The member is sent the decision letter, with its reasons and any further appeal rights.</p>`;
   } else {
     form = `<div class="f"><span>Outcome (required)</span>${radio('decision', [['resolved', 'Resolved on the call'], ['follow', 'Needs follow-up']], f.decision)}</div>${er('decision')}`;
   }

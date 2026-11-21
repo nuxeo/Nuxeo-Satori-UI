@@ -90,8 +90,26 @@ function completeTask(id) {
       setState(t.target, 'inReview', {}, () => { reopen(); delete TASKS[rid]; });
     }
   } else {
-    logOn(t.target, 'circle_check', `${t.n} completed by ${me().n}: ${f.decision}`);
-    toast(`${t.n} completed`, () => { reopen(); S.log.shift(); });
+    // Every outcome on a case leads somewhere: a next task, or a decided case. One Undo takes it all back.
+    const k = CASES[t.target], before = { ...k };
+    let next = null, msg = `${t.n} completed`;
+    if (t.node === 'Callback' && f.decision === 'follow') {
+      next = { n: 'Follow up with the member', wf: t.wf, node: 'Callback', target: t.target, who: t.who, due: '2026-11-25' };
+      msg = 'Follow-up task created';
+    } else if (t.node === 'Callback') {
+      Object.assign(k, { state: 'decided', determination: 'Resolved on the call' });
+      msg = `${t.target} resolved on the call`;
+    } else if (t.node === 'Medical review') {
+      next = { n: 'Decide the appeal', wf: t.wf, node: 'Decision', target: t.target, who: k.assignee || 'sam', due: k.due, recommendation: f.decision };
+      msg = 'Sent for the appeal decision';
+    } else if (t.node === 'Decision') {
+      Object.assign(k, { state: 'decided', determination: f.decision === 'overturn' ? 'Denial overturned' : 'Denial upheld' });
+      msg = `${t.target}: ${k.determination.toLowerCase()}`;
+    }
+    const nid = next ? nextId(TASKS, 'T-') : null;
+    if (next) TASKS[nid] = next;
+    logOn(t.target, 'circle_check', `${t.n} completed by ${me().n}: ${f.decision}${next ? `; next: ${next.n}` : ''}`);
+    toast(msg, () => { restore(k, before); if (nid) delete TASKS[nid]; reopen(); S.log.shift(); });
   }
   location.hash = '#/' + (t.target.startsWith('CLAIM') ? 'claim/' : 'case/') + t.target;
 }

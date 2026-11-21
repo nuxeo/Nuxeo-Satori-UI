@@ -22,10 +22,10 @@ function kpis() {
     return k('My open claims', my.length, 'Assigned to you', '#/queue/mine') + k('Due this week', my.filter((c) => c.due && daysTo(c.due) >= 0 && daysTo(c.due) <= 7).length, 'Determination date', '#/queue/mine', 'warn') + k('Overdue', my.filter((c) => c.due && daysTo(c.due) < 0).length, 'Past determination date', '#/queue/mine', 'bad') + k('Unassigned', queueItems(QUEUES[0]).length, 'Waiting in the team queue', '#/queue/unassigned');
   }
   if (g.includes('appeals')) {
-    const open = Object.values(CASES).filter((c) => c.type === 'Appeal' && c.state !== 'closed');
+    const open = Object.values(CASES).filter((c) => c.type === 'Appeal' && !['decided', 'closed'].includes(c.state));
     return k('Open appeals', open.length, 'Assigned to you', '#/queue/appeals') + k('Regulatory deadline in 14 days', open.filter((c) => daysTo(c.due) <= 14).length, '30-day limit', '#/queue/appeals', 'warn') + k('Missing documents', open.reduce((s, c) => s + c.checklist.filter((x) => !x[1]).length, 0), 'On your checklists', '#/case/CASE-2041', 'warn') + k('Decided this month', 9, '100% within deadline', '#/reports');
   }
-  return k('Callbacks today', myTasks().length, 'From grievances', '#/queue/callbacks', 'warn') + k('Open grievances', Object.values(CASES).filter((c) => c.type === 'Grievance').length, 'All members', '#/queue/callbacks') + k('Calls logged', 23, 'This week', '#/home');
+  return k('Callbacks today', myTasks().length, 'From grievances', '#/queue/callbacks', 'warn') + k('Open grievances', Object.values(CASES).filter((c) => c.type === 'Grievance' && !['decided', 'closed'].includes(c.state)).length, 'All members', '#/queue/callbacks') + k('Calls logged', 23, 'This week', '#/home');
 }
 P.home = () => {
   const p = me(), t = myTasks(), q = myQueues();
