@@ -1,10 +1,10 @@
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, type Observable, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ARENDER_CONFIG } from '../arender.config';
+import { ARENDER_CONFIG, ARENDER_PREPARE_SESSION } from '../arender.config';
 import { ARenderService } from './arender.service';
 
 /**
@@ -37,13 +37,17 @@ const SERVER_URL = 'https://arender.example.com/?documentId=default,doc-1,file:c
 
 let http: HttpTestingController;
 
-function setup(cfg: { viewerOrigin: string; nuxeoInternalUrl: string } | null) {
+function setup(
+  cfg: { viewerOrigin: string; nuxeoInternalUrl: string } | null,
+  prepare?: () => Observable<boolean>,
+) {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
     providers: [
       provideHttpClient(withXhr()),
       provideHttpClientTesting(),
       { provide: ARENDER_CONFIG, useValue: cfg },
+      ...(prepare ? [{ provide: ARENDER_PREPARE_SESSION, useValue: prepare }] : []),
     ],
   });
   http = TestBed.inject(HttpTestingController);
@@ -57,6 +61,32 @@ describe('ARenderService', () => {
 
   afterEach(() => {
     http.verify();
+  });
+
+  it('does not launch either viewer when the browser session cannot be prepared', async () => {
+    const prepare = vi.fn(() => of(false));
+    const service = setup(CONFIGURED, prepare);
+    await expect(firstValueFrom(service.getPreviewerUrl('doc-1'))).resolves.toBeNull();
+    await expect(firstValueFrom(service.getDiffUrl('doc-1', 'doc-2'))).resolves.toBeNull();
+    expect(prepare).toHaveBeenCalledTimes(2);
+    http.expectNone(PREVIEW_OP);
+    http.expectNone(DIFF_OP);
+  });
+
+  it('degrades to built-in preview when authentication preparation errors', async () => {
+    const service = setup(CONFIGURED, () => throwError(() => new Error('session unavailable')));
+    await expect(firstValueFrom(service.getPreviewerUrl('doc-1'))).resolves.toBeNull();
+    http.expectNone(PREVIEW_OP);
+  });
+
+  it('rechecks authentication for every viewer launch', async () => {
+    const prepare = vi.fn().mockReturnValueOnce(of(true)).mockReturnValueOnce(of(false));
+    const service = setup(CONFIGURED, prepare);
+    const first = firstValueFrom(service.getPreviewerUrl('doc-1'));
+    http.expectOne(PREVIEW_OP).flush({ previewerUrl: SERVER_URL });
+    await expect(first).resolves.toBe(SERVER_URL);
+    await expect(firstValueFrom(service.getPreviewerUrl('doc-1'))).resolves.toBeNull();
+    expect(prepare).toHaveBeenCalledTimes(2);
   });
 
   describe('when ARender is not configured', () => {

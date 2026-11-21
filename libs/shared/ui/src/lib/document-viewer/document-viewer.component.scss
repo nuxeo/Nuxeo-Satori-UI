@@ -23,6 +23,21 @@
 }
 
 /* ─── Content area ─── */
+.viewer-recovery {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  span {
+    flex: 1 1 240px;
+  }
+}
+
 .viewer-content {
   flex: 1;
   display: flex;

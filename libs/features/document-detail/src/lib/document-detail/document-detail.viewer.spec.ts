@@ -779,6 +779,51 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
   });
 
   describe('ARender previewer', () => {
+    it('retries a failed connection and obtains a fresh document URL', async () => {
+      mockARender.isAvailable.mockReturnValue(of(false));
+      await build(
+        doc({
+          properties: {
+            'file:content': { name: 'a.pdf', 'mime-type': 'application/pdf', digest: 'd' },
+          },
+        }),
+      );
+      expect(component.arenderLoading()).toBe(false);
+      mockARender.isAvailable.mockReturnValue(of(true));
+      mockARender.getPreviewerUrl.mockReturnValue(of('https://arender/view/doc-1'));
+      component.retryARender();
+      expect(mockARender.getPreviewerUrl).toHaveBeenCalledWith('doc-1', 'file:content');
+      expect(component.arenderUrl()).not.toBeNull();
+      expect(component.arenderLoading()).toBe(false);
+    });
+
+    it('times out a stalled connection and allows another attempt without accepting its late response', async () => {
+      mockARender.isAvailable.mockReturnValue(of(false));
+      await build(
+        doc({
+          properties: {
+            'file:content': { name: 'a.pdf', 'mime-type': 'application/pdf', digest: 'd' },
+          },
+        }),
+      );
+      vi.useFakeTimers();
+      const pending = new Subject<boolean>();
+      mockARender.isAvailable.mockReturnValue(pending);
+      component.retryARender();
+      expect(component.arenderLoading()).toBe(true);
+      const calls = mockARender.isAvailable.mock.calls.length;
+      component.retryARender();
+      expect(mockARender.isAvailable).toHaveBeenCalledTimes(calls);
+      vi.advanceTimersByTime(15000);
+      expect(component.arenderLoading()).toBe(false);
+      pending.next(true);
+      expect(mockARender.getPreviewerUrl).not.toHaveBeenCalled();
+      mockARender.isAvailable.mockReturnValue(of(true));
+      mockARender.getPreviewerUrl.mockReturnValue(of('https://arender/view/doc-1'));
+      component.retryARender();
+      expect(component.arenderUrl()).not.toBeNull();
+    });
+
     it('shows the previewer when the server offers one', async () => {
       mockARender.isAvailable.mockReturnValue(of(true));
       mockARender.getPreviewerUrl.mockReturnValue(of('https://arender/view/doc-1'));
