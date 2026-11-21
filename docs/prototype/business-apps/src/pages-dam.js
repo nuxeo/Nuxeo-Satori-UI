@@ -130,7 +130,8 @@ P.share = (r) => {
 const STEP_STATE = { 'Creative review': 'inReview', 'Licensor approval': 'licensorReview', 'Rights renewal': 'approved' };
 P.assetTask = (r) => {
   const id = r[1], t = TASKS[id], a = ASSETS[t.target];
-  const f = (S.tf[id] = S.tf[id] && S.tf[id].task === t ? S.tf[id] : { task: t, decision: '', comment: '', date: '', pins: [], vnotes: [], errors: {} });
+  // The draft is this task's and its owner's, as in P.task: reassigning the task starts it empty.
+  const f = (S.tf[id] = S.tf[id] && S.tf[id].task === t && S.tf[id].owner === t.who ? S.tf[id] : { task: t, owner: t.who, decision: '', comment: '', date: '', pins: [], vnotes: [], errors: {} });
   const need = STEP_GROUPS[t.node], notMine = !!need && !inGroup([need]);
   const stale = !t.done && a.state !== STEP_STATE[t.node];
   const canDo = !t.done && !stale && !notMine && t.who === S.persona;

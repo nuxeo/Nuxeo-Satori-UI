@@ -8,8 +8,9 @@ P.task = (r) => {
   if (!t) return P.notFound();
   if (t.target.startsWith('AST')) return P.assetTask(r);
   // A draft belongs to this task, not to its id: an id freed by Undo and reused by a new task must
-  // not hand the new task the old one's choices.
-  const f = (S.tf[id] = S.tf[id] && S.tf[id].task === t ? S.tf[id] : { task: t, decision: '', allowed: '', reason: '', comment: '', errors: {} });
+  // not hand the new task the old one's choices. It also belongs to the owner who wrote it: a task
+  // reassigned to someone else starts empty for them, rather than offering the last owner's choices.
+  const f = (S.tf[id] = S.tf[id] && S.tf[id].task === t && S.tf[id].owner === t.who ? S.tf[id] : { task: t, owner: t.who, decision: '', allowed: '', reason: '', comment: '', errors: {} });
   const isClaim = t.target.startsWith('CLAIM'), c = isClaim ? CLAIMS[t.target] : CASES[t.target];
   const stale = isClaim && !t.done && !OPEN_STATES.includes(c.state);
   const need = STEP_GROUPS[t.node], notMine = !!need && !inGroup([need]);
