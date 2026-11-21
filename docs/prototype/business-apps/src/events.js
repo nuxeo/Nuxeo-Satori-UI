@@ -200,7 +200,9 @@ document.addEventListener('click', (ev) => {
       break;
     }
     case 'op-records': {
-      const rec = CLAIMS[id] ? PROVIDERS[CLAIMS[id].provider].n : 'Summit Health Partners';
+      // The provider of the claim the record is about: the claim itself, or a case's own claim.
+      const about = CLAIMS[id] || CLAIMS[CASES[id]?.claim];
+      const rec = about ? PROVIDERS[about.provider].n : 'the provider on file';
       ask('Send a records request?', `<p>To <strong>${esc(rec)}</strong>, due in 14 days.</p><dl class="side-kv"><dt>Runs</dt><dd><code>Claim.RequestMedicalRecords</code> on the server</dd><dt>Parameters</dt><dd><code>recipient = ${esc(rec)}</code>, <code>dueInDays = 14</code></dd></dl>`, 'Send request', () => {
         logOn(id, 'send', `Medical records requested from ${rec}, due Dec 5, 2026`);
         toast('Request sent, due Dec 5, 2026');
@@ -229,7 +231,18 @@ document.addEventListener('click', (ev) => {
     }
     case 'edit-claim': {
       const c = CLAIMS[id];
-      ask(`Edit ${id}`, `<label class="f"><span>Allowed amount, USD (at most ${moneyText(c.billed)})</span><input type="number" min="0" step="0.01" id="al" value="${c.allowed ?? ''}"></label><div class="err" id="ale"></div>${c.state === 'denied' ? `<label class="f"><span>Denial reason (shown because the claim is denied)</span><select id="dr2">${DENIAL_REASONS.map(([k, l]) => `<option value="${k}" ${k === c.denial ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}`, 'Save', (d) => {
+      // The allowed amount is the determination's to set. Once the claim is decided it is what was
+      // approved (or $0.00 on a denial): changing it then would pay an amount nobody approved.
+      const amountOpen = OPEN_STATES.includes(c.state);
+      const amountField = amountOpen
+        ? `<label class="f"><span>Allowed amount, USD (at most ${moneyText(c.billed)})</span><input type="number" min="0" step="0.01" id="al" value="${c.allowed ?? ''}"></label><div class="err" id="ale"></div>`
+        : `<p><strong>${c.state === 'denied' ? 'Allowed' : 'Approved'} amount: ${moneyText(c.allowed ?? 0)}</strong>. It was set when the claim was ${CLAIM_STATE_LABEL[c.state].toLowerCase()}; changing it needs a new determination.</p>`;
+      ask(`Edit ${id}`, `${amountField}${c.state === 'denied' ? `<label class="f"><span>Denial reason (shown because the claim is denied)</span><select id="dr2">${DENIAL_REASONS.map(([k, l]) => `<option value="${k}" ${k === c.denial ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : ''}`, 'Save', (d) => {
+        if (!amountOpen) {
+          if (c.state === 'denied') c.denial = d.querySelector('#dr2').value;
+          toast('Saved');
+          return;
+        }
         const f = d.querySelector('#al'), v = Number(f.value);
         if (f.value !== '' && (Number.isNaN(v) || v < 0)) { f.setAttribute('aria-invalid', 'true'); d.querySelector('#ale').textContent = 'The allowed amount cannot be below $0.00.'; f.focus(); return false; }
         // $0.00 belongs to a denied claim; on any other it would approve a zero payment.
