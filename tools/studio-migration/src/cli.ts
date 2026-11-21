@@ -1,0 +1,173 @@
+/**
+ * npx tsx tools/studio-migration/src/cli.ts inventory <package.zip> [--json]
+ *
+ * Reads a Studio package and prints what it holds and what each part becomes. Exit codes:
+ * 0 the package was read; 1 it could not be read, with the reason; 2 the command was wrong.
+ * Reading never runs anything from the package.
+ */
+import { readFileSync } from 'node:fs';
+import { account, type Accounting } from './account';
+import { CatalogueError, loadCatalogue, type How } from './catalogue';
+import { inventory, type FileKind, type Inventory } from './inventory';
+import { readStudioPackage, StudioPackageError } from './studio-package';
+import { ZipError } from './zip';
+
+export interface CliIo {
+  readonly out: (text: string) => void;
+  readonly err: (text: string) => void;
+  readonly readFile: (path: string) => Buffer;
+}
+
+const USAGE = 'usage: studio-migration inventory <package.zip> [--json]\n';
+
+export function main(argv: readonly string[], io: CliIo): number {
+  const [command, ...rest] = argv;
+  const json = rest.includes('--json');
+  const paths = rest.filter((arg) => arg !== '--json');
+  if (
+    command !== 'inventory' ||
+    paths.length !== 1 ||
+    rest.some((arg) => arg.startsWith('--') && arg !== '--json')
+  ) {
+    io.err(USAGE);
+    return 2;
+  }
+  const [path] = paths;
+  let result: Inventory;
+  let accounting: Accounting;
+  try {
+    result = inventory(readStudioPackage(io.readFile(path)));
+    accounting = account(result, loadCatalogue());
+  } catch (error) {
+    if (
+      error instanceof ZipError ||
+      error instanceof StudioPackageError ||
+      error instanceof CatalogueError ||
+      (error as NodeJS.ErrnoException).code === 'ENOENT'
+    ) {
+      io.err(`${path}: ${(error as Error).message}\n`);
+      return 1;
+    }
+    throw error;
+  }
+  io.out(
+    json ? `${JSON.stringify(toJson(result, accounting), null, 2)}\n` : summary(result, accounting),
+  );
+  return 0;
+}
+
+export function summary(result: Inventory, accounting: Accounting): string {
+  const lines: string[] = [];
+  const { descriptor } = result;
+  lines.push(
+    `${descriptor.name} ${descriptor.version}: a ${descriptor.type} package for ${descriptor.targetPlatform ?? 'any platform'}` +
+      (descriptor.targetPlatformName ? ` (${descriptor.targetPlatformName})` : '') +
+      (descriptor.dependencies.length
+        ? `, depending on ${descriptor.dependencies.join(', ')}`
+        : ''),
+    '',
+  );
+
+  const inPackage = result.files.filter((file) => file.location === 'package').length;
+  lines.push(
+    `Files: ${result.files.length}, ${inPackage} in the package and ${result.files.length - inPackage} in its bundle`,
+  );
+  const kinds = new Map<FileKind, number>();
+  for (const file of result.files) kinds.set(file.kind, (kinds.get(file.kind) ?? 0) + 1);
+  lines.push(`  ${[...kinds].map(([kind, count]) => `${kind} ${count}`).join(', ')}`);
+
+  const contributions = result.model.reduce((total, m) => total + m.contributions, 0);
+  lines.push(
+    `Model: ${contributions} contributions to ${result.model.length} extension points. They stay on the server; nothing to convert.`,
+  );
+
+  lines.push(`Document layouts: ${result.layouts.length}`);
+  const byType = new Map<string, string[]>();
+  for (const layout of result.layouts) {
+    const type = layout.docType ?? '(no @doctype)';
+    byType.set(type, [
+      ...(byType.get(type) ?? []),
+      `${layout.mode} (${layout.fields.length} fields)`,
+    ]);
+  }
+  for (const [type, modes] of byType) lines.push(`  ${type}: ${modes.join(', ')}`);
+
+  const providers = [
+    ...new Set(result.searches.map((search) => search.provider ?? '(no @search)')),
+  ];
+  lines.push(`Search screens: ${providers.length}`);
+  for (const provider of providers) {
+    const parts = result.searches.filter(
+      (search) => (search.provider ?? '(no @search)') === provider,
+    );
+    const described = parts.map((part) =>
+      part.part === 'form'
+        ? `a form with ${part.fields.length} fields`
+        : `results with ${part.columns} columns, shown as ${part.views.join(', ') || 'nothing'}`,
+    );
+    lines.push(`  ${provider}: ${described.join('; ')}`);
+  }
+
+  lines.push(`Slot contributions: ${accounting.slots.length}`);
+  for (const { contribution, entry } of accounting.slots) {
+    const target = !entry
+      ? 'not in the catalogue'
+      : entry.slot
+        ? `${entry.how} → ${entry.slot}`
+        : entry.layer0
+          ? `${entry.how} → Layer 0 ${entry.layer0}`
+          : entry.how;
+    lines.push(`  ${contribution.slot.padEnd(26)} ${contribution.name.padEnd(24)} ${target}`);
+  }
+
+  const withCode = result.customCode.filter((custom) => custom.hasCode);
+  lines.push(
+    `Custom code: ${withCode.length ? withCode.map((custom) => custom.path).join(', ') : 'none'}`,
+  );
+
+  if (result.dashboard) {
+    const repeats = result.dashboard.cards.filter((card) => card.repeatOf !== null).length;
+    lines.push(
+      `Dashboard: ${result.dashboard.cards.length} cards${repeats ? `, ${repeats} of them a repeat` : ''}`,
+    );
+  }
+
+  for (const theme of accounting.themes) {
+    const mapped = theme.mappings.filter((mapping) => mapping.token !== null).length;
+    lines.push(
+      `Theme ${theme.theme}: ${theme.mappings.length} properties, ${mapped} set a token and ${theme.mappings.length - mapped} are reported`,
+    );
+  }
+
+  lines.push(
+    `Translations: ${result.translations.map((t) => `${t.locale} ${t.keys.length} keys`).join(', ') || 'none'}`,
+  );
+
+  const byHow = new Map<How | 'not in the catalogue', number>();
+  for (const outcome of accounting.elements) {
+    const how = outcome.entry?.how ?? 'not in the catalogue';
+    byHow.set(how, (byHow.get(how) ?? 0) + 1);
+  }
+  lines.push(
+    `Elements: ${accounting.elements.length} distinct: ${[...byHow].map(([how, count]) => `${how} ${count}`).join(', ')}`,
+  );
+
+  lines.push('', `Decisions needed: ${accounting.decisions.length || 'none'}`);
+  for (const decision of accounting.decisions) lines.push(`  - ${decision}`);
+  return `${lines.join('\n')}\n`;
+}
+
+function toJson(result: Inventory, accounting: Accounting): unknown {
+  return {
+    inventory: { ...result, elements: Object.fromEntries(result.elements) },
+    accounting,
+  };
+}
+
+if (require.main === module) {
+  process.exitCode = main(process.argv.slice(2), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+    readFile: (path) => readFileSync(path),
+  });
+}

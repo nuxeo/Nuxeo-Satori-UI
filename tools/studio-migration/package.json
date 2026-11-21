@@ -1,0 +1,6 @@
+{
+  "name": "@nuxeo-satori/studio-migration",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reads a Studio Designer package for Web UI and accounts for everything in it: phase M0 of the Studio migration (docs/business-apps/studio-migration.md)."
+}

@@ -1,0 +1,25 @@
+{
+  "$comment": "The first theme token map: a Web UI theme property and the token of the new app it sets. A Layer 0 theme's `tokens` are CSS custom properties applied to <html> (libs/shared/app-config/src/lib/bootstrap-config.ts), and the app's styles read Material's system tokens, so each target is one of those colour roles. Only clear one-to-one roles are mapped. Every other property is reported with the reason that matches its name, nearest prefix first: a migration keeps no custom CSS (parity decision 5), so what has no token does not migrate.",
+  "source": {
+    "read": "2026-11-22",
+    "how": "The 105 properties of the sample's theme, against the --mat-sys-* tokens the app's stylesheets read."
+  },
+  "tokens": {
+    "--nuxeo-primary-color": "--mat-sys-primary",
+    "--nuxeo-button-primary-text": "--mat-sys-on-primary",
+    "--nuxeo-secondary-color": "--mat-sys-secondary",
+    "--nuxeo-text-default": "--mat-sys-on-surface",
+    "--nuxeo-page-background": "--mat-sys-surface",
+    "--nuxeo-box": "--mat-sys-surface-container-lowest",
+    "--nuxeo-border": "--mat-sys-outline-variant",
+    "--nuxeo-warn-text": "--mat-sys-error"
+  },
+  "reported": {
+    "--nuxeo-button-primary": "Primary buttons follow --mat-sys-primary, which --nuxeo-primary-color sets",
+    "--nuxeo-app-font": "Fonts come from the Satori theme, not from a token",
+    "--nuxeo-": "No token of the app matches this Web UI property yet",
+    "--paper-": "It styles a Polymer paper element, and the app has none",
+    "--iron-": "It styles a Polymer iron element, and the app has none",
+    "--": "A Polymer palette variable; the brand comes from Web UI's own properties"
+  }
+}

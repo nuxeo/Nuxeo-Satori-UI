@@ -1,0 +1,136 @@
+{
+  "$comment": "Web UI's elements, as Studio Designer writes them into a package, and what each becomes in the new app (docs/business-apps/studio-migration.md, section 3). `role`: field (shows or edits a property), structure (lays out a page, list or card), data (loads what something else shows), action, navigation, theme. `how` as in slots.json. Widget names are not given: layout version 2 defines the widget registry, in phase 1. An element a package uses that is not listed here is reported as not in the catalogue, which is a decision someone has to take, not a pass.",
+  "source": {
+    "read": "2026-11-22",
+    "how": "The elements of the sample package, and those the migration document's widget table names. Grows with every package that arrives."
+  },
+  "elements": {
+    "nuxeo-input": {
+      "role": "field",
+      "how": "automatic",
+      "becomes": "A text field, or a number field for a numeric property"
+    },
+    "nuxeo-textarea": { "role": "field", "how": "automatic", "becomes": "A long text field" },
+    "nuxeo-date-picker": { "role": "field", "how": "automatic", "becomes": "A date field" },
+    "nuxeo-date": {
+      "role": "field",
+      "how": "automatic",
+      "becomes": "A date, shown relative to now when its format is relative"
+    },
+    "nuxeo-user-suggestion": {
+      "role": "field",
+      "how": "automatic",
+      "becomes": "A user or group field, single or multiple"
+    },
+    "nuxeo-user-tag": { "role": "field", "how": "automatic", "becomes": "A user, shown by name" },
+    "nuxeo-directory-suggestion": {
+      "role": "field",
+      "how": "automatic",
+      "becomes": "A vocabulary field, over the vocabulary its directory-name names"
+    },
+    "nuxeo-document-suggestion": {
+      "role": "field",
+      "how": "automatic",
+      "becomes": "A link to another document"
+    },
+    "nuxeo-tag": { "role": "field", "how": "automatic", "becomes": "Chips" },
+    "nuxeo-document-viewer": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "The preview card of a document with a file"
+    },
+    "nuxeo-document-thumbnail": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "A document's thumbnail in a list"
+    },
+    "nuxeo-document-grid-thumbnail": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "A document's card in a grid of thumbnails"
+    },
+    "nuxeo-data-table": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "A list; on a complex property, a table of its items or of related records"
+    },
+    "nuxeo-data-table-column": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "A typed column of a list"
+    },
+    "nuxeo-data-grid": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "A list shown as a grid of thumbnails"
+    },
+    "nuxeo-justified-grid": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "A list shown as a justified grid of pictures"
+    },
+    "nuxeo-justified-grid-item": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "One picture of a justified grid"
+    },
+    "nuxeo-results": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "The results of a search, with the views it offers"
+    },
+    "nuxeo-search-form": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "A search page: a form and its results, over the same page provider"
+    },
+    "nuxeo-card": { "role": "structure", "how": "automatic", "becomes": "A home card" },
+    "nuxeo-page": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "Nothing of its own: the app's page frame replaces it, and what it holds is converted"
+    },
+    "nuxeo-tasks-list": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "A home card of the user's tasks"
+    },
+    "nuxeo-slot-content": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "An entry in the slot that slots.json names for its slot"
+    },
+    "nuxeo-page-provider": {
+      "role": "data",
+      "how": "automatic",
+      "becomes": "The page provider the list or card reads, unchanged on the server"
+    },
+    "nuxeo-document-storage": {
+      "role": "data",
+      "how": "automatic",
+      "becomes": "The recently viewed documents, for a recently viewed home card"
+    },
+    "nuxeo-operation": {
+      "role": "data",
+      "how": "agent-proposes",
+      "becomes": "What the operation loads, for the list it feeds",
+      "note": "Home cards read page providers. An agent proposes the provider that gives the same documents, such as the favourites collection for Favorite.Fetch."
+    },
+    "nuxeo-operation-button": {
+      "role": "action",
+      "how": "automatic",
+      "becomes": "An action bound to the same operation and parameters",
+      "note": "Only for an operation on the allow-list. A button with no operation, or one off the list, is reported."
+    },
+    "nuxeo-menu-icon": {
+      "role": "navigation",
+      "how": "automatic",
+      "becomes": "A navbar entry, with its icon and label"
+    },
+    "nuxeo-theme": {
+      "role": "theme",
+      "how": "automatic",
+      "becomes": "A theme in the bootstrap configuration, through the token map"
+    }
+  }
+}
