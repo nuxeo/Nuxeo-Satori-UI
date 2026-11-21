@@ -503,6 +503,19 @@ Removed in NXSAT-312, with no replacement: `loadBootstrap()`, `loadManifest()`, 
 
 ---
 
+## AppExtensionsService (`libs/shared/extensions/src/lib/app-extensions.service.ts`)
+
+Import: `@nuxeo/satori-platform/extensions`.
+
+- `evaluateRule(rule, context): boolean` keeps the documented visibility-rule semantics:
+  unknown non-security rule IDs permit.
+- `evaluateOptInRule(rule, context, setting): boolean` evaluates an explicit feature opt-in.
+  Unknown rules, invalid nested references, excessive nesting and evaluator failures deny the
+  whole opt-in. It reports the setting and reason once per distinct refusal in the page session
+  through the `[agentic-ui-extensions]` console channel. Used by `app.tabs.view.preferARender`.
+
+---
+
 ## NxsToastService (`libs/shared/satori-components/src/lib/toast/toast.service.ts`)
 
 The core slice's one toast (NXSAT-308), over Material's `MatSnackBar`. Import:
