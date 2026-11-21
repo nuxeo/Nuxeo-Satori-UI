@@ -63,7 +63,7 @@ export const ADVERTISED = [
   },
   {
     url: 'https://nuxeo.github.io/Nuxeo-Satori-UI/prototypes/business-apps/',
-    advertisedIn: 'docs/presales-business-apps-plan.md and docs/presales-business-apps-feasibility.md',
+    advertisedIn: 'docs/business-apps/plan.md and docs/business-apps/feasibility.md',
   },
 ];
 

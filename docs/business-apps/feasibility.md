@@ -1,7 +1,7 @@
 # Is the business-app prototype buildable?
 
 Feasibility of every capability in the [clickable prototype](https://nuxeo.github.io/Nuxeo-Satori-UI/prototypes/business-apps/),
-and what we need from whom. Companion to the [plan](presales-business-apps-plan.md).
+and what we need from whom. Companion to the [plan](plan.md).
 
 Checked on 21 November 2026 against two local Nuxeo 2025 servers (`localhost:8080`, container
 `nuxeo`, with the AI package installed; `localhost:8090`, container `nx-satfb-1`) and against this

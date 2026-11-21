@@ -1,0 +1,83 @@
+# Business apps on Nuxeo
+
+Everything about turning Nuxeo Satori UI into a platform for business applications for every
+account: what presales asked for, what is feasible, the architecture, the migration from Studio
+Designer, the development plan and its decisions. Start here when you pick this work up again.
+
+## Where things stand, 21 November 2026
+
+- **Analysis, architecture and plan:** done, ready for review.
+- **Development:** not started. Phase 0 of the [development plan](development-plan.md) comes next,
+  once the plan is reviewed.
+- **Clickable prototype:** published at
+  [nuxeo.github.io/Nuxeo-Satori-UI/prototypes/business-apps](https://nuxeo.github.io/Nuxeo-Satori-UI/prototypes/business-apps/).
+  Its source is in [`docs/prototype/business-apps/`](../prototype/business-apps/). It has the
+  Payers flow, the brand assets flow, and a guide with an "Every account" page.
+- **Pull requests:** #607 (the prototype, plan and feasibility report), #608 (the brand assets
+  demo, the coverage of every account, and the review fixes) and #610 (Builder links) are merged.
+- **Where the work happens:** on the integration branch `integration/enterprise-grade-app`, created
+  from `main` on 21 November 2026. Every pull request for this work targets it, `main` is merged
+  into it at least daily, and it reaches `main` in one final pull request
+  ([AGENTS/06-git-workflow.md](../../AGENTS/06-git-workflow.md)). Run the local gate against it:
+  `SANITIZER_AUDIT_BASE_REF=origin/integration/enterprise-grade-app npm run beta:gate -- --base origin/integration/enterprise-grade-app`.
+- **Kept outside this public repository:** the names of the twenty accounts, kept with the team;
+  and a narrated demo video of the Payers flow, made locally.
+
+## Read in this order
+
+1. [plan.md](plan.md): what presales said, what the app lacks, and the plan. Sections 13 and 14
+   check it against the twenty accounts and cover them in four waves.
+2. [feasibility.md](feasibility.md): every capability of the prototype, checked against two
+   Nuxeo 2025 servers, and what we need from whom.
+3. [architecture.md](architecture.md): the six tiers, the modules, the apps and the backend
+   services.
+4. [studio-migration.md](studio-migration.md): moving Web UI customisations from Studio Designer,
+   with agents and a verification harness, from a real sample package.
+5. [development-plan.md](development-plan.md): phases 0 to 10, each with the demo the team will
+   see.
+6. [end-state.md](end-state.md): what exists at the end of phase 9, and how each kind of company
+   and each person in it uses the app.
+7. [decisions.md](decisions.md): what is open, who decides, by when, and what is settled.
+
+## Facts that hold
+
+Checked first-hand; build on them rather than re-checking.
+
+- The Nuxeo REST API gives:
+  - the content model;
+  - page provider definitions, with their aggregates;
+  - each workflow step's variables;
+  - audit, comments and bulk actions;
+  - ranged downloads.
+- Nothing lists a document's allowed lifecycle transitions.
+- The platform has picture, video and audio types, views, renditions and conversions.
+- `Document.AddPermission` grants time-limited access, including to an outside person by email.
+- Retention, legal hold and template rendering are add-ons that the checked servers do not have.
+- `nuxeo-agentic-core`, in this repository, serves the configuration and handles sign-in for the
+  app.
+- The configuration is one per server, served before sign-in.
+- Layouts are version 1 only.
+- Customer code cannot load into the shipped app at run time.
+- A Studio package carries the data model and the Web UI files together. The model needs no
+  conversion.
+
+## Rules that hold
+
+- The repository is public: no account names and no security findings in it.
+- The server is the control. What configuration hides is not secured by hiding it.
+- No free code in configuration: registered IDs, registered computations, allow-listed operations.
+- Every gate is seen failing on purpose before it is trusted, and every phase gets an
+  independent adversarial review.
+
+## The accounts
+
+Twenty accounts in eight use-case groups, plus one whose use case presales has not confirmed. The
+counts per group, and the phase that gives each group its first demo, are in the
+[development plan](development-plan.md), section 5. The names are not in this repository.
+
+## Working on it
+
+- **The prototype:** `node docs/prototype/business-apps/src/build.cjs`, then open
+  `docs/prototype/business-apps/index.html`. The build needs `sass` and the Satori packages in
+  `node_modules`.
+- **Evidence:** screenshots, recordings and reports go outside the repository, as for the Beta.

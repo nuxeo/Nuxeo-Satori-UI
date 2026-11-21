@@ -46,13 +46,13 @@ today.
 - **Said:** no prospect is looking for a file browser. The demos and the biggest deals are
   business applications.
 - **Today:** our product page describes "the everyday work of a Nuxeo user" as browsing folders,
-  searching and opening a document ([the short version](../documentation/20-product/00-the-short-version.md#what-it-does)).
+  searching and opening a document ([the short version](../../documentation/20-product/00-the-short-version.md#what-it-does)).
   The personas were inferred from the code, not from customer research, and the page says so
-  ([personas](../documentation/20-product/03-personas.md)). The Beta scope decision of record is
+  ([personas](../../documentation/20-product/03-personas.md)). The Beta scope decision of record is
   "browse, folder tree, search, document detail, metadata, permissions, versions, upload/CRUD",
-  with workflow out ([plan of record](adf-hx-beta-plan.md#decisions-locked)). The `satori-beta`
+  with workflow out ([plan of record](../adf-hx-beta-plan.md#decisions-locked)). The `satori-beta`
   demo package brands the app as "Acme Claims", but what it contains, as
-  [our status page](phase-1-improvements.md) lists it, is branding, theme, languages, sign-in,
+  [our status page](../phase-1-improvements.md) lists it, is branding, theme, languages, sign-in,
   presets and navigation. Nothing about claims.
 
 ### P2. Every user gets the same ECM home
@@ -61,9 +61,9 @@ today.
   content browsing.
 - **Today:** the dashboard has four fixed widgets: Recently edited, Tasks, Recently viewed and
   Favorites, plus AI insights, which are switched off
-  ([dashboard](../apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.html)). There is no
+  ([dashboard](../../apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.html)). There is no
   dashboard slot, so configuration cannot change it
-  ([slots](../libs/shared/extensions/src/lib/extension-slots.ts#L35)). The navigation rail lists
+  ([slots](../../libs/shared/extensions/src/lib/extension-slots.ts#L35)). The navigation rail lists
   ECM functions (browse, search, tasks, favorites, collections, trash and so on), not business
   objects.
 
@@ -77,7 +77,7 @@ today.
   queries three stock page providers (`default_search`, `assets_search`, `default_trash_search`)
   and never a customer's own. `ContentModelService` reads types, schemas and facets, but nothing
   in the app calls it
-  ([content-model.service.ts](../libs/shared/nuxeo-client/src/lib/services/content-model.service.ts)),
+  ([content-model.service.ts](../../libs/shared/nuxeo-client/src/lib/services/content-model.service.ts)),
   and no generator reads the model.
 
 ### P4. A business record is shown as if it were a file
@@ -87,16 +87,16 @@ today.
   doesn't get us to a demo we could show a prospect."
 - **Today:**
   - Every type except Note opens on the file viewer, so a Member's main area is an empty preview
-    ([document-type-traits.ts](../libs/features/document-detail/src/lib/document-detail/document-type-traits.ts#L63)).
+    ([document-type-traits.ts](../../libs/features/document-detail/src/lib/document-detail/document-type-traits.ts#L63)).
   - Its fields are in the read-only Properties panel, below state, version, dates, contributors
     and tags, under a heading that is the schema's name.
   - The schema type picks the control. A layout file cannot name a widget, compute a value,
     combine fields, format an amount or link to another record
-    ([extension reference, 9b](extension-reference.md#9b-per-type-layouts--which-properties-a-document-type-shows)).
+    ([extension reference, 9b](../extension-reference.md#9b-per-type-layouts--which-properties-a-document-type-shows)).
   - Annotations and Publishing tabs show on every document unless a manifest hides them.
   - Nothing can show related records, like the Claims and Cases tables on the Web UI Member page.
   - Folderish business objects, such as a Case folder, are sent to Browse and never get a record
-    page ([document-detail.ts](../libs/features/document-detail/src/lib/document-detail/document-detail.ts#L1327)).
+    page ([document-detail.ts](../../libs/features/document-detail/src/lib/document-detail/document-detail.ts#L1327)).
 
 ### P5. Configuration stops after branding and arrangement; after that it is Angular
 
@@ -106,10 +106,10 @@ today.
   facet rules, and which fields a type shows. A record view, a tab body, a new screen, a button
   that does something new, a dashboard, or a condition like "the user is in the claims team" all
   need code. The only packaged user rules are for administrators, powerusers and external users
-  ([extension reference, user rules](extension-reference.md#user-rules)). That code does not plug
+  ([extension reference, user rules](../extension-reference.md#user-rules)). That code does not plug
   into the shipped app: you build your own app from the template, and `@nuxeo/satori-platform` is
-  not published yet ([the short version](../documentation/20-product/00-the-short-version.md#what-needs-code);
-  [Phase 1 improvements](phase-1-improvements.md), items 6 to 8).
+  not published yet ([the short version](../../documentation/20-product/00-the-short-version.md#what-needs-code);
+  [Phase 1 improvements](../phase-1-improvements.md), items 6 to 8).
 
 ### P6. There is no task-driven UX
 
@@ -118,7 +118,7 @@ today.
 - **Today:** the Tasks page lists workflow tasks next to a preview of the target document's file.
   Completing a task sends only the variables of Nuxeo's stock review workflows (participants, end
   date, review type) and a comment
-  ([task-detail.component.ts](../libs/shared/satori-components/src/lib/task-detail/task-detail.component.ts#L240)).
+  ([task-detail.component.ts](../../libs/shared/satori-components/src/lib/task-detail/task-detail.component.ts#L240)).
   A custom step, such as a claim determination with a reason code, has no form. There are no work
   queues (unassigned claims, my open cases, overdue items), no SLA view and no home per persona.
 
@@ -129,9 +129,9 @@ today.
 - **Today:** Layer 3 is AGENTS.md, generators, guardrails and an external prompt library. The
   generators scaffold code: a rule, an action, a component, a library, or a config package. None
   reads the model or produces a business screen. The prompt library's branding prompts write to a
-  path the server no longer reads ([Phase 1 improvements](phase-1-improvements.md), item 3).
+  path the server no longer reads ([Phase 1 improvements](../phase-1-improvements.md), item 3).
   Runtime AI is off for every user, by a code constant
-  ([ai-feature-flag.service.ts](../libs/shared/ai-client/src/lib/ai-feature-flag.service.ts#L35)).
+  ([ai-feature-flag.service.ts](../../libs/shared/ai-client/src/lib/ai-feature-flag.service.ts#L35)).
 
 ### P8. The names are confusing, and so is the story next to Web UI
 
@@ -154,7 +154,7 @@ today.
 
 ### P10. Existing Studio work cannot be reused
 
-- **Today:** still open ([Phase 1 improvements](phase-1-improvements.md), item 12). The data
+- **Today:** still open ([Phase 1 improvements](../phase-1-improvements.md), item 12). The data
   model carries over, because it lives on the server. Studio Designer layouts, forms, search forms
   and task layouts do not.
 
@@ -236,7 +236,7 @@ days or less, and a prospect would accept the result.**
   provider definitions (`GET /api/v1/search/pp/{name}` returns the predicates, sort and
   aggregates). Add a small enricher to `nuxeo-agentic-core` for the one thing it does not give:
   the lifecycle transitions a document allows. Checked on a local Nuxeo 2025 on 21 November 2026;
-  see the [feasibility report](presales-business-apps-feasibility.md).
+  see the [feasibility report](feasibility.md).
 
 ### Step 2. Layouts that can describe a business screen (layout file version 2)
 
@@ -281,7 +281,7 @@ days or less, and a prospect would accept the result.**
   That is what Web UI's operation button does.
 - The behaviour lives on the server, in Studio, under server permissions. This changes today's rule
   that configuration can only place an action that already exists in code
-  ([Phase 1 improvements](phase-1-improvements.md), item 8), so it is a decision to take, not a
+  ([Phase 1 improvements](../phase-1-improvements.md), item 8), so it is a decision to take, not a
   default.
 
 ### Step 6. An agent that builds the app for presales
@@ -435,8 +435,8 @@ days or less, and a prospect would accept the result.**
 
 ## 11. What the Studio designer prototype already covers
 
-The [Studio designer prototype](prototype/studio-designer-satori/index.html), with its
-[parity plan](nuxeo-studio-parity-plan.md) and [UX guide](studio-designer-ux-guide.md), is on the
+The [Studio designer prototype](../prototype/studio-designer-satori/index.html), with its
+[parity plan](../nuxeo-studio-parity-plan.md) and [UX guide](../studio-designer-ux-guide.md), is on the
 `fix/nuxeo-studio-evaluation-ca2a58` branch and not merged yet; these links work once it is. It is
 an in-app editor for customer administrators that matches Studio Designer for the UI: draft,
 validate, publish, roll back, and the same JSON a developer would write.
@@ -663,3 +663,8 @@ links and its licensor portal also preview wave 3's outside users.
 
 The guide's "Every account" page in the prototype shows each group, its kit and its wave, with a
 link wherever a flow exists. It names no account, because the site is public.
+
+### The architecture
+
+[business-apps-architecture.md](architecture.md) designs what delivers these waves:
+the tiers, the modules, the apps and the backend services.
