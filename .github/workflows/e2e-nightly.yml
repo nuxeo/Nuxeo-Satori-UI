@@ -1,0 +1,130 @@
+name: E2E nightly
+
+# NXSAT-231. Runs the Playwright suite on Chromium and WebKit against a HOSTED Nuxeo, because a
+# GitHub runner has no Nuxeo of its own (no compose file, no packages.nuxeo.com credentials).
+# The Angular dev server runs in the job and proxies /nuxeo to the hosted instance, so the specs
+# keep seeing the app at the origin root and the code under test is this checkout, not
+# whatever happens to be deployed.
+#
+# Required repository secrets (no defaults anywhere, by design):
+#   NUXEO_E2E_TARGET  origin of the hosted Nuxeo, scheme + host only
+#   NUXEO_USER        a dedicated test account — the suite creates and trashes documents
+#   NUXEO_PASS
+#   SATORI_GH_READONLY_TOKEN  already used by ci.yml
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  e2e:
+    name: E2E (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, webkit]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          base: ${{ github.sha }}
+          head: ${{ github.sha }}
+
+      # Fail with the reason, not with a Playwright stack trace three steps later.
+      - name: Require configuration
+        env:
+          NUXEO_E2E_TARGET: ${{ secrets.NUXEO_E2E_TARGET }}
+          NUXEO_USER: ${{ secrets.NUXEO_USER }}
+          NUXEO_PASS: ${{ secrets.NUXEO_PASS }}
+        run: |
+          for v in NUXEO_E2E_TARGET NUXEO_USER NUXEO_PASS; do
+            [ -n "${!v}" ] || { echo "::error::repository secret $v is not set"; exit 1; }
+          done
+
+      # Playwright is deliberately not a tracked dependency (CLAUDE.md). Both packages in ONE
+      # command: `--no-save` prunes anything earlier installed the same way. Versions are
+      # pinned per docs/accessibility.md — never a range, never a dist-tag.
+      - name: Install Playwright (not saved)
+        run: |
+          npm install --no-save @playwright/test@1.63.0 @axe-core/playwright@4.13.0
+          npx playwright install --with-deps chromium webkit
+
+      - name: Serve the app against the hosted Nuxeo
+        env:
+          NUXEO_PROXY_TARGET: ${{ secrets.NUXEO_E2E_TARGET }}
+        run: |
+          nohup npx ng serve nuxeo-ui -c development,remote --port 4200 > dist-serve.log 2>&1 &
+          for _ in $(seq 1 90); do
+            curl -fsS -o /dev/null http://localhost:4200/ && exit 0
+            sleep 2
+          done
+          echo "::error::dev server did not come up"; tail -n 50 dist-serve.log; exit 1
+
+      # The preflight refuses a vacuous pass: wrong host, wrong identity, or an empty repository.
+      - name: Preflight
+        env:
+          NUXEO_USER: ${{ secrets.NUXEO_USER }}
+          NUXEO_PASS: ${{ secrets.NUXEO_PASS }}
+          E2E_ALLOWED_HOSTS: localhost:4200
+        run: npx tsx scripts/beta-harness/e2e-preflight.mjs
+
+      - name: Run the suite (${{ matrix.project }})
+        env:
+          CI: 'true'
+          NUXEO_USER: ${{ secrets.NUXEO_USER }}
+          NUXEO_PASS: ${{ secrets.NUXEO_PASS }}
+        run: npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts --project=${{ matrix.project }}
+
+      # Traces, screenshots and video are retained on failure only (playwright.config.ts).
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ matrix.project }}
+          path: dist/e2e
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Dev server log
+        if: failure()
+        run: tail -n 100 dist-serve.log || true
+
+  # A red nightly nobody sees is worth about as much as no job. This opens one tracking issue
+  # and comments on it for each further failure, rather than a new issue every night.
+  report:
+    name: Report failure
+    needs: e2e
+    if: ${{ always() && needs.e2e.result == 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="E2E nightly is failing"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          body="The nightly Playwright run (Chromium + WebKit) failed: $RUN_URL"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
