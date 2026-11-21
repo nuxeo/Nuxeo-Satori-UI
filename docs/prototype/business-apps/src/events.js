@@ -12,6 +12,11 @@ function restore(target, snapshot) {
   for (const key of Object.keys(target)) if (!(key in snapshot)) delete target[key];
   Object.assign(target, snapshot);
 }
+// Undo of a generated task removes the task and its form draft together.
+function dropTask(id) {
+  delete TASKS[id];
+  delete S.tf[id];
+}
 const personaOpts = (sel, group) => Object.entries(PERSONAS).filter(([, p]) => !group || p.groups.includes(group)).map(([k, p]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(p.n)}, ${esc(p.role)}</option>`).join('');
 function setState(id, to, extra, alsoUndo) {
   const c = CLAIMS[id], before = { ...c };
@@ -43,7 +48,8 @@ function completeTask(id) {
     render();
     return;
   }
-  if (!f.decision) e.decision = 'Choose a decision.';
+  // Only a choice this step's form offers counts; anything else is treated as no choice at all.
+  if (!(DECISIONS[t.node] || []).includes(f.decision)) e.decision = 'Choose a decision.';
   if (t.node === 'Determine' && f.decision === 'approve') {
     const v = Number(f.allowed), billed = CLAIMS[t.target].billed;
     if (f.allowed === '' || Number.isNaN(v)) e.allowed = 'Enter the allowed amount.';
@@ -74,7 +80,7 @@ function completeTask(id) {
         if (c.state === 'pended') c.state = 'inReview';
         TASKS[sid] = { n: 'Approve high-value claim', wf: 'Claim determination', node: 'Supervisor approval', target: t.target, who: 'morgan', due: '2026-11-24' };
         logOn(t.target, 'user_task', `Determined by ${me().n}, allowed ${moneyText(c.allowed)}: sent to Morgan Chen for supervisor approval`);
-        toast(`Over ${moneyText(SUPERVISOR_LIMIT)}: sent to Morgan Chen for approval`, () => { restore(c, before); delete TASKS[sid]; reopen(); S.log.shift(); });
+        toast(`Over ${moneyText(SUPERVISOR_LIMIT)}: sent to Morgan Chen for approval`, () => { restore(c, before); dropTask(sid); reopen(); S.log.shift(); });
       } else if (f.decision === 'approve') setState(t.target, 'approved', { allowed: Number(f.allowed) }, reopen);
       else if (f.decision === 'deny') setState(t.target, 'denied', { denial: f.reason, allowed: 0 }, reopen);
       else {
@@ -87,7 +93,7 @@ function completeTask(id) {
       // Returned: the determination goes back to the adjuster as a task of its own.
       const rid = nextId(TASKS, 'T-');
       TASKS[rid] = { n: 'Determine claim', wf: 'Claim determination', node: 'Determine', target: t.target, who: c.assignee || 'dana', due: '2026-11-25' };
-      setState(t.target, 'inReview', {}, () => { reopen(); delete TASKS[rid]; });
+      setState(t.target, 'inReview', {}, () => { reopen(); dropTask(rid); });
     }
   } else {
     // Every outcome on a case leads somewhere: a next task, or a decided case. One Undo takes it all back.
@@ -109,7 +115,7 @@ function completeTask(id) {
     const nid = next ? nextId(TASKS, 'T-') : null;
     if (next) TASKS[nid] = next;
     logOn(t.target, 'circle_check', `${t.n} completed by ${me().n}: ${f.decision}${next ? `; next: ${next.n}` : ''}`);
-    toast(msg, () => { restore(k, before); if (nid) delete TASKS[nid]; reopen(); S.log.shift(); });
+    toast(msg, () => { restore(k, before); if (nid) dropTask(nid); reopen(); S.log.shift(); });
   }
   location.hash = '#/' + (t.target.startsWith('CLAIM') ? 'claim/' : 'case/') + t.target;
 }

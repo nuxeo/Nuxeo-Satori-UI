@@ -6,7 +6,9 @@ S.tf = {};
 P.task = (r) => {
   const id = r[1], t = TASKS[id];
   if (!t) return P.notFound();
-  const f = (S.tf[id] = S.tf[id] || { decision: '', allowed: '', reason: '', comment: '', errors: {} });
+  // A draft belongs to this task, not to its id: an id freed by Undo and reused by a new task must
+  // not hand the new task the old one's choices.
+  const f = (S.tf[id] = S.tf[id] && S.tf[id].task === t ? S.tf[id] : { task: t, decision: '', allowed: '', reason: '', comment: '', errors: {} });
   const isClaim = t.target.startsWith('CLAIM'), c = isClaim ? CLAIMS[t.target] : CASES[t.target];
   const stale = isClaim && !t.done && !OPEN_STATES.includes(c.state);
   const need = STEP_GROUPS[t.node], notMine = !!need && !inGroup([need]);

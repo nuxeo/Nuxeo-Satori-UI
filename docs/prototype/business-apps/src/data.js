@@ -79,6 +79,14 @@ const SUPERVISOR_LIMIT = 5000;
 // Workflow steps that belong to a group rather than to whoever holds the task: only its members may
 // take or complete them, whatever the task's assignee says.
 const STEP_GROUPS = { 'Supervisor approval': 'claims-supervisors' };
+// The choices each workflow step's form offers. Completion accepts nothing else.
+const DECISIONS = {
+  Determine: ['approve', 'deny', 'pend'],
+  'Supervisor approval': ['approve', 'return'],
+  'Medical review': ['uphold', 'overturn'],
+  Decision: ['uphold', 'overturn'],
+  Callback: ['resolved', 'follow'],
+};
 
 const CLAIMS = {
   'CLAIM-000132': { member: 'MEMBER-100048', provider: 'PRV-201', billed: 9087, allowed: 8650, paid: 8650, svc: '2025-01-10', rcvd: '2025-01-14', state: 'paid', assignee: null, due: null, dx: 'E11.9', lines: [['J1817', 'Insulin, 50 units', 9087]], docs: ['DOC-1'] },
