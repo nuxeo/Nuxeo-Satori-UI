@@ -35,3 +35,7 @@
 /README.charter.md
 /docs/i18n-localization-plan.md
 /docs/i18n-status.md
+
+# The prototype's page templates are fragments (head.html opens the document, tail.html closes it),
+# which the Angular HTML parser rejects, and lint-staged runs prettier on every staged *.html.
+/docs/prototype/
