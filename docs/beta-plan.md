@@ -1,13 +1,10 @@
-# adf-hx Beta Deliverable — Plan
+# Beta Deliverable — Plan
 
 **Status:** current plan of record · **Last verified:** 24 August 2026
 **Position:** see [Programme status](#programme-status) below, or `npm run beta:state`
 **Tickets:** [NXENG-619](https://hyland.atlassian.net/browse/NXENG-619) under [NXENG-615](https://hyland.atlassian.net/browse/NXENG-615)
 **RFC:** "RFC: Nuxeo Satori Beta - Component Platform and Customer Extensibility Model"
 **Agent contract:** [`AGENTS/11-beta-program.md`](../AGENTS/11-beta-program.md) · **Harness:** [`scripts/beta-harness/`](../scripts/beta-harness/)
-
-Supersedes [`docs/adf-hx-poc-action-plan.md`](adf-hx-poc-action-plan.md), which was written before the
-four-layer extensibility model and before the dependency questions were settled.
 
 ---
 
@@ -27,7 +24,7 @@ is a human summary and can go stale exactly as its predecessor did.
 | 0 — Verify and unblock           | complete        | 14 checks                  |
 | 1 — Layer 0 config               | complete        | 39 checks                  |
 | 2 — Layer 1 extension registry   | complete        | 46 checks                  |
-| 3 — adf-hx adoption              | complete        | 55 checks                  |
+| 3 — Component adoption           | complete        | 55 checks                  |
 | 4 — Layer 2 publishable platform | complete        | 25 checks                  |
 | 5 — Layer 3 agent harness        | complete        | 27 checks                  |
 | 6 — Beta quality bar and proof   | **in progress** | 5 of 7; steps 3 and 6 open |
@@ -50,8 +47,8 @@ teardown and one `<img [src]>` bypassing the HTTP interceptor.
 
 ## Decisions locked
 
-- **adf-hx consumption:** install `@alfresco/adf-hx-content-services` as a real dependency and
-  delete the hand-written imitations. No vendoring, no permanent lookalikes.
+- **Components:** the UI is built on our own `nxs-` Satori components
+  (`libs/shared/satori-components`). No vendoring, no permanent lookalikes.
 - **Beta scope:** a deep core slice — browse, folder tree, search, document detail, metadata,
   permissions, versions, upload/CRUD. Workflow, users and groups, administration and publishing
   are out.
@@ -92,8 +89,7 @@ flowchart TD
 ```
 
 Layers 0 and 1 are expected to absorb most customer requests and need no build. Layer 2 exists
-because a manifest can only rewire what is already compiled in — ACA's own
-`extensions.setComponents({...})` registration confirms this. Layer 3 is the differentiator: the
+because a manifest can only rewire what is already compiled in. Layer 3 is the differentiator: the
 agent works inside the customer's extension library and the thin template, never in our library
 source, which is what preserves the support boundary and the certification claims in NXENG-615.
 
@@ -161,34 +157,6 @@ So configuration must not live inside the packaged `web` directory. Split it:
 
 Settled by first-hand inspection. Do not re-litigate; if you contradict one, prove it first.
 
-- **The package is installable.** A token with scope `read:packages` resolved and downloaded
-  `@alfresco/adf-hx-content-services` — a 379,417-byte tarball of 285 files, checksum verified.
-- **648 published versions.** `latest` = `7.20.0-automate.292` (19 Jan 2026), `beta` =
-  `7.21.0-automate.86` (19 Jun 2026). The earlier "v0.0.8" figure was a stale placeholder in source
-  control and was wrong.
-- **No stable release in twelve months.** The last true stable, `7.19.5` (21 Aug 2025), declares an
-  Angular 15 baseline and predates the surface this plan depends on. We pin an exact prerelease.
-- **Twelve API ports are overridable injection tokens, verified in the shipped artifact** —
-  `CHECKIN`, `COPY`, `DOCUMENT`, `DOWNLOAD`, `GROUP`, `MODEL`, `MOVE`, `QUERY`, `RENDITIONS`,
-  `UPLOAD`, `USER`, `VERSION`, plus `ADF_HX_CONTENT_SERVICES_API_PROVIDERS`. This is the mechanism
-  the whole plan rests on.
-- **The dependency contract is under-declared:** one peer declared (`@angular/core`) against
-  thirteen actually imported, including `@angular/material` at 48 import sites and
-  `@alfresco/adf-core` at 10. `npm install` will not warn. Test artifacts also ship — `ng-mocks` in
-  a bundle, and a mock exported from the public `/api` entry point.
-- **`@alfresco/adf-extensions@9.0.0` is on public npm**, runtime dependency `tslib` only, so
-  Layers 0 and 1 need no privileged access. `@alfresco/js-api` is a mandatory peer of both
-  adf-extensions and adf-core.
-- **The published component surface is richer than first catalogued:** `HxpDocumentListComponent`,
-  `HxpDocumentTreeComponent`, `HxpBreadcrumbComponent`, `HxpMetadataSidebarComponent`,
-  `HxpPropertiesSidebarComponent`, `ManageVersionsSidebarComponent`, `HxpUiDocumentViewerComponent`,
-  permissions dialogs and panels, content share and delete, column management, search filters —
-  several with companion `*-action.service` classes reusable in the Layer 1 action registry.
-- **Nothing in this repo uses a real adf-hx component.** No `@alfresco/*` dependency is declared,
-  locked or installed; zero `@alfresco` imports in source; all 22 `hxcs-js-client` imports are
-  `import type`; all 15 `hxp-*` components are declared locally in `libs/shared/adf-hx-bridge`.
-  _Changed by NXSAT-635 (2026-10):_ the bridge library was removed on 2026-10-14 with the POC
-  routes, and NXSAT-637 removed the `@alfresco` packages.
 - **The branch is sound.** `npm ci` succeeds; Material 20.2.14, TypeScript 5.8.3, Satori 0.2.0 and
   hxcs-js-client 2.0.111 match HFA `develop`; guardrails, lint and build all pass; 280 of 281 tests
   pass. **Angular deliberately no longer matches**: this repo runs 20.3.31 where HFA `develop` runs
@@ -209,8 +177,7 @@ Settled by first-hand inspection. Do not re-litigate; if you contradict one, pro
 - Much of Phase 5: [`scripts/beta-harness/`](../scripts/beta-harness/) (phase evidence runner with
   per-step assertions, verification gate, annotated comparison generator),
   [`AGENTS/11-beta-program.md`](../AGENTS/11-beta-program.md), the `beta-program` rule, and six SDLC
-  skills (`beta-phase`, `verify-gate`, `capture-phase-evidence`, `implement-api-port`,
-  `adopt-adf-hx-component`, `add-extension-point`).
+  skills (`beta-phase`, `verify-gate`, `capture-phase-evidence`, `add-extension-point`).
 - Baseline evidence against live Nuxeo: 13/13 checks; showcase artifact 18/18.
 - Documentation corrected for the AI backend having moved to its own repo.
 
@@ -220,22 +187,13 @@ Settled by first-hand inspection. Do not re-litigate; if you contradict one, pro
 
 1. ~~Obtain a `read:packages` token.~~ Done. **Provision it as a long-lived CI secret** — CI still
    cannot install without it.
-2. ~~Resolve the scope conflict in [`.npmrc`](../.npmrc).~~ **Closed — there was no conflict.**
-   GitHub Packages serves every `@alfresco` package we need, verified twice by downloading each
-   tarball with only that one mapping present. `adf-extensions`, `adf-core` and `js-api` are
-   published to public npm _as well_, which is what made a two-registry split look necessary;
-   `adf-hx-content-services` is the only GitHub-Packages-exclusive one. Phase 2 briefly repointed the
-   scope at public npm and recorded the consequence as a blocker on Phase 3; both the mapping and the
-   claim were reverted in `c6a47b2`. **Phase 3 is not blocked on this.**
-3. Fix the harness authentication defect: `helpers.login()` injects a session that satisfies the
+2. Fix the harness authentication defect: `helpers.login()` injects a session that satisfies the
    route guard but does not reliably authenticate XHRs, producing intermittent `403`s on
    `/nuxeo/api` paths. Use Playwright `httpCredentials`, as
    [`annotate-showcase.mjs`](../scripts/beta-harness/annotate-showcase.mjs) now does.
-4. Fix the Node-version test failure: `clipboard.utils.spec.ts` fails on Node 22+ because Node's
+3. Fix the Node-version test failure: `clipboard.utils.spec.ts` fails on Node 22+ because Node's
    built-in experimental `localStorage` collides with jsdom. CI runs Node 20, contributors do not.
-5. Triage the **9 high-severity `npm audit` findings**. NXENG-615 requires no high or critical, and
-   the surface grows once adf-core arrives.
-6. Delete the unused Material `hxp-document-tree` and open a draft PR so CI runs at all.
+4. Triage the **9 high-severity `npm audit` findings**. NXENG-615 requires no high or critical.
 
 ## Phase 1 — Layer 0: upgrade-safe configuration (**complete**)
 
@@ -327,9 +285,8 @@ Reference doc: [`docs/extension-reference.md`](extension-reference.md).
 
 Delivered:
 
-- **`libs/shared/extensions`**, wrapping `@alfresco/adf-extensions@9.0.0` for its domain-neutral
-  parts — `mergeObjects` (so `$references` layering has ACA's exact semantics, including merge-by-id
-  and `.$replace`), `filterEnabled` and `sortByOrder`.
+- **`libs/shared/extensions`**, holding the domain-neutral parts — `mergeObjects` (so `$references`
+  layering supports merge-by-id and `.$replace`), `filterEnabled` and `sortByOrder`.
 - **Slots are additive by construction.** Keyed by opaque string, with no enum, union or `switch` on
   slot identity, so a tenth slot needs no change to the nine. A spec registers a slot the library has
   never heard of and asserts the nine unchanged. This downgrades **R8 from Medium to Low**: the
@@ -355,9 +312,7 @@ Delivered:
 Delivered at closure (21 August 2026):
 
 - **The action registry.** `ExtensionActionDescriptor` in a slot says where and when;
-  an `ExtensionActionHandler` registered by id says what. The handler shape is adf-hx's
-  `*-action.service` shape, so Phase 3 can substitute an upstream service under the same
-  descriptor id. `enabledRule` disables rather than hides, which today's UI needs.
+  an `ExtensionActionHandler` registered by id says what. `enabledRule` disables rather than hides, which today's UI needs.
 - **`bulk-actions` converted.** The six fixed `@Output()` buttons in
   `selection-topbar.component.html` are now `PACKAGED_BULK_ACTIONS` plus six action
   services. Adding a seventh was a button, an output and a shell handler — three files
@@ -370,9 +325,9 @@ Delivered at closure (21 August 2026):
   moves to its own `selectionCount` field so the cardinality rules go live while the
   permission ones stay honestly inert.
 - **Fail-closed for security-relevant rules**, a lockfile-integrity gate, a direct
-  typecheck target for the library, and `core.not` corrected to upstream's NOR.
+  typecheck target for the library, and `core.not` corrected to NOR.
 
-Not attempted, and carried into the phase that adopts the components:
+Not attempted, and carried into the component-adoption phase:
 
 - **The document-detail toolbar, its seven-item overflow menu and its five `mat-tab`
   children**, and browse's row `contextMenu` and `documentList` columns. Those five slot
@@ -381,48 +336,17 @@ Not attempted, and carried into the phase that adopts the components:
   and then not shipped: eight of its eleven controls carry per-action dynamic state
   (`isLocked`, `isFavorite`, `isSubscribed`, `isInClipboard`, `actionInProgress`,
   `hasVersion`) that the descriptor shape does not yet express, and inventing those fields
-  under time pressure risked a visible regression in the most-used page. Phase 3 replaces
-  much of that markup with adf-hx components anyway, so the fields should be designed
-  against the upstream shape rather than against ours.
+  under time pressure risked a visible regression in the most-used page.
 - **Route contributions.** `app.routes.ts` still imports feature `Routes` arrays directly.
 - **The two selection permission rules remain inert.** `SelectionService` tracks ids, not
   documents, so `app.rules.canWriteSelection` and `app.rules.canRemoveSelection` still
   answer `false`. Making them live costs a fetch per selected row.
 
-## Phase 3 — adf-hx adoption (**complete**)
+## Phase 3 — Component adoption (**complete**)
 
-_Changed by NXSAT-635 (2026-10):_ the adopted components, the bridge and the POC route they were
-swapped in behind were removed on 2026-10-14, and the packages by NXSAT-637; the old path redirects
-to `/#/browse`. This section is the plan as it was carried out.
-
-**Real components, not imitations.** Swap in one at a time behind `/#/browse-adf-hx`, deleting each
-hand-written `hxp-*` equivalent in the same change. Order: `document-list`, `breadcrumb`,
-`document-tree`, `metadata-sidebar`, `permission`, `manage-versions` (a capability the POC lacks
-entirely), `document-viewer`, `search`.
-
-`HxpDocumentListComponent` is a **go/no-go spike**, not the first of a batch. Its inputs are typed on
-the HxPR SDK `Document` and the upstream neutral-type work has not started, so mapping fidelity is
-the real risk. Re-baseline the rest of the phase from what the spike measures.
-
-Scope note: the bridge implements 2 of the 12 API ports. The Beta slice needs roughly ten —
-document, query, upload, version, download, renditions, user, group, move, copy.
-
-**Hard rules for this phase:**
-
-- Import the **upstream** API tokens and delete the bridge's local clones (`DOCUMENT_API_TOKEN`,
-  `QUERY_API_TOKEN`, `ROOT_DOCUMENT`, `DEFAULT_REPOSITORY_ID`). Angular resolves by token identity,
-  so the clones do not satisfy adf-hx components.
-- **Pin an exact prerelease version.** Never a range, never a dist-tag — `latest` is itself a
-  prerelease.
-- Maintain our own pin manifest for the thirteen undeclared peers.
-- **adf-hx types must never appear in our public API signatures**, enforced by a lint or
-  API-extractor gate.
-- Update `.cursor/rules/adf-hx-browse-poc.mdc`: its ban on Material was written for hand-built
-  components and adf-core brings Material in transitively.
-
-Fix the bridge defects in the same phase, since adf-hx components consume the mapped documents:
-hardcoded `sys_effectivePermissions`, the silently dropped sort, the overwritten `totalCount`, the
-50-child ceiling with no pager, and the `browse_column_settings` localStorage collision.
+The UI is built on our own `nxs-` Satori components (`libs/shared/satori-components`) rather than
+hand-written lookalikes. This section is the plan as it was carried out; the evidence is cited in
+`.ai/state/phases.json`.
 
 ## Phase 4 — Layer 2: publishable platform (**complete**, 10 deviations recorded)
 
@@ -535,49 +459,34 @@ honest number is 10 of 11, and a project cannot be argued out of scope by editin
 | 0 — Verify and unblock | 1-2 d         | 1 d             |
 | 1 — Layer 0 config     | 12-18 d       | 7-11 d          |
 | 2 — Layer 1 registry   | 15-22 d       | 9-14 d          |
-| 3 — adf-hx adoption    | 30-45 d       | 20-29 d         |
+| 3 — Component adoption | 30-45 d       | 20-29 d         |
 | 4 — Layer 2 platform   | 18-26 d       | 11-16 d         |
 | 5 — Layer 3 harness    | 4-6 d         | 2-4 d           |
 | 6 — Quality and proof  | 20-30 d       | 12-18 d         |
 | **Total**              | **100-149 d** | **62-93 d**     |
 
 Roughly 5-7 months focused, or 3-4.5 months with AI support. These are engineering judgements
-calibrated against this branch, not measurements; re-baseline after the Phase 3 spike, which is the
-first task with a comparable prior.
+calibrated against this branch, not measurements; re-baseline against what the early tasks measure.
 
 Against the Q3/Q4 2026 Beta target, only the AI-supported pace fits. **If it slips, gate Beta on
-Phases 0-3 plus 6** — Layers 0 and 1, the adf-hx slice and the quality bar — and follow with Layers
-2 and 3 for GA. That still ships a configurable, upgrade-safe, adf-hx-based product and defers only
+Phases 0-3 plus 6** — Layers 0 and 1, the component slice and the quality bar — and follow with Layers
+2 and 3 for GA. That still ships a configurable, upgrade-safe product and defers only
 customer-authored code.
 
 ## Risks
 
-| #   | Risk                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Severity           | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | **No stable adf-hx release in twelve months.** `latest` is a prerelease; the last stable is a year old on an Angular 15 baseline. We would ship an enterprise product on a prerelease channel.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | High               | Pin an exact prerelease. Open a supported-release conversation with CSX.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| R2  | **Dependency contract under-declared** — 1 peer declared against 13 imported — and test artifacts ship in the bundle. Incompatibilities surface at build or runtime, not install time.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | High               | Own pin manifest, contract tests on all twelve ports, raise the packaging defects upstream.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| R3  | **Render fidelity unproven.** Provider substitution is verified; that real components render correctly against Nuxeo-mapped documents is not. Mapper approximations (hardcoded permissions, `sys_name` as title, state from `dc:nature`) may surface visibly.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | High               | `document-list` is a go/no-go spike before committing to the rest.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| R4  | `@alfresco/js-api` and the wider adf-core peer set (including `pdfjs-dist`, `@mat-datetimepicker/core`) ship inside a Nuxeo product.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Medium             | SCA, licensing and product-optics review before Phase 3 commits.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| R5  | **9 high-severity audit findings already**, before adf-core arrives. NXENG-615 requires none.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Medium             | Triage in Phase 0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| R6  | This branch carries the monorepo Angular 20 upgrade while `main` is on 19.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Medium             | Land the upgrade as its own PR first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| R7  | **Rehearsed 2026-10-07: the claim that `overwrite="false"` preserves customer edits was disproved, and NXSAT-317 fixes it.** With `bootstrap.json` edited on the server, upgrading the package failed and left **no version installed** (`/nuxeo/agentic-ui/` 404): the old version's md5-checked uninstall leaves the edited file, and the new version's `overwrite="false"` copy throws on it. The package now ships only `bootstrap.example.json`; the customer's `bootstrap.json` is never installed, replaced or deleted by the package. Rehearsed after the fix: today's package with an edit → fixed package succeeds and keeps serving the edit; unedited → defaults; fixed → fixed keeps the edit. _Superseded 2026-10-07 (NXSAT-312): the package installs no configuration file, not even `bootstrap.example.json`, and no `bootstrap.json` on the server is read; configuration is the customer's own package._ | Low                | Done for `nuxeoctl mp-install`. Still open: the Admin Center / Update Center path (same package tasks, not rehearsed). ~~Workstream A (configuration served by a servlet) replaces the file; its first release is an upgrade from a package that may have left an edited `bootstrap.json` and must be rehearsed from both today's and the NXSAT-317 package.~~ _Superseded 2026-10-07 (NXSAT-312): no migration. No customer used the file, so it is no longer read and that upgrade is not rehearsed; an edited `bootstrap.json` left on a server is ignored. Rehearsed instead: upgrading ours with two customer configuration packages installed (`docs/demo-deck-claims.md`)._  |
-| R8  | Too few addressable IDs in Layer 1 caps customisation and pushes work into Layer 2, undermining the maintenance economics.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | ~~Medium~~ **Low** | **Mitigated in Phase 2.** Slots are keyed by opaque string with no central dispatch, proven by a spec that registers an unknown slot, so a tenth slot is backlog rather than a retrofit. The ceiling that remains is _which_ surfaces are populated, and that is schedule, not architecture.                                                                                                                                                                                                                                                                                                                                                                                        |
-| R9  | Selection state is shared with production browse, so the Satori bulk topbar overlays the POC route.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Low                | Decide whether Beta keeps one shell or forks it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| R11 | **CI now needs Alfresco-org package access.** `@alfresco/adf-extensions` became a production dependency in Phase 2, and the `@alfresco` scope resolves from GitHub Packages, so `SATORI_GH_READONLY_TOKEN` must carry `read:packages` for the Alfresco org — not only `@hylandsoftware`. Untested until a build installs it. _(Supersedes an earlier claim that the scope spanned two registries and blocked Phase 3: all four `@alfresco` packages were confirmed downloadable from GitHub Packages alone, twice.)_                                                                                                                                                                                                                                                                                                                                                                                                        | Medium             | Rotate the CI secret to a token with proven Alfresco access. The first attempt to test this was invalid: `.npmrc` had been repointed but `package-lock.json` still held `registry.npmjs.org` URLs, and `npm ci` installs from `resolved` rather than from the registry mapping. The lock is now regenerated against GitHub Packages, so the next run does settle it. _Tested since: CI installs all four `@alfresco` packages from GitHub Packages. The most recent install with an empty npm cache was run `37446837500` on 2026-10-06. What remains is withdrawal of that access, which a warm npm cache hides; see `docs/satori-components/decision-sequencing.md` (NXSAT-308)._ |
-| R10 | The `@nuxeo-satori` npm scope is proposed but ownership is unconfirmed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Low                | Confirm or choose an owned scope in Phase 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| #   | Risk                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Severity           | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R5  | **9 high-severity audit findings already.** NXENG-615 requires none.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Medium             | Triage in Phase 0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| R6  | This branch carries the monorepo Angular 20 upgrade while `main` is on 19.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Medium             | Land the upgrade as its own PR first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| R7  | **Rehearsed 2026-10-07: the claim that `overwrite="false"` preserves customer edits was disproved, and NXSAT-317 fixes it.** With `bootstrap.json` edited on the server, upgrading the package failed and left **no version installed** (`/nuxeo/agentic-ui/` 404): the old version's md5-checked uninstall leaves the edited file, and the new version's `overwrite="false"` copy throws on it. The package now ships only `bootstrap.example.json`; the customer's `bootstrap.json` is never installed, replaced or deleted by the package. Rehearsed after the fix: today's package with an edit → fixed package succeeds and keeps serving the edit; unedited → defaults; fixed → fixed keeps the edit. _Superseded 2026-10-07 (NXSAT-312): the package installs no configuration file, not even `bootstrap.example.json`, and no `bootstrap.json` on the server is read; configuration is the customer's own package._ | Low                | Done for `nuxeoctl mp-install`. Still open: the Admin Center / Update Center path (same package tasks, not rehearsed). ~~Workstream A (configuration served by a servlet) replaces the file; its first release is an upgrade from a package that may have left an edited `bootstrap.json` and must be rehearsed from both today's and the NXSAT-317 package.~~ _Superseded 2026-10-07 (NXSAT-312): no migration. No customer used the file, so it is no longer read and that upgrade is not rehearsed; an edited `bootstrap.json` left on a server is ignored. Rehearsed instead: upgrading ours with two customer configuration packages installed (`docs/demo-deck-claims.md`)._ |
+| R8  | Too few addressable IDs in Layer 1 caps customisation and pushes work into Layer 2, undermining the maintenance economics.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | ~~Medium~~ **Low** | **Mitigated in Phase 2.** Slots are keyed by opaque string with no central dispatch, proven by a spec that registers an unknown slot, so a tenth slot is backlog rather than a retrofit. The ceiling that remains is _which_ surfaces are populated, and that is schedule, not architecture.                                                                                                                                                                                                                                                                                                                                                                                       |
+| R10 | The `@nuxeo-satori` npm scope is proposed but ownership is unconfirmed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Low                | Confirm or choose an owned scope in Phase 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Still open
 
 - Who owns the `read:packages` CI secret?
-- Which exact adf-hx version do we pin — the January `latest` prerelease, or the June `beta`, which
-  is closer to the surface verified in `develop`?
 - Does Beta ship as a marketplace package, an npm library set, or both? Phase 4 assumes both.
-- ~~Do we keep `/#/browse-adf-hx` as a parallel route through Beta, or cut over `/#/browse` once
-  parity is reached?~~ **Answered by NXSAT-308 (2026-10-08).** The parallel route stays while the
-  `nxs-` components are built, and the ADF removal commit deletes it and re-enables
-  `app.navbar.browse` on `/#/browse`. See `docs/satori-components/decision-sequencing.md`.
-  _Changed by NXSAT-635 (2026-10):_ done — the route was deleted on 2026-10-14 and redirects to
-  `/#/browse`, where `app.navbar.browse` is the one browse entry.
 - ~~How much of the app becomes addressable by ID in Layer 1?~~ **Answered in Phase 2, and the
   question turned out to be less consequential than it looked.** **Eight** slots are implemented and
   **all eight are live** — `navbar`, `sidebar`, `routes`, `toolbar`, `contextMenu`, `bulk-actions`,

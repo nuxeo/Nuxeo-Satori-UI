@@ -92,10 +92,7 @@ npm run beta:evidence -- phase-6-a11y
 `scripts/beta-harness/steps/phase-6-a11y.mjs` drives fifteen surfaces with axe at WCAG 2.1 AA. Its
 `KNOWN_VIOLATIONS` list is **empty** and its verdict is unconditional, so any violation fails it.
 
-- There is exactly one exclusion: `aria-required-children` on the adf-hx POC surface, which is
-  upstream's defect in `@alfresco/adf-core` (finding 1.2 of `docs/adf-hx-upstream-findings.md`).
-  It is scoped to a single step on purpose. **Do not widen it**, and do not add a second exclusion
-  to get green — that is a stop-and-report, not a fix.
+- There are no exclusions. **Do not add one** to get green — that is a stop-and-report, not a fix.
 - If your fix added a new surface or dialog, the existing steps will not visit it. Add a step, or
   state plainly in the report that the new surface is unscanned. An unscanned surface reported as
   "a11y clean" is exactly the under-sampling failure this harness was rewritten to remove.

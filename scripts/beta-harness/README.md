@@ -290,9 +290,8 @@ has the table. That ordering is deliberate — a lint error usually explains the
 failure that would follow, and running the full set on a known-broken tree wastes
 minutes per iteration.
 
-`dependency-tree` is **blocking** since the ADF removal (NXSAT-638) set `BLOCKING = true`
-in `dependency-tree.mjs`: any adf-hx, adf-core, adf-extensions, js-api or hxcs-js-client
-finding fails it. Until then it was report-only and passed while listing them.
+`dependency-tree` is **blocking** (`BLOCKING = true` in `dependency-tree.mjs`): any finding for a
+retired dependency (the legacy UI libraries, `js-api` or `hxcs-js-client`) fails it.
 
 Reports land in `$EVIDENCE_ROOT/beta/gates/<timestamp>-<phase>.json`.
 
@@ -327,10 +326,9 @@ is `AGENTS/12-review-agents.md`.
 ### The `parity-surface` gate
 
 `npm run beta:parity-surface` audits the one steps file that captures the same claims
-twice — `steps/nxsat-308-parity.mjs`, on the upstream adf-hx components and on their
-nxs- replacements. The upstream half cannot be captured again, so that file's rule is
-that the steps and the expected values are written once and only the **surface adapter**
-changes between the halves.
+twice — `steps/nxsat-308-parity.mjs`, on a reference surface and on the `nxs-` components.
+The reference half cannot be captured again, so that file's rule is that the steps and the
+expected values are written once and only the **surface adapter** changes between the halves.
 
 Nothing enforced the rule, and the `nxs` run was unable to finish for two months. A
 breadcrumb crumb was selected by its label; the label was itself under test, so the one
@@ -344,7 +342,7 @@ by its translated label staged nothing, so the save under test never ran — and
 that `AddChildren` survived it passed against an untouched ACL.
 
 Three rules, one per failure: `unguarded-click` (a `.click()` with no `.catch()`),
-`surface-selector-in-step` (a selector naming `nxs-`, `hxp-`, `adf-`, `sat-` or `lib-`
+`surface-selector-in-step` (a selector naming a component-library prefix such as `nxs-`, `sat-` or `lib-`
 from outside an adapter, in the runner or inside a `page.evaluate`), and `adapter-gap`
 (a surface missing an adapter key the steps read). A helper that only the adapters call
 counts as adapter code; one the steps also call does not.

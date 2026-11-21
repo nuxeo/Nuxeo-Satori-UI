@@ -136,8 +136,8 @@ route's default state cannot see them.
 ## It is slow, and that is expected
 
 Measured on this application: **8.8 minutes for `/#/browse`**, ~39s for `/#/search`, 2.5
-minutes for `/#/trash`, 3.0 for `/#/tasks`, 4.5 for administration, 4.0 for knowledge
-discovery, 3.2 for the adf-hx POC. The cost is the keyboard walk — up to 150 steps per direction, each a
+minutes for `/#/trash`, 3.0 for `/#/tasks`, 4.5 for administration, and 4.0 for knowledge
+discovery. The cost is the keyboard walk — up to 150 steps per direction, each a
 real key press plus a DOM read, against a page where Angular runs change detection on every
 one of them.
 

@@ -327,8 +327,8 @@ That instrument has been wrong twice, both times under-reporting:
 
 - `<mat-icon>` text is a ligature NAME, so `settings` reads as English and is not.
   60 phantom findings, burying the real ones.
-- Upstream ships only `en`, `fr` and `de`, so every adf-core and satori-ui string
-  read as a miss until the generator produced a `zz` for those catalogues too — 22 more.
+- Upstream catalogues ship a limited set of languages, so every satori-ui string
+  read as a miss until the generator produced a `zz` for that catalogue too.
 - The prose test required letters only, so anything with a number was skipped in
   silence: the five size buckets, every date range, `2 result(s)`.
 
@@ -377,8 +377,7 @@ English text this change alters, and invisible in HTML text, which collapses whi
 **Deliberately left hard-coded**, each for a stated reason: CSV export header rows (a file format
 downstream tools key on); `Manage everything` / `Can collect` in the share-saved-search dialog's API
 mapping and its external-user dialog, which double as data values mapped back to API rights; `versionLabel: 'Current'`, which is also the
-publish dialog's form value; adf-hx port errors, which are diagnostics returned to the upstream
-library; product names (`Nuxeo Drive`, the Layer 0 branding defaults); and `apps/nuxeo-satori-template`
+publish dialog's form value; product names (`Nuxeo Drive`, the Layer 0 branding defaults); and `apps/nuxeo-satori-template`
 (slice 11).
 
 ## Translator notes — 29 September 2026
@@ -410,8 +409,8 @@ deployment still rendered every one of these dates in English. Correct plumbing 
 constant. Gap 10, six hundred lines below on this same page, said so at the time.
 
 The provider is in `provide-app-config.ts` and shares `resolveFormattingLocale()` with the
-`APP_INITIALIZER` that sets adf-core's locale, so Angular's formatting locale and adf-core's
-cannot drift apart. Proven by `LOCALE_ID provider` in `provide-app-config.spec.ts`, which
+`APP_INITIALIZER` that sets the formatting locale, so Angular's formatting locale and the
+configured one cannot drift apart. Proven by `LOCALE_ID provider` in `provide-app-config.spec.ts`, which
 asserts `fr` and `de` resolve from configuration and an unregistered locale falls back to `en`;
 deleting the provider turns all four red.
 
@@ -556,7 +555,7 @@ the file before acting on it.
 
 | Count | What                                                                    | Action                                                   |
 | ----: | ----------------------------------------------------------------------- | -------------------------------------------------------- |
-|     9 | `Skip to main content`, hard-coded inside satori-ui's compiled template | Upstream finding 1.4 — no host-side fix exists           |
+|     9 | `Skip to main content`, hard-coded inside satori-ui's compiled template | No host-side fix exists                                  |
 |   4–6 | Repository content — document titles, custom type names, AI severities  | Instance data; translating it would corrupt user content |
 |   3–6 | Generated AI insight sentences                                          | Written by the server                                    |
 
@@ -679,7 +678,6 @@ Counting element text starting with a capital and `aria-label` / `title` / `plac
 | `apps/nuxeo-ui`                     | 15        | 89      | 10           | 7       | 1           | **107**   |
 | `apps/nuxeo-satori-template`        | 11        | 89      | 3            | 13      | 0           | **105**   |
 | `libs/features/search`              | 3         | 44      | 16           | 0       | 13          | **73**    |
-| `libs/shared/adf-hx-bridge`         | 13        | 35      | 19           | 10      | 3           | **67**    |
 | `libs/features/tasks`               | 3         | 43      | 11           | 2       | 9           | **65**    |
 | `libs/features/collections`         | 1         | 39      | 13           | 0       | 12          | **64**    |
 | `libs/features/trash`               | 2         | 30      | 17           | 0       | 16          | **63**    |
@@ -687,7 +685,7 @@ Counting element text starting with a capital and `aria-label` / `title` / `plac
 | `libs/features/assets`              | 3         | 16      | 7            | 0       | 4           | **27**    |
 | `libs/extensions/acme-extensions`   | 2         | 3       | 0            | 0       | 0           | **3**     |
 | others                              | 2         | 2       | 0            | 0       | 0           | **2**     |
-| **Total**                           |           | **822** | **317**      | **59**  | **152**     | **1350**  |
+| **Total**                           |           | **787** | **298**      | **49**  | **149**     | **1283**  |
 
 `libs/shared/nuxeo-client` is the only project with no remaining strings, and it has one
 template.
@@ -752,8 +750,7 @@ an unknown.
 
 ### Locale coverage is uneven upstream, and that bites
 
-The adf-hx rows this table used to carry are gone with the dependency (NXSAT-635, NXSAT-637).
-One upstream catalogue is left, and the problem they described is live in it:
+One upstream catalogue is seeded, and its locale coverage is uneven:
 
 | Catalogue source                            | Locale ids shipped                                                                  |
 | ------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -811,17 +808,10 @@ Delivered by Phase 1 and Phase 3, and all of it still stands:
 - **`AppTranslateLoader`** — merges N catalogue folders, then the app's own catalogue, then the
   manifest's `labels`. That last layer is a shipped **Layer 0** capability: a customer relabels
   the product with a JSON edit and no rebuild.
-- **Four upstream catalogues seeded** — `adf-core`, both adf-hx bundles, `satori-ui` — because
-  adf-hx registers its own catalogues at _component construction_, long after the language has
-  loaded, so registration landed and the strings never arrived (`W6`).
+- **One upstream catalogue seeded** — `satori-ui`.
 - **`defaultLanguage` and `availableLanguages`** as Layer 0 bootstrap keys, validated and
   unit-tested.
 - A compiled-in English fallback for a failed catalogue fetch.
-
-Two things that were _not_ true, despite the ticket saying so:
-
-- adf-hx translations were described as unwired. They were wired, and gated by the `bundle` gate.
-- The raw-key defect was attributed to those unwired assets. It was an upstream typo.
 
 ---
 
@@ -829,32 +819,7 @@ Two things that were _not_ true, despite the ticket saying so:
 
 ### The defect that started it
 
-`HxpDocumentTreeComponent` binds its folder toggle's accessible name to
-
-```
-('DOCUMENT_TREE.TOGGLE_ARIA-LABEL ' | translate) + node.name
-```
-
-— a **trailing space inside the key literal**. The catalogue ships the key without one, so the
-lookup missed a key that was present, ngx-translate fell through to its key passthrough, and
-every folder toggle in the tree was announced as `DOCUMENT_TREE.TOGGLE_ARIA-LABEL undefined`
-— on **every surface**, because the tree is the app shell's nav drawer.
-
-`undefined`, not the folder name. `Default domain` is only the label rendered _beside_ the toggle;
-the toggle itself appends `node.name`, which upstream's node wrapper does not have. Writing the
-folder name here obscured why the W13 alias alone was never going to be enough, and W15 is what
-supplies a real name.
-
-A WCAG 4.1.2 failure, and **axe cannot detect it**: axe checks that a control _has_ an accessible
-name, not that the name is words. The blank-name variant of the same defect (upstream finding
-4.6) was caught by axe in a single scan. This one sat through the same audit untouched.
-
-Fixed by aliasing, which copies the _resolved_ value so a translated catalogue still yields a
-translated name, and which yields to an upstream-shipped key so it becomes inert rather than
-authoritative if upstream fixes it. Recorded as `W13` and as upstream finding 1.3, whose ask is
-one character plus an interpolation parameter.
-
-A **second instance of the same class** turned up on the way: `settings.themes.search` is the
+A defect of this class: `settings.themes.search` is the
 themes search button's `aria-label`, it was in the catalogue and missing from the fallback, so a
 failed fetch named that control with the raw key. Its catalogue value was also literally
 `"Search (placeholder)"` — shipping as a real accessible name.
@@ -893,11 +858,11 @@ since, each added with its context because `checkTranslationContext` fails a key
 `npm run beta:evidence -- nxsat-227-i18n` → **PASS, 38/38 across 10 steps**, read from that run's
 `manifest.json` rather than transcribed. Re-run it rather than trusting this line: the figure here
 was `25/25 across 9 steps` from the 16 September run, which **predated five of the assertions it
-was being cited as proving** — the adf-hx language check, the translated suggestion payload, the
+was being cited as proving** — the translated suggestion payload, the
 French axe scan, route reachability and the date-formatting check were all added after it.
 
 Asserts off the rendered DOM: no raw key in any `aria-label`, `title` or leaf text node on all
-eight routes; the toggle named `Toggle <folder>`; `fr` and `de` differing from each other; an
+eight routes; `fr` and `de` differing from each other; an
 unshipped locale degrading to English rather than to keys, and still rendering dates rather than
 leaving them blank; a suggestion click sending the French string rather than the English one behind
 its label; and **no axe violation at any impact** on the French shell — `failOn` is
@@ -910,31 +875,13 @@ Every language switch goes through a real `page.reload()`, because `withHashLoca
 Six of those checks were failing when the assertions were first run honestly, and four of the six
 were defects in the evidence rather than the application — a raw-key sweep reading `<style>`
 elements, a route-reached check that rejected a legitimate child route, and a date check measuring
-a surface that renders no date cells. The fourth was real: the French axe scan found the navigation
-tree's folder toggles had no accessible name at all.
+a surface that renders no date cells. The fourth was real: the French axe scan found a control with no accessible
+name at all.
 
 ### Two defects found by running the application, which the controls did not catch
 
 Recorded prominently because they are the more interesting failure: a capture that reported
 **25/25 PASS** was live at the time, and both of these were present.
-
-**`W14` — adf-hx surfaces silently reverted the language to English.** adf-core's
-`TranslationService` reads the locale from its own `UserPreferencesService` and calls
-`translate.use(...)` on the shared ngx-translate instance when it constructs. So
-`defaultLanguage: 'fr'` held on the seven ordinary shell routes and reverted the moment the
-`/#/browse-adf-hx` route or the adf-hx nav drawer rendered — no page reload involved,
-`performance.getEntriesByType('navigation')` stayed at one entry, and all five catalogues were
-re-fetched for `en`.
-
-The capture missed it because step 5 navigated to `/#/browse` before asserting French — a `goTo`
-added to get away from a drawer an earlier step had opened, which happens to be exactly the
-navigation that avoids the bug. **The evidence was true and incomplete.** Fixed by re-asserting
-our Layer 0 language into adf-core's preference on every boot, with a regression step that drives
-the adf-hx surfaces explicitly.
-
-A side effect worth knowing: upstream's own catalogues now resolve too. The document tree root
-renders `Accueil` rather than `Home`, because adf-hx ships `fr` and was previously being fetched
-as `en`.
 
 **Missing Angular locale data — and the first bug was hiding it.** Once the locale actually
 applied, `DatePipe` was handed `fr` for the first time and threw `NG0701: Missing locale data`,
@@ -945,7 +892,7 @@ otherwise appears as a pipe error on an unrelated page.
 
 Then the same run showed eleven more for the deliberately-unshipped `xx` locale: strings degraded
 to English correctly, dates threw. A customer mistyping `defaultLanguage` would get readable text
-and a broken date in every list. Fixed by only handing adf-core a locale we have data for, so the
+and a broken date in every list. Fixed by only handing the formatting locale a value we have data for, so the
 string language and the formatting locale are allowed to differ.
 
 **The order matters and is the lesson: the i18n bug was hiding the l10n bug.** A half-applied
@@ -960,7 +907,7 @@ Worth recording, because it is the argument for writing controls at all:
    guardrail report.
 2. A parity branch reported "no en.json" for a file that was present but unparseable — a wrong
    message, which is worse than none.
-3. A `.first()` selector read an adf-hx input instead of the header search box, which looked
+3. A `.first()` selector read the wrong input instead of the header search box, which looked
    exactly like "the locale did not apply". Instrumentation recording the `defaultLanguage` the
    interception actually served is what separated the two explanations.
 4. **CI caught one that every local run missed.** The selftest passed `--base` but not `--head`;
@@ -1127,8 +1074,8 @@ second condition held — the NXSAT-293 pull reverted none of them, because Crow
 caught up.)
 
 One trap is already handled and must stay handled: the standard's `/**/**/i18n/en.json` glob, with
-`base_path: "."`, sweeps `node_modules` and its 48 upstream catalogues — which would push
-Alfresco's and Satori's strings into our project and bill the translation crew for work another team
+`base_path: "."`, sweeps `node_modules` and its upstream catalogues — which would push
+Satori's strings into our project and bill the translation crew for work another team
 has already paid for. `crowdin-conf.yml` is scoped to `apps/` and `libs/`, and `checkCrowdinConfig`
 fails any source that is not.
 
@@ -1146,7 +1093,7 @@ fails any source that is not.
    the selectors had to move to `data-testid` first.
 
    That is wrong, and a live counter-example was already in the repository.
-   `browse.details.toggle` has been bound through the pipe in `browse-adf-hx-poc.html` since
+   `browse.details.toggle` has been bound through the pipe in a browse template since
    before this work, and `phase-1-tag-styles.mjs` selects it as
    `button[aria-label="Toggle details panel"]`. That harness **passes 21/21**. Angular resolves
    the pipe and sets the attribute to the resolved string, so in English the DOM is byte-identical
@@ -1222,11 +1169,11 @@ fails any source that is not.
    nothing *renders* it, so a deployment still selects its language through `defaultLanguage`.
    It is read by the two admission checks on that key — `resolveFormattingLocale` and, since
    NXSAT-733, `resolveStringLanguage` — which is why the wording here no longer says it is read
-   only by the config parser. adf-core ships `LanguagePickerComponent`.
-10. **`LOCALE_ID` — CLOSED 2026-09-22.** Locale _data_ is registered for `fr` and `de` (and for `ja`, `nl`, `th`, `zh` since NXSAT-293), adf-core's
+   only by the config parser.
+10. **`LOCALE_ID` — CLOSED 2026-09-22.** Locale _data_ is registered for `fr` and `de` (and for `ja`, `nl`, `th`, `zh` since NXSAT-293), the
     formatting locale follows the configuration, and `LOCALE_ID` is now **provided** from it too,
     in `provide-app-config.ts`. Both consumers share `resolveFormattingLocale()`, so Angular's
-    formatting locale and adf-core's cannot diverge. Before that provider existed, anything
+    formatting locale and the configured one cannot diverge. Before that provider existed, anything
     reading Angular's locale — every `DatePipe`, `DecimalPipe`, `CurrencyPipe` and
     `inject(LOCALE_ID)` — got the built-in `en-US` regardless of configuration. Covered by
     `LOCALE_ID provider` in `provide-app-config.spec.ts`; deleting the provider turns four tests
@@ -1271,14 +1218,7 @@ fails any source that is not.
     `(s)`, and every pair is currently complete — no `-one` without its `-many` — but nothing yet
     enforces that pairing, which is the gap to close when a third form is needed.
 
-    `hxpRelativeTime` is the exception that already handles all of this: it uses
-    `Intl.RelativeTimeFormat`, which ships every locale's plural rules in the browser, so there is
-    nothing to translate and nothing to mistranslate.
-
-13. `GET /nuxeo/api/v1/group/Administrator` **404s on every adf-hx drawer open** because
-    `Administrator` is a user, not a group. Unrelated to i18n, currently suppressed in the
-    evidence capture with a comment saying so, and it deserves its own ticket.
-14. The Nuxeo platform's [Crowdin Integration page](https://hyland.atlassian.net/wiki/spaces/NuxEng/pages/3148546309)
+13. The Nuxeo platform's [Crowdin Integration page](https://hyland.atlassian.net/wiki/spaces/NuxEng/pages/3148546309)
     **publishes a live Crowdin API token in plaintext**, against the HXP standard's explicit MUST.
     Belongs to `nuxeo-lts`, so hand it off — but rotate it before we add a second token.
 
