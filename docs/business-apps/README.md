@@ -45,6 +45,8 @@ Designer, the development plan and its decisions. Start here when you pick this 
 6. [end-state.md](end-state.md): what exists at the end of phase 9, and how each kind of company
    and each person in it uses the app.
 7. [decisions.md](decisions.md): what is open, who decides, by when, and what is settled.
+8. [layout-v2.md](layout-v2.md): layout file version 2, proposed. It is the format record pages
+   and forms are configured in, and what the Studio migration writes.
 
 ## Facts that hold
 
