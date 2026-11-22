@@ -36,6 +36,13 @@ describe('themeProperties', () => {
     expect(themeProperties(css)).toEqual([{ name: '--real', value: 'url("a;b")', mixin: false }]);
   });
 
+  it('keeps what looks like a comment inside a quoted value', () => {
+    const css = `html { --asset: url("images/*logo*/icon.png") /* a real comment */; }`;
+    expect(themeProperties(css)).toEqual([
+      { name: '--asset', value: 'url("images/*logo*/icon.png")', mixin: false },
+    ]);
+  });
+
   it('reads declarations in nested blocks and the last one before a closing brace', () => {
     const css = `@media (max-width: 1024px) { html { --nested: 2px } } html { --last: 3px }`;
     expect(themeProperties(css).map((p) => [p.name, p.value])).toEqual([

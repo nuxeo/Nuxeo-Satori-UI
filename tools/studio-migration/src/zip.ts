@@ -137,6 +137,14 @@ export function readZip(
     }
     files.set(name, content);
   }
+  // The entries read must fill the central directory exactly. An end record that understates the
+  // count would otherwise hide the entries beyond it from this reader while other tools list them,
+  // which is how a bundle could carry files the inventory never sees.
+  if (position !== centralOffset + centralSize) {
+    throw new ZipError(
+      `the central directory holds more than the ${entryCount} entries its end record declares`,
+    );
+  }
   return files;
 }
 

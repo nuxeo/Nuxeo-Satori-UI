@@ -1,16 +1,24 @@
 /**
- * The inventory held against the catalogue: for each slot contribution, element and theme
- * property, what it becomes, or that the catalogue does not know it. Not knowing is never a pass:
- * it is a decision someone has to take, and it is listed as one.
+ * The inventory held against the catalogue: for each slot contribution, element, script and theme
+ * property, what it becomes, or that the catalogue does not know it.
+ *
+ * `decisions` lists everything a person has to settle before a migration is ready
+ * (docs/business-apps/studio-migration.md, section 6): what the catalogue does not know, what it
+ * reports or leaves for an agent to propose, customer code, and the mistakes real projects carry.
+ * Not knowing is never a pass.
  */
 import {
+  elementEntry,
   mapThemeProperty,
+  scriptEntry,
+  slotEntry,
   type Catalogue,
   type ElementEntry,
+  type ScriptEntry,
   type SlotEntry,
   type TokenMapping,
 } from './catalogue';
-import type { Inventory, InventoryFile, SlotContribution } from './inventory';
+import type { Inventory, InventoryFile, ScriptUse, SlotContribution } from './inventory';
 
 export interface SlotOutcome {
   readonly contribution: SlotContribution;
@@ -25,6 +33,12 @@ export interface ElementOutcome {
   readonly entry: ElementEntry | null;
 }
 
+export interface ScriptOutcome {
+  readonly script: ScriptUse;
+  /** `null` for a script Studio does not generate: customer code. */
+  readonly entry: ScriptEntry | null;
+}
+
 export interface ThemeOutcome {
   readonly theme: string;
   readonly mappings: readonly TokenMapping[];
@@ -33,21 +47,26 @@ export interface ThemeOutcome {
 export interface Accounting {
   readonly slots: readonly SlotOutcome[];
   readonly elements: readonly ElementOutcome[];
+  readonly scripts: readonly ScriptOutcome[];
   readonly themes: readonly ThemeOutcome[];
   readonly unrecognisedFiles: readonly InventoryFile[];
-  /** Everything the catalogue cannot place, as decisions to take. */
+  /** Everything a person has to settle, one line each. */
   readonly decisions: readonly string[];
 }
 
 export function account(inventory: Inventory, catalogue: Catalogue): Accounting {
   const slots = inventory.slotContributions.map((contribution) => ({
     contribution,
-    entry: catalogue.slots[contribution.slot] ?? null,
+    entry: slotEntry(catalogue, contribution.slot),
   }));
   const elements = [...inventory.elements].map(([element, count]) => ({
     element,
     count,
-    entry: catalogue.elements[element] ?? null,
+    entry: elementEntry(catalogue, element),
+  }));
+  const scripts = inventory.scripts.map((script) => ({
+    script,
+    entry: scriptEntry(catalogue, script.shape),
   }));
   const themes = inventory.themes.map((theme) => ({
     theme: theme.name,
@@ -56,18 +75,38 @@ export function account(inventory: Inventory, catalogue: Catalogue): Accounting 
   const unrecognisedFiles = inventory.files.filter((file) => file.kind === 'unrecognised');
 
   const decisions = [
-    ...slots
-      .filter((outcome) => outcome.entry === null)
+    ...slots.flatMap(({ contribution, entry }) => {
+      const subject = `slot ${contribution.slot} (contribution "${contribution.name}")`;
+      if (!entry) return [`${subject} is not in the catalogue`];
+      if (entry.how === 'automatic') return [];
+      return [`${subject} is ${describe(entry.how)}: ${entry.note ?? catalogue.reportedBecause}`];
+    }),
+    ...elements.flatMap(({ element, count, entry }) => {
+      const subject = `element ${element} (used ${count} times)`;
+      if (!entry) return [`${subject} is not in the catalogue`];
+      if (entry.how === 'automatic') return [];
+      return [`${subject} is ${describe(entry.how)}: ${entry.note ?? entry.becomes}`];
+    }),
+    ...scripts
+      .filter(({ entry }) => entry === null)
       .map(
-        ({ contribution }) =>
-          `slot ${contribution.slot} (contribution "${contribution.name}") is not in the catalogue`,
+        ({ script }) =>
+          `script ${script.index + 1} in ${script.path} is not one Studio generates: review it as customer code`,
       ),
-    ...elements
-      .filter((outcome) => outcome.entry === null)
+    ...inventory.customCode
+      .filter((custom) => custom.hasCode)
       .map(
-        (outcome) =>
-          `element ${outcome.element} (used ${outcome.count} times) is not in the catalogue`,
+        (custom) =>
+          `${custom.path} holds customer code, for an agent to propose as a Layer 2 plugin`,
       ),
+    ...themes.flatMap(({ theme, mappings }) => {
+      const reported = mappings.filter((mapping) => mapping.token === null).length;
+      return reported === 0
+        ? []
+        : [
+            `theme ${theme}: ${reported} of its ${mappings.length} properties set no token and are reported`,
+          ];
+    }),
     ...unrecognisedFiles.map((file) => `file ${file.path} is of no known kind`),
     ...inventory.problems.map(
       (problem) => `file ${problem.path} could not be read: ${problem.message}`,
@@ -92,11 +131,15 @@ export function account(inventory: Inventory, catalogue: Catalogue): Accounting 
     ...inventory.layouts.flatMap((layout) =>
       repeatedBindings(
         layout.element,
-        layout.fields.map((f) => f.binding),
+        layout.fields.map((field) => field.binding),
       ),
     ),
   ];
-  return { slots, elements, themes, unrecognisedFiles, decisions };
+  return { slots, elements, scripts, themes, unrecognisedFiles, decisions };
+}
+
+function describe(how: 'agent-proposes' | 'reported'): string {
+  return how === 'reported' ? 'reported' : 'for an agent to propose';
 }
 
 function repeatedBindings(layout: string, bindings: readonly (string | null)[]): string[] {

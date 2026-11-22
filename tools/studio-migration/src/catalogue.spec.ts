@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import {
   CATALOGUE_DIRECTORY,
   CatalogueError,
+  elementEntry,
   loadCatalogue,
   mapThemeProperty,
+  slotEntry,
   validate,
   type Catalogue,
 } from './catalogue';
@@ -214,11 +216,53 @@ describe('the catalogue', () => {
         expect.arrayContaining([expect.stringMatching(/needs a "--" entry/)]),
       );
     });
+
+    it('two properties setting the same token', () => {
+      const problems = broken((c) => ({
+        ...c,
+        tokens: { ...c.tokens, '--nuxeo-link-color': '--mat-sys-primary' },
+      }));
+      expect(problems).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(
+            /--nuxeo-primary-color and --nuxeo-link-color both set --mat-sys-primary/,
+          ),
+        ]),
+      );
+    });
+
+    it('a script with no shape, and one listed twice', () => {
+      const problems = broken((c) => ({
+        ...c,
+        scripts: [
+          ...c.scripts,
+          { name: 'no shape', sha256: 'abc', seen: 'x' },
+          { ...c.scripts[0], name: 'again' },
+        ],
+      }));
+      expect(problems).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/no shape has no SHA-256/),
+          expect.stringMatching(/the shape of again is listed twice/),
+        ]),
+      );
+    });
+  });
+
+  it('finds nothing on the prototype for a name a package chose', () => {
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(slotEntry(catalogue, name)).toBeNull();
+      expect(elementEntry(catalogue, name)).toBeNull();
+    }
+    expect(mapThemeProperty(catalogue, 'constructor')).toMatchObject({
+      token: null,
+      reason: catalogue.reportedProperties['--'],
+    });
   });
 
   it('refuses to load a broken catalogue, naming what is wrong', () => {
     const directory = mkdtempSync(join(tmpdir(), 'studio-catalogue-'));
-    for (const name of ['slots.json', 'elements.json', 'theme-tokens.json']) {
+    for (const name of ['slots.json', 'elements.json', 'theme-tokens.json', 'scripts.json']) {
       writeFileSync(join(directory, name), readFileSync(join(CATALOGUE_DIRECTORY, name)));
     }
     const slots = JSON.parse(readFileSync(join(directory, 'slots.json'), 'utf8'));

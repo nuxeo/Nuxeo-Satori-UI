@@ -155,6 +155,23 @@ function skipString(css: string, start: number): number {
   return at + 1;
 }
 
+/** The text without its comments. What a string holds is kept, `/*` and all. */
 function stripComments(text: string): string {
-  return text.replace(/\/\*[\s\S]*?\*\//g, '');
+  let kept = '';
+  let at = 0;
+  while (at < text.length) {
+    if (text[at] === '/' && text[at + 1] === '*') {
+      at = skipComment(text, at);
+      continue;
+    }
+    if (text[at] === '"' || text[at] === "'") {
+      const end = skipString(text, at);
+      kept += text.slice(at, end);
+      at = end;
+      continue;
+    }
+    kept += text[at];
+    at++;
+  }
+  return kept;
 }

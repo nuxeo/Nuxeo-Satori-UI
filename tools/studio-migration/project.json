@@ -9,6 +9,13 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
+      "$inputsComment": "nx.json's test inputs, plus the extension reference: a test holds the catalogue's app slots against its slot table, and without it here an edit to the reference would replay a cached pass.",
+      "inputs": [
+        "default",
+        "^production",
+        { "env": "SATORI_TEST_TZ" },
+        "{workspaceRoot}/docs/extension-reference.md"
+      ],
       "options": { "reportsDirectory": "coverage/tools/studio-migration" }
     },
     "lint": {

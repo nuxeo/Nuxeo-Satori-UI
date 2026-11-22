@@ -8,6 +8,7 @@
  * than ending the run.
  */
 import { childLabel, elementsOf, isCustomElement, parseHtml, parseXml } from './markup';
+import { scriptShape } from './script-shape';
 import type { StudioPackage, StudioPackageDescriptor } from './studio-package';
 import { themeProperties, type ThemeProperty } from './theme';
 
@@ -125,6 +126,15 @@ export interface CustomCode {
   readonly hasCode: boolean;
 }
 
+/** A `<script>` in a layout, search screen, slot bundle, dashboard or theme. */
+export interface ScriptUse {
+  readonly path: string;
+  /** Its position among the file's scripts, from 0. */
+  readonly index: number;
+  /** Its shape's SHA-256 (`script-shape.ts`), to compare with the scripts Studio generates. */
+  readonly shape: string;
+}
+
 export interface InventoryProblem {
   readonly path: string;
   readonly message: string;
@@ -147,6 +157,8 @@ export interface Inventory {
    * themes, leaving out the two wrappers every such file has, `dom-module` and `custom-style`.
    */
   readonly elements: ReadonlyMap<string, number>;
+  /** Every script in those files, so a customer's code in one is never passed over. */
+  readonly scripts: readonly ScriptUse[];
   readonly problems: readonly InventoryProblem[];
 }
 
@@ -172,11 +184,13 @@ const BUNDLE_KINDS: readonly (readonly [RegExp, FileKind])[] = [
   [/^\.metadata\/[^/]+$/, 'studio-metadata'],
 ];
 
-const PACKAGE_KINDS: Readonly<Record<string, FileKind>> = {
-  'package.xml': 'package-descriptor',
-  'install.xml': 'package-install',
-  'studio-registries.json': 'package-registries',
-};
+// A Map, not an object: a file named `constructor` or `__proto__` must not find a kind on the
+// object's prototype.
+const PACKAGE_KINDS: ReadonlyMap<string, FileKind> = new Map([
+  ['package.xml', 'package-descriptor'],
+  ['install.xml', 'package-install'],
+  ['studio-registries.json', 'package-registries'],
+]);
 
 const RESULT_VIEWS = ['nuxeo-data-table', 'nuxeo-data-grid', 'nuxeo-justified-grid'];
 const WRAPPERS = new Set(['dom-module', 'custom-style']);
@@ -188,7 +202,7 @@ export function classify(
 ): FileKind {
   if (location === 'package') {
     if (path === bundlePath) return 'bundle';
-    return PACKAGE_KINDS[path] ?? 'unrecognised';
+    return PACKAGE_KINDS.get(path) ?? 'unrecognised';
   }
   return BUNDLE_KINDS.find(([pattern]) => pattern.test(path))?.[1] ?? 'unrecognised';
 }
@@ -219,13 +233,24 @@ export function inventory(pkg: StudioPackage): Inventory {
       .filter((file) => file.location === 'bundle' && file.kind === kind)
       .map((file) => file.path);
 
-  /** Parses a Web UI file, counts its custom elements, and hands its document on. */
+  const scripts: ScriptUse[] = [];
+  /** Parses a Web UI file, counts its custom elements, records its scripts, and hands its document on. */
   const webUi = (path: string): { document: Document; text: string } => {
     const text = read(path);
     const document = parseHtml(text);
+    let index = 0;
     for (const element of elementsOf(document)) {
       if (isCustomElement(element) && !WRAPPERS.has(element.localName)) {
         elements.set(element.localName, (elements.get(element.localName) ?? 0) + 1);
+      }
+      if (element.localName === 'script') {
+        // A script loaded from elsewhere is shaped by where it comes from: it is never a template.
+        const src = element.getAttribute('src');
+        const source =
+          src === null
+            ? (element.textContent ?? '')
+            : `/* external */ import(${JSON.stringify(src)})`;
+        scripts.push({ path, index: index++, shape: scriptShape(source) });
       }
     }
     return { document, text };
@@ -309,12 +334,11 @@ export function inventory(pkg: StudioPackage): Inventory {
       }),
   );
 
+  // Judged on the parsed file, where comments are nodes of their own, rather than by cutting
+  // comments out of the text, which a malformed comment can survive.
   const customCode: CustomCode[] = ofKind('custom-bundle').map((path) => ({
     path,
-    hasCode:
-      read(path)
-        .replace(/<!--[\s\S]*?-->/g, '')
-        .trim().length > 0,
+    hasCode: hasContent(parseHtml(read(path))),
   }));
 
   const dashboardPath = ofKind('dashboard')[0];
@@ -326,12 +350,10 @@ export function inventory(pkg: StudioPackage): Inventory {
       .map((card) => {
         const inner = elementsOf(card).filter(isCustomElement);
         const heading = card.getAttribute('heading');
-        // A card repeats another when it shows the same heading over the same content: the same
-        // elements reading the same page providers.
-        const signature = JSON.stringify([
-          heading,
-          inner.map((element) => [element.localName, element.getAttribute('provider')]),
-        ]);
+        // A card repeats another only when its whole markup is the same, attributes, columns and
+        // text included, with only the spacing between them allowed to differ. Anything less would
+        // risk calling two different cards one.
+        const signature = markupOf(card);
         const earlier = signatures.indexOf(signature);
         signatures.push(signature);
         return {
@@ -397,8 +419,29 @@ export function inventory(pkg: StudioPackage): Inventory {
     elements: new Map(
       [...elements].sort(([a, countA], [b, countB]) => countB - countA || a.localeCompare(b)),
     ),
+    scripts,
     problems,
   };
+}
+
+/** True when the document holds anything but comments and spacing. */
+function hasContent(document: Document): boolean {
+  const parts = [document.head, document.body].filter((part): part is HTMLElement => part !== null);
+  return parts.some((part) =>
+    Array.from(part.childNodes).some(
+      (node) =>
+        node.nodeType === node.ELEMENT_NODE ||
+        (node.nodeType === node.TEXT_NODE && (node.textContent ?? '').trim() !== ''),
+    ),
+  );
+}
+
+/**
+ * An element's markup, with runs of spacing collapsed and the spacing between tags dropped.
+ * `outerHTML` serialises a template's content too, so nothing inside the element is left out.
+ */
+function markupOf(element: Element): string {
+  return element.outerHTML.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
 }
 
 /** The fields of a layout: its elements marked `role="widget"`. */

@@ -1,7 +1,10 @@
 /**
- * The catalogue: what each Web UI slot, element and theme property becomes in the new app, read
- * from `catalogue/*.json` and checked as it loads, so a mistaken edit fails at once instead of
- * quietly mapping something to nowhere.
+ * The catalogue: what each Web UI slot, element and theme property becomes in the new app, and
+ * which scripts are the ones Studio generates. Read from `catalogue/*.json` and checked as it
+ * loads, so a mistaken edit fails at once instead of quietly mapping something to nowhere.
+ *
+ * Every lookup is by own property only. The names come from a customer's package, and a slot
+ * named `constructor` must not find an entry on `Object.prototype`.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,6 +29,15 @@ export interface ElementEntry {
   readonly note?: string;
 }
 
+/** A script Studio or Web UI generates, known by its shape (`script-shape.ts`). */
+export interface ScriptEntry {
+  readonly name: string;
+  readonly sha256: string;
+  /** Where the shape was read from. */
+  readonly seen: string;
+  readonly note?: string;
+}
+
 export interface Catalogue {
   readonly appSlots: readonly string[];
   readonly reportedBecause: string;
@@ -34,6 +46,7 @@ export interface Catalogue {
   readonly tokens: Readonly<Record<string, string>>;
   /** Exact names, and families ending in `-` matched by prefix. */
   readonly reportedProperties: Readonly<Record<string, string>>;
+  readonly scripts: readonly ScriptEntry[];
 }
 
 export type TokenMapping =
@@ -57,12 +70,18 @@ const LAYER0_KEYS = ['themes'];
 
 export const CATALOGUE_DIRECTORY = join(__dirname, '..', 'catalogue');
 
+/** The record's own value for the key, never one inherited from `Object.prototype`. */
+export function own<T>(record: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
 export function loadCatalogue(directory = CATALOGUE_DIRECTORY): Catalogue {
   const read = (name: string): Record<string, unknown> =>
     JSON.parse(readFileSync(join(directory, name), 'utf8')) as Record<string, unknown>;
   const slots = read('slots.json');
   const elements = read('elements.json');
   const theme = read('theme-tokens.json');
+  const scripts = read('scripts.json');
   const catalogue: Catalogue = {
     appSlots: slots['appSlots'] as string[],
     reportedBecause: slots['reportedBecause'] as string,
@@ -70,6 +89,7 @@ export function loadCatalogue(directory = CATALOGUE_DIRECTORY): Catalogue {
     elements: elements['elements'] as Record<string, ElementEntry>,
     tokens: theme['tokens'] as Record<string, string>,
     reportedProperties: theme['reported'] as Record<string, string>,
+    scripts: scripts['scripts'] as ScriptEntry[],
   };
   const problems = validate(catalogue);
   if (problems.length > 0) {
@@ -110,6 +130,7 @@ export function validate(catalogue: Catalogue): string[] {
     if (!HOW.includes(entry.how)) problems.push(`elements.json: ${name} has how "${entry.how}"`);
     if (!entry.becomes) problems.push(`elements.json: ${name} does not say what it becomes`);
   }
+  const targeted = new Map<string, string>();
   for (const [property, token] of Object.entries(catalogue.tokens ?? {})) {
     if (!property.startsWith('--'))
       problems.push(`theme-tokens.json: ${property} is not a custom property`);
@@ -118,31 +139,62 @@ export function validate(catalogue: Catalogue): string[] {
         `theme-tokens.json: ${property} maps to "${token}", which is not a --mat-sys-* token`,
       );
     }
-    if (property in (catalogue.reportedProperties ?? {})) {
+    if (Object.hasOwn(catalogue.reportedProperties ?? {}, property)) {
       problems.push(`theme-tokens.json: ${property} is both mapped and reported`);
     }
+    // Two properties setting one token would leave the converted theme to whichever came last.
+    const other = targeted.get(token);
+    if (other) problems.push(`theme-tokens.json: ${other} and ${property} both set ${token}`);
+    targeted.set(token, property);
   }
   for (const [key, reason] of Object.entries(catalogue.reportedProperties ?? {})) {
     if (!key.startsWith('--'))
       problems.push(`theme-tokens.json: reported "${key}" is not a custom property`);
     if (!reason) problems.push(`theme-tokens.json: reported "${key}" gives no reason`);
   }
-  if (!('--' in (catalogue.reportedProperties ?? {}))) {
+  if (!Object.hasOwn(catalogue.reportedProperties ?? {}, '--')) {
     problems.push(
       'theme-tokens.json: "reported" needs a "--" entry, so that every property gets a reason',
     );
   }
+  const shapes = new Set<string>();
+  for (const script of catalogue.scripts ?? []) {
+    if (!script.name) problems.push('scripts.json: a script has no name');
+    if (!/^[0-9a-f]{64}$/.test(script.sha256 ?? '')) {
+      problems.push(`scripts.json: ${script.name} has no SHA-256 of its shape`);
+    }
+    if (shapes.has(script.sha256))
+      problems.push(`scripts.json: the shape of ${script.name} is listed twice`);
+    shapes.add(script.sha256);
+    if (!script.seen) problems.push(`scripts.json: ${script.name} does not say where it was seen`);
+  }
   return problems;
+}
+
+export function slotEntry(catalogue: Catalogue, slot: string): SlotEntry | null {
+  return own(catalogue.slots, slot) ?? null;
+}
+
+export function elementEntry(catalogue: Catalogue, element: string): ElementEntry | null {
+  return own(catalogue.elements, element) ?? null;
+}
+
+export function scriptEntry(catalogue: Catalogue, shape: string): ScriptEntry | null {
+  return catalogue.scripts.find((script) => script.sha256 === shape) ?? null;
 }
 
 /** The token a theme property sets, or the reason it sets none. */
 export function mapThemeProperty(catalogue: Catalogue, property: string): TokenMapping {
-  const token = catalogue.tokens[property];
+  const token = own(catalogue.tokens, property);
   if (token) return { property, token };
   const reported = catalogue.reportedProperties;
-  if (property in reported) return { property, token: null, reason: reported[property] };
-  const family = Object.keys(reported)
-    .filter((key) => key.endsWith('-') && property.startsWith(key))
-    .sort((a, b) => b.length - a.length)[0];
+  const exact = own(reported, property);
+  if (exact) return { property, token: null, reason: exact };
+  // The nearest family, and the catch-all `--` for anything no family claims, so that every
+  // property comes back with a reason, even a name that is not a custom property at all.
+  const family =
+    Object.keys(reported)
+      .filter((key) => key.endsWith('-') && property.startsWith(key))
+      .sort((a, b) => b.length - a.length)[0] ?? '--';
   return { property, token: null, reason: reported[family] };
 }

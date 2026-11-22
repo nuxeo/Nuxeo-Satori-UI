@@ -1,3 +1,4 @@
+import { loadCatalogue, scriptEntry } from './catalogue';
 import { classify, inventory } from './inventory';
 import { readStudioPackage } from './studio-package';
 import {
@@ -186,5 +187,61 @@ describe('inventory', () => {
     ]);
     expect(result.translations.map((t) => t.locale)).toEqual(['en', 'fr']);
     expect(result.layouts).toHaveLength(2);
+  });
+
+  it('records every script, and the synthetic ones have the shapes of the templates Studio generates', () => {
+    const catalogue = loadCatalogue();
+    expect(synthetic.scripts.map((s) => [s.path.split('/').pop(), s.index])).toEqual([
+      ['nuxeo-claim-view-layout.html', 0],
+      ['nuxeo-claim-edit-layout.html', 0],
+      ['nuxeo-claims-search-form.html', 0],
+      ['nuxeo-claims-search-results.html', 0],
+    ]);
+    expect(synthetic.scripts.map((s) => scriptEntry(catalogue, s.shape)?.name)).toEqual([
+      "Studio's document layout",
+      "Studio's document layout",
+      "Studio's search form",
+      "Studio's search results",
+    ]);
+  });
+
+  it('gives a script with customer code in it a shape no template has', () => {
+    const path = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
+    const original = syntheticBundleFiles()[path];
+    const result = of({
+      bundle: {
+        [path]: original.replace('behaviors:', 'ready: function() { this.track(); }, behaviors:'),
+      },
+    });
+    const script = result.scripts.find((s) => s.path === path);
+    expect(script && scriptEntry(loadCatalogue(), script.shape)).toBeNull();
+  });
+
+  // Negative controls for what review found the first version got wrong.
+  it('finds no kind on the prototype for a file named constructor or __proto__', () => {
+    for (const name of ['constructor', '__proto__', 'toString']) {
+      expect(classify(name, 'package', SYNTHETIC_BUNDLE)).toBe('unrecognised');
+    }
+  });
+
+  it('calls two cards a repeat only when their whole markup is the same', () => {
+    const path = `${UI}/nuxeo-home.html`;
+    const home = (secondColumn: string) => `<dom-module id="nuxeo-home"><template>
+      <nuxeo-card heading="Open claims"><nuxeo-data-table><nuxeo-data-table-column name="Title" field="dc:title"></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card>
+      <nuxeo-card heading="Open claims"><nuxeo-data-table>
+        <nuxeo-data-table-column name="Title" field="${secondColumn}"></nuxeo-data-table-column>
+      </nuxeo-data-table></nuxeo-card>
+    </template></dom-module>`;
+    expect(of({ bundle: { [path]: home('dc:title') } }).dashboard?.cards[1].repeatOf).toBe(0);
+    expect(of({ bundle: { [path]: home('cl:amount') } }).dashboard?.cards[1].repeatOf).toBeNull();
+  });
+
+  it('finds code in a custom bundle by parsing it, however its comments are written', () => {
+    const path = `${UI}/nuxeo-Acme-Claims-custom-bundle.html`;
+    const hasCode = (markup: string) => of({ bundle: { [path]: markup } }).customCode[0].hasCode;
+    expect(hasCode('<!-- one -->\n<!-- two -->\n')).toBe(false);
+    expect(hasCode('<!-- a --><script>Polymer({ is: "acme-x" })</script>')).toBe(true);
+    expect(hasCode('<!<!--- comment --->><link rel="import" href="acme.html">')).toBe(true);
+    expect(hasCode('<!-- a -->stray text')).toBe(true);
   });
 });

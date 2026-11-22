@@ -82,8 +82,25 @@ export function syntheticBundleFiles(): Record<string, string> {
     <nuxeo-directory-suggestion role="widget" value="{{params.cl_status}}" label="Status" directory-name="claim_status"></nuxeo-directory-suggestion>
   </template>
   <script>
-    Polymer({ is: 'nuxeo-claims-search-form', behaviors: [Nuxeo.LayoutBehavior],
-      properties: { /** @search claims */ params: { type: Object } } });
+    Polymer({
+      is: 'nuxeo-claims-search-form',
+      behaviors: [Nuxeo.LayoutBehavior],
+      properties: {
+        /**
+         * @search claims
+         */
+        params: {
+          type: Object,
+          value: {},
+          notify: true,
+        },
+        aggregations: {
+          type: Object,
+          value: {},
+          notify: true,
+        },
+      }
+    });
   </script>
 </dom-module>`,
     [`${UI}/search/claims/nuxeo-claims-search-results.html`]: `<dom-module id="nuxeo-claims-search-results">
@@ -96,7 +113,38 @@ export function syntheticBundleFiles(): Record<string, string> {
     </nuxeo-results>
   </template>
   <script>
-    Polymer({ is: 'nuxeo-claims-search-results', properties: { /** @search claims */ nxProvider: { type: Object } } });
+    Polymer({
+      is: 'nuxeo-claims-search-results',
+      behaviors: [Nuxeo.LayoutBehavior],
+      properties: {
+        nxProvider: Object,
+        sortOptions: {
+          type: Array,
+          value: []
+        },
+        _lastIndex: {
+            type: Number,
+            value: 0,
+        },
+      },
+
+      attached: function() {
+        this.sortOptions = [
+          {field: 'dc:title', label: this.i18n('searchResults.sort.field.title'), order: 'asc'},
+          {field: 'cl:amount', label: this.i18n('label.claim.amount'), order: 'desc', selected: true}
+        ];
+      },
+
+      _navigate: function(e) {
+        this.fire('navigate', { doc: (e.model || e.detail).item, index: (e.model || e.detail).index });
+      },
+
+      _computeTabAndLastIndex(index) {
+        let  tabindex = index+1;
+        this._lastIndex = this.nxProvider.resultsCount;
+        return tabindex.toString();
+      },
+    });
   </script>
 </dom-module>`,
     [`${UI}/nuxeo-Acme-Claims-bundle.html`]: `<!--

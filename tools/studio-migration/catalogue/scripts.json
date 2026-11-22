@@ -1,0 +1,31 @@
+{
+  "$comment": "The scripts Studio Designer generates into a package, and the stock Web UI script it copies in, known by the SHA-256 of their shape (src/script-shape.ts): tokens without comments or spacing, literals as placeholders, trailing commas dropped, and a run of search sort options counted as one. Any other script in a layout, search screen, slot bundle, dashboard or theme is customer code, and the inventory lists it as a decision. A new Studio or Web UI version that changes a template adds an entry here.",
+  "source": {
+    "read": "2026-11-22",
+    "how": "Every script in the sample package, a Studio project for Nuxeo LTS 2025 with Web UI 2025."
+  },
+  "scripts": [
+    {
+      "name": "Studio's document layout",
+      "sha256": "a2def051207cae348365d8aca6b133d8a3f10c5ea85dacea9ad281a9aa40d8cd",
+      "seen": "the sample's 10 document layouts"
+    },
+    {
+      "name": "Studio's search form",
+      "sha256": "581c12d96369ab1a4706826210cb986feec68a0cfa5d63091053bc27922a67df",
+      "seen": "the sample's search form"
+    },
+    {
+      "name": "Studio's search results",
+      "sha256": "7ce419bc551cca900e61d2c61c50daf06dffa02fa32939a92372468f40b440e5",
+      "seen": "the sample's search results",
+      "note": "Its sort options are configuration, read with the search screen, so their number does not change the shape."
+    },
+    {
+      "name": "Web UI's stock home",
+      "sha256": "ea84859d53205cb6360495dca5374ecedc23f060725f3bbe365632e4d0d7e056",
+      "seen": "the sample's nuxeo-home.html, which Studio copies from Web UI 2025 when a project customises the dashboard",
+      "note": "A dashboard whose script differs has customer code in it."
+    }
+  ]
+}

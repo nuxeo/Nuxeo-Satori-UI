@@ -95,6 +95,19 @@ describe('readZip', () => {
       ).toMatch(/ZIP64/);
     });
 
+    it('an end record that declares fewer entries than the central directory holds', () => {
+      const entries = [
+        { name: 'shown.txt', data: 'a' },
+        { name: 'hidden.txt', data: 'b' },
+      ];
+      expect(refusal(writeZip(entries, { declaredEntries: 1 }))).toMatch(
+        /holds more than the 1 entries its end record declares/,
+      );
+      expect(refusal(writeZip(entries, { declaredEntries: 0 }))).toMatch(
+        /holds more than the 0 entries/,
+      );
+    });
+
     it('content whose checksum does not match', () => {
       expect(refusal(writeZip([{ name: 'a.txt', data: 'x', override: { crc: 12345 } }]))).toMatch(
         /checksum/,
