@@ -1,18 +1,52 @@
 # Studio migration
 
-Reads a Studio Designer package written for Web UI and accounts for everything in it. This is the
-first part of phase M0 of the migration in
-[docs/business-apps/studio-migration.md](../../docs/business-apps/studio-migration.md). It
-converts nothing yet. It says what a package holds, what each part becomes in the new app, and
-what someone has to decide.
+Phase M0 of the migration in
+[docs/business-apps/studio-migration.md](../../docs/business-apps/studio-migration.md). It reads a
+Studio Designer package written for Web UI and accounts for everything in it, converts the little
+that can already be checked without a server, and runs the verification harness over the result.
 
 ```bash
-npx tsx tools/studio-migration/src/cli.ts inventory <package.zip>
-npx tsx tools/studio-migration/src/cli.ts inventory <package.zip> --json
+npx tsx tools/studio-migration/src/cli.ts inventory <package.zip> [--json]
+npx tsx tools/studio-migration/src/cli.ts convert <package.zip> <new-directory>
+npx tsx tools/studio-migration/src/cli.ts check <package.zip> <conversion-directory> [--json]
+npx tsx tools/studio-migration/src/cli.ts mutate <conversion-directory> <mutation> <new-directory>
+npx tsx tools/studio-migration/src/cli.ts mutate --list
 ```
 
-It exits 0 when the package was read, even if decisions are listed. It exits 1 when the package
-could not be read, with the reason, and 2 when the command was wrong.
+- `inventory` says what the package holds, what each part becomes and what someone has to decide.
+- `convert` writes the M0 conversion and its report.
+- `check` runs the harness on a conversion.
+- `mutate` writes a deliberately broken copy of a conversion, for the harness to refuse.
+
+**Exit codes:**
+
+- **0:** done, and for `check`, no check failed.
+- **1:** a check failed, or something could not be read or written; the reason is printed.
+- **2:** the command was wrong.
+
+`convert` and `mutate` write only into a new or empty directory, so they never write over
+anything.
+
+## The phase 0 demo
+
+Step 4 of phase 0's demo: run the harness on a deliberately broken conversion of a Studio package,
+and watch it fail and say why.
+
+```bash
+npx tsx tools/studio-migration/src/cli.ts convert sample.zip /tmp/demo/conversion
+npx tsx tools/studio-migration/src/cli.ts check sample.zip /tmp/demo/conversion
+npx tsx tools/studio-migration/src/cli.ts mutate /tmp/demo/conversion wrong-primary-token /tmp/demo/broken
+npx tsx tools/studio-migration/src/cli.ts check sample.zip /tmp/demo/broken
+```
+
+On the sample package:
+
+- **The first `check`:** checks 1 (nothing dropped) and 4 (labels) pass. Check 8 (theme) finds
+  two colours of the brand below WCAG 2.1 AA on its own page background: its blue at a contrast
+  of 4.43, and its error red at 4.17.
+- **The broken copy:** check 8 also names the primary colour moved to the wrong token.
+- **Every run:** the verdict is "not ready", with the reasons. Seven checks have not run, 75
+  constructs wait for a later phase, and 102 reported items have no owner.
 
 ## What it does with a package
 
@@ -101,6 +135,78 @@ Section 2 of the migration document describes what a package holds. Given one, t
 The catalogue grows with every package that arrives. Widget names are left out on purpose:
 layout version 2 defines the widget registry, in phase 1.
 
+## The conversion M0 writes
+
+M0 converts only what the harness can already check without a server: the translations, and the
+theme properties that map to a token. A conversion directory holds:
+
+- `report.json`, in the provisional format `studio-migration-report/m0`:
+  - the package, and its bundle;
+  - the Studio project's branch, commit and build time, from the bundle's manifest;
+  - the converter, and its version;
+  - every construct of the package, with an outcome.
+- `labels/<locale>.json`: the translations, language by language.
+- `themes/<name>.json`: the tokens each theme sets, with `var()` references resolved. A value that
+  refers to a property the theme does not set is reported instead.
+- `themes/<name>/<file>`: each theme's assets, copied unchanged.
+
+Every construct of the package is in the report once, with one of these outcomes:
+
+| Outcome     | Meaning                                                                                            |
+| ----------- | -------------------------------------------------------------------------------------------------- |
+| `converted` | Done, with where it went                                                                           |
+| `proposed`  | An agent proposes it, and a person accepts it                                                      |
+| `reported`  | It does not migrate, with why                                                                      |
+| `generated` | Studio's own packaging, records and templates                                                      |
+| `server`    | It stays on the server in the Studio package, and the new app reads it                             |
+| `pending`   | A later phase converts it, and the note says which: layouts and screens in M1, customer code in M3 |
+
+Layouts, search screens, slot contributions and dashboard cards are `pending` in M0, except the
+mistakes, which are `reported`.
+
+## The harness
+
+The ten checks of the migration document, section 6, in order:
+
+- **Run in M0, because they need no server:**
+  - **1, nothing dropped.** Every construct is in the report exactly once, with a valid outcome,
+    and with a reason where the outcome needs one, and nothing is invented. Coverage is 100%. The
+    two counts of the package agree:
+    - the inventory parses the package;
+    - [`second-count.ts`](src/second-count.ts) counts the same constructs from the raw text with
+      patterns, sharing no code with the parser.
+
+    A parser that misses something would otherwise go unnoticed, because the converter and the
+    harness read the same parse.
+
+  - **4, labels.** Every translation is in its language's file, word for word, and nothing else
+    is.
+  - **8, theme.** Each mapped property sets its token to its own resolved value. Nothing sets a
+    token that no property gives. The theme's files come across byte for byte. Text tokens over
+    the backgrounds the theme sets reach WCAG 2.1 AA's 4.5 contrast.
+- **Not run yet.** The other seven say "not run", with the reason and the phase that brings
+  them, and none counts as a pass.
+
+**Readiness.** A migration is ready only when all ten pass, nothing is pending, nothing proposed
+waits for a decision, and every reported item has an owner. So an M0 run is never ready, and it
+lists what stands in the way.
+
+**Negative controls.** [`src/mutations.ts`](src/mutations.ts) holds the controls of section 7 for
+the checks that run. Each breaks one thing and names the check that must then fail. The tests
+apply every one, and `mutate` applies one to a copy:
+
+| Mutation              | Check | Breaks                                             |
+| --------------------- | ----- | -------------------------------------------------- |
+| `drop-translation`    | 4     | Drops one translation from one language            |
+| `change-translation`  | 4     | Changes the words of one translation               |
+| `wrong-primary-token` | 8     | Maps the theme's primary colour to the wrong token |
+| `invent-token`        | 8     | Sets a token that no property sets                 |
+| `drop-asset`          | 8     | Leaves out one of a theme's files                  |
+| `change-asset`        | 8     | Changes one byte of one of a theme's files         |
+| `drop-report-entry`   | 1     | Drops a layout from the report without a word      |
+| `invent-report-entry` | 1     | Lists a layout the package does not have           |
+| `unexplained-report`  | 1     | Reports something without saying why               |
+
 ## Tests
 
 ```bash
@@ -120,15 +226,38 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   - In the inventory: the unrecognised kind, the marking of repeated cards, comparing whole
     cards, and recording scripts.
   - In the catalogue: the app-slot check, and own-property lookups.
+  - In the harness, for each of these, a test fails when it is removed:
+    - the comparison of the two counts;
+    - finding a dropped construct, an invented one, and one without a reason;
+    - the comparison of translation texts;
+    - the contrast check, and refusing an invented token;
+    - comparing assets byte for byte;
+    - the readiness rule.
+
+    The asset comparison at first survived its removal. No control changed an asset's bytes, only
+    removed one, so `change-asset` was added.
+
   - Elsewhere: string-aware comment stripping in the theme, and listing reported and proposed
     items as decisions.
+- **The two counts were seen disagreeing for real.** On the sample, a viewer element writes
+  `role="widget"` twice. The parser keeps one attribute; the first second count counted two
+  fields. A field is an element, so the second count now counts tags marked as widgets, and a
+  test covers that case.
 - **The typecheck target has been seen failing.** It is this project's own, because neither
   `spec-typecheck.mjs` nor any other gate type-checks `tools/`, and it failed on a planted type
   error.
 
 ## Not done yet
 
-- **The harness:** its checks with their verdicts, the report, and the deliberately broken
-  conversion of the phase 0 demo. That is the second part of M0.
+- **The other seven checks:**
+  - 2 needs layout version 2 and the M1 converter;
+  - 3, 5, 6 and 7 need the migration server;
+  - 9 needs plugins, in M3;
+  - 10 needs the package pipeline's schemas.
+- **Owners for reported items, and accepting proposals:** the report has an `owner` field and
+  the verdict counts what lacks one, but no command sets owners yet.
+- **Contrast against the base palette:** a pair is checked only when the theme sets both tokens.
+  A pair the theme sets only half of is not checked yet. Checking it needs the compiled palette's
+  values, which M1's theme conversion reads.
 - **Real packages beyond the one sample:** the catalogue grows with each one that arrives.
-- **Conversion itself:** that is M1, in phase 4.
+- **Conversion itself:** layouts, screens, slots and the dashboard, in M1, phase 4.

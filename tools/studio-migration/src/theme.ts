@@ -17,6 +17,51 @@ export interface ThemeProperty {
   readonly mixin: boolean;
 }
 
+/**
+ * The value a theme gives a property, with every `var(--x)` replaced by the value the theme gives
+ * `--x`, or by the `var()`'s fallback. `null` when the property is not set, when it refers to one
+ * the theme does not set and gives no fallback, or when its references go round in a circle. When
+ * a theme sets a property twice, the last one counts, as in CSS.
+ */
+export function resolveThemeProperty(
+  properties: readonly ThemeProperty[],
+  name: string,
+): string | null {
+  const values = new Map(properties.filter((p) => !p.mixin).map((p) => [p.name, p.value]));
+  const resolve = (text: string, seen: ReadonlySet<string>): string | null => {
+    let resolved = '';
+    let at = 0;
+    for (let open = text.indexOf('var(', at); open !== -1; open = text.indexOf('var(', at)) {
+      let depth = 1;
+      let close = open + 4;
+      while (close < text.length && depth > 0) {
+        if (text[close] === '(') depth++;
+        if (text[close] === ')') depth--;
+        if (depth > 0) close++;
+      }
+      if (depth > 0) return null;
+      const inner = text.slice(open + 4, close);
+      const comma = inner.indexOf(',');
+      const referenced = (comma === -1 ? inner : inner.slice(0, comma)).trim();
+      const fallback = comma === -1 ? null : inner.slice(comma + 1).trim();
+      if (seen.has(referenced)) return null;
+      const value = values.get(referenced);
+      const replacement =
+        value !== undefined
+          ? resolve(value, new Set([...seen, referenced]))
+          : fallback === null
+            ? null
+            : resolve(fallback, seen);
+      if (replacement === null) return null;
+      resolved += text.slice(at, open) + replacement;
+      at = close + 1;
+    }
+    return resolved + text.slice(at);
+  };
+  const value = values.get(name);
+  return value === undefined ? null : resolve(value, new Set([name]));
+}
+
 export function themeProperties(css: string): ThemeProperty[] {
   const properties: ThemeProperty[] = [];
   let depth = 0;

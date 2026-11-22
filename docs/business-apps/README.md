@@ -9,9 +9,11 @@ Designer, the development plan and its decisions. Start here when you pick this 
 - **Analysis, architecture and plan:** done, ready for review.
 - **Development:** phase 0 of the [development plan](development-plan.md) started on 22 November
   2026, with only the work no open decision affects.
-  - **Done:** migration M0's package reader, inventory and catalogue, in
-    [`tools/studio-migration`](../../tools/studio-migration/README.md).
-  - **Next:** M0's harness skeleton.
+  - **Done:** migration M0, in [`tools/studio-migration`](../../tools/studio-migration/README.md).
+    That is the package reader, the inventory and the catalogue, and the harness skeleton
+    running checks 1, 4 and 8 with its negative controls. Step 4 of the phase 0 demo, a broken
+    conversion that the harness refuses, runs on the sample.
+  - **Next:** the rest of M0 needs at least two more real Studio packages.
   - **Waiting:** the rest of phase 0 waits for its decisions and inputs.
 - **Clickable prototype:** published at
   [nuxeo.github.io/Nuxeo-Satori-UI/prototypes/business-apps](https://nuxeo.github.io/Nuxeo-Satori-UI/prototypes/business-apps/).

@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { main, type CliIo } from './cli';
 import { syntheticBundleFiles, syntheticPackage } from './testing/synthetic-package';
 
@@ -64,7 +67,7 @@ describe('studio-migration inventory', () => {
       /slot USER_MENU \(contribution "me"\) is reported: The app has no slot for it yet/,
     );
     expect(out).toMatch(
-      /element nuxeo-operation \(used 1 times\) is for an agent to propose: Home cards read page providers/,
+      /element nuxeo-operation \(used once\) is for an agent to propose: Home cards read page providers/,
     );
     expect(out).toContain(
       `${UI}/nuxeo-Acme-Claims-custom-bundle.html holds customer code, for an agent to propose as a Layer 2 plugin`,
@@ -132,7 +135,7 @@ describe('studio-migration inventory', () => {
     // The three below, the theme's reported properties and the repeated dashboard card.
     expect(out).toContain('Decisions needed: 5');
     expect(out).toContain('slot MY_SLOT (contribution "x") is not in the catalogue');
-    expect(out).toContain('element acme-widget (used 1 times) is not in the catalogue');
+    expect(out).toContain('element acme-widget (used once) is not in the catalogue');
     expect(out).toContain(
       `file ${UI}/workflow/review/nuxeo-review-task-layout.html is of no known kind`,
     );
@@ -177,5 +180,96 @@ describe('studio-migration inventory', () => {
       expect(code).toBe(2);
       expect(err).toMatch(/^usage:/);
     }
+  });
+});
+
+describe('studio-migration convert, check and mutate', () => {
+  const files = { 'acme.zip': syntheticPackage() };
+  const fresh = () => join(mkdtempSync(join(tmpdir(), 'studio-cli-')), 'conversion');
+
+  it('converts, and the harness passes what M0 checks while saying the migration is not ready', () => {
+    const out = fresh();
+    const converted = run(['convert', 'acme.zip', out], files);
+    expect(converted.code).toBe(0);
+    expect(converted.out).toMatch(/^Converted Acme-Claims 1\.0\.0 into /);
+    expect(converted.out).toContain('labels: en (3), fr (3)');
+    expect(converted.out).toContain('themes: acme (2 tokens, 1 file)');
+
+    const checked = run(['check', 'acme.zip', out], files);
+    expect(checked.code).toBe(0);
+    expect(checked.out).toMatch(/ 1 {2}Nothing dropped +pass/);
+    expect(checked.out).toMatch(/ 4 {2}Labels +pass/);
+    expect(checked.out).toMatch(/ 8 {2}Theme +pass/);
+    expect(checked.out).toMatch(/ 2 {2}Fields +not run: /);
+    expect(checked.out).toContain('Verdict: not ready');
+  });
+
+  it('refuses to convert into a directory that already holds something', () => {
+    const out = fresh();
+    expect(run(['convert', 'acme.zip', out], files).code).toBe(0);
+    const again = run(['convert', 'acme.zip', out], files);
+    expect(again.code).toBe(1);
+    expect(again.err).toContain('is not an empty directory');
+  });
+
+  it('breaks a copy on purpose, and the harness then fails, saying why', () => {
+    const good = fresh();
+    const broken = fresh();
+    run(['convert', 'acme.zip', good], files);
+    const mutated = run(['mutate', good, 'wrong-primary-token', broken], files);
+    expect(mutated.code).toBe(0);
+    expect(mutated.out).toContain(
+      'wrong-primary-token: moved the primary colour, #00796b, from --mat-sys-primary to --mat-sys-secondary',
+    );
+    expect(mutated.out).toContain('check 8 must now fail');
+
+    const checked = run(['check', 'acme.zip', broken], files);
+    expect(checked.code).toBe(1);
+    expect(checked.out).toMatch(/ 8 {2}Theme +FAIL/);
+    expect(checked.out).toContain(
+      '- acme: --mat-sys-primary is not set, though --nuxeo-primary-color sets it to #00796b',
+    );
+    expect(checked.out).toContain('  - check 8 failed');
+    // The original is untouched.
+    expect(run(['check', 'acme.zip', good], files).code).toBe(0);
+  });
+
+  it('lists the mutations, and refuses one it does not know', () => {
+    const listed = run(['mutate', '--list']);
+    expect(listed.code).toBe(0);
+    expect(listed.out).toMatch(
+      /^drop-translation +check 4 +Drop one translation from one language$/m,
+    );
+    const unknown = run(['mutate', fresh(), 'scramble', fresh()]);
+    expect(unknown.code).toBe(2);
+    expect(unknown.err).toContain('scramble is not a mutation');
+  });
+
+  it('writes the harness result as JSON with --json', () => {
+    const out = fresh();
+    run(['convert', 'acme.zip', out], files);
+    const checked = run(['check', 'acme.zip', out, '--json'], files);
+    const parsed = JSON.parse(checked.out);
+    expect(parsed.ready).toBe(false);
+    expect(parsed.checks.map((check: { status: string }) => check.status)).toEqual([
+      'pass',
+      'not run',
+      'not run',
+      'pass',
+      'not run',
+      'not run',
+      'not run',
+      'pass',
+      'not run',
+      'not run',
+    ]);
+  });
+
+  it('exits 1 when the conversion cannot be read', () => {
+    const empty = fresh();
+    mkdirSync(empty, { recursive: true });
+    const checked = run(['check', 'acme.zip', empty], files);
+    expect(checked.code).toBe(1);
+    expect(checked.err).toContain('holds no report.json');
   });
 });
