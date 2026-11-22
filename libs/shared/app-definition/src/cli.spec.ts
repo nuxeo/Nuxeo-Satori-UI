@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { main } from './cli';
 
 /** A configuration package with these files, each at its place (app-definition-v2.md, section 1). */
@@ -229,8 +229,11 @@ describe('app-definition validate', () => {
 
     it('reads a package however its directory is spelt', () => {
       const root = packageWith({ 'app.json': app, 'labels/en.json': { version: 2, labels: {} } });
-      const dotted = `.${sep}${relative(process.cwd(), root)}`;
-      for (const spelling of [`${root}${sep}`, dotted, `${root}${sep}.${sep}`]) {
+      // `./<path>` only where a relative path exists: across Windows drives, as on CI, where the
+      // temporary directory is on C: and the workspace on D:, `relative()` gives an absolute one.
+      const near = relative(process.cwd(), root);
+      const dotted = isAbsolute(near) ? [] : [`.${sep}${near}`];
+      for (const spelling of [`${root}${sep}`, ...dotted, `${root}${sep}.${sep}`]) {
         const { code, out } = run(['validate', spelling]);
         expect([spelling, out]).toEqual([spelling, '2 files: 2 passed, 0 refused.\n']);
         expect(code).toBe(0);
