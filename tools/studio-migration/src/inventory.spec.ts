@@ -1,0 +1,247 @@
+import { loadCatalogue, scriptEntry } from './catalogue';
+import { classify, inventory } from './inventory';
+import { readStudioPackage } from './studio-package';
+import {
+  SYNTHETIC_BUNDLE,
+  syntheticBundleFiles,
+  syntheticPackage,
+} from './testing/synthetic-package';
+
+const UI = 'web/nuxeo.war/ui';
+const of = (options?: Parameters<typeof syntheticPackage>[0]) =>
+  inventory(readStudioPackage(syntheticPackage(options)));
+
+describe('inventory', () => {
+  const synthetic = of();
+
+  it('gives every file a kind, and none of the synthetic package is unrecognised', () => {
+    expect(synthetic.files).toHaveLength(4 + Object.keys(syntheticBundleFiles()).length);
+    expect(synthetic.files.filter((file) => file.kind === 'unrecognised')).toEqual([]);
+    const kinds = Object.fromEntries(synthetic.files.map((file) => [file.path, file.kind]));
+    expect(kinds).toMatchObject({
+      'package.xml': 'package-descriptor',
+      'install.xml': 'package-install',
+      'studio-registries.json': 'package-registries',
+      [SYNTHETIC_BUNDLE]: 'bundle',
+      'OSGI-INF/deployment-fragment.xml': 'deployment-fragment',
+      'OSGI-INF/extensions.xml': 'model-contributions',
+      [`${UI}/nuxeo-Acme-Claims-custom-bundle.html`]: 'custom-bundle',
+      [`${UI}/nuxeo-Acme-Claims-bundle.html`]: 'slot-contributions',
+      [`${UI}/themes/acme/logo.png`]: 'theme-asset',
+      'data/i18n/messages-fr.json': 'translations',
+    });
+    expect(synthetic.problems).toEqual([]);
+  });
+
+  it('lists a file it does not know as unrecognised, never drops it', () => {
+    const result = of({
+      bundle: { [`${UI}/workflow/review/nuxeo-review-task-layout.html`]: '<p></p>' },
+    });
+    expect(
+      result.files.filter((file) => file.kind === 'unrecognised').map((file) => file.path),
+    ).toEqual([`${UI}/workflow/review/nuxeo-review-task-layout.html`]);
+    expect(classify('notes.txt', 'package', SYNTHETIC_BUNDLE)).toBe('unrecognised');
+  });
+
+  it('counts the model contributions by extension point', () => {
+    expect(synthetic.model.map((m) => [m.point, m.contributions])).toEqual([
+      ['schema', 2],
+      ['doctype', 2],
+      ['providers', 1],
+    ]);
+  });
+
+  it('reads each layout: its type, mode and bound fields', () => {
+    expect(synthetic.layouts.map((l) => [l.element, l.docType, l.mode])).toEqual([
+      ['nuxeo-claim-view-layout', 'Claim', 'view'],
+      ['nuxeo-claim-edit-layout', 'Claim', 'edit'],
+    ]);
+    expect(synthetic.layouts[0].fields).toEqual([
+      { element: 'div', binding: 'cl:number', label: 'Claim number', required: false },
+      { element: 'div', binding: 'cl:amount', label: 'Amount', required: false },
+    ]);
+    expect(synthetic.layouts[1].fields).toEqual([
+      { element: 'nuxeo-input', binding: 'cl:number', label: 'Claim number', required: true },
+      {
+        element: 'nuxeo-date-picker',
+        binding: 'cl:incidentDate',
+        label: 'Incident date',
+        required: false,
+      },
+      {
+        element: 'nuxeo-user-suggestion',
+        binding: 'cl:adjuster',
+        label: 'Adjuster',
+        required: false,
+      },
+    ]);
+  });
+
+  it('reads the search screen, giving the results their form provider', () => {
+    expect(
+      synthetic.searches.map((s) => [s.part, s.provider, s.fields.length, s.columns, s.views]),
+    ).toEqual([
+      ['form', 'claims', 2, 0, []],
+      ['results', 'claims', 0, 2, ['nuxeo-data-table']],
+    ]);
+    expect(synthetic.searches[0].fields.map((f) => f.binding)).toEqual(['cl_number', 'cl_status']);
+  });
+
+  it('reads the slot contributions, and not the one inside a comment', () => {
+    expect(synthetic.slotContributions.map((s) => [s.slot, s.name, s.order, s.elements])).toEqual([
+      ['DOCUMENT_ACTIONS', 'approveClaim', 10, ['nuxeo-operation-button']],
+      ['DRAWER_ITEMS', 'claimsSearch', 1, ['nuxeo-menu-icon']],
+      ['DRAWER_PAGES', 'claimsSearch', null, ['nuxeo-search-form']],
+      ['THEMES', 'acme', null, ['nuxeo-theme']],
+    ]);
+    expect(synthetic.slotContributions.map((s) => s.operations)).toEqual([
+      ['Claim.Approve'],
+      [],
+      [],
+      [],
+    ]);
+  });
+
+  it('tells a custom bundle with code from one with only comments', () => {
+    expect(synthetic.customCode).toEqual([
+      { path: `${UI}/nuxeo-Acme-Claims-custom-bundle.html`, hasCode: false },
+    ]);
+    const withCode = of({
+      bundle: {
+        [`${UI}/nuxeo-Acme-Claims-custom-bundle.html`]:
+          '<!-- x --><script>Polymer({is:"acme-x"})</script>',
+      },
+    });
+    expect(withCode.customCode[0].hasCode).toBe(true);
+  });
+
+  it('reads the dashboard cards, marks the repeat, and skips the one inside a comment', () => {
+    expect(synthetic.dashboard?.cards).toEqual([
+      {
+        heading: 'Open claims',
+        elements: ['nuxeo-page-provider', 'nuxeo-data-table', 'nuxeo-data-table-column'],
+        repeatOf: null,
+      },
+      {
+        heading: 'Open claims',
+        elements: ['nuxeo-page-provider', 'nuxeo-data-table', 'nuxeo-data-table-column'],
+        repeatOf: 0,
+      },
+      { heading: 'My tasks', elements: ['nuxeo-tasks-list'], repeatOf: null },
+    ]);
+  });
+
+  it('reads each theme: its properties, mixins included, and its assets', () => {
+    expect(synthetic.themes).toHaveLength(1);
+    const [theme] = synthetic.themes;
+    expect(theme.name).toBe('acme');
+    expect(theme.properties.map((p) => [p.name, p.mixin])).toEqual([
+      ['--nuxeo-primary-color', false],
+      ['--nuxeo-text-default', false],
+      ['--nuxeo-sidebar-background', false],
+      ['--paper-input-container', true],
+      ['--primary-text-color', false],
+    ]);
+    expect(theme.assets).toEqual([`${UI}/themes/acme/logo.png`]);
+  });
+
+  it('reads the translations by language', () => {
+    expect(synthetic.translations.map((t) => [t.locale, t.keys.length])).toEqual([
+      ['en', 3],
+      ['fr', 3],
+    ]);
+  });
+
+  it('counts the custom elements, leaving out the two wrappers and anything commented out', () => {
+    expect(Object.fromEntries(synthetic.elements)).toEqual({
+      'nuxeo-data-table': 3,
+      'nuxeo-data-table-column': 4,
+      'nuxeo-slot-content': 4,
+      'nuxeo-card': 3,
+      'nuxeo-input': 2,
+      'nuxeo-page-provider': 2,
+      'nuxeo-date-picker': 1,
+      'nuxeo-directory-suggestion': 1,
+      'nuxeo-menu-icon': 1,
+      'nuxeo-operation-button': 1,
+      'nuxeo-results': 1,
+      'nuxeo-search-form': 1,
+      'nuxeo-tasks-list': 1,
+      'nuxeo-theme': 1,
+      'nuxeo-user-suggestion': 1,
+    });
+    expect(synthetic.elements.has('dom-module')).toBe(false);
+    expect(synthetic.elements.has('nuxeo-menu-item')).toBe(false);
+  });
+
+  it('records a file it cannot read as a problem and carries on', () => {
+    const result = of({
+      bundle: {
+        'data/i18n/messages-de.json': '{ not json',
+        'OSGI-INF/broken.xml': '<component><extension></component>',
+      },
+    });
+    expect(result.problems.map((p) => p.path).sort()).toEqual([
+      'OSGI-INF/broken.xml',
+      'data/i18n/messages-de.json',
+    ]);
+    expect(result.translations.map((t) => t.locale)).toEqual(['en', 'fr']);
+    expect(result.layouts).toHaveLength(2);
+  });
+
+  it('records every script, and the synthetic ones have the shapes of the templates Studio generates', () => {
+    const catalogue = loadCatalogue();
+    expect(synthetic.scripts.map((s) => [s.path.split('/').pop(), s.index])).toEqual([
+      ['nuxeo-claim-view-layout.html', 0],
+      ['nuxeo-claim-edit-layout.html', 0],
+      ['nuxeo-claims-search-form.html', 0],
+      ['nuxeo-claims-search-results.html', 0],
+    ]);
+    expect(synthetic.scripts.map((s) => scriptEntry(catalogue, s.shape)?.name)).toEqual([
+      "Studio's document layout",
+      "Studio's document layout",
+      "Studio's search form",
+      "Studio's search results",
+    ]);
+  });
+
+  it('gives a script with customer code in it a shape no template has', () => {
+    const path = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
+    const original = syntheticBundleFiles()[path];
+    const result = of({
+      bundle: {
+        [path]: original.replace('behaviors:', 'ready: function() { this.track(); }, behaviors:'),
+      },
+    });
+    const script = result.scripts.find((s) => s.path === path);
+    expect(script && scriptEntry(loadCatalogue(), script.shape)).toBeNull();
+  });
+
+  // Negative controls for what review found the first version got wrong.
+  it('finds no kind on the prototype for a file named constructor or __proto__', () => {
+    for (const name of ['constructor', '__proto__', 'toString']) {
+      expect(classify(name, 'package', SYNTHETIC_BUNDLE)).toBe('unrecognised');
+    }
+  });
+
+  it('calls two cards a repeat only when their whole markup is the same', () => {
+    const path = `${UI}/nuxeo-home.html`;
+    const home = (secondColumn: string) => `<dom-module id="nuxeo-home"><template>
+      <nuxeo-card heading="Open claims"><nuxeo-data-table><nuxeo-data-table-column name="Title" field="dc:title"></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card>
+      <nuxeo-card heading="Open claims"><nuxeo-data-table>
+        <nuxeo-data-table-column name="Title" field="${secondColumn}"></nuxeo-data-table-column>
+      </nuxeo-data-table></nuxeo-card>
+    </template></dom-module>`;
+    expect(of({ bundle: { [path]: home('dc:title') } }).dashboard?.cards[1].repeatOf).toBe(0);
+    expect(of({ bundle: { [path]: home('cl:amount') } }).dashboard?.cards[1].repeatOf).toBeNull();
+  });
+
+  it('finds code in a custom bundle by parsing it, however its comments are written', () => {
+    const path = `${UI}/nuxeo-Acme-Claims-custom-bundle.html`;
+    const hasCode = (markup: string) => of({ bundle: { [path]: markup } }).customCode[0].hasCode;
+    expect(hasCode('<!-- one -->\n<!-- two -->\n')).toBe(false);
+    expect(hasCode('<!-- a --><script>Polymer({ is: "acme-x" })</script>')).toBe(true);
+    expect(hasCode('<!<!--- comment --->><link rel="import" href="acme.html">')).toBe(true);
+    expect(hasCode('<!-- a -->stray text')).toBe(true);
+  });
+});

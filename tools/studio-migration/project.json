@@ -1,0 +1,36 @@
+{
+  "name": "@nuxeo-satori/studio-migration",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/studio-migration/src",
+  "projectType": "library",
+  "tags": [],
+  "$tagsComment": "No tags, and none needed: this tool imports no project of the workspace, only Node and jsdom, and nothing may import it. A dependency on a workspace project would make the module-boundary rule report it, which is the intended alarm.",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "$inputsComment": "nx.json's test inputs, plus the extension reference: a test holds the catalogue's app slots against its slot table, and without it here an edit to the reference would replay a cached pass.",
+      "inputs": [
+        "default",
+        "^production",
+        { "env": "SATORI_TEST_TZ" },
+        "{workspaceRoot}/docs/extension-reference.md"
+      ],
+      "options": { "reportsDirectory": "coverage/tools/studio-migration" }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "$comment": "Declared rather than inferred: @nx/eslint/plugin infers `eslint:lint`, which `nx affected -t lint` does not match (see tools/satori-generators/project.json)."
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "$comment": "Nothing else type-checks this project: `spec-typecheck.mjs` reads only `apps/` and `libs/`, and Vitest strips types without checking them. The config includes the specs.",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "options": {
+        "cwd": "",
+        "command": "tsc -p tools/studio-migration/tsconfig.json --noEmit"
+      }
+    }
+  }
+}
