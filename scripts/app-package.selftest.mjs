@@ -15,7 +15,15 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,8 +40,12 @@ const VERSION = attribute(
   'version',
 );
 if (!VERSION) throw new Error("the demo's package.xml names no version");
-/** Another version: the demo's with its patch number raised. */
-const OTHER = VERSION.replace(/(\d+)$/, (patch) => String(Number(patch) + 1));
+/** Another version: the demo's with the patch of its core raised, so `0.1.0-alpha` gives `0.1.1-alpha`. */
+const OTHER = VERSION.replace(
+  /^(\d+\.\d+\.)(\d+)/,
+  (_, head, patch) => `${head}${Number(patch) + 1}`,
+);
+if (OTHER === VERSION) throw new Error(`no other version can be made from ${VERSION}`);
 const ZIP = `payers-claims-demo-${VERSION}.zip`;
 
 const failures = [];
@@ -55,7 +67,11 @@ function packageWith(change = unchanged) {
       throw new Error(`the control's edit does not apply to ${file}: ${from}`);
     writeFileSync(path, text.replace(from, to));
   };
-  change({ directory, edit, write: (file, text) => writeFileSync(join(directory, file), text) });
+  const write = (file, text) => {
+    mkdirSync(dirname(join(directory, file)), { recursive: true });
+    writeFileSync(join(directory, file), text);
+  };
+  change({ directory, edit, write });
   return { scratch, directory, out: join(scratch, 'out') };
 }
 
@@ -181,6 +197,9 @@ expectRefused(
 );
 
 const COMPONENT = 'bundle/OSGI-INF/payers-claims-demo-config.xml';
+/** A version 2 layout naming a widget the platform does not have. */
+const CALENDAR =
+  '{"version":2,"cards":[{"id":"c","fields":[{"field":"a:b","widget":"calendar"}]}]}';
 const CONTRIBUTION =
   '<layout type="Claim" mode="view" src="agentic-ui-config/layouts/Claim/view.layout.json" />';
 
@@ -202,6 +221,71 @@ expectRefused(
   ({ edit }) => edit(COMPONENT, 'mode="view"', 'mode="edit"'),
   2,
   'contributes the Claim/edit layout from agentic-ui-config/layouts/Claim/view.layout.json',
+);
+
+// Every layout the package holds is checked, whatever its directory is called.
+expectRefused(
+  'a contributed layout of the type node_modules, which a walk that passed over dependencies missed',
+  ({ edit, write }) => {
+    edit(
+      COMPONENT,
+      CONTRIBUTION,
+      `${CONTRIBUTION}\n    <layout type="node_modules" mode="view" src="agentic-ui-config/layouts/node_modules/view.layout.json" />`,
+    );
+    write('bundle/agentic-ui-config/layouts/node_modules/view.layout.json', CALENDAR);
+  },
+  2,
+  'the widget "calendar" is not registered',
+);
+
+// The manifest is read as the builder reads it, so no component is hidden from step 2.
+const MANIFEST = 'bundle/META-INF/MANIFEST.MF';
+const SECOND = `<?xml version="1.0"?>
+<component name="nuxeo.config.second" version="1.0">
+  <require>org.nuxeo.agentic.ui.config.defaults</require>
+  <extension target="org.nuxeo.agentic.ui.config" point="configuration">
+    <layout type="Claim" mode="edit"><json>${CALENDAR}</json></layout>
+  </extension>
+</component>
+`;
+/** The demo's manifest headers, without its Nuxeo-Component line. */
+const headersBut = () =>
+  readFileSync(join(DEMO, MANIFEST), 'utf8')
+    .trimEnd()
+    .split(/\r\n|\r|\n/)
+    .filter((line) => !line.startsWith('Nuxeo-Component:'));
+expectRefused(
+  'a second component behind a manifest continuation after a bare CR',
+  ({ write }) => {
+    const lines = [
+      ...headersBut(),
+      'Nuxeo-Component: OSGI-INF/payers-claims-demo-config.xml,',
+      ' OSGI-INF/second.xml',
+    ];
+    write(MANIFEST, `${lines.join('\r')}\r`);
+    write('bundle/OSGI-INF/second.xml', SECOND);
+  },
+  2,
+  'OSGI-INF/second.xml contributes the Claim/edit layout inline',
+);
+expectRefused(
+  'a second component named first in a manifest that opens with a byte-order mark',
+  ({ write }) => {
+    const lines = [
+      'Nuxeo-Component: OSGI-INF/payers-claims-demo-config.xml, OSGI-INF/second.xml',
+      ...headersBut(),
+    ];
+    write(MANIFEST, `\uFEFF${lines.join('\n')}\n`);
+    write('bundle/OSGI-INF/second.xml', SECOND);
+  },
+  2,
+  'OSGI-INF/second.xml contributes the Claim/edit layout inline',
+);
+expectBuilt('a manifest whose lines end with a bare CR', ({ write }) =>
+  write(
+    MANIFEST,
+    `${readFileSync(join(DEMO, MANIFEST), 'utf8').trimEnd().split('\n').join('\r')}\r`,
+  ),
 );
 
 expectBuilt('a package.xml written with single quotes and spaces around =', ({ edit }) =>

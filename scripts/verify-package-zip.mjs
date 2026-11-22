@@ -251,7 +251,9 @@ export function attribute(xml, name, attributeName) {
  * package grew past JSON.
  */
 export function componentPathsOf(manifest) {
-  const headers = manifest.replace(/\r?\n /g, '');
+  // As the builder reads it: no byte-order mark, which its TextDecoder drops, and a continuation
+  // unfolded after any line ending the manifest format allows, CR alone included.
+  const headers = manifest.replace(/^\uFEFF/, '').replace(/(?:\r\n|\r|\n) /g, '');
   return (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(headers)?.[1] ?? '')
     .split(',')
     .map((path) => path.trim())

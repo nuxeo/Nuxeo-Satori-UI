@@ -237,6 +237,28 @@ describe('app-definition validate', () => {
       }
     });
 
+    it('checks every layout inside a package, in a directory called node_modules too', () => {
+      const calendar = {
+        version: 2,
+        cards: [{ id: 'c', fields: [{ field: 'a:b', widget: 'calendar' }] }],
+      };
+      const root = packageWith({
+        'app.json': app,
+        'layouts/node_modules/view.layout.json': calendar,
+      });
+      const { code, out } = run(['validate', root]);
+      expect(code).toBe(1);
+      expect(out).toContain(
+        'cards[0].fields[0].widget: the widget "calendar" is not registered [unknown]',
+      );
+      // Outside a package, dependencies are still passed over.
+      const loose = packageWith({
+        'layouts/Member/view.layout.json': view,
+        'node_modules/dep/layouts/Member/view.layout.json': calendar,
+      });
+      expect(run(['validate', loose]).out).toBe('1 file: 1 passed, 0 refused.\n');
+    });
+
     it('reads a package in a directory named queues as a package, not as queues', () => {
       const root = packageWith({ 'queues/app.json': app });
       const { code, out } = run(['validate', root]);

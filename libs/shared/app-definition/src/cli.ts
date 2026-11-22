@@ -221,7 +221,9 @@ function walk(directory: string, root: string | null, found: Found[]): void {
   for (const entry of entries) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === 'node_modules') continue;
+      // Dependencies are passed over, but not inside a package: there `node_modules` is a name like
+      // any other, a layout's type for one, and what the package holds is what it ships.
+      if (entry.name === 'node_modules' && packageRoot === null) continue;
       if (app && (entry.name === 'demo' || entry.name === 'assets')) continue;
       walk(path, packageRoot, found);
     } else if (entry.isFile() && entry.name.endsWith('.json'))
