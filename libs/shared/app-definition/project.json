@@ -3,7 +3,7 @@
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/shared/app-definition/src",
   "projectType": "library",
-  "tags": ["scope:shared", "scope:engine", "type:util"],
+  "tags": ["scope:shared", "type:util"],
   "$tagsComment": "Tier 3 of docs/business-apps/architecture.md: the app definition's contract, which the engines render and the pipeline, the designer, the agent and the Studio migration all write. Shared code and an engine, as the module boundary rules tag engines. Plain TypeScript, so a Node command line and the browser can both use it.",
   "targets": {
     "test": {
