@@ -1,0 +1,156 @@
+name: App definition packages
+
+# The business apps package pipeline's first stage: validate, sign, publish to pre-production
+# (docs/business-apps/package-pipeline.md).
+#
+# - `check`, on every pull request and push that touches a package or what checks one: each
+#   package under business-apps/packages/ is checked, built and verified by
+#   scripts/app-package.mjs, with Node alone. So a package whose layout names a widget the platform
+#   does not have fails here, and the log names the widget: phase 0's demo, step 1.
+# - `sign-and-publish`, only for a tag `app-package/<name>/<version>`, which someone pushes on
+#   purpose: a build provenance attestation for the zip, then Nuxeo Marketplace preprod, the way
+#   build-marketplace.yml publishes the platform's own package. Nothing publishes on a merge,
+#   because a build nobody asked for does not belong in the shared preprod list.
+#
+# The second job never runs a package's code. It downloads the zip the first job built, checks its
+# checksum, and signs and publishes that, so the secrets are never in the same job as a package's
+# build.mjs. The first job runs only a build.mjs that is byte for byte the generator's.
+#
+# The `paths` lists are duplicated rather than shared: GitHub Actions does not resolve YAML anchors.
+# A tag push is not filtered by paths.
+
+on:
+  pull_request:
+    paths:
+      - 'business-apps/packages/**'
+      - 'libs/shared/app-definition/src/**'
+      - 'libs/platform/package.json'
+      - 'scripts/app-package.mjs'
+      - 'scripts/app-package.selftest.mjs'
+      - 'scripts/verify-package-zip.mjs'
+      - 'tools/satori-generators/src/config-package/files/build.mjs__tmpl__'
+      - '.github/workflows/app-packages.yml'
+  push:
+    branches: [main, 'integration/**']
+    tags: ['app-package/**']
+    paths:
+      - 'business-apps/packages/**'
+      - 'libs/shared/app-definition/src/**'
+      - 'libs/platform/package.json'
+      - 'scripts/app-package.mjs'
+      - 'scripts/app-package.selftest.mjs'
+      - 'scripts/verify-package-zip.mjs'
+      - 'tools/satori-generators/src/config-package/files/build.mjs__tmpl__'
+      - '.github/workflows/app-packages.yml'
+
+concurrency:
+  group: app-packages-${{ github.ref }}
+  # A publish is never cancelled half way.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check, build and verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # No `registry-url:`, which would write an `.npmrc` with an auth line.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # Asserted rather than described, as configuration-packages.yml does: an install added to
+      # this job would make it test something a customer's repository does not have.
+      - name: Check this job has no install and no credential
+        run: |
+          set -euo pipefail
+          if [ -d node_modules ]; then
+            echo "::error::node_modules exists: this job checks packages with Node alone"; exit 1
+          fi
+          for var in NODE_AUTH_TOKEN NPM_TOKEN SATORI_GH_READONLY_TOKEN NPM_PACKAGES_TOKEN GITHUB_PACKAGES_TOKEN; do
+            if [ -n "${!var:-}" ]; then
+              echo "::error::$var is set; this job must have no credential in scope"; exit 1
+            fi
+          done
+          echo "No node_modules and no token in scope. Node $(node --version)."
+
+      - name: Controls for the pipeline
+        run: node scripts/app-package.selftest.mjs
+
+      - name: Check, build and verify each package
+        run: |
+          set -euo pipefail
+          platform=$(node -p "require('./libs/platform/package.json').version")
+          tag=''
+          if [[ "$GITHUB_REF" == refs/tags/app-package/* ]]; then tag="${GITHUB_REF#refs/tags/}"; fi
+          built=0
+          for dir in business-apps/packages/*/; do
+            name=$(basename "$dir")
+            args=(--out dist/app-packages --platform "$platform")
+            if [ -n "$tag" ]; then
+              # A tag publishes the one package it names.
+              [[ "$tag" == "app-package/$name/"* ]] || continue
+              args+=(--tag "$tag")
+            fi
+            node scripts/app-package.mjs "$dir" "${args[@]}"
+            built=$((built + 1))
+          done
+          if [ "$built" -eq 0 ]; then
+            echo "::error::No package was built${tag:+: $tag names no directory under business-apps/packages/}."
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-packages
+          path: dist/app-packages/
+          retention-days: 30
+          if-no-files-found: error
+
+  sign-and-publish:
+    name: Sign and publish to preprod
+    needs: check
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/app-package/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-packages
+          path: packages
+
+      - name: Check the zip is the one the check job built
+        id: zip
+        run: |
+          set -euo pipefail
+          named="${GITHUB_REF#refs/tags/app-package/}"
+          zip="packages/${named%%/*}-${named#*/}.zip"
+          if [ ! -f "$zip" ]; then echo "::error::$zip was not built"; exit 1; fi
+          (cd packages && sha256sum -c "$(basename "$zip").sha256")
+          echo "path=$zip" >> "$GITHUB_OUTPUT"
+
+      # Signed: an attestation, by GitHub's Sigstore, that this repository's workflow built this
+      # zip from this commit. Anyone can check it with
+      # `gh attestation verify <zip> --repo nuxeo/Nuxeo-Satori-UI`.
+      - name: Sign the zip
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ steps.zip.outputs.path }}
+
+      - name: Publish to Nuxeo Marketplace (preprod)
+        uses: Alfresco/alfresco-build-tools/.github/actions/nuxeo/nos-publish@v12.10.3
+        with:
+          nos-env: staging
+          nos-username: ${{ secrets.CONNECT_PREPROD_USERNAME }}
+          nos-token: ${{ secrets.CONNECT_PREPROD_PASSWORD }}
+          skip-verify: 'false'
+          package-path: ${{ steps.zip.outputs.path }}

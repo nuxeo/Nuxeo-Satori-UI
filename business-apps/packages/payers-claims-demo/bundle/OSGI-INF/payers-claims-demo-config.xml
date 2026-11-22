@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<component name="nuxeo.config.payers-claims-demo" version="1.0">
+  <!-- Registers after Satori's defaults, so what it contributes applies on top of them. -->
+  <require>org.nuxeo.agentic.ui.config.defaults</require>
+
+  <extension target="org.nuxeo.agentic.ui.config" point="configuration">
+    <!-- A version 2 layout sits where version 1's do (docs/business-apps/layout-v2.md, section 1).
+         The view mode is new in version 2, so an app that reads only version 1 never asks for it. -->
+    <layout type="Claim" mode="view" src="agentic-ui-config/layouts/Claim/view.layout.json" />
+  </extension>
+
+  <!-- app.json, actions.json, queues/ and labels/ travel in this package, and nothing contributes
+       them yet: the app registry in nuxeo-agentic-core will (docs/business-apps/package-pipeline.md).
+       There is no bootstrap fragment on purpose: on a shared server it would rebrand everyone's app. -->
+</component>

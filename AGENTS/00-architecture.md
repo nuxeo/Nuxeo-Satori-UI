@@ -97,6 +97,9 @@ libs/
     app-definition/              ← The app definition's contract, plain TypeScript: the validators and JSON Schemas of app definition version 2's files, their registries, and `app-definition:validate` (business apps, phase 0)
     satori-components/           ← nxs- component library, published as @nuxeo/satori-platform/components (NXSAT-308, below)
     satori-components-satori/    ← the same primitive IDs on Satori, published as @nuxeo/satori-platform/components-satori
+
+business-apps/
+  packages/                      ← App definition packages the package pipeline builds; payers-claims-demo is phase 0's demo
 ```
 
 ---
