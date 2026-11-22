@@ -151,7 +151,7 @@ naming its owners and a Nuxeo server reviewer should come before wave 1.
 | 1. Nuxeo platform        | Storage, model, lifecycles, workflows, search, Automation, audit, renditions, permissions | Nuxeo platform team                     | Nuxeo LTS and its add-ons                   |
 | 2. Business services     | What only the server may do for business apps                                             | Us                                      | Marketplace packages                        |
 | 3. Client platform       | The engines and the foundations every experience shares                                   | Us                                      | `@nuxeo/satori-platform` on npm             |
-| 4. Domain modules        | One kind of work: assets, document control, cases, records, capture, integration          | Us, with the domain's experts           | A client package plus, if needed, an add-on |
+| 4. Domain modules        | One kind of work: assets, document control, cases, records, capture, integration          | Us, with the domain's experts           | A platform entry point; an add-on if needed |
 | 5. App definitions, kits | One business app: its navigation, home, queues, pages, forms, actions, labels, demo data  | Presales and product (plan, decision 7) | Configuration packages on the Marketplace   |
 | 6. Experiences           | Where people work: the shell, the portal, embedded panels, phone capture, the Builder     | Us                                      | Apps built from the client platform         |
 
@@ -483,8 +483,10 @@ The waves of the plan's section 14, and what each tier delivers in them.
   rules in CI. It lints imports between probe projects that carry each tag, with the real rule: 6
   forbidden imports reported, 6 allowed ones quiet.
 
-- **Packages.** The engines ship in `@nuxeo/satori-platform`. Each domain module ships as its own
-  package, matching its server add-on, so a customer installs only what its apps use (decision A).
+- **Packages.** The engines and the domain modules ship in one package, `@nuxeo/satori-platform`.
+  Each module is its own entry point (`@nuxeo/satori-platform/modules/<name>`), so an app built
+  from the template bundles only the modules it imports. Each module's server add-on is still its
+  own Marketplace package (decision B). This is decision A, as taken on 22 November 2026.
 - **Server.** `nuxeo-agentic-core` grows. Each add-on is a Maven module with its own Marketplace
   package, beside the existing three modules of `pom.xml`.
 - **Tools.** The MCP server under `tools/`; the app builder skill under `.cursor/skills/`,
@@ -496,10 +498,26 @@ The waves of the plan's section 14, and what each tier delivers in them.
 From the plan's section 9, these gate the build: reopening the Beta scope (workflow and business
 records, decision 2), buttons bound to Automation chains (3), how small the declarative
 expression set for layouts stays (4), loading customer code at run time (5), and who owns the
-starter kits (7). This architecture adds:
+starter kits (7).
 
-- **A. Packages:** the engines in `@nuxeo/satori-platform` and each domain module as its own
-  package (recommended), or everything in one package.
+Decision 4 was taken on 22 November 2026 for engineering: registered computations and rules
+only, with no expression language. The security review of the starting set is still open, and
+must be done before phase 1 ends ([decision log](decisions.md)).
+
+This architecture adds:
+
+- **A. Packages: decided on 22 November 2026.** One package, `@nuxeo/satori-platform`, with each
+  domain module as its own entry point. This replaces the first recommendation here, a package
+  per module, which was made before two things were checked:
+  - how the app reaches customers. Most get the prebuilt app in `nuxeo-agentic-ui`, which carries
+    every module either way;
+  - what each published package costs. Each needs the five publication gates (API surface,
+    publishability, installing without GitHub Packages, fork simulation, upgrade rehearsal) and a
+    version matrix with the platform.
+
+  A module moves into a package of its own when it needs its own release cadence or licence. The
+  module boundary rules keep each one separable, so that move stays mechanical.
+
 - **B. Server add-ons:** `nuxeo-agentic-core` for the runtime essentials and one add-on per domain
   module (recommended), or one large add-on.
 - **C. Outside users:** whether they are in the Beta scope, and how they sign in.
