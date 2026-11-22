@@ -73,6 +73,7 @@ libs/
     kd-client/                   ← Knowledge Discovery client via Nuxeo CIC automation
     ke-client/                   ← Knowledge Enrichment client via Nuxeo CIC automation
     document-layouts/            ← Per-type layouts: package layout files or schema-generated (NXSAT-311); internal, not in the platform package
+    app-definition/              ← The app definition's contract, plain TypeScript: layout file version 2's validator, JSON Schema and registries (business apps, phase 0)
     satori-components/           ← nxs- component library, published as @nuxeo/satori-platform/components (NXSAT-308, below)
     satori-components-satori/    ← the same primitive IDs on Satori, published as @nuxeo/satori-platform/components-satori
 ```

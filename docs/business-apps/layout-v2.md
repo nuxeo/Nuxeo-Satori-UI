@@ -391,9 +391,13 @@ lists what each Web UI element becomes. In version 2's terms:
 
 ## 11. Not settled here
 
-- **The schema and the validator.** This is the next step of phase 0: a JSON Schema the designer
-  and the agent read, and a validator the pipeline, the app and the migration share, each with
-  negative controls.
+- **The schema and the validator are built**, in
+  [`libs/shared/app-definition`](../../libs/shared/app-definition/README.md), with negative
+  controls. Every JSON example in this document is one of its tests: a change here that the
+  validator does not follow fails them. What is still open about them:
+  - wiring them into the package pipeline, which phase 0 builds next;
+  - into the app, when phase 1 renders version 2;
+  - into the Studio migration's converter, in M1.
 - **Checking widgets against property types** needs the content model, so it comes in phase 1,
   with the model reader.
 - **More widgets, computations and rules** join the registries as kits need them. A map, a

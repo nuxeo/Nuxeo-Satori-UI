@@ -1,0 +1,35 @@
+{
+  "name": "shared-app-definition",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/app-definition/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "scope:engine", "type:util"],
+  "$tagsComment": "Tier 3 of docs/business-apps/architecture.md: the app definition's contract, which the engines render and the pipeline, the designer, the agent and the Studio migration all write. Shared code and an engine, as the module boundary rules tag engines. Plain TypeScript, so a Node command line and the browser can both use it.",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "$inputsComment": "nx.json's test inputs, plus the two documents the tests hold this library to: the layout version 2 proposal, whose examples must validate, and the extension reference, whose rules and row actions the registries must match. Without them an edit to either would replay a cached pass.",
+      "inputs": [
+        "default",
+        "^production",
+        { "env": "SATORI_TEST_TZ" },
+        "{workspaceRoot}/docs/business-apps/layout-v2.md",
+        "{workspaceRoot}/docs/extension-reference.md"
+      ],
+      "options": { "reportsDirectory": "coverage/libs/shared/app-definition" }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "$comment": "Plain TypeScript, so tsc rather than ngc. The spec files are type-checked by the spec-types gate through tsconfig.spec.json.",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "options": {
+        "command": "tsc -p libs/shared/app-definition/tsconfig.lib.json --noEmit"
+      }
+    }
+  }
+}
