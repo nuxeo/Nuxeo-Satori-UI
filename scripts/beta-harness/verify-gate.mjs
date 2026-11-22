@@ -736,6 +736,26 @@ const ALL_GATES = [
     // about whether any of them could have failed.
     echoOnPass: true,
   },
+  // The business apps tiers' boundaries (eslint.config.mjs: `scope:engine`, `scope:module`,
+  // `scope:experience`), which no project carries until phase 1, so `lint` has nothing to fail on
+  // and cannot tell a working constraint from one that rejects nothing — the state this rule was in
+  // for months. The gate builds probe projects that carry each tag in a throwaway Nx workspace
+  // under `tmp/`, computes its graph, and lints imports between them with the real rule and the
+  // options read from `eslint.config.mjs`. Every forbidden import must be reported and every
+  // allowed one must stay quiet, so a rule that is skipped, permissive or a warning fails here.
+  // Seen failing on each of those, and on a misspelt tag, before it was registered.
+  {
+    id: 'module-boundaries',
+    // Writes a workspace, spawns nx and ESLint and compares file paths they report, so a Windows
+    // run can tell you whether the probes resolve and match there.
+    platformSensitive: true,
+    label: 'Business apps module boundaries',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/module-boundaries.mjs'],
+    // How many forbidden imports were reported and allowed ones stayed quiet is the evidence that
+    // the probes ran against the real rule.
+    echoOnPass: true,
+  },
 ];
 
 /* Every gate must say whether its VERDICT can differ by operating system. Not whether it is

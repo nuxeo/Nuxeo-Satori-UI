@@ -4,11 +4,17 @@ Everything about turning Nuxeo Satori UI into a platform for business applicatio
 account: what presales asked for, what is feasible, the architecture, the migration from Studio
 Designer, the development plan and its decisions. Start here when you pick this work up again.
 
-## Where things stand, 21 November 2026
+## Where things stand, 22 November 2026
 
 - **Analysis, architecture and plan:** done, ready for review.
-- **Development:** not started. Phase 0 of the [development plan](development-plan.md) comes next,
-  once the plan is reviewed.
+- **Development:** phase 0 of the [development plan](development-plan.md) started on 22 November
+  2026, with only the work no open decision affects.
+  - **Done:** migration M0, in [`tools/studio-migration`](../../tools/studio-migration/README.md).
+    That is the package reader, the inventory and the catalogue, and the harness skeleton
+    running checks 1, 4 and 8 with its negative controls. Step 4 of the phase 0 demo, a broken
+    conversion that the harness refuses, runs on the sample.
+  - **Next:** the rest of M0 needs at least two more real Studio packages.
+  - **Waiting:** the rest of phase 0 waits for its decisions and inputs.
 - **Clickable prototype:** published at
   [nuxeo.github.io/Nuxeo-Satori-UI/prototypes/business-apps](https://nuxeo.github.io/Nuxeo-Satori-UI/prototypes/business-apps/).
   Its source is in [`docs/prototype/business-apps/`](../prototype/business-apps/). It has the

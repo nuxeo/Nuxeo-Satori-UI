@@ -1,0 +1,91 @@
+{
+  "$comment": "Web UI's slots, and where a Studio contribution to each goes in the new app (docs/business-apps/studio-migration.md, section 3). `how` is automatic (the converter does it and the harness checks it), agent-proposes (an agent suggests the target and a person accepts it) or reported (it does not migrate, and the report says why). An automatic or proposed entry names one target: an app slot from `appSlots`, or a Layer 0 key.",
+  "source": {
+    "webUi": "nuxeo-web-ui 2025.21.0-rc.3",
+    "read": "2026-11-22",
+    "how": "Every <nuxeo-slot> the installed Web UI declares in its bundles, and every slot Web UI's own <nuxeo-slot-content> elements contribute to. COLLECTION_ACTIONS is only contributed to."
+  },
+  "appSlots": [
+    "navbar",
+    "bulk-actions",
+    "sidebar",
+    "routes",
+    "toolbar",
+    "contextMenu",
+    "rowActions",
+    "tabs",
+    "documentList",
+    "documentView",
+    "documentMetadata",
+    "documentEdit",
+    "documentCreate"
+  ],
+  "reportedBecause": "The app has no slot for it yet. A runtime slot comes first, decided slot by slot by demand (Studio parity plan, 10.2).",
+  "slots": {
+    "DOCUMENT_ACTIONS": {
+      "what": "Actions on a document's page",
+      "how": "automatic",
+      "slot": "toolbar"
+    },
+    "RESULTS_SELECTION_ACTIONS": {
+      "what": "Actions over the documents selected in a list",
+      "how": "automatic",
+      "slot": "bulk-actions"
+    },
+    "DOCUMENT_VIEWS_ITEMS": {
+      "what": "A tab's entry on a document's page",
+      "how": "automatic",
+      "slot": "tabs"
+    },
+    "DOCUMENT_VIEWS_PAGES": {
+      "what": "A tab's content on a document's page",
+      "how": "automatic",
+      "slot": "tabs"
+    },
+    "DRAWER_ITEMS": {
+      "what": "An entry in the left menu",
+      "how": "automatic",
+      "slot": "navbar"
+    },
+    "DRAWER_PAGES": {
+      "what": "What an entry of the left menu opens",
+      "how": "automatic",
+      "slot": "sidebar"
+    },
+    "PAGES": {
+      "what": "A page of the application",
+      "how": "agent-proposes",
+      "slot": "routes",
+      "note": "A page is a custom element, so what it shows needs mapping before it can become a route."
+    },
+    "THEMES": {
+      "what": "A theme",
+      "how": "automatic",
+      "layer0": "themes",
+      "note": "Its properties go through the token map (theme-tokens.json)."
+    },
+    "RESULTS_ACTIONS": {
+      "what": "Actions in the toolbar of a list of results",
+      "how": "reported",
+      "note": "Not per row, so not rowActions; contextMenu is the nearest, decided per package."
+    },
+    "DOCUMENT_CREATE_ACTIONS": { "what": "Actions in the create dialog", "how": "reported" },
+    "CREATE_POPUP_ITEMS": { "what": "An entry in the create dialog", "how": "reported" },
+    "CREATE_POPUP_PAGES": { "what": "A page of the create dialog", "how": "reported" },
+    "DOCUMENT_INFO_BAR": { "what": "The bar above a document's page", "how": "reported" },
+    "BLOB_ACTIONS": { "what": "Actions on a document's file", "how": "reported" },
+    "FILE_UPLOAD_ACTIONS": { "what": "Actions on a file being uploaded", "how": "reported" },
+    "COLLECTION_ACTIONS": { "what": "Actions on a collection", "how": "reported" },
+    "TRASH_RESULTS_SELECTION_ACTIONS": {
+      "what": "Actions over the documents selected in the trash",
+      "how": "reported"
+    },
+    "PUBLISH_ITEMS": { "what": "An entry of the publishing dialog", "how": "reported" },
+    "PUBLISH_PAGES": { "what": "A page of the publishing dialog", "how": "reported" },
+    "USER_MENU": { "what": "An entry in the user menu", "how": "reported" },
+    "ADMINISTRATION_MENU": { "what": "An entry in the administration menu", "how": "reported" },
+    "ADMINISTRATION_PAGES": { "what": "An administration page", "how": "reported" },
+    "ANALYTICS_ITEMS": { "what": "An entry in the analytics menu", "how": "reported" },
+    "ANALYTICS_PAGES": { "what": "An analytics page", "how": "reported" }
+  }
+}
