@@ -88,9 +88,12 @@ The figures in this section are what the `inventory` command of
   `Polymer({ is, behaviors: [Nuxeo.LayoutBehavior] })` block, and the results layout adds sort
   options and navigation handlers. The converter recognises these templates; anything else in a
   script is customer code.
-- **Real projects carry mistakes, and the converter must report them, not copy them:** an import
-  layout that repeats Title and Description, a dashboard card shown twice, generated labels such
-  as "Hfs Fields Hfs S Object Id", and a toolbar button with no operation to run.
+- **Real projects carry mistakes, and the converter must report them, not copy them:**
+  - an import layout that repeats Title and Description;
+  - a dashboard card shown twice;
+  - generated labels such as "Hfs Fields Hfs S Object Id";
+  - a toolbar button with no operation to run;
+  - a viewer element that writes `role="widget"` twice.
 - **Studio's `.metadata` cannot be trusted for layouts.** It holds Modeler's JSF layouts (Title
   and Description only), while the Web UI files carry the real fields. Its page provider models do
   match the server contributions, so they can cross-check those.
@@ -209,6 +212,21 @@ has been seen failing on purpose (section 7) before it is trusted.
 A migrated package is ready when checks 1 to 10 pass, a person has accepted or rejected every
 "Agent proposes" item, and every "Reported" item has an owner and a decision.
 
+**In phase M0** ([`tools/studio-migration`](../../tools/studio-migration/README.md)):
+
+- **What runs:** the harness runs checks 1, 4 and 8, which need no server. Each other check says
+  it did not run, why, and which phase brings it. None of them passes for not having run.
+- **Pending:** until M1 converts layouts, screens, slots and the dashboard, the report lists them
+  as _pending_, with the phase that converts them. Check 1 counts pending as accounted for,
+  because nothing is dropped silently. A package with anything pending is not ready.
+- **Check 1's two counts:**
+  - the parser behind the inventory;
+  - patterns over the raw text, sharing no code with that parser.
+
+  On the sample they first disagreed on a viewer element that writes `role="widget"` twice. The
+  parser keeps one attribute. A field is an element, so the second count now counts tags marked
+  as widgets.
+
 ## 7. Test corpus and negative controls
 
 **The corpus:**
@@ -229,6 +247,17 @@ all of them on every change:
 - slip a free JavaScript condition into the converted configuration;
 - map the theme's primary colour to the wrong token.
 
+**In M0**, the controls for the checks that run are mutations in
+[`tools/studio-migration/src/mutations.ts`](../../tools/studio-migration/src/mutations.ts):
+
+- **For check 4:** drop a translation, or change its words.
+- **For check 8:** map the primary colour to the wrong token, invent a token, or leave out or
+  change one of a theme's files.
+- **For check 1:** drop a construct from the report, invent one, or report one without a reason.
+
+The tests apply every one, and the `mutate` command applies one to a copy of a conversion for
+the phase 0 demo. The controls for the other checks arrive with those checks.
+
 ## 8. The report
 
 One per package, written by the verification agent and approved by a person:
@@ -247,8 +276,15 @@ For the sample, the report would list:
 - the dashboard's 5 cards, with the repeated one reported;
 - the import layout's second Title and Description, reported;
 - the theme's 105 properties against the token map, 8 of them set a token in its first version;
+- the theme's blue and its error red, below WCAG 2.1 AA on its own page background, at contrasts
+  of 4.43 and 4.17;
 - 13 translations;
 - the model files, which need no conversion.
+
+In M0 the report is `report.json`, in the provisional format `studio-migration-report/m0`. It
+takes Studio's branch, commit and build time from the bundle's manifest (`Studio-Git-Branch-Name`,
+`Studio-Git-Commit-Hash`, `Studio-Build-Time`). Each item carries an `owner` field, which no
+command sets yet.
 
 Evidence (screenshots, request logs, truth tables) is kept outside the repository, like the Beta's
 phase evidence. The summary goes into the pull request that adds the migrated package.
@@ -276,10 +312,15 @@ These sit inside the [development plan](development-plan.md):
 
 **Where M0 stands, 22 November 2026:**
 
-- **Built:** the package reader, the inventory and the first catalogue, in
-  [`tools/studio-migration`](../../tools/studio-migration/README.md). On the sample, the reader
-  finds all 40 files and the four mistakes section 2 lists.
-- **Next:** the harness skeleton.
+- **Built:** in [`tools/studio-migration`](../../tools/studio-migration/README.md):
+  - the package reader and the inventory. On the sample, the reader finds all 40 files and the
+    mistakes section 2 lists.
+  - the first catalogue, with the fingerprints of Studio's script templates.
+  - the M0 conversion: translations, theme tokens and theme files.
+  - the harness skeleton, running checks 1, 4 and 8, with nine negative controls.
+- **The phase 0 demo runs:** on the sample, checks 1 and 4 pass. Check 8 finds the two colours
+  below AA. A deliberately broken copy fails, and says what broke.
+- **Next:** owners for reported items, and M1's conversion.
 - **Waiting:** only one real package has arrived, and the catalogue needs at least two more.
 
 ## 11. Limits

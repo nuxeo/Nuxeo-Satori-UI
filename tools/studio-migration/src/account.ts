@@ -82,7 +82,7 @@ export function account(inventory: Inventory, catalogue: Catalogue): Accounting 
       return [`${subject} is ${describe(entry.how)}: ${entry.note ?? catalogue.reportedBecause}`];
     }),
     ...elements.flatMap(({ element, count, entry }) => {
-      const subject = `element ${element} (used ${count} times)`;
+      const subject = `element ${element} (used ${count === 1 ? 'once' : `${count} times`})`;
       if (!entry) return [`${subject} is not in the catalogue`];
       if (entry.how === 'automatic') return [];
       return [`${subject} is ${describe(entry.how)}: ${entry.note ?? entry.becomes}`];
