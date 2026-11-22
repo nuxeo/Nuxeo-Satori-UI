@@ -290,6 +290,31 @@ expectRefused(
   2,
   'OSGI-INF/second.xml contributes the Claim/edit layout inline',
 );
+// The server's manifest reader keeps the last of a repeated header, whatever its case; the builder
+// reads the first, spelt exactly. So a manifest that could be read either way is refused.
+expectRefused(
+  'a second Nuxeo-Component header, which the server would load and the builder never read',
+  ({ write }) => {
+    const lines = [
+      ...headersBut(),
+      'Nuxeo-Component: OSGI-INF/payers-claims-demo-config.xml',
+      'Nuxeo-Component: OSGI-INF/second.xml',
+    ];
+    write(MANIFEST, `${lines.join('\n')}\n`);
+    write('bundle/OSGI-INF/second.xml', SECOND);
+  },
+  2,
+  'names components in 2 Nuxeo-Component headers',
+);
+expectRefused(
+  'a Nuxeo-Component header spelt in another case, which only the server reads',
+  ({ write }) => {
+    const lines = [...headersBut(), 'nuxeo-component: OSGI-INF/payers-claims-demo-config.xml'];
+    write(MANIFEST, `${lines.join('\n')}\n`);
+  },
+  2,
+  'spells its header "nuxeo-component"',
+);
 expectBuilt('a manifest whose lines end with a bare CR', ({ write }) =>
   write(
     MANIFEST,

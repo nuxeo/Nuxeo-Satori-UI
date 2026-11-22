@@ -62,7 +62,9 @@ Steps 1 to 6 need no install and no credential, only Node 24, as `.nvmrc` pins, 
 Step 2 also holds the component to what the validator read: every layout it contributes comes from
 `agentic-ui-config/layouts/<Type>/<mode>.layout.json`, in the mode its path names. One written
 inline, or contributed from another file or in another mode, is refused, because the server serves
-what the component says.
+what the component says. For the same reason the manifest names its components in a single
+`Nuxeo-Component` header, spelt so: the builder reads the first header of that exact name, and the
+server's manifest reader the last, in any letter case.
 
 ## 3. Running it
 

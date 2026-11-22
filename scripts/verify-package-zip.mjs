@@ -251,13 +251,31 @@ export function attribute(xml, name, attributeName) {
  * package grew past JSON.
  */
 export function componentPathsOf(manifest) {
-  // As the builder reads it: no byte-order mark, which its TextDecoder drops, and a continuation
-  // unfolded after any line ending the manifest format allows, CR alone included.
-  const headers = manifest.replace(/^\uFEFF/, '').replace(/(?:\r\n|\r|\n) /g, '');
+  const headers = unfoldedManifest(manifest);
   return (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(headers)?.[1] ?? '')
     .split(',')
     .map((path) => path.trim())
     .filter(Boolean);
+}
+
+/**
+ * A manifest as the builder reads it: no byte-order mark, which its TextDecoder drops, and a
+ * continuation unfolded after any line ending the manifest format allows, CR alone included.
+ */
+function unfoldedManifest(manifest) {
+  return manifest.replace(/^\uFEFF/, '').replace(/(?:\r\n|\r|\n) /g, '');
+}
+
+/**
+ * Every header of a manifest named `Nuxeo-Component` in any letter case, unfolded. Java's manifest
+ * reader, which the server's runtime uses, matches a header's name whatever its case and keeps the
+ * last of a repeated one, where the builder and `componentPathsOf` take the first spelt exactly
+ * so. More than one, or another spelling, is where the two would load different components.
+ */
+export function componentHeadersOf(manifest) {
+  return unfoldedManifest(manifest)
+    .split(/\r\n|\r|\n/)
+    .filter((line) => /^nuxeo-component:/i.test(line));
 }
 
 /**
