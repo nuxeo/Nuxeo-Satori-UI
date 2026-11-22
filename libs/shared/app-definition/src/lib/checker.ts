@@ -476,6 +476,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       else
         sort.forEach((entry, index) => {
           const at = join(join(path, 'sort'), index);
+          if (isRecord(entry)) unknownKeys(entry, ['field', 'order'], at);
           if (
             !isRecord(entry) ||
             typeof entry['field'] !== 'string' ||

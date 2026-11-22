@@ -30,7 +30,7 @@
  * - 2: the command was wrong.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { LAYOUT_MODES, type LayoutMode } from './lib/layout-v2';
 import { placeFile, validateFile, type PackageContext, type PlacedFile } from './lib/package';
 import { isRecord, PACKAGED_REGISTRIES, withRegistered, type Registries } from './lib/registries';
@@ -139,7 +139,9 @@ export function main(argv: readonly string[], io: CliIo): number {
         : null);
     // Inside a package, a file is the package's at its place, version 1's own, or out of place.
     const inPackage = root !== null;
-    const atItsPlace = placed !== null && (!inPackage || placed.root === root);
+    // Compared as directories, not as spellings: `./pkg` and `/tmp/pkg/` are the package too.
+    const atItsPlace =
+      placed !== null && (!inPackage || resolve(placed.root || '.') === resolve(root));
     if (!atItsPlace) {
       const versionOneFile =
         inPackage && VERSION_ONE_FILES.includes(relative(root, path).split(sep).join('/'));

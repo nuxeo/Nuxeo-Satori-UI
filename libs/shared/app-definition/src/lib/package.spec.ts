@@ -155,6 +155,21 @@ describe('the checks across files', () => {
     expect(show(validateFile({ kind: 'app' }, app, { assets }))).toEqual([]);
   });
 
+  it('find a branding image as the browser resolves its address', () => {
+    const app = (src: string) => ({
+      version: 2,
+      id: 'claims',
+      label: 'Claims',
+      packageVersion: '1.0.0',
+      platform: '^0.2.0',
+      groups: ['members'],
+      branding: { logo: { src } },
+    });
+    const assets = new Set(['assets/logo.svg', 'assets/logo mark.svg']);
+    for (const src of ['assets/./logo.svg', 'assets/logo.svg?v=2', 'assets/logo%20mark.svg'])
+      expect(show(validateFile({ kind: 'app' }, app(src), { assets }))).toEqual([]);
+  });
+
   it('refuse a file whose name does not say what it needs to', () => {
     const queueFile = queue([]);
     expect(show(validateFile({ kind: 'queue', id: 'open claims' }, queueFile, empty))).toEqual([

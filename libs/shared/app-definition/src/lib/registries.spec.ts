@@ -6,6 +6,7 @@ import { ID, NAME } from './checker';
 import { LABEL_KEY, LABELS_V2_KEYS } from './labels';
 import { LAYOUT_V2_KEYS } from './layout-v2';
 import { QUEUE_V2_KEYS } from './queue';
+import { parseRange, parseVersion } from './semver';
 import {
   APP_RULES,
   CORE_RULES,
@@ -141,6 +142,35 @@ describe("the other files' JSON Schemas, held to their validators", () => {
       expect(shared.length).toBeGreaterThan(0);
       for (const name of shared) expect(other['$defs'][name]).toEqual(schema.$defs[name]);
     }
+  });
+
+  it('read versions and ranges as the validator does, so an editor marks what it refuses', () => {
+    const version = new RegExp(app['properties'].packageVersion.pattern);
+    const range = new RegExp(app['properties'].platform.pattern);
+    for (const text of [
+      '1.0.0',
+      '1.0.0+build.5',
+      '1.0.0-0',
+      '1.0.0-0a',
+      '1.0.0-rc.1',
+      '1.0.0-01',
+      '01.0.0',
+      '1.0',
+      'v1.0.0',
+    ])
+      expect([text, version.test(text)]).toEqual([text, parseVersion(text) !== null]);
+    for (const text of [
+      '^1.2.0',
+      '~1.2.0',
+      '>=1.0.0 <2.0.0',
+      '>=1.0.0+b <2.0.0',
+      '1.2.0',
+      '>=1.0.0-01',
+      '>= 1.0.0',
+      '1.x',
+      '',
+    ])
+      expect([text, range.test(text)]).toEqual([text, parseRange(text) !== null]);
   });
 
   it("write the validators' patterns", () => {

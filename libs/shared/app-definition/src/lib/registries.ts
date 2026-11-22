@@ -266,7 +266,8 @@ export const PACKAGED_REGISTRIES: Registries = {
 /**
  * The packaged registries with more IDs added: the rules and actions a customer registered in
  * Layer 2 code, whose parameters this library cannot know, so it accepts any; a package's own
- * actions, from its `actions.json`; and modules.
+ * actions, from its `actions.json`; and modules. A rule the platform already registers keeps its
+ * own signature, so that adding it again cannot loosen the checks of its parameters.
  */
 export function withRegistered(
   base: Registries,
@@ -279,7 +280,7 @@ export function withRegistered(
 ): Registries {
   return {
     ...base,
-    rules: { ...base.rules, ...Object.fromEntries((extra.rules ?? []).map((id) => [id, null])) },
+    rules: { ...Object.fromEntries((extra.rules ?? []).map((id) => [id, null])), ...base.rules },
     rowActions: new Set([...base.rowActions, ...(extra.rowActions ?? [])]),
     bulkActions: new Set([...base.bulkActions, ...(extra.bulkActions ?? [])]),
     modules: new Set([...base.modules, ...(extra.modules ?? [])]),

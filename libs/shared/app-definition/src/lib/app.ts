@@ -170,14 +170,21 @@ function isRelative(src: string): boolean {
 
 /**
  * The file in the package an accepted source names, as `assets/<path>`, or `null` for an address
- * elsewhere: its path, without a query or a fragment, and decoded as the browser will decode it.
+ * elsewhere. Resolved as a browser resolves it, so `assets/./logo.svg` is `assets/logo.svg`: dot
+ * segments removed, the query and fragment left out, then decoded.
  */
 export function assetFile(src: string): string | null {
   if (!isRelative(src) || !src.startsWith('assets/')) return null;
-  const path = src.split(/[?#]/, 1)[0] ?? '';
+  let path: string;
   try {
-    return decodeURIComponent(path);
+    path = new URL(src, 'https://package.invalid/').pathname.slice(1);
   } catch {
-    return path;
+    return null;
   }
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // Left encoded: a lone `%` is not an escape the browser would decode either.
+  }
+  return path.startsWith('assets/') ? path : null;
 }

@@ -13,15 +13,18 @@
  *      code this repository reviewed;
  *   2. `bundle/agentic-ui-config/` is an app definition: it has an `app.json`, and the validator of
  *      `libs/shared/app-definition` finds nothing in it, given the deployment's allow-list, what
- *      it registers and its platform version;
+ *      it registers and its platform version. The layouts the component contributes are the files
+ *      the validator read, in the modes it read them in: none inline, none from elsewhere;
  *   3. `app.json`'s `packageVersion` is `package.xml`'s version, and a tag, when given, is
  *      `app-package/<name>/<version>` for this package;
  *   4. `build.mjs` writes the zip, refusing what the server would;
  *   5. `verify-package-zip.mjs` finds a well-formed Nuxeo Package;
  *   6. the zip's SHA-256 goes beside it, as `<zip>.sha256`, in the form `sha256sum -c` reads.
  *
- * Node alone runs all of it: no install and no credential, so that a package's checks need nothing
- * a customer's repository does not have.
+ * Node 24 and the system's `unzip`, which reads the zip back at step 5, run all of it: no install
+ * and no credential, so that a package's checks need nothing a customer's repository does not have.
+ * The XML is read by `verify-package-zip.mjs`'s own helpers, the builder's grammar ported, so that
+ * the three cannot disagree about what a descriptor says.
  *
  * It runs unconditionally. A "was I started directly?" guard is how another gate here once exited
  * 0 having checked nothing, so its controls (`app-package.selftest.mjs`) run it as CI does: as a
@@ -32,9 +35,18 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verifyPackageZip } from './verify-package-zip.mjs';
+import {
+  attribute,
+  attributesOf,
+  componentPathsOf,
+  componentXmlOf,
+  TAG,
+  verifyPackageZip,
+  withoutCdata,
+  withoutCommentsOrInstructions,
+} from './verify-package-zip.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATE = join(
@@ -110,13 +122,15 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
   process.stderr.write(validation.stderr ?? '');
   if (validation.status === 2) return 2;
   if (validation.status !== 0) return refuse(2, 'the app definition has findings, listed above.');
+  const contributed = layoutContributions(directory);
+  if (contributed) return refuse(2, contributed);
 
-  // 3. One version, written in three places.
-  const descriptor = readFileSync(join(directory, 'package', 'package.xml'), 'utf8');
-  const element = /<package\b([^>]*)>/.exec(descriptor)?.[1] ?? '';
-  const attribute = (key) => new RegExp(`\\b${key}="([^"]*)"`).exec(element)?.[1];
-  const name = attribute('name');
-  const version = attribute('version');
+  // 3. One version, written in three places, `package.xml` read as the builder reads it.
+  const descriptor = withoutCdata(
+    withoutCommentsOrInstructions(readFileSync(join(directory, 'package', 'package.xml'), 'utf8')),
+  );
+  const name = attribute(descriptor, 'package', 'name');
+  const version = attribute(descriptor, 'package', 'version');
   if (!name || !version)
     return refuse(3, 'package/package.xml has no <package name="..." version="...">.');
   const app = JSON.parse(readFileSync(appFile, 'utf8').replace(/^\uFEFF/, ''));
@@ -162,4 +176,39 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
     `${name} ${version}: checked, built and verified: ${where.startsWith('..') ? zip : where}, sha256 ${digest}\n`,
   );
   return 0;
+}
+
+/**
+ * What is wrong with the layouts the package's components contribute, or `null`. The validator read
+ * the files at `layouts/<Type>/<mode>.layout.json`, each in the mode its path names; the server
+ * serves what the component says. So a layout written inline, or contributed from another file or
+ * in another mode, is one this stage did not check, and is refused rather than passed. A disabled
+ * entry contributes nothing and is skipped, as the builder skips it.
+ */
+function layoutContributions(directory) {
+  const bundle = join(directory, 'bundle');
+  const manifest = join(bundle, 'META-INF', 'MANIFEST.MF');
+  // A bundle with no manifest, or a component it cannot find, is the builder's to refuse.
+  if (!existsSync(manifest)) return null;
+  for (const component of componentPathsOf(readFileSync(manifest, 'utf8'))) {
+    const file = join(bundle, component);
+    if (!existsSync(file)) continue;
+    const xml = componentXmlOf(readFileSync(file, 'utf8'));
+    for (const [, tag] of xml.matchAll(new RegExp(`<layout${TAG}`, 'g'))) {
+      const { type, mode, src, enabled } = attributesOf(tag);
+      if (enabled !== undefined && enabled.toLowerCase() !== 'true') continue;
+      const checked = `agentic-ui-config/layouts/${type}/${mode}.layout.json`;
+      if (src === undefined)
+        return (
+          `${component} contributes the ${type}/${mode} layout inline, which this stage cannot ` +
+          `check. Write it to ${checked} and name that in src.`
+        );
+      if (posix.normalize(src) !== checked)
+        return (
+          `${component} contributes the ${type}/${mode} layout from ${src}. Contribute it from ` +
+          `${checked}, where the validator reads it in that mode.`
+        );
+    }
+  }
+  return null;
 }

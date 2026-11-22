@@ -9,8 +9,8 @@ signing and publishing run only for a tag, and no tag has been pushed yet.
 
 ## The short version
 
-- **Checked on every pull request, with Node alone.** A package that names a widget the platform
-  does not have fails, and the log names the file, the place and the widget.
+- **Checked on every pull request, with Node and `unzip` alone.** A package that names a widget
+  the platform does not have fails, and the log names the file, the place and the widget.
 - **Signed and published only when someone tags it.** The tag goes on a merged commit, and the
   package goes to Nuxeo Marketplace preprod, as the platform's own package does.
 - **A package's own code never runs where the secrets are.** The job that holds them only checks,
@@ -52,8 +52,15 @@ package, and runs steps 7 and 8 for a tag.
 | 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                     |
 | 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                   |
 
-Steps 1 to 6 need no install and no credential: Node 24, as `.nvmrc` pins. The validator runs from
-its TypeScript through `libs/shared/app-definition/src/bin.mjs`.
+Steps 1 to 6 need no install and no credential, only Node 24, as `.nvmrc` pins, and the system's
+`unzip`, which step 5 reads the zip back with. The validator runs from its TypeScript through
+`libs/shared/app-definition/src/bin.mjs`. The XML of `package.xml` and of the component is read by
+`verify-package-zip.mjs`'s helpers, the builder's own grammar, ported.
+
+Step 2 also holds the component to what the validator read: every layout it contributes comes from
+`agentic-ui-config/layouts/<Type>/<mode>.layout.json`, in the mode its path names. One written
+inline, or contributed from another file or in another mode, is refused, because the server serves
+what the component says.
 
 ## 3. Running it
 

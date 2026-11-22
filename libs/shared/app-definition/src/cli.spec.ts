@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { main } from './cli';
 
 /** A configuration package with these files, each at its place (app-definition-v2.md, section 1). */
@@ -225,6 +225,16 @@ describe('app-definition validate', () => {
       expect(out).not.toContain('demo');
       expect(out).not.toContain('assets');
       expect(out).toContain('3 files: 1 passed, 2 refused.');
+    });
+
+    it('reads a package however its directory is spelt', () => {
+      const root = packageWith({ 'app.json': app, 'labels/en.json': { version: 2, labels: {} } });
+      const dotted = `.${sep}${relative(process.cwd(), root)}`;
+      for (const spelling of [`${root}${sep}`, dotted, `${root}${sep}.${sep}`]) {
+        const { code, out } = run(['validate', spelling]);
+        expect([spelling, out]).toEqual([spelling, '2 files: 2 passed, 0 refused.\n']);
+        expect(code).toBe(0);
+      }
     });
 
     it('reads a package in a directory named queues as a package, not as queues', () => {

@@ -5,12 +5,13 @@
  *
  * What a range admits is npm's: versions compare by precedence, a prerelease before its release,
  * and build metadata is ignored. A prerelease is in a range only when one of its comparators names
- * a prerelease of the same version, so `>=0.3.0 <1.0.0` leaves out `1.0.0-beta.1`, and `^1.2.0`
- * leaves out `2.0.0-rc.1`. npm also writes the upper bound of `^` and `~` as `<2.0.0-0`, which
- * matters only with its `includePrerelease` option; with the rule above, `<2.0.0` admits the same.
+ * a prerelease of the same version, so `>=0.3.0 <1.0.0` leaves out `1.0.0-beta.1`. The upper bound
+ * of `^` and `~` is npm's `<2.0.0-0`, below every prerelease of the next version: that rule alone
+ * does not keep them out once another comparator names one, as in `^1.2.0 >=2.0.0-beta.1`.
  */
+// A numeric prerelease identifier has no leading zero, as semantic versioning requires.
 const VERSION =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const COMPARATOR = /^(>=|<=|>|<|=|\^|~)?(.+)$/;
 
 export interface Version {
@@ -73,7 +74,7 @@ export function parseRange(text: string): readonly Comparator[] | null {
             : { major: 0, minor: 0, patch: version.patch + 1 };
       comparators.push(
         { operator: '>=', version },
-        { operator: '<', version: { ...upper, prerelease: [] } },
+        { operator: '<', version: { ...upper, prerelease: ['0'] } },
       );
     } else comparators.push({ operator: operator as Comparator['operator'], version });
   }

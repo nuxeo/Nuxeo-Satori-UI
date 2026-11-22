@@ -953,3 +953,58 @@ describe("each widget's parameters", () => {
     expect(widget(entry)).toEqual([`cards[0].fields[0].parameters.${found} [parameter]`]);
   });
 });
+
+// What a second review found, on the pull request that added the package pipeline.
+describe('the second review', () => {
+  const holds = (version: string, range: string): boolean =>
+    satisfies(parseVersion(version)!, parseRange(range)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+  it("keeps the next version's prereleases out of ^ and ~ when another comparator names one", () => {
+    expect(holds('2.0.0-beta.1', '^1.2.0 >=2.0.0-beta.1')).toBe(false);
+    expect(holds('1.3.0-beta.1', '~1.2.0 >=1.3.0-beta.1')).toBe(false);
+    expect(holds('1.5.0-beta.1', '^1.2.0 >=1.5.0-beta.1')).toBe(true);
+  });
+
+  it('refuses a numeric prerelease identifier with a leading zero', () => {
+    expect(parseVersion('1.0.0-01')).toBeNull();
+    expect(parseVersion('1.0.0-rc.01')).toBeNull();
+    expect(parseRange('>=1.0.0-01')).toBeNull();
+    expect(parseVersion('1.0.0-0')).not.toBeNull();
+    expect(parseVersion('1.0.0-0a')).not.toBeNull();
+  });
+
+  it('cannot loosen a rule the platform already knows by registering it again', () => {
+    const registries = withRegistered(PACKAGED_REGISTRIES, {
+      rules: ['app.rules.isType', 'acme.rules.isContract'],
+    });
+    expect(registries.rules['app.rules.isType']).toEqual(
+      PACKAGED_REGISTRIES.rules['app.rules.isType'],
+    );
+    expect(registries.rules['acme.rules.isContract']).toBeNull();
+    const file = {
+      version: 2,
+      cards: [
+        {
+          id: 'c',
+          fields: [{ field: 'a:b', visibleWhen: { type: 'app.rules.isType', parameters: [] } }],
+        },
+      ],
+    };
+    expect(show(validateLayoutV2(file, { mode: 'view', registries }))).toEqual([
+      'cards[0].fields[0].visibleWhen.parameters: the rule "app.rules.isType" takes at least 1 parameter, not 0 [parameter]',
+    ]);
+  });
+
+  it('refuses a misspelt key in a sort, which would lose its order', () => {
+    const queue = {
+      version: 2,
+      label: 'Open claims',
+      pageProvider: 'payers_open_claims',
+      columns: ['claim:number'],
+      sort: [{ field: 'claim:received', oder: 'desc' }],
+    };
+    expect(show(validateQueue(queue))).toEqual([
+      'sort[0].oder: "oder" is not a key version 2 has [unknown]',
+    ]);
+  });
+});

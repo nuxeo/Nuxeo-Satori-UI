@@ -5,7 +5,8 @@ name: App definition packages
 #
 # - `check`, on every pull request and push that touches a package or what checks one: each
 #   package under business-apps/packages/ is checked, built and verified by
-#   scripts/app-package.mjs, with Node alone. So a package whose layout names a widget the platform
+#   scripts/app-package.mjs, with Node and the system's unzip, and no install or credential. So a
+#   package whose layout names a widget the platform
 #   does not have fails here, and the log names the widget: phase 0's demo, step 1.
 # - `sign-and-publish`, only for a tag `app-package/<name>/<version>`, which someone pushes on
 #   purpose: a build provenance attestation for the zip, then Nuxeo Marketplace preprod, the way
@@ -59,6 +60,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          # The token is not kept in .git/config, where what this job runs could reach it.
+          persist-credentials: false
 
       # No `registry-url:`, which would write an `.npmrc` with an auth line.
       - uses: actions/setup-node@v4
@@ -78,7 +81,13 @@ jobs:
               echo "::error::$var is set; this job must have no credential in scope"; exit 1
             fi
           done
-          echo "No node_modules and no token in scope. Node $(node --version)."
+          if git config --get-regexp '^http\..*\.extraheader$' >/dev/null; then
+            echo "::error::the checkout left a credential in .git/config"; exit 1
+          fi
+          if ! command -v unzip >/dev/null; then
+            echo "::error::unzip is missing, and step 5 reads the zip back with it"; exit 1
+          fi
+          echo "No node_modules, no token and no stored credential. Node $(node --version)."
 
       - name: Controls for the pipeline
         run: node scripts/app-package.selftest.mjs

@@ -1403,6 +1403,38 @@ control('the same default-of-an-import still rejects a wrong element', NEGATIVE,
   expect(/declares `fx-actual`/.test(proc.output), proc.output.slice(-400));
 });
 
+/* ── the app definition's registries are data, not registrations ─────────────────────────────── */
+
+const APP_DEFINITION_REGISTRIES = 'libs/shared/app-definition/src/lib/registries.ts';
+const PROPOSED_ONLY = "export const PROPOSED = ['app.rules.proposedOnly'];\n";
+
+falsePositive(
+  "an ID only the app definition's registries name is not a registration to document",
+  () => {
+    const proc = run(fixture({ sources: { [APP_DEFINITION_REGISTRIES]: PROPOSED_ONLY } }));
+    expectExit(proc, 0, POSITIVE);
+  },
+);
+
+control('the same ID registered in code elsewhere must still be documented', NEGATIVE, () => {
+  const proc = run(
+    fixture({ sources: { 'libs/shared/extensions/src/lib/proposed.ts': PROPOSED_ONLY } }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(
+    /registered but absent from the reference[\s\S]*app\.rules\.proposedOnly/.test(proc.output),
+    `it did not name the undocumented ID:\n${proc.output.slice(-500)}`,
+  );
+});
+
+control('a directory that only looks like the app definition is still read', NEGATIVE, () => {
+  const proc = run(
+    fixture({ sources: { 'libs/shared/app-definitions/src/registries.ts': PROPOSED_ONLY } }),
+  );
+  expectExit(proc, 1, NEGATIVE);
+  expect(/app\.rules\.proposedOnly/.test(proc.output), proc.output.slice(-400));
+});
+
 /* ── report ──────────────────────────────────────────────────────────────────────────────────── */
 
 rmSync(workspace, { recursive: true, force: true });

@@ -84,7 +84,7 @@ function entriesOf(archive) {
  * `<fragment-legacy` and `<assets` being read as `<fragment` and `<asset`, which `\b` does not.
  * This is the shape `build.mjs` matches its own contributions with; the two agree by construction.
  */
-const TAG = '(?=[ \\t\\r\\n/>])((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>';
+export const TAG = '(?=[ \\t\\r\\n/>])((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>';
 
 /**
  * XML without its comments and processing instructions, with CDATA sections kept whole.
@@ -113,7 +113,7 @@ const TAG = '(?=[ \\t\\r\\n/>])((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>';
  * upstream and will not load on the server either, so this script is not the thing standing
  * between that package and a user.
  */
-function withoutCommentsOrInstructions(xml) {
+export function withoutCommentsOrInstructions(xml) {
   const CLOSE = { '<!--': '-->', '<?': '?>', '<![CDATA[': ']]>' };
   const strip = (text) => {
     const next = /<!--|<\?|<!\[CDATA\[/g;
@@ -141,7 +141,7 @@ function withoutCommentsOrInstructions(xml) {
 }
 
 /** The same XML with every CDATA section blanked, so markup is never matched inside text. */
-const withoutCdata = (xml) =>
+export const withoutCdata = (xml) =>
   xml.replace(/<!\[CDATA\[[\s\S]*?(?:\]\]>|$)/g, (section) => ' '.repeat(section.length));
 
 /**
@@ -150,7 +150,7 @@ const withoutCdata = (xml) =>
  * extracting requirements, counting contributions or resolving src paths. Keep offsets and line
  * breaks unchanged. Documentation inside an actual descriptor is not a supported path.
  */
-function withoutDocumentation(xml) {
+export function withoutDocumentation(xml) {
   const parents = [];
   let start;
   let depth;
@@ -218,7 +218,7 @@ function decode(text) {
  * both directions at once: `src='missing.json'` looked like a contribution with no `src` and its
  * file was never resolved, while `enabled='false'` looked enabled and its `src` was demanded.
  */
-function attributesOf(tag) {
+export function attributesOf(tag) {
   const found = {};
   for (const [, name, , double, single] of tag.matchAll(
     /([\w:.-]+)[ \t\r\n]*=[ \t\r\n]*("([^"]*)"|'([^']*)')/g,
@@ -229,7 +229,7 @@ function attributesOf(tag) {
 }
 
 /** An attribute of the first element with this tag name. */
-function attribute(xml, name, attributeName) {
+export function attribute(xml, name, attributeName) {
   const tag = new RegExp(`<${name}${TAG}`).exec(xml);
   return tag ? (attributesOf(tag[1])[attributeName] ?? null) : null;
 }
@@ -240,6 +240,33 @@ function attribute(xml, name, attributeName) {
  * Takes the archive apart in a temp directory rather than in place, so nothing here can write into
  * a workspace or follow a path out of the zip into one.
  */
+/**
+ * The components a bundle's `MANIFEST.MF` names in `Nuxeo-Component`.
+ *
+ * Manifest headers wrap at 72 bytes with a leading space on the continuation; unwrapped here
+ * because a long component path is exactly where that happens. `Nuxeo-Component` is a
+ * comma-separated list, and `build.mjs` reads it as one — `.split(',').map(trim).filter(Boolean)`,
+ * then a loop. Treating the whole header as a single file name rejects a bundle that carries a
+ * configuration component beside an unrelated one, which is a legitimate shape for a customer whose
+ * package grew past JSON.
+ */
+export function componentPathsOf(manifest) {
+  const headers = manifest.replace(/\r?\n /g, '');
+  return (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(headers)?.[1] ?? '')
+    .split(',')
+    .map((path) => path.trim())
+    .filter(Boolean);
+}
+
+/**
+ * A component's XML as the builder reads its contributions: without comments, processing
+ * instructions or documentation, and with CDATA blanked. The builder's supported documentation
+ * scope applies before requirements, counts or srcs are looked at.
+ */
+export function componentXmlOf(xml) {
+  return withoutCdata(withoutDocumentation(withoutCommentsOrInstructions(xml)));
+}
+
 export function verifyPackageZip(archive) {
   const problems = [];
   const problem = (message) => problems.push(message);
@@ -391,17 +418,7 @@ export function verifyPackageZip(archive) {
       problem(`${manifest} could not be read out of ${jars[0]}.`);
       return problems;
     }
-    // Manifest headers wrap at 72 bytes with a leading space on the continuation; unwrapped here
-    // because a long component path is exactly where that happens.
-    const headers = manifestRead.stdout.toString('utf8').replace(/\r?\n /g, '');
-    // `Nuxeo-Component` is a comma-separated list, and `build.mjs` reads it as one —
-    // `.split(',').map(trim).filter(Boolean)`, then a loop. Treating the whole header as a single
-    // file name rejects a bundle that carries a configuration component beside an unrelated one,
-    // which is a legitimate shape for a customer whose package grew past JSON.
-    const componentPaths = (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(headers)?.[1] ?? '')
-      .split(',')
-      .map((path) => path.trim())
-      .filter(Boolean);
+    const componentPaths = componentPathsOf(manifestRead.stdout.toString('utf8'));
     if (componentPaths.length === 0) {
       problem(`${manifest} has no Nuxeo-Component header, so the bundle contributes nothing.`);
       return problems;
@@ -432,10 +449,7 @@ export function verifyPackageZip(archive) {
         problem(`${componentPath} could not be read out of ${jars[0]}.`);
         continue;
       }
-      // Use the builder's supported documentation scope before requirements, counts or srcs.
-      const componentXml = withoutCdata(
-        withoutDocumentation(withoutCommentsOrInstructions(componentRead.stdout.toString('utf8'))),
-      );
+      const componentXml = componentXmlOf(componentRead.stdout.toString('utf8'));
 
       // Only an extension on Satori's configuration point registers anything. `point` is checked
       // as well as `target`: `org.nuxeo.agentic.ui.config` declares exactly one extension point,

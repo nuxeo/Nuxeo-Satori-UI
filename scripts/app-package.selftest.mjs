@@ -19,11 +19,22 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } 
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { attribute, withoutCommentsOrInstructions } from './verify-package-zip.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = join(REPO, 'scripts', 'app-package.mjs');
 const DEMO = join(REPO, 'business-apps', 'packages', 'payers-claims-demo');
-const ZIP = 'payers-claims-demo-0.1.0.zip';
+// The demo's version, read rather than written down: raising it is how a package is released, and
+// that must not break these controls on the way to the tag.
+const VERSION = attribute(
+  withoutCommentsOrInstructions(readFileSync(join(DEMO, 'package', 'package.xml'), 'utf8')),
+  'package',
+  'version',
+);
+if (!VERSION) throw new Error("the demo's package.xml names no version");
+/** Another version: the demo's with its patch number raised. */
+const OTHER = VERSION.replace(/(\d+)$/, (patch) => String(Number(patch) + 1));
+const ZIP = `payers-claims-demo-${VERSION}.zip`;
 
 const failures = [];
 let negative = 0;
@@ -137,18 +148,18 @@ expectRefused(
   ({ edit }) =>
     edit(
       'bundle/agentic-ui-config/app.json',
-      '"packageVersion": "0.1.0"',
-      '"packageVersion": "0.1.1"',
+      `"packageVersion": "${VERSION}"`,
+      `"packageVersion": "${OTHER}"`,
     ),
   3,
-  "app.json's packageVersion is 0.1.1, and package.xml's version is 0.1.0",
+  `app.json's packageVersion is ${OTHER}, and package.xml's version is ${VERSION}`,
 );
 expectRefused(
   'a tag for another version',
   unchanged,
   3,
-  'the tag app-package/payers-claims-demo/0.2.0 is not app-package/payers-claims-demo/0.1.0',
-  ['--tag', 'app-package/payers-claims-demo/0.2.0'],
+  `the tag app-package/payers-claims-demo/${OTHER} is not app-package/payers-claims-demo/${VERSION}`,
+  ['--tag', `app-package/payers-claims-demo/${OTHER}`],
 );
 expectRefused(
   "a component without Satori's defaults first, which build.mjs refuses",
@@ -169,10 +180,49 @@ expectRefused(
   'is not a well-formed Nuxeo Package',
 );
 
+const COMPONENT = 'bundle/OSGI-INF/payers-claims-demo-config.xml';
+const CONTRIBUTION =
+  '<layout type="Claim" mode="view" src="agentic-ui-config/layouts/Claim/view.layout.json" />';
+
+// The server serves what the component contributes, so a layout this stage did not read is refused.
+expectRefused(
+  'a layout contributed inline, which the validator never sees',
+  ({ edit }) =>
+    edit(
+      COMPONENT,
+      CONTRIBUTION,
+      '<layout type="Claim" mode="view"><json>{"version":2,"cards":[{"id":"c","fields":' +
+        '[{"field":"a:b","widget":"calendar"}]}]}</json></layout>',
+    ),
+  2,
+  'contributes the Claim/view layout inline, which this stage cannot check',
+);
+expectRefused(
+  'a layout contributed in a mode other than the one the validator read it in',
+  ({ edit }) => edit(COMPONENT, 'mode="view"', 'mode="edit"'),
+  2,
+  'contributes the Claim/edit layout from agentic-ui-config/layouts/Claim/view.layout.json',
+);
+
+expectBuilt('a package.xml written with single quotes and spaces around =', ({ edit }) =>
+  edit(
+    'package/package.xml',
+    `<package type="addon" name="payers-claims-demo" version="${VERSION}">`,
+    `<package type='addon' name = 'payers-claims-demo' version= '${VERSION}'>`,
+  ),
+);
+expectBuilt('a disabled layout entry, which contributes nothing', ({ edit }) =>
+  edit(
+    COMPONENT,
+    CONTRIBUTION,
+    `${CONTRIBUTION}\n    <layout type="File" mode="edit" enabled="false" />`,
+  ),
+);
+
 expectBuilt('the demo package', unchanged);
 expectBuilt('the demo package, for its own tag', unchanged, [
   '--tag',
-  'app-package/payers-claims-demo/0.1.0',
+  `app-package/payers-claims-demo/${VERSION}`,
 ]);
 expectBuilt(
   'an operation the allow-list holds',
