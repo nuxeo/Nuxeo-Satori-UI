@@ -441,6 +441,99 @@ expectRed(
   /has no <fragment>, <layout> or <asset>/,
 );
 
+// ---- a manifest whose components two readers take differently. The server reads
+// `Nuxeo-Component` through `java.util.jar.Manifest`: the name in any letter case, the last of a
+// repeated header, lines ended at CR or LF alone; the runtime then splits the value at commas and
+// whitespace. This read the first header spelt exactly so, split at commas, and passed each of
+// these jars while the server loaded a component it never resolved. ----
+
+expectRed(
+  'two Nuxeo-Component headers, even when every component they name is in the jar',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': `${manifest()}Nuxeo-Component: ${SECOND}\n`,
+      [SECOND]: unrelatedComponent,
+    }),
+  },
+  /has 2 Nuxeo-Component headers, counting any letter case/,
+);
+
+expectRed(
+  'a second header spelt nuxeo-component, which the server reads as the same one',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': `${manifest()}nuxeo-component: ${SECOND}\n`,
+      [SECOND]: unrelatedComponent,
+    }),
+  },
+  /has 2 Nuxeo-Component headers, counting any letter case/,
+);
+
+expectRed(
+  'its one header spelt nuxeo-component',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': manifest().replace('Nuxeo-Component:', 'nuxeo-component:'),
+    }),
+  },
+  /spells its Nuxeo-Component header "nuxeo-component"/,
+);
+
+// A multiline `^` also matches after U+2028, which Java reads as part of the header's value.
+expectRed(
+  'a lookalike after a U+2028 inside another header, before the real one',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': manifest().replace(
+        `Nuxeo-Component: ${COMPONENT}`,
+        `X-Note: see\u2028Nuxeo-Component: ${COMPONENT}\nNuxeo-Component: OSGI-INF/missing.xml`,
+      ),
+    }),
+  },
+  /names Nuxeo-Component OSGI-INF\/missing\.xml, which is not in the jar/,
+);
+
+// And the other way round: text in a header's value is not a header, however it reads.
+expectGreen("a lookalike after a U+2028, which is part of another header's value", {
+  jar: jarFiles({
+    'META-INF/MANIFEST.MF': manifest().replace(
+      `Nuxeo-Component: ${COMPONENT}`,
+      `X-Note: see\u2028Nuxeo-Component: OSGI-INF/missing.xml\nNuxeo-Component: ${COMPONENT}`,
+    ),
+  }),
+});
+
+// Refused or not, the header the server loads is the one resolved — so a jar is never reported
+// on less than the server would read.
+expectRed(
+  'of two headers, the last names a component the jar does not hold',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': `${manifest()}Nuxeo-Component: OSGI-INF/missing.xml\n`,
+    }),
+  },
+  /names Nuxeo-Component OSGI-INF\/missing\.xml, which is not in the jar/,
+);
+
+// One entry to a split at commas; two paths to the server, and the jar holds neither.
+expectRed(
+  'a component path with a space in it, which the server splits in two',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': manifest('OSGI-INF/acme config.xml'),
+      'OSGI-INF/acme config.xml': componentXml(),
+    }),
+  },
+  /names Nuxeo-Component OSGI-INF\/acme, which is not in the jar/,
+);
+
+expectGreen('two components separated by whitespace alone, which the server reads as two', {
+  jar: jarFiles({
+    'META-INF/MANIFEST.MF': manifest(`${COMPONENT}\t${SECOND}`),
+    [SECOND]: unrelatedComponent,
+  }),
+});
+
 // ---- third review round (PR #542): attributes read whole, and contributions counted where the
 // server would actually read them ----
 

@@ -46,6 +46,10 @@ well-formed UTF-8, a `src` or `Nuxeo-Component` that names no packaged file, a s
 or `package/`, a package name or version that is not a plain file name, and a component that does
 not `<require>` Satori's defaults.
 
+List every component in the one `Nuxeo-Component` header, spelt that way. The server reads the name
+in any letter case and loads only the last of a repeated header, so `build.mjs` refuses a manifest
+with a second one or another spelling rather than check components the server would not load.
+
 The packaged JAR manifest is written without a UTF-8 BOM, with CRLF line endings and headers
 wrapped at 72 bytes, including continuation spaces. The source manifest is left unchanged.
 Asset size limits apply to both source and packaged bytes, including manifest normalization.
