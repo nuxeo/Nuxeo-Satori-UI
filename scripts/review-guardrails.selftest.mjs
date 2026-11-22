@@ -13233,6 +13233,51 @@ export default config;
   /sets `staticDirs` 2 times/,
 );
 
+// Review on #602, eighth round. The object holding `staticDirs` was judged rather than the one
+// exported, so a base object's mount passed while the exported composition served none…
+expectRed(
+  'staticDirs on a base object the exported configuration overrides',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const base = { staticDirs: [${SB_SATORI_DIR}] };
+const overrides = JSON.parse('{"staticDirs":[]}');
+export default { ...base, ...overrides };
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /sets `staticDirs` on an object other than the configuration it exports/,
+);
+
+// …and a repeated `to` was read first while JavaScript keeps the last.
+expectRed(
+  'a staticDirs entry that repeats its to key',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../${SB_VENDOR}', to: 'i18n/@hylandsoftware/satori-ui', to: 'elsewhere' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /has a `staticDirs` entry that sets `to` more than once/,
+);
+
+// The export resolver must still read the shapes Storybook's own docs use.
+falsePositiveControls += 1;
+expectGreen(
+  'an exported configuration wrapped in defineMain and satisfies',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `export default defineMain({ staticDirs: [${SB_SATORI_DIR}] } satisfies StorybookConfig);
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
 // A spread before `staticDirs` cannot replace it — the explicit value wins — so it must stay green.
 falsePositiveControls += 1;
 expectGreen('a spread before staticDirs', 'checkStorybookSatoriCatalogues', {

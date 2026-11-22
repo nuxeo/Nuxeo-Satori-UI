@@ -5469,8 +5469,74 @@ function checkStorybookSatoriCatalogues() {
     };
     findStaticDirs(mainSource);
 
+    /**
+     * The object literal `main` exports as its configuration: `export default <object>`, or a
+     * `const` it names, through `as` / `satisfies` / parentheses and a single-argument call such
+     * as `defineMain({ … })`; `module.exports = …` likewise. `null` when it cannot be resolved.
+     *
+     * Judging the object that happens to contain `staticDirs` let
+     * `const base = { staticDirs: [mount] }; export default { ...base, ...overrides }` pass on
+     * `base`'s mount while the exported configuration served none (review on #602).
+     */
+    const unwrap = (node) => {
+      while (
+        node &&
+        (ts.isParenthesizedExpression(node) ||
+          ts.isAsExpression(node) ||
+          ts.isSatisfiesExpression(node) ||
+          ts.isTypeAssertionExpression(node) ||
+          ts.isNonNullExpression(node))
+      ) {
+        node = node.expression;
+      }
+      return node;
+    };
+    const objectOf = (node) => {
+      let expression = unwrap(node);
+      if (expression && ts.isCallExpression(expression) && expression.arguments.length === 1) {
+        expression = unwrap(expression.arguments[0]);
+      }
+      return expression;
+    };
+    const exportedConfiguration = (() => {
+      let expression;
+      for (const statement of mainSource.statements) {
+        if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+          expression = statement.expression;
+        } else if (
+          ts.isExpressionStatement(statement) &&
+          ts.isBinaryExpression(statement.expression) &&
+          statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+          statement.expression.left.getText() === 'module.exports'
+        ) {
+          expression = statement.expression.right;
+        }
+      }
+      expression = objectOf(expression);
+      if (expression && ts.isIdentifier(expression)) {
+        const name = expression.text;
+        expression = undefined;
+        for (const statement of mainSource.statements) {
+          if (!ts.isVariableStatement(statement)) continue;
+          for (const declaration of statement.declarationList.declarations) {
+            if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
+              expression = objectOf(declaration.initializer);
+            }
+          }
+        }
+      }
+      return expression && ts.isObjectLiteralExpression(expression) ? expression : null;
+    })();
+
     let staticDirs;
-    if (definitions.length > 1) {
+    if (definitions.length > 0 && exportedConfiguration === null) {
+      fail(
+        `${main} sets \`staticDirs\`, but \`checkStorybookSatoriCatalogues\` cannot find the ` +
+          'configuration it exports, so it cannot tell whether that value is the one Storybook ' +
+          'uses. Export an object literal, or a `const` holding one.',
+      );
+      legible = false;
+    } else if (definitions.length > 1) {
       fail(
         `${main} sets \`staticDirs\` ${definitions.length} times, so ` +
           '`checkStorybookSatoriCatalogues` cannot tell which value Storybook uses. Define it once.',
@@ -5499,7 +5565,14 @@ function checkStorybookSatoriCatalogues() {
         };
         const members = definition.parent.properties;
         const overriding = members.slice(members.indexOf(definition) + 1).find(canReplace);
-        if (overriding) {
+        if (definition.parent !== exportedConfiguration) {
+          fail(
+            `${main} sets \`staticDirs\` on an object other than the configuration it exports ` +
+              `(\`${definition.parent.getText().slice(0, 60)}\`), so this gate cannot tell whether ` +
+              'that value reaches Storybook. Set `staticDirs` directly on the exported object.',
+          );
+          legible = false;
+        } else if (overriding) {
           fail(
             `${main} sets \`staticDirs\` and then \`${overriding.getText().slice(0, 60)}\` in the ` +
               'same object, which can replace it, so this gate cannot tell which value Storybook ' +
@@ -5578,6 +5651,24 @@ function checkStorybookSatoriCatalogues() {
             `${main} has a \`staticDirs\` entry with a member this gate cannot read statically ` +
               `(\`${illegible.getText().slice(0, 60)}\`), which can override \`from\` or \`to\`. ` +
               'Write every member as a literal key and value.',
+          );
+          legible = false;
+          continue;
+        }
+        // JavaScript keeps the last of repeated keys, so a repeated `from` or `to` means the value
+        // read here may not be the one Storybook mounts (review on #602). Refused, not guessed.
+        const repeated = ['from', 'to'].find(
+          (key) =>
+            element.properties.filter(
+              (property) =>
+                (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+                property.name.text === key,
+            ).length > 1,
+        );
+        if (repeated) {
+          fail(
+            `${main} has a \`staticDirs\` entry that sets \`${repeated}\` more than once ` +
+              `(\`${element.getText().slice(0, 60)}\`). Set each key once.`,
           );
           legible = false;
           continue;
