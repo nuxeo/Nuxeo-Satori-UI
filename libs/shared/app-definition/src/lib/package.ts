@@ -10,8 +10,9 @@
  * Reading files is the caller's: this stays plain TypeScript, for the browser as well as Node.
  */
 import { validateActions, placementsOf } from './actions';
-import { APP_ID, isAssetPath, validateApp } from './app';
+import { APP_ID, assetFile, validateApp } from './app';
 import { ID, type Finding } from './checker';
+import { describeLogoSrcForm } from './image-source';
 import { validateLabels, validateModuleSettings } from './labels';
 import { LAYOUT_MODES, validateLayoutV2, validateTaskForm, type LayoutMode } from './layout-v2';
 import { validateQueue } from './queue';
@@ -35,7 +36,8 @@ export interface PlacedFile {
 const SEP = String.raw`[\\/]`;
 const PART = String.raw`[^\\/]+`;
 const at = (tail: string): RegExp => new RegExp(`^(?:(.*)${SEP})?${tail}$`);
-// The files in a directory of their own come first, so that `queues/app.json` is a queue.
+// The files in a directory of their own come first: with no app.json to decide, `queues/app.json`
+// is a queue.
 const PLACES: readonly (readonly [RegExp, (match: RegExpExecArray) => PackageFile | null])[] = [
   [
     at(`layouts${SEP}(${PART})${SEP}(${PART})\\.layout\\.json`),
@@ -52,14 +54,25 @@ const PLACES: readonly (readonly [RegExp, (match: RegExpExecArray) => PackageFil
   [at(String.raw`actions\.json`), () => ({ kind: 'actions' })],
 ];
 
-/** Which file of an app definition `path` is, from where it sits; `null` when its place does not say. */
-export function placeFile(path: string): PlacedFile | null {
+/**
+ * Which file of an app definition `path` is, from where it sits; `null` when its place does not say.
+ *
+ * A path can fit two places: `x/queues/app.json` is the queue `app` of the package `x`, or the
+ * `app.json` of a package in a directory named `queues`. `hasApp`, which says whether a directory
+ * holds an `app.json`, decides: the place whose package has one wins, and the first place when
+ * neither does.
+ */
+export function placeFile(
+  path: string,
+  hasApp: (root: string) => boolean = () => false,
+): PlacedFile | null {
+  const candidates: PlacedFile[] = [];
   for (const [pattern, file] of PLACES) {
     const match = pattern.exec(path);
     const placed = match ? file(match) : null;
-    if (match && placed) return { file: placed, root: match[1] ?? '' };
+    if (match && placed) candidates.push({ file: placed, root: match[1] ?? '' });
   }
-  return null;
+  return candidates.find((candidate) => hasApp(candidate.root)) ?? candidates[0] ?? null;
 }
 
 export interface PackageContext {
@@ -174,11 +187,14 @@ function missingAssets(content: unknown, context: PackageContext): Finding[] {
   for (const key of ['logo', 'favicon']) {
     const image = branding[key];
     const src = isRecord(image) ? image['src'] : undefined;
-    if (typeof src === 'string' && isAssetPath(src) && !context.assets.has(src))
+    // Only a source whose form is accepted: one that is refused already has its own finding.
+    const file =
+      typeof src === 'string' && describeLogoSrcForm(src) === null ? assetFile(src) : null;
+    if (file !== null && !context.assets.has(file))
       findings.push({
         path: `branding.${key}.src`,
         kind: 'unknown',
-        message: `the asset "${src}" is not in the package`,
+        message: `the asset "${file}" is not in the package`,
       });
   }
   return findings;

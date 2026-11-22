@@ -18,7 +18,7 @@ import {
 } from './checker';
 import { isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
 
-const FILE_KEYS = ['version', 'actions'];
+const FILE_KEYS = ['$schema', 'version', 'actions'];
 const ACTION_KEYS = [
   'id',
   'label',
@@ -64,6 +64,7 @@ export function validateActions(content: unknown, options: ActionsOptions = {}):
   const file = content as Record<string, unknown>;
   const c = createChecker(options.registries ?? PACKAGED_REGISTRIES);
   c.unknownKeys(file, FILE_KEYS, '');
+  c.schemaKey(file);
   const actions = file['actions'];
   if (!Array.isArray(actions)) {
     c.add('actions', 'structure', 'actions must be a list');
@@ -86,11 +87,23 @@ function action(c: Checker, item: unknown, path: string, operations: ReadonlySet
   }
   c.unknownKeys(item, ACTION_KEYS, path);
   c.claim(item['id'], join(path, 'id'));
-  if (typeof item['id'] === 'string' && PLATFORM_ID.test(item['id']))
+  const id = item['id'];
+  if (typeof id === 'string' && PLATFORM_ID.test(id))
     c.add(
       join(path, 'id'),
       'structure',
-      `the id "${item['id']}" belongs to the platform: actions.json adds actions of its own`,
+      `the id "${id}" belongs to the platform: actions.json adds actions of its own`,
+    );
+  // A customer's own, registered in Layer 2 code, is protected as the platform's are: by being
+  // registered, not by the shape of its id (extension-reference.md, section 1).
+  else if (
+    typeof id === 'string' &&
+    (c.registries.rowActions.has(id) || c.registries.bulkActions.has(id))
+  )
+    c.add(
+      join(path, 'id'),
+      'structure',
+      `the id "${id}" is registered in code, and a manifest cannot rebind it`,
     );
   c.named(item, path);
   if ('icon' in item && (typeof item['icon'] !== 'string' || !ICON.test(item['icon'])))

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { main } from './cli';
@@ -83,10 +83,10 @@ describe('app-definition validate', () => {
     expect(missing.err).toContain('nowhere');
   });
 
-  it('says so when there is nothing to check', () => {
+  it('fails, and says so, when there is nothing to check', () => {
     const { code, out } = run(['validate', packageWith({ 'README.md': 'no layouts here' })]);
-    expect(code).toBe(0);
-    expect(out).toMatch(/^No app definition files in /);
+    expect(code).toBe(1);
+    expect(out).toMatch(/^No app definition files in .*: nothing was checked\.\n$/);
   });
 
   it('exits 2 for a command it does not know, no path, or a bad option', () => {
@@ -98,6 +98,7 @@ describe('app-definition validate', () => {
       ['validate', 'x', '--strict'],
       ['validate', 'x', '--platform', 'latest'],
       ['validate', 'x', '--allow-list'],
+      ['validate', 'x', '--registered'],
     ]) {
       const { code, err } = run(argv);
       expect(code).toBe(2);
@@ -145,12 +146,17 @@ describe('app-definition validate', () => {
       'bootstrap.json': { not: 'an app definition file' },
     };
 
-    it('passes, with the allow-list that has its operation, and skips the files it does not know', () => {
-      const root = packageWith({
-        ...files,
+    it("passes with the allow-list that has its operation, and leaves version 1's files alone", () => {
+      const root = packageWith(files);
+      const deployment = packageWith({
         'allow-list.json': { operations: ['Payers.RequestRecords'] },
       });
-      const { code, out } = run(['validate', root, '--allow-list', join(root, 'allow-list.json')]);
+      const { code, out } = run([
+        'validate',
+        root,
+        '--allow-list',
+        join(deployment, 'allow-list.json'),
+      ]);
       expect(out).toBe('6 files: 6 passed, 0 refused.\n');
       expect(code).toBe(0);
     });
@@ -189,6 +195,138 @@ describe('app-definition validate', () => {
       const { code, err } = run(['validate', root, '--allow-list', join(root, 'list.json')]);
       expect(code).toBe(2);
       expect(err).toContain('an allow-list is { "operations": [<operation or chain ID>, ...] }');
+    });
+  });
+
+  describe('inside a package', () => {
+    const app = {
+      version: 2,
+      id: 'claims',
+      label: 'Claims',
+      packageVersion: '1.0.0',
+      platform: '^0.2.0',
+      groups: ['members'],
+    };
+
+    it("checks neither demo/ nor assets/, refuses a file out of place, and leaves version 1's alone", () => {
+      const root = packageWith({
+        'app.json': app,
+        'demo/app.json': { demo: 'data' },
+        'demo/labels/en.json': { not: 'labels' },
+        'assets/data.json': { not: 'a package file' },
+        'manifest.json': { version: 1 },
+        'queue/open.json': { version: 2 },
+        'Labels/en.json': { version: 2, labels: {} },
+      });
+      const { code, out } = run(['validate', root]);
+      expect(code).toBe(1);
+      expect(out).toContain(`${join(root, 'queue/open.json')}: cannot tell which file`);
+      expect(out).toContain(`${join(root, 'Labels/en.json')}: cannot tell which file`);
+      expect(out).not.toContain('demo');
+      expect(out).not.toContain('assets');
+      expect(out).toContain('3 files: 1 passed, 2 refused.');
+    });
+
+    it('reads a package in a directory named queues as a package, not as queues', () => {
+      const root = packageWith({ 'queues/app.json': app });
+      const { code, out } = run(['validate', root]);
+      expect(out).toBe('1 file: 1 passed, 0 refused.\n');
+      expect(code).toBe(0);
+    });
+
+    it('reads a logo from assets/, and refuses one that is not there', () => {
+      const branded = { ...app, branding: { logo: { src: 'assets/logo.svg' } } };
+      expect(
+        run(['validate', packageWith({ 'app.json': branded, 'assets/logo.svg': '<svg/>' })]).code,
+      ).toBe(0);
+      const { code, out } = run(['validate', packageWith({ 'app.json': branded })]);
+      expect(code).toBe(1);
+      expect(out).toContain(
+        'branding.logo.src: the asset "assets/logo.svg" is not in the package [unknown]',
+      );
+    });
+
+    it('reports a file of the package it cannot read, rather than leaning on nothing', () => {
+      const queue = {
+        version: 2,
+        label: 'Open',
+        pageProvider: 'p',
+        columns: ['dc:title'],
+        rowActions: ['payers.take'],
+      };
+      const root = packageWith({
+        'queues/open.json': queue,
+        'actions.json': '{ "version": 2, "act',
+      });
+      const { code, out } = run(['validate', join(root, 'queues/open.json')]);
+      expect(code).toBe(1);
+      expect(out).toContain(`${join(root, 'actions.json')}: cannot be read as JSON`);
+      const assets = packageWith({ 'app.json': app, assets: 'a file, not a directory' });
+      const unreadable = run(['validate', join(assets, 'app.json')]);
+      expect(unreadable.code).toBe(1);
+      expect(unreadable.out).toContain(`${join(assets, 'assets')}: cannot be read`);
+    });
+
+    it('reads a file that begins with a byte-order mark, as a browser does', () => {
+      const root = packageWith({ 'app.json': '\uFEFF' + JSON.stringify(app) });
+      expect(run(['validate', root]).code).toBe(0);
+    });
+  });
+
+  describe('what the deployment gives it', () => {
+    it("passes the proposal's own package, with its allow-list and a registered module", () => {
+      const proposal = readFileSync(
+        join(
+          import.meta.dirname,
+          '..',
+          '..',
+          '..',
+          '..',
+          'docs',
+          'business-apps',
+          'app-definition-v2.md',
+        ),
+        'utf8',
+      );
+      const examples = Object.fromEntries(
+        [...proposal.matchAll(/```json ([^\n]+)\n([\s\S]*?)```/g)].map((match) => [
+          match[1],
+          match[2],
+        ]),
+      );
+      const { 'allow-list.json': allowList, ...files } = examples;
+      const root = packageWith(files);
+      const deployment = packageWith({
+        'allow-list.json': allowList,
+        'registered.json': { modules: ['cases'] },
+      });
+      const { code, out } = run([
+        'validate',
+        root,
+        '--allow-list',
+        join(deployment, 'allow-list.json'),
+        '--registered',
+        join(deployment, 'registered.json'),
+      ]);
+      expect(out).toBe('6 files: 6 passed, 0 refused.\n');
+      expect(code).toBe(0);
+    });
+
+    it('exits 2 for an allow-list or a registered file of the wrong shape', () => {
+      const root = packageWith({
+        'extra.json': { operations: [], chains: [] },
+        'numbers.json': { operations: [1] },
+        'registered.json': { widgets: ['map'] },
+      });
+      for (const [option, file, message] of [
+        ['--allow-list', 'extra.json', 'an allow-list is'],
+        ['--allow-list', 'numbers.json', 'an allow-list is'],
+        ['--registered', 'registered.json', 'a registered file is'],
+      ]) {
+        const { code, err } = run(['validate', root, option, join(root, file)]);
+        expect(code).toBe(2);
+        expect(err).toContain(message);
+      }
     });
   });
 });

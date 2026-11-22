@@ -136,14 +136,14 @@ describe('app.json', () => {
       what: 'a logo over plain http',
       input: app({ branding: { logo: { src: 'http://example.com/logo.svg' } } }),
       found: [
-        'branding.logo.src: src is assets/<file> in the package, an https: address or a data:image/ address [structure]',
+        'branding.logo.src: the source is refused: only https: is allowed for an absolute address, and this one uses "http:" [structure]',
       ],
     },
     {
       what: 'a logo outside the assets',
       input: app({ branding: { favicon: { src: 'assets/../secrets.svg' } } }),
       found: [
-        'branding.favicon.src: src is assets/<file> in the package, an https: address or a data:image/ address [structure]',
+        'branding.favicon.src: the source is refused: it contains a parent-directory segment (".."), which is not allowed in a relative path however it resolves [structure]',
       ],
     },
     {
@@ -537,5 +537,419 @@ describe("a module's settings", () => {
     expect(show(validateModuleSettings({ version: 2, settings: {} }, { module: 'cases' }))).toEqual(
       [': the module "cases" is not registered [unknown]'],
     );
+  });
+});
+
+// The guards an independent review found could be taken out with every test still passing, and
+// the refusals added since: each has its control here.
+
+describe("a branding image's source, held to version 1's rules", () => {
+  const branded = (src: unknown) => ({
+    version: 2,
+    id: 'claims',
+    label: 'Claims',
+    packageVersion: '1.0.0',
+    platform: '^0.2.0',
+    groups: ['members'],
+    branding: { logo: { src } },
+  });
+  const refused = (reason: string) => [
+    `branding.logo.src: the source is refused: ${reason} [structure]`,
+  ];
+
+  it('accepts what version 1 accepts, in assets/', () => {
+    for (const src of [
+      'assets/logo.svg',
+      'assets/logo.svg?v=2',
+      'https://cdn.example.com/logo.svg',
+      'HTTPS://cdn.example.com/logo.svg',
+      'data:image/png;base64,iVBORw0KGgo=',
+    ])
+      expect(show(validateApp(branded(src)))).toEqual([]);
+  });
+
+  const rows: readonly { src: unknown; reason: string }[] = [
+    { src: 3, reason: 'it is not a text' },
+    { src: ' ', reason: 'it is blank, so it names no file' },
+    {
+      src: 'assets/%2e%2e/%2e%2e/api/v1/me',
+      reason:
+        'it contains a parent-directory segment (".."), which is not allowed in a relative path however it resolves',
+    },
+    {
+      src: 'assets/\t../logo.svg',
+      reason:
+        'it contains a control character, which the URL parser drops, so the value is not what it looks like',
+    },
+    {
+      src: 'assets\\logo.svg',
+      reason: 'it contains a backslash, which the URL parser rewrites as a path separator',
+    },
+    {
+      src: 'data:image/png;base64,',
+      reason: 'it is a data: URI that is not an image, or that carries no payload',
+    },
+    { src: 'https:///logo.svg', reason: 'an absolute https: address must name a host' },
+    { src: 'https://exa mple.com/logo.svg', reason: 'it is not a valid URL' },
+    {
+      src: '/assets/logo.svg',
+      reason: 'an absolute path is not allowed; use a path relative to the configuration directory',
+    },
+    { src: '?v=2', reason: 'it has no path, so it would load bootstrap.json itself' },
+    {
+      src: 'images/logo.svg',
+      reason: 'it is a relative path outside assets/, where a package keeps its images',
+    },
+  ];
+  it.each(rows)('refuses $src', ({ src, reason }) => {
+    expect(show(validateApp(branded(src)))).toEqual(refused(reason));
+  });
+});
+
+describe('app.json, further', () => {
+  const app = (keys: Record<string, unknown> = {}) => ({
+    version: 2,
+    id: 'claims',
+    label: 'Claims',
+    packageVersion: '1.0.0',
+    platform: '^0.2.0',
+    groups: ['members'],
+    ...keys,
+  });
+
+  it('takes $schema, for editors, and build metadata in its version', () => {
+    const editor = app({ $schema: './app.schema.json', packageVersion: '1.0.0+build.5' });
+    expect(show(validateApp(editor))).toEqual([]);
+  });
+
+  it('refuses a $schema that is not a text, a key it does not have, and an empty tab title', () => {
+    expect(show(validateApp(app({ $schema: 2 })))).toEqual([
+      '$schema: $schema is the address of a JSON Schema, for editors [structure]',
+    ]);
+    expect(show(validateApp(app({ extra: true })))).toEqual([
+      'extra: "extra" is not a key version 2 has [unknown]',
+    ]);
+    expect(show(validateApp(app({ branding: { documentTitle: '' } })))).toEqual([
+      'branding.documentTitle: must be a text [structure]',
+    ]);
+  });
+});
+
+describe('the platform range, as npm reads it', () => {
+  const holds = (version: string, range: string): boolean =>
+    satisfies(parseVersion(version)!, parseRange(range)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+  it("leaves out the next version's prereleases, and any prerelease no comparator names", () => {
+    expect(holds('2.0.0-rc.1', '^1.2.0')).toBe(false);
+    expect(holds('1.3.0-beta.1', '~1.2.0')).toBe(false);
+    expect(holds('1.0.0-beta.1', '>=0.3.0 <1.0.0')).toBe(false);
+    expect(holds('1.2.0-rc.1', '^1.2.0')).toBe(false);
+    expect(holds('1.2.0-rc.2', '>=1.2.0-rc.1 <2.0.0')).toBe(true);
+  });
+
+  it('ranks a release after its own prereleases, inside one range', () => {
+    expect(holds('1.0.0', '>1.0.0-rc.1')).toBe(true);
+    expect(holds('1.0.0-rc.2', '>=1.0.0-rc.1 <1.0.0')).toBe(true);
+    expect(holds('1.0.0', '>=1.0.0-rc.1 <1.0.0')).toBe(false);
+  });
+
+  it('ignores build metadata', () => {
+    expect(holds('1.2.0+build.5', '1.2.0')).toBe(true);
+    expect(parseVersion('1.0.0+build.5')).not.toBeNull();
+  });
+});
+
+describe('a queue, further', () => {
+  const queue = (keys: Record<string, unknown> = {}): Record<string, unknown> => ({
+    version: 2,
+    label: 'Open claims',
+    pageProvider: 'payers_open_claims',
+    columns: ['claim:number'],
+    ...keys,
+  });
+  const without = (key: string): Record<string, unknown> => {
+    const content = queue();
+    delete content[key];
+    return content;
+  };
+
+  const rows: readonly Row[] = [
+    {
+      what: 'no name',
+      input: without('label'),
+      found: [': needs a "label" or a "labelKey" [structure]'],
+    },
+    {
+      what: 'a rule nobody registered for who sees it',
+      input: queue({ visibleWhen: 'app.rules.nope' }),
+      found: ['visibleWhen: the rule "app.rules.nope" is not registered [unknown]'],
+    },
+    {
+      what: 'a rule that is not an id',
+      input: queue({ visibleWhen: '' }),
+      found: ['visibleWhen: a rule is an ID, or { "type": <ID>, "parameters": [...] } [structure]'],
+    },
+    {
+      what: 'parameters that are null',
+      input: queue({ parameters: null }),
+      found: ['parameters: parameters must be a list [structure]'],
+    },
+    {
+      what: "a task's variable to sort by",
+      input: queue({ sort: [{ field: 'var:decision' }] }),
+      found: [
+        'sort[0].field: "var:" names a task variable, which only a task form has [structure]',
+      ],
+    },
+    {
+      what: "a task's variable in a widget's parameter",
+      input: queue({
+        columns: [
+          {
+            field: 'claim:amount',
+            widget: 'currency',
+            parameters: { currency: { field: 'var:cur' } },
+          },
+        ],
+      }),
+      found: [
+        'columns[0].parameters.currency.field: "var:" names a task variable, which only a task form has [structure]',
+      ],
+    },
+  ];
+  it.each(rows)('refuses $what', ({ input, found }) => {
+    expect(show(validateQueue(input))).toEqual(found);
+  });
+});
+
+describe('actions.json, further', () => {
+  const operations = new Set(['Payers.RequestRecords']);
+  const approve = (keys: Record<string, unknown> = {}) => ({
+    id: 'payers.approve',
+    label: 'Approve',
+    transition: 'approve',
+    ...keys,
+  });
+
+  const rows: readonly Row[] = [
+    {
+      what: 'a transition and an operation together',
+      input: { version: 2, actions: [approve({ operation: 'Payers.RequestRecords' })] },
+      found: ['actions[0]: an action has "transition" or "operation", one of the two [structure]'],
+    },
+    {
+      what: 'an action with no name',
+      input: { version: 2, actions: [{ id: 'payers.approve', transition: 'approve' }] },
+      found: ['actions[0]: needs a "label" or a "labelKey" [structure]'],
+    },
+    {
+      what: 'a key an action does not have',
+      input: { version: 2, actions: [approve({ colour: 'green' })] },
+      found: ['actions[0].colour: "colour" is not a key version 2 has [unknown]'],
+    },
+    {
+      what: 'a key the file does not have',
+      input: { version: 2, actions: [], extra: true },
+      found: ['extra: "extra" is not a key version 2 has [unknown]'],
+    },
+    {
+      what: 'a rule nobody registered for when it shows',
+      input: { version: 2, actions: [approve({ visibleWhen: 'app.rules.nope' })] },
+      found: ['actions[0].visibleWhen: the rule "app.rules.nope" is not registered [unknown]'],
+    },
+    {
+      what: "a task's variable in a template parameter",
+      input: {
+        version: 2,
+        actions: [
+          {
+            id: 'payers.request',
+            label: 'Request',
+            operation: 'Payers.RequestRecords',
+            parameters: {
+              note: { computed: { type: 'core.template', parameters: ['{var:secret}'] } },
+            },
+          },
+        ],
+      },
+      found: [
+        'actions[0].parameters.note.computed.parameters[0]: "var:" names a task variable, which only a task form has [structure]',
+      ],
+    },
+  ];
+  it.each(rows)('refuses $what', ({ input, found }) => {
+    expect(show(validateActions(input, { operations }))).toEqual(found);
+  });
+
+  it('refuses an id registered in Layer 2 code, which a manifest cannot rebind either', () => {
+    const registries = withRegistered(PACKAGED_REGISTRIES, {
+      rowActions: ['acme.rowActions.sign'],
+      bulkActions: ['acme.bulkActions.archive'],
+    });
+    const file = {
+      version: 2,
+      actions: [
+        { id: 'acme.rowActions.sign', label: 'Sign', on: ['row'], transition: 'sign' },
+        { id: 'acme.bulkActions.archive', label: 'Archive', on: ['bulk'], transition: 'archive' },
+      ],
+    };
+    expect(show(validateActions(file, { registries }))).toEqual([
+      'actions[0].id: the id "acme.rowActions.sign" is registered in code, and a manifest cannot rebind it [structure]',
+      'actions[1].id: the id "acme.bulkActions.archive" is registered in code, and a manifest cannot rebind it [structure]',
+    ]);
+  });
+});
+
+describe('var: outside a task form, further', () => {
+  it('is refused in a template placeholder and in a related list, and taken in a task form', () => {
+    const template = {
+      version: 2,
+      cards: [
+        {
+          id: 'c',
+          fields: [
+            { id: 'x', computed: { type: 'core.template', parameters: ['{var:decision}'] } },
+          ],
+        },
+      ],
+    };
+    expect(show(validateLayoutV2(template, { mode: 'view' }))).toEqual([
+      'cards[0].fields[0].computed.parameters[0]: "var:" names a task variable, which only a task form has [structure]',
+    ]);
+    expect(show(validateTaskForm(template))).toEqual([]);
+    const related = {
+      version: 2,
+      cards: [
+        {
+          id: 'r',
+          related: {
+            pageProvider: 'p',
+            parameters: [{ field: 'var:decision' }],
+            columns: ['dc:title'],
+          },
+        },
+      ],
+    };
+    expect(show(validateLayoutV2(related, { mode: 'view' }))).toEqual([
+      'cards[0].related.parameters[0].field: "var:" names a task variable, which only a task form has [structure]',
+    ]);
+  });
+});
+
+describe('null parameters, which the schemas refuse too', () => {
+  it('are refused in a rule and in a computation', () => {
+    const file = {
+      version: 2,
+      cards: [
+        {
+          id: 'c',
+          fields: [
+            { field: 'a:b', visibleWhen: { type: 'app.rules.isType', parameters: null } },
+            { id: 'n', computed: { type: 'core.count', parameters: null } },
+          ],
+        },
+      ],
+    };
+    expect(show(validateLayoutV2(file, { mode: 'view' }))).toEqual([
+      'cards[0].fields[0].visibleWhen.parameters: parameters must be a list [structure]',
+      'cards[0].fields[1].computed.parameters: parameters must be a list [structure]',
+    ]);
+  });
+});
+
+describe('labels and module settings, further', () => {
+  it('refuse a key the file does not have', () => {
+    expect(show(validateLabels({ version: 2, labels: {}, extra: 1 }))).toEqual([
+      'extra: "extra" is not a key version 2 has [unknown]',
+    ]);
+    expect(
+      show(
+        validateModuleSettings(
+          { version: 2, settings: {}, extra: 1 },
+          { module: 'cases', registries: withCases },
+        ),
+      ),
+    ).toEqual(['extra: "extra" is not a key version 2 has [unknown]']);
+  });
+});
+
+describe("each widget's parameters", () => {
+  const widget = (entry: Record<string, unknown>) =>
+    show(validateLayoutV2({ version: 2, cards: [{ id: 'c', fields: [entry] }] }, { mode: 'view' }));
+  const rows: readonly { what: string; entry: Record<string, unknown>; found: string }[] = [
+    {
+      what: 'rows out of range',
+      entry: { field: 'a:b', widget: 'long-text', parameters: { rows: 1 } },
+      found: 'rows: rows must be a whole number from 2 to 20',
+    },
+    {
+      what: 'decimals out of range',
+      entry: { field: 'a:b', widget: 'number', parameters: { decimals: 11 } },
+      found: 'decimals: decimals must be a whole number from 0 to 10',
+    },
+    {
+      what: 'a scale that is neither',
+      entry: { field: 'a:b', widget: 'percent', parameters: { scale: 50 } },
+      found: 'scale: scale must be one of 1, 100',
+    },
+    {
+      what: 'a date format it does not have',
+      entry: { field: 'a:b', widget: 'date', parameters: { format: 'iso' } },
+      found: 'format: format must be one of "short", "long"',
+    },
+    {
+      what: 'a blank directory',
+      entry: { field: 'a:b', widget: 'vocabulary', parameters: { directory: ' ' } },
+      found: 'directory: directory must be a text',
+    },
+    {
+      what: 'no types',
+      entry: { field: 'a:b', widget: 'document-link', parameters: { types: [] } },
+      found: 'types: types must be a list of texts',
+    },
+    {
+      what: 'an empty type',
+      entry: { field: 'a:b', widget: 'document-link', parameters: { types: ['Claim', ''] } },
+      found: 'types: types must be a list of texts',
+    },
+    {
+      what: 'types that are not a list',
+      entry: { field: 'a:b', widget: 'document-link', parameters: { types: 'Claim' } },
+      found: 'types: types must be a list of texts',
+    },
+    {
+      what: 'parts that are not a map',
+      entry: { field: 'a:b', widget: 'address', parameters: { parts: 'street' } },
+      found: 'parts: parts must map street, city, postcode, country to subfield names',
+    },
+    {
+      what: 'a part it does not know',
+      entry: { field: 'a:b', widget: 'address', parameters: { parts: { planet: 'p' } } },
+      found: 'parts: parts has parts it does not know: planet',
+    },
+    {
+      what: 'a part with no subfield',
+      entry: { field: 'a:b', widget: 'address', parameters: { parts: { street: '' } } },
+      found: 'parts: parts must give each part a subfield name',
+    },
+    {
+      what: 'no tones',
+      entry: { field: 'a:b', widget: 'status-badge', parameters: { tones: {} } },
+      found: 'tones: tones must map each value to a tone',
+    },
+    {
+      what: 'a tone it does not have',
+      entry: { field: 'a:b', widget: 'status-badge', parameters: { tones: { open: 'green' } } },
+      found:
+        'tones: tones gives open a tone that is not one of positive, warning, negative, info, neutral',
+    },
+    {
+      what: 'no columns',
+      entry: { field: 'a:b', widget: 'table', parameters: { columns: [] } },
+      found: 'columns: columns must be a list of field entries',
+    },
+  ];
+  it.each(rows)('refuses $what', ({ entry, found }) => {
+    expect(widget(entry)).toEqual([`cards[0].fields[0].parameters.${found} [parameter]`]);
   });
 });

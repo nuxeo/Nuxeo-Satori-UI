@@ -15,7 +15,7 @@ builds it. Two proposals define the files:
 - [app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md), for the others.
 
 ```bash
-npm run app-definition:validate -- <package or file>... [--mode view|metadata|edit|create] [--allow-list <file>] [--platform <version>]
+npm run app-definition:validate -- <package or file>... [--mode view|metadata|edit|create] [--allow-list <file>] [--registered <file>] [--platform <version>]
 ```
 
 It is the check behind phase 0's demo step 1, which the package pipeline is to run: a layout
@@ -27,16 +27,25 @@ and the widget.
     (app-definition-v2.md, section 1).
   - **A file:** that file. One whose place says nothing is refused, unless `--mode` names it a
     layout.
+- **Inside a package**, a directory with an `app.json`:
+  - a JSON file out of place, such as `queue/open.json`, is refused rather than passed over;
+  - `demo/` and `assets/` are not checked;
+  - version 1's `bootstrap.json`, `manifest.json` and `layouts.json` are left alone.
 - **With its package:** each file is checked with its package's `app.json`, `actions.json` and
-  `assets/`, whether or not they were named.
-- **Operations** are refused unless `--allow-list` names a file that lists them,
-  `{ "operations": [...] }`. Decision 3 settles where the real allow-list lives.
-- **`--platform`** holds `app.json`'s range to a platform version.
+  `assets/`, whether or not they were named. One of them that cannot be read is reported, and
+  fails the run.
+- **What the deployment gives it:**
+  - **`--allow-list`:** the operations it allows, `{ "operations": [...] }`. Without one, every
+    operation is refused. Decision 3 settles where the real allow-list lives.
+  - **`--registered`:** what it registers in code beyond the platform's own, as
+    `{ "rules", "rowActions", "bulkActions", "modules" }`, each a list of ids. A customer's Layer
+    2 rules and actions go here, as do domain modules, until each is built.
+  - **`--platform`:** its platform version, which `app.json`'s range must hold.
 - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
   counted.
 - **Exit codes:**
   - 0: no file has a finding;
-  - 1: one has a finding, or a file cannot be read;
+  - 1: a file has a finding or cannot be read, or there was nothing to check;
   - 2: the command was wrong.
 
 ## What is in it
@@ -72,8 +81,9 @@ and the widget.
   - the domain modules, of which there are none yet;
   - `withRegistered`, which adds a customer's own rules and actions, registered in Layer 2 code,
     and modules.
-- **The JSON Schemas** (draft 2020-12) are for editors, the designer and the agent. The validators
-  are what refuse a package. They also check what a schema expresses poorly:
+- **The JSON Schemas** (draft 2020-12) are for editors, the designer and the agent. Each file may
+  name its schema in a `$schema` key. The validators are what refuse a package. They also check
+  what a schema expresses poorly:
   - that ids are unique;
   - which keys a mode allows;
   - each widget's parameters and each computation's signature;
@@ -82,16 +92,22 @@ and the widget.
   - everything across files.
 - **`checker.ts`** holds what every file shares: ids, names, rules, values, computations and field
   entries.
+- **`image-source.ts`** holds the rules for a branding image's address. They are version 1's own,
+  copied unchanged from `libs/shared/app-config`, which cannot be imported here without Angular.
 
 ## What holds it to the rest
 
 - **The proposals.** Every JSON example in `layout-v2.md` must validate with no finding. So must
-  every example in `app-definition-v2.md`, checked together as one package.
+  every example in `app-definition-v2.md`, checked together as one package, in the library and
+  through the command.
 - **The extension reference.** The rules, row actions and bulk actions must be exactly those
   `docs/extension-reference.md` documents. They live in `libs/shared/extensions`, which needs
   Angular, so they are listed here too, and this test is what keeps the lists one.
 - **The proposed rules.** The three new rules must not be documented yet. Once phase 1 implements
   one and documents it, the test fails until it moves into `APP_RULES`.
+- **Version 1's image rules.** The copy in `image-source.ts` must be the same text as
+  `describeLogoSrcForm` in `libs/shared/app-config/src/lib/bootstrap-config.ts`, so that a
+  correction there fails here until it is copied.
 - **The JSON Schemas.** Each must:
   - allow the same keys in each part of a file as its validator;
   - write the validators' patterns;
@@ -100,8 +116,8 @@ and the widget.
   The schemas of queues, actions and `app.json` copy the layout schema's definitions they share,
   so that each stands alone in an editor, and a test keeps the copies equal.
 
-The test target lists both proposals and the extension reference among its inputs, so an edit to
-any of them reruns the tests.
+The test target lists both proposals, the extension reference and `bootstrap-config.ts` among its
+inputs, so an edit to any of them reruns the tests.
 
 ## Tests
 
@@ -110,9 +126,14 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 ```
 
 - **Negative controls:** every message a validator can give has one: an input wrong in one way,
-  and the exact place, message and kind of what is found. A test reads the validators' source and
-  fails when a message has no control, so a new refusal cannot arrive without one.
-- **Mutation checks:** taking out any one of these 37 guards made a test fail.
+  and the exact place, message and kind of what is found. A test reads the validators' source,
+  including the messages a widget's parameter check and version 1's image rules give back, and
+  fails when a message has no control. It proves that every message has a control, not that every
+  guard has one: two guards that give the same message look the same to it. The mutation checks
+  are for guards.
+- **Mutation checks:** taking out any one of these 75 guards made a test fail. The helper that ran
+  them refuses a mutation that does not apply exactly once, and one that breaks a suite instead of
+  failing it.
   - **Layouts:**
     - accepting any widget;
     - allowing an id twice;
@@ -121,35 +142,72 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - skipping parameter counts;
     - allowing related records outside view mode;
     - writing "1 parameters".
-  - **The other files:**
+  - **`var:` and task forms:**
     - allowing `var:` outside task forms;
-    - letting a task form edit the record's properties;
+    - letting a task form edit the record's own properties;
+    - allowing `var:` in a related list's parameter, a sort, a template's placeholder or a
+      widget's parameter.
+  - **Queues:**
     - letting a queue take a parameter from a record;
-    - skipping a queue's bulk actions;
+    - skipping its bulk actions, or its rule;
+    - a queue with no name.
+  - **`app.json`:**
     - skipping the platform range;
     - accepting any module, or a group twice;
-    - letting a branding image climb out of `assets/`;
+    - ignoring its unknown keys;
+    - skipping the tab title;
+    - letting a branding image climb out with `..`, or hold a backslash;
+    - a relative image outside `assets/`;
+    - the image rules drifting from version 1's.
+  - **`actions.json`:**
     - ignoring the allow-list;
-    - letting `actions.json` take a platform id;
+    - letting it take a platform id, or rebind an id registered in code;
     - letting a bulk action read one record's field;
+    - dropping the one-of-two rule;
     - allowing a transition and an operation together;
-    - accepting any label key, or settings for any module.
+    - an action with no name;
+    - ignoring the file's own keys, or an action's;
+    - skipping an action's rule.
+  - **Labels and module settings:**
+    - accepting any label key, or settings for any module;
+    - ignoring the unknown keys of either.
+  - **Widget parameters:**
+    - rows from 1;
+    - no tones;
+    - no columns;
+    - a list of texts that may be empty, or hold an empty text.
+  - **Rules and parameters:**
+    - `null` parameters;
+    - a rule id that is not one;
+    - a `$schema` that is not a text.
   - **Across files:**
     - ignoring the package's own actions in queues;
     - skipping whether `app.json` turns a module on;
     - skipping the branding images;
-    - checking a file without its package.
+    - checking a file without its package;
+    - ignoring which package has an `app.json`, when a path fits two places.
+  - **The command:**
+    - always exiting 0;
+    - not reading `assets/`;
+    - an allow-list with other keys, or with ids that are not texts;
+    - passing over a file out of place;
+    - checking `demo/` and `assets/`;
+    - passing when a package file cannot be read;
+    - a byte-order mark;
+    - passing with nothing checked;
+    - ignoring `--registered`.
   - **Versions:**
     - a caret on `0.x` reaching the next minor version;
-    - a prerelease ranked equal to its release.
+    - a prerelease ranked equal to its release;
+    - dropping npm's rule that a prerelease is in a range only when a comparator names one.
   - **The contract:**
     - registering a check the schema lacks;
     - listing a rule or a bulk action the reference does not document;
     - a queue key the schema lacks;
     - a copied schema definition drifting;
-    - deleting a negative control, in layouts and in the other files;
-    - adding a refusal with no control, in layouts and in queues;
-    - a command that always exits 0.
+    - deleting a negative control, or weakening one, in layouts, in the other files and for a
+      message given back as a value;
+    - adding a refusal with no control, in layouts and in queues.
 
 ## Not done yet
 
@@ -157,6 +215,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 - **The app's use of it:** phase 1 renders layouts and queues, and phase 2 actions and task forms.
 - **Checking widgets against property types**, which needs the content model: phase 1's model
   reader.
+- **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, may name a
+  rule that reads a record (app-definition-v2.md, section 11).
 - **The menu and the home**, whose files phase 1 proposes.
 - **The allow-list's real home and format** (decision 3), and each module's settings schema, which
   comes with the module.

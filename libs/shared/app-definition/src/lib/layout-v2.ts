@@ -35,7 +35,7 @@ export interface ValidationOptions {
   readonly registries?: Registries;
 }
 
-const FILE_KEYS = ['version', 'columns', 'cards', 'tabs'];
+const FILE_KEYS = ['$schema', 'version', 'columns', 'cards', 'tabs'];
 const TAB_KEYS = ['id', 'label', 'labelKey', 'visibleWhen', 'cards'];
 const CARD_KEYS = ['id', 'label', 'labelKey', 'span', 'visibleWhen', 'fields', 'related'];
 const RELATED_KEYS = ['pageProvider', 'parameters', 'columns', 'sort', 'pageSize', 'rowActions'];
@@ -136,6 +136,7 @@ function layout(
   };
 
   c.unknownKeys(file, FILE_KEYS, '');
+  c.schemaKey(file);
   let columns = 1;
   if ('columns' in file) {
     if (!view) c.add('columns', 'structure', 'columns belongs in view mode only');

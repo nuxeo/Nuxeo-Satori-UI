@@ -2,10 +2,15 @@
  * Semantic versions, and the ranges `app.json` gives for the platform it runs on
  * (app-definition-v2.md, section 3). A range is one or more comparators, all of which must hold:
  * `>=1.0.0 <2.0.0`, `^1.2.0`, `~1.2.0` or `1.2.0`. There is no `||`, no `x` and no hyphen range.
- * Versions are compared by precedence, a prerelease before its release.
+ *
+ * What a range admits is npm's: versions compare by precedence, a prerelease before its release,
+ * and build metadata is ignored. A prerelease is in a range only when one of its comparators names
+ * a prerelease of the same version, so `>=0.3.0 <1.0.0` leaves out `1.0.0-beta.1`, and `^1.2.0`
+ * leaves out `2.0.0-rc.1`. npm also writes the upper bound of `^` and `~` as `<2.0.0-0`, which
+ * matters only with its `includePrerelease` option; with the rule above, `<2.0.0` admits the same.
  */
 const VERSION =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const COMPARATOR = /^(>=|<=|>|<|=|\^|~)?(.+)$/;
 
 export interface Version {
@@ -76,6 +81,13 @@ export function parseRange(text: string): readonly Comparator[] | null {
 }
 
 export function satisfies(version: Version, range: readonly Comparator[]): boolean {
+  const same = (a: Version, b: Version): boolean =>
+    a.major === b.major && a.minor === b.minor && a.patch === b.patch;
+  if (
+    version.prerelease.length > 0 &&
+    !range.some(({ version: bound }) => bound.prerelease.length > 0 && same(bound, version))
+  )
+    return false;
   return range.every(({ operator, version: bound }) => {
     const order = compareVersions(version, bound);
     switch (operator) {

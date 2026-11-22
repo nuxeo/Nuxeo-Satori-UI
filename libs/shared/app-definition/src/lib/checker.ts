@@ -31,6 +31,8 @@ export interface Finding {
 export const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 /** A name the server defines: a page provider, an aggregate, an operation or a transition. */
 export const NAME = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
+/** A rule's ID, as the manifest writes one. */
+export const RULE_ID = /^[A-Za-z][A-Za-z0-9_.-]*$/;
 export const FORM_KEYS = ['required', 'readOnlyWhen', 'checks'];
 export const FIELD_KEYS = [
   'field',
@@ -131,6 +133,12 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       add(path, 'structure', 'needs a "label" or a "labelKey"');
   };
 
+  /** `$schema`, which an editor reads to find a file's JSON Schema, as version 1's fragments write it. */
+  const schemaKey = (file: Record<string, unknown>): void => {
+    if ('$schema' in file && typeof file['$schema'] !== 'string')
+      add('$schema', 'structure', '$schema is the address of a JSON Schema, for editors');
+  };
+
   /** A property, once its form is right: `var:` names a task's variable, so only a task form has it. */
   const variable = (xpath: string, path: string): void => {
     if (!task && xpath.startsWith(VARIABLE))
@@ -143,9 +151,9 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       typeof item === 'string'
         ? [item, []]
         : isRecord(item)
-          ? [item['type'], item['parameters'] ?? []]
+          ? [item['type'], 'parameters' in item ? item['parameters'] : []]
           : [null, null];
-    if (typeof type !== 'string') {
+    if (typeof type !== 'string' || !RULE_ID.test(type)) {
       add(path, 'structure', 'a rule is an ID, or { "type": <ID>, "parameters": [...] }');
       return;
     }
@@ -205,6 +213,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
         for (const [, inner] of item.matchAll(/\{([^}]*)\}/g)) {
           if (!XPATH.test(inner))
             add(path, 'parameter', `the placeholder {${inner}} is not a property, <prefix>:<name>`);
+          else variable(inner, path);
         }
       }
     }
@@ -246,7 +255,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       add(join(path, 'type'), 'unknown', `the computation "${type}" is not registered`);
       return;
     }
-    const parameters = item['parameters'] ?? [];
+    const parameters = 'parameters' in item ? item['parameters'] : [];
     if (!Array.isArray(parameters))
       add(join(path, 'parameters'), 'structure', 'parameters must be a list');
     else
@@ -274,7 +283,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       add(join(path, 'type'), 'unknown', `the check "${type}" is not registered`);
       return;
     }
-    const parameters = item['parameters'] ?? [];
+    const parameters = 'parameters' in item ? item['parameters'] : [];
     if (!Array.isArray(parameters))
       add(join(path, 'parameters'), 'structure', 'parameters must be a list');
     else
@@ -314,6 +323,8 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       }
       const problem = definition.parameters[name](setting);
       if (problem) add(join(join(path, 'parameters'), name), 'parameter', `${name} ${problem}`);
+      else if (isFieldReference(setting))
+        variable(setting.field, join(join(join(path, 'parameters'), name), 'field'));
     }
     for (const name of definition.required ?? []) {
       if (!Object.hasOwn(given, name))
@@ -432,7 +443,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
         'needs the name of a page provider defined on the server',
       );
     }
-    const parameters = item['parameters'] ?? [];
+    const parameters = 'parameters' in item ? item['parameters'] : [];
     if (!Array.isArray(parameters))
       add(join(path, 'parameters'), 'structure', 'parameters must be a list');
     else {
@@ -502,6 +513,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     unknownKeys,
     label,
     named,
+    schemaKey,
     rule,
     value,
     computation,

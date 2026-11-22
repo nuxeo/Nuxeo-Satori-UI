@@ -7,6 +7,10 @@
   "required": ["version", "id", "packageVersion", "platform", "groups"],
   "additionalProperties": false,
   "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The address of this JSON Schema, for editors. Ignored otherwise."
+    },
     "version": {
       "const": 2
     },
@@ -106,7 +110,8 @@
           "properties": {
             "src": {
               "type": "string",
-              "pattern": "^(?:assets/.+|https://.+|data:image/.+)$"
+              "pattern": "^(?:assets/[\\s\\S]+|[hH][tT][tT][pP][sS]://[^/][\\s\\S]*|[dD][aA][tT][aA]:[iI][mM][aA][gG][eE]/[A-Za-z0-9.+-]+(?:;[^,#]*)?,[^#][\\s\\S]*)$",
+              "description": "Version 1's rules for an image address, and a relative one in assets/. The validator applies them in full."
             },
             "alt": {
               "type": "string"

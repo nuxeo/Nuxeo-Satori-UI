@@ -68,6 +68,7 @@ record page is today's document page.
 | `columns` | How many columns the cards fill, 1 to 3. Default 1. `view` mode only                           |
 | `cards`   | The cards, in order                                                                            |
 | `tabs`    | Or tabs, each holding cards: `{ "id", "label"?, "labelKey"?, "visibleWhen"?, "cards": [...] }` |
+| `$schema` | Optional: the address of a JSON Schema, for editors, as version 1's fragments write it         |
 
 A file has `cards` or `tabs`, never both.
 
@@ -285,7 +286,11 @@ What counts as structural:
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
 - form-only keys in `view` mode, or `related` outside it;
-- a `span` over `columns`.
+- a `span` over `columns`;
+- a `var:` property, which only a task form has
+  ([app-definition-v2.md, section 6](app-definition-v2.md#6-task-forms)).
+
+`parameters` written as `null` is malformed, not absent.
 
 ## 9. An example: the Member page
 

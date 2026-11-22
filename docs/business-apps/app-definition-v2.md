@@ -69,8 +69,10 @@ demo/                                starter kits only; not checked
 - **Rules and values** are layout version 2's ([sections 4 and 5](layout-v2.md#4-computations)): a
   rule is a registered id or `{ "type", "parameters" }`, and a value is a literal, a
   `{ "field" }` or a `{ "computed" }`.
-- **Keys.** A key a file does not have, such as a misspelt one, is refused when the package is
-  built and ignored when the app loads it.
+- **Keys.** A key a file does not have, such as a misspelt one, is an `unknown` finding. It
+  refuses the package when it is built, and section 10 says what it does when the app loads the
+  file. `$schema`, the address of a JSON Schema for editors, may head any file, as it heads
+  version 1's fragments.
 - **Findings** have layout version 2's three kinds: `structure`, `unknown` and `parameter`.
   Section 10 says what each does to each file.
 
@@ -106,15 +108,21 @@ demo/                                starter kits only; not checked
 
 - **The platform range.** The shell refuses an app whose range leaves out its own version, and
   says both. The pipeline checks the range against the version of the server it publishes for.
+  A range admits what npm's would: `^` and `~` stop short of the next version's prereleases, and
+  a prerelease is in a range only when one of its comparators names a prerelease of the same
+  version.
 - **Groups.** Decision E settles whether the registry serves an app definition only to its groups,
   after sign-in. Until then the field is written and checked. Either way it is not a security
   control: Nuxeo's permissions still decide which records a person reads.
 - **Modules.** A module the platform does not have is refused: an app that needs it cannot run. No
   domain module exists yet, so this document's examples are checked with one named `cases`
   registered.
-- **Branding images.** A `logo` or `favicon` whose `src` is `assets/<file>` must be in the
-  package. An `https:` or `data:image/` source is taken as version 1 takes it, and `null` keeps
-  the platform's own.
+- **Branding images.** A `logo` or `favicon`'s `src` is held to version 1's own rules, unchanged:
+  an `https:` address that names a host, a `data:image/` address with a payload, or a relative
+  path with no `..`, however it is written. No backslash and no control character is allowed.
+  Here a relative path must also be in the package's `assets/`, and the file must be there.
+  `null` keeps the platform's own. When the app loads it, version 1 still decides where the
+  address may point.
 
 ## 4. Queues
 
@@ -193,19 +201,19 @@ demo/                                starter kits only; not checked
 }
 ```
 
-| Key                  | What it is                                                                                                                                                                               |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                 | Required, and the package's own: an id starting `app.` or `core.` is the platform's, and a manifest cannot rebind those ([extension-reference.md](../extension-reference.md), section 1) |
-| `label`, `labelKey`  | The button's text. One of them is required                                                                                                                                               |
-| `icon`               | A Material Symbols name, such as `check`                                                                                                                                                 |
-| `order`              | A whole number. Lower comes first                                                                                                                                                        |
-| `on`                 | Where it shows: `record`, the record page's toolbar; `row`, a queue's row menu; `bulk`, a queue's selection. `["record"]` when left out                                                  |
-| `visibleWhen`        | A rule                                                                                                                                                                                   |
-| `transition`         | A lifecycle transition. The button shows only when the record's lifecycle allows it, as phase 2's allowed-transitions enricher says                                                      |
-| `operation`          | An Automation operation or chain, on the deployment's allow-list                                                                                                                         |
-| `parameters`         | The operation's parameters: each name to a value                                                                                                                                         |
-| `confirm`, `success` | `{ "label" }` or `{ "labelKey" }`: a question before it runs, and a message after                                                                                                        |
-| `refresh`            | Whether the record or the queue reloads afterwards. True when left out                                                                                                                   |
+| Key                  | What it is                                                                                                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                 | Required, and the package's own. A manifest cannot rebind an action registered in code ([extension-reference.md](../extension-reference.md), section 1): neither an id starting `app.` or `core.`, which is the platform's, nor one a customer registers in Layer 2 code |
+| `label`, `labelKey`  | The button's text. One of them is required                                                                                                                                                                                                                               |
+| `icon`               | A Material Symbols name, such as `check`                                                                                                                                                                                                                                 |
+| `order`              | A whole number. Lower comes first                                                                                                                                                                                                                                        |
+| `on`                 | Where it shows: `record`, the record page's toolbar; `row`, a queue's row menu; `bulk`, a queue's selection. `["record"]` when left out                                                                                                                                  |
+| `visibleWhen`        | A rule                                                                                                                                                                                                                                                                   |
+| `transition`         | A lifecycle transition. The button shows only when the record's lifecycle allows it, as phase 2's allowed-transitions enricher says                                                                                                                                      |
+| `operation`          | An Automation operation or chain, on the deployment's allow-list                                                                                                                                                                                                         |
+| `parameters`         | The operation's parameters: each name to a value                                                                                                                                                                                                                         |
+| `confirm`, `success` | `{ "label" }` or `{ "labelKey" }`: a question before it runs, and a message after                                                                                                                                                                                        |
+| `refresh`            | Whether the record or the queue reloads afterwards. True when left out                                                                                                                                                                                                   |
 
 - **One of `transition` and `operation`.** Parameters belong to an operation only.
 - **The allow-list.** Decision 3 makes it per deployment, and phase 2's security review signs it
@@ -289,7 +297,9 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
 - **It is an edit-mode layout file**, with the same keys and rules: cards or tabs; fields with
   `required`, `readOnlyWhen` and `checks`; no `columns`, `span` or related records.
 - **`var:<name>`** names a variable of the step or of its workflow. A task form edits only these,
-  and `var:` means nothing in any other file.
+  and `var:` means nothing in any other file, wherever a property can be written: a field, a
+  value, a template's placeholder or a widget's parameter. So `var` is not a prefix any schema of
+  the content model can use in an app definition.
 - **The record's own properties**, such as `claim:billedAmount`, show read-only. A value may still
   read them, as the check above does.
 - **The buttons** are the step's own, from the workflow: approve and deny, here. Whether a field
@@ -345,24 +355,33 @@ Each file is checked with its package's `app.json`, `actions.json` and `assets/`
   `bulk` in `on`;
 - a module's settings are for a module `app.json` turns on;
 - a branding image in `assets/` is in the package;
-- a file's name says what the file is: a queue's id, a workflow and a step, a language, a module.
+- a file's name says what the file is: a queue's id, a workflow and a step, a language, a module;
+- inside a package, a JSON file out of place, such as `queue/open.json`, is refused rather than
+  passed over. Version 1's `bootstrap.json`, `manifest.json` and `layouts.json`, and whatever is
+  in `demo/` and `assets/`, are left alone.
 
 ## 10. What is refused, and when
 
 When the package is built, every finding refuses it, naming the file, the place and the problem.
-When the app loads a file, it is tolerant, except of `app.json`:
+When the app loads a file, what a finding does depends on its kind and on the file:
 
-| File            | A structural error                                                   | An id this platform does not have                        |
-| --------------- | -------------------------------------------------------------------- | -------------------------------------------------------- |
-| `app.json`      | The app is refused, and "Switch app" does not list it                | The app is refused too: it needs what the platform lacks |
-| A queue         | The queue is left out                                                | That column, facet or action is left out                 |
-| `actions.json`  | That action is left out; all of them, if the error is the file's own | That action is left out                                  |
-| A task form     | The step's generated form shows instead                              | That field is left out                                   |
-| A labels file   | The file is not applied: the platform's labels show                  | —                                                        |
-| Module settings | The app is refused, as for `app.json`                                | The file is ignored                                      |
+- **`unknown`:** a key, an id or a file that neither the platform nor the package has;
+- **`parameter`:** a registered id given parameters it does not take.
 
-Settings a module cannot read refuse the app, because the module would run half configured. A
-settings file for a module the app does not turn on is ignored.
+| File            | A `structure` finding                                                 | An `unknown` or `parameter` finding                                                   |
+| --------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `app.json`      | The app is refused, and "Switch app" does not list it                 | The app is refused too: the shell runs no app it cannot read whole                    |
+| A queue         | The queue is left out                                                 | The column, facet or action it is in is left out. A key of the queue's own is ignored |
+| `actions.json`  | The action it is in is left out; all of them, if it is the file's own | The action it is in is left out. A key of the file's own is ignored                   |
+| A task form     | The step's generated form shows instead                               | The card or field it is in is left out, as in a layout                                |
+| A labels file   | The file is not applied: the platform's labels show                   | The key is ignored                                                                    |
+| Module settings | The app is refused, as for `app.json`                                 | The app is refused, as for `app.json`                                                 |
+
+- **`app.json` and module settings refuse the app** on any finding, an unknown key included. An
+  app the shell cannot read whole would run half configured. A package that needs a later
+  platform's keys says so in its platform range.
+- **A settings file for a module the app does not turn on** is never read, so it refuses nothing
+  when the app loads.
 
 ## 11. Not settled here
 
@@ -378,5 +397,9 @@ settings file for a module the app does not turn on is ignored.
 - **The menu and the home**, in phase 1.
 - **The person signed in as a page provider parameter.** A page provider names them on the server
   for now.
+- **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, can name a
+  rule that reads a record, such as `app.rules.isType`, or a `{ "field" }` value, and there is no
+  one record there for it to read. Rules do not yet say what they read. Phase 1 decides whether
+  they will, so that the validator can refuse these.
 - **Related-records lists** keep the platform's row actions. Whether they also take the package's
   own is phase 1's to decide.

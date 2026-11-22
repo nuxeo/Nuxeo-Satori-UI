@@ -3,10 +3,17 @@ import { join } from 'node:path';
 import ts from 'typescript';
 
 // Every message the validators can give must appear in the expectations of a spec, so that a
-// refusal added without a negative control fails here. The messages are read from the source: the
-// last argument of each `add(...)` call, and each `message:` of a finding built whole. One is
-// compared by its literal text, the parts between its placeholders; one with none, such as a
-// widget parameter's own complaint, is made of messages tested elsewhere.
+// refusal added without a negative control fails here. The messages are read from the source:
+//
+// - the last argument of each `add(...)` call, and each `message:` of a finding built whole;
+// - a message given back as a value: the text a function returns, and the text beside a `null` in
+//   a conditional, which is how a widget parameter's check and an image's rules say what is wrong.
+//
+// One is compared by its literal text, the parts between its placeholders. A message with none is
+// made of messages tested elsewhere.
+//
+// What this proves is that every message has a control, not that every guard has one: two guards
+// that give the same message look the same here. The mutation checks are for guards.
 const LIB = import.meta.dirname;
 const sources = readdirSync(LIB).filter(
   (name) => name.endsWith('.ts') && !name.endsWith('.spec.ts'),
@@ -45,6 +52,13 @@ function messagesIn(file: string): string[][] {
           ? node.initializer
           : undefined;
     if (message) found.push(literals(message));
+    if (ts.isReturnStatement(node) && node.expression && literals(node.expression).length > 0)
+      found.push(literals(node.expression));
+    if (ts.isConditionalExpression(node)) {
+      const isNull = (branch: ts.Expression): boolean => branch.kind === ts.SyntaxKind.NullKeyword;
+      if (isNull(node.whenTrue)) found.push(literals(node.whenFalse));
+      if (isNull(node.whenFalse)) found.push(literals(node.whenTrue));
+    }
     ts.forEachChild(node, visit);
   };
   visit(source);
@@ -55,9 +69,16 @@ describe('the negative controls', () => {
   it('cover every message the validators can give', () => {
     const all = sources.flatMap((file) => messagesIn(file).map((parts) => ({ file, parts })));
     expect(sources).toEqual(
-      expect.arrayContaining(['checker.ts', 'app.ts', 'queue.ts', 'actions.ts']),
+      expect.arrayContaining([
+        'checker.ts',
+        'app.ts',
+        'queue.ts',
+        'actions.ts',
+        'registries.ts',
+        'image-source.ts',
+      ]),
     );
-    expect(all.length).toBeGreaterThan(90);
+    expect(all.length).toBeGreaterThan(120);
     const untested = all
       .map(({ file, parts }) => ({
         file,

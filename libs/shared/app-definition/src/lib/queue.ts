@@ -11,6 +11,7 @@ import { createChecker, join, NAME, unreadable, type Checker, type Finding } fro
 import { isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
 
 const QUEUE_KEYS = [
+  '$schema',
   'version',
   'label',
   'labelKey',
@@ -38,6 +39,7 @@ export function validateQueue(
   const queue = content as Record<string, unknown>;
   const c = createChecker(options.registries ?? PACKAGED_REGISTRIES);
   c.unknownKeys(queue, QUEUE_KEYS, '');
+  c.schemaKey(queue);
   c.named(queue, '');
   c.list(queue, '', { openRecord: false });
   if ('facets' in queue) facets(c, queue['facets']);

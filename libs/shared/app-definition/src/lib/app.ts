@@ -6,6 +6,7 @@
  * built: the shell refuses an app it cannot run rather than draw half of it.
  */
 import { createChecker, ID, join, unreadable, type Checker, type Finding } from './checker';
+import { describeLogoSrcForm } from './image-source';
 import { isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
 import { parseRange, parseVersion, satisfies } from './semver';
 
@@ -13,6 +14,7 @@ import { parseRange, parseVersion, satisfies } from './semver';
 export const APP_ID = /^[a-z][a-z0-9-]{0,62}$/;
 
 const APP_KEYS = [
+  '$schema',
   'version',
   'id',
   'label',
@@ -32,7 +34,10 @@ export const APP_V2_KEYS = { app: APP_KEYS, branding: BRANDING_KEYS, image: IMAG
 
 export interface AppOptions {
   readonly registries?: Registries;
-  /** The platform version the range must hold, when the caller knows it: the pipeline does. */
+  /**
+   * The platform version the range must hold, when the caller knows it: the pipeline does. It must
+   * be a semantic version: anything else is the caller's mistake, not the file's, and throws.
+   */
   readonly platformVersion?: string;
 }
 
@@ -42,6 +47,7 @@ export function validateApp(content: unknown, options: AppOptions = {}): Finding
   const app = content as Record<string, unknown>;
   const c = createChecker(options.registries ?? PACKAGED_REGISTRIES);
   c.unknownKeys(app, APP_KEYS, '');
+  c.schemaKey(app);
   c.named(app, '');
   if (typeof app['id'] !== 'string' || !APP_ID.test(app['id']))
     c.add(
@@ -132,7 +138,11 @@ function branding(c: Checker, value: unknown): void {
   }
 }
 
-/** An image as version 1's bootstrap writes it; `null` keeps the platform's own. */
+/**
+ * An image as version 1's bootstrap writes it, held to version 1's own rules for its source; `null`
+ * keeps the platform's own. A relative source must also be in the package's `assets/`, so that the
+ * package can be checked for the file.
+ */
 function image(c: Checker, value: unknown, path: string): void {
   if (value === null) return;
   if (!isRecord(value)) {
@@ -141,26 +151,33 @@ function image(c: Checker, value: unknown, path: string): void {
   }
   c.unknownKeys(value, IMAGE_KEYS, path);
   const src = value['src'];
-  if (
-    typeof src !== 'string' ||
-    !(isAssetPath(src) || src.startsWith('https://') || src.startsWith('data:image/'))
-  ) {
-    c.add(
-      join(path, 'src'),
-      'structure',
-      'src is assets/<file> in the package, an https: address or a data:image/ address',
-    );
-  }
+  const problem =
+    typeof src !== 'string'
+      ? 'it is not a text'
+      : (describeLogoSrcForm(src) ??
+        (isRelative(src) && !src.startsWith('assets/')
+          ? 'it is a relative path outside assets/, where a package keeps its images'
+          : null));
+  if (problem) c.add(join(path, 'src'), 'structure', `the source is refused: ${problem}`);
   if ('alt' in value && typeof value['alt'] !== 'string')
     c.add(join(path, 'alt'), 'structure', 'must be a text');
 }
 
-/** `assets/<file>`, inside the package's `assets/`: no `..`, no backslash. */
-export function isAssetPath(src: string): boolean {
-  return (
-    src.startsWith('assets/') &&
-    src.length > 'assets/'.length &&
-    !src.includes('\\') &&
-    !src.split('/').some((segment) => segment === '..' || segment === '')
-  );
+/** A source with no scheme: a path, which version 1 resolves against the configuration directory. */
+function isRelative(src: string): boolean {
+  return !/^[a-z][a-z0-9+.-]*:/i.test(src);
+}
+
+/**
+ * The file in the package an accepted source names, as `assets/<path>`, or `null` for an address
+ * elsewhere: its path, without a query or a fragment, and decoded as the browser will decode it.
+ */
+export function assetFile(src: string): string | null {
+  if (!isRelative(src) || !src.startsWith('assets/')) return null;
+  const path = src.split(/[?#]/, 1)[0] ?? '';
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
 }

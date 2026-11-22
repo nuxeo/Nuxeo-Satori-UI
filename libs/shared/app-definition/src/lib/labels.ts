@@ -9,8 +9,8 @@ import { isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
 /** A key as the platform's catalogues write theirs, `layout.field.claim:memberId` among them. */
 export const LABEL_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 
-const LABELS_KEYS = ['version', 'labels'];
-const MODULE_KEYS = ['version', 'settings'];
+const LABELS_KEYS = ['$schema', 'version', 'labels'];
+const MODULE_KEYS = ['$schema', 'version', 'settings'];
 
 /** The keys of a labels file and of a module's settings, which their JSON Schemas must list too. */
 export const LABELS_V2_KEYS = { labels: LABELS_KEYS, module: MODULE_KEYS } as const;
@@ -21,6 +21,7 @@ export function validateLabels(content: unknown): Finding[] {
   const file = content as Record<string, unknown>;
   const c = createChecker(PACKAGED_REGISTRIES);
   c.unknownKeys(file, LABELS_KEYS, '');
+  c.schemaKey(file);
   const labels = file['labels'];
   if (!isRecord(labels)) {
     c.add('labels', 'structure', 'labels maps each key to its text');
@@ -54,6 +55,7 @@ export function validateModuleSettings(
   const file = content as Record<string, unknown>;
   const c = createChecker(options.registries ?? PACKAGED_REGISTRIES);
   c.unknownKeys(file, MODULE_KEYS, '');
+  c.schemaKey(file);
   if (!c.registries.modules.has(options.module))
     c.add('', 'unknown', `the module "${options.module}" is not registered`);
   if (!isRecord(file['settings'])) c.add('settings', 'structure', 'settings must be an object');
