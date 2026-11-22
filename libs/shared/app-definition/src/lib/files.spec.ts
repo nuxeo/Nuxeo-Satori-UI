@@ -5,7 +5,7 @@ import { validateLabels, validateModuleSettings } from './labels';
 import { validateLayoutV2, validateTaskForm } from './layout-v2';
 import { validateQueue } from './queue';
 import { PACKAGED_REGISTRIES, withRegistered } from './registries';
-import { parseRange, parseVersion, satisfies } from './semver';
+import { compareVersions, parseRange, parseVersion, satisfies } from './semver';
 
 // The validators of the files beside the layouts (docs/business-apps/app-definition-v2.md). Each
 // table row is a negative control: an input wrong in one way, whose findings must be exactly these.
@@ -1006,5 +1006,24 @@ describe('the second review', () => {
     expect(show(validateQueue(queue))).toEqual([
       'sort[0].oder: "oder" is not a key version 2 has [unknown]',
     ]);
+  });
+});
+
+describe('numbers past JavaScript safe integers', () => {
+  const version = (text: string) => parseVersion(text)!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+  it('compares two numeric prerelease identifiers exactly, one way and the other', () => {
+    const [older, newer] = ['1.0.0-9007199254740992', '1.0.0-9007199254740993'];
+    expect(compareVersions(version(older), version(newer))).toBe(-1);
+    expect(compareVersions(version(newer), version(older))).toBe(1);
+    expect(satisfies(version(older), parseRange(`>${newer}`)!)).toBe(false); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    expect(satisfies(version(newer), parseRange(`>${older}`)!)).toBe(true); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    expect(compareVersions(version('1.0.0-10'), version('1.0.0-9'))).toBe(1);
+  });
+
+  it('refuses a major, minor or patch it cannot hold exactly, as npm does', () => {
+    expect(parseVersion('9007199254740991.0.0')).not.toBeNull();
+    for (const text of ['9007199254740992.0.0', '1.9007199254740993.0', '1.0.99999999999999999999'])
+      expect(parseVersion(text)).toBeNull();
   });
 });
