@@ -367,6 +367,60 @@ describe('the generated build.mjs', () => {
     expect(packaged.presales.presetSwitching).toBe(true);
   });
 
+  it('wraps manifest headers at 72 UTF-8 bytes and preserves their unfolded values', async () => {
+    await generate();
+    const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+    const original = readFileSync(join(dir, manifestPath), 'utf8');
+    const value = 'a'.repeat(61) + 'é😀' + '界'.repeat(40);
+    const source = original.trimEnd() + '\nX-Customer: ' + value + '\nX-Folded: first\n second\n\n';
+    write(manifestPath, source);
+    const { status, zip } = build();
+    expect(status).toBe(0);
+    const archive = unzip(zip as Buffer);
+    const jar = unzip(archive.get('install/bundles/acme-config.jar') as Buffer);
+    const bytes = jar.get('META-INF/MANIFEST.MF') as Buffer;
+    const packaged = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    for (const line of packaged.split('\r\n')) {
+      expect(Buffer.byteLength(line), line).toBeLessThanOrEqual(72);
+    }
+    expect(packaged).not.toMatch(/(?<!\r)\n|\r(?!\n)/);
+    expect(packaged.endsWith('\r\n\r\n')).toBe(true);
+    const unfolded = packaged.replace(/\r\n /g, '');
+    expect(unfolded).toContain('X-Customer: ' + value + '\r\n');
+    expect(unfolded).toContain('X-Folded: firstsecond\r\n');
+    expect(readFileSync(join(dir, manifestPath), 'utf8')).toBe(source);
+  });
+
+  it('packages a manifest without its source byte-order mark', async () => {
+    await generate();
+    const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+    const manifest = readFileSync(join(dir, manifestPath), 'utf8');
+    write(manifestPath, `\uFEFF${manifest}`);
+
+    const { status, zip } = build();
+    expect(status).toBe(0);
+    const archive = unzip(zip as Buffer);
+    const jar = unzip(archive.get('install/bundles/acme-config.jar') as Buffer);
+    const packaged = jar.get('META-INF/MANIFEST.MF') as Buffer;
+    // Check the nested JAR bytes: the validator's decoder already discarded the BOM,
+    // but copying the source bytes put it back in the artifact Java installs.
+    expect(packaged.subarray(0, 3)).not.toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
+    expect(packaged.toString('utf8')).toBe(
+      manifest.trimEnd().replace(/\r?\n/g, '\r\n') + '\r\n\r\n',
+    );
+    expect(readFileSync(join(dir, manifestPath), 'utf8')).toBe(`\uFEFF${manifest}`);
+  });
+
+  it('refuses JSON nested under another recognized descriptor', async () => {
+    await generate();
+    contribute(
+      '<fragment name="outer" layer="manifest"><layout type="File" mode="view"><json>{}</json></layout></fragment>',
+    );
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain('<json> must be a direct child');
+  });
+
   it('is reproducible: the same source builds the same bytes, whenever it is built', async () => {
     await generate();
     const digest = () =>
@@ -617,6 +671,121 @@ describe('the generated build.mjs', () => {
     expect(output).toMatch(/must <require>org\.nuxeo\.agentic\.ui\.config\.defaults<\/require>/);
   });
 
+  it.each(['component', 'extension-point'])(
+    'ignores real XML examples in %s documentation',
+    async (location) => {
+      await generate();
+      const examples =
+        '<documentation><code>' +
+        '<require>example.defaults</require>' +
+        '<extension target="org.nuxeo.agentic.ui.config" point="configuration">' +
+        '<fragment name="example" layer="manifest"><json>{"labels":{}}</json></fragment>' +
+        '<fragment name="example-src" layer="bootstrap" src="examples/missing.json" />' +
+        '<layout type="Contract" mode="view" src="examples/missing-layout.json" />' +
+        '<asset name="example.svg" src="examples/missing.svg" />' +
+        '</extension>' +
+        '</code></documentation>';
+      const documentation =
+        location === 'component'
+          ? examples
+          : '<extension-point name="configuration">' + examples + '</extension-point>';
+      const xml = readFileSync(join(dir, componentXml), 'utf8');
+      write(componentXml, xml.replace('<require>', documentation + '<require>'));
+      expect(build().status).toBe(0);
+    },
+  );
+
+  it('ignores documented extensions without inventing an active dependency', async () => {
+    await generate();
+    write(
+      componentXml,
+      '<component name="acme.config.acme-config"><documentation><code>' +
+        '<extension target="org.nuxeo.agentic.ui.config" point="configuration">' +
+        '<fragment name="example" layer="manifest" src="examples/missing.json" />' +
+        '</extension></code></documentation></component>',
+    );
+    expect(build().status).toBe(0);
+  });
+
+  it('keeps extraction offsets after documentation containing CDATA and nested markup', async () => {
+    await generate();
+    const xml = readFileSync(join(dir, componentXml), 'utf8');
+    write(
+      componentXml,
+      xml.replace(
+        '<require>',
+        '<documentation><code title=">">' +
+          '<![CDATA[</documentation><require>not active</require>]]>' +
+          '<documentation><json>not JSON</json></documentation>' +
+          '</code></documentation><documentation/><require>',
+      ),
+    );
+    contribute('<fragment name="active" layer="manifest"><json>{"labels":{}}</json></fragment>');
+    expect(build().status).toBe(0);
+  });
+
+  it('does not let documentation inside a descriptor hide nested JSON', async () => {
+    await generate();
+    contribute(
+      '<fragment name="wrapped" layer="manifest"><documentation><json>{}</json></documentation></fragment>',
+    );
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain('<json> must be a direct child');
+  });
+
+  it('does not count a documented require as an active dependency', async () => {
+    await generate();
+    const xml = readFileSync(join(dir, componentXml), 'utf8');
+    write(
+      componentXml,
+      xml.replace(
+        /<require>([^<]*)<\/require>/,
+        '<documentation><code><require>$1</require></code></documentation>',
+      ),
+    );
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toMatch(/must <require>org\.nuxeo\.agentic\.ui\.config\.defaults<\/require>/);
+  });
+
+  it('refuses a nested require that the component loader does not read', async () => {
+    await generate();
+    const xml = readFileSync(join(dir, componentXml), 'utf8');
+    write(
+      componentXml,
+      xml.replace(/<require>([^<]*)<\/require>/, '<wrapper><require>$1</require></wrapper>'),
+    );
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain('<require> must be a direct child of <component>');
+  });
+
+  it.each([
+    ['fragment', '<fragment name="wrapped" layer="manifest">', '</fragment>'],
+    ['layout', '<layout type="File" mode="view">', '</layout>'],
+  ])(
+    'refuses nested json in a %s that the descriptor does not read',
+    async (_kind, open, close) => {
+      await generate();
+      contribute(open + '<wrapper><json>{}</json></wrapper>' + close);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain('<json> must be a direct child of <fragment> or <layout>');
+    },
+  );
+
+  it('keeps nested-tag lookalikes in comments and CDATA as text', async () => {
+    await generate();
+    contribute(
+      '<!-- <wrapper><require>ignored</require><json>{}</json></wrapper> -->' +
+        '<fragment name="lookalikes" layer="manifest"><json><![CDATA[' +
+        '{"labels":{"x":"<wrapper><require>x</require><json>{}</json></wrapper>"}}' +
+        ']]></json></fragment>',
+    );
+    expect(build().status).toBe(0);
+  });
+
   describe('an asset', () => {
     const withAsset = async (name: string, bytes: number) => {
       await generate();
@@ -632,6 +801,41 @@ describe('the generated build.mjs', () => {
       return build();
     };
 
+    const manifestAsset = async (headers: number) => {
+      await generate();
+      const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+      const original = readFileSync(join(dir, manifestPath), 'utf8');
+      // Each valid header needs both a continuation and CRLF normalization when packaged.
+      const source =
+        original.trimEnd() +
+        '\n' +
+        Array.from(
+          { length: headers },
+          (_, index) => 'X-Padding-' + index + ': ' + 'a'.repeat(100) + '\n',
+        ).join('');
+      expect(Buffer.byteLength(source)).toBeLessThanOrEqual(2 * 1024 * 1024);
+      write(manifestPath, source);
+      contribute('<asset name="manifest.svg" src="META-INF/MANIFEST.MF" />');
+      return { ...build(), source };
+    };
+
+    it('rejects a manifest asset that normalization enlarges over the server limit', async () => {
+      const { status, output, zip } = await manifestAsset(17500);
+      expect(status).toBe(1);
+      expect(output).toMatch(
+        /MANIFEST\.MF: packaged as \d+ bytes; the server refuses an asset over 2097152/,
+      );
+      expect(zip).toBeUndefined();
+    });
+
+    it('accepts a normalized manifest asset that stays under the server limit', async () => {
+      const { status, zip, source } = await manifestAsset(17000);
+      expect(status).toBe(0);
+      const jar = unzip(unzip(zip as Buffer).get('install/bundles/acme-config.jar') as Buffer);
+      const packaged = jar.get('META-INF/MANIFEST.MF') as Buffer;
+      expect(packaged.length).toBeGreaterThan(Buffer.byteLength(source));
+      expect(packaged.length).toBeLessThanOrEqual(2 * 1024 * 1024);
+    });
     it('is accepted as a plain image file name', async () => {
       expect((await withAsset('acme-logo.svg', 100)).status).toBe(0);
     });
@@ -688,6 +892,19 @@ describe('the generated build.mjs', () => {
   });
 
   describe('a fragment or layout body', () => {
+    it.each([
+      ['fragment', '<fragment name="manifest-body" layer="manifest" src="META-INF/MANIFEST.MF" />'],
+      ['layout', '<layout type="File" mode="view" src="META-INF/MANIFEST.MF" />'],
+    ])('rejects the JAR manifest used as a %s JSON body', async (_kind, element) => {
+      await generate();
+      contribute(element);
+      const { status, output, zip } = build();
+      expect(status).toBe(1);
+      expect(output).toContain('bundle/META-INF/MANIFEST.MF:');
+      expect(output).toContain('not built');
+      expect(zip).toBeUndefined();
+    });
+
     it('is checked when its file is not called .json, and packaged compact', async () => {
       await generate();
       write('bundle/agentic-ui-config/labels.txt', '{\n  "labels": {}\n}\n');

@@ -459,6 +459,48 @@ function withoutCommentsOrInstructions(xml) {
 const withoutCdata = (xml) =>
   xml.replace(/<!\[CDATA\[[\s\S]*?(?:\]\]>|$)/g, (section) => ' '.repeat(section.length));
 
+/**
+ * Component and extension-point documentation may contain real XML examples. Nuxeo does not
+ * register those examples, so hide these supported documentation subtrees from every extraction
+ * below. Keep their offsets (and line breaks) so inline JSON is read from the matching location.
+ * A documentation element inside an actual descriptor is not a supported documentation path.
+ */
+function withoutDocumentation(xml) {
+  const parents = [];
+  let start;
+  let depth;
+  let at = 0;
+  let out = '';
+  for (const match of withoutCdata(xml).matchAll(
+    /<(\/)?([^\s/>]+)((?:[^>"']|"[^"]*"|'[^']*')*)>/g,
+  )) {
+    const [tag, close, name, tail] = match;
+    const empty = tail.trimEnd().endsWith('/');
+    if (
+      !close &&
+      name === 'documentation' &&
+      start === undefined &&
+      parents[0] === 'component' &&
+      (parents.length === 1 || (parents.length === 2 && parents[1] === 'extension-point'))
+    ) {
+      start = match.index;
+      depth = parents.length;
+    }
+    if (
+      start !== undefined &&
+      ((close && parents.length === depth + 1) || (empty && match.index === start))
+    ) {
+      const end = match.index + tag.length;
+      out += xml.slice(at, start) + xml.slice(start, end).replace(/[^\n]/g, ' ');
+      at = end;
+      start = undefined;
+    }
+    if (close) parents.pop();
+    else if (!empty) parents.push(name);
+  }
+  return out + xml.slice(at);
+}
+
 const ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
 
 /** XML character data with its character and predefined entity references resolved. */
@@ -482,6 +524,40 @@ function attributes(tag) {
     found[name] = decode(double ?? single).trim();
   }
   return found;
+}
+
+/**
+ * The server reads component requirements and descriptor JSON by child path, not a descendant
+ * search. Reject misleading nested elements before the text checks below can mistake them for
+ * a requirement or body the server will actually read. Comments, instructions and CDATA have
+ * already been removed or blanked; quoted ">" characters must not end a start tag.
+ */
+function checkElementParents(markup, report) {
+  const parents = [];
+  for (const [, close, name, tail] of markup.matchAll(
+    /<(\/)?([^\s/>]+)((?:[^>"']|"[^"]*"|'[^']*')*)>/g,
+  )) {
+    if (close) {
+      parents.pop();
+      continue;
+    }
+    const parent = parents.at(-1);
+    if (name === 'require' && (parent !== 'component' || parents.length !== 1)) {
+      report('<require> must be a direct child of <component>');
+    }
+    if (
+      name === 'json' &&
+      (parents.length !== 3 ||
+        parents[0] !== 'component' ||
+        parents[1] !== 'extension' ||
+        (parent !== 'fragment' && parent !== 'layout'))
+    ) {
+      report(
+        '<json> must be a direct child of <fragment> or <layout> under <component>/<extension>',
+      );
+    }
+    if (!tail.trimEnd().endsWith('/')) parents.push(name);
+  }
 }
 
 /**
@@ -677,6 +753,27 @@ const manifest = ((existsSync(manifestFile) ? readUtf8(manifestFile) : '') ?? ''
   /(?:\r\n|\r|\n) /g,
   '',
 );
+/** Fold logical headers without splitting UTF-8 characters; continuation spaces count too. */
+function packageManifest(text) {
+  const lines = [];
+  for (const header of text.replace(/[\r\n]+$/, '').split(/\r\n|\r|\n/)) {
+    let line = '';
+    let size = 0;
+    for (const character of header) {
+      const bytes = Buffer.byteLength(character);
+      if (size + bytes > 72) {
+        lines.push(line);
+        line = ' ';
+        size = 1;
+      }
+      line += character;
+      size += bytes;
+    }
+    lines.push(line);
+  }
+  return Buffer.from(lines.join('\r\n') + '\r\n\r\n');
+}
+
 const componentPaths = (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(manifest)?.[1] ?? '')
   .split(',')
   .map((path) => path.trim())
@@ -685,6 +782,8 @@ if (componentPaths.length === 0) problem(manifestFile, 'needs a Nuxeo-Component 
 
 /** Fragment and layout bodies named by `src`: JSON whatever the file is called. */
 const jsonBodies = new Set();
+/** Enabled asset sources, checked again after any packaging transform. */
+const assetBodies = new Set();
 
 for (const componentPath of componentPaths) {
   const componentFile = resolve(BUNDLE, componentPath);
@@ -697,11 +796,12 @@ for (const componentPath of componentPaths) {
   }
   const source = readXml(componentFile);
   if (source === null) continue;
-  // Comments and processing instructions removed first, so neither a commented-out example nor
-  // markup written inside an instruction can satisfy or fail a check.
-  const xml = withoutCommentsOrInstructions(source);
+  // Comments, instructions and supported documentation are not active contributions.
+  // Remove their examples before checking ancestry or extracting requirements and entries.
+  const xml = withoutDocumentation(withoutCommentsOrInstructions(source));
   // Markup is looked for here; text, including inline JSON, is read from `xml` at the same offsets.
   const markup = withoutCdata(xml);
+  checkElementParents(markup, (message) => problem(componentFile, message));
   const contributes = [
     ...markup.matchAll(/<extension(?=[ \t\n/>])((?:[^>"']|"[^"]*"|'[^']*')*)>/g),
   ].some(([, tag]) => attributes(tag).target === 'org.nuxeo.agentic.ui.config');
@@ -772,6 +872,7 @@ for (const componentPath of componentPaths) {
       jsonBodies.add(target);
       continue;
     }
+    assetBodies.add(target);
     const size = statSync(target).size;
     if (size > MAX_ASSET_BYTES) {
       problem(target, `${size} bytes; the server refuses an asset over ${MAX_ASSET_BYTES}`);
@@ -783,8 +884,20 @@ const entries = [];
 for (const file of bundleIsLink || !existsSync(BUNDLE) ? [] : filesUnder(BUNDLE).sort()) {
   if (!isPackaged(file)) continue;
   const name = relative(BUNDLE, file).split(sep).join('/');
+  // A contribution's JSON contract also applies when its src names the JAR manifest.
+  // Validate bodies before choosing a file-specific packaging transform.
   const data =
-    file.endsWith('.json') || jsonBodies.has(file) ? checkJson(file) : readFileSync(file);
+    file.endsWith('.json') || jsonBodies.has(file)
+      ? checkJson(file)
+      : name === MANIFEST_ENTRY
+        ? packageManifest(manifest)
+        : readFileSync(file);
+  if (data && assetBodies.has(file) && data.length > MAX_ASSET_BYTES) {
+    problem(
+      file,
+      `packaged as ${data.length} bytes; the server refuses an asset over ${MAX_ASSET_BYTES}`,
+    );
+  }
   if (data) entries.push({ name, data });
 }
 
