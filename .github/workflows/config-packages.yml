@@ -38,9 +38,11 @@ on:
       - 'scripts/verify-package-zip.selftest.mjs'
       - '.github/workflows/config-packages.yml'
   # Also on `main`, so a change that reaches it another way — a merge commit, an edit through the
-  # web UI, a revert — is still checked rather than only checked on the way in.
+  # web UI, a revert — is still checked rather than only checked on the way in. The same holds for
+  # `integration/**` branches (AGENTS/06-git-workflow.md): `main` is merged into them daily, and
+  # those merge commits reach them without a pull request.
   push:
-    branches: [main]
+    branches: [main, 'integration/**']
     paths:
       - 'tools/satori-generators/src/config-package/**'
       - 'scripts/verify-package-zip.mjs'

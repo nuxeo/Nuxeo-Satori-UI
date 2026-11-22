@@ -17,8 +17,10 @@ on:
   schedule:
     - cron: '17 5 * * *'
   workflow_dispatch:
+  # `integration/**` as well as `main`: a pull request into an integration branch can change what
+  # has to authenticate exactly as one into `main` can (AGENTS/06-git-workflow.md).
   pull_request:
-    branches: [main]
+    branches: [main, 'integration/**']
     paths:
       - package.json
       - package-lock.json
@@ -27,7 +29,7 @@ on:
       - scripts/registry-auth-check.mjs
       - scripts/registry-auth-check.selftest.mjs
   push:
-    branches: [main]
+    branches: [main, 'integration/**']
     paths:
       - package.json
       - package-lock.json
