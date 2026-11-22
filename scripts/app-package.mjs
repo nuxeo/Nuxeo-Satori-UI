@@ -8,7 +8,9 @@
  *   node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]
  *     [--allow-list <file>] [--registered <file>] [--platform <version>]
  *
- * In order, each step stopping the run when it fails:
+ * First it removes the zip and checksum an earlier run left for the package's name and version, so
+ * that a refused package leaves nothing installable behind. Then, in order, each step stopping the
+ * run when it fails:
  *   1. the package's `build.mjs` is the generator's, byte for byte, so the code that builds it is
  *      code this repository reviewed;
  *   2. `bundle/agentic-ui-config/` is an app definition: it has an `app.json`, and the validator of
@@ -64,6 +66,8 @@ const USAGE =
   ' [--allow-list <file>] [--registered <file>] [--platform <version>]';
 // `spawnSync` truncates a child's output in silence past its limit, 1 MiB by default.
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
+/** `build.mjs`'s rule for a package name or version: a single file name, nothing above it. */
+const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 const VALUED = ['--out', '--tag', '--allow-list', '--registered', '--platform'];
 
@@ -94,6 +98,22 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
     console.error(`${shown}: step ${step} refused it: ${message}`);
     return 1;
   };
+
+  // What an earlier run left for this package's name and version goes first, so that a run that
+  // refuses the package leaves no installable zip behind, this run's or an older one's. The name
+  // and version are the package's own, so they name a file only once they are single file names,
+  // as the builder requires: a name such as `../x` must not reach outside the output directory.
+  const descriptorFile = join(directory, 'package', 'package.xml');
+  const descriptor = existsSync(descriptorFile)
+    ? withoutCdata(withoutCommentsOrInstructions(readFileSync(descriptorFile, 'utf8')))
+    : null;
+  const name = descriptor === null ? null : attribute(descriptor, 'package', 'name');
+  const version = descriptor === null ? null : attribute(descriptor, 'package', 'version');
+  const output = resolve(out ?? join(directory, 'dist'));
+  if (FILE_NAME.test(name ?? '') && FILE_NAME.test(version ?? '')) {
+    const previous = join(output, `${name}-${version}.zip`);
+    for (const left of [previous, `${previous}.sha256`]) rmSync(left, { force: true });
+  }
 
   // 1. The builder is the reviewed one.
   const builder = join(directory, 'build.mjs');
@@ -126,11 +146,7 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
   if (contributed) return refuse(2, contributed);
 
   // 3. One version, written in three places, `package.xml` read as the builder reads it.
-  const descriptor = withoutCdata(
-    withoutCommentsOrInstructions(readFileSync(join(directory, 'package', 'package.xml'), 'utf8')),
-  );
-  const name = attribute(descriptor, 'package', 'name');
-  const version = attribute(descriptor, 'package', 'version');
+  if (descriptor === null) return refuse(3, 'package/package.xml is missing.');
   if (!name || !version)
     return refuse(3, 'package/package.xml has no <package name="..." version="...">.');
   const app = JSON.parse(readFileSync(appFile, 'utf8').replace(/^\uFEFF/, ''));
@@ -147,7 +163,6 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
     );
 
   // 4. The zip, from version 1's builder, which checks the component XML the way the server does.
-  const output = resolve(out ?? join(directory, 'dist'));
   const build = spawnSync(process.execPath, [builder, '--out', output], {
     encoding: 'utf8',
     maxBuffer: OUTPUT_LIMIT,

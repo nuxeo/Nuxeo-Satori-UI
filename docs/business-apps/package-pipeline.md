@@ -38,6 +38,8 @@ with fictional data.
 ## 2. The steps
 
 `scripts/app-package.mjs` runs steps 1 to 6 on one package, each stopping the run when it fails.
+It first removes the zip and checksum an earlier run left for the package's name and version, so
+a refused package leaves nothing installable behind, not even an older zip that looks current.
 The workflow, [`app-packages.yml`](../../.github/workflows/app-packages.yml), runs it on every
 package, and runs steps 7 and 8 for a tag.
 

@@ -86,17 +86,26 @@ function run(directory, out, args = []) {
 /** The arguments, given as they are or made from the control's scratch directory. */
 const argsFor = (args, scratch) => (typeof args === 'function' ? args(scratch) : args);
 
-/** Refused with exit 1 at `step`, saying `reason`, and no zip written. */
-function expectRefused(what, change, step, reason, args = []) {
+/**
+ * Refused with exit 1 at `step`, saying `reason`, with no zip left: neither one of its own, nor the
+ * one an earlier run of the same name and version left there, which `stale` plants first.
+ */
+function expectRefused(what, change, step, reason, args = [], { stale = true } = {}) {
   negative++;
   const { scratch, directory, out } = packageWith(change);
   try {
+    if (stale) {
+      mkdirSync(out, { recursive: true });
+      writeFileSync(join(out, ZIP), 'an earlier run left this');
+      writeFileSync(join(out, `${ZIP}.sha256`), 'an earlier run left this too');
+    }
     const { status, output } = run(directory, out, argsFor(args, scratch));
     const problems = [];
     if (status !== 1) problems.push(`exit ${status}, not 1`);
     if (!output.includes(`step ${step} refused it`)) problems.push(`not refused at step ${step}`);
     if (!output.includes(reason)) problems.push(`no "${reason}"`);
-    if (existsSync(join(out, ZIP))) problems.push('a zip was written');
+    if (existsSync(join(out, ZIP))) problems.push('a zip is left');
+    if (existsSync(join(out, `${ZIP}.sha256`))) problems.push('a checksum is left');
     if (problems.length > 0)
       failures.push(`${what}: ${problems.join('; ')}\n${output.trim().replace(/^/gm, '    ')}`);
   } finally {
@@ -302,6 +311,33 @@ expectBuilt('a disabled layout entry, which contributes nothing', ({ edit }) =>
     `${CONTRIBUTION}\n    <layout type="File" mode="edit" enabled="false" />`,
   ),
 );
+
+// With no package.xml there is no name to know an earlier zip by, so none is planted: refused, not
+// a stack trace.
+expectRefused(
+  'no package.xml',
+  ({ directory }) => rmSync(join(directory, 'package', 'package.xml')),
+  3,
+  'package/package.xml is missing',
+  [],
+  { stale: false },
+);
+
+// A name that reaches outside the output directory removes nothing there: the builder refuses it.
+negative++;
+{
+  const { scratch, directory, out } = packageWith(({ edit }) =>
+    edit('package/package.xml', 'name="payers-claims-demo"', 'name="../outside"'),
+  );
+  const outside = join(scratch, `outside-${VERSION}.zip`);
+  writeFileSync(outside, "not the pipeline's to remove");
+  const { status, output } = run(directory, out);
+  if (status !== 1 || !output.includes('step 4 refused it'))
+    failures.push(`a name that reaches outside: exit ${status}, not refused at step 4\n${output}`);
+  if (!existsSync(outside))
+    failures.push('a name that reaches outside removed a file outside the output directory');
+  rmSync(scratch, { recursive: true, force: true });
+}
 
 expectBuilt('the demo package', unchanged);
 expectBuilt('the demo package, for its own tag', unchanged, [
