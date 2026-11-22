@@ -243,7 +243,12 @@ function sourceFiles() {
         // i18n catalogues key on `app.<surface>.<name>` too, but those are
         // translation keys, not extension points — `app.nav.toggle` is the string
         // "Toggle navigation menu".
-        !full.includes(`${sep}i18n${sep}`)
+        !full.includes(`${sep}i18n${sep}`) &&
+        // The app definition's registries name `app.` IDs as the data a package is checked
+        // against, and register nothing. Their own tests hold them to this document, and keep
+        // the three rules layout version 2 only proposes out of it until phase 1 registers them.
+        // Counted here, they would ask the document to promise rules no code provides.
+        !relative(ROOT, full).split(sep).join('/').startsWith('libs/shared/app-definition/')
       ) {
         found.push(full);
       }
