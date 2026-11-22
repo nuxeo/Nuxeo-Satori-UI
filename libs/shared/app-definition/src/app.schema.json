@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nuxeo-satori:app-definition:app:2",
+  "title": "app.json, app definition version 2",
+  "description": "docs/business-apps/app-definition-v2.md, section 3. The validator in libs/shared/app-definition is what refuses a package. It also checks what a schema cannot: that each module is registered, the platform range against the platform's version, and that a branding image in assets/ is in the package.",
+  "type": "object",
+  "required": ["version", "id", "packageVersion", "platform", "groups"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "id": {
+      "$ref": "#/$defs/appId"
+    },
+    "label": {
+      "type": "string"
+    },
+    "labelKey": {
+      "type": "string"
+    },
+    "packageVersion": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "platform": {
+      "type": "string",
+      "pattern": "^\\s*(?:>=|<=|>|<|=|\\^|~)?(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\s+(?:>=|<=|>|<|=|\\^|~)?(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?)*\\s*$",
+      "description": "The platform versions it runs on: >=1.0.0 <2.0.0, ^1.2.0 or ~1.2.0."
+    },
+    "address": {
+      "$ref": "#/$defs/appId",
+      "description": "Where the shell opens the app. Its id when left out."
+    },
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^\\S(?:.*\\S)?$"
+      },
+      "description": "The groups the app is for; \"members\" is everyone. Decision E settles how the registry uses them."
+    },
+    "modules": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/appId"
+      }
+    },
+    "branding": {
+      "$ref": "#/$defs/branding"
+    }
+  },
+  "anyOf": [
+    {
+      "required": ["label"]
+    },
+    {
+      "required": ["labelKey"]
+    }
+  ],
+  "$defs": {
+    "appId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,62}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "branding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "applicationTitle": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "documentTitle": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "theme": {
+          "$ref": "#/$defs/id",
+          "description": "The id of one of the server's themes."
+        },
+        "logo": {
+          "$ref": "#/$defs/image"
+        },
+        "favicon": {
+          "$ref": "#/$defs/image"
+        }
+      }
+    },
+    "image": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": ["src"],
+          "additionalProperties": false,
+          "properties": {
+            "src": {
+              "type": "string",
+              "pattern": "^(?:assets/.+|https://.+|data:image/.+)$"
+            },
+            "alt": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

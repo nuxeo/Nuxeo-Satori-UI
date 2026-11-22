@@ -15,6 +15,7 @@
         "^production",
         { "env": "SATORI_TEST_TZ" },
         "{workspaceRoot}/docs/business-apps/layout-v2.md",
+        "{workspaceRoot}/docs/business-apps/app-definition-v2.md",
         "{workspaceRoot}/docs/extension-reference.md"
       ],
       "options": { "reportsDirectory": "coverage/libs/shared/app-definition" }

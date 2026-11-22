@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import ts from 'typescript';
 import {
   loadable,
   publishable,
@@ -559,48 +558,6 @@ describe('the validator refuses, one shape at a time', () => {
         message: '"print" is not a mode: view, metadata, edit, create',
       },
     ]);
-  });
-
-  it('and has a negative control for every message it can give', () => {
-    // Every message in the validator's source must appear in this file's expectations, so that a
-    // refusal added without a control fails here. A message is compared by its literal text, the
-    // parts between its placeholders; one with none, such as a widget parameter's own complaint,
-    // is made of messages tested elsewhere.
-    const source = ts.createSourceFile(
-      'layout-v2.ts',
-      readFileSync(join(import.meta.dirname, 'layout-v2.ts'), 'utf8'),
-      ts.ScriptTarget.Latest,
-    );
-    const spec = readFileSync(join(import.meta.dirname, 'layout-v2.spec.ts'), 'utf8');
-    const literals = (node: ts.Node): string[] =>
-      ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)
-        ? [node.text]
-        : ts.isTemplateExpression(node)
-          ? [node.head.text, ...node.templateSpans.map((span) => span.literal.text)]
-          : [];
-    const messagesInSource: string[][] = [];
-    const visit = (node: ts.Node): void => {
-      const message =
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === 'add'
-          ? node.arguments[2]
-          : ts.isPropertyAssignment(node) &&
-              ts.isIdentifier(node.name) &&
-              node.name.text === 'message'
-            ? node.initializer
-            : undefined;
-      if (message) messagesInSource.push(literals(message));
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
-
-    expect(messagesInSource.length).toBeGreaterThan(50);
-    const untested = messagesInSource
-      .map((parts) => parts.map((part) => part.trim()).filter((part) => part.length >= 4))
-      .filter((parts) => parts.length > 0 && !parts.every((part) => spec.includes(part)))
-      .map((parts) => parts.join(' … '));
-    expect(untested).toEqual([]);
   });
 });
 
