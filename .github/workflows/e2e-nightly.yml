@@ -116,6 +116,10 @@ jobs:
   # result. A dispatched run tests that branch's code with that branch's copy of this file, and
   # dispatches nothing itself: this job runs on the schedule only. It lists the branches when it
   # runs, so a new integration branch needs no edit here.
+  #
+  # Every branch is tried even when one fails, so one branch that cannot be dispatched does not
+  # leave the others untested. The dispatch step records the failures and stays green; the step
+  # after it fails the job with their names, which the report job puts in the tracking issue.
   integration-branches:
     name: Dispatch on integration branches
     needs: e2e
@@ -124,8 +128,11 @@ jobs:
     permissions:
       contents: read
       actions: write
+    outputs:
+      failed: ${{ steps.dispatch.outputs.failed }}
     steps:
       - name: Dispatch this workflow on each integration branch
+        id: dispatch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -133,12 +140,26 @@ jobs:
           branches=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/heads/integration/" --jq '.[].ref | sub("^refs/heads/"; "")')
           if [ -z "$branches" ]; then
             echo "No integration branches."
-            exit 0
           fi
+          failed=""
           while IFS= read -r branch; do
+            [ -n "$branch" ] || continue
             echo "Dispatching on $branch"
-            gh workflow run e2e-nightly.yml --repo "$GITHUB_REPOSITORY" --ref "$branch"
+            if ! gh workflow run e2e-nightly.yml --repo "$GITHUB_REPOSITORY" --ref "$branch"; then
+              echo "::error::The nightly run could not be dispatched on $branch"
+              failed="${failed:+$failed, }$branch"
+            fi
           done <<< "$branches"
+          # A branch name holds no newline (git refuses control characters), so this stays one line.
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+
+      - name: Fail if any branch could not be dispatched
+        if: ${{ steps.dispatch.outputs.failed != '' }}
+        env:
+          FAILED: ${{ steps.dispatch.outputs.failed }}
+        run: |
+          echo "::error::The nightly run could not be dispatched on: $FAILED"
+          exit 1
 
   # A red nightly nobody sees is worth about as much as no job. This opens one tracking issue
   # and comments on it for each further failure, rather than a new issue every night. An
@@ -158,6 +179,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           E2E_RESULT: ${{ needs.e2e.result }}
           DISPATCH_RESULT: ${{ needs.integration-branches.result }}
+          FAILED_BRANCHES: ${{ needs.integration-branches.outputs.failed }}
         run: |
           set -euo pipefail
           title="E2E nightly is failing"
@@ -169,7 +191,13 @@ jobs:
             body="The nightly Playwright run (Chromium + WebKit) on $GITHUB_REF_NAME failed."
           fi
           if [ "$DISPATCH_RESULT" = failure ]; then
-            body="${body:+$body }Dispatching the nightly run on the integration branches failed, so they were not tested."
+            if [ -n "$FAILED_BRANCHES" ]; then
+              case "$FAILED_BRANCHES" in *,*) untested="they were" ;; *) untested="it was" ;; esac
+              body="${body:+$body }The nightly run could not be dispatched on $FAILED_BRANCHES, so $untested not tested."
+            else
+              # No branch is named when the job failed before trying any, as when listing them fails.
+              body="${body:+$body }The dispatch job failed before it could try the integration branches, so none of them was tested."
+            fi
           fi
           body="$body $RUN_URL"
           # The search matches the title as a phrase, so `main`'s title also finds an integration
