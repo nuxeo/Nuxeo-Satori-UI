@@ -144,6 +144,48 @@ function withoutCommentsOrInstructions(xml) {
 const withoutCdata = (xml) =>
   xml.replace(/<!\[CDATA\[[\s\S]*?(?:\]\]>|$)/g, (section) => ' '.repeat(section.length));
 
+/**
+ * Component and extension-point documentation may contain real XML examples. Nuxeo does not
+ * register those examples, so match the builder's supported documentation masking before
+ * extracting requirements, counting contributions or resolving src paths. Keep offsets and line
+ * breaks unchanged. Documentation inside an actual descriptor is not a supported path.
+ */
+function withoutDocumentation(xml) {
+  const parents = [];
+  let start;
+  let depth;
+  let at = 0;
+  let out = '';
+  for (const match of withoutCdata(xml).matchAll(
+    /<(\/)?([^\s/>]+)((?:[^>"']|"[^"]*"|'[^']*')*)>/g,
+  )) {
+    const [tag, close, name, tail] = match;
+    const empty = tail.trimEnd().endsWith('/');
+    if (
+      !close &&
+      name === 'documentation' &&
+      start === undefined &&
+      parents[0] === 'component' &&
+      (parents.length === 1 || (parents.length === 2 && parents[1] === 'extension-point'))
+    ) {
+      start = match.index;
+      depth = parents.length;
+    }
+    if (
+      start !== undefined &&
+      ((close && parents.length === depth + 1) || (empty && match.index === start))
+    ) {
+      const end = match.index + tag.length;
+      out += xml.slice(at, start) + xml.slice(start, end).replace(/[^\n]/g, ' ');
+      at = end;
+      start = undefined;
+    }
+    if (close) parents.pop();
+    else if (!empty) parents.push(name);
+  }
+  return out + xml.slice(at);
+}
+
 const ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
 
 /** XML character data with its character and predefined entity references resolved. */
@@ -390,8 +432,9 @@ export function verifyPackageZip(archive) {
         problem(`${componentPath} could not be read out of ${jars[0]}.`);
         continue;
       }
+      // Use the builder's supported documentation scope before requirements, counts or srcs.
       const componentXml = withoutCdata(
-        withoutCommentsOrInstructions(componentRead.stdout.toString('utf8')),
+        withoutDocumentation(withoutCommentsOrInstructions(componentRead.stdout.toString('utf8'))),
       );
 
       // Only an extension on Satori's configuration point registers anything. `point` is checked

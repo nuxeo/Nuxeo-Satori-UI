@@ -192,6 +192,59 @@ expectGreen('a Nuxeo-Component header wrapped across two lines, as the jar tool 
   jar: jarFiles({ 'META-INF/MANIFEST.MF': manifest(COMPONENT, true) }),
 });
 
+// Documentation uses real XML examples, but those examples are not registered contributions.
+const documentedExamples =
+  '<documentation><code title=">">' +
+  '<![CDATA[</documentation>]]>' +
+  '<extension target="org.nuxeo.agentic.ui.config" point="configuration">' +
+  '<fragment name="example" layer="manifest"><json>{}</json></fragment>' +
+  '<fragment name="example-src" layer="bootstrap" src="examples/missing.json" />' +
+  '<layout type="Contract" mode="view" src="examples/missing-layout.json" />' +
+  '<asset name="example.svg" src="examples/missing.svg" />' +
+  '</extension></code></documentation>';
+
+for (const location of ['component', 'extension-point']) {
+  const documentation =
+    location === 'component'
+      ? documentedExamples
+      : '<extension-point name="configuration">' + documentedExamples + '</extension-point>';
+  expectGreen('real XML examples in ' + location + ' documentation', {
+    jar: jarFiles({
+      [COMPONENT]: componentXml().replace(
+        '  <extension target=',
+        documentation + '  <extension target=',
+      ),
+    }),
+  });
+}
+
+expectRed(
+  'documented contributions cannot make an otherwise empty configuration package active',
+  {
+    jar: jarFiles({
+      [COMPONENT]: componentXml({ srcs: [] }).replace(
+        '  <extension target=',
+        '<documentation><extension target="org.nuxeo.agentic.ui.config" point="configuration">' +
+          '<fragment name="example" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />' +
+          '</extension></documentation>  <extension target=',
+      ),
+    }),
+  },
+  /has no <fragment>, <layout> or <asset>/,
+);
+
+expectRed(
+  'a documented requirement cannot satisfy the live configuration dependency',
+  {
+    jar: jarFiles({
+      [COMPONENT]: componentXml({
+        requireText: '<documentation><code>' + DEFAULTS_REQUIRE + '</code></documentation>',
+      }),
+    }),
+  },
+  /does not <require> org\.nuxeo\.agentic\.ui\.config\.defaults/,
+);
+
 expectGreen('a component naming an asset as well as a fragment', {
   jar: jarFiles({
     [COMPONENT]: componentXml({
