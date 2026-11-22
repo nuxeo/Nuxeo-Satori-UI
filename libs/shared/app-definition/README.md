@@ -40,8 +40,10 @@ install and no transpiler.
   - **`--allow-list`:** the operations it allows, `{ "operations": [...] }`. Without one, every
     operation is refused. Decision 3 settles where the real allow-list lives.
   - **`--registered`:** what it registers in code beyond the platform's own, as
-    `{ "rules", "rowActions", "bulkActions", "modules" }`, each a list of ids. A customer's Layer
-    2 rules and actions go here, as do domain modules, until each is built.
+    `{ "rules", "rowActions", "bulkActions", "actions", "modules" }`, each a list of ids. A
+    customer's Layer 2 rules and actions go here: `actions` are those in any other slot, a
+    toolbar's for one, which a package's own action may not take the id of. Domain modules go here
+    too, until each is built.
   - **`--platform`:** its platform version, which `app.json`'s range must hold.
 - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
   counted.

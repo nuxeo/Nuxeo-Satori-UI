@@ -347,6 +347,40 @@ describe('app-definition validate', () => {
       expect(code).toBe(0);
     });
 
+    it('refuses an action taking the id of one the deployment registers in code, in any slot', () => {
+      const actions = {
+        version: 2,
+        actions: [
+          { id: 'acme.toolbar.countersign', label: 'Countersign', transition: 'countersign' },
+        ],
+      };
+      const root = packageWith({
+        'app.json': {
+          version: 2,
+          id: 'claims',
+          label: 'Claims',
+          packageVersion: '1.0.0',
+          platform: '^0.2.0',
+          groups: ['members'],
+        },
+        'actions.json': actions,
+      });
+      expect(run(['validate', root]).code).toBe(0);
+      const deployment = packageWith({
+        'registered.json': { actions: ['acme.toolbar.countersign'] },
+      });
+      const { code, out } = run([
+        'validate',
+        root,
+        '--registered',
+        join(deployment, 'registered.json'),
+      ]);
+      expect(code).toBe(1);
+      expect(out).toContain(
+        'actions[0].id: the id "acme.toolbar.countersign" is registered in code, and a manifest cannot rebind it [structure]',
+      );
+    });
+
     it('exits 2 for an allow-list or a registered file of the wrong shape', () => {
       const root = packageWith({
         'extra.json': { operations: [], chains: [] },

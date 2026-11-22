@@ -256,11 +256,12 @@ function readAllowList(path: string): ReadonlySet<string> | string {
   return new Set(operations as string[]);
 }
 
-const REGISTERED_KEYS = ['rules', 'rowActions', 'bulkActions', 'modules'] as const;
+const REGISTERED_KEYS = ['rules', 'rowActions', 'bulkActions', 'actions', 'modules'] as const;
 
 /**
  * What a deployment registers in code beyond the platform's own, from
- * `{ "rules", "rowActions", "bulkActions", "modules" }`, each a list of ids, or what is wrong.
+ * `{ "rules", "rowActions", "bulkActions", "actions", "modules" }`, each a list of ids, or what is
+ * wrong. `actions` are the others a deployment registers in code, in any other slot.
  */
 function readRegistered(path: string): Registries | string {
   let content: unknown;
@@ -270,7 +271,7 @@ function readRegistered(path: string): Registries | string {
     return `cannot be read as JSON: ${(error as Error).message}`;
   }
   const wrong =
-    'a registered file is { "rules", "rowActions", "bulkActions", "modules" }, each a list of ids';
+    'a registered file is { "rules", "rowActions", "bulkActions", "actions", "modules" }, each a list of ids';
   if (!isRecord(content)) return wrong;
   const lists: Partial<Record<(typeof REGISTERED_KEYS)[number], string[]>> = {};
   for (const [key, value] of Object.entries(content)) {

@@ -98,7 +98,9 @@ function action(c: Checker, item: unknown, path: string, operations: ReadonlySet
   // registered, not by the shape of its id (extension-reference.md, section 1).
   else if (
     typeof id === 'string' &&
-    (c.registries.rowActions.has(id) || c.registries.bulkActions.has(id))
+    (c.registries.rowActions.has(id) ||
+      c.registries.bulkActions.has(id) ||
+      c.registries.actions.has(id))
   )
     c.add(
       join(path, 'id'),

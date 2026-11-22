@@ -785,17 +785,20 @@ describe('actions.json, further', () => {
     const registries = withRegistered(PACKAGED_REGISTRIES, {
       rowActions: ['acme.rowActions.sign'],
       bulkActions: ['acme.bulkActions.archive'],
+      actions: ['acme.toolbar.countersign'],
     });
     const file = {
       version: 2,
       actions: [
         { id: 'acme.rowActions.sign', label: 'Sign', on: ['row'], transition: 'sign' },
         { id: 'acme.bulkActions.archive', label: 'Archive', on: ['bulk'], transition: 'archive' },
+        { id: 'acme.toolbar.countersign', label: 'Countersign', transition: 'countersign' },
       ],
     };
     expect(show(validateActions(file, { registries }))).toEqual([
       'actions[0].id: the id "acme.rowActions.sign" is registered in code, and a manifest cannot rebind it [structure]',
       'actions[1].id: the id "acme.bulkActions.archive" is registered in code, and a manifest cannot rebind it [structure]',
+      'actions[2].id: the id "acme.toolbar.countersign" is registered in code, and a manifest cannot rebind it [structure]',
     ]);
   });
 });
