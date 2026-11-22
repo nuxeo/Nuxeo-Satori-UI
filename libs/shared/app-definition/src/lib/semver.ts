@@ -5,12 +5,17 @@
  *
  * What a range admits is npm's: versions compare by precedence, a prerelease before its release,
  * and build metadata is ignored. A prerelease is in a range only when one of its comparators names
- * a prerelease of the same version, so `>=0.3.0 <1.0.0` leaves out `1.0.0-beta.1`, and `^1.2.0`
- * leaves out `2.0.0-rc.1`. npm also writes the upper bound of `^` and `~` as `<2.0.0-0`, which
- * matters only with its `includePrerelease` option; with the rule above, `<2.0.0` admits the same.
+ * a prerelease of the same version, so `>=0.3.0 <1.0.0` leaves out `1.0.0-beta.1`. The upper bound
+ * of `^` and `~` is npm's `<2.0.0-0`, below every prerelease of the next version: that rule alone
+ * does not keep them out once another comparator names one, as in `^1.2.0 >=2.0.0-beta.1`.
+ *
+ * Numbers past JavaScript's safe integers: a major, minor or patch is refused, as npm refuses it,
+ * and a numeric prerelease identifier is compared exactly, as semantic versioning says, where npm
+ * rounds two such identifiers to the same value.
  */
+// A numeric prerelease identifier has no leading zero, as semantic versioning requires.
 const VERSION =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const COMPARATOR = /^(>=|<=|>|<|=|\^|~)?(.+)$/;
 
 export interface Version {
@@ -28,12 +33,10 @@ interface Comparator {
 export function parseVersion(text: string): Version | null {
   const match = VERSION.exec(text);
   if (!match) return null;
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-    prerelease: match[4] ? match[4].split('.') : [],
-  };
+  const [major, minor, patch] = [match[1], match[2], match[3]].map(Number);
+  // Past 2^53 a number is rounded, and two different versions would compare equal.
+  if (![major, minor, patch].every(Number.isSafeInteger)) return null;
+  return { major, minor, patch, prerelease: match[4] ? match[4].split('.') : [] };
 }
 
 export function compareVersions(a: Version, b: Version): number {
@@ -48,7 +51,9 @@ export function compareVersions(a: Version, b: Version): number {
     if (y === undefined) return 1;
     if (x === y) continue;
     const [m, n] = [/^\d+$/.test(x), /^\d+$/.test(y)];
-    if (m && n) return Number(x) < Number(y) ? -1 : 1;
+    // Exactly, by digit count and then digit by digit, which a number without a leading zero
+    // allows: Number() would round two identifiers past 2^53 to the same value.
+    if (m && n) return x.length !== y.length ? (x.length < y.length ? -1 : 1) : x < y ? -1 : 1;
     if (m !== n) return m ? -1 : 1;
     return x < y ? -1 : 1;
   }
@@ -73,7 +78,7 @@ export function parseRange(text: string): readonly Comparator[] | null {
             : { major: 0, minor: 0, patch: version.patch + 1 };
       comparators.push(
         { operator: '>=', version },
-        { operator: '<', version: { ...upper, prerelease: [] } },
+        { operator: '<', version: { ...upper, prerelease: ['0'] } },
       );
     } else comparators.push({ operator: operator as Comparator['operator'], version });
   }

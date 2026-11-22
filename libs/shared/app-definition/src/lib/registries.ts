@@ -64,6 +64,13 @@ export interface Registries {
   readonly rules: Readonly<Record<string, Signature | null>>;
   readonly rowActions: ReadonlySet<string>;
   readonly bulkActions: ReadonlySet<string>;
+  /**
+   * The other actions registered in code, in any slot but rows and bulk: a toolbar's or a context
+   * menu's. Nothing a file names is one of these; they are known so that a package's own action
+   * cannot take one's id, which a manifest may not rebind. The platform's are `app.` IDs, refused
+   * by their prefix, so this holds a customer's own, registered in Layer 2 code.
+   */
+  readonly actions: ReadonlySet<string>;
   /** The domain modules an app may turn on (architecture.md, section 6). */
   readonly modules: ReadonlySet<string>;
 }
@@ -260,13 +267,15 @@ export const PACKAGED_REGISTRIES: Registries = {
   rules: { ...CORE_RULES, ...APP_RULES, ...PROPOSED_RULES },
   rowActions: PACKAGED_ROW_ACTIONS,
   bulkActions: PACKAGED_BULK_ACTIONS,
+  actions: new Set(),
   modules: PACKAGED_MODULES,
 };
 
 /**
  * The packaged registries with more IDs added: the rules and actions a customer registered in
  * Layer 2 code, whose parameters this library cannot know, so it accepts any; a package's own
- * actions, from its `actions.json`; and modules.
+ * actions, from its `actions.json`; and modules. A rule the platform already registers keeps its
+ * own signature, so that adding it again cannot loosen the checks of its parameters.
  */
 export function withRegistered(
   base: Registries,
@@ -274,14 +283,16 @@ export function withRegistered(
     readonly rules?: readonly string[];
     readonly rowActions?: readonly string[];
     readonly bulkActions?: readonly string[];
+    readonly actions?: readonly string[];
     readonly modules?: readonly string[];
   },
 ): Registries {
   return {
     ...base,
-    rules: { ...base.rules, ...Object.fromEntries((extra.rules ?? []).map((id) => [id, null])) },
+    rules: { ...Object.fromEntries((extra.rules ?? []).map((id) => [id, null])), ...base.rules },
     rowActions: new Set([...base.rowActions, ...(extra.rowActions ?? [])]),
     bulkActions: new Set([...base.bulkActions, ...(extra.bulkActions ?? [])]),
+    actions: new Set([...base.actions, ...(extra.actions ?? [])]),
     modules: new Set([...base.modules, ...(extra.modules ?? [])]),
   };
 }

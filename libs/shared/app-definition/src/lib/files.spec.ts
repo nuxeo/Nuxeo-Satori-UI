@@ -5,7 +5,7 @@ import { validateLabels, validateModuleSettings } from './labels';
 import { validateLayoutV2, validateTaskForm } from './layout-v2';
 import { validateQueue } from './queue';
 import { PACKAGED_REGISTRIES, withRegistered } from './registries';
-import { parseRange, parseVersion, satisfies } from './semver';
+import { compareVersions, parseRange, parseVersion, satisfies } from './semver';
 
 // The validators of the files beside the layouts (docs/business-apps/app-definition-v2.md). Each
 // table row is a negative control: an input wrong in one way, whose findings must be exactly these.
@@ -785,17 +785,20 @@ describe('actions.json, further', () => {
     const registries = withRegistered(PACKAGED_REGISTRIES, {
       rowActions: ['acme.rowActions.sign'],
       bulkActions: ['acme.bulkActions.archive'],
+      actions: ['acme.toolbar.countersign'],
     });
     const file = {
       version: 2,
       actions: [
         { id: 'acme.rowActions.sign', label: 'Sign', on: ['row'], transition: 'sign' },
         { id: 'acme.bulkActions.archive', label: 'Archive', on: ['bulk'], transition: 'archive' },
+        { id: 'acme.toolbar.countersign', label: 'Countersign', transition: 'countersign' },
       ],
     };
     expect(show(validateActions(file, { registries }))).toEqual([
       'actions[0].id: the id "acme.rowActions.sign" is registered in code, and a manifest cannot rebind it [structure]',
       'actions[1].id: the id "acme.bulkActions.archive" is registered in code, and a manifest cannot rebind it [structure]',
+      'actions[2].id: the id "acme.toolbar.countersign" is registered in code, and a manifest cannot rebind it [structure]',
     ]);
   });
 });
@@ -951,5 +954,79 @@ describe("each widget's parameters", () => {
   ];
   it.each(rows)('refuses $what', ({ entry, found }) => {
     expect(widget(entry)).toEqual([`cards[0].fields[0].parameters.${found} [parameter]`]);
+  });
+});
+
+// What a second review found, on the pull request that added the package pipeline.
+describe('the second review', () => {
+  const holds = (version: string, range: string): boolean =>
+    satisfies(parseVersion(version)!, parseRange(range)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+  it("keeps the next version's prereleases out of ^ and ~ when another comparator names one", () => {
+    expect(holds('2.0.0-beta.1', '^1.2.0 >=2.0.0-beta.1')).toBe(false);
+    expect(holds('1.3.0-beta.1', '~1.2.0 >=1.3.0-beta.1')).toBe(false);
+    expect(holds('1.5.0-beta.1', '^1.2.0 >=1.5.0-beta.1')).toBe(true);
+  });
+
+  it('refuses a numeric prerelease identifier with a leading zero', () => {
+    expect(parseVersion('1.0.0-01')).toBeNull();
+    expect(parseVersion('1.0.0-rc.01')).toBeNull();
+    expect(parseRange('>=1.0.0-01')).toBeNull();
+    expect(parseVersion('1.0.0-0')).not.toBeNull();
+    expect(parseVersion('1.0.0-0a')).not.toBeNull();
+  });
+
+  it('cannot loosen a rule the platform already knows by registering it again', () => {
+    const registries = withRegistered(PACKAGED_REGISTRIES, {
+      rules: ['app.rules.isType', 'acme.rules.isContract'],
+    });
+    expect(registries.rules['app.rules.isType']).toEqual(
+      PACKAGED_REGISTRIES.rules['app.rules.isType'],
+    );
+    expect(registries.rules['acme.rules.isContract']).toBeNull();
+    const file = {
+      version: 2,
+      cards: [
+        {
+          id: 'c',
+          fields: [{ field: 'a:b', visibleWhen: { type: 'app.rules.isType', parameters: [] } }],
+        },
+      ],
+    };
+    expect(show(validateLayoutV2(file, { mode: 'view', registries }))).toEqual([
+      'cards[0].fields[0].visibleWhen.parameters: the rule "app.rules.isType" takes at least 1 parameter, not 0 [parameter]',
+    ]);
+  });
+
+  it('refuses a misspelt key in a sort, which would lose its order', () => {
+    const queue = {
+      version: 2,
+      label: 'Open claims',
+      pageProvider: 'payers_open_claims',
+      columns: ['claim:number'],
+      sort: [{ field: 'claim:received', oder: 'desc' }],
+    };
+    expect(show(validateQueue(queue))).toEqual([
+      'sort[0].oder: "oder" is not a key version 2 has [unknown]',
+    ]);
+  });
+});
+
+describe('numbers past JavaScript safe integers', () => {
+  const version = (text: string) => parseVersion(text)!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+  it('compares two numeric prerelease identifiers exactly, one way and the other', () => {
+    const [older, newer] = ['1.0.0-9007199254740992', '1.0.0-9007199254740993'];
+    expect(compareVersions(version(older), version(newer))).toBe(-1);
+    expect(compareVersions(version(newer), version(older))).toBe(1);
+    expect(satisfies(version(older), parseRange(`>${newer}`)!)).toBe(false); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    expect(satisfies(version(newer), parseRange(`>${older}`)!)).toBe(true); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    expect(compareVersions(version('1.0.0-10'), version('1.0.0-9'))).toBe(1);
+  });
+
+  it('refuses a major, minor or patch it cannot hold exactly, as npm does', () => {
+    expect(parseVersion('9007199254740991.0.0')).not.toBeNull();
+    for (const text of ['9007199254740992.0.0', '1.9007199254740993.0', '1.0.99999999999999999999'])
+      expect(parseVersion(text)).toBeNull();
   });
 });

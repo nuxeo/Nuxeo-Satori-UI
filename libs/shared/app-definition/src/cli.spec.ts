@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { main } from './cli';
 
 /** A configuration package with these files, each at its place (app-definition-v2.md, section 1). */
@@ -227,6 +227,41 @@ describe('app-definition validate', () => {
       expect(out).toContain('3 files: 1 passed, 2 refused.');
     });
 
+    it('reads a package however its directory is spelt', () => {
+      const root = packageWith({ 'app.json': app, 'labels/en.json': { version: 2, labels: {} } });
+      // `./<path>` only where a relative path exists: across Windows drives, as on CI, where the
+      // temporary directory is on C: and the workspace on D:, `relative()` gives an absolute one.
+      const near = relative(process.cwd(), root);
+      const dotted = isAbsolute(near) ? [] : [`.${sep}${near}`];
+      for (const spelling of [`${root}${sep}`, ...dotted, `${root}${sep}.${sep}`]) {
+        const { code, out } = run(['validate', spelling]);
+        expect([spelling, out]).toEqual([spelling, '2 files: 2 passed, 0 refused.\n']);
+        expect(code).toBe(0);
+      }
+    });
+
+    it('checks every layout inside a package, in a directory called node_modules too', () => {
+      const calendar = {
+        version: 2,
+        cards: [{ id: 'c', fields: [{ field: 'a:b', widget: 'calendar' }] }],
+      };
+      const root = packageWith({
+        'app.json': app,
+        'layouts/node_modules/view.layout.json': calendar,
+      });
+      const { code, out } = run(['validate', root]);
+      expect(code).toBe(1);
+      expect(out).toContain(
+        'cards[0].fields[0].widget: the widget "calendar" is not registered [unknown]',
+      );
+      // Outside a package, dependencies are still passed over.
+      const loose = packageWith({
+        'layouts/Member/view.layout.json': view,
+        'node_modules/dep/layouts/Member/view.layout.json': calendar,
+      });
+      expect(run(['validate', loose]).out).toBe('1 file: 1 passed, 0 refused.\n');
+    });
+
     it('reads a package in a directory named queues as a package, not as queues', () => {
       const root = packageWith({ 'queues/app.json': app });
       const { code, out } = run(['validate', root]);
@@ -310,6 +345,40 @@ describe('app-definition validate', () => {
       ]);
       expect(out).toBe('6 files: 6 passed, 0 refused.\n');
       expect(code).toBe(0);
+    });
+
+    it('refuses an action taking the id of one the deployment registers in code, in any slot', () => {
+      const actions = {
+        version: 2,
+        actions: [
+          { id: 'acme.toolbar.countersign', label: 'Countersign', transition: 'countersign' },
+        ],
+      };
+      const root = packageWith({
+        'app.json': {
+          version: 2,
+          id: 'claims',
+          label: 'Claims',
+          packageVersion: '1.0.0',
+          platform: '^0.2.0',
+          groups: ['members'],
+        },
+        'actions.json': actions,
+      });
+      expect(run(['validate', root]).code).toBe(0);
+      const deployment = packageWith({
+        'registered.json': { actions: ['acme.toolbar.countersign'] },
+      });
+      const { code, out } = run([
+        'validate',
+        root,
+        '--registered',
+        join(deployment, 'registered.json'),
+      ]);
+      expect(code).toBe(1);
+      expect(out).toContain(
+        'actions[0].id: the id "acme.toolbar.countersign" is registered in code, and a manifest cannot rebind it [structure]',
+      );
     });
 
     it('exits 2 for an allow-list or a registered file of the wrong shape', () => {

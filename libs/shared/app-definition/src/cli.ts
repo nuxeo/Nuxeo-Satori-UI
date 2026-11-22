@@ -30,7 +30,7 @@
  * - 2: the command was wrong.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { LAYOUT_MODES, type LayoutMode } from './lib/layout-v2';
 import { placeFile, validateFile, type PackageContext, type PlacedFile } from './lib/package';
 import { isRecord, PACKAGED_REGISTRIES, withRegistered, type Registries } from './lib/registries';
@@ -139,7 +139,9 @@ export function main(argv: readonly string[], io: CliIo): number {
         : null);
     // Inside a package, a file is the package's at its place, version 1's own, or out of place.
     const inPackage = root !== null;
-    const atItsPlace = placed !== null && (!inPackage || placed.root === root);
+    // Compared as directories, not as spellings: `./pkg` and `/tmp/pkg/` are the package too.
+    const atItsPlace =
+      placed !== null && (!inPackage || resolve(placed.root || '.') === resolve(root));
     if (!atItsPlace) {
       const versionOneFile =
         inPackage && VERSION_ONE_FILES.includes(relative(root, path).split(sep).join('/'));
@@ -219,7 +221,9 @@ function walk(directory: string, root: string | null, found: Found[]): void {
   for (const entry of entries) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === 'node_modules') continue;
+      // Dependencies are passed over, but not inside a package: there `node_modules` is a name like
+      // any other, a layout's type for one, and what the package holds is what it ships.
+      if (entry.name === 'node_modules' && packageRoot === null) continue;
       if (app && (entry.name === 'demo' || entry.name === 'assets')) continue;
       walk(path, packageRoot, found);
     } else if (entry.isFile() && entry.name.endsWith('.json'))
@@ -252,11 +256,12 @@ function readAllowList(path: string): ReadonlySet<string> | string {
   return new Set(operations as string[]);
 }
 
-const REGISTERED_KEYS = ['rules', 'rowActions', 'bulkActions', 'modules'] as const;
+const REGISTERED_KEYS = ['rules', 'rowActions', 'bulkActions', 'actions', 'modules'] as const;
 
 /**
  * What a deployment registers in code beyond the platform's own, from
- * `{ "rules", "rowActions", "bulkActions", "modules" }`, each a list of ids, or what is wrong.
+ * `{ "rules", "rowActions", "bulkActions", "actions", "modules" }`, each a list of ids, or what is
+ * wrong. `actions` are the others a deployment registers in code, in any other slot.
  */
 function readRegistered(path: string): Registries | string {
   let content: unknown;
@@ -266,7 +271,7 @@ function readRegistered(path: string): Registries | string {
     return `cannot be read as JSON: ${(error as Error).message}`;
   }
   const wrong =
-    'a registered file is { "rules", "rowActions", "bulkActions", "modules" }, each a list of ids';
+    'a registered file is { "rules", "rowActions", "bulkActions", "actions", "modules" }, each a list of ids';
   if (!isRecord(content)) return wrong;
   const lists: Partial<Record<(typeof REGISTERED_KEYS)[number], string[]>> = {};
   for (const [key, value] of Object.entries(content)) {
