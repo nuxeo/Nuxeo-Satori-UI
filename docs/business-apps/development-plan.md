@@ -137,8 +137,12 @@ arguments.
 
 - The decisions phase 1 needs, recorded in the [decision log](decisions.md): reopening the Beta
   scope, operation buttons, the expression set, the packages (A), the server add-ons (B), app
-  definitions after sign-in (E, which reopens parity decision 4), and tokens (F). Where the work
-  is built is already decided: on `integration/enterprise-grade-app` (decision J).
+  definitions after sign-in (E, which reopens parity decision 4), and tokens (F).
+  - **Already taken:**
+    - where the work is built: on `integration/enterprise-grade-app` (decision J);
+    - the expression set (decision 4): registered computations and rules only, with its security
+      review still to come;
+    - the packages (A): one package, with an entry point per module.
 - An agreement with the Beta team on the Beta phases still in progress, configuration and the
   registry, which the engines grow from.
 - The current app's end-to-end flows as a required check on every pull request, so business apps
@@ -531,7 +535,7 @@ files itself.
 - upgrade tests that keep every app's configuration;
 - migration M4: many packages in one run, and the self-service upload;
 - documentation, tutorials and support playbooks;
-- `@nuxeo/satori-platform` 1.0 and the module packages, published;
+- `@nuxeo/satori-platform` 1.0, with each module's entry point, published;
 - every add-on and kit on the Marketplace.
 
 **Demo:**
