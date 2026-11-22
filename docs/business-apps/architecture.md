@@ -472,7 +472,17 @@ The waves of the plan's section 14, and what each tier delivers in them.
   stories.
 - **Boundaries.** New tags in `eslint.config.mjs` (`scope:engine`, `scope:module`,
   `scope:experience`) with the rule: experiences may use modules, modules may use engines, and
-  modules never use each other.
+  modules never use each other. **In place since 22 November 2026**, with these tagging rules:
+  - an engine carries `scope:shared` as well as `scope:engine`, because it is tier 3 and lives in
+    `libs/shared/`;
+  - a module carries `scope:module` and a type tag, and only an app may use it;
+  - an experience carries `scope:experience`, and may not use the current app's features. That is
+    why `apps/nuxeo-ui` takes the tag only as its features become modules and engines.
+
+  No project carries these tags before phase 1, so `npm run beta:module-boundaries` proves the
+  rules in CI. It lints imports between probe projects that carry each tag, with the real rule: 6
+  forbidden imports reported, 6 allowed ones quiet.
+
 - **Packages.** The engines ship in `@nuxeo/satori-platform`. Each domain module ships as its own
   package, matching its server add-on, so a customer installs only what its apps use (decision A).
 - **Server.** `nuxeo-agentic-core` grows. Each add-on is a Maven module with its own Marketplace

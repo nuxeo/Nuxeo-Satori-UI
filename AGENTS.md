@@ -29,6 +29,17 @@ violations had accumulated, including a `libs/shared/` library that depended on 
 feature libraries. Every project now carries `scope:` and `type:` tags; **an untagged
 project cannot depend on anything**, so a new library needs tags before it can import.
 
+The business apps tiers have three more tags:
+
+- **`scope:engine`:** an engine is a shared library that carries `scope:engine` as well.
+- **`scope:module`:** a domain module, under `libs/modules/<name>`. It uses engines and shared code
+  only, never another module, a feature or an app, and only apps may use it.
+- **`scope:experience`:** an experience app. It uses modules and engines, not the current app's
+  features.
+
+No project carries them yet, so `npm run beta:module-boundaries` proves the rules on probe
+projects.
+
 → Full detail: `AGENTS/00-architecture.md`
 
 ---

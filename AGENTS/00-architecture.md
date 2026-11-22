@@ -36,6 +36,27 @@ Nuxeo Server                     ← via Angular dev proxy (:8080) in dev; same-
 4. **Every component is `standalone: true`.** No NgModules exist anywhere.
 5. **Every template is external.** Use `templateUrl`, never inline `template`.
 
+### Business apps tiers
+
+The business apps work on `integration/enterprise-grade-app` adds three tags to `eslint.config.mjs`.
+They are the tiers of [docs/business-apps/architecture.md](../docs/business-apps/architecture.md),
+section 4. No project carries them yet; the first engine and the first module arrive in phase 1.
+
+| Tag                | Tier               | Carried by                                               | May depend on                                                             |
+| ------------------ | ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `scope:engine`     | 3, the engines     | A library in `libs/shared/`, with `scope:shared` too     | Engines, shared code, the core                                            |
+| `scope:module`     | 4, domain modules  | `libs/modules/<name>`, with a type tag (`type:feature`…) | Engines, shared code, the core. Never another module, a feature or an app |
+| `scope:experience` | 6, the experiences | An app: the shell, the portal, phone capture             | Modules, engines, shared code, the core. Not the current app's features   |
+
+- **Only apps use modules.** No other rule names `scope:module`, so only an app may depend on one,
+  through the module's type tag.
+- **`apps/nuxeo-ui` is not an experience yet.** It does not carry `scope:experience`, because it
+  still uses the current app's features.
+- **A gate proves the rules.** Until real projects exist, lint has nothing to fail on. So
+  `npm run beta:module-boundaries` lints imports between probe projects that carry each tag, with
+  the real rule. 6 forbidden imports must be reported and 6 allowed ones must stay quiet. It runs
+  in CI's static gates.
+
 ---
 
 ## Directory Map

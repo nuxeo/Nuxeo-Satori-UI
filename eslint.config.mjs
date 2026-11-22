@@ -235,6 +235,64 @@ export default [
               sourceTag: 'type:publishable',
               onlyDependOnLibsWithTags: ['scope:shared', 'scope:core', 'type:testing'],
             },
+            // Business apps: the tiers of docs/business-apps/architecture.md, section 4, under
+            // the rule of its section 14. Experiences may use modules, modules may use engines,
+            // and modules never use each other.
+            //
+            // **No project carries these tags yet.** The first engine and the first module arrive
+            // in phase 1, so until then lint has nothing to fail on here. A rule nothing exercises
+            // is how this list once rejected nothing for months. So
+            // `scripts/beta-harness/module-boundaries.mjs` lints imports between probe projects
+            // that carry each tag, with this very list. Every forbidden import must be reported,
+            // and every allowed one must stay quiet. It runs in CI's static gates.
+            //
+            // An engine (tier 3) is shared code too. It carries `scope:shared` as well as
+            // `scope:engine`, lives in `libs/shared/`, and anything that may use shared code may
+            // use it. Its own rule covers an engine tagged `scope:engine` alone: it still may not
+            // reach up into a module or an experience.
+            {
+              sourceTag: 'scope:engine',
+              onlyDependOnLibsWithTags: [
+                'scope:engine',
+                'scope:shared',
+                'scope:core',
+                'type:testing',
+              ],
+            },
+            // A domain module (tier 4, `libs/modules/<name>`) may use tier 3, which means the
+            // engines and the shared foundations under them, and nothing else:
+            //   - not another module, because what two modules share moves into tier 3;
+            //   - not a feature of the current app;
+            //   - not an app.
+            //
+            // Nothing below an experience may use a module either. No other rule in this list
+            // names `scope:module`, and that is what stops shared code, the core and the current
+            // app's features from reaching up into one. A module also carries a type tag
+            // (`type:feature`, `type:ui`, …), and that type tag is how an app may use it.
+            {
+              sourceTag: 'scope:module',
+              onlyDependOnLibsWithTags: [
+                'scope:engine',
+                'scope:shared',
+                'scope:core',
+                'type:testing',
+              ],
+            },
+            // An experience (tier 6) is an app: the shell, the portal, phone capture. It may use
+            // the modules its apps turn on, and tier 3. It may not use the current app's
+            // features, which belong to `apps/nuxeo-ui` as it is today. That is why
+            // `apps/nuxeo-ui` does not carry the tag yet: it becomes the shell as its features
+            // become modules and engines (architecture, section 14).
+            {
+              sourceTag: 'scope:experience',
+              onlyDependOnLibsWithTags: [
+                'scope:module',
+                'scope:engine',
+                'scope:shared',
+                'scope:core',
+                'type:testing',
+              ],
+            },
           ],
         },
       ],
