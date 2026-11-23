@@ -258,7 +258,7 @@ describe('M1 converts search screens and the dashboard into queues', () => {
     });
   });
 
-  it("writes a dashboard card's list as a queue, and leaves its place on the home pending", () => {
+  it("writes a dashboard card's list as a queue, and the card as a card of home.json naming it", () => {
     expect(conversion.app['queues/home-1-claims.json']).toEqual({
       version: 2,
       label: 'Open claims',
@@ -271,8 +271,12 @@ describe('M1 converts search screens and the dashboard into queues', () => {
       pageSize: 20,
     });
     expect(outcome(conversion, `dashboard-card:${UI}/nuxeo-home.html#1`)).toMatchObject({
-      outcome: 'pending',
-      note: expect.stringMatching(/queues\/home-1-claims\.json.*home\.json/),
+      outcome: 'converted',
+      to: 'home.json card-1, its list in queues/home-1-claims.json',
+    });
+    expect(conversion.app['home.json']).toEqual({
+      version: 2,
+      cards: [{ id: 'card-1', label: 'Open claims', queue: 'home-1-claims' }],
     });
     expect(conversion.app['queues/home-2-claims.json']).toBeUndefined();
     expect(outcome(conversion, `dashboard-card:${UI}/nuxeo-home.html#3`)).toMatchObject({
@@ -344,12 +348,32 @@ describe('M1 converts slot contributions', () => {
     expect(JSON.stringify(allowed.app['actions.json'])).not.toContain('Claim.Close');
   });
 
-  it('leaves the menu entry and its page pending, naming the queue they open', () => {
+  it('makes the left menu entry an entry of navigation.json that opens its search screen', () => {
+    expect(conversion.app['navigation.json']).toEqual({
+      version: 2,
+      entries: [{ id: 'claimssearch', label: 'Claims', icon: 'search', order: 1, queue: 'claims' }],
+    });
     expect(outcome(conversion, `slot-contribution:${bundle}#3`)).toMatchObject({
+      outcome: 'converted',
+      to: 'navigation.json claimssearch',
+    });
+    expect(outcome(conversion, `slot-contribution:${bundle}#4`)).toMatchObject({
+      outcome: 'converted',
+      to: 'queues/claims.json, which the menu entry navigation.json claimssearch opens',
+    });
+  });
+
+  it('leaves a menu entry that opens no queue pending, and writes no navigation.json for it', () => {
+    const other = converted({
+      bundle: {
+        [bundle]: `<nuxeo-slot-content name="reports" slot="DRAWER_ITEMS"><template><nuxeo-menu-icon name="reports" label="Reports" icon="icons:assessment"></nuxeo-menu-icon></template></nuxeo-slot-content>
+          <nuxeo-slot-content name="reports" slot="DRAWER_PAGES"><template><acme-reports></acme-reports></template></nuxeo-slot-content>`,
+      },
+    });
+    expect(other.app['navigation.json']).toBeUndefined();
+    expect(outcome(other, `slot-contribution:${bundle}#1`)).toMatchObject({
       outcome: 'pending',
-      note: expect.stringMatching(
-        /navigation\.json makes it a menu entry that opens queues\/claims\.json/,
-      ),
+      note: expect.stringMatching(/opens no queue this conversion writes/),
     });
   });
 

@@ -60,7 +60,7 @@ On the sample package, with M1:
 - **The broken copy:** check 8 also names the primary colour moved to the wrong token.
 - **Every run:** the verdict is "not ready", with the reasons:
   - check 8 failed, three checks ran in part, and check 9 waits for M3;
-  - 5 constructs wait for a later phase, and one proposal waits for a person;
+  - 2 constructs wait for a later phase, and one proposal waits for a person;
   - 133 reported items have no owner.
 
 ## What it does with a package
@@ -169,6 +169,9 @@ gives the same conversion. A conversion directory holds:
   - `layouts/<Type>/<mode>.layout.json`, one per document layout (below).
   - `queues/<id>.json`: a search screen's results as `queues/<search folder>.json`, and a dashboard
     card's list as `queues/home-<n>-<provider>.json`.
+  - `home.json`: a card for each dashboard card whose list is a queue, naming it.
+  - `navigation.json`: an entry for each left-menu entry that opens a search screen, naming its
+    queue.
   - `actions.json`: each operation button whose operation is on the allow-list.
   - `labels/<locale>.json`: the translations, language by language, in version 2's labels file.
 - `themes/<name>.json`: the tokens each theme sets, with `var()` references resolved, for the
@@ -219,11 +222,12 @@ gives the same conversion. A conversion directory holds:
   in one, which gets no queue: M2 converts the condition, as for a layout's field.
 
 **The dashboard.** A card's list becomes a queue: its page provider, its query parameters, its page
-size when it is one a queue takes (1 to 100; the card's note says when it is not) and its columns. The card itself is pending, naming its queue: its place on the home is phase
-1's `home.json`, which is not in the app definition yet, so the app-definition validator would
-refuse the file as out of place.
+size when it is one a queue takes (1 to 100; the card's note says when it is not) and its columns.
+The card becomes a card of `home.json`, with the card's heading, naming the queue
+([app-definition-v2.md](../../docs/business-apps/app-definition-v2.md), section 10).
 
-- **Pending too:** the tasks card and the recently viewed card.
+- **Pending:** the tasks card and the recently viewed card: `home.json` has no card for either
+  yet.
 - **Proposed:** a card fed by an operation, such as the favourites one, which an agent proposes a
   page provider for.
 - **Reported:** a card that repeats another.
@@ -240,8 +244,13 @@ refuse the file as out of place.
 - **One owner per action and per queue.** Each action id, and each queue path, belongs to the first
   contribution or list that becomes one at all, in the package's order. A later one is reported,
   and the checks hold each action and queue to its owner only.
-- **Pending:** the left menu and its pages wait for phase 1's `navigation.json`, and the note names
-  the queue they open. Tabs wait for M2.
+- **The left menu.** An entry (`DRAWER_ITEMS`) whose page (`DRAWER_PAGES`, paired by name) holds a
+  search screen becomes an entry of `navigation.json` (section 9), with its label, icon and order,
+  opening the screen's queue. The page is converted to that queue. An entry that opens anything
+  else is pending: `navigation.json` opens a queue or a platform page, and the mapping agent
+  proposes which. `navigation.json` holds only the package's own entries; Web UI's stock ones are
+  the app's.
+- **Pending:** tabs wait for M2.
 - **Conditions.** A contribution that sits in a condition is pending, whatever the allow-list says.
 
 **The theme.** M0's tokens and files, and its name in `app.json`'s `branding.theme`.
@@ -356,11 +365,14 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 | `wrong-page-provider`      | 7     | Points a list at a different page provider                            |
 | `change-parameter`         | 7     | Changes one parameter of a list or an action                          |
 | `bind-other-operation`     | 7     | Binds a button to a different operation                               |
+| `wrong-home-queue`         | 7     | Points a card of the home at another queue                            |
+| `drop-menu-entry`          | 7     | Drops an entry of the menu                                            |
 | `unregistered-widget`      | 10    | Names a widget the platform does not have                             |
 
-**On the sample**, every control was applied to its conversion with `mutate` and checked: the 18
-that find something to break each fail their check, with a finding of their own. The other three
-have nothing to break there, and say so: `widen-to-everyone` and `widen-column-to-everyone`,
+**On the sample**, every one of the 23 controls was applied to its conversion with `mutate` and
+checked. The 20 that find something to break each fail their check, with a finding of their own,
+`wrong-home-queue` and `drop-menu-entry` among them. The other three have nothing to break there,
+and say so: `widen-to-everyone` and `widen-column-to-everyone`,
 because the sample has no condition, and `bind-other-operation`, because its one button runs no
 operation. The tests apply all three to the made-up package, which has them.
 
@@ -452,9 +464,15 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **Check 9** needs plugins, in M3.
 - **Conditions, tabs, task forms and layout blocks** are M2's. Until then a field, button or card
   under a condition is pending, and tabs are pending.
-- **The home and the menu** are phase 1's `home.json` and `navigation.json`, which are not in the
-  app definition yet. The dashboard's cards and the drawer's entries are pending until they are;
-  the queues they would name are written already.
+- **The home and the menu, as the app draws them.** The conversion writes `home.json` and
+  `navigation.json`, which the validator checks, but the app draws neither of what M1 writes yet:
+  - it does not read `navigation.json` (app-definition-v2.md, section 9);
+  - it leaves out a home card that is only a link to a queue, until phase 1's queue page exists
+    (`HOME_QUEUE_LINK` in `libs/shared/home`). Every card M1 writes is one, because Web UI's
+    dashboard shows a list where `home.json` would show a figure, and M1 invents no figure.
+
+  The tasks and recently viewed cards wait for card kinds of their own.
+
 - **A search form.** A queue has none, so a search screen's form and its fields are reported.
 - **Web UI's own label keys.** A dashboard card's heading and its columns are Web UI's translation
   keys, such as `home.latestDocumentsEdited`. The queue names them as `labelKey`, which the app's
