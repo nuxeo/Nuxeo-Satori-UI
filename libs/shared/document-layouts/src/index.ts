@@ -6,5 +6,11 @@ export {
 export type { LayoutMode } from './lib/layout.model';
 export { DocumentLayoutService } from './lib/document-layout.service';
 export { RECORD_PAGE_TODAY, RecordPageComponent } from './lib/record-page/record-page';
+export { RECORD_LIST_TODAY, RecordListComponent } from './lib/record-page/record-list';
+export type {
+  RecordListEntry,
+  RecordListSort,
+  RecordPropertyField,
+} from './lib/record-page/record-layout';
 export type { ResolvedRecordLayout } from './lib/record-page/resolve-record-layout';
 export { readValidationFailure } from './lib/validation-failure';

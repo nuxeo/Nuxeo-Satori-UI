@@ -26,12 +26,12 @@ import {
   renderTrustedHtml,
   type TrustedHtmlConfig,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { forkJoin, map, merge, of, startWith, switchMap } from 'rxjs';
+import { merge, switchMap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
-import { type VocabularyValue, vocabularyValues } from '../document-layout/field-view';
 import { layoutLabelText } from '../layout-label';
 import type { LayoutFieldType, LayoutLabel } from '../layout.model';
+import { humanize } from '../resolve-layout';
 import {
   type RecordValueContext,
   type RecordValueView,
@@ -41,14 +41,23 @@ import {
   showValue,
   viewText,
 } from './record-field-view';
-import { propertiesReadBy } from './record-layout';
+import { listParameters } from './list-parameters';
+import { type RecordListEntry, propertiesReadBy } from './record-layout';
+import { RecordListComponent } from './record-list';
+import {
+  LookupCollector,
+  type Lookups,
+  NO_LABELS,
+  labelLookups,
+  readLabels,
+  sameLookups,
+} from './record-lookups';
 import {
   type ResolvedRecordCard,
   type ResolvedRecordField,
   type ResolvedRecordLayout,
   widgetAccepts,
 } from './resolve-record-layout';
-import { tableColumns } from './widget-support';
 
 /** Today, for computations and relative dates. A token, so that tests choose the day. */
 export const RECORD_PAGE_TODAY = new InjectionToken<() => Date>('RECORD_PAGE_TODAY', {
@@ -101,16 +110,6 @@ const TAG_STATUS: Readonly<Record<Tone, NxsTagStatus>> = {
   neutral: 'neutral',
 };
 
-interface Principal {
-  readonly kind: 'user' | 'group';
-  readonly id: string;
-}
-
-interface Lookups {
-  readonly vocabulary: readonly VocabularyValue[];
-  readonly principals: readonly Principal[];
-}
-
 /** One field as the page shows it. */
 export interface RecordFieldShown {
   readonly key: string;
@@ -122,11 +121,25 @@ export interface RecordFieldShown {
   readonly html?: SafeHtml;
 }
 
+/** A card's list of related records, as the page hands it to the list. */
+export interface RecordRelatedShown {
+  /** The columns are those whose rules pass. */
+  readonly list: RecordListEntry;
+  /** Read from the open record; `null` when one has no value, and the list is not asked for. */
+  readonly parameters: readonly string[] | null;
+  /** The list's name for assistive technology: the card's heading, or its id. */
+  readonly label: string;
+  /** Where it is written, for the console. */
+  readonly source: string;
+}
+
 export interface RecordCardShown {
   readonly id: string;
   readonly heading: string | null;
   readonly span: number;
   readonly fields: readonly RecordFieldShown[];
+  /** For a card of related records; `null` for a card of fields. */
+  readonly related: RecordRelatedShown | null;
 }
 
 export interface RecordPageShown {
@@ -143,29 +156,6 @@ export interface RecordPageShown {
   readonly cards: readonly RecordCardShown[];
 }
 
-type Labels = ReadonlyMap<string, string>;
-/** A label read for a lookup's key, or `null` where it could not be read. */
-type LabelPair = [string, string | null];
-const NO_LABELS: Labels = new Map();
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-function sameLookups(a: Lookups, b: Lookups): boolean {
-  const key = (lookups: Lookups) =>
-    JSON.stringify([
-      lookups.vocabulary.map((value) => [value.directory, value.id]),
-      lookups.principals.map((principal) => [principal.kind, principal.id]),
-    ]);
-  return key(a) === key(b);
-}
-
-function sortedUnique<T>(items: readonly T[], key: (item: T) => string): T[] {
-  return [...new Map(items.map((item) => [key(item), item])).values()].sort((a, b) =>
-    key(a).localeCompare(key(b)),
-  );
-}
-
 /**
  * The record page: a document's main area drawn from its type's layout file, version 2, in
  * `view` mode (docs/business-apps/layout-v2.md). Cards fill one to three columns, or tabs hold
@@ -178,7 +168,13 @@ function sortedUnique<T>(items: readonly T[], key: (item: T) => string): T[] {
 @Component({
   selector: 'lib-record-page',
   standalone: true,
-  imports: [ExtensionOutletComponent, MatTabsModule, NgTemplateOutlet, TranslatePipe],
+  imports: [
+    ExtensionOutletComponent,
+    MatTabsModule,
+    NgTemplateOutlet,
+    RecordListComponent,
+    TranslatePipe,
+  ],
   templateUrl: './record-page.html',
   styleUrl: './record-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -205,87 +201,30 @@ export class RecordPageComponent {
     () => {
       const layout = this.layout();
       const properties = this.document().properties;
-      const vocabulary: VocabularyValue[] = [];
-      const principals: Principal[] = [];
+      const collector = new LookupCollector();
       const read = new Set<string>();
       for (const field of this.fieldsOf(layout)) {
-        if (field.kind === 'computed') {
-          propertiesReadBy(field.computed, read);
-          continue;
-        }
-        const value = properties[field.xpath];
-        // A table's user and group columns are names to read too, row by row.
-        if (field.widget === 'table') {
-          const rows = (Array.isArray(value) ? value : []).filter(isRecord);
-          for (const column of tableColumns(field.parameters['columns'])) {
-            const kind = column.widget;
-            if (kind !== 'user' && kind !== 'group') continue;
-            for (const row of rows) {
-              const cell = row[column.subfield];
-              for (const id of Array.isArray(cell) ? cell : [cell]) {
-                if (typeof id === 'string' && id !== '') principals.push({ kind, id });
-              }
-            }
-          }
-        }
-        if (field.widget === 'user' || field.widget === 'group') {
-          for (const id of Array.isArray(value) ? value : [value]) {
-            if (typeof id === 'string' && id !== '') principals.push({ kind: field.widget, id });
-          }
-          continue;
-        }
-        const directory =
-          field.widget === 'vocabulary' && typeof field.parameters['directory'] === 'string'
-            ? field.parameters['directory']
-            : field.definition.directory;
-        vocabulary.push(
-          ...vocabularyValues([
-            {
-              definition: directory ? { ...field.definition, directory } : field.definition,
-              value,
-            },
-          ]),
-        );
+        if (field.kind === 'computed') propertiesReadBy(field.computed, read);
+        else
+          collector.value(
+            field.widget,
+            field.parameters,
+            field.definition,
+            properties[field.xpath],
+          );
       }
       for (const xpath of read) {
         const definition = layout.properties.get(xpath);
-        if (definition)
-          vocabulary.push(...vocabularyValues([{ definition, value: properties[xpath] }]));
+        if (definition) collector.value(null, {}, definition, properties[xpath]);
       }
-      return {
-        vocabulary: sortedUnique(vocabulary, (value) => `${value.directory}\n${value.id}`),
-        principals: sortedUnique(principals, (principal) => `${principal.kind}\n${principal.id}`),
-      };
+      return collector.lookups();
     },
     { equal: sameLookups },
   );
 
   /** Shown as the stored ids until the labels arrive, and as the id wherever one cannot be read. */
   private readonly labels = toSignal(
-    toObservable(this.lookups).pipe(
-      switchMap(({ vocabulary, principals }) =>
-        vocabulary.length + principals.length === 0
-          ? of(NO_LABELS)
-          : forkJoin([
-              ...vocabulary.map(({ directory, id }) =>
-                this.layouts
-                  .vocabularyLabel(directory, id)
-                  .pipe(map((label): LabelPair => [`v\n${directory}\n${id}`, label])),
-              ),
-              ...principals.map(({ kind, id }) =>
-                this.layouts
-                  .principalLabel(kind, id)
-                  .pipe(map((label): LabelPair => [`${kind}\n${id}`, label])),
-              ),
-            ]).pipe(
-              map(
-                (pairs): Labels =>
-                  new Map(pairs.filter((pair): pair is [string, string] => pair[1] !== null)),
-              ),
-              startWith(NO_LABELS),
-            ),
-      ),
-    ),
+    toObservable(this.lookups).pipe(switchMap((lookups) => readLabels(this.layouts, lookups))),
     { initialValue: NO_LABELS },
   );
 
@@ -309,8 +248,7 @@ export class RecordPageComponent {
     const context: RecordValueContext = {
       locale: this.locale,
       today: this.today(),
-      vocabulary: (directory, id) => labels.get(`v\n${directory}\n${id}`) ?? id,
-      principal: (kind, id) => labels.get(`${kind}\n${id}`) ?? id,
+      ...labelLookups(labels),
       property: (xpath) => document.properties[xpath],
       label: (label) => this.text(label),
       flagText: (flag) =>
@@ -320,15 +258,21 @@ export class RecordPageComponent {
     const cards = (list: readonly ResolvedRecordCard[]): RecordCardShown[] =>
       list
         .filter((card) => passes(card.visibleWhen))
-        .map((card) => ({
-          id: card.id,
-          heading: this.text(card.label),
-          span: Math.min(card.span, layout.columns),
-          fields: card.fields
-            .filter((field) => passes(field.visibleWhen))
-            .flatMap((field) => this.showField(field, layout, document, context, passes)),
-        }))
-        .filter((card) => card.fields.length > 0);
+        .map((card) => {
+          const heading = this.text(card.label);
+          return {
+            id: card.id,
+            heading,
+            span: Math.min(card.span, layout.columns),
+            fields: card.fields
+              .filter((field) => passes(field.visibleWhen))
+              .flatMap((field) => this.showField(field, layout, document, context, passes)),
+            related: card.related
+              ? this.showRelated(card, card.related, heading, layout, document, passes)
+              : null,
+          };
+        })
+        .filter((card) => card.fields.length > 0 || (card.related?.list.columns.length ?? 0) > 0);
     if (layout.tabs) {
       const tabs = layout.tabs
         .filter((tab) => passes(tab.visibleWhen))
@@ -397,6 +341,29 @@ export class RecordPageComponent {
       context,
     );
     return [this.withExtras({ key: field.id, label, value })];
+  }
+
+  /**
+   * A card's related records: the columns whose rules pass for the open record and the user, as
+   * a field's do, and the page provider's parameters read from the record.
+   */
+  private showRelated(
+    card: ResolvedRecordCard,
+    list: RecordListEntry,
+    heading: string | null,
+    layout: ResolvedRecordLayout,
+    document: NuxeoDocument,
+    passes: (rule: unknown) => boolean,
+  ): RecordRelatedShown {
+    const source = `${layout.type}/view layout: ${card.place}`;
+    const read = listParameters(list.parameters, document);
+    if ('missing' in read) this.tell(`${source}: not listed: ${read.missing}`);
+    return {
+      list: { ...list, columns: list.columns.filter((column) => passes(column.visibleWhen)) },
+      parameters: 'values' in read ? read.values : null,
+      label: heading ?? humanize(card.id),
+      source,
+    };
   }
 
   /** A property's display value, for a computation's placeholder: what its field would show. */

@@ -45,19 +45,30 @@
       @if (card.heading) {
         <h3 class="record-page__heading" [id]="'record-card-' + card.id">{{ card.heading }}</h3>
       }
-      <dl class="record-page__fields">
-        @for (field of card.fields; track field.key) {
-          <div class="record-page__field" [attr.data-field]="field.key">
-            <dt class="record-page__label">{{ field.label }}</dt>
-            <dd class="record-page__value">
-              <ng-container
-                [ngTemplateOutlet]="valueView"
-                [ngTemplateOutletContext]="{ $implicit: field }"
-              />
-            </dd>
-          </div>
-        }
-      </dl>
+      @if (card.related; as related) {
+        <lib-record-list
+          class="record-page__related"
+          [list]="related.list"
+          [parameters]="related.parameters"
+          [label]="related.label"
+          [source]="related.source"
+          [stateHeadingLevel]="4"
+        />
+      } @else {
+        <dl class="record-page__fields">
+          @for (field of card.fields; track field.key) {
+            <div class="record-page__field" [attr.data-field]="field.key">
+              <dt class="record-page__label">{{ field.label }}</dt>
+              <dd class="record-page__value">
+                <ng-container
+                  [ngTemplateOutlet]="valueView"
+                  [ngTemplateOutletContext]="{ $implicit: field }"
+                />
+              </dd>
+            </div>
+          }
+        </dl>
+      }
     </section>
   }
 </ng-template>

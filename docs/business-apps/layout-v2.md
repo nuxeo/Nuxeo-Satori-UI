@@ -406,9 +406,26 @@ lists what each Web UI element becomes. In version 2's terms:
   validator does not follow fails them. The package pipeline runs them
   ([package-pipeline.md](package-pipeline.md)); the Studio migration's converter will, in M1.
 - **What the app draws so far.** A `view` file draws the record page, `RecordPageComponent` in
-  `libs/shared/document-layouts`, loaded as section 8 says. Its limits, each said in the console
-  when a file meets it:
-  - **related records** are not drawn yet, so a card that lists them is left out;
+  `libs/shared/document-layouts`, loaded as section 8 says.
+- **A card of related records** draws its list with `RecordListComponent`, in the same library,
+  through the design system's document list:
+  - the page provider is asked for one page at a time through `PageProviderService`, with each
+    parameter sent whole, as a `queryParams` value of its own;
+  - a `{ "field" }` parameter reads the open record, and `ecm:uuid`, `ecm:path`,
+    `ecm:primaryType` and `ecm:currentLifeCycleState` are read where Nuxeo returns them. A
+    parameter with no single value leaves the list unasked, and the card shows "No records";
+  - each cell shows its row's property through its column's widget, held to the row's own type,
+    which is read once per type;
+  - a column's `visibleWhen` is evaluated for the open record, as a field's is;
+  - the headers sort on the server, and a row opens its record;
+  - a row offers the row actions the file lists, while their rules pass for that row.
+- **The limits**, each said in the console when a file meets it:
+  - **a cell is one line of text:** a `status-badge` column shows its label without the tag, and
+    a `phone` or `email` column shows its value without the link;
+  - **a computed column** of a related list is not drawn yet, and is left out;
+  - **a row action needs a handler where the list is.** The platform's `app.rowActions.*` are run
+    by the browse list today, so a record page offers none of them until they are registered for
+    the whole app. A customer's own row action, registered in Layer 2 code, is offered;
   - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, keeps its
     own View tab, its preview or its editor: a record page beside a preview comes later;
   - **a computed column** of a table is not drawn yet;

@@ -66,6 +66,19 @@ function fieldsOf(file: RecordLayoutFile): readonly RecordFieldEntry[] {
   return cards.flatMap((card) => card.fields);
 }
 
+/** Every property `schemas` define, by `<prefix>:<name>`. */
+export function propertyDefinitions(
+  schemas: readonly DocumentTypeSchema[],
+): Map<string, LayoutFieldType> {
+  const properties = new Map<string, LayoutFieldType>();
+  for (const schema of schemas) {
+    for (const [name, definition] of Object.entries(schema.fields)) {
+      properties.set(`${schema.prefix}:${name}`, definition);
+    }
+  }
+  return properties;
+}
+
 /**
  * The schemas a document's facets add that the record page needs read: those whose properties a
  * field shows or a computation reads. As `facetSchemasToRead` does for version 1, a facet schema
@@ -133,7 +146,7 @@ function resolveTableColumns(
  * property neither has is left out, as version 1 leaves one out; so is a field whose widget does
  * not show its property's type, which the pipeline cannot check without the content model and
  * the app can, from the schemas it has just read. A card left with no field is left out, and a tab
- * left with no card.
+ * left with no card. A card of related records is kept as it is.
  */
 export function resolveRecordLayout(
   type: DocumentTypeDefinition,
@@ -145,12 +158,7 @@ export function resolveRecordLayout(
   /** What the console is told about a table's columns, each note whole. */
   readonly notes: readonly string[];
 } {
-  const properties = new Map<string, LayoutFieldType>();
-  for (const schema of [...type.schemas, ...facetSchemas]) {
-    for (const [name, definition] of Object.entries(schema.fields)) {
-      properties.set(`${schema.prefix}:${name}`, definition);
-    }
-  }
+  const properties = propertyDefinitions([...type.schemas, ...facetSchemas]);
   const skipped: SkippedRecordField[] = [];
   const notes: string[] = [];
 
@@ -183,7 +191,9 @@ export function resolveRecordLayout(
   const cards = (list: readonly RecordCardEntry[]): ResolvedRecordCard[] =>
     list
       .map((card) => ({ ...card, fields: card.fields.flatMap(field) }))
-      .filter((card) => card.fields.length > 0);
+      // A card of related records has no fields of its own: its columns are its rows' properties,
+      // held to the rows' types when they are drawn.
+      .filter((card) => card.related !== null || card.fields.length > 0);
 
   const tabs = file.tabs
     ? file.tabs

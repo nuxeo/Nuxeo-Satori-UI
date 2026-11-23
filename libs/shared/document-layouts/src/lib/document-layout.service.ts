@@ -1,7 +1,11 @@
 import { HttpBackend, HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
-import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';
+import {
+  EXTENSION_SLOTS,
+  ExtensionRuleRegistry,
+  ExtensionSlotRegistry,
+} from '@nuxeo/satori-platform/extensions';
 import {
   L10nDirectoryEntry,
   NuxeoApiBase,
@@ -34,6 +38,7 @@ import {
   DocumentSchemaRef,
   DocumentTypeDefinition,
   DocumentTypeSchema,
+  LayoutFieldType,
   LayoutMode,
   ResolvedLayout,
 } from './layout.model';
@@ -50,6 +55,7 @@ import { RecordLayoutFile, readRecordLayout } from './record-page/record-layout'
 import {
   ResolvedRecordLayout,
   SkippedRecordField,
+  propertyDefinitions,
   recordFacetSchemasToRead,
   resolveRecordLayout,
 } from './record-page/resolve-record-layout';
@@ -183,6 +189,7 @@ export class DocumentLayoutService {
   private readonly http = new HttpClient(inject(HttpBackend));
   private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
   private readonly rules = inject(ExtensionRuleRegistry);
+  private readonly slots = inject(ExtensionSlotRegistry);
 
   private index$: Observable<LayoutIndex> | null = null;
   private readonly files = new Map<string, Observable<LayoutFile | null>>();
@@ -228,6 +235,39 @@ export class DocumentLayoutService {
     return this.recordLayoutFor(
       document.type,
       readDocumentSchemas('schemas' in document ? document.schemas : undefined),
+    );
+  }
+
+  /**
+   * What a list's row's properties are, so that its columns are shown as their types say: those
+   * its type's schemas define, and those of the schemas its facets add that `xpaths` name. Read
+   * once per type and schema, as the record page's are. `null` when the type cannot be read.
+   * Never errors.
+   */
+  rowPropertiesOf(
+    document: NuxeoDocument,
+    xpaths: readonly string[],
+  ): Observable<ReadonlyMap<string, LayoutFieldType> | null> {
+    return this.documentType(document.type).pipe(
+      switchMap((definition) => {
+        if (!definition) return of(null);
+        const own = new Set(definition.schemas.map((schema) => schema.name));
+        const named = new Set(xpaths.map(prefixOfXpath));
+        const wanted = readDocumentSchemas(
+          'schemas' in document ? document.schemas : undefined,
+        ).filter((schema) => !own.has(schema.name) && named.has(schema.prefix));
+        const reads: Observable<readonly (DocumentTypeSchema | null)[]> = wanted.length
+          ? forkJoin(wanted.map(({ name }) => this.schema(name)))
+          : of([]);
+        return reads.pipe(
+          map((read) =>
+            propertyDefinitions([
+              ...definition.schemas,
+              ...read.filter((schema): schema is DocumentTypeSchema => schema !== null),
+            ]),
+          ),
+        );
+      }),
     );
   }
 
@@ -324,7 +364,10 @@ export class DocumentLayoutService {
           warn(`${type}/view layout from ${url} ignored: ${envelope.invalid}`);
           return null;
         }
-        const file = readRecordLayout(envelope.content, this.rules.registeredRuleIds());
+        const file = readRecordLayout(envelope.content, {
+          rules: this.rules.registeredRuleIds(),
+          rowActions: this.slots.registeredIds(EXTENSION_SLOTS.rowActions),
+        });
         if ('invalid' in file) {
           warn(
             `${type}/view layout from ${url} refused, showing the document page: ${file.invalid}`,
