@@ -13,6 +13,7 @@
 import { validateActions, placementsOf } from './actions';
 import { APP_ID, assetFile, validateApp } from './app';
 import { ID, type Finding } from './checker';
+import type { ContentModel } from './content-model';
 import { validateHome, validateNavigation } from './home';
 import { describeLogoSrcForm } from './image-source';
 import { validateLabels, validateModuleSettings } from './labels';
@@ -103,6 +104,8 @@ export interface PackageOptions {
   readonly platformVersion?: string;
   /** Read every layout in this mode, whatever its path says. */
   readonly mode?: LayoutMode;
+  /** The server's content model: each layout is held to the type its path names. */
+  readonly model?: ContentModel;
 }
 
 const TASK = /^([A-Za-z][A-Za-z0-9_-]{0,127})\.([A-Za-z][A-Za-z0-9_-]{0,127})$/;
@@ -127,7 +130,12 @@ export function validateFile(
         ...missingAssets(content, context),
       ];
     case 'layout':
-      return validateLayoutV2(content, { mode: options.mode ?? file.mode, registries });
+      return validateLayoutV2(content, {
+        mode: options.mode ?? file.mode,
+        registries,
+        model: options.model,
+        type: file.type,
+      });
     case 'queue':
       return [
         ...(ID.test(file.id)

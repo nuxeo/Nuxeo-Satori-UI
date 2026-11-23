@@ -7,6 +7,7 @@
  *
  *   node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]
  *     [--allow-list <file>] [--registered <file>] [--platform <version>]
+ *     [--model <file> | --model-server <address>]
  *
  * First it removes the zip and checksum an earlier run left for the package's name and version, so
  * that a refused package leaves nothing installable behind. Then, in order, each step stopping the
@@ -15,8 +16,9 @@
  *      code this repository reviewed;
  *   2. `bundle/agentic-ui-config/` is an app definition: it has an `app.json`, and the validator of
  *      `libs/shared/app-definition` finds nothing in it, given the deployment's allow-list, what
- *      it registers and its platform version. The layouts the component contributes are the files
- *      the validator read, in the modes it read them in: none inline, none from elsewhere;
+ *      it registers and its platform version, and, when one is given, the server's content model.
+ *      The layouts the component contributes are the files the validator read, in the modes it
+ *      read them in: none inline, none from elsewhere;
  *   3. `app.json`'s `packageVersion` is `package.xml`'s version, and a tag, when given, is
  *      `app-package/<name>/<version>` for this package;
  *   4. `build.mjs` writes the zip, refusing what the server would;
@@ -25,6 +27,9 @@
  *
  * Node 24 and the system's `unzip`, which reads the zip back at step 5, run all of it: no install
  * and no credential, so that a package's checks need nothing a customer's repository does not have.
+ * The content model is the one input that may need a server, and it is opt in: `--model` names a
+ * file `app-package-model.mjs` exported, and `--model-server` reads the model live, with
+ * `NUXEO_USER` and `NUXEO_PASS` from the environment.
  * The XML is read by `verify-package-zip.mjs`'s own helpers, the builder's grammar ported, so that
  * the three cannot disagree about what a descriptor says.
  *
@@ -36,9 +41,16 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join, posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  EXIT_PRECONDITION,
+  missingNuxeoCredentialsMessage,
+  readNuxeoCredentials,
+} from './beta-harness/nuxeo-credentials.mjs';
+import { readServerModel, serverBase, withoutCredentials } from './nuxeo-content-model.mjs';
 import {
   attribute,
   attributesOf,
@@ -63,24 +75,42 @@ const TEMPLATE = join(
 const VALIDATOR = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'bin.mjs');
 const USAGE =
   'usage: node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]' +
-  ' [--allow-list <file>] [--registered <file>] [--platform <version>]';
+  ' [--allow-list <file>] [--registered <file>] [--platform <version>]' +
+  ' [--model <file> | --model-server <address>]';
 // `spawnSync` truncates a child's output in silence past its limit, 1 MiB by default.
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 /** `build.mjs`'s rule for a package name or version: a single file name, nothing above it. */
 const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-const VALUED = ['--out', '--tag', '--allow-list', '--registered', '--platform'];
+const VALUED = [
+  '--out',
+  '--tag',
+  '--allow-list',
+  '--registered',
+  '--platform',
+  '--model',
+  '--model-server',
+];
 
 function parse(argv) {
   const options = {};
   const paths = [];
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
-    if (VALUED.includes(arg) && argv[index + 1] !== undefined && !argv[index + 1].startsWith('--'))
+    // An empty value is refused, not taken as no option: `--model "$MODEL"` with the variable unset
+    // would otherwise skip the check it asks for.
+    if (
+      VALUED.includes(arg) &&
+      argv[index + 1] !== undefined &&
+      argv[index + 1] !== '' &&
+      !argv[index + 1].startsWith('--')
+    )
       options[arg.slice(2)] = argv[++index];
     else if (arg.startsWith('--')) return null;
     else paths.push(arg);
   }
+  // One content model: a file, or the server's, not both.
+  if (options.model !== undefined && options['model-server'] !== undefined) return null;
   return paths.length === 1 ? { directory: paths[0], ...options } : null;
 }
 
@@ -89,9 +119,53 @@ if (!options || !existsSync(options.directory)) {
   console.error(options ? `${options.directory} does not exist.\n${USAGE}` : USAGE);
   process.exit(2);
 }
-process.exit(run(options));
+process.exit(await withModel(options));
 
-function run({ directory, out, tag, 'allow-list': allowList, registered, platform }) {
+/**
+ * `run`, with the server's content model read first when `--model-server` names it, into a file
+ * the validator reads as it reads `--model`'s, and which is removed afterwards. A model that cannot
+ * be read stops the run with exit 2, as a wrong `--model` file does, once an earlier run's zip is
+ * removed: the package is neither refused nor built on a model nobody saw.
+ */
+async function withModel(options) {
+  if (options['model-server'] === undefined) return run(options);
+  const read = await serverModel(options['model-server']);
+  if (typeof read === 'string') return run({ ...options, unread: read });
+  const scratch = mkdtempSync(join(tmpdir(), 'app-package-model-'));
+  try {
+    const file = join(scratch, 'content-model.json');
+    writeFileSync(file, JSON.stringify(read.model));
+    process.stdout.write(`The content model was read from ${read.base}.\n`);
+    return run({ ...options, model: file });
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/** The content model `server` answers, with `NUXEO_USER` and `NUXEO_PASS`, or why it was not read. */
+async function serverModel(server) {
+  const where = serverBase(server);
+  if (where.problem) return `--model-server: ${where.problem}\n${USAGE}`;
+  const credentials = readNuxeoCredentials();
+  if (!credentials)
+    return missingNuxeoCredentialsMessage(`read the content model of ${where.base}`);
+  try {
+    return { base: where.base, model: await readServerModel(where.base, credentials) };
+  } catch (error) {
+    return `The content model of ${where.base} was not read: ${error.message}`;
+  }
+}
+
+function run({
+  directory,
+  out,
+  tag,
+  'allow-list': allowList,
+  registered,
+  platform,
+  model,
+  unread,
+}) {
   const near = relative(process.cwd(), resolve(directory));
   const shown = near === '' ? '.' : near.startsWith('..') ? resolve(directory) : near;
   const refuse = (step, message) => {
@@ -114,6 +188,11 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
     const previous = join(output, `${name}-${version}.zip`);
     for (const left of [previous, `${previous}.sha256`]) rmSync(left, { force: true });
   }
+  // A content model `--model-server` could not read.
+  if (unread !== undefined) {
+    console.error(unread);
+    return EXIT_PRECONDITION;
+  }
 
   // 1. The builder is the reviewed one.
   const builder = join(directory, 'build.mjs');
@@ -133,9 +212,11 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
     ...(allowList ? ['--allow-list', allowList] : []),
     ...(registered ? ['--registered', registered] : []),
     ...(platform ? ['--platform', platform] : []),
+    ...(model ? ['--model', model] : []),
   ];
   const validation = spawnSync(process.execPath, [VALIDATOR, 'validate', root, ...flags], {
     encoding: 'utf8',
+    env: withoutCredentials(process.env),
     maxBuffer: OUTPUT_LIMIT,
   });
   process.stdout.write(validation.stdout ?? '');
@@ -165,6 +246,7 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
   // 4. The zip, from version 1's builder, which checks the component XML the way the server does.
   const build = spawnSync(process.execPath, [builder, '--out', output], {
     encoding: 'utf8',
+    env: withoutCredentials(process.env),
     maxBuffer: OUTPUT_LIMIT,
   });
   if (build.status !== 0) {
