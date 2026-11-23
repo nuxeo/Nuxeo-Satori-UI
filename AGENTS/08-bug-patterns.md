@@ -1136,8 +1136,11 @@ clothes. The layout `date` view had it until 2026-11-23, formatting every value 
 `isStoredCalendarDay` (`document-layouts/…/stored-calendar-day.ts`) and formats only a stored day
 there. The edit form opens a value by the same rule, through its own copy in
 `satori-components/…/stored-calendar-day.ts`, so the form opens on the day the view shows. Both
-copies run one case list, `libs/shared/testing/…/stored-calendar-day-cases.ts`. The Properties
-panel's Expires row and the two `dc:expired` dialogs still read every value on its UTC day.
+copies run one case list, `libs/shared/testing/…/stored-calendar-day-cases.ts`. Every other
+`dc:expired` reader — the Expires row, the collection and Browse edit dialogs, the Expired queue
+label and the version comparison — still reads every value on its UTC day, so for a value that is
+not a stored day (Web UI's local midnight) the form and they name different days. One exported
+predicate would close that; it is a published-API decision and is deferred.
 
 Regression test pattern — and this is the part that is easy to get wrong:
 

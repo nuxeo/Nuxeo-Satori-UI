@@ -348,6 +348,17 @@ describe('openingDay, in a zone the case names', () => {
     expect(openingDay('2024-03-06T00:00:00-05:00', WEST)).toEqual({ year: 2024, month: 2, day: 6 });
   });
 
+  it('opens a day Web UI wrote at local midnight at +05:30 on the day picked, for a reader there', () => {
+    // 6 March picked in Web UI at +05:30 is stored as 18:30Z on the 5th. The form opens it on
+    // 6 March there and on 5 March in New York. The Expires row, the two `dc:expired` dialogs and
+    // the Expired queue read it on its UTC day, 5 March, everywhere: their specs assert that day
+    // for this same value. A stored day, below, is 6 March on every one of those surfaces.
+    expect(openingDay('2024-03-05T18:30:00.000Z', EAST)).toEqual({ year: 2024, month: 2, day: 6 });
+    expect(openingDay('2024-03-05T18:30:00.000Z', WEST)).toEqual({ year: 2024, month: 2, day: 5 });
+    expect(openingDay('2024-03-06T00:00:00.000Z', EAST)).toEqual({ year: 2024, month: 2, day: 6 });
+    expect(openingDay('2024-03-06T00:00:00.000Z', WEST)).toEqual({ year: 2024, month: 2, day: 6 });
+  });
+
   it('reads a JS Date as an instant, as the layout view does', () => {
     expect(openingDay(new Date('2024-03-06T00:00:00.000Z'), WEST)).toEqual({
       year: 2024,
@@ -409,6 +420,13 @@ describe('the day a date control opens on, in the zone this run is in', () => {
         moved: { to: { year: 2024, month: 2, day: 6 }, writes: '2024-03-06T00:00:00.000Z' },
       },
       {
+        value: '2024-03-05T18:30:00.000Z',
+        opens: { year: 2024, month: 2, day: 6 },
+        why: '6 March as Web UI writes it here, local midnight',
+        writes: '2024-03-05T18:30:00.000Z',
+        moved: { to: { year: 2024, month: 2, day: 5 }, writes: '2024-03-05T00:00:00.000Z' },
+      },
+      {
         value: '2024-03-06T00:00:00.000Z',
         opens: { year: 2024, month: 2, day: 6 },
         why: 'a stored day',
@@ -440,6 +458,12 @@ describe('the day a date control opens on, in the zone this run is in', () => {
         opens: { year: 2024, month: 2, day: 6 },
         why: 'a bare stored day',
         writes: '2024-03-06T00:00:00.000Z',
+      },
+      {
+        value: '2024-03-05T18:30:00.000Z',
+        opens: { year: 2024, month: 2, day: 5 },
+        why: '6 March as Web UI writes it at +05:30, 13:30 on the 5th here',
+        writes: '2024-03-05T18:30:00.000Z',
       },
     ],
   };

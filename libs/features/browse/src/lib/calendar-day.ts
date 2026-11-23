@@ -22,7 +22,9 @@
  * writer in this application writes one. But a stored day is not all this dialog sees: a
  * `dc:expired` that Web UI wrote at local midnight, or that this application anchored locally
  * before NXSAT-727, is an instant, and for one of those the editor and this dialog can open on
- * different days. Moving this read to the editor's rule means moving the Expires row with it.
+ * different days. Moving this read to the editor's rule means moving every UTC reader with it —
+ * the Expires row, the Expired queue label and the version comparison — through one predicate
+ * exported from the platform API. That decision is deferred, not rejected.
  *
  * `AGENTS/08-bug-patterns.md` pattern 29 has the full rule and the test traps.
  */

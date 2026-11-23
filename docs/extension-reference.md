@@ -1693,13 +1693,27 @@ Three consequences worth designing around:
   midnight UTC, so it is shown and opened as an instant: on the day that was picked by a reader in
   the writer's zone, and, when that zone is ahead of UTC, on the previous day by a reader in UTC or
   west of it. Nothing records the zone it was written in, so it cannot be recovered.
-- **`dc:expired` is read two ways.** The Edit dialog's Expires field follows the rule above. The
-  Properties panel's packaged Expires row, and the edit dialogs of Browse and of a collection
-  (`browse/…/edit-metadata-dialog`, `shared/ui/…/edit-collection-dialog`), read every
-  `dc:expired` on its UTC day. For a stored day they agree. For a `dc:expired` that is not one they
-  can name different days: 6 March picked in Web UI in Paris, `2024-03-05T23:00:00.000Z`, opens on
-  6 March in the Edit dialog for a reader in Paris while the Expires row shows 5 March. A day
-  picked in this application is always written as a stored day.
+- **`dc:expired` is read two ways, and they can name different days.** The Edit dialog's Expires
+  field follows the rule above, as does the row of a `metadata` layout that lists `dc:expired`.
+  Every other reader of `dc:expired` opens or formats it on its UTC
+  day, whatever it holds:
+  - the Properties panel's packaged Expires row (`properties-panel.component.html`);
+  - the edit dialogs of a collection and of Browse (`calendarDayOf` in `shared/ui/…/calendar-day.ts`
+    and `browse/…/calendar-day.ts`);
+  - the navigation drawer's Expired queue label (`drawerExpiredLabel`, `apps/nuxeo-ui`);
+  - the version comparison (`formatCompareDate`, `nuxeo-client`).
+
+  The Expired queue's NXQL compares the stored instant with the current time, so it names no day.
+  For a stored day every reader agrees: `2024-03-06T00:00:00.000Z` is 6 March on all of them, in
+  every zone. For a `dc:expired` that is not one, they disagree. 6 March picked in Web UI at +05:30
+  is stored as its local midnight, `2024-03-05T18:30:00.000Z`. To a reader at +05:30, the Edit
+  dialog opens it as 6 March, while the Expires row, both edit dialogs, the Expired queue and the
+  comparison show 5 March. Every day picked in this application is written as a stored day, so the
+  difference is confined to values another client wrote and to values this application anchored
+  locally before NXSAT-727. Closing it means one rule for every reader: a single
+  `isStoredCalendarDay` exported from `@nuxeo/satori-platform/components` for all of them to use.
+  That is a published-API decision, deferred rather than rejected, and until it is taken these
+  readers stay as they are.
 
 **Validation before saving.** Save checks the schema's constraints in the browser first: a
 required field (`NotNullConstraint`, or `"required": true` in the file), a `PatternConstraint`
