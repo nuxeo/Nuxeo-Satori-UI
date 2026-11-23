@@ -46,8 +46,13 @@ interface BasicStoredSession {
   basic: string;
   isAdministrator: boolean;
   groups: string[];
-  /** Every group Nuxeo counts the user in, nested and virtual ones too; absent in older sessions. */
-  allGroups?: string[];
+  /**
+   * Every group Nuxeo counts the user in, nested and virtual ones too. Required, so that every
+   * place that builds a session from `/me` has to keep them: two that did not left
+   * `app.rules.inGroup` reading the stored groups alone. A session stored before these were kept
+   * has none in storage, and `restoreSession()` gives it its stored groups (`Restored`).
+   */
+  allGroups: string[];
 }
 
 interface CookieStoredSession {
@@ -56,10 +61,13 @@ interface CookieStoredSession {
   isAdministrator: boolean;
   groups: string[];
   /** As in `BasicStoredSession`. */
-  allGroups?: string[];
+  allGroups: string[];
 }
 
 type StoredSession = BasicStoredSession | CookieStoredSession;
+
+/** A session as read back from storage, where one stored before `allGroups` was kept lacks it. */
+type Restored<T extends StoredSession> = Omit<T, 'allGroups'> & { allGroups?: string[] };
 
 /** Legacy payload before `kind` was introduced. */
 interface LegacyStoredSession {
@@ -342,10 +350,7 @@ export class AuthService {
    * context's `app.rules.inGroup`; none when no one is signed in. A session stored before these
    * were kept has the stored groups only, until `/me` is read again.
    */
-  readonly groups = computed<readonly string[]>(() => {
-    const s = this.state();
-    return s?.allGroups ?? s?.groups ?? [];
-  });
+  readonly groups = computed<readonly string[]>(() => this.state()?.allGroups ?? []);
 
   constructor() {
     this.restoreSession();
@@ -466,20 +471,20 @@ export class AuthService {
       const parsed = JSON.parse(raw) as StoredSession | LegacyStoredSession;
       if (parsed && typeof parsed === 'object' && 'username' in parsed) {
         if ('kind' in parsed && parsed.kind === 'cookie') {
-          const c = parsed as CookieStoredSession;
+          const c = parsed as Restored<CookieStoredSession>;
           if (c.username) {
             this.state.set({
               kind: 'cookie',
               username: c.username,
               isAdministrator: c.isAdministrator ?? false,
               groups: c.groups ?? [],
-              allGroups: c.allGroups,
+              allGroups: c.allGroups ?? c.groups ?? [],
             });
           }
           return;
         }
         if ('kind' in parsed && parsed.kind === 'basic') {
-          const b = parsed as BasicStoredSession;
+          const b = parsed as Restored<BasicStoredSession>;
           if (b.username && b.basic) {
             this.state.set({
               kind: 'basic',
@@ -487,7 +492,7 @@ export class AuthService {
               basic: b.basic,
               isAdministrator: b.isAdministrator ?? false,
               groups: b.groups ?? [],
-              allGroups: b.allGroups,
+              allGroups: b.allGroups ?? b.groups ?? [],
             });
           }
           return;
@@ -500,6 +505,7 @@ export class AuthService {
             basic: legacy.basic,
             isAdministrator: legacy.isAdministrator ?? false,
             groups: legacy.groups ?? [],
+            allGroups: legacy.groups ?? [],
           });
         }
       }
@@ -747,6 +753,7 @@ export class AuthService {
                 basic,
                 isAdministrator: flags.isAdministrator,
                 groups: flags.groups,
+                allGroups: flags.allGroups,
               };
               this.state.set(session);
               this.persist(session, remember);
@@ -830,6 +837,7 @@ export class AuthService {
           username: user,
           isAdministrator: flags.isAdministrator,
           groups: flags.groups,
+          allGroups: flags.allGroups,
         };
         this.state.set(next);
         this.persistCookie(next);

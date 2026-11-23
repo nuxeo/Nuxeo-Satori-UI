@@ -426,6 +426,36 @@ describe('RecordPageComponent', () => {
     expect(valueOf(await render(member(), page), 'member:ssn')).toBe('000-00-0000');
   });
 
+  /** The reader keeps a field `fieldIn` shows by a number or a boolean, and the rule decides it. */
+  it('shows a field by the number or the boolean that app.rules.fieldIn matches', async () => {
+    TestBed.inject(ExtensionRuleRegistry).registerRules(DOCUMENT_RULE_EVALUATORS);
+    const page = (property: string, value: unknown) => ({
+      version: 2,
+      cards: [
+        {
+          id: 'member',
+          fields: [
+            'member:phone',
+            {
+              field: 'member:ssn',
+              visibleWhen: { type: 'app.rules.fieldIn', parameters: [{ field: property }, value] },
+            },
+          ],
+        },
+      ],
+    });
+    const ssn = async (document: NuxeoDocument, content: Record<string, unknown>) =>
+      valueOf(await render(document, content), 'member:ssn');
+
+    expect(await ssn(member({ 'member:dues': 5000 }), page('member:dues', 5000))).toBe(
+      '000-00-0000',
+    );
+    expect(await ssn(member({ 'member:dues': 4000 }), page('member:dues', 5000))).toBeUndefined();
+    expect(await ssn(member({ 'member:vip': true }), page('member:vip', true))).toBe('000-00-0000');
+    expect(await ssn(member({ 'member:vip': false }), page('member:vip', true))).toBeUndefined();
+    expect(warnings.filter((warning) => warning.includes('left out'))).toEqual([]);
+  });
+
   /** `core.choose` picks an id; the widget shows it by name, as a property's would be. */
   it('names a computed result shown as a user, a group or a vocabulary entry', async () => {
     const choose = (a: unknown, b: unknown) => ({
@@ -605,6 +635,43 @@ describe('RecordPageComponent', () => {
     expect(
       [...root.querySelectorAll('[data-field="member:visits"] td')].map((td) => td.textContent),
     ).toEqual(['Called back', 'By: jdoe']);
+  });
+
+  /** The validator takes a date widget on a computed field: a date the computation gives shows. */
+  it("shows a computed date through a date widget, on the reader's day", async () => {
+    timeZone = '+0530';
+    const choose = {
+      type: 'core.choose',
+      parameters: ['test.rules.canSeeService', { field: 'member:visitedAt' }, 'x'],
+    };
+    const root = await render(member(), {
+      version: 2,
+      cards: [
+        {
+          id: 'a',
+          fields: [
+            { id: 'seen', widget: 'date', computed: choose },
+            { id: 'seenAgo', widget: 'relative-date', computed: choose },
+            { id: 'seenText', widget: 'text', computed: choose },
+          ],
+        },
+      ],
+    });
+    expect(valueOf(root, 'seen')).toBe('November 24, 2026');
+    expect(valueOf(root, 'seenAgo')).toBe('in 8 hours');
+    expect(valueOf(root, 'seenText')).toBe('2026-11-23T20:00:00Z');
+    // A result that is not a date is still left out, and the console says why.
+    rules.canSeeService = false;
+    const other = await render(member(), {
+      version: 2,
+      cards: [
+        { id: 'a', fields: ['member:phone', { id: 'seen', widget: 'date', computed: choose }] },
+      ],
+    });
+    expect(other.querySelector('[data-field="seen"]')).toBeNull();
+    expect(warnings.some((warning) => warning.includes('does not show a string result'))).toBe(
+      true,
+    );
   });
 
   describe("a template's placeholder", () => {

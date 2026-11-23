@@ -36,6 +36,19 @@ export function widgetAccepts(widget: string, definition: LayoutFieldType): bool
 
 type Json = Record<string, unknown>;
 
+/**
+ * `record[key]`, when `record` has it as its own: never what every object inherits. A schema's
+ * subfields, a table's row and a widget's parameters are plain objects, and a subfield a layout
+ * names `constructor` or `toString` would otherwise find a function where it expects a value or a
+ * type, and a page that met it would throw.
+ */
+export function own<T>(
+  record: Readonly<Record<string, T>> | undefined,
+  key: string,
+): T | undefined {
+  return record !== undefined && Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
 const isRecord = (value: unknown): value is Json =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
