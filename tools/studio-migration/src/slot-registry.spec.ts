@@ -265,7 +265,8 @@ describe("the review's cases of Web UI's slot registration", () => {
       `${button('lockIt', 'x')}<nuxeo-slot-content name="lockIt" slot="DOCUMENT_ACTIONS,RESULTS_SELECTION_ACTIONS" disabled></nuxeo-slot-content>`,
     );
     expect(ids(disabled)).toEqual([]);
-    expect(entry(disabled.conversion, 1)?.note).toContain('moves it to the slots');
+    // Moved and disabled: Web UI shows it nowhere.
+    expect(entry(disabled.conversion, 1)?.note).toContain('is disabled');
     // Moved, though not disabled: the converter does not follow it to the other slot.
     const moved = only(
       `${button('lockIt', 'x')}<nuxeo-slot-content name="lockIt" slot="DOCUMENT_ACTIONS,RESULTS_SELECTION_ACTIONS" order="3"></nuxeo-slot-content>`,
@@ -350,6 +351,132 @@ describe("the review's cases of Web UI's slot registration", () => {
       ),
     });
     expect(run(page, 5)?.findings).toEqual([]);
+  });
+});
+
+describe("the second review's cases", () => {
+  const button = (name: string, comment: string, extra = '', label = name) =>
+    `<nuxeo-slot-content name="${name}" slot="DOCUMENT_ACTIONS"${extra}><template><nuxeo-operation-button label="${label}" operation="Claim.Approve" input="[[document]]" params='{"comment": "${comment}"}'></nuxeo-operation-button></template></nuxeo-slot-content>`;
+  const only = (markup: string, more: Record<string, string> = {}) =>
+    prepare({ [SLOTS]: markup, ...more });
+  const ids = (input: HarnessInput) =>
+    actions(input.conversion)
+      .map(([id]) => id)
+      .filter((id) => id !== 'acme-claims.approveClaim');
+
+  it('sorts the slot after each registration, so a replacement moves with its new order', () => {
+    const resorted = only(
+      button('a', 'first', ' order="10"') +
+        button('b', 'b', ' order="5"') +
+        button('a', 'second', ' order="5"'),
+    );
+    expect(ids(resorted)).toEqual(['acme-claims.b', 'acme-claims.a']);
+  });
+
+  it('reads a priority as Web UI compares it, a NaN outranking nothing and kept by nothing', () => {
+    const nan = only(button('a', 'first', ' priority="abc"') + button('a', 'second'));
+    expect(actions(nan.conversion).find(([id]) => id === 'acme-claims.a')?.[2]).toEqual({
+      comment: 'first',
+    });
+  });
+
+  it('writes no order an app definition cannot hold, and reports it', () => {
+    const half = only(button('a', 'x', ' order="2.5"'));
+    expect(actions(half.conversion).find(([id]) => id === 'acme-claims.a')?.[1]).toBeNull();
+    expect(entry(half.conversion, 1)).toMatchObject({
+      outcome: 'reported',
+      to: 'actions.json acme-claims.a',
+      note: expect.stringContaining('Its order, 2.5, is no whole number'),
+    });
+    expect(run(half, 10)?.status).toBe('pass');
+  });
+
+  it("translates a button's label as Web UI does, and holds the action to it", () => {
+    const keyed = only(button('a', 'x', '', 'label.claim.amount'));
+    expect(
+      (keyed.conversion.app['actions.json'] as { actions: Record<string, unknown>[] }).actions.find(
+        (action) => action['id'] === 'acme-claims.a',
+      ),
+    ).toMatchObject({ labelKey: 'label.claim.amount' });
+    expect(run(keyed, 6)?.findings).toEqual([]);
+    const literal = {
+      ...keyed,
+      conversion: {
+        ...keyed.conversion,
+        app: {
+          ...keyed.conversion.app,
+          'actions.json': {
+            version: 2,
+            actions: (
+              keyed.conversion.app['actions.json'] as { actions: Record<string, unknown>[] }
+            ).actions.map((action) =>
+              action['id'] === 'acme-claims.a'
+                ? { ...action, labelKey: undefined, label: 'label.claim.amount' }
+                : action,
+            ),
+          },
+        },
+      },
+    };
+    expect(run(literal, 6)?.findings).toEqual([
+      'actions.json: acme-claims.a: the app shows "label.claim.amount", where Web UI shows "Amount"',
+    ]);
+  });
+
+  it('holds equals to the places Web UI gives them', () => {
+    const ties = only(button('a', 'a') + button('b', 'b'));
+    const swapped = {
+      ...ties,
+      conversion: {
+        ...ties.conversion,
+        app: {
+          ...ties.conversion.app,
+          'actions.json': {
+            version: 2,
+            actions: [
+              ...(ties.conversion.app['actions.json'] as { actions: unknown[] }).actions,
+            ].reverse(),
+          },
+        },
+      },
+    };
+    expect(run(ties, 6)?.findings).toEqual([]);
+    expect(run(swapped, 6)?.findings).toEqual([
+      `actions.json: acme-claims.b comes before acme-claims.a, where Web UI's slot shows "a" first, both at order 0`,
+    ]);
+  });
+
+  it("translates a menu entry's label, and reports an order it cannot write", () => {
+    const menu = only(
+      '<nuxeo-slot-content name="claimsSearch" slot="DRAWER_ITEMS" order="1.5"><template><nuxeo-menu-icon name="claimssearch" label="label.search.claims" icon="icons:search"></nuxeo-menu-icon></template></nuxeo-slot-content>',
+    );
+    const [written] = (
+      menu.conversion.app['navigation.json'] as { entries: Record<string, unknown>[] }
+    ).entries;
+    expect(written).toMatchObject({ id: 'claimssearch', labelKey: 'label.search.claims' });
+    expect(written).not.toHaveProperty('order');
+    expect(entry(menu.conversion, 1)).toMatchObject({
+      outcome: 'reported',
+      to: 'navigation.json claimssearch',
+      note: expect.stringContaining('Its order, 1.5, is no whole number'),
+    });
+    expect(run(menu, 6)?.findings).toEqual([]);
+  });
+
+  it('writes no tab of a contribution to several slots, which it reports', () => {
+    const tabs = `${UI}/nuxeo-Acme-Claims-tabs-bundle.html`;
+    const both = prepare({
+      [tabs]: `<nuxeo-slot-content name="rcItem" slot="DOCUMENT_VIEWS_ITEMS,DOCUMENT_ACTIONS"><template><nuxeo-filter document="[[document]]" type="Policy"><template><nuxeo-page-item name="rc" label="rc"></nuxeo-page-item></template></nuxeo-filter></template></nuxeo-slot-content>
+<nuxeo-slot-content name="rcPage" slot="DOCUMENT_VIEWS_PAGES"><template><nuxeo-filter document="[[document]]" type="Policy"><template><acme-policy-terms name="rc" document="[[document]]"></acme-policy-terms></template></nuxeo-filter></template></nuxeo-slot-content>`,
+    });
+    expect(
+      (both.conversion.app['layouts/Policy/view.layout.json'] as Record<string, unknown>)['tabs'],
+    ).toBeUndefined();
+    expect(
+      both.conversion.report.constructs.find(
+        (construct) => construct.id === `slot-contribution:${tabs}#1`,
+      ),
+    ).toMatchObject({ outcome: 'reported', note: 'Its slot is not in the catalogue' });
   });
 });
 

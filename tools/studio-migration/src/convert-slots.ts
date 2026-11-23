@@ -20,7 +20,7 @@ import { menuDecisions } from './convert-home';
 import { carry, guardOfSet, type Guard } from './guards';
 import type { ConvertContext } from './convert';
 import type { Inventory, SlotContribution } from './inventory';
-import { actionIdOf, iconOf, isBound, labelOf, placed } from './app-files';
+import { actionIdOf, iconOf, isBound, placed, translatedLabelOf } from './app-files';
 import { slotRegistry } from './slot-registry';
 
 /** The operation an action converted from a button runs, and its parameters, or why it cannot. */
@@ -171,11 +171,17 @@ export function actionOwners(
   return owners;
 }
 
+/** Why an order Web UI reads is not written: an app definition's orders are whole numbers. */
+function unwholeOrder(order: number): string {
+  return `Its order, ${order}, is no whole number, which an app definition's order is: written with none, the app shows it after every ordered one, where Web UI's slot places it at ${order}: a person picks a whole order`;
+}
+
 export function convertSlots(context: ConvertContext): void {
   const { inventory, catalogue } = context;
   const actions: Record<string, unknown>[] = [];
   const owners = actionOwners(inventory, catalogue, context.appId, context.allowList);
   const registry = slotRegistry(inventory);
+  const translated = new Set(inventory.translations.flatMap((translations) => translations.keys));
   const menus = menuDecisions(inventory, catalogue);
   const entries = menus.entries;
   for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
@@ -242,7 +248,8 @@ export function convertSlots(context: ConvertContext): void {
         });
         continue;
       }
-      const label = labelOf(own(action.attributes, 'label') ?? null);
+      // Web UI's button translates its label as a key (`nuxeo-operation-button`, `i18n(label)`).
+      const label = translatedLabelOf(own(action.attributes, 'label') ?? null, translated);
       // Its order as Web UI's slot keeps it, a later contribution of its name included.
       const owner = owners.get(actionId);
       const icon = iconOf(own(action.attributes, 'icon'));
@@ -258,7 +265,16 @@ export function convertSlots(context: ConvertContext): void {
         ...(action.parameters !== null ? { parameters: action.parameters } : {}),
       });
       if (guard.guard) carry(context.carried, guard.guard, `actions.json ${actionId}`);
-      context.decide(id, { outcome: 'converted', to: `actions.json ${actionId}` });
+      context.decide(
+        id,
+        owner && !Number.isInteger(owner.order)
+          ? {
+              outcome: 'reported',
+              to: `actions.json ${actionId}`,
+              note: unwholeOrder(owner.order),
+            }
+          : { outcome: 'converted', to: `actions.json ${actionId}` },
+      );
       continue;
     }
     if (entry.layer0 === 'themes') {
@@ -298,7 +314,13 @@ export function convertSlots(context: ConvertContext): void {
               note: 'No entry of the left menu opens it, so it is no entry of navigation.json: the mapping agent proposes where it goes (section 5)',
             })
           : menu.item === contribution
-            ? { outcome: 'converted', to: `navigation.json ${menu.id}` }
+            ? Number.isInteger(registry.kept.get(contribution)?.order ?? 0)
+              ? { outcome: 'converted', to: `navigation.json ${menu.id}` }
+              : {
+                  outcome: 'reported',
+                  to: `navigation.json ${menu.id}`,
+                  note: unwholeOrder(registry.kept.get(contribution)?.order ?? 0),
+                }
             : {
                 outcome: 'converted',
                 to: `queues/${menu.queue}.json, which the menu entry navigation.json ${menu.id} opens`,

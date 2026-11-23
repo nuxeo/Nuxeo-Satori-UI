@@ -10,7 +10,16 @@
  * Both are worked out here from the inventory alone, so that the converter and harness check 7
  * read the same answer: which card or entry each is, and which queue it opens.
  */
-import { homeQueueId, iconOf, labelOf, placed, queuePath, searchQueueId, slug } from './app-files';
+import {
+  homeQueueId,
+  iconOf,
+  labelOf,
+  placed,
+  queuePath,
+  searchQueueId,
+  slug,
+  translatedLabelOf,
+} from './app-files';
 import { own, slotEntry, type Catalogue } from './catalogue';
 import { cardGuard, queueOwners, searchOfForm } from './convert-lists';
 import { menuGuard, type Guard } from './guards';
@@ -104,6 +113,7 @@ export function menuDecisions(
     if (page && !skipped.has(page)) skipped.set(page, skip);
   };
   const registry = slotRegistry(inventory);
+  const translated = new Set(inventory.translations.flatMap((translations) => translations.keys));
   for (const { contribution: item } of placed(contributions)) {
     if (item.slot !== 'DRAWER_ITEMS') continue;
     if (slotEntry(catalogue, item.slot)?.how !== 'automatic') continue;
@@ -179,7 +189,8 @@ export function menuDecisions(
       queue,
       entry: {
         id,
-        ...labelOf(own(icon.attributes, 'label') ?? null),
+        // Web UI's menu icon translates its label as a key (`nuxeo-menu-icon`, `i18n(label)`).
+        ...translatedLabelOf(own(icon.attributes, 'label') ?? null, translated),
         ...(symbol !== null ? { icon: symbol } : {}),
         // An order is a whole number in an app definition; one that is not is kept by the place.
         ...(order !== undefined && Number.isInteger(order) ? { order } : {}),

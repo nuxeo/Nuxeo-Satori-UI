@@ -79,8 +79,17 @@ export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
     return `slot-contribution:${contribution.path}#${found?.index ?? 0}`;
   };
   const registry = slotRegistry(inventory);
-  const items = registry.inSlot(ITEMS);
-  const pagesKept = registry.inSlot(PAGES);
+  // A contribution to several slots takes part in each one's registration, but is itself a slot
+  // the catalogue does not know, reported as such: only one to the tab's own slot becomes a tab.
+  const inOwnSlot = (slot: string) => {
+    const { kept, dropped } = registry.inSlot(slot);
+    return {
+      kept: kept.filter((entry) => entry.contribution.slot === slot),
+      dropped: dropped.filter(([contribution]) => contribution.slot === slot),
+    };
+  };
+  const items = inOwnSlot(ITEMS);
+  const pagesKept = inOwnSlot(PAGES);
   const pages = pagesKept.kept.map((entry) => entry.contribution);
   const paired = new Set<SlotContribution>();
   const translated = new Set(inventory.translations.flatMap((t) => t.keys));

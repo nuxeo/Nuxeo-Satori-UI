@@ -85,7 +85,8 @@ export function slotRegistry(inventory: Pick<Inventory, 'slotContributions'>): S
         ? list.findIndex((other) => other.contribution.name === contribution.name)
         : -1;
       if (at === -1) list.push(node);
-      else if (node.priority < list[at].priority)
+      // As Web UI compares them: `>=` overrides, so anything else, a NaN included, is ignored.
+      else if (!(node.priority >= list[at].priority))
         fates.set(contribution, { kind: 'ignored', by: contribution.name });
       else if (contribution.hasTemplate) {
         fates.set(list[at].contribution, { kind: 'replaced', by: contribution.name });
@@ -157,6 +158,7 @@ function whyLeftOut(node: Node, fate: Fate | undefined): string {
     case 'merged':
       return `It holds no template, so it only changes the earlier contribution of the same name, ${fate.into}, which is decided with its disabled, order and priority`;
     case 'moved':
+      if (node.disabled) return 'It is disabled, so Web UI shows nothing of it: it is left out';
       return `A later contribution of its name, with no template, moves it to the slots ${fate.to}, which the converter does not follow: a person maps it`;
   }
   if (!contribution.hasTemplate)

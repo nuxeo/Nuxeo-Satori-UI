@@ -886,11 +886,13 @@ function bindingPattern(binding: string): RegExp {
     : new RegExp(`(?:document\\.properties|\\bparams)\\.${escaped}(?![\\w:-])`);
 }
 
-/** A Number attribute as Polymer deserialises it, `Number(value)`, or `null` when it is no number. */
+/**
+ * A Number attribute as Polymer deserialises it, `Number(value)`: `NaN` and `Infinity` included,
+ * as Web UI compares them; `null` when left out, which the slot's default, 0, stands for.
+ */
 function polymerNumber(text: string | null): number | null {
-  if (text === null || text.trim() === '') return null;
-  const value = Number(text);
-  return Number.isFinite(value) ? value : null;
+  if (text === null) return null;
+  return Number(text);
 }
 
 /**
