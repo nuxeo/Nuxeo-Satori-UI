@@ -3,4 +3,4 @@ Bundle-ManifestVersion: 1
 Bundle-Name: payers-claims-demo
 Bundle-SymbolicName: nuxeo.config.payers-claims-demo;singleton:=true
 Bundle-Version: 0.1.0
-Nuxeo-Component: OSGI-INF/payers-claims-demo-config.xml
+Nuxeo-Component: OSGI-INF/payers-claims-demo-model.xml,OSGI-INF/payers-claims-demo-config.xml

@@ -1,0 +1,124 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN MODEL, until the presales Payers model arrives.
+
+  Everything here is fictional: the document types, schemas and page providers the kit's layouts
+  and queue name, and nothing more. When the presales model arrives, this file and schemas/ are
+  replaced by theirs, and the layouts follow its property names.
+
+  Its own component, apart from the configuration one, so that it can be replaced whole. It
+  contributes nothing to org.nuxeo.agentic.ui.config, so it needs none of Satori's defaults.
+-->
+<component name="nuxeo.config.payers-claims-demo.model" version="1.0">
+  <!-- Registers after the platform's own types, as a Studio project's bundle does. -->
+  <require>org.nuxeo.runtime.started</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="member" prefix="member" src="schemas/member.xsd" />
+    <schema name="claim" prefix="claim" src="schemas/claim.xsd" />
+    <schema name="case" prefix="case" src="schemas/case.xsd" />
+    <schema name="provider" prefix="provider" src="schemas/provider.xsd" />
+    <schema name="claimdoc" prefix="claimdoc" src="schemas/claimdoc.xsd" />
+  </extension>
+
+  <!-- None of the four record types holds a file or is a folder, so each opens as a record page. -->
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <doctype name="Member" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="member" />
+    </doctype>
+    <doctype name="Claim" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="claim" />
+    </doctype>
+    <doctype name="Case" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="case" />
+    </doctype>
+    <doctype name="Provider" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="provider" />
+    </doctype>
+    <!-- A file: it keeps its preview, and is listed on its claim's page. -->
+    <doctype name="ClaimDocument" extends="File">
+      <schema name="claimdoc" />
+    </doctype>
+  </extension>
+
+  <!-- The platform's default lifecycle, so that the package's approve action (a transition of
+       that lifecycle) and the inState rule have a state to work with. The claim's own status is
+       claim:status. A Payers lifecycle is phase 2's. -->
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="Member">default</type>
+      <type name="Claim">default</type>
+      <type name="Case">default</type>
+      <type name="Provider">default</type>
+      <type name="ClaimDocument">default</type>
+    </types>
+  </extension>
+
+  <!-- Every page provider binds what it is given as a quoted, escaped literal, and leaves out
+       versions, proxies and trashed records. -->
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <!-- The Member page's claims card: the member's claims, given the member's ecm:uuid. -->
+    <coreQueryPageProvider name="member_claims">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND claim:member = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="claim:serviceDate" ascending="false" />
+      <pageSize>10</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The Member page's cases card: the member's cases, given the member's ecm:uuid. -->
+    <coreQueryPageProvider name="member_cases">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'Case' AND case:member = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dc:modified" ascending="false" />
+      <pageSize>10</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The Provider page's claims card: the claims billed by the provider, given its ecm:uuid. -->
+    <coreQueryPageProvider name="provider_claims">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND claim:provider = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="claim:serviceDate" ascending="false" />
+      <pageSize>10</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The Claim page's documents card: the claim's documents, given its claim:number. -->
+    <coreQueryPageProvider name="payers_claim_documents">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'ClaimDocument' AND claimdoc:claim = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dc:modified" ascending="false" />
+      <pageSize>10</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The unassigned-claims queue: claims no adjuster holds yet, still to be decided. -->
+    <coreQueryPageProvider name="payers_unassigned_claims">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND claim:adjuster IS NULL
+        AND claim:status IN ('submitted', 'inReview')
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="claim:received" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+</component>

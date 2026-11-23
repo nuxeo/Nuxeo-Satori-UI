@@ -1,0 +1,60 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "provider",
+      "labelKey": "payers.provider.card",
+      "fields": [
+        "provider:number",
+        "provider:npi",
+        "provider:specialty",
+        {
+          "field": "provider:network",
+          "widget": "status-badge",
+          "parameters": { "tones": { "inNetwork": "positive", "outOfNetwork": "warning" } }
+        }
+      ]
+    },
+    {
+      "id": "contact",
+      "labelKey": "payers.provider.contact",
+      "fields": [
+        { "field": "provider:phone", "widget": "phone" },
+        {
+          "field": "provider:address",
+          "widget": "address",
+          "parameters": {
+            "parts": { "street": "street", "city": "city", "postcode": "zip", "country": "country" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "claims",
+      "labelKey": "payers.provider.claims",
+      "span": 2,
+      "related": {
+        "pageProvider": "provider_claims",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "claim:number",
+          {
+            "field": "claim:member",
+            "widget": "document-link",
+            "parameters": { "types": ["Member"] }
+          },
+          {
+            "field": "claim:billedAmount",
+            "widget": "currency",
+            "parameters": { "currency": "USD" }
+          },
+          "claim:status",
+          { "field": "claim:serviceDate", "widget": "date" }
+        ],
+        "sort": [{ "field": "claim:serviceDate", "order": "desc" }]
+      }
+    }
+  ]
+}

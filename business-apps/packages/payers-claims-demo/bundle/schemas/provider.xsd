@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until the presales Payers model arrives: a fictional provider schema. The
+     provider's name is its dc:title. Replace it with theirs. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/provider"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/provider">
+
+  <!-- The provider ID, such as PRV-201. -->
+  <xs:element name="number" type="xs:string" />
+  <!-- A National Provider Identifier. The demo's are fictional: none starts with 1 or 2, as every
+       real one does. -->
+  <xs:element name="npi" type="xs:string" />
+  <xs:element name="specialty" type="xs:string" />
+
+  <xs:element name="network">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="inNetwork" />
+        <xs:enumeration value="outOfNetwork" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+
+  <xs:element name="phone" type="xs:string" />
+
+  <!-- The same subfields as the member's address, so one widget setting shows both. -->
+  <xs:complexType name="address">
+    <xs:sequence>
+      <xs:element name="street" type="xs:string" />
+      <xs:element name="city" type="xs:string" />
+      <xs:element name="zip" type="xs:string" />
+      <xs:element name="country" type="xs:string" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="address" type="nxs:address" />
+</xs:schema>
