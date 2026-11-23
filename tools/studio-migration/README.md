@@ -342,11 +342,18 @@ UI's own task page (`nuxeo-document-task.js`) and its stock layouts:
   widget, label and required flag, as an edit form's field. A step whose layout shows no field gets
   a form with no card, as Web UI shows none; with no file the app would show its own form of the
   step's variables.
-- **The document.** Web UI gives a task layout the task's first target by its id alone
-  (`targetDocumentIds[0]`). So a field bound to the document shows nothing there and is reported,
-  and so is a layout block, which shows the document's properties. A condition that tests that
-  document decides on nothing a rule would, and is reported too: its truth table would not hold.
-  A group test converts where the layout writes the user, as everywhere.
+- **Read-only.** A field Web UI binds one way, in `[[…]]` or text, only shows its value, and
+  Web UI writes back only a two-way `{{…}}` binding. So in a task form, a field bound one way is
+  written `readOnlyWhen: "core.true"`: the app neither edits nor sends what Web UI never changes.
+  Version 1 cannot make a field read-only, so in an edit or create layout such a field is written
+  editable and reported.
+- **The document.** Web UI's task page fetches the task with its first target whole
+  (`nuxeo-app.js`, `fetch-task: targetDocumentIds`, with every schema): on the reference server it
+  holds the document's type, state, facets and properties, but no permissions, since no enricher
+  asks for them. So a field or a layout block bound to the document becomes the record's property,
+  which the app's task form shows read-only; a type, facet or state test converts as anywhere; and
+  a permission test, which never passes there, is reported. A group test converts where the layout
+  writes the user, as everywhere.
 - **The buttons** are the step's own, from the workflow on the server: Web UI's task page and the
   app's task panel both draw `taskInfo.taskActions`, so a form has none to write.
 
@@ -374,9 +381,17 @@ that defines one `dom-module` with `Nuxeo.LayoutBehavior`.
 
 - **In each type it shows on.** A layout file is a type's own, so the tab goes into the view file
   of each type every `type` test of its conditions names. The record page's own cards become the
-  first tab, `view`, as Web UI's View tab, and the tabs follow in Web UI's order, the View tab at
-  its order of 10. A tab's cards are named after it, `<tab>.<card>`, because a card's id is unique
-  in its file.
+  first tab, `view`, and the tabs follow in Web UI's order, an order left out being 0, as Web UI's
+  slot has it. Web UI opens the document page on its View tab, at order 10, and the record page
+  opens on its first tab, so a tab Web UI puts before View comes after it, and its report entry
+  says so. A tab's cards are named after it, `<tab>.<card>`, because a card's id is unique in its
+  file.
+- **As Web UI's slots register them** (`nuxeo-slots.js`): a disabled contribution shows nothing,
+  and is reported; a later contribution of the same name, at the same or a higher priority,
+  replaces an earlier one when it holds a template and otherwise changes its `disabled`, `order`
+  and `priority`; one at a lower priority is ignored. A contribution with no template and no
+  earlier one of its name changes one of Web UI's own, such as hiding its Permissions tab, and is
+  reported for a person to decide.
 - **What it holds** is its page's layout block, as one card.
 - **Its rule** is the item's and the page's conditions together, through M2's conditions, as its
   `visibleWhen`.
@@ -386,7 +401,9 @@ that defines one `dom-module` with `Nuxeo.LayoutBehavior`.
 - **Reported, never guessed:** a tab whose conditions test no type, so it shows on every type; a
   condition that does not convert; an item with no page, or more than one; a page no item opens; a
   page that is not a layout block of the package; a tab named as one of Web UI's own; a tab on a
-  type the package writes no view file of.
+  type the package writes no view file of, or whose view layout shows only the document's
+  preview. A tab on several types, some of which have no view file, is written for the others and
+  reported, with where it went.
 
 **The theme.** M0's tokens and files, and its name in `app.json`'s `branding.theme`.
 
@@ -680,6 +697,19 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **A tab's listing.** A tab whose page is a page provider and a table, rather than a layout block,
   is reported: section 3's "a list over the page provider" would be a card of related records
   (layout-v2.md, section 7), and is not written yet.
+- **Web UI's slot registration for actions and the menu.** Tabs are read as `nuxeo-slots.js`
+  registers contributions: `disabled`, `priority` and a later contribution of the same name. M1's
+  actions and menu entries are not yet, so a disabled button still becomes an action, and a
+  replaced one is not reported.
+- **What the checks share with the converter.** The checks hold what each file shows to the
+  package, but they find which tab is which, which types a tab goes to, which file a task form is
+  and which card is a block's through the converter's own planning (`forms.ts`, `blocks.ts`,
+  `convert-tabs.ts`, `convert-tasks.ts`), and whether a field edits through the inventory's
+  reading of its bindings. A mistake there would pass both. Only check 1's second count reads the
+  package another way.
+- **A task variable only one variables schema holds.** Check 3 fails a variable neither its step's
+  nor its workflow's schema has only when the package holds both schemas. With one of them on the
+  server, the variable may be that one's, and the check lists it as resting on the platform.
 - **The home and the menu, as the app draws them.** The conversion writes `home.json` and
   `navigation.json`, which the validator checks, but the app draws neither of what M1 writes yet:
   - it does not read `navigation.json` (app-definition-v2.md, section 9);

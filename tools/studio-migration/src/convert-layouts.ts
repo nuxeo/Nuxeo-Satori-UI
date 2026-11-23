@@ -4,8 +4,8 @@
  * layout blocks they use, as cards, and the tabs of a type's page.
  *
  * - **`view`** is written in layout version 2, the record page's main area. When the package's
- *   tabs show on the type, its cards become the first tab, `view`, as Web UI's View tab is, and
- *   each tab follows in Web UI's order (`convert-tabs.ts`).
+ *   tabs show on the type, its cards become the first tab, `view`, on which the record page opens
+ *   as Web UI's opens on its View tab, and each tab follows in Web UI's order (`convert-tabs.ts`).
  * - **`metadata`, `edit` and `create`** are written in version 1. Version 1 cannot name a widget:
  *   the schema type picks it.
  * - **`import`** has no place: the app's import step reads no layout.

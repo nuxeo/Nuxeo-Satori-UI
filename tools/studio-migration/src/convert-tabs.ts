@@ -13,10 +13,13 @@
  * **What it becomes.** A tab whose page is a layout block of the package becomes a tab of the
  * record page, holding one card of the block's fields, with the rule of the item's and the page's
  * conditions as its `visibleWhen`. A layout file is a type's own, so the tab goes into the view
- * file of each type its conditions name, and the record page's own cards become its first tab,
- * `view`. What cannot be worked out from the package is reported, never guessed: a tab with no
+ * file of each type its conditions name. The record page's own cards become its first tab, `view`,
+ * on which it opens as Web UI's document page opens on View, and the tabs follow in Web UI's
+ * order. The contributions are read as Web UI's slots register them (`nuxeo-slots.js`): a disabled
+ * one shows nothing, and a later one of the same name replaces or changes an earlier one by its
+ * priority. What cannot be worked out from the package is reported, never guessed: a tab with no
  * page, a page that is not a block, a condition that does not convert, a tab its conditions show
- * on every type.
+ * on every type, a tab on a type with no view file.
  *
  * Worked out from the inventory alone, so that the converter and harness checks 2, 5 and 6 read
  * the same answer.

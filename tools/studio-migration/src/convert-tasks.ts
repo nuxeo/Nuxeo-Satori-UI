@@ -10,9 +10,11 @@
  *   `var_<step>`, and the workflows it imports (`routeModelImporter`). A name the package does not
  *   give is reported, never guessed.
  * - **Its fields.** A field bound to `task.variables.<name>` becomes `var:<name>`, with its widget,
- *   label and required flag, as an edit form's field is. One bound to the document shows nothing in
- *   Web UI, which gives a task layout the task's first target by its id alone, so it is reported, and
- *   so is a layout block, which shows the document's properties.
+ *   label and required flag, as an edit form's field is, and read-only when Web UI only shows it.
+ *   Web UI's task page fetches the task with its first target whole (`nuxeo-app.js`,
+ *   `fetch-task: targetDocumentIds`), so a field or a layout block bound to the document shows the
+ *   record's property, which the task form shows read-only; but without its permissions, so a
+ *   permission test there never passes, and is reported (`conditions.ts`).
  * - **Its buttons** are the step's own, from the workflow on the server: Web UI's task page and the
  *   app's task panel both draw `taskInfo.taskActions`, so a task form has none to write.
  */

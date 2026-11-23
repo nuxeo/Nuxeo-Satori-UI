@@ -127,7 +127,8 @@ not migrate, and the report says why and what to do instead.
 | Structured conditions: type, facet, permission, group, lifecycle state, path                                                                      | Rules from the registered list                                                                           | Automatic      |
 | Free JavaScript conditions that match a known pattern (`user.isMember(…)`, `user.hasPermission(doc, …)`, `document.facets.indexOf(…)`)            | The equivalent structured rule, proven with truth tables (section 6)                                     | Agent proposes |
 | Any other free JavaScript condition                                                                                                               | Nothing                                                                                                  | Reported       |
-| Tabs whose page is a layout block, or a listing                                                                                                   | Tabs of each type's record page; a listing, a list over the page provider                                | Automatic      |
+| Tabs whose page is a layout block                                                                                                                 | Tabs of each type's record page                                                                          | Automatic      |
+| Tabs whose page is a listing                                                                                                                      | A card of related records over the page provider; not written yet (section 10)                           | Reported       |
 | Dashboard (`nuxeo-home`) cards: a page provider, tasks, recently viewed                                                                           | Home cards                                                                                               | Automatic      |
 | Theme: `--nuxeo-*` custom properties and a logo                                                                                                   | Theme tokens and a logo (Layer 0), through a token map                                                   | Automatic      |
 | Theme properties with no token                                                                                                                    | Nothing: no custom CSS (parity decision 5)                                                               | Reported       |
@@ -285,15 +286,16 @@ all of them on every change:
   another operation, point a home card at another queue, or drop a menu entry.
 - **For check 10:** name a widget the platform does not have.
 
-**In M2**, eight more, for task forms, tabs and layout blocks: drop a task form's field (2), name a
+**In M2**, nine more, for task forms, tabs and layout blocks: drop a task form's field (2), name a
 variable its step and workflow lack (3), put a task's variable in a document's layout (10), drop a
-block's card or a tab (2), drop a tab's rule (5), change a tab's label (6), and drop a block's use
-from the report (1).
+block's card or a tab (2), make a field Web UI only shows editable in a task form (2), drop a
+tab's rule (5), change a tab's label (6), and drop a block's use from the report (1).
 
 Each fails its check on the made-up test package. On the sample's conversion, each that finds
-something to break fails its check too. The five that do not, `widen-to-everyone`,
-`widen-column-to-everyone`, `invert-rule`, `drop-rule` and `bind-other-operation`, find no
-condition and no operation button to break there, and say so.
+something to break fails its check too. The thirteen that do not say so: `widen-to-everyone`,
+`widen-column-to-everyone`, `invert-rule`, `drop-rule` and `bind-other-operation` find no
+condition and no operation button to break there, and eight of M2's nine no task layout, tab or
+layout block.
 
 **In M0**, the controls for the checks that run are mutations in
 [`tools/studio-migration/src/mutations.ts`](../../tools/studio-migration/src/mutations.ts):
@@ -378,13 +380,15 @@ These sit inside the [development plan](development-plan.md):
   `var:` fields, with the names' case from the package's variables schemas. A layout block becomes
   a card wherever a layout uses it. A tab becomes a tab of the view file of each type its
   conditions name, holding its page's block, with its conditions as its rule. Checks 1, 2, 3, 5, 6
-  and 10 hold them, with eight more negative controls. They are read from Web UI's own sources
+  and 10 hold them, with nine more negative controls. They are read from Web UI's own sources
   (`nuxeo-document-task.js`, `nuxeo-browser.js`, the stock task layouts and tabs) and tested on the
   synthetic corpus: the sample holds none of them.
 - **Reported, against section 3's table:** what has no version 2 equivalent, or cannot be told from
-  the package. A task layout's field bound to the document, which Web UI gives as an id alone; a
-  task layout whose names' case the package does not give; a tab on every type, or whose page is
-  not a block; a block inside a block, or given no document.
+  the package. A permission test in a task layout, whose document Web UI's task page fetches
+  without its permissions; a task layout whose names' case the package does not give; a tab on
+  every type, on a type with no view file, or whose page is not a block; a tab whose page is a
+  listing; a block inside a block, or given no document. A field Web UI only shows becomes a
+  read-only field of a task form, and is reported in a version 1 form, which cannot say so.
 - **Built: conditions.** A `nuxeo-filter`'s structured tests become the registered rules that
   decide exactly as they do, read from both sides' code. A known JavaScript pattern is proposed:
   one call of a filter function in a `dom-if`, which is all a Polymer binding holds, or `this.`
