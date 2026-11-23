@@ -6,6 +6,10 @@
  * sample described in docs/business-apps/studio-migration.md, section 2, and adds what a parser
  * must not be fooled by: a slot contribution and a dashboard card inside comments, a card shown
  * twice, a Polymer mixin in the theme, and a translation in a second language.
+ *
+ * For M1's conversion it also holds what the sample lacks (section 7's synthetic corpus): a field
+ * and a button that show only under a condition, a date in a view layout, a user picker in an edit
+ * form, an operation button with parameters, and a dashboard list with a query parameter.
  */
 import { writeZip } from './zip-writer';
 
@@ -33,7 +37,15 @@ export function syntheticBundleFiles(): Record<string, string> {
     <coreQueryPageProvider name="claims"><pattern>SELECT * FROM Claim</pattern></coreQueryPageProvider>
   </extension>
 </component>`,
-    'data/schemas/claim.xsd': '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"/>',
+    'data/schemas/claim.xsd': `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/Acme-Claims/claim">
+  <xs:simpleType name="stringList"><xs:list itemType="xs:string"/></xs:simpleType>
+  <xs:element name="number" type="xs:string"/>
+  <xs:element name="amount" type="xs:double"/>
+  <xs:element name="incidentDate" type="xs:date"/>
+  <xs:element name="adjuster" type="xs:string"/>
+  <xs:element name="reserve" type="xs:double"/>
+  <xs:element name="tags" type="nxs:stringList"/>
+</xs:schema>`,
     'data/schemas/party.xsd': '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"/>',
     'data/i18n/messages.json': JSON.stringify(
       {
@@ -59,6 +71,7 @@ export function syntheticBundleFiles(): Record<string, string> {
     <style include="nuxeo-styles"></style>
     <div role="widget"><label>Claim number</label><div name="number">[[document.properties.cl:number]]</div></div>
     <div role="widget"><label>Amount</label><div name="amount">[[document.properties.cl:amount]]</div></div>
+    <nuxeo-date role="widget" datetime="[[document.properties.cl:incidentDate]]" label="Incident date"></nuxeo-date>
   </template>
   <script>
     Polymer({ is: 'nuxeo-claim-view-layout', behaviors: [Nuxeo.LayoutBehavior],
@@ -73,6 +86,21 @@ export function syntheticBundleFiles(): Record<string, string> {
   </template>
   <script>
     Polymer({ is: 'nuxeo-claim-edit-layout', behaviors: [Nuxeo.LayoutBehavior],
+      properties: { /** @doctype Claim */ document: { type: Object } } });
+  </script>
+</dom-module>`,
+    [`${UI}/document/claim/nuxeo-claim-metadata-layout.html`]: `<dom-module id="nuxeo-claim-metadata-layout">
+  <template>
+    <div role="widget"><label>Title</label><div name="title">[[document.properties.dc:title]]</div></div>
+    <div role="widget"><label>Claim number</label><div name="number">[[document.properties.cl:number]]</div></div>
+    <nuxeo-filter document="[[document]]" group="adjusters">
+      <template>
+        <div role="widget"><label>Reserve</label><div name="reserve">[[document.properties.cl:reserve]]</div></div>
+      </template>
+    </nuxeo-filter>
+  </template>
+  <script>
+    Polymer({ is: 'nuxeo-claim-metadata-layout', behaviors: [Nuxeo.LayoutBehavior],
       properties: { /** @doctype Claim */ document: { type: Object } } });
   </script>
 </dom-module>`,
@@ -152,7 +180,14 @@ STUDIO CODE SPACE
 -->
 <link rel="import" href="nuxeo-Acme-Claims-custom-bundle.html">
 <nuxeo-slot-content name="approveClaim" slot="DOCUMENT_ACTIONS" order="10">
-  <template><nuxeo-operation-button icon="icons:check" label="Approve" operation="Claim.Approve" input="[[document]]"></nuxeo-operation-button></template>
+  <template><nuxeo-operation-button icon="icons:check" label="Approve" operation="Claim.Approve" input="[[document]]" params='{"comment": "Approved in Web UI"}'></nuxeo-operation-button></template>
+</nuxeo-slot-content>
+<nuxeo-slot-content name="closeClaim" slot="DOCUMENT_ACTIONS" order="20">
+  <template>
+    <nuxeo-filter document="[[document]]" permission="WriteProperties">
+      <template><nuxeo-operation-button icon="icons:close" label="Close" operation="Claim.Close" input="[[document]]"></nuxeo-operation-button></template>
+    </nuxeo-filter>
+  </template>
 </nuxeo-slot-content>
 <nuxeo-slot-content name="claimsSearch" slot="DRAWER_ITEMS" order="1">
   <template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template>
@@ -173,12 +208,18 @@ Use this file to put any custom code you want to deploy on top of Studio's autom
   <template>
     <div class="dashboard">
       <nuxeo-card heading="Open claims">
-        <nuxeo-page-provider id="open" provider="claims"></nuxeo-page-provider>
-        <nuxeo-data-table nx-provider="open"><nuxeo-data-table-column name="Title"></nuxeo-data-table-column></nuxeo-data-table>
+        <nuxeo-page-provider id="open" provider="claims" page-size="20" params='{"queryParams": "open"}'></nuxeo-page-provider>
+        <nuxeo-data-table nx-provider="open">
+          <nuxeo-data-table-column name="Title"><template><a href$="[[urlFor(item)]]">[[item.title]]</a></template></nuxeo-data-table-column>
+          <nuxeo-data-table-column name="Incident"><template><nuxeo-date datetime="[[item.properties.cl:incidentDate]]" format="relative"></nuxeo-date></template></nuxeo-data-table-column>
+        </nuxeo-data-table>
       </nuxeo-card>
       <nuxeo-card heading="Open claims">
-        <nuxeo-page-provider id="open" provider="claims"></nuxeo-page-provider>
-        <nuxeo-data-table nx-provider="open"><nuxeo-data-table-column name="Title"></nuxeo-data-table-column></nuxeo-data-table>
+        <nuxeo-page-provider id="open" provider="claims" page-size="20" params='{"queryParams": "open"}'></nuxeo-page-provider>
+        <nuxeo-data-table nx-provider="open">
+          <nuxeo-data-table-column name="Title"><template><a href$="[[urlFor(item)]]">[[item.title]]</a></template></nuxeo-data-table-column>
+          <nuxeo-data-table-column name="Incident"><template><nuxeo-date datetime="[[item.properties.cl:incidentDate]]" format="relative"></nuxeo-date></template></nuxeo-data-table-column>
+        </nuxeo-data-table>
       </nuxeo-card>
       <nuxeo-card heading="My tasks"><nuxeo-tasks-list></nuxeo-tasks-list></nuxeo-card>
       <!-- <nuxeo-card heading="Retired"><nuxeo-tasks-list></nuxeo-tasks-list></nuxeo-card> -->

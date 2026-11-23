@@ -27,6 +27,23 @@ function fieldTags(text: string): number {
   return [...text.matchAll(START_TAG)].filter(([start]) => ROLE_WIDGET.test(start)).length;
 }
 const SCRIPT = tag('script');
+const IS_DOM_IF = /\s[Ii][Ss]\s*=\s*(?:"\s*dom-if\s*"|'\s*dom-if\s*'|dom-if(?=[\s/>]))/;
+/** A `nuxeo-filter`, a `dom-if`, or a template written `is="dom-if"`. */
+function conditionTags(text: string): number {
+  return (
+    count(tag('nuxeo-filter'))(text) +
+    count(tag('dom-if'))(text) +
+    [...text.matchAll(START_TAG)].filter(
+      ([start]) => /^<template\b/i.test(start) && IS_DOM_IF.test(start),
+    ).length
+  );
+}
+/** The result views: a table, a grid of thumbnails, a justified grid. */
+const VIEWS = (text: string): number =>
+  ['nuxeo-data-table', 'nuxeo-data-grid', 'nuxeo-justified-grid'].reduce(
+    (total, name) => total + count(tag(name))(text),
+    0,
+  );
 const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
 const CUSTOM_PROPERTY = /(?:^|[{;\s])--[\w-]+\s*:/g;
 const JSON_KEY = /"(?:[^"\\]|\\.)*"\s*:/g;
@@ -34,19 +51,34 @@ const JSON_KEY = /"(?:[^"\\]|\\.)*"\s*:/g;
 const PATTERNS: Partial<
   Record<FileKind, Partial<Record<ConstructKind, (text: string) => number>>>
 > = {
-  'document-layout': { 'layout-field': fieldTags, script: count(SCRIPT) },
-  'search-form': { 'search-field': fieldTags, script: count(SCRIPT) },
+  'document-layout': {
+    'layout-field': fieldTags,
+    condition: conditionTags,
+    script: count(SCRIPT),
+  },
+  'search-form': { 'search-field': fieldTags, condition: conditionTags, script: count(SCRIPT) },
   'search-results': {
     'search-field': fieldTags,
     'search-column': count(tag('nuxeo-data-table-column')),
+    'search-view': VIEWS,
+    condition: conditionTags,
     script: count(SCRIPT),
   },
   'slot-contributions': {
     'slot-contribution': count(tag('nuxeo-slot-content')),
+    condition: conditionTags,
     script: count(SCRIPT),
   },
-  dashboard: { 'dashboard-card': count(tag('nuxeo-card')), script: count(SCRIPT) },
-  theme: { 'theme-property': countThemeProperties, script: count(SCRIPT) },
+  dashboard: {
+    'dashboard-card': count(tag('nuxeo-card')),
+    condition: conditionTags,
+    script: count(SCRIPT),
+  },
+  theme: {
+    'theme-property': countThemeProperties,
+    condition: conditionTags,
+    script: count(SCRIPT),
+  },
 };
 
 /** The same keys as `countsOf` in `constructs.ts`: `<kind> <file>`, for counts above zero. */

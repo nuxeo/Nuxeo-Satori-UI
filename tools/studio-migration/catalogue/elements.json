@@ -1,5 +1,5 @@
 {
-  "$comment": "Web UI's elements, as Studio Designer writes them into a package, and what each becomes in the new app (docs/business-apps/studio-migration.md, section 3). `role`: field (shows or edits a property), structure (lays out a page, list or card), data (loads what something else shows), action, navigation, theme. `how` as in slots.json. Widget names are not given: layout version 2 defines the widget registry, in phase 1. An element a package uses that is not listed here is reported as not in the catalogue, which is a decision someone has to take, not a pass.",
+  "$comment": "Web UI's elements, as Studio Designer writes them into a package, and what each becomes in the new app (docs/business-apps/studio-migration.md, section 3). `role`: field (shows or edits a property), structure (lays out a page, list or card), data (loads what something else shows), action, navigation, theme, condition (shows what it holds only while it passes). `how` as in slots.json. `widget`, for a field element: the layout version 2 widget it becomes, from the registry of libs/shared/app-definition, or null when the property's schema type picks it, as for a plain text or number field. `parameters` maps a widget parameter to the element attribute that gives it. An element a package uses that is not listed here is reported as not in the catalogue, which is a decision someone has to take, not a pass.",
   "source": {
     "read": "2026-11-22",
     "how": "The elements of the sample package, and those the migration document's widget table names. Grows with every package that arrives."
@@ -8,32 +8,62 @@
     "nuxeo-input": {
       "role": "field",
       "how": "automatic",
-      "becomes": "A text field, or a number field for a numeric property"
+      "becomes": "A text field, or a number field for a numeric property",
+      "widget": null
     },
-    "nuxeo-textarea": { "role": "field", "how": "automatic", "becomes": "A long text field" },
-    "nuxeo-date-picker": { "role": "field", "how": "automatic", "becomes": "A date field" },
+    "nuxeo-textarea": {
+      "role": "field",
+      "how": "automatic",
+      "becomes": "A long text field",
+      "widget": "long-text"
+    },
+    "nuxeo-date-picker": {
+      "role": "field",
+      "how": "automatic",
+      "becomes": "A date field",
+      "widget": "date"
+    },
     "nuxeo-date": {
       "role": "field",
       "how": "automatic",
-      "becomes": "A date, shown relative to now when its format is relative"
+      "becomes": "A date, shown relative to now when its format is relative",
+      "widget": "date",
+      "note": "relative-date when its format is \"relative\""
     },
     "nuxeo-user-suggestion": {
       "role": "field",
       "how": "automatic",
-      "becomes": "A user or group field, single or multiple"
+      "becomes": "A user or group field, single or multiple",
+      "widget": "user",
+      "note": "group when its search-type is GROUP_TYPE"
     },
-    "nuxeo-user-tag": { "role": "field", "how": "automatic", "becomes": "A user, shown by name" },
+    "nuxeo-user-tag": {
+      "role": "field",
+      "how": "automatic",
+      "becomes": "A user, shown by name",
+      "widget": "user"
+    },
     "nuxeo-directory-suggestion": {
       "role": "field",
       "how": "automatic",
-      "becomes": "A vocabulary field, over the vocabulary its directory-name names"
+      "becomes": "A vocabulary field, over the vocabulary its directory-name names",
+      "widget": "vocabulary",
+      "parameters": {
+        "directory": "directory-name"
+      }
     },
     "nuxeo-document-suggestion": {
       "role": "field",
       "how": "automatic",
-      "becomes": "A link to another document"
+      "becomes": "A link to another document",
+      "widget": "document-link"
     },
-    "nuxeo-tag": { "role": "field", "how": "automatic", "becomes": "Chips" },
+    "nuxeo-tag": {
+      "role": "field",
+      "how": "automatic",
+      "becomes": "Chips",
+      "widget": "chips"
+    },
     "nuxeo-document-viewer": {
       "role": "structure",
       "how": "automatic",
@@ -84,7 +114,11 @@
       "how": "automatic",
       "becomes": "A search page: a form and its results, over the same page provider"
     },
-    "nuxeo-card": { "role": "structure", "how": "automatic", "becomes": "A home card" },
+    "nuxeo-card": {
+      "role": "structure",
+      "how": "automatic",
+      "becomes": "A home card"
+    },
     "nuxeo-page": {
       "role": "structure",
       "how": "automatic",
@@ -131,6 +165,18 @@
       "role": "theme",
       "how": "automatic",
       "becomes": "A theme in the bootstrap configuration, through the token map"
+    },
+    "nuxeo-filter": {
+      "role": "condition",
+      "how": "automatic",
+      "becomes": "A rule from the registered list, for a type, facet, permission, group, lifecycle state or path",
+      "note": "Converted in M2, with truth tables (check 5). An expression is free JavaScript: a known pattern is for an agent to propose, anything else is reported."
+    },
+    "dom-if": {
+      "role": "condition",
+      "how": "agent-proposes",
+      "becomes": "A rule, when its expression matches a known pattern",
+      "note": "Its `if` is free JavaScript. Converted in M2: a known pattern is for an agent to propose, with truth tables (check 5); anything else is reported."
     }
   }
 }

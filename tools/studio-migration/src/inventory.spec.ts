@@ -55,26 +55,97 @@ describe('inventory', () => {
     expect(synthetic.layouts.map((l) => [l.element, l.docType, l.mode])).toEqual([
       ['nuxeo-claim-view-layout', 'Claim', 'view'],
       ['nuxeo-claim-edit-layout', 'Claim', 'edit'],
+      ['nuxeo-claim-metadata-layout', 'Claim', 'metadata'],
     ]);
-    expect(synthetic.layouts[0].fields).toEqual([
-      { element: 'div', binding: 'cl:number', label: 'Claim number', required: false },
-      { element: 'div', binding: 'cl:amount', label: 'Amount', required: false },
+    const fields = (index: number) =>
+      synthetic.layouts[index].fields.map(({ element, binding, label, required, condition }) => ({
+        element,
+        binding,
+        label,
+        required,
+        condition,
+      }));
+    expect(fields(0)).toEqual([
+      {
+        element: 'div',
+        binding: 'cl:number',
+        label: 'Claim number',
+        required: false,
+        condition: null,
+      },
+      { element: 'div', binding: 'cl:amount', label: 'Amount', required: false, condition: null },
+      {
+        element: 'nuxeo-date',
+        binding: 'cl:incidentDate',
+        label: 'Incident date',
+        required: false,
+        condition: null,
+      },
     ]);
-    expect(synthetic.layouts[1].fields).toEqual([
-      { element: 'nuxeo-input', binding: 'cl:number', label: 'Claim number', required: true },
+    expect(fields(1)).toEqual([
+      {
+        element: 'nuxeo-input',
+        binding: 'cl:number',
+        label: 'Claim number',
+        required: true,
+        condition: null,
+      },
       {
         element: 'nuxeo-date-picker',
         binding: 'cl:incidentDate',
         label: 'Incident date',
         required: false,
+        condition: null,
       },
       {
         element: 'nuxeo-user-suggestion',
         binding: 'cl:adjuster',
         label: 'Adjuster',
         required: false,
+        condition: null,
       },
     ]);
+    expect(synthetic.layouts[1].fields[0].attributes).toMatchObject({ type: 'text', required: '' });
+  });
+
+  it('records the condition a field sits in, and every condition of the Web UI files', () => {
+    expect(synthetic.layouts[2].fields.map((field) => [field.binding, field.condition])).toEqual([
+      ['dc:title', null],
+      ['cl:number', null],
+      ['cl:reserve', 0],
+    ]);
+    expect(synthetic.conditions.map((c) => [c.path, c.index, c.element, c.attributes])).toEqual([
+      [
+        `${UI}/document/claim/nuxeo-claim-metadata-layout.html`,
+        0,
+        'nuxeo-filter',
+        { document: '[[document]]', group: 'adjusters' },
+      ],
+      [
+        `${UI}/nuxeo-Acme-Claims-bundle.html`,
+        0,
+        'nuxeo-filter',
+        { document: '[[document]]', permission: 'WriteProperties' },
+      ],
+    ]);
+    const domIf = of({
+      bundle: {
+        [`${UI}/document/claim/nuxeo-claim-view-layout.html`]: syntheticBundleFiles()
+          [`${UI}/document/claim/nuxeo-claim-view-layout.html`].replace(
+            '<div role="widget"><label>Amount</label>',
+            '<template is="dom-if" if="[[document.properties.cl:amount]]"><div role="widget"><label>Amount</label>',
+          )
+          .replace(
+            '[[document.properties.cl:amount]]</div></div>',
+            '[[document.properties.cl:amount]]</div></div></template>',
+          ),
+      },
+    });
+    expect(domIf.layouts[0].fields.map((field) => field.condition)).toEqual([null, 0, null]);
+    expect(domIf.conditions[0]).toMatchObject({
+      element: 'template',
+      attributes: { is: 'dom-if' },
+    });
   });
 
   it('reads the search screen, giving the results their form provider', () => {
@@ -87,18 +158,46 @@ describe('inventory', () => {
     expect(synthetic.searches[0].fields.map((f) => f.binding)).toEqual(['cl_number', 'cl_status']);
   });
 
+  it("reads the results' columns and the sorts their script offers, without running it", () => {
+    const [, results] = synthetic.searches;
+    expect(results.columnDetails.map((c) => [c.name, c.field, c.sortBy])).toEqual([
+      ['Title', 'dc:title', 'dc:title'],
+      ['Amount', 'cl:amount', null],
+    ]);
+    expect(results.sortOptions).toEqual([
+      { field: 'dc:title', order: 'asc', selected: false },
+      { field: 'cl:amount', order: 'desc', selected: true },
+    ]);
+    expect(synthetic.searches[0].sortOptions).toEqual([]);
+  });
+
   it('reads the slot contributions, and not the one inside a comment', () => {
     expect(synthetic.slotContributions.map((s) => [s.slot, s.name, s.order, s.elements])).toEqual([
       ['DOCUMENT_ACTIONS', 'approveClaim', 10, ['nuxeo-operation-button']],
+      ['DOCUMENT_ACTIONS', 'closeClaim', 20, ['nuxeo-filter', 'nuxeo-operation-button']],
       ['DRAWER_ITEMS', 'claimsSearch', 1, ['nuxeo-menu-icon']],
       ['DRAWER_PAGES', 'claimsSearch', null, ['nuxeo-search-form']],
       ['THEMES', 'acme', null, ['nuxeo-theme']],
     ]);
     expect(synthetic.slotContributions.map((s) => s.operations)).toEqual([
       ['Claim.Approve'],
+      ['Claim.Close'],
       [],
       [],
       [],
+    ]);
+    expect(synthetic.slotContributions.map((s) => s.conditions)).toEqual([[], [0], [], [], []]);
+    expect(synthetic.slotContributions[0].parts).toEqual([
+      {
+        element: 'nuxeo-operation-button',
+        attributes: {
+          icon: 'icons:check',
+          label: 'Approve',
+          operation: 'Claim.Approve',
+          input: '[[document]]',
+          params: '{"comment": "Approved in Web UI"}',
+        },
+      },
     ]);
   });
 
@@ -116,18 +215,35 @@ describe('inventory', () => {
   });
 
   it('reads the dashboard cards, marks the repeat, and skips the one inside a comment', () => {
-    expect(synthetic.dashboard?.cards).toEqual([
-      {
-        heading: 'Open claims',
-        elements: ['nuxeo-page-provider', 'nuxeo-data-table', 'nuxeo-data-table-column'],
-        repeatOf: null,
-      },
-      {
-        heading: 'Open claims',
-        elements: ['nuxeo-page-provider', 'nuxeo-data-table', 'nuxeo-data-table-column'],
-        repeatOf: 0,
-      },
+    const elements = [
+      'nuxeo-page-provider',
+      'nuxeo-data-table',
+      'nuxeo-data-table-column',
+      'nuxeo-data-table-column',
+      'nuxeo-date',
+    ];
+    expect(
+      synthetic.dashboard?.cards.map(({ heading, elements, repeatOf }) => ({
+        heading,
+        elements,
+        repeatOf,
+      })),
+    ).toEqual([
+      { heading: 'Open claims', elements, repeatOf: null },
+      { heading: 'Open claims', elements, repeatOf: 0 },
       { heading: 'My tasks', elements: ['nuxeo-tasks-list'], repeatOf: null },
+    ]);
+    expect(synthetic.dashboard?.cards[0]).toMatchObject({
+      provider: 'claims',
+      pageSize: 20,
+      params: '{"queryParams": "open"}',
+      operation: null,
+      conditional: false,
+    });
+    // A column with no `field` shows the property its template binds, or the title.
+    expect(synthetic.dashboard?.cards[0].columns.map((c) => [c.field, c.dateFormat])).toEqual([
+      ['dc:title', null],
+      ['cl:incidentDate', 'relative'],
     ]);
   });
 
@@ -154,16 +270,18 @@ describe('inventory', () => {
 
   it('counts the custom elements, leaving out the two wrappers and anything commented out', () => {
     expect(Object.fromEntries(synthetic.elements)).toEqual({
+      'nuxeo-data-table-column': 6,
+      'nuxeo-slot-content': 5,
       'nuxeo-data-table': 3,
-      'nuxeo-data-table-column': 4,
-      'nuxeo-slot-content': 4,
       'nuxeo-card': 3,
+      'nuxeo-date': 3,
+      'nuxeo-filter': 2,
       'nuxeo-input': 2,
+      'nuxeo-operation-button': 2,
       'nuxeo-page-provider': 2,
       'nuxeo-date-picker': 1,
       'nuxeo-directory-suggestion': 1,
       'nuxeo-menu-icon': 1,
-      'nuxeo-operation-button': 1,
       'nuxeo-results': 1,
       'nuxeo-search-form': 1,
       'nuxeo-tasks-list': 1,
@@ -186,7 +304,7 @@ describe('inventory', () => {
       'data/i18n/messages-de.json',
     ]);
     expect(result.translations.map((t) => t.locale)).toEqual(['en', 'fr']);
-    expect(result.layouts).toHaveLength(2);
+    expect(result.layouts).toHaveLength(3);
   });
 
   it('records every script, and the synthetic ones have the shapes of the templates Studio generates', () => {
@@ -194,10 +312,12 @@ describe('inventory', () => {
     expect(synthetic.scripts.map((s) => [s.path.split('/').pop(), s.index])).toEqual([
       ['nuxeo-claim-view-layout.html', 0],
       ['nuxeo-claim-edit-layout.html', 0],
+      ['nuxeo-claim-metadata-layout.html', 0],
       ['nuxeo-claims-search-form.html', 0],
       ['nuxeo-claims-search-results.html', 0],
     ]);
     expect(synthetic.scripts.map((s) => scriptEntry(catalogue, s.shape)?.name)).toEqual([
+      "Studio's document layout",
       "Studio's document layout",
       "Studio's document layout",
       "Studio's search form",
