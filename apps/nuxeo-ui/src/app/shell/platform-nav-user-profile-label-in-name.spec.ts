@@ -354,6 +354,23 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
       .toBe('test.user');
   });
 
+  /*
+   * Upper-casing can lengthen a string: the ligature "ﬁ" becomes "FI", so the first two
+   * characters "ﬁl" become "FIL", of which the avatar draws "FI". Initials taken before
+   * upper-casing would name the control "FIL", which does not contain the "FI" on screen.
+   */
+  it('names the control with what the avatar draws when upper-casing lengthens the name', () => {
+    username.set('ﬁle.clerk');
+    const button = profileButton(renderRail('collapsed').nativeElement as HTMLElement);
+    const shown = paintedText(button);
+
+    expect(shown).withContext('the avatar draws the first two upper-cased characters').toBe('FI');
+    const name = accessibleName(button);
+    expect(containsWords(name, shown))
+      .withContext(`accessible name "${name}" must contain the shown text "${shown}" as words`)
+      .toBeTrue();
+  });
+
   it('opens the settings drawer when the profile control is activated', () => {
     const fixture = TestBed.createComponent(AppShellComponent);
     const component = fixture.componentInstance;
