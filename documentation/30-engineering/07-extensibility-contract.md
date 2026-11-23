@@ -10,14 +10,12 @@ audience: engineering
 # The Extensibility Contract — four layers
 
 > **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
-> Before that, last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
+> Last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
 > Only "The six guardrail checks" was verified at that commit, against
 > `libs/platform/guardrails/check-extension-library.mjs`. The entry-point count and the
 > `@nuxeo/satori-platform/components-satori` row in §6 were verified on 2026-10-11 at `ad60a57`.
 > The `@nuxeo/satori-platform/components` row in §6 was re-verified at
-> `effd434` (`feature/nxsat-308-satori-components`), and "Our rule context is deliberately not
-> upstream's" in §5 at `5abcd50` (`feature/nxsat-308-replace-adf-extensions`); the tarball figure
+> `effd434` (`feature/nxsat-308-satori-components`), and the tarball figure
 > in §6 carries its own date. The rest of the page as of 2026-08-24 · `77265f9`.
 > Customer-facing companion: [`docs/extension-reference.md`](../../docs/extension-reference.md),
 > which is drift-gated by `npm run beta:reference`.
@@ -41,7 +39,7 @@ Layers 0 and 1 are expected to absorb most customer requests and need no build o
 the customer's configuration package is zipped by a dependency-free script and installed.
 
 > **This expectation is a design assumption, not a measured fact.** It has not been tested
-> against real customer requests. [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md)
+> against real customer requests. [`docs/beta-plan.md`](../../docs/beta-plan.md)
 > flags it as needing validation against The Church and one other account. **Not verified in
 > repository.**
 
@@ -526,15 +524,10 @@ Both answer `false` with no string parameter, and both read the focused document
 document-detail tabs and toolbar actions but not browse columns. Reference and examples:
 `docs/extension-reference.md` §4.
 
-### Our rule context is deliberately not upstream's
+### Our rule context is typed on Nuxeo
 
-`RuleContext` from `@alfresco/adf-extensions` is typed on Alfresco Content Services domain
-objects — `NodeEntry`, `SiteEntry`, `RepositoryInfo` — describing a repository we do not
-talk to. Reusing it would put ACS types in the signature every customer rule is written
-against. The _shape_ is upstream's; the types are ours. Upstream's domain-neutral helpers
-were used directly until NXSAT-308, which replaced the three the engine needed —
-`mergeObjects`, `filterEnabled` and `sortByOrder` — with our own, pinned case by case to
-upstream's output.
+`RuleContext` is typed on Nuxeo documents, not on the domain objects of a repository we do not
+talk to. The engine's helpers — `mergeObjects`, `filterEnabled` and `sortByOrder` — are our own.
 
 ---
 
@@ -548,7 +541,7 @@ One publishable library, six secondary entry points; `npm pack --dry-run` on the
 | `@nuxeo/satori-platform`                   | Root — `PLATFORM_ENTRY_POINTS`, shared types                                                                                                     |
 | `@nuxeo/satori-platform/extensions`        | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent`                                                                            |
 | `@nuxeo/satori-platform/app-config`        | Layer 0 loader and tokens                                                                                                                        |
-| `@nuxeo/satori-platform/components`        | `nxs-` components — Material-backed, no ADF or Satori import                                                                                     |
+| `@nuxeo/satori-platform/components`        | `nxs-` components — Material-backed, no Satori import                                                                                            |
 | `@nuxeo/satori-platform/components-satori` | The same `nxs-` primitive IDs on Satori, over the Material ones; the only entry point that imports the optional `@hylandsoftware/satori-ui` peer |
 | `@nuxeo/satori-platform/nuxeo-client`      | Services and models                                                                                                                              |
 | `@nuxeo/satori-platform/ui`                | Shared presentational components                                                                                                                 |

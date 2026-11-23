@@ -11,10 +11,8 @@ audience: engineering
 
 > **Last reviewed:** 2026-10-16 · **Repository:** `250ec9a` (`integration/nxsat-308`)
 > E2E section re-verified for NXSAT-646; other sections retain their earlier review scope.
-> On 2026-10-15 at `c053e63`, only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
 > Before that, last reviewed 2026-10-08 at `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`):
-> Only the repository links were re-verified at that commit: made relative rather than pinned to
-> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
+> Only the repository links were re-verified at that commit: made relative, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
 > Standards: [`AGENTS/05-test-standards.md`](../../AGENTS/05-test-standards.md)
 
 ---
@@ -86,7 +84,6 @@ visible.
 | `shared-ke-client`    |     70.9% |     1 |
 | `ui`                  |     68.2% |     4 |
 | `knowledge-discovery` |     64.8% |     3 |
-| `adf-hx-bridge`       |     65.6% |    12 |
 | `administration`      |     62.1% |     3 |
 | `browse`              |     56.7% |     4 |
 | `document-detail`     | **29.8%** |     4 |
@@ -94,9 +91,6 @@ visible.
 | `tasks`               |    _100%_ | **0** |
 | `assets`              |    _100%_ | **0** |
 | `core`                |    _100%_ | **0** |
-
-_Changed by NXSAT-635 (2026-10):_ `adf-hx-bridge` was removed on 2026-10-14; its row is the
-measurement above, kept as it was.
 
 > **Three of those numbers are artefacts.** `tasks`, `assets` and `core` have **zero spec files**.
 > Their coverage reports contain 0 total statements, so the summariser computes 0/0 as 100%. So
@@ -320,25 +314,21 @@ away. If `@axe-core/playwright` is missing it is a **failed check**, never a sil
 
 Current state — **AA met on the fifteen cases scanned**, `KNOWN_VIOLATIONS` **empty** (2026-08-24):
 
-| Rule                          | Nodes | Now | Owner                                        |
-| ----------------------------- | ----- | --- | -------------------------------------------- |
-| `label`                       | 42    | 0   | ours                                         |
-| `nested-interactive`          | 40    | 0   | ours                                         |
-| `button-name`                 | 21    | 0   | ours                                         |
-| `role-img-alt`                | 12    | 0   | ours                                         |
-| `color-contrast`              | 7     | 0   | ours                                         |
-| `scrollable-region-focusable` | 2     | 0   | ours                                         |
-| `aria-progressbar-name`       | 2     | 0   | ours                                         |
-| `aria-required-children`      | 3     | 3   | **`@alfresco/adf-core@9.0.0`** — finding 1.2 |
+| Rule                          | Nodes | Now | Owner |
+| ----------------------------- | ----- | --- | ----- |
+| `label`                       | 42    | 0   | ours  |
+| `nested-interactive`          | 40    | 0   | ours  |
+| `button-name`                 | 21    | 0   | ours  |
+| `role-img-alt`                | 12    | 0   | ours  |
+| `color-contrast`              | 7     | 0   | ours  |
+| `scrollable-region-focusable` | 2     | 0   | ours  |
+| `aria-progressbar-name`       | 2     | 0   | ours  |
 
 The lesson is about the **baseline**, not the fixes. The previous capture scanned **three** surfaces
 and ratcheted **four** rule ids. Widening it to fifteen cases found **seven** classes and 77 nodes,
 and three of the classes lived only in view-mode and column-panel states a single visit per route
 never reaches. A ratchet over an under-sampled scan reports "no new violations" while the ones it
 cannot see accumulate — the same failure mode as a gate nobody has watched go red.
-
-The single exclusion is scoped to the **adf-hx step alone**, not to `KNOWN_VIOLATIONS`, so the same
-rule failing on a surface we own still fails the capture.
 
 **Not covered:** dialogs, the upload flow, dark mode, and the pre-auth login surface. The last is a
 harness limitation — the capture signs in before its first scan, and on a guest-enabled Nuxeo an

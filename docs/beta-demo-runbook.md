@@ -90,10 +90,6 @@ Visit this once, then return to the dashboard:
 
 - `http://localhost:4200/#/browse`
 
-_Changed by NXSAT-635 (2026-10):_ the slow route was the adf-hx one, whose lazy ~1.3 MB chunk took
-about 4 seconds on first load. It and the adf-hx search route were removed on 2026-10-14 and now
-redirect to `/#/browse` and `/#/search`.
-
 ### 0.6 Write the dev configuration
 
 Every customisation beat needs it. On a server, configuration is fragments contributed by
@@ -154,82 +150,9 @@ is for demos.
 
 ---
 
-## Part 1 — What is adf-hx, and what is ours
+## Part 1 — Retired
 
-> _Changed by NXSAT-635 and NXSAT-638 (2026-10):_ **Do not demo this Part.** adf-hx is no longer in
-> the product: the POC routes, the adopted upstream components and the bridge library were removed
-> on 2026-10-14 (NXSAT-635), and the `@alfresco` packages by NXSAT-637. Both old paths redirect to
-> `/#/browse` and `/#/search`. The rest of this Part is kept as the record of what the 2026-08-25
-> demo showed.
-
-This is the question you will be asked first, and the answer is easy to get backwards. An
-`hxp-*` tag says **nothing** about who wrote the component: **seven** are upstream's and
-**thirteen** are ours, sharing the prefix.
-
-> `libs/shared/adf-hx-bridge/ARCHITECTURE.md` had this inverted until 2026-08-25 — it listed
-> `hxp-document-list` and `hxp-breadcrumb` as ours, and listed two things that do not exist. It
-> is corrected now, but if you have read an older copy, re-read it.
-
-The reliable test is the import. Our POC feature code aliases every upstream component as
-`Upstream*` on import — see `browse-adf-hx-poc.ts:60-66`.
-
-### Real adf-hx (from `@alfresco/adf-hx-content-services/ui`)
-
-| Selector                           | Where                                              |
-| ---------------------------------- | -------------------------------------------------- |
-| `hxp-document-list`                | browse POC, adf-hx search                          |
-| `hxp-ui-breadcrumb`                | browse POC, fed ancestors plus the current folder  |
-| `hxp-ui-document-viewer`           | browse POC                                         |
-| `hxp-permissions-management-panel` | browse POC, Permissions tab                        |
-| `hxp-document-tree`                | nav drawer, wrapped by our `hxp-browse-nav-drawer` |
-
-### Ours — 13 components in `libs/shared/adf-hx-bridge/src/lib/ui/`
-
-`hxp-folder-header`, `hxp-domain-hint`, `hxp-browse-tabs`, `hxp-browse-toolbar`,
-`hxp-browse-pager`, `hxp-column-picker`, `hxp-document-cards`,
-`hxp-browse-history`, `hxp-browse-trash`, `hxp-browse-details-panel`, `hxp-browse-nav-drawer`,
-`hxp-icon`, `hxp-spinner`.
-
-**History and Trash are ours**, reading real Nuxeo audit and trash APIs. Do not attribute them to
-adf-hx.
-
-Permissions is **no longer** in that group, and earlier copies of this runbook said it was. The
-read-only `hxp-browse-permissions` table was replaced on 2026-08-31 by upstream's
-`hxp-permissions-management-panel`, which reads _and writes_ Nuxeo ACLs. If you are demoing from a
-script that says "upstream ships nothing for permissions", it is out of date —
-`docs/permissions-phase-3-decision.md` records what changed and why the original deferral was
-wrong.
-
-### Dependency versions (from the lockfile)
-
-| Package                             | Version             |
-| ----------------------------------- | ------------------- |
-| `@alfresco/adf-hx-content-services` | 7.20.0-automate.292 |
-| `@alfresco/adf-core`                | 9.0.0               |
-| `@alfresco/adf-extensions`          | 9.0.0               |
-| `@hylandsoftware/hxcs-js-client`    | 2.0.111             |
-| `@hylandsoftware/satori-ui`         | 0.2.1               |
-
-### The side-by-side, and how to show it
-
-All routes need `/#/` — the app uses hash routing.
-
-| Show                          | URL                                             | Point at                                                                                         |
-| ----------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **Ours** (baseline)           | `/#/browse/default-domain`                      | Material chrome, file-type icons, `Root › Domain` breadcrumb                                     |
-| **adf-hx**                    | `/#/browse-adf-hx?path=%2Fdefault-domain`       | **The table** — that is upstream's `hxp-document-list`, driven by our Layer 1 column descriptors |
-| **Properties** (best surface) | same URL → **tick a row checkbox** → Properties | Real Nuxeo data: Title, Category, Created, Creator, Path                                         |
-| **Versions**                  | same → Versions                                 | "Current Version / Created By Administrator / …"                                                 |
-
-**Tick the checkbox, do not click the row.** A row click leaves both sidebars saying _"Select a
-single document in the View tab."_ This one detail is the difference between your strongest beat
-and an empty panel.
-
-The wrapping rule — _adf-hx types never appear in our public API_ — is **enforced, not just
-documented**: `scripts/review-guardrails.mjs` fails the build if an `@alfresco/adf-hx-`* import is
-reachable from a library's public barrel. `@alfresco/adf-extensions` was the deliberate exception,
-as a declared peer, until NXSAT-308 gave the platform its own copies of the three functions it used,
-so customers install no `@alfresco` package at all.
+This Part is no longer used.
 
 ---
 
@@ -280,14 +203,9 @@ The interesting engineering detail, and it is worth reading aloud from
 
 ### The support boundary
 
-|                           |                                                                                                                                                                                                                        |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Customer depends on       | `@nuxeo/satori-platform` + peers: Angular 22.2, Material/CDK 22.2, `@hylandsoftware/satori-ui ^1.0.0` (optional), `@ngx-translate/core ^18`, `rxjs ^7.8`                                                               |
-| Customer **cannot** reach | adf-hx, at all. `libs/shared/adf-hx-bridge`, which held the twelve API ports, the Nuxeo↔Hx mappers and thirteen of our `hxp-`* components, was internal and never published, and was removed on 2026-10-14 (NXSAT-635) |
-
-**The line for leadership:** adf-hx is an implementation detail of the product, not part of the
-customer contract. Customers get the Layer 0/1/2 extensibility surface and are insulated from
-adf-hx entirely. _Changed by NXSAT-638 (2026-10):_ adf-hx is no longer in the product at all.
+|                     |                                                                                                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer depends on | `@nuxeo/satori-platform` + peers: Angular 22.2, Material/CDK 22.2, `@hylandsoftware/satori-ui ^1.0.0` (optional), `@ngx-translate/core ^18`, `rxjs ^7.8` |
 
 ---
 
@@ -327,16 +245,6 @@ Beat 12 show that route running.
 
 `/#/browse/default-domain`. Real repository, 113 documents. This is the baseline; everything after
 it is customisation without forking.
-
-### Beat 2 — adf-hx vs ours (4 min)
-
-> _Changed by NXSAT-635 (2026-10):_ **Skip this beat.** The adf-hx browse route was removed on
-> 2026-10-14 and redirects to `/#/browse`, so there is no second stack to switch to. Kept as the
-> record of the beat.
-
-Follow the table in Part 1. Open `/#/browse` and `/#/browse-adf-hx?path=%2Fdefault-domain` in two
-tabs and switch between them. The folder tabs are the same on both: View, Permissions, History and
-Trash. Properties and Versions are not browse tabs on either — open a document for them.
 
 ### Beat 3 — Rebrand, no rebuild (3 min)
 
@@ -453,9 +361,8 @@ exactly between 30 and 40.
 > renders 14, and
 > `acme.navbar.contracts` lands at index 2 — between `app.navbar.dashboard` and
 > `app.navbar.recentlyViewed`. Read the numbers off the screen before you quote them.
-> _Changed by NXSAT-635 (2026-10):_ the entry this manifest used to hide, the adf-hx Browse, is
-> retired and `app.navbar.browse` is rendered again, so the manifest now hides that. The figures
-> above predate both changes.
+> _Changed by NXSAT-635 (2026-10):_ `app.navbar.browse` is rendered, so the manifest now hides
+> that. The figures above predate the change.
 
 > **Expand the nav rail before this beat.** It is collapsed by default, so labels are hidden by CSS
 > and a new entry shows only as an icon — measured: every item's `innerText` is empty while
@@ -583,8 +490,6 @@ git checkout -- apps/nuxeo-ui/src/app/app.routes.ts
 ```
 
 `/#/browse` headers go from `Title, Modified, Last Contributor` to `Updated by, Title`.
-_Changed by NXSAT-635 (2026-10):_ until 2026-10-14 the same relabel also landed in upstream's
-`hxp-document-list` on the adf-hx POC route, which is removed.
 
 For the picker contrast, use `slots` (**not** `overrides` — see F4):
 
@@ -886,28 +791,10 @@ hard-coded in Satori's `sat-platform-nav`). The browser tab icon has its own key
 `branding.favicon`, taking an asset the same way (NXSAT-313); the Apple and Microsoft tile
 variants do not.
 
-**"Is this adf-hx or your own UI?"**
-Both, deliberately. Six upstream components render real adf-hx surfaces; the surrounding chrome is
-ours. Use the Part 1 table.
-
 **"Can I install it from npm today?"**
 No. It is publishable and verified by dry run; the first publish is a deliberate later step, and the
 final package name is part of that step. Today's name in the repo is `@nuxeo/satori-platform` — the
 same form the guardrail prints in Beat 10.
-
-**"How big is the bundle?"**
-3.56 MB initial against a 4 MB build-failure budget — 0.44 MB of headroom. adf-core registers
-eleven root services, so it is eager: every user pays it, including users who never open the
-adf-hx route. This is a known constraint, not a surprise.
-
-**"What about ng-mocks in the runtime bundle?"**
-adf-hx's shipped bundle imports a test library containing two `eval()` calls. It is replaced with
-a stub that throws if called. Expect this question from a security reviewer; the answer is that it
-is neutralised, not tolerated.
-
-**"Can I edit metadata in the adf-hx panel?"**
-No. Upstream does not export the cache service its metadata sidebar needs. Browse no longer
-renders upstream's read-only properties panel either; metadata is on the document page.
 
 ---
 
@@ -923,8 +810,6 @@ renders upstream's read-only properties panel either; metadata is on the documen
 | **F5**  | ~~`labels` **to rename nav entries**~~ — **withdrawn 2026-09-26, it is demoable**                                  | This entry was wrong. Descriptors carry `labelKey`, the rail (`app-shell.component.html:25`) and the drawer (`nav-drawer.component.html:10`) both resolve it, and the manifest's `labels` layer last over the catalogue (`app-translate-loader.ts:220`). So `labels["nav.item.<slug>"]` renames a nav entry, with the same text in every locale; per-language wording is not configurable. `overrides.<id>.label` bypasses the key and wins when both are set.                                                                                               |
 | **F6**  | ~~`toolbar`**,** `contextMenu`**,** `tabs`**,** `routes` **slots**~~ — **withdrawn 2026-09-26, all four are live** | This entry was wrong, and `docs/demo-deck-claims.md` recorded it as withdrawn while this row still told presenters the opposite. All four are registered (`provide-app-extensions.ts:104-106`) and consumed: `toolbar` at `document-detail.html:156`, `tabs` at `document-detail.ts:397`, `contextMenu` at `browse.ts:469-471`, and `routes` through `provideExtensionRoutes()` (`provide-app-extensions.ts:218`), which calls `router.resetConfig` at `extension-routes.ts:112`. Re-checked against those lines on 2026-09-26.                              |
 | **F7**  | `app.rules.canWriteSelection` **/** `canRemoveSelection`                                                           | Still inert, always `false`, so they hide whatever you gate on them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **F8**  | `npm run beta:evidence -- showcase-adf-hx` **live**                                                                | It **fails** (21/22). Three of ten screenshots are byte-identical duplicates, and steps 8-10 photograph the repository root, so panels captioned "reads real Nuxeo ACLs" show "no local permissions" and "No audit entries found." Use only `02-agentic-ui-production-browse.png` + `03-adf-hx-browse-list.png`.                                                                                                                                                                                                                                             |
-| **F9**  | ~~`/#/search-adf-hx` **with an empty box**~~ — **withdrawn 2026-10-14, the route is removed**                      | NXSAT-635 removed it; the old path redirects to `/#/search`. It showed repository plumbing: personal workspaces, `My Favorites`, rows titled `1783067622304`, and had **no nav entry**.                                                                                                                                                                                                                                                                                                                                                                      |
 | **F10** | `acme.panel.policySummary`**,** `acme.actions.exportClaim`**,** `acme.rules.isLegalTeam`                           | Registered but never placed. Nothing renders them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **F11** | **A statically served production build past sign-in**                                                              | Stock Docker Nuxeo sends no CORS headers, so a static bundle cannot authenticate. Use `nx serve`. The rebrand _is_ demoable statically, because brand and tab title render pre-sign-in.                                                                                                                                                                                                                                                                                                                                                                      |
 | **F12** | **Layer 1 on the template app**                                                                                    | The template serves a manifest with **no fragments** — deliberately, so the "before" state is honest. `manifest.example.json` is visible only once it is added as a fragment to `apps/nuxeo-satori-template/public/agentic-ui-config/manifest.json`.                                                                                                                                                                                                                                                                                                         |
@@ -932,14 +817,6 @@ renders upstream's read-only properties panel either; metadata is on the documen
 
 ### Cosmetic things a sharp audience will notice
 
-- ~~The nav entry literally reads **"Browse (adf-hx POC)"**~~ — fixed. It reads **"Browse"**, and
-  the production `app.navbar.browse` entry ships `disabled`, so there is one Browse in the nav.
-  `/#/browse` is still routable and still reachable from the dashboard.
-- The POC filter row is visibly unstyled: native `dd/mm/yyyy` date inputs, a bare `Columns`
-  button. **Those are ours, not upstream's** — do not blame adf-hx.
-- The POC list has no file-type icons; production browse does.
-- Upstream's breadcrumb under-reports: "Home" at `/default-domain`, where production shows
-  `Root › Domain`.
 - `HTTP 500 /nuxeo/api/v1/automation/AI.Insights` on the dashboard — the AI marketplace package
   is not installed. Expected.
 - A `403` on first load — the anonymous startup manifest fetch. Expected.
@@ -978,12 +855,10 @@ and demo packages.
 | Docker/Nuxeo not running                        | Part 0.1. This was the actual state found during rehearsal.                             |
 | Dev configuration missing or written too late   | Part 0.6: `npm run config:dev`, then restart `nx serve`.                                |
 | Manifest edit appears not to work               | You did not hard-reload. Hash navigation does not re-read it.                           |
-| First adf-hx load takes ~4 s                    | Warm it — Part 0.5.                                                                     |
 | Clicking a checkbox too early selects nothing   | `/#/browse` needs ~2.5 s before the table is interactive.                               |
 | `/#/doc/:uid` never settles                     | AI polling keeps the network busy. Do not wait for it.                                  |
 | Stored column/theme prefs override the manifest | Part 0.4.                                                                               |
 | Two nav entries sharing a `path`                | Drawer resolution matches by path; the first wins. Give every demo entry a unique path. |
 
-**Suggested order if you have 30 minutes:** Beats 1, 2, 3, 5, 7, 9, 10 — the product, the
-provenance, a no-rebuild rebrand, declarative nav with the honest security answer, rules, the
+**Suggested order if you have 30 minutes:** Beats 1, 3, 5, 7, 9, 10 — the product, a no-rebuild rebrand, declarative nav with the honest security answer, rules, the
 customer's own code, and the guardrail. Beats 4, 6, 8, 11, 12 are the depth reserve.
