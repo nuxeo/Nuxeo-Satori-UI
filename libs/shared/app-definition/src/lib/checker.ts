@@ -209,6 +209,10 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
         if (typeof item !== 'string' || item === '')
           add(path, 'parameter', `${owner} takes a text here`);
         return;
+      case 'literal':
+        if (!isLiteral(item) || item === '')
+          add(path, 'parameter', `${owner} takes a text, a number or a boolean here`);
+        return;
       case 'unit':
         if (!['days', 'months', 'years'].includes(item as string)) {
           add(path, 'parameter', `${owner} takes "days", "months" or "years" here`);

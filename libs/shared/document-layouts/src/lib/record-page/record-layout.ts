@@ -201,6 +201,43 @@ export function refusedRule(
   return null;
 }
 
+/**
+ * Whether `path` is `place` or inside it. A place ends in `]`, so `columns[1]` begins
+ * `columns[1].visibleWhen` and never `columns[10]`.
+ */
+function within(path: string, place: string): boolean {
+  return path.startsWith(place);
+}
+
+/**
+ * Where each column this build does not draw ({@link notDrawnColumn}) is in the file, as
+ * `cards[0].fields[1].parameters.columns[2]`: the places the validator's findings name.
+ */
+function undrawnColumnPlaces(content: Json): string[] {
+  const list = (value: unknown): readonly unknown[] => (Array.isArray(value) ? value : []);
+  const cards = (value: unknown, prefix: string): [unknown, string][] =>
+    list(value).map((card, index) => [card, `${prefix}cards[${index}]`]);
+  const all: [unknown, string][] = [
+    ...cards(content['cards'], ''),
+    ...list(content['tabs']).flatMap((tab, index) =>
+      isRecord(tab) ? cards(tab['cards'], `tabs[${index}].`) : [],
+    ),
+  ];
+  return all.flatMap(([card, place]) =>
+    isRecord(card)
+      ? list(card['fields']).flatMap((field, position) =>
+          isRecord(field)
+            ? tableColumnEntries(field).flatMap((column, index) =>
+                notDrawnColumn(column)
+                  ? [`${place}.fields[${position}].parameters.columns[${index}]`]
+                  : [],
+              )
+            : [],
+        )
+      : [],
+  );
+}
+
 /** Why the page could not answer the rule a computation's `core.choose`, at any depth, takes. */
 function refusedRuleInComputation(
   computation: unknown,
@@ -294,7 +331,16 @@ export function readRecordLayout(
 
   const problems: string[] = [];
   const leftOut = new Set<string>();
+  const undrawn = undrawnColumnPlaces(content);
   for (const finding of findings) {
+    // A finding inside a column this build does not draw is about that column only, which is
+    // left out anyway: the table it is in stays. Structural findings never get here, since any
+    // one of them refuses the file above, inside such a column or not.
+    const column = undrawn.find((place) => within(finding.path, place));
+    if (column) {
+      problems.push(`${describe(finding)}; ${column} left out`);
+      continue;
+    }
     const entry = entryOf(finding.path);
     if (entry) leftOut.add(entry);
     problems.push(`${describe(finding)}; ${entry ? `${entry} left out` : 'ignored'}`);
@@ -314,10 +360,11 @@ export function readRecordLayout(
       return false;
     }
     // A table's columns may each have a rule too, and one the page cannot answer would show its
-    // column to everyone: the whole table is left out rather than drawn without it. The columns
-    // of a table inside a column are not checked: that column is never drawn (`notDrawnColumn`),
-    // so no rule in it is ever evaluated.
+    // column to everyone: the whole table is left out rather than drawn without it. A column this
+    // build does not draw (`notDrawnColumn`) is not checked, nor anything inside it: no rule of
+    // its is ever evaluated, and leaving the table out for it would lose the columns that show.
     for (const [index, column] of tableColumnEntries(entry).entries()) {
+      if (notDrawnColumn(column)) continue;
       const inColumn = isRecord(column) ? refusedRule(column['visibleWhen'], isRuleKnown) : null;
       if (inColumn) {
         problems.push(`${place}.parameters.columns[${index}] ${inColumn}; ${place} left out`);
