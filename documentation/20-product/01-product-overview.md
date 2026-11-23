@@ -39,15 +39,15 @@ fourth ships AI generators and guardrails so that writing the third is cheap.
 
 ## Executive summary
 
-|                     |                                                                                                                                                                                                   |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **What it is**      | A customer-brandable, extensible Angular content UI for Nuxeo, shipped as a marketplace package                                                                                                   |
-| **Who it is for**   | Enterprise Nuxeo customers needing a custom content UI; Nuxeo Professional Services; partners                                                                                                     |
-| **The problem**     | The existing Web UI cannot be customised economically. This "costs deals and blocks expansion in strategic accounts" (RFC §2)                                                                     |
-| **The central bet** | _The extension contract is the product; AI agents are the accelerator._ Customisation is governed by a versioned API, not by pointing an agent at our source                                      |
-| **Maturity**        | Phases 0–5 complete with evidence; Phase 6 (quality bar) in progress at **5 of 7** as of 2026-09-23 — steps 3 (WCAG) and 6 (coverage) open. **Not yet published, not yet in front of a customer** |
-| **Distribution**    | One npm package (`@nuxeo/satori-platform`, 4 entry points) + a forkable app template + the marketplace package                                                                                    |
-| **Runtime AI**      | 12 `AI.*` Nuxeo Automation operations. The backend implementing them is **a separate package, not in this repository**                                                                            |
+|                     |                                                                                                                                                                                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **What it is**      | A customer-brandable, extensible Angular content UI for Nuxeo, shipped as a marketplace package                                                                                                                                                                                      |
+| **Who it is for**   | Enterprise Nuxeo customers needing a custom content UI; Nuxeo Professional Services; partners                                                                                                                                                                                        |
+| **The problem**     | The existing Web UI cannot be customised economically. This "costs deals and blocks expansion in strategic accounts" (RFC §2)                                                                                                                                                        |
+| **The central bet** | _The extension contract is the product; AI agents are the accelerator._ Customisation is governed by a versioned API, not by pointing an agent at our source                                                                                                                         |
+| **Maturity**        | Phases 0, 4 and 5 complete with evidence, 4 with deviations; 1 and 2 back in progress since 2026-11-02; 3 superseded. Phase 6 (quality bar) in progress at **5 of 7** as of 2026-09-23 — steps 3 (WCAG) and 6 (coverage) open. **Not yet published, not yet in front of a customer** |
+| **Distribution**    | One npm package (`@nuxeo/satori-platform`, 4 entry points) + a forkable app template + the marketplace package                                                                                                                                                                       |
+| **Runtime AI**      | 12 `AI.*` Nuxeo Automation operations. The backend implementing them is **a separate package, not in this repository**                                                                                                                                                               |
 
 ---
 

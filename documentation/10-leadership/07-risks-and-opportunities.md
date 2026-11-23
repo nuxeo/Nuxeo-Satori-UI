@@ -26,7 +26,7 @@ change materially.
 - RFC risk **R8**: _"Too few addressable IDs in Layer 1 would cap customisation and push work
   into Layer 2, undermining the maintenance economics."_
 - The RFC's own mitigation was to _"fix the addressable surface explicitly before Phase 2
-  begins, informed by real customer requests."_ **Phase 2 completed without that input.**
+  begins, informed by real customer requests."_ **Phase 2 was signed off without that input.**
 - Reinforcing evidence: **4 of 8 slots are reserved** (`routes`, `toolbar`, `contextMenu`,
   `tabs`) — read by nothing. The addressable surface is narrower than the slot list implies.
 

@@ -1,5 +1,3 @@
-<!-- Satori fits a trail to its box only when it starts or the box resizes, so each new trail gets a
-     new sat-breadcrumbs, which measures it. -->
-@for (trail of [satoriItems()]; track trail) {
-  <sat-breadcrumbs [items]="trail" />
-}
+<!-- satori-ui 1.0.0 re-fits the trail whenever `items` changes, so one instance serves every trail.
+     Remounting it per trail (NXSAT-308, before 1.0.0) is no longer needed and logged NG0956. -->
+<sat-breadcrumbs [items]="satoriItems()" />
