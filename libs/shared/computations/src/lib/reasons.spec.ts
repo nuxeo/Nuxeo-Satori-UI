@@ -6,8 +6,9 @@ import ts from 'typescript';
 // without a negative control fails here. The reasons are read from the source: the argument of each
 // `refuse(...)` call, and one written with no literal text to look for, a variable for one, is
 // reported rather than passed, which the third test holds. And `refuse` is the only place a refusal
-// is built, which the fourth test holds, so that a reason cannot get past the first by being
-// written some other way.
+// is built: an object with an `ok` key, however the key is written, is found in `accept` and
+// `refuse` alone, which the fourth and fifth tests hold, so that a reason cannot get past the first
+// by being written some other way.
 //
 // A reason is compared by its literal text, the parts between its placeholders, and all of its parts
 // must be in one expectation: the strings in one matcher's arguments, `expect(…).toEqual({ ok: false,
@@ -26,9 +27,6 @@ const sources = readdirSync(LIB).filter(
 const specs = readdirSync(join(LIB, '..'), { recursive: true, encoding: 'utf8' })
   .filter((name) => name.endsWith('.spec.ts') && !name.endsWith('reasons.spec.ts'))
   .map((name) => readFileSync(join(LIB, '..', name), 'utf8'));
-
-const parse = (file: string): ts.SourceFile =>
-  ts.createSourceFile(file, readFileSync(join(LIB, file), 'utf8'), ts.ScriptTarget.Latest, true);
 
 interface Reason {
   readonly file: string;
@@ -61,25 +59,34 @@ function reasonsIn(source: string): string[][] {
   return found;
 }
 
-/** Each `{ ok: false, … }` written in the file, by the function it is written in. */
-function refusalsBuiltIn(file: string): string[] {
+/** A property's key as written: `ok`, `'ok'`, `['ok']` and the shorthand `{ ok }` are all "ok". */
+function keyOf(property: ts.ObjectLiteralElementLike): string | undefined {
+  if (ts.isShorthandPropertyAssignment(property)) return property.name.text;
+  if (!ts.isPropertyAssignment(property)) return undefined;
+  const name = property.name;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name))
+    return name.text;
+  if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression))
+    return name.expression.text;
+  return undefined;
+}
+
+/**
+ * Each object with an `ok` key written in `source`, by the function it is written in: a result,
+ * whatever its key is written as and whatever its value, `false as const` or a variable included.
+ */
+function resultsBuiltIn(source: string): string[] {
   const found: string[] = [];
   const visit = (node: ts.Node, inside: string): void => {
     const name = ts.isFunctionDeclaration(node) && node.name ? node.name.text : inside;
     if (
       ts.isObjectLiteralExpression(node) &&
-      node.properties.some(
-        (property) =>
-          ts.isPropertyAssignment(property) &&
-          ts.isIdentifier(property.name) &&
-          property.name.text === 'ok' &&
-          property.initializer.kind === ts.SyntaxKind.FalseKeyword,
-      )
+      node.properties.some((property) => keyOf(property) === 'ok')
     )
-      found.push(name);
+      found.push(name || 'the module');
     ts.forEachChild(node, (child) => visit(child, name));
   };
-  visit(parse(file), '');
+  visit(ts.createSourceFile('source.ts', source, ts.ScriptTarget.Latest, true), '');
   return found;
 }
 
@@ -203,10 +210,27 @@ describe('the negative controls', () => {
     );
   });
 
-  it('can be found: a refusal is built by refuse() alone', () => {
+  it('can be found: a result is built by accept() or refuse() alone', () => {
     const built = sources.flatMap((file) =>
-      refusalsBuiltIn(file).map((inside) => `${file}: ${inside || 'the module'}`),
+      resultsBuiltIn(readFileSync(join(LIB, file), 'utf8')).map((inside) => `${file}: ${inside}`),
     );
-    expect(built).toEqual(['types.ts: refuse']);
+    expect(built).toEqual(['types.ts: accept', 'types.ts: refuse']);
+  });
+
+  it('find a result however its key is written', () => {
+    const source = `
+      function quoted() { return { 'ok': false, reason: 'a' }; }
+      function computed() { return { ['ok']: false, reason: 'b' }; }
+      function shorthand(ok: boolean) { return { ok, reason: 'c' }; }
+      function asConst() { return { ok: false as const, reason: 'd' }; }
+      const arrow = () => ({ ok: !1, reason: 'e' });
+      function notOne() { return { okay: false, reason: 'f' }; }`;
+    expect(resultsBuiltIn(source)).toEqual([
+      'quoted',
+      'computed',
+      'shorthand',
+      'asConst',
+      'the module',
+    ]);
   });
 });

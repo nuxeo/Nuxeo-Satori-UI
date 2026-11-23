@@ -9,6 +9,7 @@ import { humanize } from '../resolve-layout';
 import {
   type TableColumn,
   WIDGETS_SHOWN_AS_VERSION_1,
+  own,
   tableColumns,
   widgetAccepts,
 } from './widget-support';
@@ -380,10 +381,10 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
     if (!isRecord(value)) return text(textOf(value));
     const parts = isRecord(parameters['parts']) ? parameters['parts'] : {};
     const part = (name: string): string => {
-      const subfield = parts[name];
-      if (typeof subfield !== 'string' || isEmpty(value[subfield])) return '';
-      const directory = definition.fields?.[subfield]?.directory;
-      const stored = textOf(value[subfield]);
+      const subfield = own(parts, name);
+      if (typeof subfield !== 'string' || isEmpty(own(value, subfield))) return '';
+      const directory = own(definition.fields, subfield)?.directory;
+      const stored = textOf(own(value, subfield));
       return directory ? context.vocabulary(directory, stored) : stored;
     };
     const lines = [
@@ -404,7 +405,7 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
   'status-badge': ({ value, parameters, definition }, context) => {
     const stored = textOf(value);
     const tones = isRecord(parameters['tones']) ? parameters['tones'] : {};
-    const tone = tones[stored];
+    const tone = own(tones, stored);
     return {
       kind: 'badge',
       text: definition.directory ? context.vocabulary(definition.directory, stored) : stored,
@@ -430,7 +431,7 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
               {
                 key: column.subfield,
                 label: column.subfield,
-                value: item[column.subfield],
+                value: own(item, column.subfield),
                 parameters: column.parameters,
                 definition: sub,
               },
@@ -447,7 +448,7 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
 
 /** What a table's column holds: its subfield's type in the list's schema, or text when it has none. */
 export function subfieldDefinition(list: LayoutFieldType, column: TableColumn): LayoutFieldType {
-  return list.fields?.[column.subfield] ?? { type: 'string' };
+  return own(list.fields, column.subfield) ?? { type: 'string' };
 }
 
 /**
@@ -482,9 +483,43 @@ export function showValue(
     : asVersion1(input.key, input.label, input.definition, input.value, context);
 }
 
-/** What a computation's result is, as a property type, so that a widget can be checked against it. */
-export function computedDefinition(value: unknown): LayoutFieldType {
+/**
+ * A date as Nuxeo writes one, the computations' rule: a day, or a date and time with its zone, `Z`
+ * or `±HH:mm`. A time with no zone names a different instant in every zone, and is not one.
+ */
+const ISO_DATE =
+  /^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
+
+/** Whether a text is a date as {@link ISO_DATE} writes one, on a day that exists. */
+function isDateText(value: string): boolean {
+  const match = ISO_DATE.exec(value);
+  if (!match || Number.isNaN(new Date(value).getTime())) return false;
+  // `Date` rolls a day that does not exist into the next month: 2023-02-30 is 2 March to it.
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const written = new Date(Date.UTC(year, month - 1, day));
+  return (
+    written.getUTCFullYear() === year &&
+    written.getUTCMonth() === month - 1 &&
+    written.getUTCDate() === day
+  );
+}
+
+/**
+ * What a computation's result is, as a property type, so that its widget can be checked against
+ * it. A computation has no date type: `core.choose` gives a date property's value as its text. So
+ * a text that is a date is a `date` for a widget that shows dates, `date` or `relative-date`, and
+ * the field is not left out; for any other widget it stays the text it is.
+ */
+export function computedDefinition(value: unknown, widget: string | null = null): LayoutFieldType {
   if (typeof value === 'number') return { type: 'double' };
   if (typeof value === 'boolean') return { type: 'boolean' };
+  if (
+    widget !== null &&
+    typeof value === 'string' &&
+    widgetAccepts(widget, { type: 'date' }) &&
+    isDateText(value)
+  ) {
+    return { type: 'date' };
+  }
   return { type: 'string' };
 }

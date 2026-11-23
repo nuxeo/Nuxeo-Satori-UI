@@ -48,7 +48,7 @@ import {
   type ResolvedRecordLayout,
   widgetAccepts,
 } from './resolve-record-layout';
-import { tableColumns } from './widget-support';
+import { own, tableColumns } from './widget-support';
 
 /** Today, for computations and relative dates. A token, so that tests choose the day. */
 export const RECORD_PAGE_TODAY = new InjectionToken<() => Date>('RECORD_PAGE_TODAY', {
@@ -266,7 +266,7 @@ export class RecordPageComponent {
         for (const column of tableColumns(field.parameters['columns'])) {
           const sub = subfieldDefinition(field.definition, column);
           const widget = columnWidget(column, sub);
-          for (const row of rows) named(widget, column.parameters, sub, row[column.subfield]);
+          for (const row of rows) named(widget, column.parameters, sub, own(row, column.subfield));
         }
       }
       // A placeholder whose property a field shows is read with that field, above.
@@ -415,7 +415,7 @@ export class RecordPageComponent {
       this.tell(`${layout.type}/view layout: ${field.place} left out: ${result.reason}`);
       return [];
     }
-    const definition: LayoutFieldType = computedDefinition(result.value);
+    const definition: LayoutFieldType = computedDefinition(result.value, field.widget);
     if (
       field.widget !== null &&
       result.value !== null &&

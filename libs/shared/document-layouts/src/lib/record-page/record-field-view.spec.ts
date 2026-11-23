@@ -557,6 +557,59 @@ describe('richTextWords', () => {
   });
 });
 
+/**
+ * A table's rows, its schema's subfields and an address's parts are plain objects: a name every
+ * object inherits is not in one. `__proto__` is the one whose inherited value shows, as `{}`; a
+ * subfield's type that is a function made the page throw.
+ */
+describe('a name every object inherits', () => {
+  it('is an empty cell, whether or not the schema lists the subfields', () => {
+    const cells = (definition: LayoutFieldType) =>
+      showValue(
+        {
+          key: 'k',
+          label: 'L',
+          value: [{ code: 'A' }],
+          parameters: { columns: ['line:code', 'line:__proto__', 'line:constructor'] },
+          definition,
+        },
+        'table',
+        context,
+      );
+    expect(cells({ type: 'complex[]' })).toMatchObject({ rows: [['A', '', '']] });
+    expect(cells({ type: 'complex[]', fields: { code: { type: 'string' } } })).toMatchObject({
+      rows: [['A', '', '']],
+    });
+  });
+
+  /** Its type is read from the schema only as the schema's own: a function there made it throw. */
+  it("shows a row's value under a name the schema does not list, as text", () => {
+    const view = showValue(
+      {
+        key: 'k',
+        label: 'L',
+        value: [{ code: 'A', constructor: 'x' }],
+        parameters: { columns: ['line:code', 'line:constructor'] },
+        definition: { type: 'complex[]', fields: { code: { type: 'string' } } },
+      },
+      'table',
+      context,
+    );
+    expect(view).toMatchObject({ rows: [['A', 'x']] });
+  });
+
+  it('is no part of an address', () => {
+    expect(
+      show(
+        'address',
+        { street: '1 Main St' },
+        { parts: { street: 'street', city: '__proto__' } },
+        { type: 'complex', fields: { street: { type: 'string' } } },
+      ),
+    ).toEqual({ kind: 'lines', lines: ['1 Main St'] });
+  });
+});
+
 describe('computedDefinition', () => {
   it.each([
     [3, 'double'],
@@ -565,5 +618,23 @@ describe('computedDefinition', () => {
     [null, 'string'],
   ])('a %s result is a %s', (value, type) => {
     expect(computedDefinition(value)).toEqual({ type });
+  });
+
+  /** `core.choose` gives a date property's value as text: a date widget shows it as a date. */
+  it.each([
+    ['2026-11-23', 'date', 'date'],
+    ['2026-11-23T20:00:00Z', 'date', 'date'],
+    ['2026-11-23T20:00:00.000+05:30', 'relative-date', 'date'],
+    ['2024-02-29', 'date', 'date'],
+    // For a widget that shows text, a text that looks like a date stays text.
+    ['2026-11-23', 'text', 'string'],
+    ['2026-11-23', null, 'string'],
+    // Not a date as Nuxeo writes one: no zone, a day that does not exist, or prose.
+    ['2026-11-23T20:00:00', 'date', 'string'],
+    ['2023-02-29', 'date', 'string'],
+    ['2026-13-01', 'date', 'string'],
+    ['23 November 2026', 'date', 'string'],
+  ])('%j for the widget %j is a %s', (value, widget, type) => {
+    expect(computedDefinition(value, widget)).toEqual({ type });
   });
 });

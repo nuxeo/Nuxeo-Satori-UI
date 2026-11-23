@@ -607,6 +607,43 @@ describe('RecordPageComponent', () => {
     ).toEqual(['Called back', 'By: jdoe']);
   });
 
+  /** The validator takes a date widget on a computed field: a date the computation gives shows. */
+  it("shows a computed date through a date widget, on the reader's day", async () => {
+    timeZone = '+0530';
+    const choose = {
+      type: 'core.choose',
+      parameters: ['test.rules.canSeeService', { field: 'member:visitedAt' }, 'x'],
+    };
+    const root = await render(member(), {
+      version: 2,
+      cards: [
+        {
+          id: 'a',
+          fields: [
+            { id: 'seen', widget: 'date', computed: choose },
+            { id: 'seenAgo', widget: 'relative-date', computed: choose },
+            { id: 'seenText', widget: 'text', computed: choose },
+          ],
+        },
+      ],
+    });
+    expect(valueOf(root, 'seen')).toBe('November 24, 2026');
+    expect(valueOf(root, 'seenAgo')).toBe('in 8 hours');
+    expect(valueOf(root, 'seenText')).toBe('2026-11-23T20:00:00Z');
+    // A result that is not a date is still left out, and the console says why.
+    rules.canSeeService = false;
+    const other = await render(member(), {
+      version: 2,
+      cards: [
+        { id: 'a', fields: ['member:phone', { id: 'seen', widget: 'date', computed: choose }] },
+      ],
+    });
+    expect(other.querySelector('[data-field="seen"]')).toBeNull();
+    expect(warnings.some((warning) => warning.includes('does not show a string result'))).toBe(
+      true,
+    );
+  });
+
   describe("a template's placeholder", () => {
     it('shows what the field showing its property shows: a name, a label, a day', async () => {
       // +05:30: 20:00 UTC on the 23rd is the 24th there, so a date read in UTC is a day out.
