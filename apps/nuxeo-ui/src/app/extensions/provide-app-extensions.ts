@@ -27,6 +27,7 @@ import {
   type ExtensionActionHandler,
 } from '@nuxeo/satori-platform/extensions';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { TaskFormComponent } from '@agentic-ui/shared/document-layouts';
 import {
   NXS_ASSET_FACETS_DRAWER_ID,
   NXS_ASSET_GRID_ID,
@@ -202,10 +203,10 @@ function provideAppContributions(): EnvironmentProviders {
         // through its ID, so a customer library can re-register it.
         [NXS_TASK_DETAIL_ID]: NxsTaskDetailComponent,
         // A task's own form, inside that panel: the fields its workflow step's task form draws
-        // (app-definition-v2.md, section 6). Lazy: only the tasks page opens a task, and the
-        // shell imports nothing else of the document-layouts engine.
-        [NXS_TASK_FORM_ID]: () =>
-          import('@agentic-ui/shared/document-layouts').then((m) => m.TaskFormComponent),
+        // (app-definition-v2.md, section 6). By class, not behind `import()`: the shell's
+        // translation loader imports the document-layouts engine eagerly for the labels index, so
+        // a lazy import of it would load nothing later, and the module-boundary rule rejects the mix.
+        [NXS_TASK_FORM_ID]: TaskFormComponent,
         // The trash list. `/trash` renders it through this ID, so a customer library can replace
         // it, and falls back to the packaged component when no registration resolves.
         [NXS_TRASH_LIST_ID]: NxsTrashListComponent,

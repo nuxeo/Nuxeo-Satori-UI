@@ -1,3 +1,4 @@
+import { LiveAnnouncer } from '@angular/cdk/a11y';
 import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatIconTestingModule } from '@angular/material/icon/testing';
@@ -6,9 +7,13 @@ import { Router, provideRouter } from '@angular/router';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { NxsDocumentListComponent, provideNxsComponents } from '@nuxeo/satori-platform/components';
 import {
+  AppExtensionsService,
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
+  ExtensionRuleContextService,
+  SURFACE_RULE_EVALUATORS,
   type ExtensionActionDescriptor,
+  type ExtensionRule,
   type ExtensionRuleContext,
   provideSatoriExtensions,
 } from '@nuxeo/satori-platform/extensions';
@@ -362,6 +367,18 @@ describe('RecordListComponent', () => {
     expect(list().pageIndex()).toBe(1);
   });
 
+  it('shows no total where the server counted none, and pages on by whether another page follows', async () => {
+    await render();
+    await answer([claim(1)], {
+      totalSize: -1,
+      resultsCount: -1,
+      numberOfPages: -1,
+      isNextPageAvailable: true,
+    });
+    expect(list().totalSize()).toBe(-1);
+    expect(list().hasNextPage()).toBe(true);
+  });
+
   it("starts on the first page for another record, and never shows the last record's rows", async () => {
     await render(['m1']);
     await answer([claim(1)], { numberOfPages: 2, isNextPageAvailable: true });
@@ -405,6 +422,28 @@ describe('RecordListComponent', () => {
     ).toEqual([true, false, false]);
   });
 
+  it("asks again on retry when the file's order, turned back to from its header, failed", async () => {
+    await render(['m1'], { ...CLAIMS, sort: [{ field: 'claim:number', order: 'desc' }] });
+    await answer([claim(1)]);
+    list().sortChange.emit({ key: 'claim:number', direction: 'asc' });
+    await settle();
+    await answer([claim(1)]);
+    execute.mockReturnValueOnce(throwError(() => ({ status: 500 })));
+    // Turned round and back to the file's order.
+    list().sortChange.emit({ key: 'claim:number', direction: 'desc' });
+    await settle();
+    expect(list().error()).toBe(500);
+    const asked = execute.mock.calls.length;
+    list().retry.emit();
+    await settle();
+    expect(execute).toHaveBeenCalledTimes(asked + 1);
+    expect(execute).toHaveBeenLastCalledWith(
+      'member_claims',
+      expect.objectContaining({ sort: [{ field: 'claim:number', order: 'desc' }] }),
+    );
+    expect(list().error()).toBeNull();
+  });
+
   it("goes back to the file's order on retry when a chosen order failed", async () => {
     await render();
     await answer([claim(1)]);
@@ -424,22 +463,117 @@ describe('RecordListComponent', () => {
     );
   });
 
-  it("turns the file's own order round from its header, rather than leaving it unmarked", async () => {
+  /**
+   * Through the header itself: the order it asks for and the one it announces are the same, and
+   * neither is "cleared" while the rows are in the file's order.
+   */
+  it("turns the file's own order round from its header, and never announces it cleared", async () => {
     const byNumber: RecordListEntry = {
       ...CLAIMS,
       sort: [{ field: 'claim:number', order: 'desc' }],
     };
     await render(['m1'], byNumber);
     await answer([claim(1)]);
-    expect(list().sort()).toEqual({ key: 'claim:number', direction: 'desc' });
-    // The header cycles from the file's direction to none.
-    list().sortChange.emit(null);
+    const announce = vi.spyOn(TestBed.inject(LiveAnnouncer), 'announce').mockResolvedValue();
+    const header = (): HTMLElement => {
+      const th = [...(fixture.nativeElement as HTMLElement).querySelectorAll('th')].find(
+        (cell) => cell.textContent?.trim() === 'number',
+      );
+      if (!th) throw new Error('no header "number"');
+      return th;
+    };
+    const click = async (): Promise<void> => {
+      (header().querySelector('.mat-sort-header-container') as HTMLElement).click();
+      await settle();
+    };
+    expect(list().sort()).toBeNull();
+    expect(header().getAttribute('aria-sort')).toBe('descending');
+    const sent = (): unknown => (execute.mock.lastCall as [string, { sort: unknown }])[1].sort;
+    const said = (): unknown => announce.mock.lastCall?.[0];
+
+    await click();
+    expect(sent()).toEqual([{ field: 'claim:number', order: 'asc' }]);
+    expect(said()).toBe('Sorted by number, ascending');
+    await answer([claim(1)]);
+    expect(header().getAttribute('aria-sort')).toBe('ascending');
+
+    await click();
+    expect(sent()).toEqual([{ field: 'claim:number', order: 'desc' }]);
+    expect(said()).toBe('Sorted by number, descending');
+    await answer([claim(1)]);
+
+    // From the file's own direction again: round, not cleared.
+    await click();
+    expect(sent()).toEqual([{ field: 'claim:number', order: 'asc' }]);
+    expect(said()).toBe('Sorted by number, ascending');
+    expect(announce.mock.calls.map(([message]) => message)).not.toContain(
+      'Sort cleared, showing the default order',
+    );
+  });
+
+  it("goes back to the file's whole order, every key of it, when its header is turned back", async () => {
+    await render(['m1'], {
+      ...CLAIMS,
+      sort: [
+        { field: 'claim:number', order: 'desc' },
+        { field: 'claim:status', order: 'asc' },
+      ],
+    });
+    await answer([claim(1)]);
+    list().sortChange.emit({ key: 'claim:number', direction: 'asc' });
     await settle();
-    expect(list().sort()).toEqual({ key: 'claim:number', direction: 'asc' });
+    await answer([claim(1)]);
+    list().sortChange.emit({ key: 'claim:number', direction: 'desc' });
+    await settle();
     expect(execute).toHaveBeenLastCalledWith(
       'member_claims',
-      expect.objectContaining({ sort: [{ field: 'claim:number', order: 'asc' }] }),
+      expect.objectContaining({
+        sort: [
+          { field: 'claim:number', order: 'desc' },
+          { field: 'claim:status', order: 'asc' },
+        ],
+      }),
     );
+    expect(list().sort()).toBeNull();
+  });
+
+  it("gives the list no default order on a header when no column shows the file's first key", async () => {
+    await render();
+    await answer([claim(1)]);
+    // CLAIMS sorts by claim:serviceDate, which none of its columns shows.
+    expect(list().defaultSort()).toBeNull();
+    expect(list().sort()).toBeNull();
+  });
+
+  it("goes back to the file's order, and shows it on its header, when another column's is cleared", async () => {
+    await render(['m1'], { ...CLAIMS, sort: [{ field: 'claim:number', order: 'desc' }] });
+    await answer([claim(1)]);
+    const header = (label: string): HTMLElement => {
+      const th = [...(fixture.nativeElement as HTMLElement).querySelectorAll('th')].find(
+        (cell) => cell.textContent?.trim() === label,
+      );
+      if (!th) throw new Error(`no header "${label}"`);
+      return th;
+    };
+    const click = async (label: string): Promise<void> => {
+      (header(label).querySelector('.mat-sort-header-container') as HTMLElement).click();
+      await settle();
+      await answer([claim(1)]);
+    };
+    await click('status');
+    await click('status');
+    expect(header('status').getAttribute('aria-sort')).toBe('descending');
+    expect(header('number').getAttribute('aria-sort')).toBe('none');
+    // From the status column's descending to the file's, also descending. The loader redraws the
+    // table here, so the header's state is drawn afresh: the list's own spec pins it without one.
+    await click('status');
+    expect(execute).toHaveBeenLastCalledWith(
+      'member_claims',
+      expect.objectContaining({ sort: [{ field: 'claim:number', order: 'desc' }] }),
+    );
+    expect(list().sort()).toBeNull();
+    expect(header('number').getAttribute('aria-sort')).toBe('descending');
+    expect(header('status').getAttribute('aria-sort')).toBe('none');
   });
 
   it('draws no column whose rule it was not given an answer for, and says so', async () => {
@@ -531,6 +665,102 @@ describe('RecordListComponent', () => {
       document: closed,
     });
     expect(flagged).toEqual([]);
+  });
+
+  describe("a row's rules, against the state the page publishes about its own record", () => {
+    /** What the record page around the list publishes about the Member: every flag set. */
+    const PAGE_FLAGS = {
+      favorite: true,
+      locked: true,
+      subscribed: true,
+      inClipboard: true,
+      hasVersion: true,
+      aiEnabled: true,
+      'busy.trash': true,
+    };
+    const PROBE = 'acme.rowActions.probe';
+
+    function probe(descriptor: Partial<ExtensionActionDescriptor>): RecordListEntry {
+      TestBed.inject(AppExtensionsService).register(EXTENSION_SLOTS.rowActions, [
+        { id: PROBE, label: 'Probe', order: 50, ...descriptor },
+      ]);
+      TestBed.inject(ExtensionActionRegistry).register({
+        [PROBE]: { execute: (context) => flagged.push(context) },
+      });
+      TestBed.inject(ExtensionRuleContextService).flags.set(PAGE_FLAGS);
+      return { ...CLAIMS, rowActions: [PROBE] };
+    }
+
+    const pageStateRules = Object.keys(SURFACE_RULE_EVALUATORS).filter(
+      (id) => id !== 'app.rules.isNote',
+    );
+    const shapes: [string, (id: string) => Partial<ExtensionActionDescriptor>][] = [
+      ['its rule', (id) => ({ rule: id })],
+      ['its rule, turned round', (id) => ({ rule: { type: 'core.not', parameters: [id] } })],
+      [
+        'its enabledRule, nested',
+        (id) => ({
+          enabledRule: {
+            type: 'core.every',
+            parameters: [{ type: 'core.some', parameters: [{ type: id, parameters: ['trash'] }] }],
+          } as ExtensionRule,
+        }),
+      ],
+    ];
+
+    it.each(
+      pageStateRules.flatMap((id) => shapes.map(([where, shape]) => [id, where, shape] as const)),
+    )('does not offer or run a row action naming %s in %s', async (id, _where, shape) => {
+      const row = claim(1);
+      await render(['m1'], probe(shape(id)));
+      await answer([row]);
+      expect(list().rowActions()).toEqual({});
+      list().rowAction.emit({ action: { id: PROBE, label: 'Probe' }, document: row });
+      expect(flagged).toEqual([]);
+    });
+
+    /**
+     * Said where the rule answered yes for the row and the action would otherwise be offered. One
+     * whose rule answers no, as a bare page-state rule does with no flags, is left out before.
+     */
+    it('says in the console why such a row action is not offered', async () => {
+      await render(
+        ['m1'],
+        probe({ rule: { type: 'core.not', parameters: ['app.rules.isLocked'] } }),
+      );
+      await answer([claim(1)]);
+      expect(warnings).toContain(
+        `[agentic-ui-layouts] Member/view layout: cards[1]: the row action "${PROBE}" names the rule "app.rules.isLocked", which is refused for a row: as packaged, it answers for the page's own record; not offered`,
+      );
+    });
+
+    it("offers one by app.rules.isNote, which reads the row's own type", async () => {
+      await render(['m1'], probe({ rule: 'app.rules.isNote' }));
+      const note: NuxeoDocument = { ...claim(1), uid: 'n1', type: 'Note' };
+      await answer([note, claim(2)]);
+      expect(Object.keys(list().rowActions())).toEqual(['n1']);
+    });
+
+    it("gives a customer's own rule, and the run, no page flags for a row", async () => {
+      TestBed.inject(AppExtensionsService).registerRules({
+        'acme.rules.flagged': (context) => Object.keys(context.flags).length > 0,
+      });
+      const row = claim(1);
+      await render(
+        ['m1'],
+        probe({ rule: { type: 'core.not', parameters: ['acme.rules.flagged'] } }),
+      );
+      await answer([row]);
+      expect(
+        list()
+          .rowActions()
+          ['c1']?.map((action) => action.id),
+      ).toEqual([PROBE]);
+      list().rowAction.emit({ action: { id: PROBE, label: 'Probe' }, document: row });
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].document?.uid).toBe('c1');
+      expect(flagged[0].flags).toEqual({});
+    });
   });
 
   it('does not run a listed action whose rule fails for the row', async () => {

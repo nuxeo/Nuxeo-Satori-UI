@@ -71,7 +71,7 @@ import {
 /** As for the bootstrap and manifest reads: `HttpClient` has no timeout of its own. */
 export const LAYOUT_LOAD_TIMEOUT_MS = 10_000;
 
-const EMPTY_INDEX: LayoutIndex = { entries: [], diagnostics: [] };
+const EMPTY_INDEX: LayoutIndex = { entries: [], diagnostics: [], labelLanguages: [] };
 
 /** The directory the configuration service answers from, taken from the bootstrap URL. */
 function configDirectory(bootstrapUrl: string): string {

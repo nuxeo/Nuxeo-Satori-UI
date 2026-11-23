@@ -3,6 +3,18 @@ import { readLayoutEnvelope, readLayoutFile, readLayoutIndex } from './layout-fi
 const FORMAT = 'nuxeo-agentic-ui-config/1';
 
 describe('readLayoutIndex', () => {
+  it("lists the languages a business app's labels are served in, and none where it names none", () => {
+    const listed = readLayoutIndex({
+      format: FORMAT,
+      layer: 'layouts',
+      layouts: [],
+      labels: ['en', 'pt-BR', 'EN', '../x', 7, 'fr'],
+    });
+    expect('labelLanguages' in listed && listed.labelLanguages).toEqual(['en', 'pt-BR', 'fr']);
+    const none = readLayoutIndex({ format: FORMAT, layer: 'layouts', layouts: [] });
+    expect('labelLanguages' in none && none.labelLanguages).toEqual([]);
+  });
+
   it('lists the types and modes in force, with the component behind each', () => {
     const index = readLayoutIndex({
       format: FORMAT,
@@ -36,6 +48,7 @@ describe('readLayoutIndex', () => {
           message: 'layout Claim/metadata from a is replaced by b.',
         },
       ],
+      labelLanguages: [],
     });
   });
 

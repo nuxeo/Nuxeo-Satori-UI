@@ -12,6 +12,7 @@
  *   npm run config:dev -- --bootstrap acme.json --manifest acme-manifest.json
  *   npm run config:dev -- --layout Claim/metadata=claim.layout.json
  *   npm run config:dev -- --home home.json
+ *   npm run config:dev -- --labels en=labels/en.json --labels fr=labels/fr.json
  *   npm run config:dev -- --task claimDetermination.determine=determine.layout.json
  *
  * `--layout <Type>/<mode>=<file>` serves a per-type layout file as the servlet does: listed in
@@ -24,6 +25,12 @@
  * on decisions B and E. So this is the only place the home is served for now. Without `--home`,
  * any `home.json` written before is removed, so the app finds no home, as on a server. A later
  * `--home` replaces an earlier one.
+ *
+ * `--labels <lang>=<file>` serves a package's labels for one language at `labels/<lang>.json`, as
+ * the package writes them (app-definition-v2.md, section 7). Like the home, nothing on a server
+ * answers there until the app registry. The app reads the file for the person's language, above the
+ * platform's catalogue and below the manifest's `labels`. Without `--labels`, any written before
+ * are removed. A later file for the same language replaces an earlier one.
  *
  * `--task <workflow>.<step>=<file>` serves a workflow step's task form at
  * `tasks/<workflow>.<step>.layout.json`, as the package writes it, with no envelope
@@ -44,7 +51,7 @@ const ROOT = resolve(import.meta.dirname, '..');
 const DEFAULTS = join(ROOT, 'nuxeo-agentic-core/src/main/resources/agentic-ui-config');
 const TARGET = join(ROOT, 'apps/nuxeo-ui/public/agentic-ui-config');
 
-const extra = { bootstrap: [], manifest: [], layout: [], home: [], task: [] };
+const extra = { bootstrap: [], manifest: [], layout: [], home: [], labels: [], task: [] };
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i += 2) {
   const layer = args[i]?.replace(/^--/, '');
@@ -52,11 +59,15 @@ for (let i = 0; i < args.length; i += 2) {
     console.error(
       'usage: dev-config.mjs [--bootstrap <fragment.json>]... [--manifest <fragment.json>]... ' +
         '[--layout <Type>/<mode>=<layout.json>]... [--home <home.json>] ' +
-        '[--task <workflow>.<step>=<layout.json>]...',
+        '[--labels <lang>=<labels.json>]... [--task <workflow>.<step>=<layout.json>]...',
     );
     process.exit(2);
   }
-  extra[layer].push(layer === 'layout' || layer === 'task' ? args[i + 1] : resolve(args[i + 1]));
+  extra[layer].push(
+    layer === 'layout' || layer === 'labels' || layer === 'task'
+      ? args[i + 1]
+      : resolve(args[i + 1]),
+  );
 }
 
 // The servlet leaves out a fragment over this size or with a repeated key (ConfigSnapshot.java), so
@@ -135,6 +146,22 @@ for (const spec of extra.layout) {
   });
 }
 
+// Each `--labels` names a language as the platform names its catalogues: `en`, or one with a
+// region, such as `pt-BR`. Its file is read here, before anything is written, so that a mistyped
+// language or file changes nothing.
+const labels = new Map();
+for (const entry of extra.labels) {
+  const at = entry.indexOf('=');
+  const lang = entry.slice(0, at);
+  const file = entry.slice(at + 1);
+  if (at <= 0 || !/^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(lang) || file === '') {
+    console.error(`--labels takes <lang>=<labels.json>, such as en=labels/en.json, not ${entry}`);
+    process.exit(2);
+  }
+  const path = resolve(file);
+  labels.set(lang, { path, content: read(path) });
+}
+
 // A task form is served as the package writes it, as the home is; the app reads it with the
 // validator when the task opens. The parts are those `placeFile` in libs/shared/app-definition
 // takes from a package's `tasks/` file name. Checked and read here, before anything is written, as
@@ -208,7 +235,7 @@ for (const { type, mode, content, ...provenance } of layouts.values()) {
 }
 writeFileSync(
   join(TARGET, 'layouts.json'),
-  `${JSON.stringify({ format: 'nuxeo-agentic-ui-config/1', layer: 'layouts', layouts: index, diagnostics: [] }, null, 2)}\n`,
+  `${JSON.stringify({ format: 'nuxeo-agentic-ui-config/1', layer: 'layouts', layouts: index, labels: [...labels.keys()], diagnostics: [] }, null, 2)}\n`,
 );
 console.log(
   `wrote ${join(TARGET, 'layouts.json').slice(ROOT.length + 1)}: ${index.map((l) => `${l.type}/${l.mode}`).join(', ') || 'no layouts'}`,
@@ -226,6 +253,39 @@ if (home === undefined) {
   console.log(
     `wrote ${HOME.slice(ROOT.length + 1)}: ${home.startsWith(ROOT) ? home.slice(ROOT.length + 1) : home}`,
   );
+}
+
+// A package's labels, one file per language, served as the package writes them; the app checks
+// each with the validator when it reads it, and the pipeline when the package is built.
+const LABELS = join(TARGET, 'labels');
+rmSync(LABELS, { recursive: true, force: true });
+if (labels.size === 0) {
+  console.log(`no labels: ${LABELS.slice(ROOT.length + 1)} not served`);
+} else {
+  // The app asks for a language's labels in the languages it offers, which the bootstrap lists
+  // (the last fragment that sets them wins, as the app merges them), and always in English, its
+  // fallback language.
+  const offered = [
+    'en',
+    ...(envelopes
+      .find((envelope) => envelope.layer === 'bootstrap')
+      ?.fragments.map((fragment) => fragment.content?.availableLanguages)
+      .filter(Array.isArray)
+      .at(-1) ?? []),
+  ];
+  mkdirSync(LABELS, { recursive: true });
+  for (const [lang, { path, content }] of labels) {
+    const out = join(LABELS, `${lang}.json`);
+    writeFileSync(out, `${JSON.stringify(content, null, 2)}\n`);
+    console.log(
+      `wrote ${out.slice(ROOT.length + 1)}: ${path.startsWith(ROOT) ? path.slice(ROOT.length + 1) : path}`,
+    );
+    if (!offered.includes(lang)) {
+      console.warn(
+        `warning: the app asks for labels in ${[...new Set(offered)].join(', ')} only, so never for ${lang}'s`,
+      );
+    }
+  }
 }
 
 const TASKS = join(TARGET, 'tasks');

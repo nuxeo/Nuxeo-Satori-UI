@@ -353,7 +353,7 @@ carry packaged entries.
 | `routes`           | Application routes                                 | Resolves; **no packaged entries** — see section 11 |
 | `toolbar`          | Document-detail toolbar and overflow menu          | **Populated** — 17 packaged actions, section 8     |
 | `contextMenu`      | The browse "More actions" menu                     | **Populated** — 4 packaged actions, section 10     |
-| `rowActions`       | The menu on each row of browse's list              | **Populated** — 5 packaged actions, section 10a    |
+| `rowActions`       | Each row's menu, in browse and in related records  | **Populated** — 5 packaged actions, section 10a    |
 | `tabs`             | Document-detail tab children                       | **Populated** — 6 packaged tabs, section 9         |
 | `documentList`     | Document list columns                              | **Populated** — 12 packaged columns, section 7     |
 | `documentView`     | The View tab body on document detail               | Resolves; **no packaged entries** — see section 9a |
@@ -469,7 +469,9 @@ they are not interchangeable.
 | Replace a translation key   | `labels["nav.item.collections"]` (Layer 0)  | Your text wherever that key resolves, the same in every language.         |
 
 The manifest's `labels` map is not keyed by language: `AppTranslateLoader` layers the same map
-over every language's catalogue. Per-language wording is not configurable today.
+over every language's catalogue. Per-language wording comes from a business app's own labels files,
+one per language (`docs/business-apps/app-definition-v2.md`, section 7), which sit below the
+manifest's `labels` and above the platform's catalogue.
 
 **Setting `label` disables the key for that entry**, deliberately and by design: a manifest
 literal is an instruction to show exactly that string, so it must win. If you set both, `label`
@@ -798,9 +800,9 @@ by the rules' library, so it would match nothing, and the layout validator refus
 
 **Scope, stated plainly.** "The focused document" means the document open on
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
-when you navigate away, so all of them answer `false` everywhere else — with one
-exception: browse's row menu (section 10a) resolves its own slot with each row's
-document in focus, for that slot only. `app.rules.fieldIn` with a literal first
+when you navigate away, so all of them answer `false` everywhere else — with two
+exceptions, both of the `rowActions` slot (section 10a): browse's row menu and a record page's
+list of related records resolve it with each row's document in focus, for that slot only. `app.rules.fieldIn` with a literal first
 parameter is not a rule about the document: it reads none, so it answers the same on
 every surface, and `fieldIn("gold", "gold")` is `true` with nothing in focus. In particular the two
 type rules gate document-detail **tabs and toolbar actions**; they cannot vary browse list
@@ -1996,7 +1998,7 @@ is a separate slot, `rowActions` — section 10a.
 
 ---
 
-## 10a. `rowActions` — the menu on each row of browse's list
+## 10a. `rowActions` — the menu on each row of a list of documents
 
 Registered by `PACKAGED_ROW_ACTIONS` in `libs/shared/extensions/src/lib/packaged-actions.ts`,
 rendered as the "Actions for …" menu at the end of each row of browse's document list.
@@ -2004,6 +2006,14 @@ rendered as the "Actions for …" menu at the end of each row of browse's docume
 Each row resolves the slot with **that row's document in focus**, so `rule`, `enabledRule` and the
 document rules of section 4 read the row's own permissions and properties, not the folder's. A
 row whose entries are all hidden has no menu button.
+
+A record page's list of related records ([layout-v2.md](business-apps/layout-v2.md), section 7)
+resolves the same slot for the row actions its file lists, with two differences. A row's context
+there has none of the flags the page publishes about its own record. A row action whose `rule` or
+`enabledRule` names a surface-state rule (section 4) other than `app.rules.isNote`, itself or inside
+`core.every`, `core.some` or `core.not`, is not offered there, nor one whose rule nests more than 32
+levels deep, and the console says why. Those rules are refused by ID, so a customer's own evaluator
+registered under one is refused too.
 
 | ID                        | Label    | Icon                        | Order | Shown when                                |
 | ------------------------- | -------- | --------------------------- | ----- | ----------------------------------------- |
