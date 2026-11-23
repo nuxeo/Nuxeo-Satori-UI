@@ -17,6 +17,22 @@ export const p90 = (values) => percentile(values, 90);
 
 export const hoursBetween = (a, b) => (new Date(b) - new Date(a)) / 36e5;
 
+/**
+ * Splits [since, until] into contiguous, non-overlapping UTC date ranges of `days` days each,
+ * oldest first, as [from, to] YYYY-MM-DD pairs (both ends inclusive, the form `created=a..b` takes).
+ */
+export function dateWindows(since, until, days) {
+  const day = (d) => d.toISOString().slice(0, 10);
+  const end = new Date(day(new Date(until)) + 'T00:00:00Z');
+  const out = [];
+  for (let from = new Date(day(new Date(since)) + 'T00:00:00Z'); from <= end; ) {
+    const to = new Date(Math.min(from.getTime() + (days - 1) * 864e5, end.getTime()));
+    out.push([day(from), day(to)]);
+    from = new Date(to.getTime() + 864e5);
+  }
+  return out;
+}
+
 /** Monday (UTC) of the ISO week containing `iso`, as YYYY-MM-DD. */
 export function weekStart(iso) {
   const d = new Date(iso);

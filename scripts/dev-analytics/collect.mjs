@@ -22,7 +22,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join, resolve } from 'node:path';
 
 import {
-  byWeek, countSpec, kpis, parseLcov, parsePlaywright, prTimings, summariseJobs, summarisePrs,
+  byWeek, countSpec, dateWindows, kpis, parseLcov, parsePlaywright, prTimings, summariseJobs, summarisePrs,
   summariseRuns, summariseSpecs,
 } from './lib.mjs';
 import { renderDashboard, renderSummary } from './render.mjs';
@@ -42,8 +42,19 @@ function parseArgs(argv) {
   return o;
 }
 
-const gh = (args) =>
-  JSON.parse(execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }));
+// Retried because the GraphQL endpoint answers 502/504 now and then, and one gateway blip should
+// not blank a whole section. Three attempts, then the real error surfaces as that section's gap.
+const gh = (args) => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return JSON.parse(execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }));
+    } catch (e) {
+      const transient = /HTTP (502|503|504)|ECONNRESET|timed out/i.test(`${e.stderr ?? ''}${e.message}`);
+      if (!transient || attempt >= 3) throw e;
+      execFileSync('node', ['-e', `setTimeout(()=>{}, ${attempt * 2000})`]);
+    }
+  }
+};
 
 function detectRepo() {
   if (process.env.GITHUB_REPOSITORY) return process.env.GITHUB_REPOSITORY;
@@ -91,21 +102,23 @@ function collectPrs(repo, since) {
 }
 
 function collectCi(repo, since, jobSample, gaps, workflow = 'ci.yml') {
-  // ci.yml runs on every push and PR (about 100 a day here), so a window of weeks is dozens of
-  // pages. The cap bounds API use; hitting it is reported, never silently shortened.
-  const MAX_PAGES = 40;
-  const runs = [];
-  let truncated = false;
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const res = gh(['api', `repos/${repo}/actions/workflows/${workflow}/runs?per_page=100&page=${page}&created=>=${since.slice(0, 10)}`]);
-    runs.push(...res.workflow_runs);
-    if (res.workflow_runs.length < 100) break;
-    if (page === MAX_PAGES) truncated = true;
+  // GitHub caps any list-workflow-runs query that uses `created` at 1,000 results, however many
+  // pages are requested. ci.yml runs about 100 times a day, so one query over weeks silently
+  // returns only the newest 1,000. The window is therefore split into short date ranges, each
+  // under the cap, and de-duplicated by run id. A range that still hits the cap is reported.
+  const CAP = 1000;
+  const byId = new Map();
+  for (const [from, to] of dateWindows(since, new Date(), 3)) {
+    let got = 0;
+    for (let page = 1; page <= CAP / 100; page++) {
+      const res = gh(['api', `repos/${repo}/actions/workflows/${workflow}/runs?per_page=100&page=${page}&created=${from}..${to}`]);
+      for (const r of res.workflow_runs) byId.set(r.id, r);
+      got += res.workflow_runs.length;
+      if (res.workflow_runs.length < 100) break;
+    }
+    if (got >= CAP) gaps.push(`ci runs: ${from}..${to} returned the API's ${CAP}-run limit, so that range is incomplete`);
   }
-  if (truncated) {
-    const oldest = runs.at(-1)?.created_at?.slice(0, 10);
-    gaps.push(`ci runs: stopped at ${runs.length} runs (oldest ${oldest}); the window is shorter than ${since.slice(0, 10)}`);
-  }
+  const runs = [...byId.values()].sort((x, y) => y.created_at.localeCompare(x.created_at));
   const completed = runs.filter((r) => r.status === 'completed' && ['success', 'failure'].includes(r.conclusion));
   const jobLists = [];
   for (const run of completed.slice(0, jobSample)) {
@@ -133,15 +146,25 @@ function isBrowserSuite(path, source) {
   return /(^|\/)[^/]*-e2e\//.test(path) || /(^|\/)a11y\/specs\//.test(path) || /from\s+['"]@playwright\/test['"]/.test(source);
 }
 
+/**
+ * Specs that need a live Nuxeo. libs/integration-tests/vitest.unit.config.mts includes only
+ * `*.unit.spec.ts`, so `*.integration.spec.*` is a different population from the unit suite.
+ */
+const isLiveIntegrationSuite = (path) => /\.integration\.(spec|test)\.[cm]?[jt]sx?$/.test(path);
+
 function collectUnit() {
   const files = execFileSync('git', ['ls-files', ...UNIT_GLOBS], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
     .split('\n').filter(Boolean);
   const scanned = [];
+  let browser = 0;
+  let live = 0;
   for (const path of files) {
     const source = readFileSync(path, 'utf8');
-    if (!isBrowserSuite(path, source)) scanned.push({ path, counts: countSpec(source) });
+    if (isBrowserSuite(path, source)) browser += 1;
+    else if (isLiveIntegrationSuite(path)) live += 1;
+    else scanned.push({ path, counts: countSpec(source) });
   }
-  return { ...summariseSpecs(scanned), excludedBrowserSuites: files.length - scanned.length };
+  return { ...summariseSpecs(scanned), excludedBrowserSuites: browser, excludedLiveIntegrationSuites: live };
 }
 
 /** The `matrix.project` list in e2e-nightly.yml. Keep the two in step. */
@@ -163,7 +186,16 @@ function collectE2e(dir) {
   // rate nobody measured, so a missing browser leaves the whole section unmeasured.
   const missing = EXPECTED_E2E_BROWSERS.filter((b) => !reports.some((p) => p.split(/[\\/]/).includes(`e2e-${b}`)));
   if (missing.length) throw new Error(`no results.json from ${missing.join(', ')}; the nightly's other browser alone would be a partial total`);
-  const parts = reports.map((p) => parsePlaywright(JSON.parse(readFileSync(p, 'utf8'))));
+  const parts = reports.map((p) => {
+    const raw = JSON.parse(readFileSync(p, 'utf8'));
+    const parsed = parsePlaywright(raw);
+    // A browser that failed setup can still write results.json: top-level `errors` and no tests.
+    // Parsed naively that is zero counts, which the other browser then turns into a clean 100%.
+    const browser = p.split(/[\\/]/).find((seg) => seg.startsWith('e2e-')) ?? p;
+    if (raw.errors?.length) throw new Error(`${browser}/results.json reports ${raw.errors.length} error(s): ${String(raw.errors[0]?.message ?? '').split('\n')[0]}`);
+    if (parsed.total === 0) throw new Error(`${browser}/results.json contains no tests`);
+    return parsed;
+  });
   const sum = (k) => parts.reduce((s, x) => s + (x[k] ?? 0), 0);
   const ran = sum('total') - sum('skipped');
   return {

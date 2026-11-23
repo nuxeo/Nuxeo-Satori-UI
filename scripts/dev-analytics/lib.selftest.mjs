@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 
 import {
-  byWeek, countSpec, kpis, median, p90, parseLcov, parsePlaywright, prTimings, projectOf,
+  byWeek, countSpec, dateWindows, kpis, median, p90, parseLcov, parsePlaywright, prTimings, projectOf,
   summariseJobs, summarisePrs, summariseRuns, summariseSpecs, weekStart,
 } from './lib.mjs';
 
@@ -18,6 +18,17 @@ assert.equal(weekStart('2026-11-23T10:00:00Z'), '2026-11-23'); // a Monday
 assert.equal(weekStart('2026-11-29T23:59:00Z'), '2026-11-23'); // the Sunday after it
 assert.equal(weekStart('2026-11-30T00:00:00Z'), '2026-11-30');
 assert.deepEqual(byWeek([{ d: '2026-11-30T00:00:00Z' }, { d: '2026-11-23T00:00:00Z' }], (x) => x.d).map(([w]) => w), ['2026-11-23', '2026-11-30']);
+
+// date windows: contiguous, no gaps or overlap, the last one clipped to today
+assert.deepEqual(dateWindows('2026-11-01T10:00:00Z', '2026-11-08T01:00:00Z', 3), [
+  ['2026-11-01', '2026-11-03'], ['2026-11-04', '2026-11-06'], ['2026-11-07', '2026-11-08'],
+]);
+assert.deepEqual(dateWindows('2026-11-08T00:00:00Z', '2026-11-08T23:00:00Z', 3), [['2026-11-08', '2026-11-08']]);
+{
+  const w = dateWindows('2026-08-25T00:00:00Z', '2026-11-23T12:00:00Z', 3);
+  for (let i = 1; i < w.length; i++) assert.equal(new Date(w[i][0]) - new Date(w[i - 1][1]), 864e5);
+  assert.equal(w.length, 31); // 91 inclusive days -> 31 queries, each far under the 1,000-result cap
+}
 
 // PR timings: author's own review is ignored; unreviewed PR yields null stages, not 0
 const pr = {
