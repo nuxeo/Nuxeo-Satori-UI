@@ -5501,6 +5501,34 @@ function checkStorybookSatoriCatalogues() {
         reachesConfiguration(node.arguments[0])
       ) {
         hiddenWrite = node;
+      } else if (
+        // Mutating the mounts in place: `config.staticDirs.length = 0`, `….staticDirs[0].to = …`.
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+        insideStaticDirs(node.left)
+      ) {
+        hiddenWrite = node;
+      } else if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        ARRAY_MUTATORS.has(node.expression.name.text) &&
+        insideStaticDirs(node.expression)
+      ) {
+        hiddenWrite = node;
+      } else if (ts.isDeleteExpression(node)) {
+        const target = unwrap(node.expression);
+        const deletesStaticDirs =
+          (ts.isPropertyAccessExpression(target) && target.name.text === 'staticDirs') ||
+          (ts.isElementAccessExpression(target) &&
+            ts.isStringLiteralLike(target.argumentExpression) &&
+            target.argumentExpression.text === 'staticDirs');
+        if (
+          insideStaticDirs(target) ||
+          (deletesStaticDirs && reachesConfiguration(target.expression))
+        ) {
+          hiddenWrite = node;
+        }
       }
       ts.forEachChild(node, findHiddenWrites);
     };
@@ -5636,6 +5664,47 @@ function checkStorybookSatoriCatalogues() {
       }
     }
     /** Whether a write to `target` (or to something inside it) can reach the exported configuration. */
+    /** Every identifier a binding name declares, through object and array destructuring. */
+    const boundNames = (name, out = []) => {
+      if (ts.isIdentifier(name)) out.push(name.text);
+      else if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
+        for (const element of name.elements) {
+          if (ts.isBindingElement(element)) boundNames(element.name, out);
+        }
+      }
+      return out;
+    };
+    /**
+     * Whether `identifier` names something other than the exported configuration because an
+     * enclosing scope rebinds it. Storybook's own docs write `webpackFinal: async (config) => …`,
+     * where `config` is webpack's, and matching by name alone refused writes to it (review on
+     * #602). A parameter always shadows; a local declaration shadows unless it is itself an alias
+     * of the configuration (`const same = config`), which must stay visible.
+     */
+    const shadowed = (identifier) => {
+      const name = identifier.text;
+      for (let scope = identifier.parent; scope && !ts.isSourceFile(scope); scope = scope.parent) {
+        if (ts.isFunctionLike(scope)) {
+          for (const parameter of scope.parameters ?? []) {
+            if (boundNames(parameter.name).includes(name)) return true;
+          }
+        }
+        const statements = ts.isBlock(scope) ? scope.statements : null;
+        for (const statement of statements ?? []) {
+          if (!ts.isVariableStatement(statement)) continue;
+          for (const declaration of statement.declarationList.declarations) {
+            if (!boundNames(declaration.name).includes(name)) continue;
+            const init = unwrap(declaration.initializer);
+            const aliases =
+              init &&
+              ((ts.isIdentifier(init) && configurationNames.has(init.text)) ||
+                objectOf(declaration.initializer) === exportedConfiguration);
+            if (!aliases) return true;
+          }
+        }
+      }
+      return false;
+    };
     const reachesConfiguration = (target) => {
       let node = unwrap(target);
       while (node && (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))) {
@@ -5643,9 +5712,40 @@ function checkStorybookSatoriCatalogues() {
         node = unwrap(node.expression);
       }
       if (!node) return false;
-      if (ts.isIdentifier(node)) return configurationNames.has(node.text);
+      if (ts.isIdentifier(node)) return configurationNames.has(node.text) && !shadowed(node);
       if (node.kind === ts.SyntaxKind.ThisKeyword) return false;
       return true; // a call result or other expression this gate cannot name
+    };
+    /**
+     * Whether `target` reaches *into* the exported `staticDirs` — `config.staticDirs.length`,
+     * `config.staticDirs[0].to`, `config.staticDirs.splice` — so a write or call there changes what
+     * is served without reassigning `staticDirs` itself, which is counted as a definition above.
+     */
+    const ARRAY_MUTATORS = new Set([
+      'push',
+      'pop',
+      'shift',
+      'unshift',
+      'splice',
+      'sort',
+      'reverse',
+      'fill',
+      'copyWithin',
+    ]);
+    const insideStaticDirs = (target) => {
+      let node = unwrap(target);
+      let below = false;
+      while (node && (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))) {
+        const segment = ts.isPropertyAccessExpression(node)
+          ? node.name.text
+          : ts.isStringLiteralLike(node.argumentExpression)
+            ? node.argumentExpression.text
+            : null;
+        if (segment === 'staticDirs') return below && reachesConfiguration(node.expression);
+        below = true;
+        node = unwrap(node.expression);
+      }
+      return false;
     };
     findHiddenWrites(mainSource);
     if (hiddenWrite) {

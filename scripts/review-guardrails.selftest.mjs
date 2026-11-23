@@ -13370,6 +13370,73 @@ export default config;
   /writes a property this gate cannot name \(`same\[key\] = \[\]`\)/,
 );
 
+// Twelfth round. Mutating the mounts in place changed what is served without reassigning
+// `staticDirs`, so the gate judged mounts that no longer existed…
+for (const [label, mutation] of [
+  ['emptied by length', 'config.staticDirs.length = 0;'],
+  ['emptied by splice', 'config.staticDirs.splice(0);'],
+  ['a mount retargeted', "config.staticDirs[0].to = 'elsewhere';"],
+  ['deleted', 'delete config.staticDirs;'],
+]) {
+  expectRed(
+    `staticDirs ${label} after it is defined`,
+    'checkStorybookSatoriCatalogues',
+    {
+      ...SB_VENDOR_1_0_0,
+      [`${SB}/.storybook/main.ts`]: `const config = { staticDirs: [${SB_SATORI_DIR}] };
+${mutation}
+export default config;
+`,
+      [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+    },
+    null,
+    /writes a property this gate cannot name/,
+  );
+}
+
+// …and a name was matched without scope, so webpack's own `config` in Storybook's documented
+// `webpackFinal: async (config) => …` was taken for the exported one and its writes refused.
+falsePositiveControls += 1;
+expectGreen(
+  'a webpackFinal hook whose parameter shadows the exported config',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const config = {
+  staticDirs: [${SB_SATORI_DIR}],
+  webpackFinal: async (config) => {
+    config.resolve.alias[name] = 'src';
+    Object.assign(config.resolve.alias, { '@app': 'src' });
+    return config;
+  },
+};
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+// Scope must not become a way round the rule: a local alias of the configuration still counts.
+expectRed(
+  'a computed write through a function-local alias of the exported configuration',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const key = 'staticDirs';
+const config = { staticDirs: [${SB_SATORI_DIR}] };
+function empty() {
+  const same = config;
+  same[key] = [];
+}
+empty();
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /writes a property this gate cannot name \(`same\[key\] = \[\]`\)/,
+);
+
 // A computed write with a literal key naming something else cannot reach `staticDirs`.
 falsePositiveControls += 1;
 expectGreen('a literal-key write to another property', 'checkStorybookSatoriCatalogues', {
