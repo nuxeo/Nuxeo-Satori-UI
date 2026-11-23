@@ -440,6 +440,12 @@ becomes. In version 2's terms:
   - **a row action needs a handler where the list is.** The platform's `app.rowActions.*` are run
     by the browse list today, so a record page offers none of them until they are registered for
     the whole app. A customer's own row action, registered in Layer 2 code, is offered;
+  - **a row action's rules answer for the row, not the page's record.** A row action whose rule
+    or `enabledRule` names a rule that answers from the state the page publishes about its own
+    record, such as `app.rules.isLocked` or `app.rules.isNotBusy`, itself or inside `core.every`,
+    `core.some` or `core.not`, is not offered: nothing publishes that state for a row. Those are
+    the surface rules but `app.rules.isNote`, which reads the document, refused by ID. A row's rules see none of
+    the page's flags, so a customer's own rule that reads them finds none;
   - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, or any
     record a facet gives the `file` or `note` schema, keeps its own View tab, its preview or its
     editor: a record page beside a preview comes later;
@@ -448,7 +454,7 @@ becomes. In version 2's terms:
   - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or
     the stored id, until each has its lookup. Section 12 proposes how `document-link` reads the
     linked record, and shows another of its properties;
-  - **a rule nested more than 32 levels deep** leaves its tab, card or field out: the rule
+  - **a rule nested more than 32 levels deep** leaves its tab, card, field or row action out: the rule
     registry answers no deeper, and past that it passes any rule not declared security-relevant,
     whatever the rule says;
   - **`metadata`, `edit` and `create` files of version 2** are still refused, and the generated
