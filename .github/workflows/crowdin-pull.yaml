@@ -25,6 +25,11 @@ on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
+    inputs:
+      verify_pending_languages:
+        description: 'Download ar/he/it/sv and report approval/readiness without updating translation PRs'
+        type: boolean
+        default: false
 
 concurrency:
   group: crowdin-pull
@@ -35,7 +40,7 @@ jobs:
     # The off switch, not a "not yet" — see the note in crowdin-push.yaml. The project exists
     # and both halves have run; what this still guards is a fork or clone, which has none of
     # these secrets and would otherwise run this job on every push.
-    if: vars.CROWDIN_SYNC_ENABLED == 'true'
+    if: vars.CROWDIN_SYNC_ENABLED == 'true' && !inputs.verify_pending_languages
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -311,3 +316,41 @@ jobs:
           # workflows and leave the pull request with no checks. Confirm on the first real run that
           # this token completes both operations and that checks start on the resulting pull request.
           GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+
+  verify-pending-languages:
+    if: github.event_name == 'workflow_dispatch' && inputs.verify_pending_languages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Download approved translations without pushing or opening a PR
+        uses: crowdin/github-action@8868a33591d21088edfc398968173a3b98d51706 # v2.16.2
+        with:
+          config: crowdin-conf.yml
+          skip_ref_checkout: true
+          upload_sources: false
+          upload_translations: false
+          download_translations: true
+          download_translations_args: '--language=ar --language=he --language=it --language=sv'
+          push_translations: false
+          create_pull_request: false
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Check exported files and live Crowdin approval status
+        if: always()
+        run: node scripts/check-crowdin-readiness.mjs
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+      - name: Save translation files and readiness report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nxsat-754-crowdin-readiness
+          path: crowdin-readiness/
+          if-no-files-found: error
+          retention-days: 7
