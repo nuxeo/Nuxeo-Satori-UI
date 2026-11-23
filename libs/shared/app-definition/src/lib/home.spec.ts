@@ -214,6 +214,61 @@ describe('home.json', () => {
     expect(show(validateHome(input, { registries }))).toEqual([]);
   });
 
+  it("checks a registered rule nested in a customer's own, however deep, as a rule", () => {
+    const registries = withRegistered(PACKAGED_REGISTRIES, { rules: ['acme.rules.anyOf'] });
+    const card = (parameters: unknown[]) =>
+      home([kpi({}, { visibleWhen: { type: 'acme.rules.anyOf', parameters } })]);
+    // `core.not` over nothing is `true` in the registry: a composite resolving it would show the card.
+    expect(
+      show(validateHome(card([{ type: 'core.not', parameters: [] }]), { registries })),
+    ).toEqual([
+      'cards[0].visibleWhen.parameters[0].parameters: the rule "core.not" takes 1 parameter, not 0 [parameter]',
+    ]);
+    expect(
+      show(
+        validateHome(card([{ any: [{ type: 'app.rules.inGroup', parameters: [] }] }]), {
+          registries,
+        }),
+      ),
+    ).toEqual([
+      'cards[0].visibleWhen.parameters[0].any[0].parameters: the rule "app.rules.inGroup" takes at least 1 parameter, not 0 [parameter]',
+    ]);
+    // A sound nested rule, a value and a `{ "type" }` nobody registered are the customer's to read.
+    expect(
+      show(
+        validateHome(
+          card([
+            { type: 'app.rules.inGroup', parameters: ['claims-adjusters'] },
+            'claims-supervisors',
+            { type: 'acme.kind', of: 'x' },
+          ]),
+          { registries },
+        ),
+      ),
+    ).toEqual([]);
+    // In a layout too, where a record is open: the nested rule is a rule there as well.
+    const layout = {
+      version: 2,
+      cards: [
+        {
+          id: 'c',
+          fields: [
+            {
+              field: 'dc:title',
+              visibleWhen: {
+                type: 'acme.rules.anyOf',
+                parameters: [{ type: 'core.not', parameters: [] }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    expect(show(validateLayoutV2(layout, { mode: 'view', registries }))).toEqual([
+      'cards[0].fields[0].visibleWhen.parameters[0].parameters: the rule "core.not" takes 1 parameter, not 0 [parameter]',
+    ]);
+  });
+
   it("refuses a property in a customer's own rule too, however deep, which has no signature here", () => {
     const registries = withRegistered(PACKAGED_REGISTRIES, { rules: ['acme.rules.ownerIs'] });
     const input = home([

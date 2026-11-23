@@ -150,6 +150,28 @@ describe("the other files' JSON Schemas, held to their validators", () => {
     expect(actions['$defs'].action.properties.on.items.enum).toEqual([...PLACEMENTS]);
   });
 
+  it('ask a name of a home card with a figure, whatever else it has, as the validator does', () => {
+    // Each way a card may be valid either requires a name or excludes a figure.
+    type Branch = {
+      required: string[];
+      anyOf?: { required: string[] }[];
+      not?: { required: string[] };
+    };
+    const branches = home['$defs'].homeCard.anyOf as Branch[];
+    expect(branches.length).toBe(2);
+    for (const branch of branches) {
+      const excludesKpi = branch.not?.required.includes('kpi') === true;
+      const named = (branch.anyOf ?? [])
+        .map((option) => option.required)
+        .flat()
+        .sort();
+      expect([branch.required, excludesKpi || named.join()]).toEqual([
+        branch.required,
+        excludesKpi || 'label,labelKey',
+      ]);
+    }
+  });
+
   it("copy the layout schema's definitions they share, unchanged", () => {
     // Each schema stands alone, for editors, so the rules, values and field entries are copied
     // from the layout schema rather than referenced across files. This keeps the copies equal.

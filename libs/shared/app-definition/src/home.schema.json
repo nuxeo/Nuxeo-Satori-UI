@@ -46,7 +46,10 @@
           ]
         },
         {
-          "required": ["queue"]
+          "required": ["queue"],
+          "not": {
+            "required": ["kpi"]
+          }
         }
       ],
       "additionalProperties": false,

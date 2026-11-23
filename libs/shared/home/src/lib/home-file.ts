@@ -79,9 +79,10 @@ function cardOf(finding: Finding): number | null {
  * than the registry would.
  *
  * The nested rules are those a composite resolves: every parameter of `core.every`, `core.some`
- * and `core.not`, a rule's id included, and any `{ "type" }` among another rule's parameters, which
- * a customer's own composite, registered in Layer 2 code, may resolve the same way. A text among a
- * non-composite's parameters is a value, such as a group, and is not read as a rule.
+ * and `core.not`, a rule's id included, and any `{ "type" }` among another rule's parameters, at
+ * any depth, which a customer's own composite, registered in Layer 2 code, may resolve the same
+ * way. A text among a non-composite's parameters is a value, such as a group, and is not read as a
+ * rule. The validator checks the signature of each nested rule it knows, as `validateHome` does.
  */
 export function refusedRule(
   rule: unknown,
@@ -94,13 +95,20 @@ export function refusedRule(
   if (level > MAX_RULE_LEVELS)
     return `nests its rule more than ${MAX_RULE_LEVELS} levels deep, deeper than this build answers`;
   if (!isRecord(rule) || !Array.isArray(rule['parameters'])) return null;
-  const composite = COMPOSITES.has(id);
-  for (const nested of rule['parameters']) {
-    if (!composite && !(isRecord(nested) && typeof nested['type'] === 'string')) continue;
-    const refused = refusedRule(nested, isRegistered, level + 1);
+  const nested = COMPOSITES.has(id) ? rule['parameters'] : rulesIn(rule['parameters']);
+  for (const inner of nested) {
+    const refused = refusedRule(inner, isRegistered, level + 1);
     if (refused) return refused;
   }
   return null;
+}
+
+/** Every `{ "type" }` in `value`, at any depth, not looking inside one it finds. */
+function rulesIn(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value.flatMap(rulesIn);
+  if (!isRecord(value)) return [];
+  if (typeof value['type'] === 'string') return [value];
+  return Object.values(value).flatMap(rulesIn);
 }
 
 /**

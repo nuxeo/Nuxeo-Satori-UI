@@ -177,19 +177,35 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     }
     const signature = registries.rules[type];
     if (signature) signed(signature, parameters, join(path, 'parameters'), `the rule "${type}"`);
-    // A customer's own rule has no signature here, so its parameters are not read as values. With
-    // no record open, none of them may still name a property, however deep.
-    else if (!record) propertiesIn(parameters, join(path, 'parameters'));
+    // A customer's own rule has no signature here, so its parameters are not read as values.
+    else inCustomerRule(parameters, join(path, 'parameters'));
   };
 
-  /** Every `{ "field" }` in `item`, at any depth: a parameter finding where no record is open. */
-  const propertiesIn = (item: unknown, path: string): void => {
-    if (isFieldReference(item))
-      add(path, 'parameter', 'no record is open here, so a rule is given literals, not a property');
-    else if (Array.isArray(item))
-      item.forEach((inner, index) => propertiesIn(inner, join(path, index)));
+  /**
+   * The parameters of a customer's own rule, at any depth, which this library cannot type. A
+   * customer's composite may resolve a rule among them, as `core.every` does, so a `{ "type" }`
+   * naming a registered rule is checked as one, its signature included. Where no record is open,
+   * a `{ "field" }` is refused. Anything else is the customer's to read: a text is a value, such
+   * as a group, not a rule's id.
+   */
+  const inCustomerRule = (item: unknown, path: string): void => {
+    if (isFieldReference(item)) {
+      if (!record)
+        add(
+          path,
+          'parameter',
+          'no record is open here, so a rule is given literals, not a property',
+        );
+    } else if (Array.isArray(item))
+      item.forEach((inner, index) => inCustomerRule(inner, join(path, index)));
+    else if (
+      isRecord(item) &&
+      typeof item['type'] === 'string' &&
+      Object.hasOwn(registries.rules, item['type'])
+    )
+      rule(item, path);
     else if (isRecord(item))
-      for (const [key, inner] of Object.entries(item)) propertiesIn(inner, join(path, key));
+      for (const [key, inner] of Object.entries(item)) inCustomerRule(inner, join(path, key));
   };
 
   /** A literal, a property, or a computation. */

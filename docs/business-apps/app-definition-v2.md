@@ -480,8 +480,10 @@ A KPI:
 - **One request per page provider and parameters**, however many cards read it, with a page of one
   record. A hidden card asks for nothing.
 - **No record is open** on the home: a page provider's parameters are literals, as a queue's are,
-  and a rule is given literals. That holds for a customer's own rule too: its parameters are not
-  checked here, but a `{ "field" }` among them, at any depth, is a `parameter` finding.
+  and a rule is given literals. That holds for a customer's own rule too: the validator cannot
+  type its parameters, but a `{ "field" }` among them, at any depth, is a `parameter` finding.
+  And a registered rule among them, which a customer's composite may resolve, is checked as a
+  rule, its parameters included, in every file.
 - **A figure is not a security control,** and not an audit either. It counts what the page provider
   returns to the person signed in, and hiding a card hides the figure, not the records.
 

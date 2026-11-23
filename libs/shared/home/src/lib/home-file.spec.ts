@@ -183,6 +183,10 @@ describe("a customer's own composite", () => {
     ]);
     // A text among a rule's parameters is a value, such as a group, not a rule's id.
     expect(ids(readHome(card('claims-adjusters'), registered))).toEqual(['a']);
+    // However deep the customer's own parameters hold it.
+    expect(ids(readHome(card({ any: [[{ type: 'acme.rules.unknown' }]] }), registered))).toEqual(
+      [],
+    );
   });
 });
 

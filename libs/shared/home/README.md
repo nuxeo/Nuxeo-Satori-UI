@@ -29,7 +29,7 @@ It is an engine (tier 3 of [architecture.md](../../../docs/business-apps/archite
   - an `unknown` or `parameter` finding leaves out its card, and a key of the file's own is ignored;
   - a card whose rule this build does not register, or nests deeper than the rule registry answers
     (`MAX_RULE_LEVELS`, 32), is left out: the registry would answer `true` for it. Nested rules are
-    a core composite's parameters and any `{ "type" }` among another rule's;
+    a core composite's parameters and any `{ "type" }` among another rule's, at any depth;
   - a home whose every card is left out is a home that could not be read.
 - **Evaluates each card's rule** with `ExtensionRuleRegistry`, in the signed-in person's context:
   their user name and groups, and no record. A home per group is cards whose rule is
