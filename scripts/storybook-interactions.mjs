@@ -294,9 +294,13 @@ async function runStory(context, story) {
     page.on('requestfinished', async (request) => {
       if (pathOf(request).includes(SATORI_CATALOGUES)) {
         const response = await request.response().catch(() => null);
+        // Its strings, not just its status: a 200 with `{}` loaded nothing, and a story whose
+        // `sat.*` text sits only in attributes then passed with no translations (review on #602).
+        const body = response ? await response.text().catch(() => '') : '';
         catalogues.push({
           path: pathOf(request),
           status: response?.status() ?? 0,
+          strings: countStrings(body),
           error: 'no response',
         });
       }
@@ -327,9 +331,27 @@ async function runStory(context, story) {
       .filter((reporter) => reporter?.type === 'a11y')
       .reduce((count, reporter) => count + (reporter?.result?.violations?.length ?? 0), 0);
     if (!failures.length) {
-      const text = await page.evaluate(() => document.body.innerText);
+      // With --satori, the text a screen reader announces as well as what is drawn: an accessible
+      // name left as a raw key is the regression this started from, and `innerText` cannot see
+      // it. The default run reads `innerText` only, as it always has.
+      const text = await page.evaluate(
+        (withAttributes) =>
+          [
+            document.body.innerText,
+            ...(withAttributes
+              ? [...document.querySelectorAll('[aria-label],[title],[placeholder],[alt]')].flatMap(
+                  (el) =>
+                    ['aria-label', 'title', 'placeholder', 'alt']
+                      .map((name) => el.getAttribute(name))
+                      .filter(Boolean),
+                )
+              : []),
+          ].join('\n'),
+        satori,
+      );
       const raw = RAW_KEY.exec(text);
-      if (raw) failures.push(`an untranslated key is on screen: ${raw[0]}`);
+      if (raw)
+        failures.push(`an untranslated key is on screen or in an accessible name: ${raw[0]}`);
     }
     const layout =
       isDialogStory(story) && !failures.length ? await checkLayout(context, page, story) : null;
@@ -348,6 +370,23 @@ async function runStory(context, story) {
   } finally {
     await page.close();
   }
+}
+
+/** How many string values a catalogue body holds, at any depth; 0 for one that is not JSON. */
+function countStrings(body) {
+  let value;
+  try {
+    value = JSON.parse(body);
+  } catch {
+    return 0;
+  }
+  const walk = (node) =>
+    typeof node === 'string'
+      ? 1
+      : node && typeof node === 'object'
+        ? Object.values(node).reduce((sum, child) => sum + walk(child), 0)
+        : 0;
+  return walk(value);
 }
 
 /**
@@ -384,13 +423,16 @@ async function settleCatalogues(page, inFlight) {
  * is fine only if that fallback then loaded; and a Satori Storybook must load at least one.
  */
 function satoriCatalogueFailures(catalogues) {
-  /** Served: an HTTP answer below 400. A transport failure is recorded as status 0. */
+  /** An HTTP answer below 400. A transport failure is recorded as status 0. */
   const ok = (status) => status >= 200 && status < 400;
-  const loaded = new Set(catalogues.filter((c) => ok(c.status)).map((c) => c.path));
+  /** Served: answered, and holding at least one translation string. */
+  const served = (c) => ok(c.status) && (c.strings ?? 0) > 0;
+  const loaded = new Set(catalogues.filter(served).map((c) => c.path));
   const failures = [];
-  for (const { path, status, error } of catalogues) {
+  for (const catalogue of catalogues) {
+    const { path, status, error } = catalogue;
     // Served on another attempt — the preview and a story can each ask — means the strings arrived.
-    if (ok(status) || loaded.has(path)) continue;
+    if (served(catalogue) || loaded.has(path)) continue;
     const file = path.slice(path.lastIndexOf('/') + 1);
     const lang = file.replace(/\.json$/, '');
     const parts = lang.split(/[-_]/);
@@ -398,7 +440,7 @@ function satoriCatalogueFailures(catalogues) {
       parts.length > 1 ? path.replace(new RegExp(`${file}$`), `${parts[0]}.json`) : null;
     if (fallback && loaded.has(fallback)) continue;
     failures.push(
-      `Satori's catalogue ${path} ${status ? `answered ${status}` : `failed in transport (${error})`}` +
+      `Satori's catalogue ${path} ${ok(status) ? `answered ${status} with no translation strings` : status ? `answered ${status}` : `failed in transport (${error})`}` +
         (fallback ? ` and its fallback ${fallback} did not load` : '') +
         ', so its sat.* strings are missing',
     );
