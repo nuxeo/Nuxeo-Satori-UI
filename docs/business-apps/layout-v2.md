@@ -420,9 +420,7 @@ becomes. In version 2's terms:
     that column is left out, and the rest of the table shows;
   - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or
     the stored id, until each has its lookup;
-  - **the three rules of section 5** are not registered yet, so a tab, card or field that one of
-    them shows is left out, rather than shown to everyone;
-  - **a rule nested more than 32 levels deep** leaves its tab, card or field out too: the rule
+  - **a rule nested more than 32 levels deep** leaves its tab, card or field out: the rule
     registry answers no deeper, and past that it passes any rule not declared security-relevant,
     whatever the rule says;
   - **`metadata`, `edit` and `create` files of version 2** are still refused, and the generated

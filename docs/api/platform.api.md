@@ -3756,6 +3756,7 @@ interface ExtensionRuleContext {
     readonly user: {
     readonly username: string | null;
     readonly isAdministrator: boolean;
+    readonly groups?: readonly string[];
     };
     readonly url: string;
     readonly flags: Readonly<Record<string, boolean>>;
@@ -3767,6 +3768,7 @@ class ExtensionRuleContextService {
     readonly selectionCount: import("@angular/core").WritableSignal<number>;
     readonly username: import("@angular/core").WritableSignal<string | null>;
     readonly isAdministrator: import("@angular/core").WritableSignal<boolean>;
+    readonly groups: import("@angular/core").WritableSignal<readonly string[]>;
     readonly url: import("@angular/core").WritableSignal<string>;
     readonly flags: import("@angular/core").WritableSignal<Readonly<Record<string, boolean>>>;
     readonly context: import("@angular/core").Signal<ExtensionRuleContext>;
@@ -3902,7 +3904,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-319 exported symbol(s).
+320 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -5397,6 +5399,7 @@ function permissionUpdateMailFailureMessage(translate: PermissionMessageTranslat
 function postTrashBrowseRouterUrl(deletedDocPath: string): string;
 function principalPermissionTimeFrameLabel(row: PrincipalPermissionRow, translate: (key: string) => string, locale: string): string;
 function principalPermissionToLocalRow(row: PrincipalPermissionRow, translate: (key: string) => string, locale: string): LocalPermissionRow;
+function readAllGroupsFromMe(me: unknown): string[];
 function readBlobDigest(doc: NuxeoDocument): string | null;
 function readClipboardDocs(): ClipboardDoc[];
 function readContentLakeIngestMarker(doc: NuxeoDocument): string | null;

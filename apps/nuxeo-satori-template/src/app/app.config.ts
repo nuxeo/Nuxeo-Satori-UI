@@ -126,6 +126,7 @@ export const appConfig: ApplicationConfig = {
       effect(
         () => {
           ruleContext.username.set(session.username());
+          ruleContext.groups.set(session.groups());
         },
         { injector },
       );
