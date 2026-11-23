@@ -25,9 +25,9 @@ name: Dev analytics
 
 on:
   # TEMPORARY — remove before merge. A workflow can only be dispatched once it is on `main`, so
-  # this lets the branch run it. Off `main` PUBLISH is false: no snapshot push, no Pages republish.
-  push:
-    branches: [fix/dev-analytics-metrics-aac4d7]
+  # this lets the pull request run it. Off `main` PUBLISH is false: no snapshot push, no Pages
+  # republish. (`push` on a feature branch is rejected by review-guardrails, rightly.)
+  pull_request:
     paths: ['.github/workflows/dev-analytics.yml', 'scripts/dev-analytics/**']
   schedule:
     - cron: '0 5 * * *' # after the 03:00 e2e-nightly has finished
