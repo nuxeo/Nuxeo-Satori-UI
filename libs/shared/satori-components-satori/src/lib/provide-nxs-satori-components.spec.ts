@@ -381,7 +381,7 @@ describe('the Satori primitives, rendered by ID', () => {
     } finally {
       if (original.offsetWidth) Object.defineProperty(proto, 'offsetWidth', original.offsetWidth);
       // `scrollWidth` lives on Element.prototype; only the HTMLElement shadow was added.
-      delete (proto as unknown as Record<string, unknown>)['scrollWidth'];
+      Reflect.deleteProperty(proto, 'scrollWidth');
     }
   });
 

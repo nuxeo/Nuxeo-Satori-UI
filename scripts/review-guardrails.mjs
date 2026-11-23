@@ -5110,6 +5110,15 @@ const SATORI_STORYBOOK_CATALOGUE_DIR = 'i18n/@hylandsoftware/satori-ui';
  * Scope: the satori-ui path only. Other paths added with `provideSatoriTranslationPaths` (the
  * app's own catalogue, served at `i18n/`) are this product's catalogues, and a missing one shows
  * English rather than raw keys.
+ *
+ * ## This is the fast approximation; `storybook-satori` is the authority
+ *
+ * This reads configuration files and predicts what Storybook will serve, and code can always build
+ * or mutate a configuration in a way a static reader cannot follow: review on #602 found twelve
+ * such ways in turn. It refuses what it cannot read, which keeps it on the safe side, but it cannot
+ * be complete. The `storybook-satori` gate builds the Storybook and checks in a browser what is
+ * actually served, so prefer extending that over teaching this one another syntactic form. This
+ * stays because it is fast, needs no token and runs on every `guardrails` pass.
  */
 function checkStorybookSatoriCatalogues() {
   /**

@@ -36,7 +36,22 @@
  *
  * The default Storybook, which builds without a GitHub Packages token. The Satori adapter's
  * Storybook (`satori-components-satori`) and the Satori-theme build need `@hylandsoftware/satori-ui`
- * and are refused, so the job never depends on the token.
+ * and are refused unless `--satori` is passed, so the CI job never depends on the token.
+ *
+ * ## With `--satori`
+ *
+ * For the Satori adapter's Storybook (the `storybook-satori` gate), each story also fails when:
+ *
+ * - a request under `i18n/@hylandsoftware/satori-ui/` answers an error and Satori's loader has no
+ *   fallback that loaded — it asks for `<lang>.json` and, for a regional code, then the base
+ *   language's file, so `en-US.json` 404 followed by `en.json` 200 is fine and a lone 404 is not;
+ * - no Satori catalogue loaded at all;
+ * - an untranslated `sat.*` key is on screen (checked in every run; nothing else renders one).
+ *
+ * This is what the static `checkStorybookSatoriCatalogues` guardrail approximates from the config
+ * files. It asks the built Storybook instead, so no way of writing `staticDirs`, `assets` or the
+ * loader's languages can make it disagree with what is served. satori-ui 1.0.0 dropped `en.json`
+ * and the Satori Storybook rendered raw `sat.*` keys with every gate green; this is that check.
  *
  * Needs `@playwright/test` and Chromium, which CI installs with `--no-save`:
  *   npm install --no-save @playwright/test@<a11y/versions.mjs> && npx playwright install chromium
@@ -44,6 +59,7 @@
  * Usage:
  *   node scripts/storybook-interactions.mjs [--dir dist/storybook/satori-components]
  *     [--port 6231] [--story-timeout 20000] [--budget 900000] [--only <id-part>] [--json <file>]
+ *     [--satori]
  *
  * Exit 0 all stories passed, 1 a story failed or the budget ran out, 2 nothing could be run.
  */
@@ -74,6 +90,8 @@ const storyTimeout = Number(option('--story-timeout', '20000'));
 const budget = Number(option('--budget', '900000'));
 const only = option('--only', null);
 const jsonOut = option('--json', null);
+/** Accept a Satori Storybook and check what Satori's own translation loader is served. */
+const satori = argv.includes('--satori');
 
 /** Events after which a story has said all it will. */
 const TERMINAL = ['storyFinished', 'storyErrored', 'storyMissing', 'storyThrewException'];
@@ -86,7 +104,9 @@ const FAILING = [
   'storyMissing',
 ];
 /** A key from a catalogue the library binds, left untranslated on screen. */
-const RAW_KEY = /\b(?:satori-components|shared-ui)\.[a-z0-9-]+(?:\.[a-z0-9-]+)+/;
+const RAW_KEY = /\b(?:satori-components|shared-ui|sat)\.[a-z0-9-]+(?:\.[a-z0-9-]+)+/;
+/** Where Satori's loader fetches its catalogues: `./i18n/@hylandsoftware/satori-ui/<lang>.json`. */
+const SATORI_CATALOGUES = '/i18n/@hylandsoftware/satori-ui/';
 
 const TYPES = {
   '.html': 'text/html',
@@ -147,10 +167,10 @@ function recordChannel(watched) {
 }
 
 async function main() {
-  if (/satori-components-satori|satori-theme/.test(dir)) {
+  if (!satori && /satori-components-satori|satori-theme/.test(dir)) {
     refuse(
       `${dir} is a Satori Storybook, which needs @hylandsoftware/satori-ui and a GitHub Packages ` +
-        'token. This runner covers the token-free build only.',
+        'token. This runner covers the token-free build only; pass --satori to check it anyway.',
     );
   }
   const indexFile = join(dir, 'index.json');
@@ -249,8 +269,17 @@ async function runStory(context, story) {
   const page = await context.newPage();
   const failures = [];
   page.on('pageerror', (error) => failures.push(`uncaught on the page: ${error.message}`));
+  /** Every response to Satori's loader, by path: what the built Storybook actually serves. */
+  const catalogues = [];
+  if (satori) {
+    page.on('response', (response) => {
+      const path = new URL(response.url()).pathname;
+      if (path.includes(SATORI_CATALOGUES)) catalogues.push({ path, status: response.status() });
+    });
+  }
   try {
     const events = await openStory(page, story, failures);
+    if (satori) failures.push(...satoriCatalogueFailures(catalogues));
     const finished = events.find((event) => event.name === 'storyFinished');
     const a11y = (finished?.payload?.reporters ?? [])
       .filter((reporter) => reporter?.type === 'a11y')
@@ -277,6 +306,38 @@ async function runStory(context, story) {
   } finally {
     await page.close();
   }
+}
+
+/**
+ * What is wrong with the catalogues Satori's loader was served, by its own rule: it asks for
+ * `<lang>.json` and, for a regional code, falls back to the base language's file. A failed request
+ * is fine only if that fallback then loaded; and a Satori Storybook must load at least one.
+ */
+function satoriCatalogueFailures(catalogues) {
+  const loaded = new Set(catalogues.filter((c) => c.status < 400).map((c) => c.path));
+  const failures = [];
+  for (const { path, status } of catalogues) {
+    if (status < 400) continue;
+    const file = path.slice(path.lastIndexOf('/') + 1);
+    const lang = file.replace(/\.json$/, '');
+    const parts = lang.split(/[-_]/);
+    const fallback =
+      parts.length > 1 ? path.replace(new RegExp(`${file}$`), `${parts[0]}.json`) : null;
+    if (fallback && loaded.has(fallback)) continue;
+    failures.push(
+      `Satori's catalogue ${path} answered ${status}` +
+        (fallback ? ` and its fallback ${fallback} did not load` : '') +
+        ', so its sat.* strings are missing',
+    );
+  }
+  if (loaded.size === 0) {
+    failures.push(
+      catalogues.length
+        ? 'no Satori catalogue loaded'
+        : `Satori's loader requested nothing under ${SATORI_CATALOGUES}; is the Satori translation provider configured?`,
+    );
+  }
+  return [...new Set(failures)];
 }
 
 /** Opens a story's iframe, waits for it to finish and records the events that fail it. */

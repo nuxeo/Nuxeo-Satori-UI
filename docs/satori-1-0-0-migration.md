@@ -115,7 +115,19 @@ bump, kept for its reasoning; each part says how it turned out.
   code, then base language, as the loader does). With the old `en` values put back, it failed on
   all three places, including the stories decorator first missed by hand. The 8 selftest controls
   were checked by weakening the guardrail two ways — no stories-file scan, no base-language
-  fallback — and each was caught.
+  fallback — and each was caught. Review on #602 then found twelve more ways of writing a
+  configuration it could not follow; each was fixed with a control, and it now refuses what it
+  cannot read.
+- **The authority is now the built Storybook: the `storybook-satori` gate.** It builds
+  `satori-components-satori`'s Storybook and runs `scripts/storybook-interactions.mjs --satori`,
+  which opens every story in Chromium. A story fails when a request under
+  `i18n/@hylandsoftware/satori-ui/` answers an error without the loader's base-language fallback
+  loading, when no Satori catalogue loads, or when a `sat.*` key is on screen. No way of writing
+  the configuration can make it disagree with what is served. Seen red twice on the real build:
+  with the old `en` values (`…/satori-ui/en.json answered 404`, both stories), and with
+  `staticDirs` mounted elsewhere (`en-US.json` and its `en.json` fallback both 404). Green on the
+  current configuration. It needs the GitHub Packages token and Playwright, so it reports NOT RUN
+  without them and is not in PR CI.
 - **A stale engineering doc, corrected:** `documentation/30-engineering/07-extensibility-contract.md`
   said satori-ui ships fifteen catalogues, bare names included. It now gives 1.0.0's eight
   regional files and the `aliases` mapping.
