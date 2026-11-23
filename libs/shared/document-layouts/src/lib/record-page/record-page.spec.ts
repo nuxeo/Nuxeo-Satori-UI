@@ -852,6 +852,13 @@ describe('RecordPageComponent', () => {
           .list()
           .columns.map((column) => column.xpath),
       ).toEqual(['claim:number', 'claim:billedAmount', 'claim:status']);
+      // Answered here, so that the list, which draws no column with a rule left to answer, draws it.
+      expect(
+        relatedList()
+          .list()
+          .columns.map((column) => column.visibleWhen),
+      ).toEqual([null, null, null]);
+      expect(relatedList()['shownColumns']()).toHaveLength(3);
     });
 
     it('does not ask for the list while a parameter has no value on the record, and says why', async () => {

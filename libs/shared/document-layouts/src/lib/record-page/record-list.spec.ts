@@ -102,6 +102,12 @@ const UNLISTED: ExtensionActionDescriptor = {
   label: 'Other',
   order: 30,
 };
+const ARCHIVE: ExtensionActionDescriptor = {
+  id: 'acme.rowActions.archive',
+  label: 'Archive',
+  order: 40,
+  enabledRule: 'test.rules.open',
+};
 
 describe('RecordListComponent', () => {
   let fixture: ComponentFixture<RecordListComponent>;
@@ -135,7 +141,7 @@ describe('RecordListComponent', () => {
         provideRouter([]),
         { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
         provideSatoriExtensions({
-          slots: { [EXTENSION_SLOTS.rowActions]: [FLAG, DOWNLOAD, UNLISTED] },
+          slots: { [EXTENSION_SLOTS.rowActions]: [FLAG, DOWNLOAD, UNLISTED, ARCHIVE] },
           rules: {
             'test.rules.open': (context) =>
               context.document?.properties['claim:status'] !== 'closed',
@@ -363,6 +369,10 @@ describe('RecordListComponent', () => {
     await settle();
     await answer([claim(2)]);
     fixture.componentRef.setInput('parameters', ['m2']);
+    // One pass of change detection, the first frame the new record's card is drawn in.
+    fixture.detectChanges();
+    expect(list().documents()).toEqual([]);
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('CLM-2');
     await settle();
     expect(execute).toHaveBeenLastCalledWith(
       'member_claims',
@@ -370,6 +380,96 @@ describe('RecordListComponent', () => {
     );
     expect(list().documents()).toEqual([]);
     expect(list().loading()).toBe(true);
+  });
+
+  it('sorts by a property with one value, and not by a list, a complex value or a file', async () => {
+    rowProperties = () =>
+      of(
+        new Map<string, LayoutFieldType>([
+          ['claim:number', { type: 'string' }],
+          ['claim:billedAmount', { type: 'string[]' }],
+          ['claim:status', { type: 'complex' }],
+        ]),
+      );
+    await render();
+    expect(
+      list()
+        .columns()
+        .map((c) => c.sortable),
+    ).toEqual([false, false, false]);
+    await answer([claim(1)]);
+    expect(
+      list()
+        .columns()
+        .map((c) => c.sortable),
+    ).toEqual([true, false, false]);
+  });
+
+  it("goes back to the file's order on retry when a chosen order failed", async () => {
+    await render();
+    await answer([claim(1)]);
+    execute.mockReturnValueOnce(throwError(() => ({ status: 400 })));
+    list().sortChange.emit({ key: 'claim:number', direction: 'asc' });
+    await settle();
+    // The error state shows a 400 as the server's failure.
+    expect(list().error()).toBe(500);
+    list().retry.emit();
+    await settle();
+    expect(execute).toHaveBeenLastCalledWith(
+      'member_claims',
+      expect.objectContaining({
+        pageIndex: 0,
+        sort: [{ field: 'claim:serviceDate', order: 'desc' }],
+      }),
+    );
+  });
+
+  it("turns the file's own order round from its header, rather than leaving it unmarked", async () => {
+    const byNumber: RecordListEntry = {
+      ...CLAIMS,
+      sort: [{ field: 'claim:number', order: 'desc' }],
+    };
+    await render(['m1'], byNumber);
+    await answer([claim(1)]);
+    expect(list().sort()).toEqual({ key: 'claim:number', direction: 'desc' });
+    // The header cycles from the file's direction to none.
+    list().sortChange.emit(null);
+    await settle();
+    expect(list().sort()).toEqual({ key: 'claim:number', direction: 'asc' });
+    expect(execute).toHaveBeenLastCalledWith(
+      'member_claims',
+      expect.objectContaining({ sort: [{ field: 'claim:number', order: 'asc' }] }),
+    );
+  });
+
+  it('draws no column whose rule it was not given an answer for, and says so', async () => {
+    const gated: RecordListEntry = {
+      ...CLAIMS,
+      columns: [
+        column('claim:number'),
+        { ...column('claim:billedAmount'), visibleWhen: 'test.rules.open' },
+      ],
+    };
+    await render(['m1'], gated);
+    expect(
+      list()
+        .columns()
+        .map((c) => c.key),
+    ).toEqual(['claim:number']);
+    expect(
+      warnings.some((w) =>
+        w.includes('has a rule the list was not given an answer for; not drawn'),
+      ),
+    ).toBe(true);
+  });
+
+  it("asks again when a column appears, to read its rows' definitions", async () => {
+    const one: RecordListEntry = { ...CLAIMS, columns: [column('claim:number')] };
+    await render(['m1'], one);
+    await answer([claim(1)]);
+    fixture.componentRef.setInput('list', CLAIMS);
+    await settle();
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
   it('asks once for a list given again as an equal copy', async () => {
@@ -413,6 +513,24 @@ describe('RecordListComponent', () => {
       document: row,
     });
     expect(flagged).toHaveLength(1);
+  });
+
+  it('does not run a listed action whose enabledRule fails for the row', async () => {
+    TestBed.inject(ExtensionActionRegistry).register({
+      'acme.rowActions.archive': { execute: (context) => flagged.push(context) },
+    });
+    await render(['m1'], { ...CLAIMS, rowActions: ['acme.rowActions.archive'] });
+    const closed = claim(2, { 'claim:status': 'closed' });
+    await answer([closed]);
+    expect(list().rowActions()['c2']?.[0]).toMatchObject({
+      id: 'acme.rowActions.archive',
+      disabled: true,
+    });
+    list().rowAction.emit({
+      action: { id: 'acme.rowActions.archive', label: 'Archive' },
+      document: closed,
+    });
+    expect(flagged).toEqual([]);
   });
 
   it('does not run a listed action whose rule fails for the row', async () => {

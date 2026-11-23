@@ -71,15 +71,30 @@ type ListState =
 const IDLE: ListState = { status: 'idle' };
 const LOADING: ListState = { status: 'loading' };
 
-/** What one page is asked with. Compared by value, so that an equal request is never sent twice. */
+/**
+ * What one page is asked with. Compared by value, so that one list never sends an equal request
+ * twice in a row. A list drawn again, as a tab is when it is shown again, asks again.
+ */
 interface ListRequest {
   readonly pageProvider: string;
   readonly parameters: readonly string[];
   readonly pageSize: number;
   readonly pageIndex: number;
   readonly sort: readonly PageProviderSort[];
+  /** Not sent: a column that appears needs its rows' definitions read, which a response brings. */
+  readonly columns: readonly string[];
   readonly attempt: number;
 }
+
+/** The property types a header sorts by: one value each. A list, a complex value or a file does not. */
+const SORTABLE_TYPES: ReadonlySet<string> = new Set([
+  'string',
+  'long',
+  'integer',
+  'double',
+  'boolean',
+  'date',
+]);
 
 const sameRequest = (a: ListRequest | null, b: ListRequest | null): boolean =>
   JSON.stringify(a) === JSON.stringify(b);
@@ -143,6 +158,19 @@ export class RecordListComponent {
 
   private readonly attempt = signal(0);
 
+  /**
+   * The columns drawn. One whose rule is still to answer is not: the caller answers each column's
+   * rule for the record and the user, as the record page does, and hands over those that pass.
+   * Drawn, an unanswered rule's column would show to everyone.
+   */
+  private readonly shownColumns = computed<readonly RecordPropertyField[]>(() =>
+    this.list().columns.filter((column) => {
+      if (column.visibleWhen === null) return true;
+      this.tell(`${column.place} has a rule the list was not given an answer for; not drawn`);
+      return false;
+    }),
+  );
+
   private readonly request = computed<ListRequest | null>(
     () => {
       const parameters = this.parameters();
@@ -155,6 +183,7 @@ export class RecordListComponent {
         pageSize: list.pageSize,
         pageIndex: this.pageIndex(),
         sort: chosen ? [{ field: chosen.key, order: chosen.direction }] : list.sort,
+        columns: this.shownColumns().map((column) => column.xpath),
         attempt: this.attempt(),
       };
     },
@@ -197,7 +226,7 @@ export class RecordListComponent {
       const collector = new LookupCollector();
       if (state.status !== 'loaded') return collector.lookups();
       for (const row of state.page.entries) {
-        for (const column of this.list().columns) {
+        for (const column of this.shownColumns()) {
           const definition = this.definitionOf(state, row, column);
           if (!definition) continue;
           collector.value(
@@ -258,7 +287,7 @@ export class RecordListComponent {
     const chosen = this.chosenSort();
     if (chosen) return chosen;
     const [first] = this.list().sort;
-    if (!first || !this.list().columns.some((column) => column.xpath === first.field)) return null;
+    if (!first || !this.shownColumns().some((column) => column.xpath === first.field)) return null;
     return { key: first.field, direction: first.order };
   });
 
@@ -266,10 +295,10 @@ export class RecordListComponent {
     this.translations();
     const state = this.state();
     const context = this.valueContext();
-    return this.list().columns.map((column) => ({
+    return this.shownColumns().map((column) => ({
       key: column.xpath,
       label: layoutLabelText(this.translate, column.label) ?? column.xpath,
-      sortable: true,
+      sortable: state.status === 'loaded' && this.sortable(state, column),
       text: (row: NuxeoDocument) =>
         state.status === 'loaded' ? this.cellText(state, row, column, context) : '',
     }));
@@ -299,7 +328,17 @@ export class RecordListComponent {
   });
 
   protected onSort(sort: NxsDocumentListSort | null): void {
-    this.chosenSort.set(sort);
+    // The header of the file's own order cycles from its direction to none, which would leave the
+    // rows in that order under a header that says they are not: it turns the order round instead.
+    const shown = this.shownSort();
+    const next =
+      sort === null && this.chosenSort() === null && shown
+        ? {
+            key: shown.key,
+            direction: shown.direction === 'asc' ? ('desc' as const) : ('asc' as const),
+          }
+        : sort;
+    this.chosenSort.set(next);
     this.pageIndex.set(0);
   }
 
@@ -307,7 +346,17 @@ export class RecordListComponent {
     this.pageIndex.set(index);
   }
 
+  /**
+   * Asks again. After a failure under an order chosen from a header, the order may be what failed:
+   * Nuxeo refuses some sorts, such as a text field in OpenSearch. Retrying then goes back to the
+   * file's order, rather than sending the same refusal again.
+   */
   protected onRetry(): void {
+    if (this.state().status === 'failed' && this.chosenSort() !== null) {
+      this.chosenSort.set(null);
+      this.pageIndex.set(0);
+      return;
+    }
     this.attempt.update((n) => n + 1);
   }
 
@@ -315,14 +364,19 @@ export class RecordListComponent {
     void this.router.navigateByUrl(documentNavigationUrl(row));
   }
 
-  /** Runs the action with the row in focus, as its menu offered it: resolved again, rules and all. */
+  /**
+   * Runs the action with the row in focus, as its menu offered it: resolved again with its rule,
+   * and run only while its `enabledRule` passes too.
+   */
   protected onRowAction({ action, document }: NxsDocumentListRowAction): void {
     if (!this.list().rowActions.includes(action.id)) return;
     const context = { ...this.ruleContext.context(), document };
     const descriptor = this.extensions
       .resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS.rowActions, context)
       .find((candidate) => candidate.id === action.id);
-    if (descriptor && this.runnable(descriptor)) this.actions.execute(descriptor, context);
+    if (!descriptor || !this.runnable(descriptor)) return;
+    if (!this.extensions.evaluateRule(descriptor.enabledRule, context)) return;
+    this.actions.execute(descriptor, context);
   }
 
   /**
@@ -392,6 +446,18 @@ export class RecordListComponent {
     return properties.get(column.xpath) ?? null;
   }
 
+  /**
+   * Whether the column's header sorts: while the rows' type gives its property a single value.
+   * Read from the first row that has it, since a page provider's rows are usually of one type.
+   */
+  private sortable(state: LoadedPage, column: RecordPropertyField): boolean {
+    for (const row of state.page.entries) {
+      const definition = state.properties.get(row.uid)?.get(column.xpath);
+      if (definition) return SORTABLE_TYPES.has(definition.type);
+    }
+    return false;
+  }
+
   /** The column's widget, held to the row's property type: one that does not show it gives way. */
   private widgetFor(column: RecordPropertyField, definition: LayoutFieldType): string | null {
     const { widget } = column;
@@ -412,7 +478,7 @@ export class RecordListComponent {
   /** The page, with each row's property definitions read: one read per type, shared. */
   private withProperties(page: NuxeoDocumentList) {
     const rows = page.entries ?? [];
-    const xpaths = this.list().columns.map((column) => column.xpath);
+    const xpaths = this.shownColumns().map((column) => column.xpath);
     if (rows.length === 0) {
       return of<ListState>({
         status: 'loaded',

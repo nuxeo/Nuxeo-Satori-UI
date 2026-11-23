@@ -29,8 +29,14 @@ export interface PageProviderRequest {
   readonly properties?: string;
 }
 
-/** A page provider's name, as the server defines one. */
-const PAGE_PROVIDER = /^[A-Za-z0-9_.-]+$/;
+/**
+ * A page provider's name, as the validator of app definitions accepts one: a letter first, so
+ * that neither `.` nor `..` can stand in a path.
+ */
+const PAGE_PROVIDER = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
+
+/** Nuxeo reads a page size of 0 as no limit, so a page is 1 to this many records. */
+const MAX_PAGE_SIZE = 1000;
 
 /** A property as a sort names it. Nuxeo splits `sortBy` on commas, so a comma cannot be in one. */
 const SORT_FIELD = /^[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -48,12 +54,21 @@ export class PageProviderService {
    * One page of `name`'s results. Each row carries the `permissions` enricher, without which a
    * row action's rule such as `app.rules.canWrite` answers false.
    *
-   * Errors, without a request, for a name that is not a page provider's or a sort that is not a
-   * property and a direction; otherwise as the request does.
+   * Errors, without a request, for a name that is not a page provider's, a page size outside 1 to
+   * 1000, or a sort that is not a property and a direction; otherwise as the request does.
    */
   execute(name: string, request: PageProviderRequest): Observable<NuxeoDocumentList> {
     if (!PAGE_PROVIDER.test(name)) {
       return throwError(() => new Error(`"${name}" is not the name of a page provider`));
+    }
+    if (
+      !Number.isInteger(request.pageSize) ||
+      request.pageSize < 1 ||
+      request.pageSize > MAX_PAGE_SIZE
+    ) {
+      return throwError(
+        () => new Error(`a page is 1 to ${MAX_PAGE_SIZE} records, not ${String(request.pageSize)}`),
+      );
     }
     const sort = request.sort ?? [];
     const wrong = sort.find(

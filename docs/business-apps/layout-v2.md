@@ -272,11 +272,13 @@ out on purpose:
 
 ## 8. What is refused, and when
 
-| When                                     | A structural error                                                   | An ID the platform does not have                              |
-| ---------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------- |
-| When the package is built (the pipeline) | The package is refused, naming the file and the place                | The package is refused, naming the file, the place and the ID |
-| When the app loads the file              | The file is refused, and the generated layout shows, as in version 1 | That card or field is left out, and the console says why      |
+| When                                     | A structural error                                                   | An ID the platform does not have                                                  |
+| ---------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| When the package is built (the pipeline) | The package is refused, naming the file and the place                | The package is refused, naming the file, the place and the ID                     |
+| When the app loads the file              | The file is refused, and the generated layout shows, as in version 1 | That card, field, list column or row action is left out, and the console says why |
 
+- **In a list of related records,** a finding about one column or one row action leaves out that
+  one. A finding about the list itself, such as a key version 2 does not have, leaves out its card.
 - **Strict when built.** A package that reaches a server has already passed every check, so the
   app has little to refuse.
 - **Tolerant when loaded.** A file written for a later platform still shows everything this one
@@ -419,9 +421,15 @@ lists what each Web UI element becomes. In version 2's terms:
   - a column's `visibleWhen` is evaluated for the open record, as a field's is;
   - the headers sort on the server, and a row opens its record;
   - a row offers the row actions the file lists, while their rules pass for that row.
-- **The limits**, each said in the console when a file meets it:
+- **The limits.** Each one that leaves something out is said in the console when a file meets it:
   - **a cell is one line of text:** a `status-badge` column shows its label without the tag, and
     a `phone` or `email` column shows its value without the link;
+  - **a column shows a property once:** a second column naming the same property is left out,
+    before any rule is evaluated, so two columns with opposite rules over one property cannot
+    stand in for each other;
+  - **a header sorts only a property with one value,** of a type a server can sort by. A sort the
+    server refuses, such as a text field in OpenSearch, shows the error state, and retrying goes
+    back to the file's order;
   - **a computed column** of a related list is not drawn yet, nor **a table in a list's cell**:
     that column is left out, and the rest of the list shows;
   - **a row action needs a handler where the list is.** The platform's `app.rowActions.*` are run

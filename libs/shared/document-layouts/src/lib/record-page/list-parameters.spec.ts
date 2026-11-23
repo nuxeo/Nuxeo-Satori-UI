@@ -16,7 +16,9 @@ const member: NuxeoDocument = {
     'member:plans': ['gold'],
     'member:address': { city: 'Springfield' },
     'member:notes': '',
+    'member:token': '$currentUser',
   },
+  parentRef: 'p-1',
 };
 
 describe('listParameters', () => {
@@ -33,6 +35,24 @@ describe('listParameters', () => {
         member,
       ),
     ).toEqual({ values: ['m-1', '/members/m-1', 'Member', 'active', 'M-0042'] });
+  });
+
+  it("reads the record's parent", () => {
+    expect(listParameters([{ field: 'ecm:parentId' }], member)).toEqual({ values: ['p-1'] });
+  });
+
+  it('refuses a system property it does not read, rather than saying the record has none', () => {
+    expect(listParameters([{ field: 'ecm:name' }], member)).toEqual({
+      missing: 'parameters[0] reads ecm:name, which this build does not read from a record',
+    });
+  });
+
+  it("refuses a value from the record that the server would read as its own placeholder, and keeps a literal's", () => {
+    expect(listParameters([{ field: 'member:token' }], member)).toEqual({
+      missing:
+        'parameters[0] reads member:token, whose value starts with "$", which the server would read as its own placeholder',
+    });
+    expect(listParameters(['$currentUser'], member)).toEqual({ values: ['$currentUser'] });
   });
 
   it('sends a number or a boolean as text, and a literal as written', () => {

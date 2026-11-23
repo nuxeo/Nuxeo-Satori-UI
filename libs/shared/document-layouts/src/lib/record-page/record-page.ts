@@ -297,10 +297,10 @@ export class RecordPageComponent {
     return { type: layout.type, columns: layout.columns, tabs: null, cards: cards(layout.cards) };
   });
 
-  /** What a widget reads besides its value, with the labels read so far. */
   /**
    * A card's related records: the columns whose rules pass for the open record and the user, as
-   * a field's do, and the page provider's parameters read from the record.
+   * a field's do, and the page provider's parameters read from the record. The columns go to the
+   * list with their rules answered, and the list draws no column whose rule is still to answer.
    */
   private showRelated(
     card: ResolvedRecordCard,
@@ -314,13 +314,19 @@ export class RecordPageComponent {
     const read = listParameters(list.parameters, document);
     if ('missing' in read) this.tell(`${source}: not listed: ${read.missing}`);
     return {
-      list: { ...list, columns: list.columns.filter((column) => passes(column.visibleWhen)) },
+      list: {
+        ...list,
+        columns: list.columns
+          .filter((column) => passes(column.visibleWhen))
+          .map((column) => ({ ...column, visibleWhen: null })),
+      },
       parameters: 'values' in read ? read.values : null,
       label: heading ?? humanize(card.id),
       source,
     };
   }
 
+  /** What a widget reads besides its value, with the labels read so far. */
   private valueContext(document: NuxeoDocument, labels: Labels): RecordValueContext {
     const ruleContext = { ...this.ruleContext.context(), document };
     return {

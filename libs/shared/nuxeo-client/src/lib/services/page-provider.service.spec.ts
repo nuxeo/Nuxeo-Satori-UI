@@ -96,9 +96,20 @@ describe('PageProviderService', () => {
   });
 
   it('refuses, without a request, a name that is not a page provider', async () => {
-    await expect(firstValueFrom(service.execute('../id/secret', { pageSize: 10 }))).rejects.toThrow(
-      '"../id/secret" is not the name of a page provider',
-    );
+    for (const name of ['../id/secret', '..', '.', '_hidden', '']) {
+      await expect(firstValueFrom(service.execute(name, { pageSize: 10 }))).rejects.toThrow(
+        `"${name}" is not the name of a page provider`,
+      );
+    }
+    http.expectNone(() => true);
+  });
+
+  it('refuses, without a request, a page size Nuxeo would read as no limit, or one too large', async () => {
+    for (const pageSize of [0, -1, 1001, 2.5]) {
+      await expect(firstValueFrom(service.execute('member_claims', { pageSize }))).rejects.toThrow(
+        `a page is 1 to 1000 records, not ${pageSize}`,
+      );
+    }
     http.expectNone(() => true);
   });
 
