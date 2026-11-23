@@ -362,8 +362,9 @@ These sit inside the [development plan](development-plan.md):
   one call of a filter function in a `dom-if`, which is all a Polymer binding holds, or `this.`
   calls and `document.facets.indexOf(…)` in a filter's `expression`. Anything else is reported.
   The rule travels as the `visibleWhen` of what the condition hides: a view field where it shows
-  its property, an action by its button, a menu entry by its icon, and a home card and its queue
-  by its list. Check 5 holds every rule to its condition's truth table, without a server.
+  its property, an action by its button, a menu entry by its icon and its page's search form, and
+  a home card and its queue by its list. Check 5 holds every rule to its condition's truth table,
+  without a server.
 - **Reported, against the table above:** a `path` test, which no registered rule makes, and
   `hasPermission` for a permission no rule holds alone, such as `Write`. A group test whose file
   holds no user is reported too: a document layout and the stock home are given none, so it never

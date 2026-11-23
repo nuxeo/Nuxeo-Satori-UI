@@ -92,11 +92,14 @@ export function planFields(
       };
     let guard: Guard | null = null;
     if (field.condition !== null) {
-      if (field.shownOutside)
+      if (field.placesUnclear)
         return {
           kind: 'skip',
           outcome: 'reported',
-          note: `It names ${binding} inside condition ${field.condition + 1} of its file and outside it too, and whether the place outside shows it to everyone or only reads it is a person's call`,
+          note:
+            field.placesUnclear.reason === 'outside'
+              ? `It names ${binding} inside condition ${field.placesUnclear.at + 1} of its file and outside it too, and whether the place outside shows it to everyone or only reads it is a person's call`
+              : `It holds condition ${field.placesUnclear.at + 1} of its file, whose content may show ${binding} by other means than naming it, as a widget's xpath does, so whether everyone sees it is a person's call`,
         };
       // Web UI shows the property to everyone through another field: that one is kept.
       if (always.has(binding))

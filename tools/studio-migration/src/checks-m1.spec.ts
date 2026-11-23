@@ -1582,6 +1582,85 @@ describe('M2: where a condition cannot travel', () => {
     ]);
   });
 
+  it('reports a field holding a condition that may show its value by other means than naming it', () => {
+    const input = prepare({
+      bundle: {
+        [view]: files[view].replace(
+          '</template>\n  <script>',
+          '<div role="widget" hidden$="[[!document.properties.file:content]]"><label>File</label><nuxeo-filter document="[[document]]" permission="Write, WriteProperties"><template><nuxeo-document-blob document="[[document]]" xpath="file:content"></nuxeo-document-blob></template></nuxeo-filter></div>\n  </template>\n  <script>',
+        ),
+      },
+    });
+    expect(JSON.stringify(input.conversion.app['layouts/Claim/view.layout.json'])).not.toContain(
+      'file:content',
+    );
+    expect(
+      input.conversion.report.constructs.find(
+        (entry) => entry.kind === 'layout-field' && entry.property === 'file:content',
+      ),
+    ).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/may show file:content by other means than naming it/),
+    });
+    expect(run(input, 5)?.findings).toEqual([]);
+    const widened = edit(input, 'layouts/Claim/view.layout.json', (file) => {
+      file.cards[0].fields.push({ field: 'file:content' });
+      return file;
+    });
+    expect(run(widened, 5)?.findings).toEqual([
+      expect.stringMatching(
+        /it shows file:content to everyone, though Web UI shows it only while condition \d+ passes/,
+      ),
+    ]);
+    // An element of its own with nothing bound, or a helper's binding with no element: either may
+    // show the value.
+    for (const shows of [
+      '<acme-reserve></acme-reserve>',
+      '<span>[[_reserveOf(document)]]</span>',
+    ]) {
+      const other = prepare({
+        bundle: {
+          [view]: files[view].replace(
+            '</template>\n  <script>',
+            `<div role="widget" hidden$="[[!document.properties.cl:adjuster]]"><label>Adjuster</label><nuxeo-filter document="[[document]]" permission="Remove"><template>${shows}</template></nuxeo-filter></div>\n  </template>\n  <script>`,
+          ),
+        },
+      });
+      expect(
+        other.conversion.report.constructs.find(
+          (entry) => entry.kind === 'layout-field' && entry.property === 'cl:adjuster',
+        ),
+      ).toMatchObject({ outcome: 'reported', note: expect.stringMatching(/by other means/) });
+    }
+  });
+
+  it("holds a menu entry to its page's search form, not to a button beside it", () => {
+    const input = prepare({
+      bundle: {
+        [bundle]: files[bundle].replace(
+          '<template><nuxeo-search-form provider="claims" search-name="claims" name="claimssearch"></nuxeo-search-form></template>',
+          '<template><nuxeo-operation-button operation="Claim.Export" input="[[document]]"></nuxeo-operation-button><nuxeo-filter user="[[user]]" group="adjusters"><template><nuxeo-search-form provider="claims" search-name="claims" name="claimssearch"></nuxeo-search-form></template></nuxeo-filter></template>',
+        ),
+      },
+    });
+    expect(input.conversion.app['navigation.json']).toMatchObject({
+      entries: [
+        {
+          id: 'claimssearch',
+          visibleWhen: { type: 'app.rules.inGroup', parameters: ['adjusters'] },
+        },
+      ],
+    });
+    expect(run(input, 5)?.findings).toEqual([]);
+    const dropped = edit(input, 'navigation.json', (file) => {
+      delete file.entries[0].visibleWhen;
+      return file;
+    });
+    expect(run(dropped, 5)?.findings).toEqual([
+      expect.stringMatching(/^navigation\.json: claimssearch shows to everyone/),
+    ]);
+  });
+
   it("reports a menu entry whose and whose page's conditions together are too large to table", () => {
     const groups = (prefix: string) =>
       Array.from({ length: 9 }, (_, index) => `${prefix}${index}`).join(', ');

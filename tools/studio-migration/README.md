@@ -307,8 +307,11 @@ WriteProperties` becomes `canWrite`, `Remove` becomes `canRemove`, `AddChildren`
     inside the field guards nothing. A field naming its property in two places under conditions
     side by side is reported. So is one naming it both in a condition and outside every one, as
     `hidden$="[[!document.properties.x]]"` does: which place shows the value, and which only reads
-    it, cannot be told from the markup;
-  - an action, by its operation button, and a menu entry, by its menu icon;
+    it, cannot be told from the markup. So is one holding a condition that binds something or
+    holds an element, but where it does not name its property: it may show the value another way,
+    as a widget's `xpath` does;
+  - an action, by its operation button, and a menu entry, by its menu icon and its page's search
+    form;
   - a home card, by its page provider and its table, which its list needs.
 - **Where a rule travels:**
   - the `visibleWhen` of a view field, an action, a home card and its queue, and a menu entry;

@@ -69,11 +69,14 @@ export interface LayoutField {
    */
   readonly conditions: readonly number[];
   /**
-   * True when it names its property both in a condition and outside every one. Which of those
-   * places shows the value, and which only reads it, as `hidden$="[[!…]]"` does, cannot be told
-   * from the markup, so whether everyone sees it is a person's call.
+   * Set when which of its places shows the value, and to whom, cannot be told from the markup:
+   * it names its property both in a condition and outside every one, and the place outside may
+   * only read it, as `hidden$="[[!…]]"` does (`outside`); or it holds a condition whose content
+   * binds something or holds an element, and may show the value by other means than naming it,
+   * as a widget's `xpath` does (`other`). `conditions` then holds every condition it sits in or
+   * holds, and whether everyone sees it is a person's call.
    */
-  readonly shownOutside: boolean;
+  readonly placesUnclear: { readonly reason: 'outside' | 'other'; readonly at: number } | null;
 }
 
 /**
@@ -174,8 +177,9 @@ export interface SlotContribution {
     readonly attributes: Readonly<Record<string, string>>;
   }[];
   /**
-   * The conditions around its operation buttons and menu icons, which become its action or its
-   * entry, by their place among the file's conditions; with neither, every condition it holds.
+   * The conditions around what it becomes, by their place among the file's conditions: its
+   * operation buttons and menu icons, an action's or an entry's, or a left-menu page's search
+   * form. With none of them, every condition it holds.
    */
   readonly conditions: readonly number[];
 }
@@ -481,11 +485,14 @@ export function inventory(pkg: StudioPackage): Inventory {
           parts: inner
             .filter((part) => isCustomElement(part) && !CONDITIONS.has(part.localName))
             .map((part) => ({ element: part.localName, attributes: attributesOf(part) })),
-          // What it becomes is its operation button or its menu icon: the conditions around that,
-          // not one around some other part of it, such as a tooltip.
+          // What it becomes is its operation button or its menu icon, or for a left-menu page the
+          // search form it opens: the conditions around that, not around some other part of it,
+          // such as a tooltip.
           conditions: conditionsAround(
             [element, ...inner],
-            ['nuxeo-operation-button', 'nuxeo-menu-icon'],
+            element.getAttribute('slot') === 'DRAWER_PAGES'
+              ? ['nuxeo-search-form']
+              : ['nuxeo-operation-button', 'nuxeo-menu-icon'],
             within,
           ),
         };
@@ -635,13 +642,13 @@ function fieldsOf(document: Document, places: Places): LayoutField[] {
     .map((element) => {
       const binding = bindingOf(element);
       const shown = binding === null ? [] : placesShowing(element, binding, places);
-      // A field that binds nothing keeps every condition it sits in or holds: it is reported.
+      const inside = shown.filter((place): place is number => place !== null);
+      const unclear = unclearPlaces(element, shown, inside, places);
+      // A field that binds nothing, or whose places are unclear, keeps every condition it sits in
+      // or holds: it is reported.
       const conditions =
-        shown.length > 0
-          ? shownUnder(
-              shown.filter((place) => place !== null),
-              places.parentOf,
-            )
+        shown.length > 0 && unclear === null
+          ? shownUnder(inside, places.parentOf)
           : heldConditions(element, places);
       return {
         element: element.localName,
@@ -651,9 +658,47 @@ function fieldsOf(document: Document, places: Places): LayoutField[] {
         attributes: attributesOf(element),
         condition: conditions[0] ?? null,
         conditions,
-        shownOutside: shown.includes(null) && shown.some((place) => place !== null),
+        placesUnclear: unclear,
       };
     });
+}
+
+/**
+ * Why a field's places say nothing sure about who sees its value, or `null`: see
+ * `LayoutField.placesUnclear`. A condition inside the field around static text alone, a hint,
+ * hides no value.
+ */
+function unclearPlaces(
+  field: Element,
+  shown: readonly (number | null)[],
+  inside: readonly number[],
+  places: Places,
+): LayoutField['placesUnclear'] {
+  if (shown.includes(null) && inside.length > 0) return { reason: 'outside', at: inside[0] };
+  const around = new Set<number>();
+  for (const index of inside)
+    for (let at: number | null = index; at !== null && !around.has(at); at = places.parentOf(at))
+      around.add(at);
+  for (const element of elementsOf(field)) {
+    const index = places.conditionAt.get(element);
+    if (index === undefined || around.has(index) || !holdsData(element)) continue;
+    return { reason: 'other', at: index };
+  }
+  return null;
+}
+
+/** True when a condition's content binds something, or holds an element of its own. */
+function holdsData(condition: Element): boolean {
+  const inner = elementsOf(condition);
+  if (inner.some((element) => isCustomElement(element) && !isCondition(element))) return true;
+  const texts = [
+    ...inner.flatMap((element) => Array.from(element.attributes, (attribute) => attribute.value)),
+    condition.textContent ?? '',
+    ...[condition, ...inner]
+      .filter((element) => element.localName === 'template')
+      .map((element) => (element as HTMLTemplateElement).content?.textContent ?? ''),
+  ];
+  return texts.some((text) => /\[\[|\{\{/.test(text));
 }
 
 /** Every condition an element sits in or holds. */
