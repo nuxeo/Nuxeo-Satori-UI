@@ -119,7 +119,8 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   return with what it seeded.
 - **What it needs:** Node 24, nothing to install. `NUXEO_USER` and `NUXEO_PASS` have no default;
   `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a precondition is not met: no
-  credentials, no server, credentials refused, or the package not installed.
+  credentials, no server, credentials refused, the package not installed, or no
+  `/default-domain/workspaces`.
 
 It prints a member's and a provider's record page, on the app at `APP_URL`
 (`http://localhost:4200` by default, `npx nx serve nuxeo-ui`).

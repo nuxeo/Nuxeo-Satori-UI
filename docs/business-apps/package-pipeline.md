@@ -33,7 +33,11 @@ root: `app.json`, and the other files of [app-definition-v2.md](app-definition-v
   this yet.
 
 The demo is [`business-apps/packages/payers-claims-demo`](../../business-apps/packages/payers-claims-demo/README.md),
-with fictional data.
+with fictional data. It is also phase 1's Payers kit, version 0, so its bundle carries a second
+component: a stand-in content model, with its document types, schemas and page providers, until
+the presales Payers model replaces it. The builder holds its XML to what Nuxeo can load, as it
+does every component's; nothing in the pipeline checks the schemas, types or page providers
+themselves, nor that a layout's page provider exists.
 
 ## 2. The steps
 

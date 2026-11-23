@@ -11,21 +11,24 @@
  * Environment:
  *   NUXEO_USER, NUXEO_PASS   required, with no default. An empty value counts as unset.
  *   NUXEO_URL                the server, default http://localhost:8080
- *   APP_URL                  the app, for the links printed at the end, default http://localhost:4200
+ *   APP_URL                  the app, for the links printed at the end,
+ *                            default http://localhost:4200
  *
- * **Safe to run twice.** Every record has a fixed place, under /default-domain/workspaces/payers-demo,
- * named by its number. A record already there is updated to `data.mjs`'s values, a trashed one is
- * restored, and a file already holding the same bytes is not uploaded again. A place that holds a
- * document of another type is left alone, and the run stops.
+ * **Safe to run twice.** Every record has a fixed place under
+ * /default-domain/workspaces/payers-demo, named by its number. A record already there has
+ * `data.mjs`'s values written over its own, a trashed one is restored, and a file already holding
+ * the same bytes is not uploaded again. A place that holds a document of another type is left
+ * alone, and the run stops.
  *
- * **It checks what it seeded.** Last, it runs the kit's page providers and compares what they
- * return with what it wrote, so a run that passes has proved them as well as the records.
+ * **It checks what it seeded.** Last, it runs the kit's five page providers and compares what they
+ * return with what it wrote (`check`), so a run that passes has run each of them on the server.
  *
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
  *
  * Exit codes: 0, seeded and checked; 1, the server refused a write or a check failed; 2, a
- * precondition: no credentials, no server, credentials refused, or the package not installed.
+ * precondition: no credentials, no server, credentials refused, the package not installed, or no
+ * /default-domain/workspaces.
  */
 import { CASES, CLAIM_DOCUMENTS, CLAIMS, MEMBERS, PROVIDERS } from './data.mjs';
 
@@ -45,6 +48,13 @@ const FOLDERS = {
   documents: 'Claim documents',
 };
 const TYPES = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument'];
+const PAGE_PROVIDERS = [
+  'member_claims',
+  'member_cases',
+  'provider_claims',
+  'payers_claim_documents',
+  'payers_unassigned_claims',
+];
 
 /** A precondition the environment or the server does not meet: fix it, not the script. */
 class Precondition extends Error {}
@@ -280,8 +290,10 @@ async function upload({ fileName, bytes }) {
 }
 
 /**
- * The kit's page providers return exactly the records seeded for each member, provider and claim,
- * and the queue holds every unassigned claim still to be decided.
+ * What the kit's page providers return: for each member and each provider, exactly the claims and
+ * cases seeded for it; for each claim number, at least the documents seeded for it, since another
+ * record on the server could carry the same number; and in the queue, every seeded claim that is
+ * unassigned and still to be decided, and none of the others.
  */
 async function check({ members, providers, claims, cases, documents }) {
   const problems = [];
@@ -339,9 +351,7 @@ async function check({ members, providers, claims, cases, documents }) {
       problems.push(`payers_unassigned_claims holds ${claim.number}, which is not unassigned`);
   if (problems.length > 0)
     throw new Error(`The page providers disagree with the seed:\n  ${problems.join('\n  ')}`);
-  console.log(
-    '  checked  member_claims, member_cases, provider_claims, payers_claim_documents, payers_unassigned_claims',
-  );
+  console.log(`  checked  ${PAGE_PROVIDERS.join(', ')}`);
 }
 
 /** Every id a page provider returns, given one parameter or none. */
@@ -406,7 +416,8 @@ async function request(method, path, { json, body, headers = {} } = {}) {
     });
   } catch (error) {
     throw new Precondition(
-      `${SERVER} did not answer ${method} ${path}: ${error?.cause?.code ?? error?.message ?? error}. ` +
+      `${SERVER} did not answer ${method} ${path}: ` +
+        `${error?.cause?.code ?? error?.message ?? error}. ` +
         'Is Nuxeo running, and is NUXEO_URL its address?',
     );
   }

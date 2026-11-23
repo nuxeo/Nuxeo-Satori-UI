@@ -1,7 +1,8 @@
 /**
  * The Payers kit's demo records. **Everything here is fictional:** the people, providers, numbers,
- * addresses and documents. They follow the business-apps prototype's demo data
- * (docs/prototype/business-apps/src/data.js), so the kit and the prototype tell the same story.
+ * addresses and documents. The people, claims and cases are the business-apps prototype's
+ * (docs/prototype/business-apps/src/data.js), with one member and one case more, so the kit and
+ * the prototype tell the same story. The numbers below are this file's own.
  *
  * - Social security numbers are in 987-65-4320 to 987-65-4329, a range set aside for
  *   advertising and never issued.
