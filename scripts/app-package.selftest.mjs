@@ -757,8 +757,12 @@ await (async () => {
       }
       big = null;
       const said = error?.message ?? 'read';
-      // At the padded answer itself: the demo's own schemas are over a kilobyte too.
-      if (refused !== said.includes(`/config/types answered more than ${maxBytes} bytes`))
+      // Refused at the padded answer itself, as the demo's own schemas are over a kilobyte too;
+      // or read with no error at all, not merely without this one.
+      const held = refused
+        ? said.includes(`/config/types answered more than ${maxBytes} bytes`)
+        : error === null;
+      if (!held)
         failures.push(
           `${padding.length} × "${padding[0]}" under a cap of ${maxBytes} bytes: ${said}`,
         );

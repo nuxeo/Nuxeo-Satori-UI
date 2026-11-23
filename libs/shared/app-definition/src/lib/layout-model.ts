@@ -129,8 +129,10 @@ export function againstModel(
     // An address's parts are subfields by their bare names.
     if (widget === 'address' && isRecord(parameters['parts'])) {
       for (const [part, subfield] of Object.entries(parameters['parts'])) {
+        // A part that is not a text has its finding already, and is not made into one here.
+        if (typeof subfield !== 'string') continue;
         const written = `:${subfield}`;
-        if (typeof subfield === 'string' && !subfields.lookup(written))
+        if (!subfields.lookup(written))
           add(join(parameter('parts'), part), 'unknown', subfields.missing(written));
       }
     }

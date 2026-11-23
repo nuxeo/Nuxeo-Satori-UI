@@ -104,8 +104,8 @@ export function readContentModel(source: unknown): ContentModelReading {
       return;
     }
     const name = raw['name'];
-    // A facet that brings no schema has no `schemas` at all.
-    const brought = raw['schemas'] ?? [];
+    // A facet that brings no schema has no `schemas` at all; one written `null` is malformed.
+    const brought = raw['schemas'] === undefined ? [] : raw['schemas'];
     if (!Array.isArray(brought)) {
       problems.push(`${at}.schemas: must be a list of schemas`);
       return;
@@ -134,7 +134,7 @@ export function readContentModel(source: unknown): ContentModelReading {
     }
     const lists: Record<'facets' | 'schemas', string[]> = { facets: [], schemas: [] };
     for (const key of ['facets', 'schemas'] as const) {
-      const value = raw[key] ?? [];
+      const value = raw[key] === undefined ? [] : raw[key];
       if (!Array.isArray(value) || !value.every((item) => typeof item === 'string' && item)) {
         problems.push(`${at}.${key}: must be a list of names`);
         continue;
@@ -233,7 +233,7 @@ function readSchema(raw: unknown, at: string, problems: string[]): SchemaModel |
   const name = raw['name'];
   const prefix = prefixOf(raw, name, at, problems);
   if (prefix === null) return null;
-  const fields = raw['fields'] ?? {};
+  const fields = raw['fields'] === undefined ? {} : raw['fields'];
   if (!isRecord(fields)) {
     problems.push(`${at}.fields: must be an object of fields`);
     return null;

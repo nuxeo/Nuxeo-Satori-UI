@@ -196,6 +196,19 @@ describe('readContentModel', () => {
       'doctypes.File.schemas: the schema "claim" is not in schemas',
     ]);
   });
+  it('reads an explicit null as malformed, not as absent', () => {
+    const broken = source();
+    broken.schemas.push({ name: 'n', fields: null });
+    broken.facets.push({ name: 'Nulls', schemas: null });
+    Object.assign(broken.doctypes, { Nulls: { facets: null, schemas: null } });
+    expect(readContentModel(broken).problems).toEqual([
+      'schemas[6].fields: must be an object of fields',
+      'facets[4].schemas: must be a list of schemas',
+      'doctypes.Nulls.facets: must be a list of names',
+      'doctypes.Nulls.schemas: must be a list of names',
+    ]);
+  });
+
   it('names the place of each entry it cannot read: a schema, a field, a facet, a type', () => {
     const broken = source();
     broken.schemas.push(

@@ -188,6 +188,20 @@ describe('validateLayoutV2, given the content model', () => {
     ]);
   });
 
+  it("leaves an address part that is not a text to the widget's own check, without throwing", () => {
+    expect(
+      messages(
+        withFields({
+          field: 'member:address',
+          widget: 'address',
+          parameters: { parts: { street: 'street', city: { toString: 0 } } },
+        }),
+      ),
+    ).toEqual([
+      'cards[0].fields[0].parameters.parts: parts must give each part a subfield name [parameter]',
+    ]);
+  });
+
   it('checks the fields of every tab, in every mode', () => {
     const tabs = {
       version: 2,
