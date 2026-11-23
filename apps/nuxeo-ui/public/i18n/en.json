@@ -1533,6 +1533,16 @@
       "loading": "Loading…"
     }
   },
+  "home": {
+    "empty": "Nothing on the home is for you.",
+    "loading": "Loading the home",
+    "loading-figure": "Counting",
+    "none": "No home is configured for this app.",
+    "open-queue": "Open the queue",
+    "refused": "The home could not be read.",
+    "title": "Home",
+    "unavailable": "Unavailable"
+  },
   "kd": {
     "content-lake-upload": {
       "checking-for-existing-content-lake-copies": "Checking for existing Content Lake copies...",

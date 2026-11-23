@@ -1,0 +1,95 @@
+:host {
+  display: block;
+}
+
+.home-page {
+  padding: 16px;
+}
+
+// Headings and paragraphs are doubled to outrank the app theme's
+// `html[data-app-theme] .mat-typography h1`–`h6` and `p`, which would otherwise draw them at
+// display size and with the theme's margins, as `nxs-error-state` says.
+.home-page__title.home-page__title {
+  margin: 0 0 16px;
+  font: var(--mat-sys-headline-small);
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface);
+}
+
+.home-page__message.home-page__message {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.home-page__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: start;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  background: var(--mat-sys-surface);
+}
+
+.home-card__title.home-card__title {
+  margin: 0 0 8px;
+  font: var(--mat-sys-title-small);
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.home-card__figure.home-card__figure {
+  margin: 0;
+  font: var(--mat-sys-display-small);
+  letter-spacing: normal;
+  font-variant-numeric: tabular-nums;
+  color: var(--mat-sys-on-surface);
+}
+
+.home-card__note.home-card__note {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.home-card__buckets {
+  margin: 12px 0 0;
+}
+
+.home-card__bucket {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface);
+
+  dt {
+    overflow-wrap: anywhere;
+  }
+
+  dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.home-card__link {
+  display: inline-block;
+  margin-top: 12px;
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-primary);
+}
+
+.home-card__queue {
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-primary);
+}

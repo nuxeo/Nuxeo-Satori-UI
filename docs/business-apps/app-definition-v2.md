@@ -510,7 +510,11 @@ The app's page `/home` reads the file, checks it with the validator, and draws i
 - **a page provider the server does not have,** or a request it refuses, shows the card's title
   with no figure, and the console says why;
 - **links to queues** wait for phase 1's queue page. The app gives the home no queue address yet,
-  so a link alone is left out, and a KPI's link is not drawn.
+  so a link alone is left out, and a KPI's link is not drawn. The app does not read queues either,
+  so a link with no name of its own shows the queue's id, not its name, until it does.
+
+The engine is `libs/shared/home`, and its `samples/documents/home.json` is a home on the
+platform's own `default_search` page provider, for the development server.
 
 ## 11. Checks across files
 
