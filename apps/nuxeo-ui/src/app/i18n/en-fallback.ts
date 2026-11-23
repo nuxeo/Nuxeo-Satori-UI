@@ -288,6 +288,9 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'nav.loading': 'Loading',
   'nav.refresh': 'Refresh',
   'nav.tree.toggle': 'Toggle {{ name }}',
+  // The header's bell: its name carries the unread count (libs/shared/notifications).
+  'notifications.bell.label': 'Notifications, {{ count }} unread',
+  'notifications.panel.close': 'Close notifications',
   'satori-components.action-menu.more-actions': 'More actions',
   'satori-components.admin-group-details-page.loading': 'Loading',
   'satori-components.admin-group-details-page.remove-member': 'Remove {{ name }} from this group',

@@ -21,7 +21,7 @@ type PlatformEntryPoint = (typeof PLATFORM_ENTRY_POINTS)[number];
 
 ## @nuxeo/satori-platform/app-config
 
-40 exported symbol(s).
+41 exported symbol(s).
 
 ```ts
 const APP_BOOTSTRAP_CONFIG_FILE = "bootstrap.json";
@@ -51,6 +51,7 @@ interface AppBootstrapConfig {
     readonly availableLanguages: readonly string[];
     readonly integrations: AppIntegrationsConfig;
     readonly session: AppSessionConfig;
+    readonly notifications?: AppNotificationsConfig;
     readonly sso: AppSsoConfig;
     }
 }
@@ -114,6 +115,10 @@ type AppConfigSource = 'configuration-service' | 'packaged-default';
 interface AppIntegrationsConfig {
     readonly arender: AppARenderConfig | null;
     readonly knowledgeDiscoveryOperations: Readonly<Record<string, string>>;
+    }
+}
+interface AppNotificationsConfig {
+    readonly pollIntervalMs: number | null;
     }
 }
 interface AppRuntimeManifest {
@@ -3933,7 +3938,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-330 exported symbol(s).
+332 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4337,7 +4342,7 @@ class DocumentDetailService {
     fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>;
     fetchPdfRendition(uid: string): Observable<Blob>;
     fetchThumbnail(uid: string): Observable<Blob>;
-    getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery): Observable<AuditLogList>;
+    getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery, context?: HttpContext): Observable<AuditLogList>;
     getPublishedVersions(uid: string): Observable<NuxeoDocumentList>;
     getSectionTree(): Observable<NuxeoDocumentList>;
     publishDocument(uid: string, targetSectionId: string, options?: {
@@ -4610,6 +4615,7 @@ const NOTE_FORMAT_OPTIONS: readonly [{
     }];
 }
 const NUXEO_API_ORIGIN: InjectionToken<string>;
+const NUXEO_BACKGROUND_REQUEST: HttpContextToken<boolean>;
 const NUXEO_POWERUSERS_GROUP = "powerusers";
 const NUXEO_SAML_LOGIN_ENDPOINTS: InjectionToken<NuxeoSamlLoginEndpoint[]>;
 const NUXEO_SERVER_URL: InjectionToken<string>;
@@ -4647,8 +4653,8 @@ interface NuxeoAllowedTransition {
 }
 class NuxeoApiBase {
     apiUrl(path: string): string;
-    get<T>(path: string, params?: HttpParams, headers?: Record<string, string>): Observable<T>;
-    post<T>(path: string, body: unknown, headers?: Record<string, string>): Observable<T>;
+    get<T>(path: string, params?: HttpParams, headers?: Record<string, string>, context?: HttpContext): Observable<T>;
+    post<T>(path: string, body: unknown, headers?: Record<string, string>, context?: HttpContext): Observable<T>;
     put<T>(path: string, body: unknown, headers?: Record<string, string>): Observable<T>;
     delete<T>(path: string, headers?: Record<string, string>): Observable<T>;
     nxqlSearch(query: string, pageSize: number, headers?: Record<string, string>): Observable<NuxeoDocumentList>;
@@ -5203,7 +5209,7 @@ interface TaskDueDistance {
 class TaskService {
     readonly tasksChanged$: Subject<void>;
     notifyTasksChanged(): void;
-    getUserTasks(userId: string, pageSize?: number): Observable<NuxeoTask[]>;
+    getUserTasks(userId: string, pageSize?: number, context?: HttpContext): Observable<NuxeoTask[]>;
     getTask(taskId: string): Observable<NuxeoTask>;
     getDocumentTasks(docId: string, userId?: string): Observable<NuxeoTask[]>;
     completeTask(taskId: string, action: string, variables?: Record<string, unknown>, comment?: string): Observable<NuxeoTask>;
@@ -5358,6 +5364,7 @@ function allowedTransitions(document: NuxeoDocument | null | undefined): readonl
 function auditActivityLabel(entry: AuditEntry, eventTypeLabels?: Map<string, string> | Record<string, string>): string;
 function auditActivityLabelKey(entry: AuditEntry): string;
 function avatarColor(name: string): AvatarColor;
+function backgroundRequestContext(): HttpContext;
 function browseFolderFiltersActive(filters?: BrowseFolderFilters): boolean;
 function browseTreeContextPath(doc: NuxeoDocument): string;
 function buildContentLakeIngestMarker(blobDigest: string): string;

@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, forkJoin, of, map, catchError, throwError } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
@@ -85,12 +85,16 @@ export class DocumentDetailService {
    * A document's audit entries, one page. `query` filters and sorts on the server, so a filter
    * reaches every entry rather than only the page on screen. Dates go as instants: the adapter
    * reads a bare day as midnight in the server's zone, not the user's.
+   *
+   * @param context for the interceptors: `backgroundRequestContext()` for a read the application
+   *   sends on its own
    */
   getAuditLog(
     uid: string,
     pageSize = 50,
     currentPageIndex = 0,
     query: AuditLogQuery = {},
+    context?: HttpContext,
   ): Observable<AuditLogList> {
     let params = new HttpParams()
       .set('pageSize', pageSize)
@@ -106,6 +110,7 @@ export class DocumentDetailService {
     }
     return this.http.get<AuditLogList>(this.api.apiUrl(`/nuxeo/api/v1/id/${uid}/@audit`), {
       params,
+      context,
     });
   }
 

@@ -8,6 +8,7 @@ export {
   type AppBrandingConfig,
   type AppBrandingLogo,
   type AppIntegrationsConfig,
+  type AppNotificationsConfig,
   type AppSessionConfig,
   type AppSsoConfig,
   type AppSsoEndpointConfig,
