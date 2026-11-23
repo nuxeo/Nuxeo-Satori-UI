@@ -1,0 +1,7 @@
+{
+  "name": "@nuxeo-satori/builder-mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Builder kit's MCP server: reads a Nuxeo server's content model, page providers, workflows, vocabularies and operations, and validates an app definition package (docs/business-apps/development-plan.md, phase 3)."
+}

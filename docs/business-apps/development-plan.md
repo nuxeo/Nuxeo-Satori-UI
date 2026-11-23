@@ -263,7 +263,9 @@ faxes wait for capture, in phase 7.
 
 - **The MCP server:** reads the model, page providers, workflows, vocabularies and operations
   with their parameters; validates a package; previews it in dev mode; publishes to
-  pre-production.
+  pre-production. The reads and the validation are in
+  [`tools/builder-mcp`](../../tools/builder-mcp/README.md); previewing and publishing are not
+  built yet.
 - **The app builder skill**, written under `.cursor/skills/` and mirrored.
 - **The generators**, updated for app definition version 2.
 - **The pipeline**, completed: versions, signatures, and promotion after a person approves.

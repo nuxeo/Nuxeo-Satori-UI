@@ -6,6 +6,8 @@ import ts from 'typescript';
 // refusal added without a negative control fails here. The messages are read from the source:
 //
 // - the last argument of each `add(...)` call, and each `message:` of a finding built whole;
+// - each problem the model reader pushes, `problems.push(...)`, or returns, `{ problems: [...] }`;
+// - the text an arrow function gives back with no body, as a scope's `missing` does;
 // - a message given back as a value: the text a function returns, and the text beside a `null` in
 //   a conditional, which is how a widget parameter's check and an image's rules say what is wrong.
 //
@@ -23,12 +25,18 @@ const specs = readdirSync(join(LIB, '..'), { recursive: true, encoding: 'utf8' }
   .map((name) => readFileSync(join(LIB, '..', name), 'utf8'))
   .join('\n');
 
+// A message may be written in parentheses, or joined from parts with `+`: its parts are its
+// literals, whichever way it is put together.
 const literals = (node: ts.Node): string[] =>
   ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)
     ? [node.text]
     : ts.isTemplateExpression(node)
       ? [node.head.text, ...node.templateSpans.map((span) => span.literal.text)]
-      : [];
+      : ts.isParenthesizedExpression(node)
+        ? literals(node.expression)
+        : ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken
+          ? [...literals(node.left), ...literals(node.right)]
+          : [];
 
 function messagesIn(file: string): string[][] {
   const source = ts.createSourceFile(
@@ -43,15 +51,32 @@ function messagesIn(file: string): string[][] {
       callee !== undefined &&
       ((ts.isIdentifier(callee) && callee.text === 'add') ||
         (ts.isPropertyAccessExpression(callee) && callee.name.text === 'add'));
+    const isProblem =
+      callee !== undefined &&
+      ts.isPropertyAccessExpression(callee) &&
+      callee.name.text === 'push' &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === 'problems';
     const message =
       isAdd && ts.isCallExpression(node)
         ? node.arguments[2]
-        : ts.isPropertyAssignment(node) &&
-            ts.isIdentifier(node.name) &&
-            node.name.text === 'message'
-          ? node.initializer
-          : undefined;
+        : isProblem && ts.isCallExpression(node)
+          ? node.arguments[0]
+          : ts.isPropertyAssignment(node) &&
+              ts.isIdentifier(node.name) &&
+              node.name.text === 'message'
+            ? node.initializer
+            : undefined;
     if (message) found.push(literals(message));
+    if (
+      ts.isPropertyAssignment(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === 'problems' &&
+      ts.isArrayLiteralExpression(node.initializer)
+    )
+      for (const element of node.initializer.elements) found.push(literals(element));
+    if (ts.isArrowFunction(node) && !ts.isBlock(node.body) && literals(node.body).length > 0)
+      found.push(literals(node.body));
     if (ts.isReturnStatement(node) && node.expression && literals(node.expression).length > 0)
       found.push(literals(node.expression));
     if (ts.isConditionalExpression(node)) {
@@ -76,6 +101,8 @@ describe('the negative controls', () => {
         'actions.ts',
         'registries.ts',
         'image-source.ts',
+        'content-model.ts',
+        'layout-model.ts',
       ]),
     );
     expect(all.length).toBeGreaterThan(120);

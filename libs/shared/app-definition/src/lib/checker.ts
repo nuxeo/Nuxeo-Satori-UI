@@ -19,7 +19,7 @@ export interface Finding {
   /**
    * `structure`: not version 2's shape.
    * `unknown`: it names a widget, computation, check, rule, action, module or key nobody
-   * registered, or something the package does not have.
+   * registered, or something the package, or the content model it was given, does not have.
    * `parameter`: a registered ID with parameters it does not take, a property where no record is
    * open, or rules, computations or fields nested deeper than {@link MAX_NESTING}.
    *

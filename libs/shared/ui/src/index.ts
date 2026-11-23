@@ -41,6 +41,11 @@ export {
   type ConfirmDialogData,
 } from './lib/confirm-dialog/confirm-dialog.component';
 export {
+  FollowTransitionDialogComponent,
+  type FollowTransitionDialogData,
+} from './lib/follow-transition-dialog/follow-transition-dialog.component';
+export { lifecycleLabel } from './lib/follow-transition-dialog/lifecycle-labels';
+export {
   EditCollectionDialogComponent,
   type EditCollectionDialogData,
 } from './lib/edit-collection-dialog/edit-collection-dialog';

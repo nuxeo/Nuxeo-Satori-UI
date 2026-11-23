@@ -108,7 +108,8 @@ A field has `field` or `computed`, never both. A computed field is never editabl
 
 A widget says how one value is shown, and in a form how it is entered. It declares the property
 types it accepts. A widget on a property of another type is refused wherever the content model is
-known: by the pipeline in dev mode, by the designer, and by the migration server.
+known: by the app when it loads the page and by the pipeline when it is given the model, and the
+designer and the migration server are to refuse it too (section 11).
 
 | Widget          | For                            | Parameters                                                               | In a form                        |
 | --------------- | ------------------------------ | ------------------------------------------------------------------------ | -------------------------------- |
@@ -464,8 +465,18 @@ becomes. In version 2's terms:
 
 - **Checking widgets against property types** happens wherever the content model is known. The app
   checks each field against the type's schemas when it loads the page, and leaves out one whose
-  widget does not show its property. The pipeline, the designer and the migration server need
-  phase 1's model reader.
+  widget does not show its property. The model reader, `readContentModel` in
+  `libs/shared/app-definition`, reads the same model for the others: `validateLayoutV2`, given it
+  and the type, finds a field whose property is on neither the type nor a facet it declares, a
+  widget that does not show its property's type, and a table column naming a subfield its property
+  lacks. Each is `unknown` or `parameter`, so loading stays tolerant. The pipeline holds a package
+  to a model when it is given one ([package-pipeline.md](package-pipeline.md), section 4); the
+  designer and the migration server are still to call it. Its limits:
+  - a property that only a facet given at run time brings is refused, though the record page shows
+    it on a record with that facet;
+  - not checked: a related list's columns, which are other records'; the properties a computation,
+    a rule or a widget parameter names; a task form's fields; and a vocabulary's `directory`
+    against the property's own.
 - **More widgets, computations and rules** join the registries as kits need them. A map, a
   signature or a chart is a kit's request, not version 2's.
 - **Whether `metadata` mode should exist** once `view` does is phase 1's call, made once the
