@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>Dev analytics — nuxeo/Nuxeo-Satori-UI</title>
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#1b1f24;--mut:#667085;--line:#e4e7ec;--card:#f7f8fa;--acc:#2f6fed}
+@media (prefers-color-scheme:dark){:root{--bg:#14171c;--fg:#e6e8eb;--mut:#98a2b3;--line:#2a2f37;--card:#1b1f26;--acc:#6b9bff}}
+body{font:14px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg);margin:0;padding:24px;max-width:1100px;margin-inline:auto}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:32px 0 12px;border-bottom:1px solid var(--line);padding-bottom:6px}h3{font-size:13px;margin:18px 0 6px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+small,.muted,.sub{color:var(--mut)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px}.card h3{margin:0 0 4px}.big{font-size:26px;font-weight:600}.sub{font-size:12px;min-height:18px}
+.spark{color:var(--acc);display:block;margin-top:6px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}
+.bar{display:grid;grid-template-columns:minmax(120px,260px) 1fr 140px;gap:10px;align-items:center;margin:3px 0}.bl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bt{background:var(--line);border-radius:4px;height:10px;display:block}.bt i{display:block;height:10px;border-radius:4px;background:var(--acc)}.bv{text-align:right}
+.gaps{border-left:3px solid var(--mut);padding-left:12px}
+</style></head><body>
+<h1>Dev analytics</h1>
+<div class="muted">nuxeo/Nuxeo-Satori-UI · generated 2026-11-23T17:06:58.394Z · window 90 days · 1 snapshot(s) of history</div>
+<section><h2>Delivery and review</h2><div class="grid">
+    <div class="card"><h3>Merged PRs</h3><div class="big">353</div><div class="sub">last 90 days → main</div></div>
+    <div class="card"><h3>Lead time (median)</h3><div class="big">5.0 h</div><div class="sub">p90 3.7 d · first commit → merge</div><span class="muted">needs 2+ snapshots</span></div>
+    <div class="card"><h3>PR size (median)</h3><div class="big">223 lines</div><div class="sub">p90 2514 lines</div><span class="muted">needs 2+ snapshots</span></div>
+    <div class="card"><h3>Merged without review</h3><div class="big">79.6%</div><div class="sub">no review by someone other than the author</div></div>
+  </div>
+  <h3>Where the time goes (median · p90)</h3><table><thead><tr><th>Stage</th><th>Median</th><th>p90</th></tr></thead><tbody><tr><td>Open → first review</td><td>23.5 h</td><td>8.1 d</td></tr><tr><td>First review → approval</td><td>0.0 h</td><td>0.8 h</td></tr><tr><td>Approval → merge</td><td>0.0 h</td><td>0.0 h</td></tr></tbody></table>
+  <p class="muted">Changes-requested rounds per PR: 0.0 · Linked to a Jira key: 82.7% · AI-assisted (PR body carries the Claude Code line — a heuristic, undercounts): 34.6%</p>
+  <h3>Slowest merged PRs</h3><table><thead><tr><th>PR</th><th>Lead time</th><th>Lines changed</th></tr></thead><tbody><tr><td>#145</td><td>24.5 d</td><td>112898</td></tr><tr><td>#566</td><td>15.8 d</td><td>476</td></tr><tr><td>#225</td><td>15.0 d</td><td>8268</td></tr><tr><td>#395</td><td>14.6 d</td><td>196</td></tr><tr><td>#396</td><td>14.5 d</td><td>137</td></tr></tbody></table>
+  </section>
+<section><h2>CI health <small>(4039 runs of ci.yml)</small></h2><div class="grid">
+    <div class="card"><h3>Pass rate</h3><div class="big">84.4%</div><div class="sub">all attempts</div></div>
+    <div class="card"><h3>First-attempt pass rate</h3><div class="big">83.4%</div><div class="sub">41 runs went green only on a rerun</div><span class="muted">needs 2+ snapshots</span></div>
+    <div class="card"><h3>Duration (median)</h3><div class="big">12.2 min</div><div class="sub">p90 23.3 min · upper bound, includes waits</div></div>
+  </div>
+  <h3>Failure rate by job (latest 60 runs)</h3><div class="bar"><span class="bl" title="verify">verify</span><span class="bt"><i style="width:2.0%"></i></span><span class="bv">1.7% <small>1/60</small></span></div><div class="bar"><span class="bl" title="test">test</span><span class="bt"><i style="width:2.0%"></i></span><span class="bv">1.7% <small>1/60</small></span></div><div class="bar"><span class="bl" title="base">base</span><span class="bt"><i style="width:0.0%"></i></span><span class="bv">0% <small>0/60</small></span></div><div class="bar"><span class="bl" title="sanitizer-gates">sanitizer-gates</span><span class="bt"><i style="width:0.0%"></i></span><span class="bv">0% <small>0/60</small></span></div><div class="bar"><span class="bl" title="storybook">storybook</span><span class="bt"><i style="width:0.0%"></i></span><span class="bv">0% <small>0/60</small></span></div><div class="bar"><span class="bl" title="guardrails">guardrails</span><span class="bt"><i style="width:0.0%"></i></span><span class="bv">0% <small>0/60</small></span></div><div class="bar"><span class="bl" title="static-gates">static-gates</span><span class="bt"><i style="width:0.0%"></i></span><span class="bv">0% <small>0/60</small></span></div>
+  </section>
+<section><h2>Unit tests</h2><div class="grid">
+    <div class="card"><h3>Declared tests</h3><div class="big">5941</div><div class="sub">398 spec files · static count</div><span class="muted">needs 2+ snapshots</span></div>
+    <div class="card"><h3>Skipped / todo</h3><div class="big">0</div><div class="sub">a floor: describe.skip counts once</div><span class="muted">needs 2+ snapshots</span></div>
+    <div class="card"><h3>Expects per test</h3><div class="big">2.2</div><div class="sub">0 spec files declare tests but never call expect()</div></div>
+    <div class="card"><h3>Line coverage</h3><div class="big">no data</div><div class="sub">branches no data · functions no data</div><span class="muted">needs 2+ snapshots</span></div>
+  </div>
+  <h3>Tests per project (top 12)</h3><table><thead><tr><th>Project</th><th>Declared</th><th>Skipped</th><th>expect() / test</th></tr></thead><tbody><tr><td>libs/shared/satori-components</td><td>1468</td><td>0</td><td>2.36</td></tr><tr><td>libs/shared/nuxeo-client</td><td>812</td><td>0</td><td>1.80</td></tr><tr><td>libs/features/document-detail</td><td>635</td><td>0</td><td>2.35</td></tr><tr><td>libs/features/browse</td><td>514</td><td>0</td><td>2.56</td></tr><tr><td>apps/nuxeo-ui</td><td>431</td><td>0</td><td>2.54</td></tr><tr><td>libs/shared/ui</td><td>285</td><td>0</td><td>2.26</td></tr><tr><td>libs/features/administration</td><td>243</td><td>0</td><td>1.85</td></tr><tr><td>libs/shared/extensions</td><td>235</td><td>0</td><td>2.21</td></tr><tr><td>libs/features/search</td><td>186</td><td>0</td><td>2.23</td></tr><tr><td>libs/shared/app-config</td><td>177</td><td>0</td><td>1.99</td></tr><tr><td>libs/shared/document-layouts</td><td>166</td><td>0</td><td>2.29</td></tr><tr><td>libs/shared/satori-components-satori</td><td>141</td><td>0</td><td>1.99</td></tr></tbody></table>
+  
+  </section>
+<section><h2>End-to-end (Playwright)</h2><div class="grid">
+    <div class="card"><h3>Scenarios</h3><div class="big">80</div><div class="sub">78 passed · 0 failed · 2 skipped</div><span class="muted">needs 2+ snapshots</span></div>
+    <div class="card"><h3>First-attempt pass rate</h3><div class="big">100%</div><div class="sub">passed without a retry, of those that ran</div><span class="muted">needs 2+ snapshots</span></div>
+    <div class="card"><h3>Flaky (passed on retry)</h3><div class="big">0</div><div class="sub">the gap between pass-after-retry and first attempt</div><span class="muted">needs 2+ snapshots</span></div>
+    <div class="card"><h3>Duration</h3><div class="big">5.8 min</div><div class="sub">slowest browser job</div></div>
+  </div>
+  <table><thead><tr><th>Project</th><th>Total</th><th>Passed</th><th>Failed</th><th>Flaky</th><th>Skipped</th></tr></thead><tbody><tr><td>chromium</td><td>40</td><td>39</td><td>0</td><td>0</td><td>1</td></tr><tr><td>webkit</td><td>40</td><td>39</td><td>0</td><td>0</td><td>1</td></tr></tbody></table>
+  
+  </section>
+<section class="gaps"><h2>Not measured this run</h2><ul><li>coverage: no lcov file (the SonarCloud workflow has not published one yet)</li></ul></section>
+<p class="muted">Test counts are static declarations, not executions. Medians and p90 use nearest rank. A section with “no data” was not measured — see the list above, never read it as zero.</p>
+</body></html>
