@@ -195,7 +195,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-196 exported symbol(s).
+198 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -227,6 +227,7 @@ const NXS_PUBLISH_DIALOG_ID = "nxs.components.publishDialog";
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
 const NXS_STORYBOARD_ID = "nxs.components.storyboard";
 const NXS_TASK_DETAIL_ID = "nxs.components.taskDetail";
+const NXS_TASK_FORM_ID = "nxs.components.taskForm";
 const NXS_TOAST_DURATION = 4000;
 const NXS_TRASH_LIST_ID = "nxs.components.trashList";
 interface NxsActionBarInputs {
@@ -3024,6 +3025,9 @@ class NxsTaskDetailComponent {
     protected readonly panelComment: import("@angular/core").WritableSignal<string>;
     protected readonly graph: import("@angular/core").WritableSignal<Graph | null>;
     protected readonly submitting: import("@angular/core").WritableSignal<boolean>;
+    protected readonly taskFormId = "nxs.components.taskForm";
+    protected readonly onForm: import("@angular/core").Signal<(form: NxsTaskForm | null) => void>;
+    protected readonly taskForm: import("@angular/core").Signal<NxsTaskForm | null>;
     constructor();
     protected execute(action: TaskAction): void;
     protected abandon(): void;
@@ -3062,6 +3066,12 @@ class NxsTaskDetailComponent {
     "isSignal": true;
     };
     }, {}, never, never, true, never>;
+    }
+}
+interface NxsTaskForm {
+    validate(): boolean;
+    variables(): Record<string, unknown>;
+    showFailure(failure: unknown): readonly string[] | null;
     }
 }
 type NxsTaskOutcome = 'abandoned' | 'completed';
@@ -4849,6 +4859,10 @@ interface NuxeoTask {
     validate?: boolean;
     }[];
     allowTaskReassignment?: boolean;
+    schemas?: {
+    name: string;
+    url?: string;
+    }[];
     };
     targetDocTitle?: string;
     }

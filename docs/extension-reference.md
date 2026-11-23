@@ -1021,6 +1021,7 @@ Components are referenced by ID and must already be compiled in. Contributing a 
 | `nxs.components.adminGroupDetailsPage` | One group at `/administration/users-groups/group/:groupId`: members, nested groups, and permissions                                                      |
 | `nxs.components.publishDialog`         | The Publish dialog that `app.toolbar.publish` and `app.bulkActions.publish` both open                                                                    |
 | `nxs.components.taskDetail`            | The task panel of the Tasks page at `/tasks/:taskId`: a task's actions, abandon, delegate, reassign, workflow graph                                      |
+| `nxs.components.taskForm`              | A task's own form inside that panel, from its step's `tasks/<workflow>.<step>.layout.json`; given `task`, `disabled` and `onForm`, to hand its form back |
 | `nxs.components.trashList`             | The trash at `/trash`: trashed documents as a table, grid or list, with restore and permanent delete for one document or a selection                     |
 | `nxs.components.storyboard`            | The strip of frames under a video that seeks it, wherever the document viewer shows a video — the document page's View tab and the asset screens         |
 | `nxs.components.assetGrid`             | The cards of the asset search screen's grid view at `/documents`: thumbnail, name, type pill and the selection checkbox                                  |

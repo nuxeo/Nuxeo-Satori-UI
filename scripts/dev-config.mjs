@@ -12,6 +12,7 @@
  *   npm run config:dev -- --bootstrap acme.json --manifest acme-manifest.json
  *   npm run config:dev -- --layout Claim/metadata=claim.layout.json
  *   npm run config:dev -- --home home.json
+ *   npm run config:dev -- --task claimDetermination.determine=determine.layout.json
  *
  * `--layout <Type>/<mode>=<file>` serves a per-type layout file as the servlet does: listed in
  * `layouts.json` and answered at `layouts/<Type>/<mode>.layout.json`. A later one for the same
@@ -23,6 +24,13 @@
  * on decisions B and E. So this is the only place the home is served for now. Without `--home`,
  * any `home.json` written before is removed, so the app finds no home, as on a server. A later
  * `--home` replaces an earlier one.
+ *
+ * `--task <workflow>.<step>=<file>` serves a workflow step's task form at
+ * `tasks/<workflow>.<step>.layout.json`, as the package writes it, with no envelope
+ * (app-definition-v2.md, section 6). The servlet does not answer there either, for the same
+ * reason as the home, so a server without dev mode shows the task panel's own form. Every run
+ * writes the tasks it is given and removes any written before; a later `--task` for the same step
+ * replaces an earlier one.
  *
  * The dev server serves only files that existed when it started, so run this before `nx serve`;
  * edits to a file it already serves are picked up on reload. A bare configuration object is not
@@ -36,18 +44,19 @@ const ROOT = resolve(import.meta.dirname, '..');
 const DEFAULTS = join(ROOT, 'nuxeo-agentic-core/src/main/resources/agentic-ui-config');
 const TARGET = join(ROOT, 'apps/nuxeo-ui/public/agentic-ui-config');
 
-const extra = { bootstrap: [], manifest: [], layout: [], home: [] };
+const extra = { bootstrap: [], manifest: [], layout: [], home: [], task: [] };
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i += 2) {
   const layer = args[i]?.replace(/^--/, '');
   if (!Object.hasOwn(extra, layer ?? '') || !args[i + 1]) {
     console.error(
       'usage: dev-config.mjs [--bootstrap <fragment.json>]... [--manifest <fragment.json>]... ' +
-        '[--layout <Type>/<mode>=<layout.json>]... [--home <home.json>]',
+        '[--layout <Type>/<mode>=<layout.json>]... [--home <home.json>] ' +
+        '[--task <workflow>.<step>=<layout.json>]...',
     );
     process.exit(2);
   }
-  extra[layer].push(layer === 'layout' ? args[i + 1] : resolve(args[i + 1]));
+  extra[layer].push(layer === 'layout' || layer === 'task' ? args[i + 1] : resolve(args[i + 1]));
 }
 
 // The servlet leaves out a fragment over this size or with a repeated key (ConfigSnapshot.java), so
@@ -126,6 +135,25 @@ for (const spec of extra.layout) {
   });
 }
 
+// A task form is served as the package writes it, as the home is; the app reads it with the
+// validator when the task opens. The parts are those `placeFile` in libs/shared/app-definition
+// takes from a package's `tasks/` file name. Checked and read here, before anything is written, as
+// the layouts are, so a mistake leaves the configuration served before it as it was.
+const TASK_PART = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
+const tasks = new Map();
+for (const spec of extra.task) {
+  const match = /^([^.=/]+)\.([^.=/]+)=(.+)$/.exec(spec);
+  if (!match || !TASK_PART.test(match[1]) || !TASK_PART.test(match[2])) {
+    console.error(
+      `--task ${spec}: expected <workflow>.<step>=<file>, the workflow model's name and the ` +
+        "step's node id, each a letter then letters, digits, '_' or '-'",
+    );
+    process.exit(2);
+  }
+  const path = resolve(match[3]);
+  tasks.set(`${match[1]}.${match[2]}`, { path, content: read(path) });
+}
+
 const envelopes = ['bootstrap', 'manifest'].map((layer) => {
   const defaults = join(DEFAULTS, `${layer}.defaults.json`);
   const fragments = [
@@ -199,3 +227,15 @@ if (home === undefined) {
     `wrote ${HOME.slice(ROOT.length + 1)}: ${home.startsWith(ROOT) ? home.slice(ROOT.length + 1) : home}`,
   );
 }
+
+const TASKS = join(TARGET, 'tasks');
+rmSync(TASKS, { recursive: true, force: true });
+for (const [name, { path, content }] of tasks) {
+  mkdirSync(TASKS, { recursive: true });
+  const file = join(TASKS, `${name}.layout.json`);
+  writeFileSync(file, `${JSON.stringify(content, null, 2)}\n`);
+  console.log(
+    `wrote ${file.slice(ROOT.length + 1)}: ${path.startsWith(ROOT) ? path.slice(ROOT.length + 1) : path}`,
+  );
+}
+if (tasks.size === 0) console.log(`no task forms: ${TASKS.slice(ROOT.length + 1)} not served`);

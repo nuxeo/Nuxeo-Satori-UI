@@ -37,6 +37,7 @@ import {
   NXS_PUBLISH_DIALOG_ID,
   NXS_STORYBOARD_ID,
   NXS_TASK_DETAIL_ID,
+  NXS_TASK_FORM_ID,
   NXS_TRASH_LIST_ID,
   NxsAdminGroupDetailsPageComponent,
   NxsAdminUserDetailsPageComponent,
@@ -200,6 +201,11 @@ function provideAppContributions(): EnvironmentProviders {
         // The task panel of the tasks page: reading a task and completing it. The page renders it
         // through its ID, so a customer library can re-register it.
         [NXS_TASK_DETAIL_ID]: NxsTaskDetailComponent,
+        // A task's own form, inside that panel: the fields its workflow step's task form draws
+        // (app-definition-v2.md, section 6). Lazy: only the tasks page opens a task, and the
+        // shell imports nothing else of the document-layouts engine.
+        [NXS_TASK_FORM_ID]: () =>
+          import('@agentic-ui/shared/document-layouts').then((m) => m.TaskFormComponent),
         // The trash list. `/trash` renders it through this ID, so a customer library can replace
         // it, and falls back to the packaged component when no registration resolves.
         [NXS_TRASH_LIST_ID]: NxsTrashListComponent,

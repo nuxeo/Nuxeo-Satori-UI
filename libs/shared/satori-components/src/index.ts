@@ -259,7 +259,9 @@ export {
 } from './lib/publish-dialog/publish-dialog.component';
 export {
   NXS_TASK_DETAIL_ID,
+  NXS_TASK_FORM_ID,
   NxsTaskDetailComponent,
+  type NxsTaskForm,
   type NxsTaskOutcome,
 } from './lib/task-detail/task-detail.component';
 export {

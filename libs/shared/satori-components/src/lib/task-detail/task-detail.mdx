@@ -19,6 +19,15 @@ the document a task is about, as the Tasks page does.
   as the user types, and a choice between a simple review and a validation. With nobody chosen, the
   signed-in user is assigned; when the application does not know who is signed in, the panel asks
   for a participant instead.
+- **A task's own form.** The panel renders the component registered as `nxs.components.taskForm`
+  with the task, whether a request is running, the heading level for its sections, and `onForm`. In
+  the product that is the form a step's layout file draws
+  (`docs/business-apps/app-definition-v2.md`, section 6). A component that hands a form to `onForm`
+  takes the place of the participants fields: an action that validates (Nuxeo's `validate`, true
+  unless it says otherwise) asks the form first, and completes the task with its `variables()` and
+  the comment; an action that skips the form, such as Cancel, sends none of it. A refusal goes to
+  the form's `showFailure()`, which places what it can beside its fields, and the rest is the toast.
+  With nothing registered, or no form handed, the panel's own fields show.
 - **Delegate and reassign.** Delegating shares the task with more people; reassigning gives it to
   others instead. Both take an optional comment.
 - **The workflow graph.** The workflow's steps, with the task's own step marked as current.
@@ -26,7 +35,8 @@ the document a task is about, as the Tasks page does.
   task stays, and the actions are enabled again.
 - **Late answers stay with their task.** If the host shows another task while a request is
   running, its outcome is still announced, but it does not close the new task's panel or call the
-  callbacks for it.
+  callbacks for it, and a refusal is never put on the new task's form. A form handed, or
+  withdrawn, for a task the host has moved on from changes nothing.
 - **It does not navigate.** `taskDone` is called once the task has left the inbox, and
   `taskChanged` after its assignees changed; the host decides what comes next.
 - **Replaceable by ID.** It is registered as `nxs.components.taskDetail`, so your own panel can

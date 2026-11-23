@@ -7,6 +7,7 @@ export type { LayoutMode } from './lib/layout.model';
 export { DocumentLayoutService } from './lib/document-layout.service';
 export { RECORD_PAGE_TODAY, RecordPageComponent } from './lib/record-page/record-page';
 export { RecordListComponent } from './lib/record-page/record-list';
+export { TaskFormComponent } from './lib/task-form/task-form';
 export type {
   RecordListEntry,
   RecordListSort,
