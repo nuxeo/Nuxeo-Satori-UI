@@ -326,10 +326,12 @@ describe('QueuePageComponent, over the whole query', () => {
       'queues.whole-query.done',
       expect.objectContaining({ action: 'Delete selected', processed: '120' }),
     );
-    // The list is read again: the records have changed.
+    // The list is read again: the records have changed. Until it answers, there is no count.
     expect(execute.mock.calls.length).toBe(asked + 1);
-    await answer(0);
     await press('.queue-whole-query__dismiss');
+    await selectRow();
+    expect(notice()).toBe('');
+    await answer(0);
     expect(notice()).toBe('');
   });
 
@@ -413,6 +415,25 @@ describe('QueuePageComponent, over the whole query', () => {
       'Every result cannot be selected while a filter is chosen. Clear the filters to select them all.',
     );
     expect(buttons()).toEqual([]);
+  });
+
+  it("names no number from the last page's buckets once they change, until the list is read again", async () => {
+    create();
+    await open();
+    await answer(120);
+    const box = (): HTMLInputElement =>
+      page().querySelector('.queue-facet mat-checkbox input') as HTMLInputElement;
+    box().click();
+    await settle();
+    await answer(40);
+    // The bucket is cleared: the list asks again, and the 40 belongs to the bucket.
+    box().click();
+    await settle();
+    await selectRow();
+    expect(notice()).toBe('');
+    await answer(120);
+    await selectRow();
+    expect(notice()).toBe('This queue has 120 results.');
   });
 
   it('does not offer every result when the page provider does not count them', async () => {

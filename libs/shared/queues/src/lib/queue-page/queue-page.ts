@@ -126,8 +126,10 @@ function warn(message: string): void {
  * - **The facets** are the page provider's aggregates, from the results. Choosing a bucket sends
  *   it back as the search page sends its filters, and the list starts again on its first page.
  * - **Selecting rows** offers the queue's bulk actions in the app's selection bar: those the
- *   `bulk-actions` slot resolves that have a handler here. A bulk action over every result of the
- *   query, rather than the rows selected, is phase 2's.
+ *   `bulk-actions` slot resolves that have a handler here.
+ * - **Every result of the query** can be selected instead, for the queue's bulk actions that the
+ *   platform maps to an action of the Bulk Action Framework. The page confirms, naming the number,
+ *   runs the action on the server, follows it, and reads the list again (`runWholeQuery`).
  * - **The queue shows** while its rule holds for the person signed in, with their groups and no
  *   record. Hiding a queue is not a security control: the address still answers, and the page
  *   provider returns only what the person may read.
@@ -587,7 +589,11 @@ export class QueuePageComponent {
         this.report(event);
         this.allResults.set(false);
         // Nothing ran when the server refused it; otherwise records may have changed.
-        if (event.kind !== 'refused' && action.mapped.refresh) this.documentChanges.notify();
+        if (event.kind !== 'refused' && action.mapped.refresh) {
+          // The count is the one before the action: none until the list has been read again.
+          this.total.set(-1);
+          this.documentChanges.notify();
+        }
       });
   }
 
@@ -708,6 +714,8 @@ export class QueuePageComponent {
     });
     this.selection.clear();
     this.allResults.set(false);
+    // The count is the last page's, for the buckets it was read with: none until the next page.
+    this.total.set(-1);
   }
 
   /** The list's selection, kept in the app's, as the browse list keeps its own. */
