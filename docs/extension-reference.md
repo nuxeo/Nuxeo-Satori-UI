@@ -791,9 +791,9 @@ by the rules' library, so it would match nothing, and the layout validator refus
 
 **Scope, stated plainly.** "The focused document" means the document open on
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
-when you navigate away, so all of them answer `false` everywhere else — with one
-exception: browse's row menu (section 10a) resolves its own slot with each row's
-document in focus, for that slot only. `app.rules.fieldIn` with a literal first
+when you navigate away, so all of them answer `false` everywhere else — with two
+exceptions, both of the `rowActions` slot (section 10a): browse's row menu and a record page's
+list of related records resolve it with each row's document in focus, for that slot only. `app.rules.fieldIn` with a literal first
 parameter is not a rule about the document: it reads none, so it answers the same on
 every surface, and `fieldIn("gold", "gold")` is `true` with nothing in focus. In particular the two
 type rules gate document-detail **tabs and toolbar actions**; they cannot vary browse list
@@ -1952,6 +1952,12 @@ rendered as the "Actions for …" menu at the end of each row of browse's docume
 Each row resolves the slot with **that row's document in focus**, so `rule`, `enabledRule` and the
 document rules of section 4 read the row's own permissions and properties, not the folder's. A
 row whose entries are all hidden has no menu button.
+
+A record page's list of related records ([layout-v2.md](business-apps/layout-v2.md), section 7)
+resolves the same slot for the row actions its file lists, with two differences. A row's context
+there has none of the flags the page publishes about its own record. A row action whose `rule` or
+`enabledRule` names a surface-state rule (section 4) other than `app.rules.isNote`, itself or inside
+`core.every`, `core.some` or `core.not`, is not offered there, and the console says why.
 
 | ID                        | Label    | Icon                        | Order | Shown when                                |
 | ------------------------- | -------- | --------------------------- | ----- | ----------------------------------------- |

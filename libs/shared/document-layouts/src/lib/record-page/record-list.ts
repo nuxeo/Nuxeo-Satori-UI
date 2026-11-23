@@ -105,7 +105,8 @@ const sameRequest = (a: ListRequest | null, b: ListRequest | null): boolean =>
  * (`ExtensionRuleContext.flags`): whether it is a favourite, locked, subscribed, in the clipboard,
  * has a version, whether AI is on, whether an operation on it is in flight. A row is another
  * record, and nothing publishes that for it. `app.rules.isNote` is in the same map and reads the
- * document, which a row's context has.
+ * document, which a row's context has. Known by ID: a customer's own evaluator registered under
+ * one of these IDs is refused too.
  */
 const PAGE_STATE_RULES: ReadonlySet<string> = new Set(
   Object.keys(SURFACE_RULE_EVALUATORS).filter((id) => id !== 'app.rules.isNote'),
@@ -297,22 +298,17 @@ export class RecordListComponent {
   });
 
   /**
-   * How many records the list holds: the server's count, or `-1`, unknown, where it gave none. A
-   * count no larger than the rows up to this page while another page follows is a limit, as
-   * `resultsCountLimit` makes one, and is unknown too. Never an estimate: the list shows it, and
-   * tells assistive technology it is the number of rows.
+   * How many records the list holds: the server's count, or `-1`, unknown, where it gave none, as
+   * Nuxeo's `-2` past `resultsCountLimit` is. Never an estimate: the list shows it, and tells
+   * assistive technology it is the number of rows.
    */
   protected readonly totalSize = computed(() => {
     const state = this.state();
     if (state.status !== 'loaded') return -1;
-    const { page } = state;
-    const counts = [page.totalSize, page.resultsCount].filter(
+    const counts = [state.page.totalSize, state.page.resultsCount].filter(
       (count): count is number => typeof count === 'number' && count >= 0,
     );
-    if (counts.length === 0) return -1;
-    const count = Math.max(...counts);
-    const shown = this.pageIndex() * this.list().pageSize + page.entries.length;
-    return this.hasNextPage() && count <= shown ? -1 : count;
+    return counts.length > 0 ? Math.max(...counts) : -1;
   });
 
   protected readonly hasNextPage = computed(() => {
@@ -323,12 +319,13 @@ export class RecordListComponent {
   });
 
   /**
-   * The file's order, by its first key, for the list's header: it shows it while no other is
-   * chosen, and turns it round rather than clearing it.
+   * The file's order, by its first key, for the list's header while a column shows that property:
+   * it shows it while no other is chosen, and turns it round rather than clearing it.
    */
   protected readonly defaultSort = computed<NxsDocumentListSort | null>(() => {
     const [first] = this.list().sort;
-    return first ? { key: first.field, direction: first.order } : null;
+    if (!first || !this.shownColumns().some((column) => column.xpath === first.field)) return null;
+    return { key: first.field, direction: first.order };
   });
 
   protected readonly columns = computed<readonly NxsDocumentListColumn[]>(() => {
@@ -367,9 +364,14 @@ export class RecordListComponent {
     return menus;
   });
 
-  /** `null` goes back to the file's order: the list's header of that order never clears it. */
+  /**
+   * `null` goes back to the file's order, and so does the header of that order turned back to its
+   * own direction: the file's order whole, with every key it sorts by, not its first alone.
+   */
   protected onSort(sort: NxsDocumentListSort | null): void {
-    this.chosenSort.set(sort);
+    const own = this.defaultSort();
+    const isOwn = sort !== null && own?.key === sort.key && own.direction === sort.direction;
+    this.chosenSort.set(isOwn ? null : sort);
     this.pageIndex.set(0);
   }
 
@@ -380,8 +382,8 @@ export class RecordListComponent {
   /**
    * Asks again. After a failure under an order chosen from a header, the order may be what failed:
    * Nuxeo refuses some sorts, such as a text field in OpenSearch. Retrying then goes back to the
-   * file's order, rather than sending the same refusal again. Each retry is an attempt of its own,
-   * so one whose order comes back the same as the chosen one is still sent.
+   * file's order, rather than sending the same refusal again. Every retry counts an attempt, so it
+   * is always sent.
    */
   protected onRetry(): void {
     if (this.state().status === 'failed' && this.chosenSort() !== null) {
@@ -416,9 +418,12 @@ export class RecordListComponent {
    *
    * - One with no handler here would do nothing when chosen. The platform's own row actions are
    *   registered by the browse list, so a record page has none of them yet.
-   * - One whose `rule` or `enabledRule` names, anywhere in it, a rule that answers for the page's
-   *   own record ({@link PAGE_STATE_RULES}) would show or run on that record's state, not the
-   *   row's. One whose rule has already answered no for the row is not offered either way.
+   * - One whose `rule` or `enabledRule` names a rule that answers for the page's own record
+   *   ({@link PAGE_STATE_RULES}), itself or inside `core.every`, `core.some` or `core.not`, would
+   *   show or run on that record's state, not the row's. A customer's own composite is not looked
+   *   into: the rules inside it see the row's context, which has no page flags. One whose rule has
+   *   already answered no for the row is not offered either way.
+   * - One whose rule nests deeper than the rule registry answers, as a field's does.
    */
   private offered(action: ExtensionActionDescriptor): boolean {
     if (!this.actions.has(action.action ?? action.id)) {

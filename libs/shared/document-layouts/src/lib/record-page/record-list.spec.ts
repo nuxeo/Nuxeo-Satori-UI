@@ -379,17 +379,6 @@ describe('RecordListComponent', () => {
     expect(list().hasNextPage()).toBe(true);
   });
 
-  it('shows no total for a count the next page contradicts, a limit rather than a total', async () => {
-    await render();
-    const ten = Array.from({ length: 10 }, (_, index) => claim(index + 1));
-    await answer(ten, { totalSize: 10, resultsCount: 10, isNextPageAvailable: true });
-    expect(list().totalSize()).toBe(-1);
-    list().pageChange.emit(1);
-    await settle();
-    await answer([claim(11)], { totalSize: 11, currentPageIndex: 1, isNextPageAvailable: false });
-    expect(list().totalSize()).toBe(11);
-  });
-
   it("starts on the first page for another record, and never shows the last record's rows", async () => {
     await render(['m1']);
     await answer([claim(1)], { numberOfPages: 2, isNextPageAvailable: true });
@@ -433,14 +422,14 @@ describe('RecordListComponent', () => {
     ).toEqual([true, false, false]);
   });
 
-  it("asks again on retry when the chosen order that failed is the same as the file's", async () => {
+  it("asks again on retry when the file's order, turned back to from its header, failed", async () => {
     await render(['m1'], { ...CLAIMS, sort: [{ field: 'claim:number', order: 'desc' }] });
     await answer([claim(1)]);
     list().sortChange.emit({ key: 'claim:number', direction: 'asc' });
     await settle();
     await answer([claim(1)]);
     execute.mockReturnValueOnce(throwError(() => ({ status: 500 })));
-    // Turned round and back: chosen, and the same as the file's order.
+    // Turned round and back to the file's order.
     list().sortChange.emit({ key: 'claim:number', direction: 'desc' });
     await settle();
     expect(list().error()).toBe(500);
@@ -520,6 +509,40 @@ describe('RecordListComponent', () => {
     expect(announce.mock.calls.map(([message]) => message)).not.toContain(
       'Sort cleared, showing the default order',
     );
+  });
+
+  it("goes back to the file's whole order, every key of it, when its header is turned back", async () => {
+    await render(['m1'], {
+      ...CLAIMS,
+      sort: [
+        { field: 'claim:number', order: 'desc' },
+        { field: 'claim:status', order: 'asc' },
+      ],
+    });
+    await answer([claim(1)]);
+    list().sortChange.emit({ key: 'claim:number', direction: 'asc' });
+    await settle();
+    await answer([claim(1)]);
+    list().sortChange.emit({ key: 'claim:number', direction: 'desc' });
+    await settle();
+    expect(execute).toHaveBeenLastCalledWith(
+      'member_claims',
+      expect.objectContaining({
+        sort: [
+          { field: 'claim:number', order: 'desc' },
+          { field: 'claim:status', order: 'asc' },
+        ],
+      }),
+    );
+    expect(list().sort()).toBeNull();
+  });
+
+  it("gives the list no default order on a header when no column shows the file's first key", async () => {
+    await render();
+    await answer([claim(1)]);
+    // CLAIMS sorts by claim:serviceDate, which none of its columns shows.
+    expect(list().defaultSort()).toBeNull();
+    expect(list().sort()).toBeNull();
   });
 
   it("goes back to the file's order, and shows it on its header, when another column's is cleared", async () => {
