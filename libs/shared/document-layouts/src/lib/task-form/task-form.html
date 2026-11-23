@@ -1,0 +1,12 @@
+@if (task(); as current) {
+  @if (document(); as record) {
+    <lib-document-layout-form
+      class="task-form"
+      mode="task"
+      [task]="current"
+      [document]="record"
+      [disabled]="disabled()"
+      [headingLevel]="headingLevel()"
+    />
+  }
+}

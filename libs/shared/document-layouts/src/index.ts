@@ -8,6 +8,7 @@ export { DocumentLayoutService, layoutsIndexUrl } from './lib/document-layout.se
 export { readLayoutIndex } from './lib/layout-file';
 export { RECORD_PAGE_TODAY, RecordPageComponent } from './lib/record-page/record-page';
 export { RecordListComponent } from './lib/record-page/record-list';
+export { TaskFormComponent } from './lib/task-form/task-form';
 export {
   readRecordList,
   type EntryReading,

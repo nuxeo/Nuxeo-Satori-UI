@@ -507,6 +507,9 @@ becomes. In version 2's terms:
     `required`'s to refuse. One that cannot compare its values, a date against a text, does not
     stop the save, and the console says why: a check is a help, and the server still decides;
   - **the server's messages** go on the fields they name, as in version 1;
+  - **a task form**, a layout file for one workflow step, is drawn the same way in the task panel,
+    over the record the task is on, its `var:` fields bound to the task's variables
+    ([app-definition-v2.md, section 6](app-definition-v2.md#6-task-forms));
   - **a field the form cannot answer is left out:** a rule this build does not register, in
     `visibleWhen`, `required`, `readOnlyWhen` or a computation a check compares with, as on the
     record page, so that a field is never required, or editable, by accident.

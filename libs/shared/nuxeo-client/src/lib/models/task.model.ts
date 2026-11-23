@@ -24,6 +24,13 @@ export interface NuxeoTask {
      * reassignment, and reports the refusal as a 500. Absent on a server that does not send it.
      */
     allowTaskReassignment?: boolean;
+    /**
+     * The schemas the step's form is generated from, as Nuxeo names them: `var_<step>`, which holds
+     * the step's variables, then `dublincore` and `route_node`. The workflow's own variables are in
+     * `var_<workflowModelName>`, which this list does not name. Absent on a server that does not
+     * send it.
+     */
+    schemas?: { name: string; url?: string }[];
   };
   /** Enriched client-side after fetching the target document */
   targetDocTitle?: string;

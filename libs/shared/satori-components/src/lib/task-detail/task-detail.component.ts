@@ -6,6 +6,7 @@ import {
   inject,
   input,
   linkedSignal,
+  signal,
   untracked,
   type InputSignal,
 } from '@angular/core';
@@ -20,6 +21,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { interval, map, type Observable, type Subscription } from 'rxjs';
 
 import {
@@ -40,6 +42,32 @@ import {
 
 /** The ID the tasks page renders this panel under, through `lib-extension-outlet`. */
 export const NXS_TASK_DETAIL_ID = 'nxs.components.taskDetail';
+
+/**
+ * The ID the panel renders a task's own form under, through `lib-extension-outlet`: the fields a
+ * layout file draws for the task's workflow step. The component registered there is given `task`,
+ * `disabled`, `headingLevel`, the level of its section headings, and `onForm`, and hands its form
+ * to `onForm` once it has one for the task. With nothing registered, or no form handed, the panel
+ * shows its own fields.
+ */
+export const NXS_TASK_FORM_ID = 'nxs.components.taskForm';
+
+/**
+ * A task's own form, as the component registered under {@link NXS_TASK_FORM_ID} hands it to the
+ * panel. It takes the place of the panel's participants fields; the panel keeps the comment and
+ * the step's buttons, and completes the task with what `variables()` gives.
+ */
+export interface NxsTaskForm {
+  /** Shows every error, and answers whether the task may be completed with the values entered. */
+  validate(): boolean;
+  /** The step's variables to complete the task with, by their names. */
+  variables(): Record<string, unknown>;
+  /**
+   * Puts the server's validation messages on the fields they name. Answers the messages it could
+   * not place, or `null` for a failure that is not a validation failure.
+   */
+  showFailure(failure: unknown): readonly string[] | null;
+}
 
 /** How a task left the user's inbox: one of its actions was run, or its workflow was abandoned. */
 export type NxsTaskOutcome = 'completed' | 'abandoned';
@@ -118,6 +146,7 @@ const DEFAULT_DUE_DAYS = 5;
     MatProgressSpinnerModule,
     MatSelectModule,
     MatTooltipModule,
+    ExtensionOutletComponent,
     NxsAvatarComponent,
     NxsUserGroupPickerComponent,
     TranslatePipe,
@@ -228,6 +257,29 @@ export class NxsTaskDetailComponent {
 
   protected readonly submitting = linkedSignal({ source: this.taskId, computation: () => false });
 
+  protected readonly taskFormId = NXS_TASK_FORM_ID;
+  /** The form last handed, with the task it was handed for. */
+  private readonly handedForm = signal<{ readonly id: string; readonly form: NxsTaskForm } | null>(
+    null,
+  );
+  /**
+   * What the task form's component is given to hand its form with: one per task, so that a form
+   * handed late, for a task the host has moved on from, is never taken for the current one's.
+   */
+  protected readonly onForm = computed(() => {
+    const id = this.taskId();
+    return (form: NxsTaskForm | null): void => {
+      // A late call for a task the host has moved on from neither hands nor withdraws anything.
+      if (untracked(this.taskId) !== id) return;
+      this.handedForm.set(form ? { id, form } : null);
+    };
+  });
+  /** The task's own form, when its step has one: it takes the place of the participants fields. */
+  protected readonly taskForm = computed(() => {
+    const handed = this.handedForm();
+    return handed && handed.id === this.taskId() ? handed.form : null;
+  });
+
   private graphRequest?: Subscription;
 
   constructor() {
@@ -238,7 +290,12 @@ export class NxsTaskDetailComponent {
   protected execute(action: TaskAction): void {
     const task = this.task();
     const variables: Record<string, unknown> = {};
-    if (this.choosesParticipants() && action.validate !== false) {
+    // An action that skips the form, such as Cancel, sends none of it.
+    const form = action.validate !== false ? this.taskForm() : null;
+    if (form) {
+      if (!form.validate()) return;
+      Object.assign(variables, form.variables());
+    } else if (this.choosesParticipants() && action.validate !== false) {
       const chosen = this.participants().map((principal) => principal.prefixedId);
       const user = this.currentUsername();
       if (!chosen.length && !user) {
@@ -261,11 +318,15 @@ export class NxsTaskDetailComponent {
         this.taskService.notifyTasksChanged();
         if (current) this.taskDone()(task, 'completed');
       },
-      (err) =>
+      (err, current) => {
+        // The form shows the messages it can place beside their fields; the rest are said here.
+        // A refusal that lands after the host moved on is said, never put on the next task's form.
+        const unplaced = current ? (form?.showFailure(err) ?? null) : null;
+        const said = unplaced === null ? serverMessage(err) : unplaced.join(' ');
         this.toast.error(
-          serverMessage(err) ||
-            this.translate.instant('satori-components.task-detail.complete-failed'),
-        ),
+          said || this.translate.instant('satori-components.task-detail.complete-failed'),
+        );
+      },
     );
   }
 
@@ -410,7 +471,7 @@ export class NxsTaskDetailComponent {
   private submit<T>(
     request: Observable<T>,
     done: (current: boolean) => void,
-    failed: (err: unknown) => void,
+    failed: (err: unknown, current: boolean) => void,
   ): void {
     const id = this.taskId();
     this.submitting.set(true);
@@ -421,10 +482,7 @@ export class NxsTaskDetailComponent {
     };
     request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => done(settle()),
-      error: (err: unknown) => {
-        settle();
-        failed(err);
-      },
+      error: (err: unknown) => failed(err, settle()),
     });
   }
 }

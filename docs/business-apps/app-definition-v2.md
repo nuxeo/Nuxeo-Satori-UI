@@ -367,6 +367,38 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
 - **The buttons** are the step's own, from the workflow: approve and deny, here. Whether a field
   can be required for one button only is phase 2's to decide.
 
+### Where the app reads it, and what it draws
+
+- **The address.** The app reads `tasks/<workflow>.<step>.layout.json` beside `layouts.json`, as
+  the package writes it, with no envelope, as it reads `home.json` (section 10). `<workflow>` is
+  the task's `workflowModelName` and `<step>` its `nodeName`, the step's node id.
+- **What happens when there is none.** Nothing served there (HTTP 404) leaves the task panel's own
+  form, and so does a file refused for a structural error.
+- **Only the development server serves it for now.** It does so from
+  `npm run config:dev -- --task <workflow>.<step>=<file>`. The configuration servlet does not, so a
+  production install without dev mode shows the task panel's own form until the app registry
+  serves an app's files (section 13).
+- **Where the form is drawn.** It is in the task panel, in place of the panel's participants
+  fields; the panel keeps its comment and the step's buttons. The component is `lib-task-form` in
+  `libs/shared/document-layouts`, registered as `nxs.components.taskForm`, so a customer library
+  can replace it.
+- **How it is drawn.** It is an edit form of layout version 2, as layout-v2.md, section 11,
+  describes one, over the record the task is on, its first target document, read with all its
+  properties.
+- **A `var:` field's type and value.** Its type comes from the step's variable schema, `var_<step>`,
+  which the task names in `taskInfo.schemas`, or from the workflow's, `var_<workflow>`. Its value
+  is the task's `variables`. A `var:` field naming neither schema's field is left out, as a field
+  its type lacks is.
+- **The record's own properties** show read-only, through their widgets.
+- **The step's buttons** are its `taskInfo.taskActions`:
+  - one that validates (`validate`, true unless Nuxeo says otherwise) checks the form first, then
+    completes the task with `PUT /api/v1/task/{id}/{action}`, sending the form's variables by name
+    and the comment;
+  - one that skips it, such as Cancel, sends none of the form.
+- **The server's validation messages** go on the fields they name. A property
+  `var_<schema>:<name>` is the field `var:<name>`; the messages the form cannot place are said in
+  the panel's toast.
+
 ## 7. Labels
 
 ```json labels/en.json
@@ -633,7 +665,7 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 | `app.json`        | The app is refused, and "Switch app" does not list it                 | The app is refused too: the shell runs no app it cannot read whole                    |
 | A queue           | The queue is left out                                                 | The column, facet or action it is in is left out. A key of the queue's own is ignored |
 | `actions.json`    | The action it is in is left out; all of them, if it is the file's own | The action it is in is left out. A key of the file's own is ignored                   |
-| A task form       | The step's generated form shows instead                               | The card or field it is in is left out, as in a layout                                |
+| A task form       | The task panel's own form shows instead                               | The card or field it is in is left out, as in a layout                                |
 | A labels file     | The file is not applied: the platform's labels show                   | The key is ignored                                                                    |
 | Module settings   | The app is refused, as for `app.json`                                 | The app is refused, as for `app.json`                                                 |
 | `navigation.json` | The menu is not drawn: the platform's shows                           | The entry it is in is left out. A key of the file's own is ignored                    |
@@ -660,6 +692,9 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 - **Serving the menu, the home and the queues.** The app registry serves them, once decisions B and
   E are taken. Until then only the development server answers `navigation.json`, `home.json` and
   `queues/<id>.json` (sections 4, 9 and 10).
+- **Serving task forms.** The app registry is to serve them too. Until then only the development
+  server answers `tasks/<workflow>.<step>.layout.json` (section 6), so a production install
+  without dev mode shows the task panel's own form for every step.
 - **Replacing the platform's menu.** The app joins its entries to the manifest's `navbar` slot
   (section 9). Whether an app's entries replace the platform's or join them is for the shell that
   switches apps, with the registry.
