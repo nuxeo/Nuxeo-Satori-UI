@@ -68,7 +68,7 @@ describe('the harness on a sound conversion', () => {
       "1 name rests on the platform's own model, which only the migration server can confirm: dc:title",
     );
     expect(reason(5)).toBe(
-      '3 conditions wait for M2, whose truth tables run in Web UI on the migration server',
+      "The truth tables of 5 conditions ran against Web UI's and the app's code as written; evaluating each original in Web UI itself, on the migration server, has not run",
     );
     expect(reason(6)).toMatch(/^The values half opens the same records in both apps/);
     expect(reason(7)).toMatch(/needs the migration server$/);
@@ -98,6 +98,7 @@ describe('the harness on a sound conversion', () => {
       'check 7 ran only in part',
       'check 9 did not run',
       expect.stringMatching(/^\d+ constructs are pending a later phase$/),
+      expect.stringMatching(/^\d+ proposals wait for a person to accept or reject them$/),
       expect.stringMatching(/^\d+ reported items have no owner$/),
     ]);
   });
@@ -193,7 +194,7 @@ describe('each deliberate breakage fails the check that guards it', () => {
       'layouts/Claim/edit.layout.json sections.0.fields.0: the schema claim has no field numberRenamed, so cl:numberRenamed does not exist',
     ]);
     expect(findings('slip-free-javascript')).toEqual([
-      'layouts/Claim/edit.layout.json: sections.0.fields.0.visibleWhen holds a rule that no condition of the package gives: M1 converts no condition',
+      'layouts/Claim/edit.layout.json: sections.0.fields.0.visibleWhen holds a rule that no condition of the package gives',
     ]);
     expect(findings('widen-to-everyone')).toEqual([
       'layouts/Claim/metadata.layout.json: it shows cl:reserve to everyone, though Web UI shows it only while condition 1 passes',
@@ -229,14 +230,14 @@ describe('each deliberate breakage fails the check that guards it', () => {
 describe('check 1, nothing dropped', () => {
   it('fails when the two counts of the package disagree, as when the parser misses something', () => {
     const path = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
-    // A field written inside a script's string: the text holds four, the parser sees three.
+    // A field written inside a script's string: the text holds six, the parser sees five.
     const layout = syntheticBundleFiles()[path].replace(
       '</template>',
       `<script>const row = '<div role="widget"></div>';</script></template>`,
     );
     const findings = check(prepare({ bundle: { [path]: layout } }), 1)?.findings;
     expect(findings).toEqual([
-      `the two counts disagree on ${path}: the parser finds 3 layout-field, the text holds 4`,
+      `the two counts disagree on ${path}: the parser finds 5 layout-field, the text holds 6`,
     ]);
   });
 

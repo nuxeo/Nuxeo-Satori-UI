@@ -137,6 +137,39 @@ describe('SelectionTopbarComponent — bulk-actions slot', () => {
     expect(calls).toEqual(['archive']);
   });
 
+  it("offers only the actions a page lists, in the slot's order, and only those with a handler", () => {
+    manifest.set({
+      extensionLayers: [
+        {
+          slots: {
+            'bulk-actions': [
+              { id: 'acme.bulkActions.ghost', label: 'Ghost', icon: 'help', order: 5 },
+            ],
+          },
+        },
+      ],
+    });
+    const fixture = render();
+    TestBed.inject(ExtensionActionRegistry).register({
+      'app.bulkActions.downloadZip': { execute: () => undefined },
+      'app.bulkActions.delete': { execute: () => undefined },
+    });
+    fixture.componentRef.setInput('offered', [
+      'app.bulkActions.delete',
+      'acme.bulkActions.ghost',
+      'app.bulkActions.downloadZip',
+      'acme.bulkActions.unregistered',
+    ]);
+    fixture.detectChanges();
+    // The ghost has no handler: offered, it would do nothing. The unregistered id is not in the slot.
+    expect(renderedButtons(fixture).map((button) => button.getAttribute('data-action-id'))).toEqual(
+      ['app.bulkActions.downloadZip', 'app.bulkActions.delete'],
+    );
+    fixture.componentRef.setInput('offered', null);
+    fixture.detectChanges();
+    expect(renderedButtons(fixture)).toHaveLength(MARKUP_ORDER.length + 1);
+  });
+
   it('renders a manifest action with no handler as inert rather than throwing', () => {
     manifest.set({
       extensionLayers: [

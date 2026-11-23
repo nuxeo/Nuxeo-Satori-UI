@@ -126,6 +126,51 @@ describe('PageProviderService', () => {
     http.expectNone(() => true);
   });
 
+  it("sends each aggregate's chosen buckets as a JSON array named after it, as the search page does", async () => {
+    const page = firstValueFrom(
+      service.execute('member_claims', {
+        pageSize: 10,
+        parameters: ['m-1'],
+        aggregates: {
+          claim_type_agg: ['medical', 'dental, vision'],
+          claim_state_agg: [],
+        },
+      }),
+    );
+    const request = http.expectOne((r) => execute(r.url));
+    // A key holding a comma stays whole: the array is JSON, not comma-separated.
+    expect(request.request.params.get('claim_type_agg')).toBe('["medical","dental, vision"]');
+    // An aggregate with nothing chosen filters nothing, and is not sent.
+    expect(request.request.params.has('claim_state_agg')).toBe(false);
+    expect(request.request.params.getAll('queryParams')).toEqual(['m-1']);
+    request.flush({
+      ...PAGE,
+      aggregations: { claim_type_agg: { buckets: [{ key: 'medical', docCount: 2 }] } },
+    });
+    expect((await page).aggregations).toEqual({
+      claim_type_agg: { buckets: [{ key: 'medical', docCount: 2 }] },
+    });
+  });
+
+  it('refuses, without a request, an aggregate the search or its rendering reads for itself', async () => {
+    for (const aggregate of [
+      'pageSize',
+      'sortBy',
+      'queryParams',
+      'properties',
+      'enrichers.document',
+      'fetch-document',
+      '_agg',
+    ]) {
+      await expect(
+        firstValueFrom(
+          service.execute('member_claims', { pageSize: 10, aggregates: { [aggregate]: ['x'] } }),
+        ),
+      ).rejects.toThrow(`"${aggregate}" cannot be sent as an aggregate`);
+    }
+    http.expectNone(() => true);
+  });
+
   it('passes a failed request on', async () => {
     const page = firstValueFrom(service.execute('member_claims', { pageSize: 10 }));
     http

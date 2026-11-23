@@ -39,8 +39,9 @@ It is an engine (tier 3 of [architecture.md](../../../docs/business-apps/archite
   hidden card asks for nothing. A terms aggregate returns only its `size` largest buckets: a KPI on
   a bucket missing from a full list is unavailable, not 0, and a full list says it is the largest
   only.
-- **Leaves queue links out** until the app gives `HOME_QUEUE_LINK`, which it does not yet: phase 1's
-  queue page is not built.
+- **Links to queues** through `HOME_QUEUE_LINK`, which the app gives: `/queues/<id>`, the queue
+  engine's page (`libs/shared/queues`). Without it, as in a host that has no queue page, a card that
+  is only a link is left out and a KPI draws no link.
 
 Nothing here is a security control. A figure counts what the page provider returns to the person,
 and hiding a card hides the figure, not the records.
@@ -73,7 +74,6 @@ npx ngc -p libs/shared/home/tsconfig.lib.json
 ## Not done yet
 
 - **Serving `home.json` on a server.** The app registry serves it, once decisions B and E are taken.
-- **Links to queues**, which wait for phase 1's queue page.
 - **The home as the app's first page.** `/` still opens the dashboard.
 - **A bucket's label.** A bucket shows its key, as the server returns it.
 - **The menu.** `navigation.json` is proposed and validated, and not drawn.

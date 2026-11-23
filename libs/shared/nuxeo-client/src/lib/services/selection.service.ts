@@ -16,6 +16,14 @@ export class SelectionService {
   readonly selectedTypes = signal<Map<string, string>>(new Map());
   /** When true, the app shell topbar shows only count + Clear (e.g. note image picker). */
   readonly clearOnlyMode = signal(false);
+  /**
+   * The bulk actions the page that holds the selection offers for it, by id, or `null` for every
+   * one the `bulk-actions` slot resolves. A queue's page sets those of its file's `bulkActions`
+   * that have a handler, `[]` while it shows no queue, and puts `null` back when it goes; the app
+   * shell's topbar reads it. Offering fewer actions is not a security control: Nuxeo's permissions
+   * still decide what each one may do.
+   */
+  readonly offeredBulkActions = signal<readonly string[] | null>(null);
 
   readonly selectedCount = () => this.selectedIds().size;
   readonly selectedItems = () =>

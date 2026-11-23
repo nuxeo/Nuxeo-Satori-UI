@@ -354,6 +354,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
     'Hi! Could you comment on this document and...',
   'permissions.update-permission-dialog.hi-could-you-comment-on-this':
     'Hi! Could you comment on this document and...',
+  'queues.filters': 'Filters',
   'sat.platform-nav.collapse': 'Collapse navigation',
   'sat.platform-nav.expand': 'Expand navigation',
   'satori-components.favorite-toggle.add': 'Add to favorites',
