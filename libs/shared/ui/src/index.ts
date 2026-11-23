@@ -56,6 +56,10 @@ export {
   type TranslateFn,
 } from './lib/confirm-dialog/trash-confirm.utils';
 export {
+  RowActionsService,
+  providePackagedRowActions,
+} from './lib/row-actions/row-actions.service';
+export {
   observeStripRedundantMatInputAriaRequired,
   stripRedundantMatInputAriaRequired,
 } from './lib/login-mat-input-required-a11y';

@@ -10,8 +10,6 @@ import {
   NxsDocumentListComponent,
   NxsDomainHintComponent,
   NxsDriveDialogComponent,
-  NxsFolderPickerDialogComponent,
-  NxsRenameDialogComponent,
   NxsErrorStateComponent,
   NxsFolderHeaderComponent,
   NxsPagerComponent,
@@ -34,9 +32,6 @@ import {
   type NxsDocumentListSort,
   type NxsDriveDialogData,
   type NxsErrorStatus,
-  type NxsFolderPickerDialogData,
-  type NxsFolderPickerDialogResult,
-  type NxsRenameDialogData,
   type NxsMenuAction,
   type NxsPickableColumn,
   type NxsShareExternalDialogData,
@@ -97,6 +92,7 @@ import {
   BrowseService,
   BrowseContextService,
   ClipboardTargetService,
+  DocumentChangesService,
   decodeNuxeoPathSegment,
   nuxeoBreadcrumbTitles,
   parseBrowseNuxeoPathFromRouterUrl,
@@ -168,7 +164,6 @@ import {
   ExtensionRuleContextService,
   type ExtensionActionDescriptor,
   type ExtensionColumnDescriptor,
-  type ExtensionRuleContext,
 } from '@nuxeo/satori-platform/extensions';
 
 import {
@@ -295,6 +290,7 @@ export class BrowseComponent {
   private readonly router = inject(Router);
   private readonly browseService = inject(BrowseService);
   private readonly browseContext = inject(BrowseContextService);
+  private readonly documentChanges = inject(DocumentChangesService);
   private readonly clipboardTargetService = inject(ClipboardTargetService);
   private readonly detailService = inject(DocumentDetailService);
   private readonly directoryService = inject(DirectoryService);
@@ -1007,6 +1003,10 @@ export class BrowseComponent {
    * reachable and would run against dead state. Withdrawing the registration
    * rather than the ids is what leaves a customer's handler for the same id
    * untouched.
+   *
+   * The row actions are not here. They act on the row's document alone, so
+   * `providePackagedRowActions()` registers them once for the whole app, and every
+   * list that offers them runs them; this page reloads when they change a document.
    */
   private registerContextMenuHandlers(): void {
     const registration = this.actionRegistry.registerPackaged({
@@ -1014,21 +1014,6 @@ export class BrowseComponent {
       'app.contextMenu.subscribe': { execute: () => this.toggleNotify() },
       'app.contextMenu.unsubscribe': { execute: () => this.toggleNotify() },
       'app.contextMenu.export': { execute: () => this.openExportDialog() },
-      'app.rowActions.download': {
-        execute: (context) => this.withRow(context, (doc) => this.downloadEntry(doc)),
-      },
-      'app.rowActions.rename': {
-        execute: (context) => this.withRow(context, (doc) => this.renameEntry(doc)),
-      },
-      'app.rowActions.copyTo': {
-        execute: (context) => this.withRow(context, (doc) => this.copyOrMoveEntry('copy', doc)),
-      },
-      'app.rowActions.moveTo': {
-        execute: (context) => this.withRow(context, (doc) => this.copyOrMoveEntry('move', doc)),
-      },
-      'app.rowActions.delete': {
-        execute: (context) => this.withRow(context, (doc) => this.trashEntry(doc)),
-      },
     });
     this.destroyRef.onDestroy(() => {
       registration.unregister();
@@ -1036,13 +1021,13 @@ export class BrowseComponent {
     });
   }
 
-  /** A row action runs on the row's document, which arrives as the context's focused one. */
-  private withRow(context: ExtensionRuleContext, run: (doc: NuxeoDocument) => void): void {
-    if (context.document) run(context.document);
-  }
-
   constructor() {
     this.registerContextMenuHandlers();
+    // A row action, or anything else that changes documents and says so, may have changed this
+    // folder's rows: they are read again, as after any change made here.
+    this.documentChanges.changes
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.reloadAfterContentChange());
     const initialPath = parseBrowseNuxeoPathFromRouterUrl(this.router.url);
     this.currentNuxeoPath = initialPath;
     this.browsePath.set(initialPath);
@@ -1436,166 +1421,6 @@ export class BrowseComponent {
     this.browseContext.requestTreeRefresh();
     if (nuxeoPathsEqualFlexible(path, this.currentDoc()?.path ?? ''))
       this.reloadAfterContentChange();
-  }
-
-  // ── Row actions ──
-
-  /** The row's main file, saved by the browser under the file's own name. */
-  downloadEntry(doc: NuxeoDocument): void {
-    this.detailService
-      .fetchBlob(doc.uid, { clientReason: 'download' })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (blob) => {
-          const content = doc.properties?.['file:content'] as { name?: string } | null | undefined;
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = content?.name || doc.title || 'download';
-          link.click();
-          URL.revokeObjectURL(url);
-        },
-        error: (err: unknown) =>
-          this.toast.error(
-            this.translate.instant(
-              isPermissionDeniedError(err)
-                ? PERMISSION_DENIED_KEY
-                : 'browse.message.download-failed',
-            ),
-          ),
-      });
-  }
-
-  /** Changes the row's title; its path name stays, so links to it keep working. */
-  renameEntry(doc: NuxeoDocument): void {
-    // The packaged rule's Immutable restriction, held here too because a manifest may clear the
-    // rule, and a version's or publication's permissions still list Write.
-    if (doc.facets?.includes('Immutable')) {
-      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
-      return;
-    }
-    this.dialog
-      .open<NxsRenameDialogComponent, NxsRenameDialogData, NuxeoDocument>(
-        NxsRenameDialogComponent,
-        {
-          data: { documentId: doc.uid, title: doc.title },
-        },
-      )
-      .afterClosed()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((updated) => {
-        if (!updated) return;
-        this.toast.show(
-          this.translate.instant('browse.message.renamed', { name: updated.title ?? doc.title }),
-        );
-        this.browseContext.requestTreeRefresh();
-        this.reloadAfterContentChange();
-      });
-  }
-
-  /** Chooses a folder, then copies or moves the row there. */
-  copyOrMoveEntry(operation: 'copy' | 'move', doc: NuxeoDocument): void {
-    const here = this.currentDoc()?.path;
-    const data: NxsFolderPickerDialogData = {
-      heading: this.translate.instant(
-        operation === 'copy'
-          ? 'browse.row-actions.copy-heading'
-          : 'browse.row-actions.move-heading',
-        { name: doc.title },
-      ),
-      confirmLabel: this.translate.instant(
-        operation === 'copy' ? 'browse.row-actions.copy-here' : 'browse.row-actions.move-here',
-      ),
-      initialPath: here,
-      excludePath: this.isFolderish(doc) ? doc.path : undefined,
-      currentParentPath: operation === 'move' ? here : undefined,
-    };
-    this.dialog
-      .open<NxsFolderPickerDialogComponent, NxsFolderPickerDialogData, NxsFolderPickerDialogResult>(
-        NxsFolderPickerDialogComponent,
-        { data },
-      )
-      .afterClosed()
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        filter((target): target is NxsFolderPickerDialogResult => !!target),
-        switchMap((target) =>
-          (operation === 'copy'
-            ? this.browseService.copyDocuments([doc.uid], target.uid)
-            : this.browseService.moveDocuments([doc.uid], target.uid)
-          ).pipe(map(() => target)),
-        ),
-      )
-      .subscribe({
-        next: (target) => {
-          this.toast.show(
-            this.translate.instant(
-              operation === 'copy' ? 'browse.message.copied-to' : 'browse.message.moved-to',
-              { name: doc.title, folder: target.title },
-            ),
-          );
-          if (operation === 'move' && this.selectionService.isSelected(doc.uid)) {
-            this.selectionService.toggle(doc.uid);
-          }
-          this.browseContext.requestTreeRefresh();
-          this.reloadAfterContentChange();
-        },
-        error: (err: unknown) =>
-          this.toast.error(
-            this.translate.instant(
-              isPermissionDeniedError(err)
-                ? PERMISSION_DENIED_KEY
-                : operation === 'copy'
-                  ? 'browse.message.failed-to-copy'
-                  : 'browse.message.failed-to-move',
-            ),
-          ),
-      });
-  }
-
-  /** Moves the row to the trash, after the same confirmation as the header's Delete. */
-  trashEntry(doc: NuxeoDocument): void {
-    if (isCollectionDocument(doc)) {
-      this.deleteCollectionEntry(doc);
-      return;
-    }
-    const guard$ =
-      doc.type === 'Collections' ? this.browseService.hasChildCollections(doc.uid) : of(false);
-    guard$
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        switchMap((blocked) => {
-          if (blocked) {
-            this.showCollectionsFolderDeleteBlockedMessage();
-            return EMPTY;
-          }
-          return this.dialog
-            .open(ConfirmDialogComponent, {
-              data: trashDocumentConfirmData(doc.title, (key, params) =>
-                this.translate.instant(key, params),
-              ),
-            })
-            .afterClosed();
-        }),
-        filter((confirmed) => confirmed === true),
-        switchMap(() => this.detailService.trashDocument(doc.uid)),
-      )
-      .subscribe({
-        next: () => {
-          if (this.selectionService.isSelected(doc.uid)) this.selectionService.toggle(doc.uid);
-          this.toast.show(this.translate.instant('browse.message.moved-to-trash'));
-          this.browseContext.requestTreeRefresh();
-          this.reloadAfterContentChange();
-        },
-        error: (err: unknown) =>
-          this.toast.error(
-            this.translate.instant(
-              isPermissionDeniedError(err)
-                ? PERMISSION_DENIED_KEY
-                : 'browse.message.failed-to-delete',
-            ),
-          ),
-      });
   }
 
   /** Merge clipboard copy/move API results into the visible folder (Web UI updates listing immediately). */

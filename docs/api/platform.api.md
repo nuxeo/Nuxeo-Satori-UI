@@ -3911,7 +3911,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-329 exported symbol(s).
+330 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4299,6 +4299,13 @@ class DocTypeLabelPipe implements PipeTransform {
     transform(type: string | null | undefined): string;
     static ɵfac: i0.ɵɵFactoryDeclaration<DocTypeLabelPipe, never>;
     static ɵpipe: i0.ɵɵPipeDeclaration<DocTypeLabelPipe, "docTypeLabel", true>;
+    }
+}
+class DocumentChangesService {
+    readonly changes: Observable<void>;
+    notify(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<DocumentChangesService, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 class DocumentDetailService {
@@ -5480,7 +5487,7 @@ function writeClipboardDocs(docs: ClipboardDoc[]): void;
 
 ## @nuxeo/satori-platform/ui
 
-53 exported symbol(s).
+55 exported symbol(s).
 
 ```ts
 class ConfirmDialogComponent {
@@ -5857,6 +5864,16 @@ class PlatformEnglishMissingTranslationHandler implements MissingTranslationHand
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
+class RowActionsService {
+    download(doc: NuxeoDocument): void;
+    rename(doc: NuxeoDocument): void;
+    copyTo(doc: NuxeoDocument): void;
+    moveTo(doc: NuxeoDocument): void;
+    delete(doc: NuxeoDocument): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<RowActionsService, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
+    }
+}
 const SAVED_SEARCH_DIALOG_OPTIONS: Partial<MatDialogConfig>;
 class SavedSearchDialogComponent {
     readonly dialogRef: MatDialogRef<any, any>;
@@ -6038,6 +6055,7 @@ function lifecycleLabel(kind: 'state' | 'transition', name: string, translate: (
 function observeMatTabListKeyboardA11y(root: HTMLElement): (() => void) | null;
 function observeStripRedundantMatInputAriaRequired(input: HTMLInputElement | null | undefined): MutationObserver | null;
 function openDocumentCompareDialog(dialog: MatDialog, items: DocumentCompareDialogData['items']): void;
+function providePackagedRowActions(): EnvironmentProviders;
 function providePlatformEnglishFallback(): Provider;
 function provideSatoriDateAdapter(): Provider[];
 function provideTranslatedDatepickerIntl(): Provider;

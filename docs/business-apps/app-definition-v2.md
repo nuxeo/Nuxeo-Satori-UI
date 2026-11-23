@@ -196,7 +196,9 @@ provider, for the development server.
   that could not be read.
 - **The list** is the record page's (layout-v2.md, section 7): the page provider's records page by
   page, the columns through their widgets, the order sorted on the server from a header, a row
-  opening its record, and the row actions that have a handler on the page. A column with a rule
+  opening its record, and the row actions that have a handler on the page, the platform's five
+  among them, which the app registers once for every list. After one of them changes a record, the
+  list reads its page again, with its buckets chosen. A column with a rule
   shows to the people it passes for, answered as the queue's own rule is; a queue none of whose
   columns is for the person signed in is hidden from them.
 - **An empty parameter** refuses the queue, as a related list is not asked with one: a page
