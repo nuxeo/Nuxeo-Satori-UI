@@ -66,7 +66,9 @@ export function prTimings(pr) {
     files: pr.changedFiles ?? 0,
     changesRequested: reviews.filter((r) => r.state === 'CHANGES_REQUESTED').length,
     reviewed: reviews.length > 0,
-    jiraKey: /\b([A-Z][A-Z0-9]+-\d+)\b/.exec(`${pr.headRefName ?? ''} ${pr.title ?? ''}`)?.[1] ?? null,
+    // Branch, title, then body: AGENTS/06-git-workflow.md accepts the ticket in the PR body
+    // ("Implements NCO-1234") as well as the title, so a body-only link is a link.
+    jiraKey: /\b([A-Z][A-Z0-9]+-\d+)\b/.exec(`${pr.headRefName ?? ''} ${pr.title ?? ''} ${pr.body ?? ''}`)?.[1] ?? null,
     // Heuristic, and labelled as one in the dashboard: the PR body carries Claude Code's
     // attribution line. It misses AI-assisted work whose author removed the line.
     aiAssisted: /Generated with \[?Claude Code/i.test(pr.body ?? ''),

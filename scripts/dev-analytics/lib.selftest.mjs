@@ -49,6 +49,9 @@ const bare = prTimings({ number: 8, createdAt: '2026-11-01T00:00:00Z', mergedAt:
 assert.equal(bare.toFirstReviewHours, null);
 assert.equal(bare.reviewed, false);
 assert.equal(bare.jiraKey, null);
+// a ticket named only in the body ("Implements NCO-1234") is still a link
+const bodyOnly = prTimings({ number: 10, title: 'add export', headRefName: 'feature/export', body: 'Implements NCO-1234', createdAt: '2026-11-01T00:00:00Z', mergedAt: '2026-11-01T01:00:00Z', author: { login: 'me' }, reviews: { nodes: [] } });
+assert.equal(bodyOnly.jiraKey, 'NCO-1234');
 const s = summarisePrs([t, bare]);
 assert.equal(s.merged, 2);
 assert.equal(s.mergedWithoutReviewPct, 50);

@@ -84,12 +84,21 @@ jobs:
 
       - name: Fetch the latest merged coverage
         continue-on-error: true
+        # The newest completed main run that still HAS the artifact, whatever its conclusion:
+        # sonarcloud.yml uploads `coverage-lcov` before the Sonar scan and quality gate, so a run
+        # that failed there measured coverage fine, and filtering to green runs would show an
+        # older number (or none) in place of the latest one. A run that failed before the upload
+        # has no artifact, so the download fails and the next older run is tried.
         run: |
-          id=$(gh run list --workflow sonarcloud.yml --branch main --limit 10 --json databaseId,conclusion,status \
-            --jq '[.[] | select(.status=="completed" and .conclusion=="success")][0].databaseId')
-          [ -n "$id" ] && [ "$id" != null ] || { echo "no successful sonarcloud run"; exit 0; }
-          echo "sonarcloud run $id"
-          gh run download "$id" --dir coverage-artifact --name coverage-lcov || true
+          ids=$(gh run list --workflow sonarcloud.yml --branch main --limit 15 --json databaseId,status \
+            --jq '.[] | select(.status=="completed") | .databaseId')
+          for id in $ids; do
+            if gh run download "$id" --dir coverage-artifact --name coverage-lcov 2>/dev/null; then
+              echo "coverage from sonarcloud run $id"
+              exit 0
+            fi
+          done
+          echo "no recent sonarcloud run on main has a coverage-lcov artifact"
 
       - name: Collect
         env:

@@ -123,11 +123,29 @@ function collectCi(repo, since, jobSample, gaps, workflow = 'ci.yml') {
   };
 }
 
-function collectUnit() {
-  const files = execFileSync('git', ['ls-files', '*.spec.ts'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-    .split('\n').filter(Boolean);
-  return summariseSpecs(files.map((path) => ({ path, counts: countSpec(readFileSync(path, 'utf8')) })));
+// The Vitest `include` the projects use (libs/shared/ui/vite.config.mts): `*.{test,spec}.<ext>`.
+// Karma projects use `*.spec.ts`, which this also covers.
+const UNIT_EXTS = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts', 'jsx', 'tsx'];
+const UNIT_GLOBS = ['spec', 'test'].flatMap((kind) => UNIT_EXTS.map((ext) => `*.${kind}.${ext}`));
+
+/** Playwright suites match the same file names but are not unit tests. */
+function isBrowserSuite(path, source) {
+  return /(^|\/)[^/]*-e2e\//.test(path) || /(^|\/)a11y\/specs\//.test(path) || /from\s+['"]@playwright\/test['"]/.test(source);
 }
+
+function collectUnit() {
+  const files = execFileSync('git', ['ls-files', ...UNIT_GLOBS], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    .split('\n').filter(Boolean);
+  const scanned = [];
+  for (const path of files) {
+    const source = readFileSync(path, 'utf8');
+    if (!isBrowserSuite(path, source)) scanned.push({ path, counts: countSpec(source) });
+  }
+  return { ...summariseSpecs(scanned), excludedBrowserSuites: files.length - scanned.length };
+}
+
+/** The `matrix.project` list in e2e-nightly.yml. Keep the two in step. */
+const EXPECTED_E2E_BROWSERS = ['chromium', 'webkit'];
 
 function collectE2e(dir) {
   const reports = [];
@@ -140,7 +158,11 @@ function collectE2e(dir) {
   };
   walk(dir);
   if (reports.length === 0) return null;
-  // One results.json per browser job; combine them so the totals cover the whole nightly.
+  // e2e-nightly.yml runs one job per browser and uploads each as `e2e-<browser>`, ignoring a job
+  // that produced no files. One browser's totals presented as the nightly's would read as a pass
+  // rate nobody measured, so a missing browser leaves the whole section unmeasured.
+  const missing = EXPECTED_E2E_BROWSERS.filter((b) => !reports.some((p) => p.split(/[\\/]/).includes(`e2e-${b}`)));
+  if (missing.length) throw new Error(`no results.json from ${missing.join(', ')}; the nightly's other browser alone would be a partial total`);
   const parts = reports.map((p) => parsePlaywright(JSON.parse(readFileSync(p, 'utf8'))));
   const sum = (k) => parts.reduce((s, x) => s + (x[k] ?? 0), 0);
   const ran = sum('total') - sum('skipped');
@@ -207,8 +229,10 @@ async function main() {
   else gaps.push('coverage: no lcov file (the SonarCloud workflow has not published one yet)');
 
   if (o.e2eDir && existsSync(o.e2eDir)) {
+    const before = gaps.length;
     snapshot.e2e = guard('e2e', () => collectE2e(o.e2eDir));
-    if (!snapshot.e2e) gaps.push('e2e: no results.json under the artifact directory');
+    // `guard` already named the reason when collection threw (a browser missing, a bad report).
+    if (!snapshot.e2e && gaps.length === before) gaps.push('e2e: no results.json under the artifact directory');
   } else gaps.push('e2e: no artifact directory (no recent e2e-nightly run to read)');
 
   const history = loadHistory(o.historyDir);
