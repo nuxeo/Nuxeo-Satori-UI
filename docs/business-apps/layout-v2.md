@@ -415,7 +415,8 @@ lists what each Web UI element becomes. In version 2's terms:
   - **a computed column** of a table is not drawn yet, nor **a table inside a table's column**:
     that column is left out, and the rest of the table shows;
   - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or
-    the stored id, until each has its lookup;
+    the stored id, until each has its lookup. Section 12 proposes how `document-link` reads the
+    linked record, and shows another of its properties;
   - **a rule nested more than 32 levels deep** leaves its tab, card or field out: the rule
     registry answers no deeper, and past that it passes any rule not declared security-relevant,
     whatever the rule says;
@@ -440,3 +441,127 @@ lists what each Web UI element becomes. In version 2's terms:
   signature or a chart is a kit's request, not version 2's.
 - **Whether `metadata` mode should exist** once `view` does is phase 1's call, made once the
   record page is seen.
+
+## 12. Proposed: a property of a linked record
+
+**Proposed, 23 November 2026, for review. Not built:** the validator refuses the example below,
+and the app draws none of it.
+
+**Why.** The Member page this document rebuilds (section 9, and
+[the plan's section 3](plan.md#3-the-member-page-side-by-side)) lists each claim's provider and the
+provider's NPI. A claim holds only its provider's id, in a reference such as `claim:provider` (a
+`documentResolver` property). Version 2 shows the open or listed record's own properties, so no
+column can show the provider's NPI. The plan names that column; until now, nothing here said how to
+write it.
+
+### The proposal
+
+`document-link` takes one more parameter, `show`: a property of the linked record,
+`"<prefix>:<name>"`, which the widget shows in place of the record's title. Without `show`, the
+widget shows the title, as section 3 has it.
+
+```json proposed
+{
+  "id": "claims",
+  "labelKey": "payers.member.claims",
+  "related": {
+    "pageProvider": "member_claims",
+    "parameters": [{ "field": "ecm:uuid" }],
+    "columns": [
+      "claim:number",
+      { "field": "claim:billedAmount", "widget": "currency", "parameters": { "currency": "USD" } },
+      {
+        "id": "provider",
+        "field": "claim:provider",
+        "widget": "document-link",
+        "parameters": { "types": ["Provider"] }
+      },
+      {
+        "id": "providerNpi",
+        "field": "claim:provider",
+        "widget": "document-link",
+        "labelKey": "payers.provider.npi",
+        "parameters": { "types": ["Provider"], "show": "provider:npi" }
+      },
+      { "field": "claim:serviceDate", "widget": "date" }
+    ],
+    "sort": [{ "field": "claim:serviceDate", "order": "desc" }]
+  }
+}
+```
+
+- **One reference, several columns:** the provider's name and its NPI above are two columns over
+  `claim:provider`.
+- **The value is shown as its own property would be:** as a field with no widget shows it, through
+  its schema type, so a vocabulary's label, a user's name, a date as `date` shows one. It links to
+  the linked record.
+- **A list of references** shows each record's property, as chips.
+- **In a card's fields as in a list's columns.** In `view` mode only: a form's document picker
+  chooses a record by its title, so `show` in a form is refused, as `related` is.
+- **One link away only.** `show` names a property of the linked record, never of a record that one
+  links to in turn.
+
+### How the app reads it, with no request per row
+
+Checked on Nuxeo 2025.10.18 on 23 November 2026, with the Payers kit's stand-in model
+([`business-apps/packages/payers-claims-demo`](../../business-apps/packages/payers-claims-demo/README.md)),
+where `claim:provider` is a document reference:
+
+- **On a page provider's results**, the headers `fetch-document: claim:provider`,
+  `depth: children` and `properties: claim,provider` return each claim with its provider inline,
+  NPI included. `member_claims` for one member returned three claims, each with the six properties
+  of its provider's `provider` schema, in one response of about 6 KB.
+- **`depth: children` is what brings the properties.** Without it, the provider comes back with its
+  title and no properties.
+- **On the open record**, `fetch-document` takes the references beside what the page asks for
+  today: `lock,claim:provider,claim:member` returned both linked records.
+
+So the record page adds the reference of each `show` to the read of the open record, and the lists
+engine adds each column's to its page request; `properties` names the schemas of the shown
+properties as well as the record's own. Nothing is fetched per row or per field, and Nuxeo's own
+`fetch-document` does the work: no enricher of ours is needed.
+
+### What the validator would check
+
+- **Today** it refuses `show`: `the widget "document-link" has no parameter "show" [parameter]`.
+  Its test holds the example above to exactly that refusal, so it fails, and asks for this section
+  to be settled, on the day the parameter is built.
+- **Proposed:** `show` is `"<prefix>:<name>"`, neither `ecm:` nor `var:`, in `view` mode only.
+- **Where the content model is known** (the pipeline in dev mode, the designer and the migration
+  server, through phase 1's model reader): the field must be a document reference, and `show` a
+  property of every type its `types` lists.
+
+### What the reader may see
+
+- **The server fetches the linked record as the reader.** One the reader may not read is not
+  inlined, and the property carries its stored id instead. This is what Nuxeo's resolver is
+  expected to do; it is not yet checked with a reader who lacks the permission.
+- **The widget then shows no value**, and says "Not available" to a screen reader, never the id.
+- **So `show` reveals nothing the server would not.** As the short version says of every rule and
+  widget, the server's permissions decide.
+
+### Sorting
+
+A column showing a linked record's property is not offered for sorting: a page provider sorts its
+own records' properties, and sorting by `claim:provider` would sort by the stored id.
+
+### What the Studio migration would write
+
+A Web UI column that shows a property of a referenced document, through a page provider that asks
+for `fetch-document`, becomes a `document-link` column with `show`. The converter of M1 does not
+write it yet.
+
+### The other options, and why not
+
+| Option                                         | What it would be                                        | Why not                                                                                                                                                                                            |
+| ---------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A path in `field`                              | `{ "field": "claim:provider/provider:npi" }`            | Nuxeo already writes a complex value's subfield with `/` (`member:address/city`), so one path would mean two things. Every reader of a field, its widget, rules, checks and sort, would need paths |
+| A computation over the linked record           | A `core.linked` computation that reads it               | A computation's result is text (section 4), so an amount or a date loses its widget. And a computation makes no request, so the record would have to be fetched anyway                             |
+| A copy in the model                            | The model keeps `provider:npi` on each claim as well    | No platform change, and a kit may do it today. But the copy goes stale when the provider changes, unless a listener keeps it, which is server code in every kit                                    |
+| An enricher of our own in `nuxeo-agentic-core` | A server call that adds the linked records to each list | Nuxeo's `fetch-document` already does it, in the same request                                                                                                                                      |
+
+### Recommendation
+
+Adopt `show` on `document-link`, and build it with the `document-link` lookup that section 11 lists
+as missing. Both read the same inlined record: the lookup shows its title, `show` another of its
+properties, so building one builds most of the other. Its name, `show`, is open to review.

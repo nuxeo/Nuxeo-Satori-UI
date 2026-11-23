@@ -66,6 +66,31 @@ describe('the proposal and the validator agree', () => {
   });
 });
 
+describe('the proposed examples are refused until they are built', () => {
+  // A "```json proposed" block is a proposal not yet built (layout-v2.md, section 12): the
+  // validator refuses it today, and for the proposed parameter alone. The day it is accepted, the
+  // proposal is built: make the block a plain ```json example, and settle its section.
+  const proposed = [...proposal.matchAll(/```json proposed\n([\s\S]*?)```/g)].map((match) =>
+    JSON.parse(match[1]),
+  );
+
+  it('finds them', () => {
+    expect(proposed.length).toBeGreaterThanOrEqual(1);
+  });
+
+  proposed.forEach((example, index) => {
+    it(`proposed example ${index + 1} is refused, for document-link's "show" alone`, () => {
+      const file = 'version' in example ? example : { version: 2, columns: 2, cards: [example] };
+      const found = messages(file);
+      expect(found.length).toBeGreaterThan(0);
+      for (const message of found)
+        expect(message).toMatch(
+          /\.parameters\.show: the widget "document-link" has no parameter "show" \[parameter\]$/,
+        );
+    });
+  });
+});
+
 describe('a sound file', () => {
   it('has no finding, in every mode it suits', () => {
     expect(messages(sound())).toEqual([]);
