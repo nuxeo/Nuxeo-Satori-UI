@@ -1,0 +1,133 @@
+name: Dev analytics
+
+# Nightly engineering metrics: PR flow, CI health, unit-test counts, coverage, E2E.
+# `scripts/dev-analytics/` does the work; this file only feeds it and publishes the result.
+#
+# Where the numbers come from, so a gap is explainable rather than mysterious:
+#   PR flow, CI runs   the GitHub API, through `gh`
+#   unit-test counts   a static scan of `*.spec.ts` (declarations, not executions)
+#   coverage           `coverage/lcov.info`, the merged report sonarcloud.yml uploads as the
+#                      `coverage-lcov` artifact on `main`
+#   E2E                `dist/e2e/results.json` from the latest e2e-nightly.yml run on `main`
+# A missing input becomes a named gap in the dashboard, never a zero.
+#
+# Where the result goes:
+#   - the job summary of this run (readable in the GitHub UI, no download)
+#   - the `dev-analytics` artifact: `index.html`, a self-contained dashboard
+#   - one JSON snapshot per day on the `dev-analytics-data` branch, which is the history the
+#     trend lines are drawn from. Orphan branch, so it never touches `main`'s history.
+#
+# NOT published to GitHub Pages: storybook-pages.yml owns the one Pages site, and
+# `actions/deploy-pages` replaces the whole site, so a second deployment would delete Storybook.
+# Serving this under `/dev-analytics/` means adding it to that workflow's assembled site.
+
+on:
+  schedule:
+    - cron: '0 5 * * *' # after the 03:00 e2e-nightly has finished
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Window in days
+        default: '90'
+
+permissions:
+  contents: write # pushes the daily snapshot to dev-analytics-data
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: dev-analytics
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: Collect and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The schedule only ever runs the default branch; a manual dispatch from another branch would
+    # push a snapshot of that branch's scripts, so only `main` publishes history.
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLISH: ${{ github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Selftest the collector
+        run: node scripts/dev-analytics/lib.selftest.mjs
+
+      - name: Load earlier snapshots
+        run: |
+          mkdir -p history
+          if git ls-remote --exit-code --heads origin dev-analytics-data >/dev/null 2>&1; then
+            git fetch --depth=1 origin dev-analytics-data
+            git --work-tree=history checkout FETCH_HEAD -- snapshots 2>/dev/null || true
+            [ -d history/snapshots ] && mv history/snapshots/* history/ && rmdir history/snapshots || true
+            git reset --quiet
+          fi
+          ls history | tail -3 || true
+
+      # Both downloads are allowed to find nothing: the collector reports the gap.
+      - name: Fetch the latest E2E results
+        continue-on-error: true
+        run: |
+          id=$(gh run list --workflow e2e-nightly.yml --branch main --limit 10 --json databaseId,conclusion,status \
+            --jq '[.[] | select(.status=="completed" and (.conclusion=="success" or .conclusion=="failure"))][0].databaseId')
+          [ -n "$id" ] && [ "$id" != null ] || { echo "no completed e2e-nightly run"; exit 0; }
+          echo "e2e-nightly run $id"
+          gh run download "$id" --dir e2e-artifacts --pattern 'e2e-*' || true
+
+      - name: Fetch the latest merged coverage
+        continue-on-error: true
+        run: |
+          id=$(gh run list --workflow sonarcloud.yml --branch main --limit 10 --json databaseId,conclusion,status \
+            --jq '[.[] | select(.status=="completed" and .conclusion=="success")][0].databaseId')
+          [ -n "$id" ] && [ "$id" != null ] || { echo "no successful sonarcloud run"; exit 0; }
+          echo "sonarcloud run $id"
+          gh run download "$id" --dir coverage-artifact --name coverage-lcov || true
+
+      - name: Collect
+        env:
+          DAYS: ${{ inputs.days || '90' }}
+        run: |
+          node scripts/dev-analytics/collect.mjs \
+            --out dist/dev-analytics \
+            --days "$DAYS" \
+            --lcov coverage-artifact/lcov.info \
+            --e2e-dir e2e-artifacts \
+            --history-dir history
+
+      - name: Job summary
+        run: cat dist/dev-analytics/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dev-analytics
+          path: dist/dev-analytics
+          retention-days: 30
+
+      - name: Push today's snapshot
+        if: ${{ env.PUBLISH == 'true' }}
+        run: |
+          day=$(date -u +%F)
+          work=$(mktemp -d)
+          git worktree add --detach "$work" HEAD
+          cd "$work"
+          if git ls-remote --exit-code --heads origin dev-analytics-data >/dev/null 2>&1; then
+            git fetch --depth=1 origin dev-analytics-data
+            git checkout -B dev-analytics-data FETCH_HEAD
+          else
+            git checkout --orphan dev-analytics-data
+            git rm -rf --quiet . || true
+          fi
+          mkdir -p snapshots
+          # Strip `history` from the stored copy: it is derived from the other snapshots.
+          node -e "const s=require(process.argv[1]);delete s.history;require('fs').writeFileSync(process.argv[2],JSON.stringify(s))" \
+            "$GITHUB_WORKSPACE/dist/dev-analytics/snapshot.json" "snapshots/$day.json"
+          git add snapshots
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "dev-analytics: snapshot $day" || { echo "nothing to commit"; exit 0; }
+          git push origin dev-analytics-data
