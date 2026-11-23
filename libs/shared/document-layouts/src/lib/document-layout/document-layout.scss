@@ -6,9 +6,13 @@
   margin-top: 16px;
 }
 
-.document-layout__heading {
-  font-size: 14px;
+/* Scoped under the section: the theme's `html[data-app-theme] .mat-typography h4` outranks a
+   single class, and drew every section heading as a 32px display title. Its whole `font` is set
+   again, so that no line height or letter spacing of the display style is left. */
+.document-layout__section > .document-layout__heading {
+  font: var(--mat-sys-title-small);
   font-weight: 600;
+  letter-spacing: normal;
   color: var(--mat-sys-on-surface);
   margin: 0 0 8px;
 }

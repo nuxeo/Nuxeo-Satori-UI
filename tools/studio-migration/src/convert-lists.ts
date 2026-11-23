@@ -8,8 +8,9 @@
  * - **A queue is a table.** A grid of thumbnails or a justified grid is reported.
  * - **What shows under a condition** waits for M2, as a layout's field does: a column in a
  *   condition is left out, and a table in one leaves the whole list pending.
- * - **A dashboard card's place on the home** is phase 1's `home.json`, which is not in the app
- *   definition yet. Its list is written as a queue now, and the card is pending, naming it.
+ * - **A dashboard card** whose list becomes a queue is a card of `home.json`, naming the queue
+ *   (`convert-home.ts`). The tasks and recently viewed cards wait: `home.json` has no card for
+ *   either yet.
  */
 import { own } from './catalogue';
 import type { ConvertContext } from './convert';
@@ -17,11 +18,13 @@ import type { DashboardCard, Inventory, ResultColumn, SearchLayout } from './inv
 import {
   homeQueueId,
   labelOf,
+  slug,
   PAGE_SIZE_LIMIT,
   queuePageSize,
   queuePath,
   searchQueueId,
 } from './app-files';
+import { homeCards } from './convert-home';
 import { columnWidget } from './widgets';
 
 /** A column, as a queue writes it: the property alone, or with its heading and widget. */
@@ -243,22 +246,33 @@ export function menuLabel(
   search: SearchLayout,
 ): string | null {
   const contributions = context.inventory.slotContributions;
-  const page = contributions.find(
-    (contribution) =>
-      contribution.slot === 'DRAWER_PAGES' &&
-      contribution.parts.some(
-        (part) =>
-          part.element === 'nuxeo-search-form' &&
-          (own(part.attributes, 'provider') === search.provider ||
-            own(part.attributes, 'search-name') === searchQueueId(search)),
-      ),
-  );
+  const page = contributions.find((contribution) => {
+    if (contribution.slot !== 'DRAWER_PAGES') return false;
+    const form = contribution.parts.find((part) => part.element === 'nuxeo-search-form');
+    return form !== undefined && searchOfForm(context.inventory, form.attributes) === search;
+  });
   if (!page) return null;
   const item = contributions.find(
     (contribution) => contribution.slot === 'DRAWER_ITEMS' && contribution.name === page.name,
   );
   const icon = item?.parts.find((part) => part.element === 'nuxeo-menu-icon');
   return (icon && own(icon.attributes, 'label')) ?? null;
+}
+
+/**
+ * The search screen's results a `nuxeo-search-form` opens: the one its `search-name` names, by
+ * the screen's folder; only for a form that names none, the first on its `provider`. Two screens
+ * can search one page provider, and a provider alone would take the first for both.
+ */
+export function searchOfForm(
+  inventory: Pick<Inventory, 'searches'>,
+  form: Readonly<Record<string, string>>,
+): SearchLayout | undefined {
+  const results = inventory.searches.filter((search) => search.part === 'results');
+  const name = own(form, 'search-name')?.trim();
+  if (name) return results.find((search) => searchQueueId(search) === slug(name));
+  const provider = own(form, 'provider')?.trim();
+  return provider ? results.find((search) => search.provider === provider) : undefined;
 }
 
 function machineLabel(label: string | null): string {
@@ -288,6 +302,7 @@ export function convertDashboard(context: ConvertContext): void {
   const dashboard = context.inventory.dashboard;
   if (!dashboard) return;
   const owners = queueOwners(context.inventory);
+  const cards = homeCards(context.inventory);
   dashboard.cards.forEach((card, index) => {
     const id = `dashboard-card:${dashboard.path}#${index + 1}`;
     if (card.repeatOf !== null) {
@@ -314,14 +329,14 @@ export function convertDashboard(context: ConvertContext): void {
     if (card.elements.includes('nuxeo-tasks-list')) {
       context.decide(id, {
         outcome: 'pending',
-        note: `A card of the user's tasks: phase 1's home.json places it, and is not in the app definition yet`,
+        note: "A card of the user's tasks: home.json has no card for them yet (app-definition-v2.md, section 10)",
       });
       return;
     }
     if (card.elements.includes('nuxeo-document-storage')) {
       context.decide(id, {
         outcome: 'pending',
-        note: `A card of recently viewed documents: phase 1's home.json places it, and is not in the app definition yet`,
+        note: 'A card of recently viewed documents: home.json has no card for them yet (app-definition-v2.md, section 10)',
       });
       return;
     }
@@ -364,13 +379,17 @@ export function convertDashboard(context: ConvertContext): void {
       ...(columns.length > 0 ? { columns } : {}),
       ...(pageSize !== null ? { pageSize } : {}),
     };
-    const unkept =
-      card.pageSize !== null && pageSize === null
-        ? `. Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`
-        : '';
+    const home = cards.find((candidate) => candidate.index === index);
     context.decide(id, {
-      outcome: 'pending',
-      note: `Its list is written as ${path}; its place on the home is phase 1's home.json, which is not in the app definition yet${unkept}`,
+      outcome: 'converted',
+      to: `home.json ${home?.id ?? `card-${index + 1}`}, its list in ${path}`,
+      ...(card.pageSize !== null && pageSize === null
+        ? {
+            note: `Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`,
+          }
+        : {}),
     });
   });
+  if (cards.length > 0)
+    context.files['home.json'] = { version: 2, cards: cards.map((c) => c.entry) };
 }
