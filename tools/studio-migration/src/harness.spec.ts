@@ -34,6 +34,7 @@ function prepare(options?: SyntheticPackageOptions): HarnessInput {
     pkg,
     inventory: read,
     catalogue,
+    allowList: ALLOW_LIST,
     conversion: convert(pkg, read, catalogue, { allowList: ALLOW_LIST }),
   };
 }
@@ -71,6 +72,15 @@ describe('the harness on a sound conversion', () => {
     );
     expect(reason(6)).toMatch(/^The values half opens the same records in both apps/);
     expect(reason(7)).toMatch(/needs the migration server$/);
+  });
+
+  it("runs check 10 only in part when it has the conversion's word for the allow-list alone", () => {
+    const { allowList: _given, ...recorded } = input;
+    expect(runHarness(recorded).checks.find((c) => c.number === 10)).toMatchObject({
+      status: 'partial',
+      findings: [],
+      reason: expect.stringMatching(/the allow-list the conversion recorded/),
+    });
   });
 
   it('says why each other check did not run, and never counts it as a pass', () => {

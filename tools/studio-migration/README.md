@@ -21,6 +21,8 @@ npx tsx tools/studio-migration/src/cli.ts mutate --list
 - `--allow-list` names the deployment's operations, `{ "operations": [...] }`, as the app
   definition's validator reads them (decision 3). A button becomes an action only when its
   operation is on it. `check` uses the list the conversion was made with, unless it is given one.
+  Check 10 then runs only in part when there are actions: the conversion's record of what was
+  allowed is not the deployment's word for it.
 
 **Exit codes:**
 
@@ -281,10 +283,13 @@ check that did not run does.
     - the operations against the allow-list;
     - `app.json`'s range against the platform's version.
 
-    A file out of place is refused. The validator leaves version 1 layouts to the reader in
-    `libs/shared/document-layouts`, which does not export it, so the pipeline checks nothing in
-    them. This check holds them to version 1's documented contract
-    ([extension-reference.md](../../docs/extension-reference.md), section 9b) instead.
+    A file out of place is refused. Without `--allow-list`, actions are held to the list the
+    conversion recorded, and the check is partial.
+
+    The validator leaves version 1 layouts to the reader in `libs/shared/document-layouts`, which
+    does not export it, so the pipeline checks nothing in them. This check holds them to version
+    1's documented contract ([extension-reference.md](../../docs/extension-reference.md), section
+    9b) instead.
 - **Run in part: what needs no server runs, and the rest needs the migration server:**
   - **3, model.** Every field, type, vocabulary and page provider the conversion names exists, and
     every widget shows its property's type. The package's own model is read from its contributions

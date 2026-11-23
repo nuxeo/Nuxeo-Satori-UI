@@ -72,6 +72,11 @@ export interface HarnessInput {
   readonly conversion: Conversion;
   /** The deployment's allow-list of operations, which check 10 holds actions to. */
   readonly allowList?: ReadonlySet<string>;
+  /**
+   * True when no allow-list was given, so `allowList` is the one the conversion's own report
+   * recorded. Check 10 then cannot speak for the deployment's, and says so.
+   */
+  readonly allowListFromReport?: boolean;
   /** The platform version `app.json`'s range must hold; the platform's own when left out. */
   readonly platformVersion?: string;
 }
@@ -110,6 +115,7 @@ export function runHarness(given: HarnessInput): HarnessResult {
   const input: HarnessInput = {
     ...given,
     allowList: given.allowList ?? new Set(given.conversion.report.allowList ?? []),
+    allowListFromReport: given.allowList === undefined,
     platformVersion: given.platformVersion ?? platformVersion(),
   };
   const checks: CheckResult[] = CHECKS.map(([number, name, run]) => {

@@ -204,7 +204,7 @@ describe('studio-migration convert, check and mutate', () => {
     expect(converted.out).toContain('labels: en (3), fr (3)');
     expect(converted.out).toContain('themes: acme (2 tokens, 1 file)');
 
-    const checked = run(['check', 'acme.zip', out], files);
+    const checked = run(['check', 'acme.zip', out, '--allow-list', 'allow.json'], files);
     expect(checked.code).toBe(0);
     for (const [number, name] of [
       [1, 'Nothing dropped'],
@@ -223,7 +223,11 @@ describe('studio-migration convert, check and mutate', () => {
   it('checks actions against the allow-list it is given, or else the one the conversion was made with', () => {
     const out = fresh();
     run(['convert', 'acme.zip', out, '--allow-list', 'allow.json'], files);
-    expect(run(['check', 'acme.zip', out], files).code).toBe(0);
+    const recorded = run(['check', 'acme.zip', out], files);
+    expect(recorded.code).toBe(0);
+    expect(recorded.out).toMatch(
+      /10 {2}Package +partial: .*the allow-list the conversion recorded/,
+    );
     const none = { ...files, 'none.json': Buffer.from('{"operations": []}') };
     const refused = run(['check', 'acme.zip', out, '--allow-list', 'none.json'], none);
     expect(refused.code).toBe(1);

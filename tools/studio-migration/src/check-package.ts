@@ -7,6 +7,10 @@
  * the operations against the deployment's allow-list, and `app.json`'s platform range against the
  * platform's version. A file with no place in an app definition is refused, as inside a package.
  *
+ * An action's operation is held to the deployment's allow-list when the harness is given one. When
+ * it is not, the list the conversion recorded is used, and the check runs only in part: a
+ * conversion's word for what was allowed is not the deployment's.
+ *
  * Version 1 layout files are the one gap: app-definition leaves them to the version 1 reader of
  * `libs/shared/document-layouts`, which that Angular library does not export, so the pipeline
  * counts them and checks nothing. This check holds them to version 1's documented contract
@@ -27,6 +31,7 @@ const FIELD_KEYS = ['field', 'label', 'labelKey', 'required'];
 export function checkPackage({
   conversion,
   allowList,
+  allowListFromReport,
   platformVersion,
 }: HarnessInput): CheckOutcome {
   const findings: string[] = [];
@@ -58,7 +63,20 @@ export function checkPackage({
     }))
       findings.push(`app/${path}${finding.path ? ` ${finding.path}` : ''}: ${finding.message}`);
   }
-  return { findings };
+  // The conversion's own record of what was allowed is not the deployment's word for it.
+  const actions = app['actions.json'];
+  const operations =
+    isRecord(actions) && Array.isArray(actions['actions'])
+      ? actions['actions'].some((action) => isRecord(action) && 'operation' in action)
+      : false;
+  return {
+    findings,
+    ...(allowListFromReport && operations
+      ? {
+          rest: "Its actions' operations were held to the allow-list the conversion recorded: the deployment's own, given with --allow-list, decides",
+        }
+      : {}),
+  };
 }
 
 /** A version 1 layout file's findings against extension-reference.md, section 9b. */
