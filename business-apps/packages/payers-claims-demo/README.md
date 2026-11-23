@@ -52,8 +52,12 @@ controls (`scripts/app-package.selftest.mjs`) break copies of it.
 
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
 - **No operation button.** Decision 3 is open, so the pipeline refuses every operation.
-- **One version in two places:** `package.xml`'s and `app.json`'s `packageVersion`, raised
-  together. The manifest's `Bundle-Version` follows them; nothing checks it.
+- **One version in three places:** `package.xml`'s, `app.json`'s `packageVersion` and the
+  manifest's `Bundle-Version`, raised together. The pipeline's step 3 refuses any of them that
+  differs, and, given the package as it was (`--previous`), a version that moved less than the
+  changes need ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8).
+  0.3.0 is the minor raise this version needs over 0.2.0: the `members` group no longer has the
+  app, which is breaking, and below 1.0.0 a breaking change raises the minor.
 
 ## The stand-in model
 
@@ -115,6 +119,19 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 ```
 
 It writes `dist/payers-claims-demo-0.3.0.zip`.
+
+Held to the package as it was, as a pull request's check holds it
+([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8), it also writes
+`dist/payers-claims-demo-0.3.0.changes.md`. Run on 24 November 2026 against the staging branch's
+0.2.0: 27 changes, which need a minor version, and 0.3.0 raises the minor.
+
+```bash
+mkdir -p /tmp/base && git archive origin/staging/enterprise-grade-app business-apps/packages/payers-claims-demo | tar -x -C /tmp/base
+```
+
+```bash
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --previous /tmp/base/business-apps/packages/payers-claims-demo
+```
 
 Held to its content model ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md),
 section 4): `content-model.json` is the stand-in model as a local Nuxeo with this package installed
