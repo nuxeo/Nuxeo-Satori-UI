@@ -62,6 +62,7 @@ import {
   WorkflowService,
   type AuditEntry,
   type NuxeoAce,
+  type NuxeoAllowedTransition,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import {
@@ -70,6 +71,10 @@ import {
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
 import { DocumentViewerComponent, MAT_TAB_LIST_KEYDOWN_ATTR } from '@nuxeo/satori-platform/ui';
+import {
+  DocumentLayoutService,
+  type ResolvedRecordLayout,
+} from '@agentic-ui/shared/document-layouts';
 
 import { DocumentDetailComponent } from './document-detail';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
@@ -253,6 +258,7 @@ const mockDetailService = {
   getAuditLog: vi.fn((): Observable<Record<string, unknown>> =>
     of({ entries: [], resultsCount: 0 }),
   ),
+  followTransition: vi.fn((): Observable<NuxeoDocument> => of(doc())),
   getDocumentPermissions: vi.fn((): Observable<NuxeoDocument> => of(doc())),
   exportXml: vi.fn((): Observable<Blob> => of(new Blob(['<xml/>']))),
   exportZip: vi.fn((): Observable<Blob> => of(new Blob(['zip']))),
@@ -1377,6 +1383,431 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       TestBed.inject(HttpTestingController)
         .match((request) => request.url.includes('/layouts/Case/view'))
         .forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+    });
+
+    /**
+     * The record on screen reloaded, as after an edit, a transition or a check-in: the record page
+     * stays, so that its cards keep what the reader was doing. Each was seen red on purpose: the
+     * spinner on every reload, the layout compared by object rather than by `uid`, the layout kept
+     * for any record, the save's own answer handed to the page, its lock not carried over, the page
+     * kept for a documentView entry, with no record page and from another tab, and the History tab
+     * left as it was drawn.
+     */
+    describe('while the record on screen reloads', () => {
+      const LOCK = { lockOwner: 'tester', lockCreated: '2026-08-24T09:00:00.000Z' };
+      /** The Claim after an edit, as the reload reads it back. */
+      const edited = (over: Partial<NuxeoDocument> = {}): NuxeoDocument => ({
+        ...claim(),
+        lastModified: '2026-08-24T11:00:00.000Z',
+        properties: { 'claim:number': 'CLM-2', 'claim:billedAmount': 2480 },
+        ...over,
+      });
+
+      async function settle(): Promise<void> {
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+      }
+
+      /**
+       * Closes the edit dialog with what the save answers: no enrichers, as the PUT has none. The
+       * page's own `MatDialog`, from its imports, rather than the root one these tests provide.
+       */
+      function saveEdit(): void {
+        vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockReturnValue({
+          afterClosed: () => of(edited({ contextParameters: undefined })),
+        } as unknown as ReturnType<MatDialog['open']>);
+        fixture.componentInstance.openEditDialog();
+      }
+
+      const recordPage = (): Element | null => viewBody().querySelector('lib-record-page');
+      const claimNumber = (): string | undefined =>
+        recordPage()
+          ?.querySelector('[data-field="claim:number"] .record-page__value')
+          ?.textContent?.trim();
+      const spinner = (): Element | null => fixture.nativeElement.querySelector('.detail-loading');
+      const action = (id: string): Element | null =>
+        fixture.nativeElement.querySelector(`[data-action-id="${id}"]`);
+
+      async function onTab(id: string): Promise<void> {
+        const page = fixture.componentInstance;
+        page.onTabChange(page.detailTabs().findIndex((tab) => tab.id === id));
+        await settle();
+      }
+
+      it('keeps the record page, with the edited values and its toolbar, while it reloads after an edit', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, { ...claim(), ...LOCK });
+        await answer(['Claim/view'], VIEW);
+        const page = recordPage();
+        expect(page).toBeTruthy();
+        expect(action('app.toolbar.unlock')).toBeTruthy();
+
+        const reload = new Subject<NuxeoDocument>();
+        mockDetailService.getFullDocument.mockReturnValue(reload);
+        saveEdit();
+        await settle();
+
+        expect(spinner()).toBeNull();
+        expect(recordPage()).toBe(page);
+        expect(claimNumber()).toBe('CLM-2');
+        // The save's answer has no permissions and no lock: those on screen stay until the reload
+        // brings them, so Edit is still offered, and Unlock rather than Lock.
+        expect(action('app.toolbar.edit')).toBeTruthy();
+        expect(action('app.toolbar.unlock')).toBeTruthy();
+        expect(action('app.toolbar.lock')).toBeNull();
+
+        reload.next(edited(LOCK));
+        reload.complete();
+        await settle();
+        expect(recordPage()).toBe(page);
+        expect(claimNumber()).toBe('CLM-2');
+      });
+
+      it('keeps the record page while it reloads after a transition', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, claim());
+        await answer(['Claim/view'], VIEW);
+        const page = recordPage();
+        expect(page).toBeTruthy();
+
+        const reload = new Subject<NuxeoDocument>();
+        mockDetailService.getFullDocument.mockReturnValue(reload);
+        mockDetailService.followTransition.mockReturnValueOnce(of(edited({ state: 'approved' })));
+        // What the transition dialog's confirmation runs: unlike an edit, it sets no document first.
+        (
+          fixture.componentInstance as unknown as {
+            followTransition(uid: string, transition: NuxeoAllowedTransition): void;
+          }
+        ).followTransition('doc-1', { name: 'approve', destinationState: 'approved' });
+        await settle();
+        expect(mockDetailService.followTransition).toHaveBeenCalledWith('doc-1', 'approve');
+        expect(spinner()).toBeNull();
+        expect(recordPage()).toBe(page);
+
+        reload.next(edited({ state: 'approved' }));
+        reload.complete();
+        await settle();
+        expect(recordPage()).toBe(page);
+        expect(claimNumber()).toBe('CLM-2');
+      });
+
+      it('keeps a comment half written in a comments card', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, claim());
+        await answer(['Claim/view'], {
+          version: 2,
+          columns: 1,
+          cards: [{ id: 'notes', label: 'Notes', comments: { pageSize: 5 } }],
+        });
+        const composer = (): HTMLTextAreaElement | null =>
+          viewBody().querySelector('lib-record-page nxs-comments textarea[id$="-new"]');
+        const draft = composer();
+        expect(draft).toBeTruthy();
+        draft!.value = 'Half written';
+        draft!.dispatchEvent(new Event('input'));
+        await settle();
+
+        const reload = new Subject<NuxeoDocument>();
+        mockDetailService.getFullDocument.mockReturnValue(reload);
+        saveEdit();
+        await settle();
+        reload.next(edited());
+        reload.complete();
+        await settle();
+
+        expect(composer()).toBe(draft);
+        expect(composer()?.value).toBe('Half written');
+      });
+
+      it('puts the History tab away, so that it reads the reloaded history when next opened', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, claim());
+        await answer(['Claim/view'], VIEW);
+        const historyShown = (): Element | null =>
+          fixture.nativeElement.querySelector('nxs-document-history');
+        await onTab('app.tabs.history');
+        const history = historyShown();
+        expect(history).toBeTruthy();
+        // Drawn once, it is only set aside while another tab is shown, and opened again as it was,
+        // asking nothing: nothing but being drawn anew would read the audit again.
+        await onTab('app.tabs.view');
+        let asked = mockDetailService.getAuditLog.mock.calls.length;
+        await onTab('app.tabs.history');
+        expect(historyShown()).toBe(history);
+        expect(mockDetailService.getAuditLog.mock.calls.length).toBe(asked);
+        await onTab('app.tabs.view');
+
+        const reload = new Subject<NuxeoDocument>();
+        mockDetailService.getFullDocument.mockReturnValue(reload);
+        saveEdit();
+        await settle();
+        reload.next(edited());
+        reload.complete();
+        await settle();
+        expect(spinner()).toBeNull();
+
+        asked = mockDetailService.getAuditLog.mock.calls.length;
+        await onTab('app.tabs.history');
+        expect(historyShown()).toBeTruthy();
+        expect(historyShown()).not.toBe(history);
+        expect(mockDetailService.getAuditLog.mock.calls.length).toBeGreaterThan(asked);
+      });
+
+      it('shows the spinner and draws the record page anew when it reloads from another tab', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, claim());
+        await answer(['Claim/view'], VIEW);
+        const page = recordPage();
+        expect(page).toBeTruthy();
+        await onTab('app.tabs.history');
+
+        const reload = new Subject<NuxeoDocument>();
+        mockDetailService.getFullDocument.mockReturnValue(reload);
+        saveEdit();
+        await settle();
+        expect(spinner()).toBeTruthy();
+        expect(page?.isConnected).toBe(false);
+
+        reload.next(edited());
+        reload.complete();
+        await settle();
+        await onTab('app.tabs.view');
+        expect(recordPage()).toBeTruthy();
+        expect(recordPage()).not.toBe(page);
+      });
+
+      it('keeps the layout resolved for the record, with its new values, while it resolves again', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, claim());
+        await answer(['Claim/view'], VIEW);
+        const page = recordPage();
+        const layout = fixture.componentInstance.recordLayout();
+        expect(page && layout).toBeTruthy();
+        const layouts = TestBed.inject(DocumentLayoutService);
+        const resolveForReal = layouts.recordLayoutOf.bind(layouts);
+        const resolving = new Subject<ResolvedRecordLayout | null>();
+        vi.spyOn(layouts, 'recordLayoutOf').mockReturnValue(resolving);
+
+        fixture.componentInstance.doc.set(edited());
+        await settle();
+        expect(fixture.componentInstance.recordLayout()).toBe(layout);
+        expect(recordPage()).toBe(page);
+        expect(claimNumber()).toBe('CLM-2');
+
+        // The layout as the service resolves it for the reloaded record: another object.
+        resolveForReal(edited()).subscribe((resolved) => resolving.next(resolved));
+        await settle();
+        expect(fixture.componentInstance.recordLayout()).not.toBe(layout);
+        expect(recordPage()).toBe(page);
+        expect(claimNumber()).toBe('CLM-2');
+      });
+
+      it("never shows a record's page for another record of its type while that one's resolves", async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, claim());
+        await answer(['Claim/view'], VIEW);
+        const layout = fixture.componentInstance.recordLayout();
+        expect(layout).toBeTruthy();
+        const resolving = new Subject<ResolvedRecordLayout | null>();
+        vi.spyOn(TestBed.inject(DocumentLayoutService), 'recordLayoutOf').mockReturnValue(
+          resolving,
+        );
+
+        fixture.componentInstance.doc.set(
+          edited({ uid: 'claim-2', properties: { 'claim:number': 'CLM-9' } }),
+        );
+        await settle();
+        expect(fixture.componentInstance.recordLayout()).toBeNull();
+        expect(recordPage()).toBeNull();
+        expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
+
+        resolving.next({ ...layout! });
+        await settle();
+        expect(claimNumber()).toBe('CLM-9');
+      });
+
+      it('shows the spinner and draws anew a record with no record page', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, claim());
+        await answer(['Claim/metadata']);
+        const viewer = viewBody().querySelector('lib-document-viewer');
+        expect(viewer).toBeTruthy();
+
+        const reload = new Subject<NuxeoDocument>();
+        mockDetailService.getFullDocument.mockReturnValue(reload);
+        saveEdit();
+        await settle();
+        expect(spinner()).toBeTruthy();
+        expect(viewer?.isConnected).toBe(false);
+
+        reload.next(edited());
+        reload.complete();
+        await settle();
+        expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
+        expect(viewBody().querySelector('lib-document-viewer')).not.toBe(viewer);
+      });
+
+      it("shows the spinner and draws anew a documentView entry's component", async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render(
+          {
+            slots: {
+              documentView: [
+                {
+                  id: 'acme.documentView.claim',
+                  componentId: 'acme.views.claim',
+                  rule: { type: IS_TYPE_RULE, parameters: ['Claim'] },
+                },
+              ],
+            },
+          },
+          claim(),
+        );
+        await answer(['Claim/view'], VIEW);
+        expect(fixture.componentInstance.recordLayout()).toBeTruthy();
+        const entryShown = (): Element | null =>
+          viewBody().querySelector('[data-document-view-id="acme.documentView.claim"]');
+        const entry = entryShown();
+        expect(entry).toBeTruthy();
+
+        const reload = new Subject<NuxeoDocument>();
+        mockDetailService.getFullDocument.mockReturnValue(reload);
+        saveEdit();
+        await settle();
+        expect(spinner()).toBeTruthy();
+        expect(entry?.isConnected).toBe(false);
+
+        reload.next(edited());
+        reload.complete();
+        await settle();
+        expect(entryShown()).toBeTruthy();
+        expect(entryShown()).not.toBe(entry);
+      });
+
+      describe('a timeline card', () => {
+        const TIMELINE_VIEW = {
+          version: 2,
+          columns: 1,
+          cards: [{ id: 'history', label: 'History', timeline: { events: ['documentModified'] } }],
+        };
+        /** By Nuxeo's own account, which the timeline names without asking for it. */
+        const modified = (id: number, eventDate: string): AuditEntry => ({
+          id,
+          category: 'eventDocumentCategory',
+          principalName: 'system',
+          comment: '',
+          docLifeCycle: 'project',
+          docPath: '/default-domain/workspaces/ws/test-document',
+          docType: 'Claim',
+          docUUID: 'doc-1',
+          eventId: 'documentModified',
+          repositoryId: 'default',
+          eventDate,
+          logDate: eventDate,
+          extended: {},
+        });
+        const auditPage = (entries: AuditEntry[]): Record<string, unknown> => ({
+          entries,
+          resultsCount: entries.length,
+          isNextPageAvailable: false,
+        });
+        const shownEntries = (): (string | null)[] =>
+          [...viewBody().querySelectorAll('lib-record-timeline [data-entry-id]')].map((entry) =>
+            entry.getAttribute('data-entry-id'),
+          );
+
+        afterEach(() => mockDetailService.getAuditLog.mockReset());
+
+        it('refreshes in place after an edit, keeping its entries while it asks', async () => {
+          vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+          const first = modified(1, '2026-08-24T10:00:00.000Z');
+          // Every read answers the first page, the one the audit delay brings included, but one.
+          mockDetailService.getAuditLog.mockReturnValue(of(auditPage([first])));
+          await render({}, claim());
+          await answer(['Claim/view'], TIMELINE_VIEW);
+          const timeline = viewBody().querySelector('lib-record-timeline');
+          expect(shownEntries()).toEqual(['1']);
+          const asked = mockDetailService.getAuditLog.mock.calls.length;
+
+          const refresh = new Subject<Record<string, unknown>>();
+          mockDetailService.getAuditLog.mockReturnValueOnce(refresh);
+          // The reload answers later, as the server does: a spinner in between would be drawn.
+          const reload = new Subject<NuxeoDocument>();
+          mockDetailService.getFullDocument.mockReturnValue(reload);
+          saveEdit();
+          await settle();
+          reload.next(edited());
+          reload.complete();
+          await settle();
+
+          // The same timeline, asked again for its first page, still showing its entries:
+          // drawn anew, it would show its loading state instead.
+          expect(viewBody().querySelector('lib-record-timeline')).toBe(timeline);
+          expect(mockDetailService.getAuditLog.mock.calls.length).toBeGreaterThan(asked);
+          expect(mockDetailService.getAuditLog).toHaveBeenLastCalledWith(
+            'doc-1',
+            10,
+            0,
+            expect.objectContaining({ eventIds: ['documentModified'] }),
+          );
+          expect(shownEntries()).toEqual(['1']);
+          expect(timeline?.querySelector('.record-timeline__body')?.getAttribute('aria-busy')).toBe(
+            'false',
+          );
+
+          refresh.next(auditPage([modified(2, '2026-08-24T11:00:00.000Z'), first]));
+          refresh.complete();
+          await settle();
+          expect(shownEntries()).toEqual(['2', '1']);
+        });
+
+        it('keeps the kind chosen in its filter through the reload', async () => {
+          vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+          mockDetailService.getAuditLog.mockReturnValue(
+            of(auditPage([modified(1, '2026-08-24T10:00:00.000Z')])),
+          );
+          await render({}, claim());
+          await answer(['Claim/view'], {
+            ...TIMELINE_VIEW,
+            cards: [
+              {
+                id: 'history',
+                label: 'History',
+                timeline: { events: ['documentCreated', 'documentModified'], filter: true },
+              },
+            ],
+          });
+          /** The kind the timeline on the page now has chosen, as its filter's select sets it. */
+          const kind = (): WritableSignal<string> =>
+            (
+              fixture.debugElement.query(By.css('lib-record-timeline')).componentInstance as {
+                kind: WritableSignal<string>;
+              }
+            ).kind;
+          kind().set('documentModified');
+          await settle();
+          const asked = mockDetailService.getAuditLog.mock.calls.length;
+
+          const reload = new Subject<NuxeoDocument>();
+          mockDetailService.getFullDocument.mockReturnValue(reload);
+          saveEdit();
+          await settle();
+          reload.next(edited());
+          reload.complete();
+          await settle();
+
+          // Drawn anew, the timeline would ask for every kind the card shows.
+          expect(kind()()).toBe('documentModified');
+          expect(mockDetailService.getAuditLog.mock.calls.length).toBeGreaterThan(asked);
+          expect(mockDetailService.getAuditLog).toHaveBeenLastCalledWith(
+            'doc-1',
+            10,
+            0,
+            expect.objectContaining({ eventIds: ['documentModified'] }),
+          );
+        });
+      });
     });
 
     it("gives way to the record page when a documentView entry's component cannot load", async () => {
