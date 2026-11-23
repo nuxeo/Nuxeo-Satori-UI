@@ -1,43 +1,70 @@
 #!/usr/bin/env node
 /**
- * Seed a Nuxeo server with the Payers kit's fictional records, so that its record pages and queue
- * have something to show: four members, three providers, eight claims, three cases and four claim
- * documents, from `data.mjs`.
+ * Seed a Nuxeo server with the Payers kit's fictional records and people, so that its record pages,
+ * queues and home have something to show: four members, three providers, eight claims, three cases
+ * and four claim documents, and the four people who work them, in the three groups the kit's rules
+ * name, from `data.mjs`.
  *
  *   node business-apps/packages/payers-claims-demo/demo/seed.mjs
  *
  * The package must be installed first: the records are of its stand-in model's types.
  *
  * Environment:
- *   NUXEO_USER, NUXEO_PASS   required, with no default. An empty value counts as unset.
+ *   NUXEO_USER, NUXEO_PASS   required, with no default. An empty value counts as unset. An
+ *                            administrator: only one may create users and groups.
+ *   PAYERS_DEMO_PASSWORD     required, with no default: the password the demo's people are given,
+ *                            and put back to on every run. Choose one for this server.
  *   NUXEO_URL                the server, default http://localhost:8080
  *   APP_URL                  the app, for the links printed at the end,
  *                            default http://localhost:4200
  *   NUXEO_TIMEOUT_MS         how long one request may take, its body included, default 30000
+ *   NUXEO_INDEX_WAIT_MS      how long the checks are asked again while the search index catches
+ *                            up with what was written, default 60000
  *
  * **Safe to run twice.** Every record has a fixed place under
  * /default-domain/workspaces/payers-demo, named by its number. A record already there has
  * `data.mjs`'s values written over its own, a trashed one is restored, and a file already holding
  * the same bytes is not uploaded again. A place that holds a document of another type is left
- * alone, and the run stops.
+ * alone, and the run stops. A user or a group of the same name that the seed did not create, which
+ * it knows by its marker (`MARKER`), is found before anything is written, and stops the run with
+ * exit 2.
  *
- * **It checks what it seeded.** Last, it runs the kit's five page providers and compares what they
- * return with what it wrote (`check`), so a run that passes has run each of them on the server.
+ * **The people.** Each user is created, or put back to `data.mjs`'s values: name, e-mail, groups
+ * and password. The seeded workspace and its folders give the demo's groups the permissions
+ * `data.mjs` names, and only those: one of theirs it does not name is removed. Anyone else's stays.
+ *
+ * **It checks what it seeded.** Last, as `check` says: each user signs in, in their groups, with
+ * the rights `GRANTS` implies on a claim and none to change a member; then the kit's seven page
+ * providers return what it wrote, the three queues' aggregates count it, and each adjuster's
+ * claims are what `payers_my_claims` returns to them, asked as they are, through `$currentUser`.
+ * So a run that passes has run each of them on the server.
  *
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
  *
  * Exit codes: 0, seeded and checked; 1, the server refused a write, stopped answering part way, or
- * a check failed; 2, a precondition, found before anything is written: no credentials, no server,
- * credentials refused, the package not installed, or no /default-domain/workspaces.
+ * a check failed; 2, a precondition, found before anything is written: no credentials, no demo
+ * password, no server, credentials refused or not an administrator's, the package not installed
+ * or older than 0.3.0, no /default-domain/workspaces, or a user or a group of the demo's names
+ * that the seed did not create.
  */
-import { CASES, CLAIM_DOCUMENTS, CLAIMS, MEMBERS, PROVIDERS } from './data.mjs';
+import {
+  CASES,
+  CLAIM_DOCUMENTS,
+  CLAIMS,
+  GRANTS,
+  GROUPS,
+  MEMBERS,
+  PROVIDERS,
+  USERS,
+} from './data.mjs';
 
 const EXIT_PRECONDITION = 2;
 const SERVER = (process.env['NUXEO_URL'] || 'http://localhost:8080').replace(/\/+$/, '');
 const APP = (process.env['APP_URL'] || 'http://localhost:4200').replace(/\/+$/, '');
 const API = `${SERVER}/nuxeo/api/v1`;
 const TIMEOUT_MS = Number(process.env['NUXEO_TIMEOUT_MS']) || 30_000;
+const INDEX_WAIT_MS = Number(process.env['NUXEO_INDEX_WAIT_MS']) || 60_000;
 const PAGE_SIZE = 100;
 const MAX_PAGES = 100;
 
@@ -50,14 +77,24 @@ const FOLDERS = {
   cases: 'Cases',
   documents: 'Claim documents',
 };
-const TYPES = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument'];
+/** The stand-in model's types; `PayersClaimSearch` is version 0.3.0's, which the queues need. */
+const TYPES = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument', 'PayersClaimSearch'];
 const PAGE_PROVIDERS = [
   'member_claims',
   'member_cases',
   'provider_claims',
   'payers_claim_documents',
   'payers_unassigned_claims',
+  'payers_my_claims',
+  'payers_pending_claims',
 ];
+/** The statuses `payers_pending_claims` holds, as the stand-in model's query names them. */
+const PENDING = ['inReview', 'pended'];
+/**
+ * How a user or a group the seed created is known again: a user's `company`, a group's
+ * `description`. One without it is not the seed's, and is left alone.
+ */
+const MARKER = 'Payers kit demo (fictional)';
 
 /** A precondition the environment or the server does not meet: fix it, not the script. */
 class Precondition extends Error {}
@@ -71,6 +108,7 @@ class HttpError extends Error {
 }
 
 const tally = { created: 0, updated: 0, restored: 0, uploaded: 0 };
+const people = { created: 0, updated: 0, granted: 0, removed: 0 };
 /** Whether the run is still in its preflight, where no answer at all means no server. */
 let preflighting = true;
 
@@ -83,7 +121,17 @@ if (!username || !password) {
   );
   process.exit(EXIT_PRECONDITION);
 }
-const AUTHORIZATION = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+const demoPassword = process.env['PAYERS_DEMO_PASSWORD'];
+if (!demoPassword) {
+  console.error(
+    "PAYERS_DEMO_PASSWORD must be set, and has no default: the password the demo's users are " +
+      'given. Choose one for this server, and export it:\n' +
+      '  export PAYERS_DEMO_PASSWORD=<password>',
+  );
+  process.exit(EXIT_PRECONDITION);
+}
+const basic = (user, secret) => `Basic ${Buffer.from(`${user}:${secret}`).toString('base64')}`;
+const AUTHORIZATION = basic(username, password);
 
 try {
   await seed();
@@ -101,13 +149,21 @@ async function seed() {
   await preflight();
   preflighting = false;
 
-  await ensure(WORKSPACES, 'payers-demo', 'Workspace', {
-    'dc:title': 'Payers demo',
-    'dc:description': 'Fictional records for the Payers kit. No real person, provider or claim.',
-  });
+  for (const group of GROUPS) await ensureGroup(group);
+  for (const user of USERS) await ensureUser(user);
+
+  const places = new Map();
+  places.set(
+    '',
+    await ensure(WORKSPACES, 'payers-demo', 'Workspace', {
+      'dc:title': 'Payers demo',
+      'dc:description': 'Fictional records for the Payers kit. No real person, provider or claim.',
+    }),
+  );
   for (const [name, title] of Object.entries(FOLDERS)) {
-    await ensure(ROOT, name, 'Folder', { 'dc:title': title });
+    places.set(name, await ensure(ROOT, name, 'Folder', { 'dc:title': title }));
   }
+  for (const [place, document] of places) await grant(place, document);
 
   const members = new Map();
   for (const member of MEMBERS) {
@@ -206,30 +262,167 @@ async function seed() {
     `\nDone: ${created} created, ${updated} updated, ${restored} restored from the trash, ` +
       `${uploaded} file(s) uploaded. The page providers return what was seeded.`,
   );
+  console.log(
+    `People: ${people.created} created, ${people.updated} updated, ${people.granted} ` +
+      `permission(s) granted, ${people.removed} removed, for ${USERS.length} users in ` +
+      `${GROUPS.length} groups: ` +
+      `${USERS.map((user) => `${user.username} (${user.groups.join(', ')})`).join('; ')}.`,
+  );
   console.log(`A member's record page: ${APP}/#/doc/${members.get(MEMBERS[0].number)}`);
   console.log(`A provider's record page: ${APP}/#/doc/${providers.get(PROVIDERS[2].number)}`);
 }
 
-/** The server answers, the credentials are accepted, and the package's types are installed. */
+/**
+ * The server answers, the credentials are accepted and are an administrator's, the package's
+ * types are installed, version 0.3.0's search type among them, and no user or group of the demo's
+ * names is someone else's.
+ */
 async function preflight() {
+  let me;
   try {
-    await call('GET', '/me');
+    me = await call('GET', '/me');
   } catch (error) {
     if (error instanceof HttpError && error.status === 401)
       throw new Precondition(`${SERVER} refused NUXEO_USER and NUXEO_PASS (HTTP 401).`);
     throw error;
   }
+  if (me?.isAdministrator !== true)
+    throw new Precondition(
+      `NUXEO_USER is not an administrator on ${SERVER}, and only one may create the demo's users ` +
+        'and groups. Sign in as one.',
+    );
   const missing = [];
   for (const type of TYPES) {
     if ((await find(`/config/types/${type}`)) === null) missing.push(type);
   }
   if (missing.length > 0)
     throw new Precondition(
-      `${SERVER} has no ${missing.join(', ')} type: install the payers-claims-demo package first ` +
-        '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
+      missing.length === 1 && missing[0] === 'PayersClaimSearch'
+        ? `${SERVER} has version 0.2.0 or older of the payers-claims-demo package, with no ` +
+            'PayersClaimSearch type for its queues: upgrade it to 0.3.0 ' +
+            '(business-apps/packages/payers-claims-demo/README.md), then run this again.'
+        : `${SERVER} has no ${missing.join(', ')} type: install the payers-claims-demo package ` +
+            'first (business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   if ((await find(`/path${pathOf(WORKSPACES)}`)) === null)
     throw new Precondition(`${SERVER} has no ${WORKSPACES}, where the records go.`);
+  // Before anything is written: a user or a group of the demo's names that is not the seed's.
+  for (const { name } of GROUPS) {
+    const group = await find(`/group/${encodeURIComponent(name)}`);
+    if (group !== null && group.properties?.description !== MARKER)
+      throw new Precondition(
+        `${SERVER} has a group ${name} that the seed did not create, so it is left alone. ` +
+          'Seed another server, or rename that group.',
+      );
+  }
+  for (const { username: id } of USERS) {
+    const user = await find(`/user/${encodeURIComponent(id)}`);
+    if (user !== null && user.properties?.company !== MARKER)
+      throw new Precondition(
+        `${SERVER} has a user ${id} that the seed did not create, so it is left alone. ` +
+          'Seed another server, or rename that user.',
+      );
+  }
+}
+
+/** The group, created with no members, or left as it is when the seed created it before. */
+async function ensureGroup({ name, label }) {
+  const existing = await find(`/group/${encodeURIComponent(name)}`);
+  if (existing === null) {
+    await call('POST', '/group', {
+      json: {
+        'entity-type': 'group',
+        groupname: name,
+        grouplabel: label,
+        properties: { groupname: name, grouplabel: label, description: MARKER },
+      },
+    });
+    people.created++;
+    console.log(`  created  group ${name}`);
+    return;
+  }
+  if (existing.properties?.description !== MARKER)
+    throw new Error(
+      `${SERVER} has a group ${name} that the seed did not create, so it is left alone. ` +
+        'Seed another server, or rename that group.',
+    );
+}
+
+/**
+ * The user, created or put back to `data.mjs`'s values and the demo password. Their groups are
+ * `data.mjs`'s alone: a user the seed created is the seed's.
+ */
+async function ensureUser({ username: id, firstName, lastName, groups }) {
+  const properties = {
+    username: id,
+    firstName,
+    lastName,
+    email: `${id}@example.com`,
+    company: MARKER,
+    groups,
+    password: demoPassword,
+  };
+  const existing = await find(`/user/${encodeURIComponent(id)}`);
+  if (existing === null) {
+    await call('POST', '/user', { json: { 'entity-type': 'user', id, properties } });
+    people.created++;
+    console.log(`  created  user ${id}`);
+    return;
+  }
+  if (existing.properties?.company !== MARKER)
+    throw new Error(
+      `${SERVER} has a user ${id} that the seed did not create, so it is left alone. ` +
+        'Seed another server, or rename that user.',
+    );
+  await call('PUT', `/user/${encodeURIComponent(id)}`, {
+    json: { 'entity-type': 'user', id, properties },
+  });
+  people.updated++;
+  console.log(`  updated  user ${id}`);
+}
+
+/**
+ * The demo's groups' permissions on one place of the workspace, `data.mjs`'s `GRANTS`, in its
+ * local ACL: each one there, and none of theirs that `GRANTS` does not name. Anyone else's
+ * permission is left as it is.
+ */
+async function grant(place, document) {
+  const path = place === '' ? ROOT : `${ROOT}/${place}`;
+  const wanted = GRANTS.filter((entry) => entry.place === place);
+  const ours = new Set(GROUPS.map((group) => group.name));
+  const { contextParameters } = await call('GET', `/id/${document.uid}`, {
+    headers: { 'enrichers-document': 'acls' },
+  });
+  const local = (contextParameters?.acls ?? []).find((acl) => acl.name === 'local');
+  const aces = (local?.aces ?? []).map((ace) => ({
+    id: ace.id,
+    group: ace.username?.id ?? ace.username,
+    permission: ace.permission,
+    current: ace.granted === true && (ace.status ?? 'effective') === 'effective',
+  }));
+  for (const ace of aces) {
+    if (!ours.has(ace.group)) continue;
+    const named = wanted.some(
+      (entry) => entry.group === ace.group && entry.permission === ace.permission && ace.current,
+    );
+    if (named) continue;
+    await call('POST', '/automation/Document.RemovePermission', {
+      json: { input: `doc:${document.uid}`, params: { id: ace.id, acl: 'local' } },
+    });
+    people.removed++;
+    console.log(`  removed  ${ace.permission} on ${path} from ${ace.group}`);
+  }
+  for (const { group, permission } of wanted) {
+    const held = aces.some(
+      (ace) => ace.group === group && ace.permission === permission && ace.current,
+    );
+    if (held) continue;
+    await call('POST', '/automation/Document.AddPermission', {
+      json: { input: `doc:${document.uid}`, params: { permission, users: [group], acl: 'local' } },
+    });
+    people.granted++;
+    console.log(`  granted  ${permission} on ${path} to ${group}`);
+  }
 }
 
 /**
@@ -321,12 +514,108 @@ async function upload({ fileName, bytes }) {
 }
 
 /**
- * What the kit's page providers return: for each member and each provider, exactly the claims and
- * cases seeded for it; for each claim number, at least the documents seeded for it, since another
- * record on the server could carry the same number; and in the queue, every seeded claim that is
- * unassigned and still to be decided, and none of the others.
+ * What the seed checks, last. First, once, the people: each user signs in with the demo password,
+ * as themself and in their groups, and may change what `GRANTS` lets them change, and no member.
+ * Then the page providers: for each member and each provider, exactly the claims and cases seeded
+ * for it; for each claim number, at least the documents seeded for it, since another record on the
+ * server could carry the same number; and in each of the three queues, every seeded claim that
+ * belongs there, none of the seeded claims that do not, and its aggregates counting at least the
+ * seeded claims in each bucket. Another claim on the server may be in a queue: the seed checks what
+ * it wrote, and the demo, which counts exactly, refuses such a server (exit 2).
+ *
+ * The queue page providers read the search index, which is written a moment after the repository,
+ * so a disagreement among them is asked again, once a second, until INDEX_WAIT_MS has passed. Not
+ * `Search.WaitForIndexing`: it waits for every indexing the server has queued, anyone's, and on a
+ * shared server it timed out with the kit's records long indexed. A problem with the people is not
+ * the index's, so it is not asked again.
  */
-async function check({ members, providers, claims, cases, documents }) {
+async function check(seeded) {
+  const refused = await staff(seeded);
+  if (refused.length > 0)
+    throw new Error(`The demo's people are not as seeded:\n  ${refused.join('\n  ')}`);
+  const deadline = Date.now() + INDEX_WAIT_MS;
+  for (;;) {
+    const problems = await disagreements(seeded);
+    if (problems.length === 0) {
+      console.log(`  checked  every user, and ${PAGE_PROVIDERS.join(', ')}`);
+      return;
+    }
+    if (Date.now() >= deadline)
+      throw new Error(`The page providers disagree with the seed:\n  ${problems.join('\n  ')}`);
+    console.log(
+      `  waiting  ${problems.length} disagreement(s), the search index may be catching up: ` +
+        'asking again',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
+/**
+ * Each user signs in with the demo password as themself, in their groups, and holds on a claim and
+ * on a member exactly the rights `GRANTS` implies: adjusters and supervisors may change a claim
+ * (`WriteProperties`) and move its lifecycle (`WriteLifeCycle`, which approving needs); no one may
+ * change a member, whose Edit form would list the social security number. Read through the
+ * `permissions` enricher, as each user, so a permission from anywhere counts: an inherited one, or
+ * one given to `members`.
+ */
+async function staff({ members, claims }) {
+  const problems = [];
+  const memberId = members.get(MEMBERS[0].number);
+  const claimId = claims.get(CLAIMS[0].number);
+  for (const user of USERS) {
+    const authorization = basic(user.username, demoPassword);
+    let me;
+    try {
+      me = await call('GET', '/me', { authorization });
+    } catch (error) {
+      if (!(error instanceof HttpError)) throw error;
+      problems.push(`${user.username} cannot sign in with PAYERS_DEMO_PASSWORD (${error.status})`);
+      continue;
+    }
+    const groups = (me?.extendedGroups ?? []).map((group) => group.name);
+    if (me?.id !== user.username || user.groups.some((group) => !groups.includes(group))) {
+      problems.push(
+        `${user.username} signs in as ${me?.id}, in ${groups.join(', ') || 'no group'}, ` +
+          `not in ${user.groups.join(', ')}`,
+      );
+      continue;
+    }
+    const rights = async (id) =>
+      (
+        await call('GET', `/id/${id}`, {
+          authorization,
+          headers: { 'enrichers-document': 'permissions' },
+        })
+      )?.contextParameters?.permissions ?? [];
+    let onClaim;
+    let onMember;
+    try {
+      onClaim = await rights(claimId);
+      onMember = await rights(memberId);
+    } catch (error) {
+      if (!(error instanceof HttpError)) throw error;
+      problems.push(`${user.username} cannot read the seeded records (${error.status})`);
+      continue;
+    }
+    const mayChangeClaims = GRANTS.some(
+      (entry) =>
+        entry.place === 'claims' &&
+        user.groups.includes(entry.group) &&
+        entry.permission === 'ReadWrite',
+    );
+    for (const right of ['WriteProperties', 'WriteLifeCycle'])
+      if (onClaim.includes(right) !== mayChangeClaims)
+        problems.push(
+          `${user.username} ${mayChangeClaims ? 'lacks' : 'holds'} ${right} on a claim`,
+        );
+    if (onMember.includes('WriteProperties'))
+      problems.push(`${user.username} may change a member, and would see its Edit form`);
+  }
+  return problems;
+}
+
+/** Every way the page providers disagree with what was seeded, or none. */
+async function disagreements({ members, providers, claims, cases, documents }) {
   const problems = [];
   const expect = async (pageProvider, parameter, wanted, { exact = true } = {}) => {
     const found = await results(pageProvider, parameter);
@@ -369,24 +658,78 @@ async function check({ members, providers, claims, cases, documents }) {
       { exact: false },
     );
   }
-  const unassigned = CLAIMS.filter(
+
+  /**
+   * A queue's page provider holds every seeded claim that `belongs`, and none that does not, and
+   * each of its aggregates counts at least the seeded claims in each bucket: another claim on the
+   * server may be in the queue, or in the same bucket.
+   */
+  const queue = async (
+    pageProvider,
+    belongs,
+    aggregates,
+    { parameter, authorization, as } = {},
+  ) => {
+    const name = `${pageProvider}${as ? ` as ${as}` : ''}`;
+    const found = await results(pageProvider, parameter, authorization);
+    for (const claim of CLAIMS) {
+      const held = found.includes(claims.get(claim.number));
+      if (belongs(claim) && !held) problems.push(`${name} does not hold ${claim.number}`);
+      if (!belongs(claim) && held)
+        problems.push(`${name} holds ${claim.number}, which it should not`);
+    }
+    const page = await call(
+      'GET',
+      `/search/pp/${pageProvider}/execute?${new URLSearchParams({
+        ...(parameter === undefined ? {} : { queryParams: parameter }),
+        pageSize: '1',
+      })}`,
+      { authorization },
+    );
+    for (const [aggregate, property] of aggregates) {
+      const buckets = page?.aggregations?.[aggregate]?.buckets;
+      if (!Array.isArray(buckets)) {
+        problems.push(`${name} answered no ${aggregate}: is it served by the search index?`);
+        continue;
+      }
+      const wanted = new Map();
+      for (const claim of CLAIMS.filter(belongs))
+        if (claim[property] !== null)
+          wanted.set(claim[property], (wanted.get(claim[property]) ?? 0) + 1);
+      for (const [key, count] of wanted) {
+        const counted = buckets.find((bucket) => bucket.key === key)?.docCount ?? 0;
+        if (counted < count)
+          problems.push(`${name}'s ${aggregate} counts ${counted} ${key}, not ${count}`);
+      }
+    }
+  };
+  const status = ['claim_status_agg', 'status'];
+  await queue(
+    'payers_unassigned_claims',
     (claim) => claim.adjuster === null && ['submitted', 'inReview'].includes(claim.status),
+    [status],
   );
-  const assigned = CLAIMS.filter((claim) => !unassigned.includes(claim));
-  const queue = await results('payers_unassigned_claims');
-  for (const claim of unassigned)
-    if (!queue.includes(claims.get(claim.number)))
-      problems.push(`payers_unassigned_claims does not hold ${claim.number}`);
-  for (const claim of assigned)
-    if (queue.includes(claims.get(claim.number)))
-      problems.push(`payers_unassigned_claims holds ${claim.number}, which is not unassigned`);
-  if (problems.length > 0)
-    throw new Error(`The page providers disagree with the seed:\n  ${problems.join('\n  ')}`);
-  console.log(`  checked  ${PAGE_PROVIDERS.join(', ')}`);
+  await queue('payers_pending_claims', (claim) => PENDING.includes(claim.status), [
+    status,
+    ['claim_adjuster_agg', 'adjuster'],
+  ]);
+  // Each adjuster's own claims, asked for as that adjuster, as the queue and the home ask:
+  // $currentUser, which the server replaces with the person signed in.
+  for (const user of USERS.filter((u) => u.groups.includes('claims-adjusters')))
+    await queue('payers_my_claims', (claim) => claim.adjuster === user.username, [status], {
+      parameter: '$currentUser',
+      authorization: basic(user.username, demoPassword),
+      as: user.username,
+    });
+
+  return problems;
 }
 
-/** Every id a page provider returns, given one parameter or none. */
-async function results(pageProvider, parameter) {
+/**
+ * Every id a page provider returns, given one parameter or none, asked as NUXEO_USER or with
+ * another user's `authorization`.
+ */
+async function results(pageProvider, parameter, authorization) {
   const parameters = parameter === undefined ? {} : { queryParams: parameter };
   const entries = await everyPage(pageProvider, (index) =>
     call(
@@ -396,12 +739,12 @@ async function results(pageProvider, parameter) {
         pageSize: `${PAGE_SIZE}`,
         currentPageIndex: `${index}`,
       })}`,
+      { authorization },
     ),
   );
   return entries.map((entry) => entry.uid);
 }
 
-/** Every document an NXQL query finds. */
 /**
  * Every document an NXQL query finds in the repository, through `Repository.Query`. Not
  * `search/lang/NXQL/execute`: with an OpenSearch search client installed, that one answers from the
@@ -475,14 +818,14 @@ async function call(method, path, options = {}) {
 }
 
 /** An answer read whole, its body's bytes included, within the one timeout. */
-async function request(method, path, { json, body, headers = {} } = {}) {
+async function request(method, path, { json, body, headers = {}, authorization } = {}) {
   let response;
   let bytes;
   try {
     response = await fetch(`${API}${path}`, {
       method,
       headers: {
-        Authorization: AUTHORIZATION,
+        Authorization: authorization ?? AUTHORIZATION,
         Accept: 'application/json',
         // Every schema of a document, so that its file can be compared.
         properties: '*',

@@ -617,6 +617,8 @@ const NEXT_MINOR = VERSION.replace(
 const APP = 'bundle/agentic-ui-config/app.json';
 const LABELS = 'bundle/agentic-ui-config/labels/en.json';
 const ACTIONS = 'bundle/agentic-ui-config/actions.json';
+const HOME = 'bundle/agentic-ui-config/home.json';
+const NAVIGATION = 'bundle/agentic-ui-config/navigation.json';
 
 /** `directory`'s package at `version`, in the three places that carry it. */
 function setVersion(directory, version) {
@@ -656,7 +658,24 @@ function firstSchema(directory) {
   return `bundle/schemas/${name}`;
 }
 
-const removeQueue = (directory) => rmSync(join(directory, firstQueue(directory)));
+/**
+ * The first queue removed, with the home's cards and the menu's entries that name it: the demo's
+ * home and menu name every one of its queues, and a package that names a queue it lacks is refused
+ * at step 2, before step 3 could judge the removal.
+ */
+const removeQueue = (directory) => {
+  const queue = firstQueue(directory);
+  const id = basename(queue, '.json');
+  rmSync(join(directory, queue));
+  for (const [file, list] of [
+    [HOME, 'cards'],
+    [NAVIGATION, 'entries'],
+  ])
+    if (existsSync(join(directory, file)))
+      jsonEdit(directory, file, (content) => {
+        content[list] = content[list].filter((item) => item.queue !== id);
+      });
+};
 const changeLabelText = (directory) =>
   jsonEdit(directory, LABELS, (labels) => {
     const [key] = Object.keys(labels.labels);
@@ -788,9 +807,10 @@ expectVersion(
   {
     from: '1.0.0',
     to: '1.1.0',
-    before: (directory) => jsonEdit(directory, APP, (app) => app.groups.push('claims-adjusters')),
+    // A group the demo does not give the app, so that the package as it is has lost it.
+    before: (directory) => jsonEdit(directory, APP, (app) => app.groups.push('claims-auditors')),
   },
-  { refused: 'For one: The group claims-adjusters no longer has the app.' },
+  { refused: 'For one: The group claims-auditors no longer has the app.' },
 );
 expectVersion(
   'a platform range that leaves out a version it admitted, from 1.0.0, raising only the minor',

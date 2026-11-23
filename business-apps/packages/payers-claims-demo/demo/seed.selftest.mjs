@@ -6,14 +6,17 @@
  *
  * **What this proves, and what it does not.** The stand-in is an in-memory server written here,
  * from what Nuxeo's REST API is documented to do: documents by path and by id, batch upload, the
- * `Document.Untrash` operation, page providers, NXQL through `Repository.Query`, a search endpoint
- * whose index has not yet seen what was trashed, as OpenSearch's can lag, and trash renaming a
- * document to
- * `<name>._<time>_.trashed` (the document alone: its children are neither flagged nor moved, which
- * Nuxeo may do differently). So a pass proves the script's logic: preconditions, a second run that
- * adds nothing, a trashed record restored, a document of another type left alone, and checks that
- * fail when a page provider is wrong. It says nothing about whether a real server accepts the
- * stand-in model or answers as the stand-in does: only a run against one shows that.
+ * `Document.Untrash` operation, page providers, `$currentUser` replaced by the person asking,
+ * aggregates, users and groups, a document's ACLs, `Document.AddPermission` and
+ * `Document.RemovePermission`, a search index that lags behind the repository, NXQL through
+ * `Repository.Query`, a search endpoint whose index has not yet seen what was trashed, as
+ * OpenSearch's can lag, and trash renaming a document to `<name>._<time>_.trashed` (the document
+ * alone: its children are neither flagged nor moved, which Nuxeo may do differently). So a pass
+ * proves the script's logic: preconditions, a second run that adds nothing, a trashed record
+ * restored, a document of another type left alone, a user or a group the seed did not create left
+ * alone, the demo's people put back, and checks that fail when a page provider, its aggregates or
+ * a user's rights are wrong. It says nothing about whether a real server accepts
+ * the stand-in model or answers as the stand-in does: only a run against one shows that.
  *
  * It runs the real `seed.mjs` as a command, against a server on 127.0.0.1, with a user and a
  * password made up for the run. Node 24 and nothing else. CI does not run it.
@@ -34,7 +37,11 @@ const PAGE_PROVIDERS = [
   'provider_claims',
   'payers_claim_documents',
   'payers_unassigned_claims',
+  'payers_my_claims',
+  'payers_pending_claims',
 ];
+/** `seed.mjs`'s marker on a user or a group it created. */
+const MARKER = 'Payers kit demo (fictional)';
 
 const failures = [];
 let controls = 0;
@@ -46,12 +53,25 @@ function expect(condition, what, output = '') {
 
 /**
  * The stand-in server. `renameOnTrash` is Nuxeo's default; `brokenProvider` makes one page
- * provider return nothing; `pageSize` caps what a page holds, so paging is exercised.
+ * provider return nothing; `pageSize` caps what a page holds, so paging is exercised;
+ * `administrator: false` makes NUXEO_USER an ordinary user; `noAggregations` answers as a page
+ * provider that queries the repository does, with none; `guestFor` answers that user's `/me` as
+ * `Anonymous`, as a server that lets guests in does when a password is refused; `groupless` answers
+ * that user's `/me` with none of their groups; `indexLag` answers the queue page providers, which
+ * read the search index, with nothing for that many requests, as an index not yet caught up does;
+ * `membersWrite` gives the platform's `members` group, which every user is in, ReadWrite
+ * everywhere, as a server configured so would.
  */
 function standIn({
   user,
   password,
-  types = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument'],
+  administrator = true,
+  noAggregations = false,
+  guestFor = null,
+  groupless = null,
+  indexLag = 0,
+  membersWrite = false,
+  types = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument', 'PayersClaimSearch'],
   brokenProvider = null,
   renameOnTrash = true,
   pageSize = 3,
@@ -63,6 +83,12 @@ function standIn({
   const byId = new Map();
   const batches = new Map();
   const blobs = new Map();
+  /** Users by id, each with its properties and its password, and groups by name. */
+  const users = new Map();
+  const groups = new Map();
+  /** Each document's local ACL, by its id. */
+  const acls = new Map();
+  const calls = [];
   const add = (path, type, properties = {}) => {
     const document = {
       'entity-type': 'document',
@@ -97,7 +123,33 @@ function standIn({
   add('/default-domain', 'Domain');
   add('/default-domain/workspaces', 'WorkspaceRoot');
 
-  const authorization = `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`;
+  const basic = (id, secret) => `Basic ${Buffer.from(`${id}:${secret}`).toString('base64')}`;
+  const authorization = basic(user, password);
+  /** Who a request runs as: NUXEO_USER, a user the seed created, or no one. */
+  const principal = (header) => {
+    if (header === authorization) return user;
+    for (const [id, entry] of users) if (header === basic(id, entry.password)) return id;
+    return null;
+  };
+  /**
+   * What `asking` may do on a document, as the `permissions` enricher lists it: read, and change
+   * when an ACE on the document or above it gives one of their groups ReadWrite.
+   */
+  const rights = (document, asking) => {
+    const write = ['WriteProperties', 'WriteLifeCycle', 'ReadWrite'];
+    if (asking === user) return ['Read', ...write];
+    const theirs = [...(users.get(asking)?.properties.groups ?? []), 'members'];
+    const segments = document.path.split('/').filter(Boolean);
+    const above = segments.map((_, i) => byPath.get(`/${segments.slice(0, i + 1).join('/')}`));
+    const writes =
+      membersWrite ||
+      above.some((place) =>
+        (acls.get(place?.uid) ?? []).some(
+          (ace) => theirs.includes(ace.username) && ace.permission === 'ReadWrite',
+        ),
+      );
+    return ['Read', ...(writes ? write : [])];
+  };
   const view = (document) => {
     const properties = { ...document.properties };
     const blob = blobs.get(document.uid);
@@ -131,6 +183,22 @@ function standIn({
           (d.properties['claim:adjuster'] ?? null) === null &&
           ['submitted', 'inReview'].includes(d.properties['claim:status']),
       ),
+    // Given the adjuster's name: the seed passes $currentUser, which the server replaces.
+    payers_my_claims: (adjuster) =>
+      live().filter((d) => d.type === 'Claim' && d.properties['claim:adjuster'] === adjuster),
+    payers_pending_claims: () =>
+      live().filter(
+        (d) => d.type === 'Claim' && ['inReview', 'pended'].includes(d.properties['claim:status']),
+      ),
+  };
+  /** A terms aggregate over the records found, as the search index answers it. */
+  const terms = (found, property) => {
+    const counts = new Map();
+    for (const d of found) {
+      const key = d.properties[property];
+      if (key !== null && key !== undefined) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return { buckets: [...counts].map(([key, docCount]) => ({ key, docCount })) };
   };
   /** The one NXQL query the seed makes: a parent's trashed children by a name pattern. */
   const TRASHED_QUERY =
@@ -148,12 +216,13 @@ function standIn({
       response.writeHead(status, { 'Content-Type': 'application/json' });
       response.end(body === undefined ? '' : JSON.stringify(body));
     };
-    if (request.headers.authorization !== authorization)
-      return send(401, { message: 'Unauthorized' });
+    const asking = principal(request.headers.authorization);
+    if (asking === null) return send(401, { message: 'Unauthorized' });
     const url = new URL(request.url, 'http://127.0.0.1');
     const path = decodeURIComponent(url.pathname).replace(/^\/nuxeo\/api\/v1/, '');
     const index = Number(url.searchParams.get('currentPageIndex') ?? 0);
     const { method } = request;
+    calls.push(`${method} ${path}`);
     // A server that goes away once writing has started: the connection drops, with no answer.
     if (hangUpOnFirstWrite && method === 'POST' && path.startsWith('/path/'))
       return request.socket.destroy();
@@ -163,7 +232,83 @@ function standIn({
       return response.write('{');
     }
     try {
-      if (method === 'GET' && path === '/me') return send(200, { id: user });
+      if (method === 'GET' && path === '/me') {
+        if (asking === user) return send(200, { id: user, isAdministrator: administrator });
+        if (asking === guestFor) return send(200, { id: 'Anonymous', isAdministrator: false });
+        const member = asking === groupless ? [] : (users.get(asking).properties.groups ?? []);
+        return send(200, {
+          id: asking,
+          isAdministrator: false,
+          properties: { groups: member },
+          extendedGroups: [...member, 'members'].map((name) => ({ name })),
+        });
+      }
+      // Users and groups: only an administrator may write them, as on a server.
+      const writing = method !== 'GET';
+      if (
+        (path === '/user' ||
+          path.startsWith('/user/') ||
+          path === '/group' ||
+          path.startsWith('/group/')) &&
+        writing &&
+        !(asking === user && administrator)
+      )
+        return send(403, { message: 'not an administrator' });
+      if (path.startsWith('/user/')) {
+        const id = path.slice('/user/'.length);
+        const entry = users.get(id);
+        if (!entry) return send(404, { message: 'no such user' });
+        if (method === 'GET') return send(200, { id, properties: { ...entry.properties } });
+        if (method === 'PUT') {
+          const { password: secret, ...properties } = JSON.parse(raw).properties;
+          Object.assign(entry.properties, properties);
+          if (secret) entry.password = secret;
+          return send(200, { id, properties: { ...entry.properties } });
+        }
+      }
+      if (method === 'POST' && path === '/user') {
+        const { id, properties } = JSON.parse(raw);
+        if (users.has(id)) return send(409, { message: 'user exists' });
+        const { password: secret, ...rest } = properties;
+        const unknown = (rest.groups ?? []).filter((name) => !groups.has(name));
+        if (unknown.length > 0) return send(400, { message: `no group ${unknown.join(', ')}` });
+        users.set(id, { properties: rest, password: secret });
+        return send(201, { id, properties: { ...rest } });
+      }
+      if (path.startsWith('/group/') && method === 'GET') {
+        const group = groups.get(path.slice('/group/'.length));
+        return group ? send(200, group) : send(404, { message: 'no such group' });
+      }
+      if (method === 'POST' && path === '/group') {
+        const body = JSON.parse(raw);
+        if (groups.has(body.groupname)) return send(409, { message: 'group exists' });
+        groups.set(body.groupname, { groupname: body.groupname, properties: body.properties });
+        return send(201, groups.get(body.groupname));
+      }
+      if (method === 'POST' && path === '/automation/Document.AddPermission') {
+        const body = JSON.parse(raw);
+        const uid = body.input.replace(/^doc:/, '');
+        const aces = acls.get(uid) ?? [];
+        for (const name of body.params.users)
+          aces.push({
+            id: `${name}:${body.params.permission}:true:${user}::`,
+            username: name,
+            permission: body.params.permission,
+            granted: true,
+            status: 'effective',
+          });
+        acls.set(uid, aces);
+        return send(200, view(byId.get(uid)));
+      }
+      if (method === 'POST' && path === '/automation/Document.RemovePermission') {
+        const body = JSON.parse(raw);
+        const uid = body.input.replace(/^doc:/, '');
+        acls.set(
+          uid,
+          (acls.get(uid) ?? []).filter((ace) => ace.id !== body.params.id),
+        );
+        return send(200, view(byId.get(uid)));
+      }
       if (method === 'GET' && path.startsWith('/config/types/'))
         return types.includes(path.slice('/config/types/'.length))
           ? send(200, {})
@@ -190,7 +335,20 @@ function standIn({
       if (path.startsWith('/id/')) {
         const document = byId.get(path.slice('/id/'.length));
         if (!document) return send(404, { message: 'not found' });
-        if (method === 'GET') return send(200, view(document));
+        if (method === 'GET')
+          return send(200, {
+            ...view(document),
+            ...(request.headers['enrichers-document'] === 'acls'
+              ? {
+                  contextParameters: {
+                    acls: [{ name: 'local', aces: acls.get(document.uid) ?? [] }],
+                  },
+                }
+              : {}),
+            ...(request.headers['enrichers-document'] === 'permissions'
+              ? { contextParameters: { permissions: rights(document, asking) } }
+              : {}),
+          });
         if (method === 'PUT') {
           write(document, { ...JSON.parse(raw).properties });
           return send(200, view(document));
@@ -242,21 +400,38 @@ function standIn({
       if (method === 'GET' && execute) {
         const provider = providers[execute[1]];
         if (!provider) return send(404, { message: 'no such page provider' });
+        const given = url.searchParams.get('queryParams') ?? undefined;
+        const lagging =
+          execute[1].startsWith('payers_') &&
+          execute[1] !== 'payers_claim_documents' &&
+          indexLag-- > 0;
         const found =
-          brokenProvider === execute[1]
+          brokenProvider === execute[1] || lagging
             ? []
-            : provider(url.searchParams.get('queryParams') ?? undefined);
+            : provider(given === '$currentUser' ? asking : given);
         // A provider that always says there is another page.
         if (endlessProvider === execute[1])
           return send(200, { ...page(found, index), isNextPageAvailable: true });
-        return send(200, page(found, index));
+        // The three queue page providers answer their aggregates, as the search index does.
+        const queues = {
+          payers_unassigned_claims: ['claim_status_agg'],
+          payers_my_claims: ['claim_status_agg'],
+          payers_pending_claims: ['claim_status_agg', 'claim_adjuster_agg'],
+        };
+        const property = { claim_status_agg: 'claim:status', claim_adjuster_agg: 'claim:adjuster' };
+        const aggregations = Object.fromEntries(
+          noAggregations === execute[1] || noAggregations === true
+            ? []
+            : (queues[execute[1]] ?? []).map((id) => [id, terms(found, property[id])]),
+        );
+        return send(200, { ...page(found, index), aggregations });
       }
       return send(404, { message: `the stand-in does not answer ${method} ${path}` });
     } catch (error) {
       return send(500, { message: error.message });
     }
   });
-  Object.assign(server, { byPath, add, trash });
+  Object.assign(server, { byPath, add, trash, users, groups, acls, calls, basic });
   return server;
 }
 
@@ -275,6 +450,7 @@ function seed(env) {
 async function against(options, body) {
   const user = `selftest-${randomUUID().slice(0, 8)}`;
   const password = randomUUID();
+  const demoPassword = `demo-${randomUUID()}`;
   const server = standIn({ user, password, ...options });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}`;
@@ -283,11 +459,13 @@ async function against(options, body) {
       NUXEO_URL: url,
       NUXEO_USER: user,
       NUXEO_PASS: password,
+      PAYERS_DEMO_PASSWORD: demoPassword,
       NUXEO_TIMEOUT_MS: '2000',
+      NUXEO_INDEX_WAIT_MS: '1500',
       ...env,
     });
   try {
-    await body({ server, run, user, password });
+    await body({ server, run, user, password, demoPassword });
   } catch (error) {
     // A control that throws, because the seed left the server in a state it did not expect, is a
     // failed control, not a crash that hides the others.
@@ -311,9 +489,28 @@ const ids = (server) => [...server.byPath.values()].map((document) => document.u
     NUXEO_URL: 'http://127.0.0.1:9',
     NUXEO_USER: 'selftest',
     NUXEO_PASS: randomUUID(),
+    PAYERS_DEMO_PASSWORD: randomUUID(),
   });
   expect(status === 2 && /did not answer/.test(output), 'no server is exit 2', output);
 }
+await against({}, async ({ server, run }) => {
+  const { status, output } = await run({ PAYERS_DEMO_PASSWORD: '' });
+  expect(
+    status === 2 && /PAYERS_DEMO_PASSWORD must be set/.test(output) && server.calls.length === 0,
+    'no demo password is exit 2, before the server is asked anything',
+    output,
+  );
+});
+await against({ administrator: false }, async ({ server, run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 2 &&
+      /is not an administrator/.test(output) &&
+      server.calls.every((call) => call.startsWith('GET ')),
+    'NUXEO_USER who is not an administrator is exit 2, with nothing written',
+    output,
+  );
+});
 await against({}, async ({ run, user }) => {
   const wrong = randomUUID();
   const { status, output } = await run({ NUXEO_PASS: wrong });
@@ -326,11 +523,24 @@ await against({}, async ({ run, user }) => {
 await against({ types: ['Member'] }, async ({ run }) => {
   const { status, output } = await run();
   expect(
-    status === 2 && /no Claim, Case, Provider, ClaimDocument type/.test(output),
+    status === 2 && /no Claim, Case, Provider, ClaimDocument, PayersClaimSearch type/.test(output),
     'the package not installed is exit 2, naming the types it lacks',
     output,
   );
 });
+await against(
+  { types: ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument'] },
+  async ({ server, run }) => {
+    const { status, output } = await run();
+    expect(
+      status === 2 &&
+        /version 0.2.0 or older .* upgrade it to 0.3.0/.test(output) &&
+        server.calls.every((call) => call.startsWith('GET ')),
+      'version 0.2.0 of the package, with no queue search type, is exit 2, with nothing written',
+      output,
+    );
+  },
+);
 
 await against({ hangUpOnFirstWrite: true }, async ({ run }) => {
   const { status, output } = await run();
@@ -369,8 +579,20 @@ for (const renameOnTrash of [true, false]) {
       `${how}: a first run creates 28 documents and uploads 4 files`,
       first.output,
     );
+    expect(
+      /People: 7 created, 0 updated, 5 permission\(s\) granted, 0 removed, for 4 users in 3 groups/.test(
+        first.output,
+      ),
+      `${how}: a first run creates 4 users and 3 groups, and grants 5 permissions`,
+      first.output,
+    );
     const before = ids(server);
     const second = await run();
+    expect(
+      /People: 0 created, 4 updated, 0 permission\(s\) granted, 0 removed/.test(second.output),
+      `${how}: a second run creates no user, group or permission`,
+      second.output,
+    );
     expect(
       second.status === 0 &&
         /0 created, 28 updated, 0 restored from the trash, 0 file\(s\) uploaded/.test(
@@ -430,6 +652,158 @@ for (const renameOnTrash of [true, false]) {
     expect(
       at(server, 'cases/case-2030').properties['case:claim'] === null,
       'a case with no claim has none',
+    );
+  });
+}
+
+// The demo's people: in their groups, with the demo password, and put back when changed by hand.
+await against({}, async ({ server, run, demoPassword }) => {
+  const first = await run();
+  expect(first.status === 0, 'a first run, for the people, exits 0', first.output);
+  expect(!first.output.includes(demoPassword), 'the demo password is never printed', first.output);
+  const dana = server.users.get('dana.lee');
+  const morgan = server.users.get('morgan.chen');
+  expect(
+    dana?.password === demoPassword &&
+      JSON.stringify(dana?.properties.groups) === '["claims-adjusters"]' &&
+      JSON.stringify(morgan?.properties.groups) === '["claims-adjusters","claims-supervisors"]' &&
+      server.users.get('riley.brooks')?.properties.groups.includes('member-services') &&
+      dana?.properties.company === MARKER,
+    'each user has the demo password, their groups and the marker',
+  );
+  const aclOf = (place) =>
+    (server.acls.get(server.byPath.get(place).uid) ?? [])
+      .map((a) => `${a.username}:${a.permission}`)
+      .sort();
+  expect(
+    JSON.stringify(aclOf(ROOT)) ===
+      JSON.stringify([
+        'claims-adjusters:Read',
+        'claims-supervisors:Read',
+        'member-services:Read',
+      ]) &&
+      JSON.stringify(aclOf(`${ROOT}/claims`)) ===
+        JSON.stringify(['claims-adjusters:ReadWrite', 'claims-supervisors:ReadWrite']) &&
+      aclOf(`${ROOT}/members`).length === 0,
+    'the workspace and the claims folder give each group the permissions data.mjs names, once',
+    JSON.stringify({ workspace: aclOf(ROOT), claims: aclOf(`${ROOT}/claims`) }),
+  );
+  // A permission of a demo group that data.mjs does not name is removed; anyone else's stays.
+  const ace = (username, permission) => ({
+    id: `${username}:${permission}:true:x::`,
+    username,
+    permission,
+    granted: true,
+    status: 'effective',
+  });
+  server.acls.set(server.byPath.get(`${ROOT}/members`).uid, [
+    ace('claims-adjusters', 'Everything'),
+    ace('someone', 'Write'),
+  ]);
+  dana.password = 'changed by hand';
+  dana.properties.groups = ['member-services'];
+  const second = await run();
+  expect(
+    second.status === 0 &&
+      dana.password === demoPassword &&
+      JSON.stringify(dana.properties.groups) === '["claims-adjusters"]',
+    'a password and groups changed by hand are put back',
+    second.output,
+  );
+  expect(
+    /1 removed/.test(second.output) &&
+      JSON.stringify(aclOf(`${ROOT}/members`)) === JSON.stringify(['someone:Write']),
+    "a demo group's permission data.mjs does not name is removed, and someone else's is kept",
+    second.output,
+  );
+});
+
+// A user or a group of the demo's names that the seed did not create is left alone, and found
+// before anything is written.
+await against({}, async ({ server, run }) => {
+  server.groups.set('member-services', { groupname: 'member-services', properties: {} });
+  const { status, output } = await run();
+  expect(
+    status === 2 &&
+      /a group member-services that the seed did not create/.test(output) &&
+      server.groups.get('member-services').properties.description === undefined &&
+      server.calls.every((call) => call.startsWith('GET ')),
+    'a member-services group the seed did not create is exit 2, with nothing written',
+    output,
+  );
+});
+await against({}, async ({ server, run }) => {
+  expect((await run()).status === 0, 'a first run, before a user is replaced, exits 0');
+  server.users.set('sam.patel', {
+    properties: { username: 'sam.patel', company: 'Someone else', groups: [] },
+    password: 'theirs',
+  });
+  const { status, output } = await run();
+  const sam = server.users.get('sam.patel');
+  expect(
+    status === 2 &&
+      /a user sam.patel that the seed did not create/.test(output) &&
+      sam.password === 'theirs' &&
+      sam.properties.groups.length === 0,
+    'a sam.patel the seed did not create is exit 2, untouched',
+    output,
+  );
+});
+
+// What each user may do is checked as them, wherever the permission comes from.
+await against({ membersWrite: true }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 &&
+      /riley.brooks may change a member/.test(output) &&
+      /riley.brooks holds WriteProperties on a claim/.test(output),
+    'a server that lets every member change records fails the run: member services may not',
+    output,
+  );
+});
+
+// Each user must sign in as themself, in their groups: the demo signs in as them.
+await against({ guestFor: 'dana.lee' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 && /dana.lee signs in as Anonymous/.test(output),
+    'a user the server answers as Anonymous fails the run',
+    output,
+  );
+});
+await against({ groupless: 'riley.brooks' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 &&
+      /riley.brooks signs in as riley.brooks, in members, not in member-services/.test(output),
+    'a user who is not in their groups fails the run',
+    output,
+  );
+});
+
+// The search index a moment behind: the checks are asked again until it has caught up.
+await against({ indexLag: 3 }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 0 && /waiting {2}\d+ disagreement\(s\)/.test(output),
+    'a search index that lags is waited for, and the run then passes',
+    output,
+  );
+});
+
+// The aggregates the queues' facets and the home's KPIs read must be answered, by each queue.
+for (const pageProvider of [
+  'payers_unassigned_claims',
+  'payers_my_claims',
+  'payers_pending_claims',
+]) {
+  await against({ noAggregations: pageProvider }, async ({ run }) => {
+    const { status, output } = await run();
+    expect(
+      status === 1 &&
+        new RegExp(`${pageProvider}( as \\S+)? answered no claim_status_agg`).test(output),
+      `${pageProvider} answering no aggregates fails the run`,
+      output,
     );
   });
 }

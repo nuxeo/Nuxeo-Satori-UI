@@ -75,8 +75,8 @@ const TASK = {
 };
 
 /**
- * The demo package with a home, a menu, a task form and an image added, which it does not have yet:
- * every file the preview serves, and one it cannot.
+ * The demo package with its home and menu replaced by these smaller ones, and a task form and an
+ * image added, which it does not have: every kind of file the preview serves, and one it cannot.
  */
 function packageWith(name: string, change: (root: string) => void = () => undefined): string {
   const directory = join(scratch, name);
@@ -162,9 +162,12 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
           'labels/en.json',
           'layouts/Case/view.layout.json',
           'layouts/Claim/view.layout.json',
+          'layouts/Member/metadata.layout.json',
           'layouts/Member/view.layout.json',
           'layouts/Provider/view.layout.json',
           'navigation.json',
+          'queues/my-claims.json',
+          'queues/pending-determination.json',
           'queues/unassigned-claims.json',
           'tasks/claimReview.check.layout.json',
         ]);
@@ -197,6 +200,7 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
           layouts: [
             { type: 'Case', mode: 'view' },
             { type: 'Claim', mode: 'view' },
+            { type: 'Member', mode: 'metadata' },
             { type: 'Member', mode: 'view' },
             { type: 'Provider', mode: 'view' },
           ],
@@ -211,10 +215,12 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
         expect(asked).toContain('GET /agentic-ui-config/tasks/claimReview.check.layout.json');
         expect(asked.every((line) => /^GET \/agentic-ui-config\/\S+$/.test(line))).toBe(true);
 
-        // The addresses: the home first, then the queue and the tasks page.
+        // The addresses: the home first, then the queues and the tasks page.
         expect(preview.open).toBe(`${origin}/#/home`);
         expect(preview.pages.map((page) => page.url).filter(Boolean)).toEqual([
           `${origin}/#/home`,
+          `${origin}/#/queues/my-claims`,
+          `${origin}/#/queues/pending-determination`,
           `${origin}/#/queues/unassigned-claims`,
           `${origin}/#/tasks`,
         ]);

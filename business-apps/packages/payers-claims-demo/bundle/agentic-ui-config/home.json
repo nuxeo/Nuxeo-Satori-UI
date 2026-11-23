@@ -1,0 +1,50 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/home.schema.json",
+  "version": 2,
+  "labelKey": "payers.home.title",
+  "cards": [
+    {
+      "id": "unassigned",
+      "labelKey": "payers.home.unassigned",
+      "kpi": { "pageProvider": "payers_unassigned_claims" },
+      "queue": "unassigned-claims",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
+    },
+    {
+      "id": "unassigned-by-status",
+      "labelKey": "payers.home.unassignedByStatus",
+      "kpi": { "pageProvider": "payers_unassigned_claims", "aggregate": "claim_status_agg" },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
+    },
+    {
+      "id": "mine",
+      "labelKey": "payers.home.mine",
+      "kpi": { "pageProvider": "payers_my_claims", "parameters": ["$currentUser"] },
+      "queue": "my-claims",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
+    },
+    {
+      "id": "pending",
+      "labelKey": "payers.home.pending",
+      "kpi": { "pageProvider": "payers_pending_claims" },
+      "queue": "pending-determination",
+      "visibleWhen": {
+        "type": "app.rules.inGroup",
+        "parameters": ["member-services", "claims-supervisors"]
+      }
+    },
+    {
+      "id": "pended",
+      "labelKey": "payers.home.pended",
+      "kpi": {
+        "pageProvider": "payers_pending_claims",
+        "aggregate": "claim_status_agg",
+        "bucket": "pended"
+      },
+      "visibleWhen": {
+        "type": "app.rules.inGroup",
+        "parameters": ["member-services", "claims-supervisors"]
+      }
+    }
+  ]
+}

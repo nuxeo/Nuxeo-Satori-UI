@@ -103,7 +103,7 @@ libs/
     satori-components-satori/    ← the same primitive IDs on Satori, published as @nuxeo/satori-platform/components-satori
 
 business-apps/
-  packages/                      ← App definition packages the package pipeline builds; payers-claims-demo is phase 0's demo
+  packages/                      ← App definition packages the package pipeline builds; payers-claims-demo is the Payers kit, phase 0's and phase 1's demo
 ```
 
 ---

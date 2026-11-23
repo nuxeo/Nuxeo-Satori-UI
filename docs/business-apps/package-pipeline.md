@@ -98,7 +98,7 @@ it must not be a link either.
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
 ```
 
-It writes `dist/payers-claims-demo-0.2.0.zip` and its `.sha256` in the package. `--out` puts them
+It writes `dist/payers-claims-demo-0.3.0.zip` and its `.sha256` in the package. `--out` puts them
 elsewhere. `--allow-list` and `--registered` pass the deployment's to the validator, and
 `--platform` its platform version; the workflow passes the version of `libs/platform`. `--model`
 and `--model-server` give it the server's content model (section 4). `--previous` gives it the
@@ -177,7 +177,7 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 4. Anyone can check the signature:
 
    ```bash
-   gh attestation verify payers-claims-demo-0.2.0.zip --repo nuxeo/Nuxeo-Satori-UI
+   gh attestation verify payers-claims-demo-0.3.0.zip --repo nuxeo/Nuxeo-Satori-UI
    ```
 
 A tag rather than a button: a manually dispatched workflow must be on `main`, which this one
