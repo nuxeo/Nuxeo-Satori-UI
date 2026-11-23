@@ -422,7 +422,9 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     every check still passed. Examples: a property shown to everyone, dropped because an earlier
     field bound it under a condition; a queue written for a card under a condition; a bound label
     copied as text. Each is fixed, with a test in `checks-m1.spec.ts` that was run against the code
-    before the fix and failed there.
+    before the fix and failed there. A second round confirmed the twelve fixed and found two more,
+    fixed the same way: a card whose queue a search screen took was held to that screen's queue,
+    and two files' unnamed buttons shared an action id.
 - **The two counts were seen disagreeing for real.** On the sample, a viewer element writes
   `role="widget"` twice. The parser keeps one attribute; the first second count counted two
   fields. A field is an element, so the second count now counts tags marked as widgets, and a
