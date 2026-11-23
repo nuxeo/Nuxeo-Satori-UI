@@ -17,6 +17,7 @@ import {
   type ExtensionActionDescriptor,
   type ExtensionRouteDescriptor,
   type ExtensionTabDescriptor,
+  ExtensionRuleContextService,
 } from '@nuxeo/satori-platform/extensions';
 
 import { appConfig } from '../app.config';
@@ -38,6 +39,7 @@ describe('provideAppExtensions — the four reserved slots, as the app wires the
     isAuthenticated: signal(true),
     username: signal('test.user'),
     isAdministrator: signal(false),
+    groups: signal(['members', 'member-services']),
     isPowerUser: signal(false),
     hasAdministrationAccess: signal(false),
     basicCredentials: () => 'dGVzdA==',
@@ -88,6 +90,15 @@ describe('provideAppExtensions — the four reserved slots, as the app wires the
     await done;
     TestBed.inject(ApplicationRef).tick();
   }
+
+  it("puts the signed-in user's groups in the rule context, where app.rules.inGroup reads them", async () => {
+    await loadManifest({});
+    TestBed.inject(ApplicationRef).tick();
+    expect(TestBed.inject(ExtensionRuleContextService).context().user.groups).toEqual([
+      'members',
+      'member-services',
+    ]);
+  });
 
   it('registers the packaged toolbar, tabs and context-menu descriptors', () => {
     const ids = (slot: string) => extensions.resolve(slot).map((entry) => entry.id);

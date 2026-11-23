@@ -327,6 +327,8 @@ export class AuthService {
     return isPowerUserFromGroups(s.groups);
   });
   readonly hasAdministrationAccess = computed(() => this.isAdministrator() || this.isPowerUser());
+  /** The groups `/me` reported for the signed-in user; none when no one is signed in. */
+  readonly groups = computed<readonly string[]>(() => this.state()?.groups ?? []);
 
   constructor() {
     this.restoreSession();

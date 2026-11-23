@@ -1,0 +1,117 @@
+import { TestBed } from '@angular/core/testing';
+
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+
+import { DOCUMENT_RULE_EVALUATORS } from './document-rules';
+import { ExtensionRuleContextService } from './extension-rule-context.service';
+import { EMPTY_EXTENSION_RULE_CONTEXT, type ExtensionRuleContext } from './extension-rules';
+
+/** Layout version 2's three rules (docs/business-apps/layout-v2.md, section 5). */
+
+function claim(properties: Record<string, unknown>, state?: string): NuxeoDocument {
+  return {
+    uid: 'c1',
+    title: 'Claim',
+    type: 'Claim',
+    path: '/c1',
+    lastModified: '2026-11-23T00:00:00.000Z',
+    properties,
+    ...(state ? { state } : {}),
+  };
+}
+
+function on(document: NuxeoDocument | null, groups?: readonly string[]): ExtensionRuleContext {
+  const { user } = EMPTY_EXTENSION_RULE_CONTEXT;
+  return {
+    ...EMPTY_EXTENSION_RULE_CONTEXT,
+    document,
+    user:
+      groups === undefined
+        ? { username: user.username, isAdministrator: false }
+        : { ...user, groups },
+  };
+}
+
+const evaluate = (id: string, context: ExtensionRuleContext, ...parameters: unknown[]): boolean =>
+  DOCUMENT_RULE_EVALUATORS[id](context, parameters, () => false);
+
+describe('app.rules.fieldIn', () => {
+  const status = { field: 'claim:status' };
+
+  it('passes while the property holds one of the values', () => {
+    const denied = on(claim({ 'claim:status': 'denied' }));
+    expect(evaluate('app.rules.fieldIn', denied, status, 'denied', 'appealed')).toBe(true);
+    expect(evaluate('app.rules.fieldIn', denied, status, 'approved')).toBe(false);
+  });
+
+  it('passes while any item of a list property is one of the values', () => {
+    const tagged = on(claim({ 'claim:tags': ['urgent', 'fraud'] }));
+    expect(evaluate('app.rules.fieldIn', tagged, { field: 'claim:tags' }, 'fraud')).toBe(true);
+    expect(evaluate('app.rules.fieldIn', tagged, { field: 'claim:tags' }, 'routine')).toBe(false);
+  });
+
+  it('compares a number or a boolean written as text, as the values are', () => {
+    const record = on(claim({ 'claim:amount': 5000, 'claim:urgent': true }));
+    expect(evaluate('app.rules.fieldIn', record, { field: 'claim:amount' }, '5000')).toBe(true);
+    expect(evaluate('app.rules.fieldIn', record, { field: 'claim:urgent' }, 'true')).toBe(true);
+  });
+
+  it('compares a literal first parameter as it is', () => {
+    expect(evaluate('app.rules.fieldIn', on(claim({})), 'gold', 'gold', 'silver')).toBe(true);
+    expect(evaluate('app.rules.fieldIn', on(claim({})), 'bronze', 'gold')).toBe(false);
+  });
+
+  it('does not pass with a computation first, which this library does not evaluate', () => {
+    const computed = { computed: { type: 'core.template', parameters: ['denied'] } };
+    expect(evaluate('app.rules.fieldIn', on(claim({})), computed, 'denied')).toBe(false);
+  });
+
+  it('does not pass with no document, a missing property, an object value or no values', () => {
+    expect(evaluate('app.rules.fieldIn', on(null), status, 'denied')).toBe(false);
+    expect(evaluate('app.rules.fieldIn', on(claim({})), status, 'denied')).toBe(false);
+    const nested = on(claim({ 'claim:status': { value: 'denied' } }));
+    expect(evaluate('app.rules.fieldIn', nested, status, 'denied')).toBe(false);
+    expect(evaluate('app.rules.fieldIn', on(claim({ 'claim:status': 'denied' })), status)).toBe(
+      false,
+    );
+  });
+});
+
+describe('app.rules.inState', () => {
+  it("passes while the record's lifecycle state is one of the parameters", () => {
+    expect(evaluate('app.rules.inState', on(claim({}, 'approved')), 'approved', 'closed')).toBe(
+      true,
+    );
+    expect(evaluate('app.rules.inState', on(claim({}, 'project')), 'approved')).toBe(false);
+  });
+
+  it('does not pass with no document, no state or no parameters', () => {
+    expect(evaluate('app.rules.inState', on(null), 'approved')).toBe(false);
+    expect(evaluate('app.rules.inState', on(claim({})), 'approved')).toBe(false);
+    expect(evaluate('app.rules.inState', on(claim({}, 'approved')))).toBe(false);
+  });
+});
+
+describe('app.rules.inGroup', () => {
+  it('passes while the user is in one of the groups', () => {
+    const staff = on(claim({}), ['members', 'member-services']);
+    expect(evaluate('app.rules.inGroup', staff, 'member-services')).toBe(true);
+    expect(evaluate('app.rules.inGroup', staff, 'adjusters', 'members')).toBe(true);
+    expect(evaluate('app.rules.inGroup', staff, 'adjusters')).toBe(false);
+  });
+
+  it('does not pass with no group known, a context built without groups, or no parameters', () => {
+    expect(evaluate('app.rules.inGroup', on(claim({}), []), 'member-services')).toBe(false);
+    expect(evaluate('app.rules.inGroup', on(claim({})), 'member-services')).toBe(false);
+    expect(evaluate('app.rules.inGroup', on(claim({}), ['member-services']))).toBe(false);
+  });
+});
+
+describe('the rule context', () => {
+  it("carries the user's groups, which the shell sets", () => {
+    const service = TestBed.inject(ExtensionRuleContextService);
+    expect(service.context().user.groups).toEqual([]);
+    service.groups.set(['members', 'member-services']);
+    expect(service.context().user.groups).toEqual(['members', 'member-services']);
+  });
+});

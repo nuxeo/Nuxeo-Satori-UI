@@ -1,6 +1,10 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { provideNxsComponents } from '@nuxeo/satori-platform/components';
-import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';
+import {
+  DOCUMENT_RULE_EVALUATORS,
+  ExtensionRuleContextService,
+  ExtensionRuleRegistry,
+} from '@nuxeo/satori-platform/extensions';
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { Subject, of, type Observable } from 'rxjs';
 
@@ -365,6 +369,30 @@ describe('RecordPageComponent', () => {
     const heading = card?.querySelector('h3');
     expect(card?.getAttribute('aria-labelledby')).toBe(heading?.id);
     expect(card?.hasAttribute('aria-label')).toBe(false);
+  });
+
+  /** Phase 1's demo step 4: member services see the member's social security number, others do not. */
+  it("shows the Member page's SSN to member services, through the platform's app.rules.inGroup", async () => {
+    TestBed.inject(ExtensionRuleRegistry).registerRules(DOCUMENT_RULE_EVALUATORS);
+    const page = {
+      version: 2,
+      cards: [
+        {
+          id: 'member',
+          fields: [
+            'member:phone',
+            {
+              field: 'member:ssn',
+              visibleWhen: { type: 'app.rules.inGroup', parameters: ['member-services'] },
+            },
+          ],
+        },
+      ],
+    };
+    TestBed.inject(ExtensionRuleContextService).groups.set(['members']);
+    expect((await render(member(), page)).querySelector('[data-field="member:ssn"]')).toBeNull();
+    TestBed.inject(ExtensionRuleContextService).groups.set(['members', 'member-services']);
+    expect(valueOf(await render(member(), page), 'member:ssn')).toBe('000-00-0000');
   });
 
   it('shows an empty value as a dash', async () => {

@@ -414,8 +414,8 @@ lists what each Web UI element becomes. In version 2's terms:
   - **a computed column** of a table is not drawn yet;
   - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or
     the stored id, until each has its lookup;
-  - **the three rules of section 5** are not registered yet, so a tab, card or field that one of
-    them shows is left out, rather than shown to everyone;
+  - **`app.rules.fieldIn` with a computation** as its first parameter never passes, because the
+    rules' library does not evaluate computations; with a property or a literal it does;
   - **`metadata`, `edit` and `create` files of version 2** are still refused, and the generated
     layout shows.
 - **Checking widgets against property types** happens wherever the content model is known. The app

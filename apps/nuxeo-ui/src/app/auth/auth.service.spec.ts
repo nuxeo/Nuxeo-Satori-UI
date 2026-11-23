@@ -93,6 +93,25 @@ describe('AuthService poweruser access', () => {
     expect(service.isAuthenticated()).toBe(true);
   });
 
+  it("keeps the user's groups from /me, for the rule context's app.rules.inGroup", () => {
+    expect(service.groups()).toEqual([]);
+    service.login('poweruser01', 'secret', false).subscribe();
+
+    httpMock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me'))
+      .flush({
+        id: 'poweruser01',
+        properties: { username: 'poweruser01', groups: ['members', 'member-services'] },
+        isAdministrator: false,
+      });
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
+      .flush({ id: 'poweruser01' });
+
+    expect(service.groups()).toEqual(['members', 'member-services']);
+  });
+
   it('sets isPowerUser and hasAdministrationAccess after login', () => {
     service.login('poweruser01', 'secret', false).subscribe();
 

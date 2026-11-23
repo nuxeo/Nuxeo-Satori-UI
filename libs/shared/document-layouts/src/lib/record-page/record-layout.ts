@@ -198,8 +198,8 @@ function describe(finding: Finding): string {
  *
  * - a customer's own rule, registered in Layer 2 code, is known here though the validator's
  *   packaged list lacks it, as the pipeline's `--registered` makes it known there;
- * - a rule the validator knows and this build does not register, such as version 2's three
- *   proposed ones, is not: evaluated, it would pass, and show a field its author meant to hide.
+ * - a rule the validator knows and this build does not register, a platform rule a build was
+ *   made without, is not: evaluated, it would pass, and show a field its author meant to hide.
  */
 export function readRecordLayout(
   content: Json,

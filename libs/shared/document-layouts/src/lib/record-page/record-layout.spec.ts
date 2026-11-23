@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { entryOf, readRecordLayout, unknownRuleIn, type RecordLayoutFile } from './record-layout';
 
 /**
- * The rules this build registers, in these tests: the platform's own, a customer's own Layer 2
- * rule the validator's packaged list does not have, and none of version 2's three proposed ones.
+ * The rules this build registers, in these tests: some of the platform's own, a customer's own
+ * Layer 2 rule the validator's packaged list does not have, and none of version 2's three, which
+ * stand here for any platform rule a build was made without.
  */
 const known = [
   'core.every',
@@ -173,9 +174,9 @@ describe('readRecordLayout', () => {
     });
 
     /**
-     * The validator knows version 2's three proposed rules, so the pipeline passes a file that
-     * uses them; this build does not register them yet. Evaluated, an unregistered rule passes,
-     * and the member's social security number would show to everyone. Left out instead.
+     * The validator knows the platform's rules, so the pipeline passes a file that uses them; a
+     * build made without one does not register it. Evaluated, an unregistered rule passes, and
+     * the member's social security number would show to everyone. Left out instead.
      */
     it('a field shown by a rule the validator knows and this build does not register', () => {
       const file = read({

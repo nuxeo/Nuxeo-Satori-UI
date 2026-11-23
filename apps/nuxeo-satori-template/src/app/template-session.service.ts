@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { Observable, map, tap } from 'rxjs';
 
-import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
+import { NUXEO_API_ORIGIN, readGroupsFromMe } from '@nuxeo/satori-platform/nuxeo-client';
 
 /** What the template keeps about a signed-in user. */
 interface TemplateSession {
@@ -10,6 +10,8 @@ interface TemplateSession {
   /** Base64 `user:password` for `Authorization: Basic …`. */
   readonly basic: string;
   readonly isAdministrator: boolean;
+  /** The user's groups, as `/me` reports them: what `app.rules.inGroup` reads. */
+  readonly groups: readonly string[];
 }
 
 /**
@@ -33,9 +35,13 @@ function readStoredSession(): TemplateSession | null {
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return null;
-    const { username, basic, isAdministrator } = parsed as Record<string, unknown>;
+    const { username, basic, isAdministrator, groups } = parsed as Record<string, unknown>;
     if (typeof username !== 'string' || typeof basic !== 'string') return null;
-    return { username, basic, isAdministrator: isAdministrator === true };
+    // A session stored before groups were kept has none, rather than none to read.
+    const known = Array.isArray(groups)
+      ? groups.filter((group): group is string => typeof group === 'string')
+      : [];
+    return { username, basic, isAdministrator: isAdministrator === true, groups: known };
   } catch {
     // A quota-denied or disabled storage must not stop the application booting.
     return null;
@@ -79,6 +85,8 @@ export class TemplateSessionService {
   readonly isSignedIn = computed<boolean>(() => this.session() !== null);
 
   readonly isAdministrator = computed<boolean>(() => this.session()?.isAdministrator === true);
+  /** The signed-in user's groups; none when no one is signed in. */
+  readonly groups = computed<readonly string[]>(() => this.session()?.groups ?? []);
 
   /** The value for `Authorization: Basic …`, without the prefix. */
   basicCredentials(): string | null {
@@ -102,6 +110,7 @@ export class TemplateSessionService {
           username: readUsername(me) ?? username,
           basic,
           isAdministrator: readIsAdministrator(me),
+          groups: readGroupsFromMe(me),
         })),
         tap((session) => this.store(session)),
         map((session) => session.username),

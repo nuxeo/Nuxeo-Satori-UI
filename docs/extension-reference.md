@@ -713,6 +713,8 @@ Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicate
 | `app.rules.hasFile`              | The focused document holds a main file (`file:content`)                              |
 | `app.rules.isTrashed`            | The focused document is in the trash                                                 |
 | `app.rules.isNotTrashed`         | A document is in focus and is not in the trash                                       |
+| `app.rules.fieldIn`              | A property of the focused document, named first, holds one of the other `parameters` |
+| `app.rules.inState`              | The focused document's lifecycle state is one of the `parameters`                    |
 
 `app.rules.canPublish` is Nuxeo Web UI's `isPublishable`: the focused document is not a proxy, a
 record or in the trash, carries the `Publishable` facet, and the user has `WriteVersion`. It is
@@ -738,9 +740,17 @@ Publishing tab only on Case and Claim documents:
 and negate with `core.not`, or combine with `core.every` — `hasFacet("Versionable")` alongside
 `isType("Claim")` is an ordinary composite.
 
+`app.rules.fieldIn` and `app.rules.inState` are layout version 2's
+([layout-v2.md](business-apps/layout-v2.md), section 5), and any manifest may use them too.
+`fieldIn` takes the property first, as a layout names one, then the values:
+`{ "type": "app.rules.fieldIn", "parameters": [{ "field": "claim:status" }, "denied", "appealed"] }`.
+The stored value is compared written as text, and for a list any of its items may match. A
+literal first parameter is compared as it is; a computation there is not evaluated by this
+library, so with one the rule does not pass.
+
 **Scope, stated plainly.** "The focused document" means the document open on
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
-when you navigate away, so all ten answer `false` everywhere else — with one
+when you navigate away, so all of them answer `false` everywhere else — with one
 exception: browse's row menu (section 10a) resolves its own slot with each row's
 document in focus, for that slot only. In particular the two
 type rules gate document-detail **tabs and toolbar actions**; they cannot vary browse list
@@ -778,6 +788,13 @@ denies rather than permits.
 | `app.rules.isPowerUser`             | The user is in `powerusers`                                                                                          |
 | `app.rules.hasAdministrationAccess` | Either of the above                                                                                                  |
 | `app.rules.isExternalUser`          | The user is an external share recipient (`transient/`), who can open none of Browse, Favorites, Collections or Trash |
+| `app.rules.inGroup`                 | The user is in one of the groups in `parameters`                                                                     |
+
+`app.rules.inGroup` reads the groups Nuxeo's `/me` reports, which the shell puts in the rule
+context's `user.groups`; both the product app and the template fill it. It is layout version 2's,
+and does not fail closed: with no group known it answers `false`. Like every rule here it hides
+from the interface only: a field it hides is still returned by the REST API to anyone who may
+read the record.
 
 `rule: null` in an override still clears the gate, so a customer who genuinely
 wants an entry ungated has a Layer 1 route to it. Fail-closed is about the
