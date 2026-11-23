@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  watch,
   writeFileSync,
 } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -61,6 +62,38 @@ const LAYOUT = join('bundle', 'agentic-ui-config', 'layouts', 'Claim', 'view.lay
 describe.skipIf(!PIPELINE_TESTS_RUN)(
   'validatePackage (the pipeline needs unzip, which a Windows runner lacks)',
   () => {
+    it('unpacks the zip in a folder of its own, made where it is told, and removed', async () => {
+      // The pipeline's step 5 unpacks the zip into the temporary folder it is given: here, one
+      // inside workIn, which a watcher sees made there; and afterwards workIn is empty again.
+      const workIn = join(scratch, 'work-in');
+      mkdirSync(workIn);
+      const seen: string[] = [];
+      const watcher = watch(workIn, { recursive: true }, (_, name) => {
+        if (name) seen.push(String(name));
+      });
+      try {
+        const check = await validatePackage(
+          { directory: demoWith('work-in-package') },
+          { ...SCRATCH, workIn },
+        );
+        expect(check.passed).toBe(true);
+        await new Promise((done) => setTimeout(done, 200));
+      } finally {
+        watcher.close();
+      }
+      expect(
+        seen.some((name) =>
+          /builder-mcp-package-[^/\\]+[/\\]tmp[/\\]verify-package-zip-/.test(name),
+        ),
+      ).toBe(true);
+      expect(
+        seen.some((name) =>
+          /builder-mcp-package-[^/\\]+[/\\]out[/\\]payers-claims-demo-/.test(name),
+        ),
+      ).toBe(true);
+      expect(readdirSync(workIn)).toEqual([]);
+    });
+
     it('passes the demo package, as CI does, writing nothing into it', async () => {
       const root = demoWith('sound');
       const before = everyFile(root);
@@ -74,8 +107,9 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect(check.zip?.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(check.command).toContain(`--platform ${platformVersion()}`);
       expect(everyFile(root)).toEqual(before);
-      // The temporary folder the zip went to is gone too.
-      expect(leftovers()).toEqual(left);
+      // The temporary folder the zip went to is gone too. Others' runs, in parallel, may come
+      // and go meanwhile, so only this run's is looked for.
+      expect(leftovers().filter((name) => !left.includes(name))).toEqual([]);
     });
 
     it("names the file, the place and the widget for phase 0's demo step 1", async () => {
@@ -285,6 +319,11 @@ describe('the pipeline process', () => {
         SATORI_GH_READONLY_TOKEN: 'z',
       }),
     ).toEqual({ PATH: '/bin' });
+    // Given a temporary folder, it is the temporary folder under every system's name for it, and
+    // replaces the server's own.
+    expect(
+      pipelineEnvironment({ PATH: '/bin', TMPDIR: '/elsewhere', NUXEO_PASS: 'x' }, '/work'),
+    ).toEqual({ PATH: '/bin', TMPDIR: '/work', TEMP: '/work', TMP: '/work' });
     const saved = process.env['NUXEO_PASS'];
     process.env['NUXEO_PASS'] = 'not-a-real-password';
     try {

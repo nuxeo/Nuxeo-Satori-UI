@@ -70,6 +70,36 @@ function readOrigin(value: string | undefined): string | { readonly problem: str
   return url.origin;
 }
 
+export const DEFAULT_DEV_SERVER_URL = 'http://localhost:4200';
+export const DEV_SERVER_URL_ENV = 'DEV_SERVER_URL';
+
+/**
+ * The development server `preview_package` serves to, `npx nx serve nuxeo-ui`: its origin, from
+ * `DEV_SERVER_URL`, or why it cannot be asked. Unset, it is the one `nx serve` starts. It must be
+ * on this machine, because the files `preview_package` checks there are the ones it wrote into this
+ * checkout, and a URL elsewhere would send requests off the machine for nothing.
+ */
+export function readDevServer(env: Environment): string | { readonly problem: string } {
+  const value = env[DEV_SERVER_URL_ENV];
+  const text = value === undefined || value === '' ? DEFAULT_DEV_SERVER_URL : value;
+  const refuse = (why: string) => ({
+    problem: `${DEV_SERVER_URL_ENV} ${why}. It is the dev server's origin, such as ${DEFAULT_DEV_SERVER_URL}.`,
+  });
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return refuse('is not a URL');
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return refuse('is not http or https');
+  if (url.username !== '' || url.password !== '') return refuse('holds credentials');
+  if (url.pathname !== '/' || url.search !== '' || url.hash !== '')
+    return refuse('has a path, a query or a fragment');
+  if (!isThisMachine(url.hostname))
+    return refuse(`names ${url.hostname}, which is not this machine; the dev server runs here`);
+  return url.origin;
+}
+
 /**
  * Loopback only. Not `*.localhost`: whether such a name stays on this machine is the resolver's
  * choice, and not every resolver makes it.

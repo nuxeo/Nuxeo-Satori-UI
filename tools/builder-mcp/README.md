@@ -10,31 +10,32 @@ It runs beside the developer's tools, against a development server, and never in
 
 ## Not here yet
 
-The plan gives the server four jobs. Two are here:
+The plan gives the server four jobs. Three are here:
 
-- **Here:** reading the server, and validating a package.
-- **Not here:** previewing a package in dev mode, and publishing it to pre-production. Both are
-  left for later on purpose. Publishing waits for the pipeline's versions, signatures and promotion
-  after a person approves, which phase 3 also builds
-  ([package-pipeline.md](../../docs/business-apps/package-pipeline.md), section 6). Until then a
-  package is published by a tag, in CI, as that document says.
+- **Here:** reading the server, validating a package, and previewing it in dev mode on the local
+  development server.
+- **Not here:** publishing it to pre-production. It waits for signatures and promotion after a
+  person approves, which [package-pipeline.md](../../docs/business-apps/package-pipeline.md),
+  section 9, proposes and nobody has decided. Until then a package is published by a tag, in CI,
+  as that document says, and its version is held to what changed (section 8).
 
 ## The tools
 
-| Tool                     | What it answers                                                                                                                                      | Nuxeo reads                                                                        |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `get_content_model`      | Every document type (parent, facets, schemas), facet (schemas) and schema (prefix, field count)                                                      | `/config/types`, `/config/facets`, `/config/schemas`                               |
-| `describe_document_type` | One type's fields, as `<prefix>:<name>` with their types, by schema; the facets that bring a schema; ancestors and subtypes                          | the same three                                                                     |
-| `describe_schema`        | One schema's fields, by name or prefix, and the types and facets that use it                                                                         | the same three                                                                     |
-| `list_page_providers`    | The names of the server's page providers, and which the search index answers                                                                         | `/management/page-providers`                                                       |
-| `describe_page_provider` | One page provider: its pattern or fixed part, how many parameters it takes in order, its predicates, sorts, page sizes, aggregates and quick filters | `/search/pp/<name>`                                                                |
-| `list_workflows`         | The workflow models and their variables' names                                                                                                       | `/workflowModel`                                                                   |
-| `describe_workflow`      | One model's variables, and each step's task, buttons, variables and transitions; a task step's task form file and `var:` fields                      | `/workflowModel/<name>`, its graph, the model and step documents, `/config/facets` |
-| `list_vocabularies`      | The vocabularies; other directories are counted, not named                                                                                           | `/directory`                                                                       |
-| `get_vocabulary`         | One vocabulary's entries, a page at a time                                                                                                           | `/directory`, `/directory/<name>`                                                  |
-| `list_operations`        | Operations and chains, filtered by category or text, with every category's count                                                                     | `/automation`                                                                      |
-| `describe_operation`     | One operation or chain, by id or alias: signature and parameters                                                                                     | `/automation`                                                                      |
-| `validate_package`       | Whether a package folder passes the package pipeline, its findings with file and place, and the step that refused it                                 | none                                                                               |
+| Tool                     | What it answers                                                                                                                                             | Nuxeo reads                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `get_content_model`      | Every document type (parent, facets, schemas), facet (schemas) and schema (prefix, field count)                                                             | `/config/types`, `/config/facets`, `/config/schemas`                               |
+| `describe_document_type` | One type's fields, as `<prefix>:<name>` with their types, by schema; the facets that bring a schema; ancestors and subtypes                                 | the same three                                                                     |
+| `describe_schema`        | One schema's fields, by name or prefix, and the types and facets that use it                                                                                | the same three                                                                     |
+| `list_page_providers`    | The names of the server's page providers, and which the search index answers                                                                                | `/management/page-providers`                                                       |
+| `describe_page_provider` | One page provider: its pattern or fixed part, how many parameters it takes in order, its predicates, sorts, page sizes, aggregates and quick filters        | `/search/pp/<name>`                                                                |
+| `list_workflows`         | The workflow models and their variables' names                                                                                                              | `/workflowModel`                                                                   |
+| `describe_workflow`      | One model's variables, and each step's task, buttons, variables and transitions; a task step's task form file and `var:` fields                             | `/workflowModel/<name>`, its graph, the model and step documents, `/config/facets` |
+| `list_vocabularies`      | The vocabularies; other directories are counted, not named                                                                                                  | `/directory`                                                                       |
+| `get_vocabulary`         | One vocabulary's entries, a page at a time                                                                                                                  | `/directory`, `/directory/<name>`                                                  |
+| `list_operations`        | Operations and chains, filtered by category or text, with every category's count                                                                            | `/automation`                                                                      |
+| `describe_operation`     | One operation or chain, by id or alias: signature and parameters                                                                                            | `/automation`                                                                      |
+| `validate_package`       | Whether a package folder passes the package pipeline, its findings with file and place, and the step that refused it                                        | none                                                                               |
+| `preview_package`        | A package validated, then served to the local dev server: the address to open, each page, what could not be served and why, and what the dev server answers | none                                                                               |
 
 Some things about them are worth knowing before relying on them:
 
@@ -98,6 +99,63 @@ Some things about them are worth knowing before relying on them:
   outright cannot stop anything. Because it builds a zip, it is the one tool not marked read-only,
   so a client may ask before running it.
 
+## Previewing a package
+
+`preview_package` shows a package in the app running from this checkout, `npx nx serve nuxeo-ui`,
+as dev mode would on a server:
+
+1. **It validates first,** as `validate_package` does, with the same arguments. A package the
+   pipeline refuses is not served, and the answer holds the findings.
+2. **It serves through `config:dev`.** It runs `scripts/dev-config.mjs`, the script
+   `npm run config:dev` runs, with Node, as npm would, giving it one option per file the dev server
+   can serve: `--layout` for each `layouts/<Type>/<mode>.layout.json`, `--home`, `--navigation`,
+   `--queue` for each queue, `--labels` for each language and `--task` for each task form. The
+   script writes them into `apps/nuxeo-ui/public/agentic-ui-config/`, which git ignores, and
+   **replaces what was served before**: one package is previewed at a time.
+3. **It says what it could not serve,** and why: `app.json`, which the app registry will read and
+   which waits on decisions B and E; `actions.json` and `modules/`, which nothing in the app reads
+   yet; `assets/`, which `config:dev` does not serve; version 1's fragments.
+4. **It checks the dev server,** at `DEV_SERVER_URL`: each file the dev folder holds must be
+   answered byte for byte, and each the run removed must no longer be answered as it was. The dev
+   server sees a new file a moment after it is written (measured: under a second), so it is given
+   five seconds. A dev server started before `agentic-ui-config/` existed serves nothing under it
+   until it is restarted, and the answer says to restart it then. Nothing answering means it is not
+   running.
+5. **It answers with the addresses:** the home, each queue and the tasks page, under
+   `<DEV_SERVER_URL>/#/`. A record page opens on a record of its type, which the tool does not look
+   up, since it reads no record: open one from a queue or a search.
+
+The app still signs in to the Nuxeo server the dev server proxies to
+(`apps/nuxeo-ui/proxy.conf.json`), and draws what that server holds: the types, page providers,
+workflows and records the package names must be there.
+
+**What it writes, and nothing else:** the dev folder, through the script; and, while it runs, a
+folder of its own in the package's `dist/`, for the pipeline's zip and what step 5 unpacks to read
+it back, removed afterwards, with `dist/` itself when the tool made it. The package's files are
+read before the pipeline runs and again after the script, and a package that changed in between is
+refused, with the dev folder put back to the platform's defaults: what is served is what was
+validated. No credential reaches the pipeline or the script.
+
+**On a server, in dev mode.** A Nuxeo server with the Satori package can read a development
+override folder on every request, `${nuxeo.data.dir}/agentic-ui-config-dev`, once
+`nuxeo.agentic.ui.config.dev=true` is in its `nuxeo.conf`
+([extension-reference.md](../../docs/extension-reference.md), "The fast loop while you are tuning
+a value"). That folder takes only `bootstrap*.json`, `manifest*.json`,
+`layouts/<Type>/<mode>.layout.json` and `assets/` (`DevOverrides.java`), and the configuration
+servlet answers only those addresses. So on a server it previews a package's **layouts** and
+nothing else: not the home, the menu, the queues, the labels or the task forms, which wait on the
+app registry. By hand, on the local Docker one, after setting the property and restarting once:
+
+```bash
+docker exec nuxeo mkdir -p /var/lib/nuxeo/agentic-ui-config-dev
+docker cp business-apps/packages/<package>/bundle/agentic-ui-config/layouts \
+  nuxeo:/var/lib/nuxeo/agentic-ui-config-dev/
+```
+
+The tool does not do this: writing to a server is a person's decision, and the property must never
+be set on a shared or production server. Measured on 23 November 2026, the local Docker Nuxeo has
+the Satori package and the Payers kit installed and the property unset.
+
 ## What it sends, and where
 
 Hyland's AI use requirements apply to everything an agent reads. This server is built so that the
@@ -109,6 +167,8 @@ only place it sends anything is the Nuxeo server it is configured with:
   it is sent.
 - **Nothing else goes out.** No telemetry, no other host. `validate_package` runs Node and
   `unzip` on this machine, needs no network, and reads only inside the repository.
+  `preview_package` does the same, then sends `GET`s for the files it served to the dev server,
+  `DEV_SERVER_URL`, which must be on this machine, with no credential and no redirect followed.
 - **Definitions, not records.** The tools read the model, searches, workflow models, vocabularies
   and operations. None reads a document's content, a group, an audit entry or a file. A workflow
   model's own documents are read for their steps, with the workflow's schemas only, and a
@@ -121,15 +181,16 @@ only place it sends anything is the Nuxeo server it is configured with:
 
 From the environment only, read once when the server starts:
 
-| Variable     | Meaning                                                                                           |
-| ------------ | ------------------------------------------------------------------------------------------------- |
-| `NUXEO_URL`  | The server's origin, such as `http://localhost:8080`. Default: that. `http` only for this machine |
-| `NUXEO_USER` | Required. No default                                                                              |
-| `NUXEO_PASS` | Required. No default                                                                              |
+| Variable         | Meaning                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| `NUXEO_URL`      | The server's origin, such as `http://localhost:8080`. Default: that. `http` only for this machine             |
+| `NUXEO_USER`     | Required. No default                                                                                          |
+| `NUXEO_PASS`     | Required. No default                                                                                          |
+| `DEV_SERVER_URL` | The dev server `preview_package` serves to. Default: `http://localhost:4200`, `nx serve`'s. This machine only |
 
 - **No default account.** `scripts/beta-harness/nuxeo-credentials.mjs` says why. Without the pair
-  the server still starts, `validate_package` still answers, and each Nuxeo tool says what is
-  missing.
+  the server still starts, `validate_package` and `preview_package` still answer, and each Nuxeo
+  tool says what is missing. `preview_package` needs no credential: the person signs in to the app.
 - **Checked on every call.** Each tool call first asks Nuxeo who it runs as (`/me`), and reads
   nothing unless the answer is `NUXEO_USER`, so an account that stopped being accepted since the
   last call is found. A server with anonymous authentication, such as the
@@ -173,6 +234,11 @@ npx nx run @nuxeo-satori/builder-mcp:typecheck
 - **`src/main.spec.ts`** starts the real entry point over stdio, as Claude Code does: with no
   credentials, with a server that answers as its guest, with one that stops accepting the account
   after the first call, and validating the demo package.
+- **`src/preview-package.spec.ts`** runs the real pipeline and a byte copy of
+  `scripts/dev-config.mjs` in a scratch checkout of its own, so the tests never write this
+  checkout's dev folder, against a stand-in dev server: the files served and not, a refused
+  package, a dev server that is down, behind or slow to see a file, a package changed while it was
+  previewed, and no credential reaching the script.
 - **The recorded run.** With a Nuxeo running, this runs every Nuxeo tool's reads against it and
   prints what each answered. Without `--check` it also rewrites the recordings, which are
   committed to a public repository, so:
