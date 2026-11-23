@@ -29,6 +29,30 @@ the fragments named `defaults`. `level` was already one of `error` / `warning` /
 is an open string, so neither is a schema change — but a consumer that matched on `replaced` or
 `removed` to notice this case should match the new codes instead.
 
+### Fixed (generators) — a configuration package's manifest is one Java can read
+
+A generated package's `build.mjs` packaged a `bundle/META-INF/MANIFEST.MF` that Java's
+`java.util.jar.Manifest` refuses outright, and `scripts/verify-package-zip.mjs` passed the result.
+The Nuxeo runtime reads a bundle's headers through that class, which throws at the first line it
+cannot read, so the bundle has no headers at all and the package installs and configures nothing.
+A blank line inside the main section with an ordinary header after it, a header name with a space
+or a dot in it or over 70 characters, a colon with no space after it, and a first line that starts
+with a space each built a package, and JDK 21 refused its jar with `invalid manifest format`,
+`invalid header field` or `misplaced continuation line`. No component went unchecked: the server
+loaded none.
+
+`build.mjs` now refuses a manifest Java would refuse, quoting the line: a line that is neither a
+header — a name of 1 to 70 letters, digits, `-` and `_`, then `: ` and the value — nor a
+continuation of one, a first line that starts with a space, or a section after a blank line that
+does not begin with `Name: `. It checks the manifest as packaged, the unfolded source refolded at
+72 bytes, so a source line longer than Java's 512-byte limit, or one with no line break at its
+end, still builds. The new check refuses nothing Java reads, and packaging is unchanged.
+`verify-package-zip.mjs` applies the same rules to the packaged jar, and two more, since its jar
+may come from anywhere: a line over 512 bytes with its line break, and text after the last line
+break, which Java ignores — a `Nuxeo-Component` header there loads nothing. Every copy of
+`build.mjs` made before this change keeps building such manifests until it is replaced with the
+template's.
+
 ### Fixed (generators) — a configuration package's components are the ones the server loads
 
 A generated package's `build.mjs` read `bundle/META-INF/MANIFEST.MF`'s components from the first
