@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<component name="<%= component %>" version="1.0">
+  <!-- Registers after Satori's defaults, so what it contributes applies on top of them. -->
+  <require>org.nuxeo.agentic.ui.config.defaults</require>
+
+  <!-- The app-layout generator adds each layout here, inside an org.nuxeo.agentic.ui.config
+       "configuration" extension: the server serves a layout only when this component names it,
+       and the package pipeline refuses one named from anywhere but its layouts/ file.
+
+       app.json, actions.json, queues/ and labels/ travel in this package, and nothing contributes
+       them yet: the app registry in nuxeo-agentic-core will (docs/business-apps/package-pipeline.md).
+       There is no bootstrap fragment on purpose: on a shared server it would rebrand everyone's app. -->
+</component>

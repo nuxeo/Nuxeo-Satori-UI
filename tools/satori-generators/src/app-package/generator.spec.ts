@@ -1,0 +1,214 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import type { Tree } from '@nx/devkit';
+import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
+import * as prettier from 'prettier';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { generatorFilesDir } from '../util/generator-files-dir';
+import appPackageGenerator, { type AppPackageSchema } from './generator';
+import { CONTRACTS_MODEL } from './testing/scaffold';
+
+const ROOT = 'business-apps/packages/acme-contracts';
+const CONFIG = `${ROOT}/bundle/agentic-ui-config`;
+const json = (tree: Tree, path: string): unknown => JSON.parse(tree.read(path, 'utf-8') ?? 'null');
+
+describe('app-package generator', () => {
+  let tree: Tree;
+  const generate = (options: Partial<AppPackageSchema> = {}) =>
+    appPackageGenerator(tree, {
+      name: 'acme-contracts',
+      owner: 'acme',
+      platform: '>=0.2.0 <1.0.0',
+      ...options,
+    });
+
+  beforeEach(() => {
+    tree = createTreeWithEmptyWorkspace();
+  });
+
+  it('writes app.json version 2, with its name as a label key in labels/en.json', async () => {
+    await generate({ title: 'Acme Contracts', groups: 'contract-managers, legal' });
+    expect(json(tree, `${CONFIG}/app.json`)).toEqual({
+      $schema: '../../../../../libs/shared/app-definition/src/app.schema.json',
+      version: 2,
+      id: 'acme-contracts',
+      label: 'Acme Contracts',
+      labelKey: 'acme-contracts.app',
+      packageVersion: '0.1.0',
+      platform: '>=0.2.0 <1.0.0',
+      groups: ['contract-managers', 'legal'],
+      branding: { applicationTitle: 'Acme Contracts' },
+    });
+    expect(json(tree, `${CONFIG}/labels/en.json`)).toEqual({
+      $schema: '../../../../../../libs/shared/app-definition/src/labels.schema.json',
+      version: 2,
+      labels: { 'acme-contracts.app': 'Acme Contracts' },
+    });
+  });
+
+  it('writes one version into package.xml, app.json and the manifest', async () => {
+    await generate({ version: '1.2.3' });
+    expect(tree.read(`${ROOT}/package/package.xml`, 'utf-8')).toContain(
+      '<package type="addon" name="acme-contracts" version="1.2.3">',
+    );
+    expect((json(tree, `${CONFIG}/app.json`) as { packageVersion: string }).packageVersion).toBe(
+      '1.2.3',
+    );
+    expect(tree.read(`${ROOT}/bundle/META-INF/MANIFEST.MF`, 'utf-8')).toContain(
+      'Bundle-Version: 1.2.3',
+    );
+  });
+
+  it('writes a component ordered after Satori, with no bootstrap fragment', async () => {
+    await generate();
+    const component = tree.read(`${ROOT}/bundle/OSGI-INF/acme-contracts-config.xml`, 'utf-8') ?? '';
+    expect(component).toContain('<component name="acme.config.acme-contracts" version="1.0">');
+    expect(component).toContain('<require>org.nuxeo.agentic.ui.config.defaults</require>');
+    expect(component).not.toContain('<fragment');
+    expect(tree.read(`${ROOT}/bundle/META-INF/MANIFEST.MF`, 'utf-8')).toContain(
+      'Nuxeo-Component: OSGI-INF/acme-contracts-config.xml',
+    );
+    expect(tree.read(`${ROOT}/package/package.xml`, 'utf-8')).toContain(
+      '<package>nuxeo-agentic-ui:2026.0.2</package>',
+    );
+    expect(tree.exists(`${CONFIG}/bootstrap.json`)).toBe(false);
+  });
+
+  it("writes the config-package generator's build.mjs, byte for byte, as the pipeline's step 1 requires", async () => {
+    await generate();
+    expect(
+      tree
+        .read(`${ROOT}/build.mjs`)
+        ?.equals(readFileSync(join(generatorFilesDir('config-package'), 'build.mjs__tmpl__'))),
+    ).toBe(true);
+  });
+
+  it('writes its JSON and Markdown as Prettier formats them', async () => {
+    // Nx formats with the formatter the workspace configures. This repository's is Prettier; the
+    // empty workspace Nx tests in configures oxfmt, which is not installed here.
+    tree.delete('.oxfmtrc.json');
+    tree.write('.prettierrc', JSON.stringify({ printWidth: 100, singleQuote: true }));
+    await generate({ type: 'Contract', model: CONTRACTS_MODEL });
+    const files = tree
+      .listChanges()
+      .map((change) => change.path)
+      .filter((path) => path.startsWith(`${ROOT}/`) && /\.(json|md)$/.test(path));
+    expect(files.length).toBeGreaterThanOrEqual(4);
+    for (const path of files) {
+      const text = tree.read(path, 'utf-8') ?? '';
+      expect(
+        await prettier.format(text, { filepath: path, printWidth: 100, singleQuote: true }),
+        path,
+      ).toBe(text);
+    }
+  });
+
+  it("takes the platform range from libs/platform's version, up to its next major", async () => {
+    tree.write('libs/platform/package.json', JSON.stringify({ version: '0.4.1' }));
+    await appPackageGenerator(tree, { name: 'acme-contracts', owner: 'acme' });
+    expect((json(tree, `${CONFIG}/app.json`) as { platform: string }).platform).toBe(
+      '>=0.4.0 <1.0.0',
+    );
+    tree = createTreeWithEmptyWorkspace();
+    tree.write('libs/platform/package.json', JSON.stringify({ version: '2.1.0' }));
+    await appPackageGenerator(tree, { name: 'acme-contracts', owner: 'acme' });
+    expect((json(tree, `${CONFIG}/app.json`) as { platform: string }).platform).toBe(
+      '>=2.1.0 <3.0.0',
+    );
+  });
+
+  it('writes the first record page, contributed by the component, when given a type', async () => {
+    await generate({ type: 'Contract', model: CONTRACTS_MODEL });
+    expect(tree.exists(`${CONFIG}/layouts/Contract/view.layout.json`)).toBe(true);
+    expect(tree.read(`${ROOT}/bundle/OSGI-INF/acme-contracts-config.xml`, 'utf-8')).toContain(
+      '<layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />',
+    );
+  });
+
+  it('lists each group once, as the validator requires', async () => {
+    await generate({ groups: 'legal,legal, legal,members' });
+    expect((json(tree, `${CONFIG}/app.json`) as { groups: string[] }).groups).toEqual([
+      'legal',
+      'members',
+    ]);
+  });
+
+  it("refuses a platform range that leaves out libs/platform's version, as the pipeline would", async () => {
+    tree.write('libs/platform/package.json', JSON.stringify({ version: '0.2.0' }));
+    await expect(generate({ platform: '>=0.3.0 <1.0.0' })).rejects.toThrow(
+      'leaves out this platform, 0.2.0',
+    );
+    await expect(generate({ platform: '^0.3.0' })).rejects.toThrow('leaves out this platform');
+    // A release comes after every prerelease of its own version, as the validator compares them.
+    for (const range of ['^0.3.0-0', '>=0.3.0-0', '<0.2.0-rc.1', '>0.2.0']) {
+      await expect(generate({ platform: range }), range).rejects.toThrow(
+        'leaves out this platform',
+      );
+    }
+    await expect(generate({ platform: '>=0.2.0 <9007199254740993.0.0' })).rejects.toThrow(
+      'is not a range',
+    );
+    await generate({ platform: '>=0.2.0-0 <1.0.0' });
+    // 0.2.0 is after its own prerelease: a range that starts past one holds it.
+    tree = createTreeWithEmptyWorkspace();
+    tree.write('libs/platform/package.json', JSON.stringify({ version: '0.2.0' }));
+    await generate({ platform: '>0.2.0-rc.1 <1.0.0' });
+    tree = createTreeWithEmptyWorkspace();
+    tree.write('libs/platform/package.json', JSON.stringify({ version: '0.2.0' }));
+    await generate({ platform: '~0.2.0' });
+    expect((json(tree, `${CONFIG}/app.json`) as { platform: string }).platform).toBe('~0.2.0');
+  });
+
+  it('writes the app id the registry knows, when it is not the package name', async () => {
+    await generate({ appId: 'contracts' });
+    expect(json(tree, `${CONFIG}/app.json`)).toMatchObject({
+      id: 'contracts',
+      labelKey: 'contracts.app',
+    });
+  });
+
+  describe('refuses, and writes nothing', () => {
+    const refusals: [string, Partial<AppPackageSchema>, string][] = [
+      ['a name that is not kebab-case', { name: 'Acme_Contracts' }, 'must be kebab-case'],
+      ['a name Satori uses', { name: 'nuxeo-agentic-ui' }, 'a name Satori itself uses'],
+      ['a device name Windows reserves', { name: 'aux' }, 'a device name Windows reserves'],
+      ['an owner with capitals', { owner: 'Acme' }, '--owner "Acme"'],
+      ['an app id the registry refuses', { appId: 'Contracts' }, '--appId "Contracts"'],
+      ['an app id over 63 characters', { appId: `a${'b'.repeat(63)}` }, '--appId'],
+      ['a version that is not semantic', { version: '1.0' }, '--version "1.0"'],
+      ['a group with a control character', { groups: 'legal\u0007' }, '--groups'],
+      ['a directory that climbs', { directory: '../elsewhere' }, '--directory "../elsewhere"'],
+      ['a model with no type', { model: CONTRACTS_MODEL }, 'give its --type too'],
+      ['a platform that is not a range', { platform: 'latest' }, '"latest" is not a range'],
+    ];
+    for (const [what, options, message] of refusals) {
+      it(what, async () => {
+        await expect(generate(options)).rejects.toThrow(message);
+        expect(
+          tree.listChanges().filter((change) => change.path.startsWith('business-apps/')),
+        ).toEqual([]);
+      });
+    }
+
+    it('a type the model does not have', async () => {
+      // Found once the package's files are in the tree, by app-layout; a generator that throws has
+      // nothing of its tree written to disk.
+      await expect(generate({ type: 'Invoice', model: CONTRACTS_MODEL })).rejects.toThrow(
+        'has no document type "Invoice"',
+      );
+    });
+
+    it('a package that exists already: written again, it would lose what the others added', async () => {
+      await generate();
+      await expect(generate()).rejects.toThrow(`${ROOT} already exists`);
+    });
+
+    it('a workspace with no libs/platform and no --platform', async () => {
+      await expect(
+        appPackageGenerator(tree, { name: 'acme-contracts', owner: 'acme' }),
+      ).rejects.toThrow('pass --platform');
+    });
+  });
+});
