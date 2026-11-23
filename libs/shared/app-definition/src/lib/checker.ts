@@ -90,6 +90,15 @@ export interface CheckerOptions {
 /** The name of a Material Symbols icon, such as `check`. */
 export const ICON = /^[a-z0-9_]{1,64}$/;
 
+/**
+ * How many levels of rules, computations and a customer's rule's parameters the validator reads,
+ * the outermost being the first. JSON can nest further than a recursive walk has stack for, so
+ * past this a walk stops with a `parameter` finding: the entry it is in is left out, or the
+ * package refused, rather than the check overflowing its stack. Far above what any file needs, and
+ * above the 32 levels the rule registry answers, which the engines enforce on their own.
+ */
+export const MAX_NESTING = 256;
+
 export type Checker = ReturnType<typeof createChecker>;
 
 /** One file's findings, and the checks that add to them. */
@@ -99,6 +108,29 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   const findings: Finding[] = [];
   const add = (path: string, kind: Finding['kind'], message: string): void => {
     findings.push({ path, kind, message });
+  };
+
+  /** How deep the walk is in rules, computations and a customer's rule's parameters. */
+  let depth = 0;
+  /**
+   * `walk` one level deeper, or, past {@link MAX_NESTING}, a finding instead. The level is given
+   * back however `walk` ends.
+   */
+  const nested = (path: string, walk: () => void): void => {
+    if (depth >= MAX_NESTING) {
+      add(
+        path,
+        'parameter',
+        `nests more than ${MAX_NESTING} levels deep, deeper than the validator reads`,
+      );
+      return;
+    }
+    depth++;
+    try {
+      walk();
+    } finally {
+      depth--;
+    }
   };
 
   const ids = new Map<string, string>();
@@ -155,7 +187,9 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   };
 
   /** A rule, as the manifest writes it: an ID, or `{ "type", "parameters" }`. */
-  const rule = (item: unknown, path: string): void => {
+  const rule = (item: unknown, path: string): void => nested(path, () => ruleAt(item, path));
+
+  const ruleAt = (item: unknown, path: string): void => {
     const [type, parameters] =
       typeof item === 'string'
         ? [item, []]
@@ -188,7 +222,10 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
    * a `{ "field" }` is refused. Anything else is the customer's to read: a text is a value, such
    * as a group, not a rule's id.
    */
-  const inCustomerRule = (item: unknown, path: string): void => {
+  const inCustomerRule = (item: unknown, path: string): void =>
+    nested(path, () => inCustomerRuleAt(item, path));
+
+  const inCustomerRuleAt = (item: unknown, path: string): void => {
     if (isFieldReference(item)) {
       if (!record)
         add(
@@ -301,7 +338,10 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     });
   };
 
-  const computation = (item: unknown, path: string): void => {
+  const computation = (item: unknown, path: string): void =>
+    nested(path, () => computationAt(item, path));
+
+  const computationAt = (item: unknown, path: string): void => {
     if (!isRecord(item) || typeof item['type'] !== 'string') {
       add(path, 'structure', 'a computation is { "type": <ID>, "parameters": [...] }');
       return;

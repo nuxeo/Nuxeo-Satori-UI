@@ -296,6 +296,42 @@ describe('HomePageComponent', () => {
     expect(cards()).toEqual(['authors 30 ada 20 grace 7 The largest only']);
   });
 
+  it('leaves out a card nested deeper than the validator reads, rather than staying loading', () => {
+    create({ groups: [] });
+    let deep: unknown = 'x';
+    for (let index = 0; index < 6000; index++) deep = { a: deep };
+    TestBed.inject(ExtensionRuleRegistry).registerRules({ 'acme.rules.anyOf': () => true });
+    home({
+      version: 2,
+      cards: [
+        {
+          id: 'deep',
+          label: 'Deep',
+          kpi: { pageProvider: 'pp_deep' },
+          visibleWhen: { type: 'acme.rules.anyOf', parameters: [deep] },
+        },
+        { id: 'b', label: 'B', kpi: { pageProvider: 'pp_b' } },
+      ],
+    });
+    expect(cardIds()).toEqual(['b']);
+    answer('pp_b', { resultsCount: 1 });
+    http.expectNone((r) => r.url === ppUrl('pp_deep'));
+  });
+
+  it('says the home could not be read when reading it throws, rather than staying loading', () => {
+    create({ groups: [] });
+    vi.spyOn(TestBed.inject(ExtensionRuleRegistry), 'registeredRuleIds').mockImplementation(() => {
+      throw new Error('the registry failed');
+    });
+    home({ version: 2, cards: [{ id: 'b', label: 'B', kpi: { pageProvider: 'pp_b' } }] });
+    expect(page().querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+      'The home could not be read.',
+    );
+    expect(warn).toHaveBeenCalledWith(
+      '[agentic-ui-home] home.json refused: it could not be read: the registry failed',
+    );
+  });
+
   it('draws no home, and says so, for a file it refuses', () => {
     create({ groups: [] });
     home({ version: 2, cards: [{ id: 'a' }] });
