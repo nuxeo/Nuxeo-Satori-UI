@@ -675,7 +675,7 @@ describe('readRecordLayout', () => {
               },
             ],
           },
-          known,
+          { rules: known, rowActions },
         ),
       ).toEqual({
         invalid: `${columns}[1].computed.parameters: parameters must be a list`,
