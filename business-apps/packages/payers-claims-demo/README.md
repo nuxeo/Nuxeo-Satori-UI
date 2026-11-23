@@ -177,6 +177,19 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
 It prints a member's and a provider's record page, on the app at `APP_URL`
 (`http://localhost:4200` by default, `npx nx serve nuxeo-ui`).
 
+### Seeing it under `nx serve`
+
+Installed on a server, the app reads its layouts from `/nuxeo/agentic-ui-config/`, which the
+package fills. Under `npx nx serve nuxeo-ui` it reads `/agentic-ui-config/` on its own port
+instead (`app-config.tokens.ts`), served from the git-ignored
+`apps/nuxeo-ui/public/agentic-ui-config/`. Until that folder holds the server's layouts, every
+record shows today's document page. Copy them there, from the repository's root, then start the
+dev server, or restart it: it reads the folder when it starts.
+
+```bash
+for f in layouts.json layouts/Claim/view.layout.json layouts/Member/view.layout.json layouts/Case/view.layout.json layouts/Provider/view.layout.json; do curl -sf --create-dirs "http://localhost:8080/nuxeo/agentic-ui-config/$f" -o "apps/nuxeo-ui/public/agentic-ui-config/$f"; done
+```
+
 **The social security number** shows only to members of the group `member-services`
 (`app.rules.inGroup`). An administrator is not in it, so to see it, add yourself to a group of that
 name. Hiding it is a convenience, not a control: the API still returns it to anyone who may read

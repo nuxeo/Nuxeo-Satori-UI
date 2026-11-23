@@ -13,6 +13,7 @@
  *   NUXEO_URL                the server, default http://localhost:8080
  *   APP_URL                  the app, for the links printed at the end,
  *                            default http://localhost:4200
+ *   NUXEO_TIMEOUT_MS         how long one request may take, its body included, default 30000
  *
  * **Safe to run twice.** Every record has a fixed place under
  * /default-domain/workspaces/payers-demo, named by its number. A record already there has
@@ -36,7 +37,7 @@ const EXIT_PRECONDITION = 2;
 const SERVER = (process.env['NUXEO_URL'] || 'http://localhost:8080').replace(/\/+$/, '');
 const APP = (process.env['APP_URL'] || 'http://localhost:4200').replace(/\/+$/, '');
 const API = `${SERVER}/nuxeo/api/v1`;
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = Number(process.env['NUXEO_TIMEOUT_MS']) || 30_000;
 const PAGE_SIZE = 100;
 const MAX_PAGES = 100;
 
@@ -299,8 +300,8 @@ async function holds(document, file) {
   const current = document.properties?.['file:content'];
   if (!current || current.name !== file.fileName || Number(current.length) !== file.bytes.length)
     return false;
-  const response = await request('GET', `/id/${document.uid}/@blob/file:content`);
-  return Buffer.from(await response.arrayBuffer()).equals(file.bytes);
+  const { bytes } = await request('GET', `/id/${document.uid}/@blob/file:content`);
+  return bytes.equals(file.bytes);
 }
 
 /** A text file uploaded to a new batch, as the value a document's `file:content` takes. */
@@ -426,9 +427,10 @@ async function everyPage(what, pageAt) {
     entries.push(...(page.entries ?? []));
     if (page.isNextPageAvailable !== true) return entries;
   }
+  // Counted in pages, not records: a server may cap a page below PAGE_SIZE.
   throw new Error(
-    `${what} returns more than ${MAX_PAGES * PAGE_SIZE} records, past which the seed does not ` +
-      'read, so it cannot say what the server holds.',
+    `${what} still reports another page after ${MAX_PAGES} pages (${entries.length} records ` +
+      'read), past which the seed does not read, so it cannot say what the server holds.',
   );
 }
 
@@ -468,13 +470,14 @@ async function find(path) {
 
 /** A JSON call: the parsed answer, or `null` for an empty one. */
 async function call(method, path, options = {}) {
-  const response = await request(method, path, options);
-  const text = await response.text();
+  const text = (await request(method, path, options)).bytes.toString('utf8');
   return text ? JSON.parse(text) : null;
 }
 
+/** An answer read whole, its body's bytes included, within the one timeout. */
 async function request(method, path, { json, body, headers = {} } = {}) {
   let response;
+  let bytes;
   try {
     response = await fetch(`${API}${path}`, {
       method,
@@ -489,6 +492,9 @@ async function request(method, path, { json, body, headers = {} } = {}) {
       body: json === undefined ? body : JSON.stringify(json),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
+    // Read here, under the same timeout and the same verdict: a server that sends its headers and
+    // then stalls has not answered either.
+    bytes = Buffer.from(await response.arrayBuffer());
   } catch (error) {
     const unanswered =
       `${SERVER} did not answer ${method} ${path}: ` +
@@ -499,7 +505,7 @@ async function request(method, path, { json, body, headers = {} } = {}) {
     throw new Error(`${unanswered} The run stopped part way; running it again is safe.`);
   }
   if (!response.ok) {
-    const text = await response.text();
+    const text = bytes.toString('utf8');
     let detail = '';
     try {
       detail = JSON.parse(text)?.message ?? '';
@@ -508,5 +514,5 @@ async function request(method, path, { json, body, headers = {} } = {}) {
     }
     throw new HttpError(response.status, method, path, detail);
   }
-  return response;
+  return { status: response.status, bytes };
 }

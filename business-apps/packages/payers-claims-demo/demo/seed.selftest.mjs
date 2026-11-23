@@ -56,6 +56,8 @@ function standIn({
   renameOnTrash = true,
   pageSize = 3,
   hangUpOnFirstWrite = false,
+  stallBodyOn = null,
+  endlessProvider = null,
 }) {
   const byPath = new Map();
   const byId = new Map();
@@ -155,6 +157,11 @@ function standIn({
     // A server that goes away once writing has started: the connection drops, with no answer.
     if (hangUpOnFirstWrite && method === 'POST' && path.startsWith('/path/'))
       return request.socket.destroy();
+    // A server that sends its headers, then never the rest of its body.
+    if (stallBodyOn === path) {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      return response.write('{');
+    }
     try {
       if (method === 'GET' && path === '/me') return send(200, { id: user });
       if (method === 'GET' && path.startsWith('/config/types/'))
@@ -239,6 +246,9 @@ function standIn({
           brokenProvider === execute[1]
             ? []
             : provider(url.searchParams.get('queryParams') ?? undefined);
+        // A provider that always says there is another page.
+        if (endlessProvider === execute[1])
+          return send(200, { ...page(found, index), isNextPageAvailable: true });
         return send(200, page(found, index));
       }
       return send(404, { message: `the stand-in does not answer ${method} ${path}` });
@@ -269,7 +279,13 @@ async function against(options, body) {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}`;
   const run = (env = {}) =>
-    seed({ NUXEO_URL: url, NUXEO_USER: user, NUXEO_PASS: password, ...env });
+    seed({
+      NUXEO_URL: url,
+      NUXEO_USER: user,
+      NUXEO_PASS: password,
+      NUXEO_TIMEOUT_MS: '2000',
+      ...env,
+    });
   try {
     await body({ server, run, user, password });
   } catch (error) {
@@ -321,6 +337,23 @@ await against({ hangUpOnFirstWrite: true }, async ({ run }) => {
   expect(
     status === 1 && /stopped part way; running it again is safe/.test(output),
     'a server that stops answering after writing starts is exit 1, not a precondition',
+    output,
+  );
+});
+
+await against({ stallBodyOn: '/me' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 2 && /did not answer GET \/me/.test(output),
+    'a server whose first answer stalls after its headers is exit 2: no answer is no server',
+    output,
+  );
+});
+await against({ endlessProvider: 'member_claims' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 && /member_claims still reports another page after 100 pages/.test(output),
+    'a page provider that never stops reporting another page fails the run, counted in pages',
     output,
   );
 });
