@@ -1915,7 +1915,38 @@
     "no-buckets": "No values",
     "none": "No queue is configured with this name.",
     "refused": "The queue could not be read.",
-    "title": "Queue"
+    "title": "Queue",
+    "whole-query": {
+      "aborted": "{{action}} was stopped on the server. {{processed}} of {{total}} records were processed.",
+      "all-selected": "All {{count}} results of this queue are selected.",
+      "clear": "Clear selection",
+      "confirm": "{{action}}: {{count}} records",
+      "confirm-message": "{{action}} runs on the server over every result of this queue: {{count}} records, not only those on this page. The server checks your permission on each record.",
+      "confirm-title": "{{action}}: all {{count}} results",
+      "dismiss": "Dismiss",
+      "done": "{{action}}: done for {{processed}} records.",
+      "done-errors": "{{action}}: {{processed}} records processed, {{errors}} of them failed. The server refused those, for example because you may not change them.",
+      "filtered": "Every result cannot be selected while a filter is chosen. Clear the filters to select them all.",
+      "lost": "{{action}}: its progress can no longer be read, after {{processed}} of {{total}} records. It may still be running on the server.",
+      "offer": "This queue has {{count}} results.",
+      "progress": "{{action}}: {{processed}} of {{total}} records",
+      "refused": {
+        "failed": "{{action}} did not run: the server failed.",
+        "forbidden": "{{action}} did not run: the server does not let you run it over a whole query.",
+        "invalid": "{{action}} did not run: the server refused the request.",
+        "signed-out": "{{action}} did not run: you are signed out.",
+        "unreachable": "{{action}} did not run: the server could not be reached."
+      },
+      "select-all": "Select all {{count}} results",
+      "starting": "{{action}}: starting",
+      "stop": "Stop",
+      "stopped": "{{action}} stopped. {{processed}} of {{total}} records were processed before it stopped.",
+      "stopped-early": "{{action}} stopped before the server had counted the records. None were processed.",
+      "stopped-unsettled": "{{action}} stopped. At least {{processed}} of {{total}} records were processed, and batches the server had already started may still finish.",
+      "stopping": "Stopping",
+      "too-many": "{{action}} stopped: the query now holds more records than the {{count}} you agreed to. The server processed {{processed}}, and goes no further than one more than you agreed to.",
+      "too-many-unsettled": "{{action}} stopped: the query now holds more records than the {{count}} you agreed to. The server had processed at least {{processed}}, and goes no further than one more than you agreed to."
+    }
   },
   "rendition": {
     "pdf": "PDF",

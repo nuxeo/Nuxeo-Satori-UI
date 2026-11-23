@@ -166,7 +166,18 @@ export {
 } from './lib/services/document-import.service';
 export { TaskService } from './lib/services/task.service';
 export { CollectionService } from './lib/services/collection.service';
-export { PageProviderService, isAggregateParameter } from './lib/services/page-provider.service';
+export {
+  PageProviderService,
+  isAggregateParameter,
+  isPageProviderName,
+} from './lib/services/page-provider.service';
+export {
+  BulkCommandService,
+  readBulkCommandStatus,
+  type BulkCommandQuery,
+  type BulkCommandState,
+  type BulkCommandStatus,
+} from './lib/services/bulk-command.service';
 export type {
   PageProviderRequest,
   PageProviderResults,

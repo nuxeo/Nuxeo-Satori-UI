@@ -53,6 +53,16 @@ list (`libs/shared/document-layouts`) and the home's rule check (`libs/shared/ho
   slot resolves and that have a handler, through `SelectionService.offeredBulkActions`, which it
   puts back to `null` when it goes. Rows are selectable only when one is offered, for one row or
   for several: the bar then offers those whose rules pass for the rows actually selected.
+- **Runs a bulk action over every result of the query**, for the queue's bulk actions that the
+  platform maps to an action of Nuxeo's Bulk Action Framework (`wholeQueryBulkAction`, in
+  `@nuxeo/satori-platform/extensions`): only `app.bulkActions.delete`, as `trash`, so far. With rows
+  selected it offers to select all the results, with their number; then it confirms, naming the
+  number, runs the action through `BulkCommandService.runOverPageProvider`, shows its progress from
+  the command's status, offers to stop it, says how it ended, and reads the list again through
+  `DocumentChangesService`. `whole-query-run.ts` follows the command. Not while a bucket is chosen,
+  which the server would leave out; not without a count; and the command is limited on the server
+  to one record more than the person agreed to, and stopped and reported when it reaches it
+  (app-definition-v2.md, section 4).
 
 Nothing here is a security control. The page provider returns only what the person may read,
 hiding a queue hides the page and not the address, and offering fewer actions decides nothing
@@ -85,11 +95,19 @@ npx ngc -p libs/shared/queues/tsconfig.lib.json
   a reserved or dotted aggregate; a repeated facet; an unregistered rule, a rule this build was made
   without, and one nested past the registry's depth; a person outside the queue's group; a bulk
   action with no handler; no file, and a file that cannot be read.
+- Over the whole query, against a stand-in server: the offer and its total, the confirmation and its
+  cancel, the request (the queue's parameters, no bucket, the platform's action and parameters),
+  progress, the end and the list read again, a stop, more records than agreed, a refusal, and no
+  offer while a bucket is chosen, without a count, for a queue with no mapped action, or for a
+  descriptor that runs another action's handler. Each was seen failing with its guard removed.
 
 ## Not done yet
 
-- **Bulk actions over a whole query**, every result rather than the rows selected: the Bulk Action
-  Framework's, in phase 2.
+- **More actions over a whole query.** Only Delete maps to one, and a stock Nuxeo opens its `trash`
+  to administrators only over HTTP. A customer's own bulk action cannot be mapped yet, and a
+  package's own waits for decision 3.
+- **Following a command after the page goes.** Leaving the page stops following it; it goes on on
+  the server, and nothing tells the person how it ended.
 - **The package's own actions**, from `actions.json`: phase 2 runs them, so a queue leaves them out.
 - **Serving the queues on a server.** The app registry serves them, once decisions B and E are
   taken.

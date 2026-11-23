@@ -222,8 +222,30 @@ provider, for the development server.
   queue from everyone: the registry would pass it, and show the queue to everyone.
 - **Hiding a queue is not a security control.** The address still answers, and the page provider
   returns only what the person may read.
-- **Not here:** a bulk action over every result of the query rather than the rows selected, which
-  is the Bulk Action Framework's, in phase 2.
+- **Every result of the query.** While rows are selected, a queue offering a bulk action that can run
+  over a whole query ([extension-reference.md](../extension-reference.md), section 5) offers to
+  select all its results, with their number. Every result selected, the page offers those actions
+  in place of the selection bar, and rows cannot be selected meanwhile.
+  - **It always confirms,** naming the number of records. The action then runs on the server through
+    Nuxeo's Bulk Action Framework, over the page provider with the queue's parameters. The page shows
+    its progress as it reads the command's status, offers to stop it, and says how it ended: done,
+    done with some records failed, stopped, refused by the server, or no longer followed, in which
+    case it may still be running. An action that changes records reads the list again when it ends.
+  - **Not while a bucket is chosen.** The server builds the command from the page provider's query
+    and leaves out the buckets chosen, so it would reach records the list does not show. The page
+    says to clear the filters instead.
+  - **Not without a count.** A page provider whose results give no number of records cannot have all
+    of them selected: the confirmation must name it.
+  - **More than agreed.** The command is limited on the server to one record more than the person
+    agreed to (`queryLimit`), so a query that has come to hold more records, or a parameter the server
+    leaves out, reaches that many at most. When the server reports the one more, the page stops the
+    command and says so. A fast action such as `trash` has usually processed them all by then: the
+    limit is what bounds it.
+  - **Stopping** stops the command on the server. The batches already started still finish and count,
+    so the page waits a while for them before it gives the number processed, and says when it could
+    not.
+  - **Leaving the page** stops following the command, not the command: it goes on on the server.
+  - **The server decides** who may run which action and on which records, as for every action.
 
 ## 5. Actions
 

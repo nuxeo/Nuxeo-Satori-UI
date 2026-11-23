@@ -985,6 +985,39 @@ inject(ExtensionActionRegistry).register({
 });
 ```
 
+### Over every result of a queue's query
+
+A queue's page can also run a bulk action over every result of its query rather than the rows
+selected, on the server, through Nuxeo's Bulk Action Framework. Which actions can, and what each one
+runs there, is code: `PACKAGED_WHOLE_QUERY_BULK_ACTIONS` in
+`libs/shared/extensions/src/lib/whole-query-actions.ts`, read with `wholeQueryBulkAction(id)`.
+
+| ID                                | Over a whole query | Framework action | Parameters sent | List read again |
+| --------------------------------- | ------------------ | ---------------- | --------------- | --------------- |
+| `app.bulkActions.delete`          | yes                | `trash`          | `value: true`   | yes             |
+| `app.bulkActions.downloadZip`     | no                 |                  |                 |                 |
+| `app.bulkActions.addToCollection` | no                 |                  |                 |                 |
+| `app.bulkActions.compare`         | no                 |                  |                 |                 |
+| `app.bulkActions.addToClipboard`  | no                 |                  |                 |                 |
+| `app.bulkActions.publish`         | no                 |                  |                 |                 |
+
+The other five work on the documents a person has in hand, and Nuxeo has no framework action for
+any of them that it opens over HTTP.
+
+- **A file cannot name what runs.** A queue file lists bulk actions by id, and a manifest may hide,
+  relabel or reorder their descriptors, but neither can map an id to another framework action or send
+  it other parameters. A descriptor that hands its work to another action's handler (`action`) is not
+  offered over the whole query, since what the table maps would not be what it does on a selection.
+- **The server decides.** A stock Nuxeo 2025.10 does not open `trash` over HTTP: it answers HTTP 403
+  to everyone but an administrator, and the page says that the server does not let the person run it
+  over a whole query. A deployment opens it with `httpEnabled="true"` on the `trash` action. Either
+  way the server checks the person's permission on every record: one they may not trash is counted as
+  failed, and the page reports how many.
+- **A customer's own bulk action cannot run over a whole query yet.** The table has no registration
+  for Layer 2, and an action of a package's own, from `actions.json`, waits for decision 3.
+
+What the page does with them is in app-definition-v2.md, section 4.
+
 Handlers are objects with an `execute(context)` method — the usual
 service shape. Re-registering one of our IDs replaces
 the behaviour without forking, and it stays replaced: the packaged surfaces

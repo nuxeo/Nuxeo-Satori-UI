@@ -1980,6 +1980,94 @@ and the console says why.
 
 ---
 
+## 34. Queues — a bulk action over every result, through the Bulk Action Framework
+
+| Field           | Value                                                                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `BulkCommandService` (`libs/shared/nuxeo-client/src/lib/services/bulk-command.service.ts`)                                    |
+| **Methods**     | `runOverPageProvider(pageProvider, query, action, actionParameters)`, `status(commandId)`, `abort(commandId)`                 |
+| **HTTP Method** | `POST`, then `GET` every 200 ms until the server has counted, then once a second, and `PUT` to stop                           |
+| **Endpoints**   | `/nuxeo/api/v1/search/pp/<pageProvider>/bulk/<action>` — the command over the page provider's whole result, answered HTTP 202 |
+|                 | `/nuxeo/api/v1/bulk/<commandId>` — its status                                                                                 |
+|                 | `/nuxeo/api/v1/bulk/<commandId>/abort` — stops it                                                                             |
+| **Server side** | Nuxeo's Bulk Action Framework (`nuxeo-core-bulk`) and the REST bundle's `BulkActionObject`                                    |
+
+**Query parameters of the command:** `queryParams`, the queue's literal `parameters`, one each, in
+order, as the list sends them, and `queryLimit`, one more than the number the person agreed to.
+Nothing else: no page, order or bucket.
+
+**Body:** the action's parameters, from the platform's table and never from a file
+(`wholeQueryBulkAction`, extension-reference.md, section 5): `{ "value": true }` for `trash`.
+
+**Response (the submission and every status read):**
+
+```json
+{
+  "entity-type": "bulkStatus",
+  "commandId": "1e0ad81f-3592-4ad2-9878-023539dd2733",
+  "state": "RUNNING",
+  "processed": 1000,
+  "total": 2314,
+  "errorCount": 0,
+  "skipCount": 0,
+  "error": false,
+  "action": "setProperties",
+  "username": "Administrator",
+  "submitted": "2026-11-23T17:45:06.262Z",
+  "scrollEnd": "2026-11-23T17:45:06.468Z",
+  "completed": null
+}
+```
+
+`state` goes `SCHEDULED`, `SCROLLING_RUNNING`, `RUNNING`, then `COMPLETED` or `ABORTED`. `total`
+is `0` until the server has read the whole query. `errorMessage` appears with the first failure.
+`result` holds what an action produces, such as `csvExport`'s `{ "url": "nxbigblob/<commandId>" }`.
+
+**Measured on the local Nuxeo 2025.10.18, as an administrator (2026-11-23):**
+
+- **The actions it registers**, from the bundles' `org.nuxeo.ecm.core.bulk` contributions. Opened
+  over HTTP (`httpEnabled="true"`): `setProperties`, `csvExport`, `automation`, `automationUi` and
+  `publicAction`, and the HxAI connector's `ingest` and `nucleusMapping`. Registered but not opened:
+  `trash`, `removeProxy`, `setSystemProperties`, `deletion` and about twenty internal ones.
+- **Who may run what.** `BulkActionObject` answers HTTP 403, `Action name: <action> is not exposed
+to HTTP`, to anyone but an administrator for an action not opened over HTTP. A command's status
+  and stopping it are allowed to the person who ran it and to administrators only. Not measured as a
+  person who is not an administrator: no such account was used.
+- **Parameters.** The command reads the page provider's parameters as the list does: `member_claims`
+  given a member's id counted 3 records in the list and 3 in the command. A named parameter, such as
+  `ecm_parentId` for `advanced_document_content`, is applied too.
+- **What it leaves out, silently.** A chosen bucket (`dc_last_contributor_agg=["nobody-at-all"]`):
+  the list counted 0 and the command 3. A `queryParams` value for a page provider that takes none:
+  the command ran over the provider's whole result, 2,314 records instead of 3. Neither is an
+  error. So the page never sends a bucket, does not offer every result while one is chosen, and
+  limits the command.
+- **`queryLimit` caps the command.** `SearchObject` reads it and the command builder applies it:
+  over `member_claims`'s 3 records, `queryLimit=2` read and processed 2, and `4` processed 3. The
+  page sends one more than agreed, so a widened command processes that many at most, and its
+  `total` above the agreed number says it was widened. Measured live: 5,010 agreed, 5,015 on the
+  server, 5,011 trashed and 4 untouched.
+- **Speed.** `trash` over 5,010 notes went from the end of the scroll to `completed` in 70 ms, so
+  stopping a command once its `total` is known comes too late for it: the limit is what bounds it.
+  5,000 records showed `4,900 of 5,000` at the page's first read after the count.
+- **Refusals at submission.** An action the server does not know: HTTP 400 with no body. A
+  `setProperties` property that does not exist: HTTP 400, `Unknown xpath …`. A page provider that
+  does not exist: HTTP 500, a `NullPointerException`.
+- **A parameter missing.** `trash` sent without `value` is taken (HTTP 202), then fails on its first
+  record, and the failure **stops the server's `trash` processor** until Nuxeo restarts: the command
+  stays `RUNNING` at 0 processed, and every later `trash` command waits behind it. That is why the
+  platform's table fixes the parameters.
+- **Stopping.** `PUT …/abort` answers `ABORTED` at once with the count so far; the batches already
+  started still finish and still count, and `completed` is written when they have. Measured:
+  `ABORTED` at 1,000 processed, final at 2,100 of 2,314.
+- **Counts.** A page provider counts its results, so `resultsCount` is a real total for
+  `payers_unassigned_claims`, `member_claims` and `default_search`. One that answers `-2` cannot
+  have every result selected.
+
+**Used by:** `QueuePageComponent` (`libs/shared/queues/src/lib/queue-page/queue-page.ts`), through
+`runWholeQuery` (`libs/shared/queues/src/lib/whole-query-run.ts`).
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |
