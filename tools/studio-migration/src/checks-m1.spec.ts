@@ -267,7 +267,7 @@ describe('check 6, what people see', () => {
       },
     });
     expect(run(webKey, 6)?.reason).toMatch(
-      /2 labels rest on a catalogue the package does not hold: Web UI's claim\.amount\.heading, the app's claim\.amount\.heading/,
+      /1 label key rests on a catalogue the package does not hold: claim\.amount\.heading \(Web UI's and the app's\)/,
     );
   });
 });

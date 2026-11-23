@@ -34,7 +34,11 @@ type Resolved = string | typeof UNKNOWN | null;
 
 export function checkSeen({ pkg, inventory, conversion }: HarnessInput): CheckOutcome {
   const findings: string[] = [];
-  const unsettled = new Set<string>();
+  /** Each translation key whose text is in a catalogue not in hand, with whose catalogue. */
+  const unsettled = new Map<string, Set<string>>();
+  const unsettle = (key: string, whose: string): void => {
+    unsettled.set(key, (unsettled.get(key) ?? new Set()).add(whose));
+  };
   const locale =
     inventory.translations.find((t) => t.locale === 'en')?.locale ??
     inventory.translations[0]?.locale ??
@@ -51,7 +55,7 @@ export function checkSeen({ pkg, inventory, conversion }: HarnessInput): CheckOu
     if ('labelKey' in label) {
       const value = Object.hasOwn(webTexts, label.labelKey) ? webTexts[label.labelKey] : undefined;
       if (typeof value === 'string') return normal(value);
-      unsettled.add(`Web UI's ${label.labelKey}`);
+      unsettle(label.labelKey, "Web UI's");
       return UNKNOWN;
     }
     return null;
@@ -62,7 +66,7 @@ export function checkSeen({ pkg, inventory, conversion }: HarnessInput): CheckOu
     if (isRecord(entry) && typeof entry['labelKey'] === 'string') {
       const key = entry['labelKey'];
       if (Object.hasOwn(appTexts, key)) return normal(appTexts[key]);
-      unsettled.add(`the app's ${key}`);
+      unsettle(key, "the app's");
       return UNKNOWN;
     }
     if (fallbackKey !== null && Object.hasOwn(appTexts, fallbackKey))
@@ -136,7 +140,9 @@ export function checkSeen({ pkg, inventory, conversion }: HarnessInput): CheckOu
     findings,
     rest:
       unsettled.size > 0
-        ? `${values}. ${unsettled.size} ${unsettled.size === 1 ? 'label rests' : 'labels rest'} on a catalogue the package does not hold: ${listed([...unsettled])}`
+        ? `${values}. ${unsettled.size} ${unsettled.size === 1 ? 'label key rests' : 'label keys rest'} on a catalogue the package does not hold: ${listed(
+            [...unsettled].map(([key, whose]) => `${key} (${[...whose].join(' and ')})`),
+          )}`
         : values,
   };
 }

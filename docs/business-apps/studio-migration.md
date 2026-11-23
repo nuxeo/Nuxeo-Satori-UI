@@ -63,7 +63,7 @@ zip holds four files; the bundle holds 36.
 | Dashboard          | A replacement home with 5 cards: latest edited documents (twice), tasks, recently viewed, favourites                                                                                                   | `ui/nuxeo-home.html`                       |
 | Theme              | 105 custom properties, 52 of them Web UI's `--nuxeo-*` and 53 Polymer's (42 `--paper-*`), and a logo                                                                                                   | `ui/themes/<name>/`                        |
 | Translations       | 13 keys in `messages.json` (type, schema field and search labels) and a `messages.properties` for the old JSF UI                                                                                       | `data/i18n/`                               |
-| Images             | A login background                                                                                                                                                                                     | `web/nuxeo.war/img/`                       |
+| Images             | An image the model names as `AdmissionForm`'s type icon                                                                                                                                                | `web/nuxeo.war/img/`                       |
 | Studio's own model | Types, schemas and page providers in Studio's XML; its layouts are Modeler's JSF-era layouts, not the Web UI ones                                                                                      | `.metadata/`                               |
 
 **Elements used**, 27 distinct besides the two wrappers every file has (`dom-module` and
@@ -113,7 +113,7 @@ not migrate, and the report says why and what to do instead.
 | In Studio Designer                                                                                                                                | In the new app                                                                                           | How            |
 | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------- |
 | Types, schemas, lifecycles, page providers, workflows, chains                                                                                     | Nothing to convert: they stay on the server in the Studio package, and the new app reads them            | —              |
-| Document layouts in 5 modes                                                                                                                       | Layout version 2, per type and mode                                                                      | Automatic      |
+| Document layouts in 5 modes                                                                                                                       | Layout files: version 2 for `view`, version 1 for the rest; `import` has none                            | Automatic      |
 | A field bound to `document.properties.<prefix>:<field>`                                                                                           | A field with the matching widget (table below)                                                           | Automatic      |
 | `required`, labels, names                                                                                                                         | Field rules; labels as keys in `labels/<locale>.json`                                                    | Automatic      |
 | Machine-generated labels ("Hfs Fields Hfs S Object Id")                                                                                           | A tidy label, kept as a translation                                                                      | Agent proposes |
@@ -212,7 +212,22 @@ has been seen failing on purpose (section 7) before it is trusted.
 A migrated package is ready when checks 1 to 10 pass, a person has accepted or rejected every
 "Agent proposes" item, and every "Reported" item has an owner and a decision.
 
-**In phase M0** ([`tools/studio-migration`](../../tools/studio-migration/README.md)):
+**In phase M1** ([`tools/studio-migration`](../../tools/studio-migration/README.md)):
+
+- **What runs in full, with no server:** checks 1, 2, 4, 8 and 10.
+- **What runs in part:** checks 3, 5, 6 and 7. Each runs what the package and the conversion
+  hold, and says what waits for the migration server: a check that ran in part is `partial`,
+  never a pass, and blocks readiness.
+  - **3:** the package's own model, from its contributions and XSDs. The platform's model is
+    listed.
+  - **5:** no invented rule, and nothing shown to everyone that Web UI shows under a condition.
+  - **6:** the labels.
+  - **7:** the page providers, parameters, sorts and operations each app is configured to ask for.
+- **What waits:** check 9, for M3's plugins.
+- **Check 10 and version 1.** It is the package pipeline's validator, plus version 1's contract
+  for the `metadata`, `edit` and `create` files, which that validator leaves unchecked.
+
+**In phase M0**:
 
 - **What runs:** the harness runs checks 1, 4 and 8, which need no server. Each other check says
   it did not run, why, and which phase brings it. None of them passes for not having run.
@@ -247,6 +262,21 @@ all of them on every change:
 - slip a free JavaScript condition into the converted configuration;
 - map the theme's primary colour to the wrong token.
 
+**In M1**, the controls for checks 2, 3, 5, 6, 7 and 10 join them in the same file:
+
+- **For check 2:** drop a field, turn a date widget into text, make a required field optional.
+- **For check 3:** name a field the package's own schema lacks.
+- **For check 5:** slip a free JavaScript condition in, or show a field Web UI shows only under a
+  condition to everyone. "Invert a rule" waits for M2, which converts the first rules.
+- **For check 6:** change a field's label.
+- **For check 7:** point a list at another page provider, change one parameter, or bind a button
+  to another operation.
+- **For check 10:** name a widget the platform does not have.
+
+Each fails its check on the made-up test package. On the sample's conversion, each that finds
+something to break fails its check too. The two that do not, `widen-to-everyone` and
+`bind-other-operation`, find no condition and no operation button to break there, and say so.
+
 **In M0**, the controls for the checks that run are mutations in
 [`tools/studio-migration/src/mutations.ts`](../../tools/studio-migration/src/mutations.ts):
 
@@ -269,19 +299,29 @@ One per package, written by the verification agent and approved by a person:
 - **Per file:** what it became, what the harness found, and links to the screenshots.
 - **Decisions needed:** every reported item, with its owner.
 
-For the sample, the report would list:
+For the sample, M1's report lists:
 
-- the 10 document layouts and the search screen, converted;
-- 4 slot contributions, of which the button with no operation is reported;
-- the dashboard's 5 cards, with the repeated one reported;
-- the import layout's second Title and Description, reported;
+- 8 of the 10 document layouts, converted: the two import layouts are reported, because the app
+  has no import form. SampleTestDocu's view, which only shows the file's preview, becomes no file:
+  the app's document page shows the preview;
+- the search screen's results, converted to a queue, with its table view, three columns and the
+  sort it opens with; its form, its three fields and its two grid views, reported, because a queue
+  has neither;
+- 4 slot contributions:
+  - the button with no operation, reported;
+  - the menu entry and its page, pending phase 1's `navigation.json`;
+  - the theme, converted;
+- the dashboard's 5 cards:
+  - the repeated one, reported;
+  - the favourites card, which reads an operation, proposed;
+  - the other three, pending phase 1's `home.json`, the first with its list written as a queue;
 - the theme's 105 properties against the token map, 8 of them set a token in its first version;
 - the theme's blue and its error red, below WCAG 2.1 AA on its own page background, at contrasts
   of 4.43 and 4.17;
 - 13 translations;
 - the model files, which need no conversion.
 
-In M0 the report is `report.json`, in the provisional format `studio-migration-report/m0`. It
+The report is `report.json`, in the provisional format `studio-migration-report/m1` since M1. It
 takes Studio's branch, commit and build time from the bundle's manifest (`Studio-Git-Branch-Name`,
 `Studio-Git-Commit-Hash`, `Studio-Build-Time`). Each item carries an `owner` field, which no
 command sets yet.
@@ -310,7 +350,26 @@ These sit inside the [development plan](development-plan.md):
 | M3    | Phase 6                 | The code track: custom elements to plugins, with check 9                                                                                                                           |
 | M4    | Phase 10                | Migration at scale: many packages in one run, a self-service upload that validates a package and returns its report, and a support playbook                                        |
 
-**Where M0 stands, 22 November 2026:**
+**Where M1 stands, 23 November 2026:**
+
+- **Built:** in [`tools/studio-migration`](../../tools/studio-migration/README.md), the
+  declarative track:
+  - layouts, search screens as queues, the dashboard's lists as queues, operation buttons as
+    actions, the theme and the translations, written as an app definition the package pipeline's
+    validator accepts;
+  - checks 2, 3, 5, 6, 7 and 10. Checks 3, 5, 6 and 7 run in part until the migration server
+    exists. With M0's, there are twenty negative controls.
+- **On the sample:**
+  - checks 1, 2, 4, 5 and 10 pass;
+  - checks 3, 6 and 7 run in part;
+  - check 8 finds the two colours below AA.
+- **Waiting:**
+  - the migration lab server, for the server halves of checks 3, 5, 6 and 7;
+  - phase 1's `home.json` and `navigation.json`, for the dashboard's cards and the drawer;
+  - M2, for conditions, tabs, task forms and layout blocks;
+  - real packages: only the sample has arrived, and phase 4 needs three.
+
+**Where M0 stood, 22 November 2026:**
 
 - **Built:** in [`tools/studio-migration`](../../tools/studio-migration/README.md):
   - the package reader and the inventory. On the sample, the reader finds all 40 files and the
@@ -320,7 +379,7 @@ These sit inside the [development plan](development-plan.md):
   - the harness skeleton, running checks 1, 4 and 8, with nine negative controls.
 - **The phase 0 demo runs:** on the sample, checks 1 and 4 pass. Check 8 finds the two colours
   below AA. A deliberately broken copy fails, and says what broke.
-- **Next:** owners for reported items, and M1's conversion.
+- **Next:** owners for reported items, and M1's conversion, since built.
 - **Waiting:** only one real package has arrived, and the catalogue needs at least two more.
 
 ## 11. Limits
