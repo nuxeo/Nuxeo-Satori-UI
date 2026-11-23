@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ACTIONS_V2_KEYS, PLACEMENTS } from './actions';
 import { APP_ID, APP_V2_KEYS } from './app';
-import { ID, NAME } from './checker';
+import { ICON, ID, NAME } from './checker';
+import { HOME_V2_KEYS, NAVIGATION_V2_KEYS } from './home';
 import { LABEL_KEY, LABELS_V2_KEYS } from './labels';
 import { LAYOUT_V2_KEYS } from './layout-v2';
 import { QUEUE_V2_KEYS } from './queue';
@@ -13,6 +14,7 @@ import {
   PACKAGED_BULK_ACTIONS,
   PACKAGED_CHECKS,
   PACKAGED_COMPUTATIONS,
+  PACKAGED_PAGES,
   PACKAGED_REGISTRIES,
   PACKAGED_ROW_ACTIONS,
   PACKAGED_WIDGETS,
@@ -65,6 +67,17 @@ describe('the registries, held to the extension reference', () => {
     expect(actions.length).toBeGreaterThan(5);
     expect([...PACKAGED_BULK_ACTIONS].sort()).toEqual(actions);
   });
+
+  it("know exactly the pages the reference's menu entries open", () => {
+    const pages = documented(
+      section('## 3. `navbar`', '\n## 4.'),
+      /^\| `(app\.navbar\.[A-Za-z]+)`/gm,
+    );
+    expect(pages.length).toBeGreaterThan(10);
+    // The settings drawer is named in the section's prose, not its table: it opens no page.
+    expect(pages).not.toContain('app.navbar.settings');
+    expect([...PACKAGED_PAGES].sort()).toEqual(pages);
+  });
 });
 
 describe('the JSON Schema, held to the registries and the validator', () => {
@@ -105,9 +118,15 @@ const schemaFile = (name: string): AnySchema =>
 const keysOf = (part: AnySchema): string[] => Object.keys(part['properties']).sort();
 
 describe("the other files' JSON Schemas, held to their validators", () => {
-  const [app, queue, actions, labels, module] = ['app', 'queue', 'actions', 'labels', 'module'].map(
-    schemaFile,
-  );
+  const [app, queue, actions, labels, module, home, navigation] = [
+    'app',
+    'queue',
+    'actions',
+    'labels',
+    'module',
+    'home',
+    'navigation',
+  ].map(schemaFile);
 
   it('allow the same keys in each part of a file as the validators do', () => {
     const pairs: [AnySchema, readonly string[]][] = [
@@ -121,6 +140,11 @@ describe("the other files' JSON Schemas, held to their validators", () => {
       [actions['$defs'].message, ACTIONS_V2_KEYS.message],
       [labels, LABELS_V2_KEYS.labels],
       [module, LABELS_V2_KEYS.module],
+      [home, HOME_V2_KEYS.home],
+      [home['$defs'].homeCard, HOME_V2_KEYS.card],
+      [home['$defs'].kpi, HOME_V2_KEYS.kpi],
+      [navigation, NAVIGATION_V2_KEYS.navigation],
+      [navigation['$defs'].entry, NAVIGATION_V2_KEYS.entry],
     ];
     for (const [part, keys] of pairs) expect(keysOf(part)).toEqual([...keys].sort());
     expect(actions['$defs'].action.properties.on.items.enum).toEqual([...PLACEMENTS]);
@@ -129,7 +153,7 @@ describe("the other files' JSON Schemas, held to their validators", () => {
   it("copy the layout schema's definitions they share, unchanged", () => {
     // Each schema stands alone, for editors, so the rules, values and field entries are copied
     // from the layout schema rather than referenced across files. This keeps the copies equal.
-    for (const other of [app, queue, actions]) {
+    for (const other of [app, queue, actions, home, navigation]) {
       const shared = Object.keys(other['$defs']).filter((name) => name in schema.$defs);
       expect(shared.length).toBeGreaterThan(0);
       for (const name of shared) expect(other['$defs'][name]).toEqual(schema.$defs[name]);
@@ -176,6 +200,10 @@ describe("the other files' JSON Schemas, held to their validators", () => {
     expect(actions['$defs'].action.properties.transition.pattern).toBe(NAME.source);
     expect(actions['$defs'].action.properties.operation.pattern).toBe(NAME.source);
     expect(labels['properties'].labels.propertyNames.pattern).toBe(LABEL_KEY.source);
+    expect(home['$defs'].kpi.properties.pageProvider.pattern).toBe(NAME.source);
+    expect(home['$defs'].kpi.properties.aggregate.pattern).toBe(NAME.source);
+    expect(navigation['$defs'].entry.properties.icon.pattern).toBe(ICON.source);
+    expect(actions['$defs'].action.properties.icon.pattern).toBe(ICON.source);
   });
 });
 

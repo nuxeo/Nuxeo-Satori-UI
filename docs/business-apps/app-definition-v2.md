@@ -7,7 +7,9 @@ A proposal for the files of an app definition beside its layouts:
 - actions;
 - task forms;
 - labels;
-- module settings.
+- module settings;
+- the menu, `navigation.json`;
+- the home, `home.json`.
 
 Phase 0 of the [development plan](development-plan.md) gives each a JSON schema.
 [Layout file version 2](layout-v2.md) covers the layouts, and this document reuses its rules. The
@@ -15,8 +17,9 @@ validator in [`libs/shared/app-definition`](../../libs/shared/app-definition/REA
 every file, and every JSON example here is one of its tests: together they are one small package,
 the Payers Claims app, checked as a whole.
 
-Status: proposal, 22 November 2026. Nothing reads these files yet. Phase 1 renders queues, and
-phase 2 the actions and task forms.
+Status: proposal, 22 November 2026; the menu and the home added on 23 November 2026, in phase 1.
+The app draws the home (section 10). Nothing reads the other files yet. Phase 1 renders queues,
+and phase 2 the actions and task forms.
 
 ## The short version
 
@@ -30,6 +33,8 @@ phase 2 the actions and task forms.
 - **A task form** is a layout file for one workflow step. Its `var:` fields are the step's
   variables.
 - **Labels** are per language. **Module settings** are per module.
+- **The menu** lists queues and pages. **The home** is cards of KPIs and links to queues, each
+  with a rule, so that each group has its own.
 - **Strict when built, tolerant when loaded**, as for layouts, except `app.json`: the shell
   refuses an app it cannot run rather than draw half of it.
 
@@ -40,8 +45,8 @@ with where each file is described:
 
 ```text
 app.json                             section 3
-navigation.json                      phase 1, with the home
-home.json                            phase 1
+navigation.json                      section 9
+home.json                            section 10
 layouts/<Type>/<mode>.layout.json    layout-v2.md
 queues/<id>.json                     section 4
 actions.json                         section 5
@@ -56,8 +61,8 @@ demo/                                starter kits only; not checked
   that is `bundle/agentic-ui-config/`.
 - **A file's place says what it is.** A queue's id, a task form's workflow and step, a labels
   file's language and a module's name come from the file name, as a layout's type and mode do.
-- **`navigation.json` and `home.json`** are not in phase 0's list. Phase 1 builds the menu and the
-  home, and proposes their files with them.
+- **`navigation.json` and `home.json`** were not in phase 0's list. Phase 1 proposes them, with
+  the home that draws `home.json`.
 
 ## 2. What every file shares
 
@@ -70,11 +75,11 @@ demo/                                starter kits only; not checked
   rule is a registered id or `{ "type", "parameters" }`, and a value is a literal, a
   `{ "field" }` or a `{ "computed" }`.
 - **Keys.** A key a file does not have, such as a misspelt one, is an `unknown` finding. It
-  refuses the package when it is built, and section 10 says what it does when the app loads the
+  refuses the package when it is built, and section 12 says what it does when the app loads the
   file. `$schema`, the address of a JSON Schema for editors, may head any file, as it heads
   version 1's fragments.
 - **Findings** have layout version 2's three kinds: `structure`, `unknown` and `parameter`.
-  Section 10 says what each does to each file.
+  Section 12 says what each does to each file.
 
 ## 3. `app.json`
 
@@ -347,20 +352,181 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
   ([architecture](architecture.md#6-the-modules), section 6). Until one does, the validator checks
   that the module is registered and that `settings` is an object.
 
-## 9. Checks across files
+## 9. The menu
 
-Each file is checked with its package's `app.json`, `actions.json` and `assets/`:
+```json navigation.json
+{
+  "version": 2,
+  "entries": [
+    { "id": "home", "label": "Home", "icon": "home", "page": "home" },
+    {
+      "id": "unassigned",
+      "icon": "inbox",
+      "queue": "unassigned-claims",
+      "visibleWhen": {
+        "type": "app.rules.inGroup",
+        "parameters": ["claims-adjusters", "claims-supervisors"]
+      }
+    },
+    { "id": "tasks", "label": "My tasks", "icon": "task_alt", "page": "app.navbar.tasks" },
+    { "id": "search", "label": "Search", "icon": "search", "page": "app.navbar.search" }
+  ]
+}
+```
+
+| Key                 | What it is                                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `id`                | Required, and used once in the file                                                                         |
+| `queue`             | A queue of the package, by its id: `unassigned-claims` is `queues/unassigned-claims.json`                   |
+| `page`              | `home`, the app's home (section 10), or a platform page, by its menu entry's ID, such as `app.navbar.tasks` |
+| `label`, `labelKey` | The entry's text. A page needs one; a queue shows its own name when it has none                             |
+| `icon`              | A Material Symbols name, such as `inbox`                                                                    |
+| `order`             | A whole number. Lower comes first                                                                           |
+| `visibleWhen`       | A rule                                                                                                      |
+
+- **One of `queue` and `page`.** An entry opens one thing. A record has no entry: a queue or the
+  home opens it.
+- **A page by its menu entry's ID**, not by its address: the IDs of
+  [extension-reference.md](../extension-reference.md), section 3, are a public contract, and an
+  address can change. A deployment's own pages, registered in a manifest or in Layer 2 code, are
+  named the same way.
+- **No record is open** in the menu, so a rule there is given literals: a `{ "field" }` value is a
+  `parameter` finding.
+- **Hiding an entry is not a security control.** The route still answers, and the page provider
+  behind a queue still returns only what the person may read.
+- **Not drawn yet.** The file is proposed and checked. The shell's menu is still the manifest's
+  `navbar` slot, and phase 1's queue page is not in the app yet, so the app does not read
+  `navigation.json` (section 13).
+
+## 10. The home
+
+```json home.json
+{
+  "version": 2,
+  "label": "Claims",
+  "cards": [
+    {
+      "id": "unassigned",
+      "label": "Unassigned claims",
+      "kpi": { "pageProvider": "payers_unassigned_claims" },
+      "queue": "unassigned-claims",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
+    },
+    {
+      "id": "unassigned-by-type",
+      "label": "Unassigned, by claim type",
+      "kpi": { "pageProvider": "payers_unassigned_claims", "aggregate": "claim_type_agg" },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
+    },
+    {
+      "id": "pending",
+      "label": "Pending determination",
+      "kpi": {
+        "pageProvider": "payers_open_claims",
+        "aggregate": "claim_state_agg",
+        "bucket": "pending"
+      },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-supervisors"] }
+    },
+    {
+      "id": "unassigned-queue",
+      "queue": "unassigned-claims",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-supervisors"] }
+    }
+  ]
+}
+```
+
+| Key                 | What it is                                      |
+| ------------------- | ----------------------------------------------- |
+| `label`, `labelKey` | The home's title. "Home" shows when it has none |
+| `cards`             | Required: the cards, in the order they show     |
+
+A card:
+
+| Key                 | What it is                                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| `id`                | Required, and used once in the file                                                                |
+| `kpi`               | A figure: what it counts, below                                                                    |
+| `queue`             | A queue of the package, by its id. With a `kpi`, the card links to it; alone, the card is the link |
+| `label`, `labelKey` | The card's title. A KPI needs one; a link to a queue shows the queue's own name when it has none   |
+| `visibleWhen`       | A rule: who sees the card                                                                          |
+
+A KPI:
+
+| Key            | What it is                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `pageProvider` | Required: a page provider defined on the server                                              |
+| `parameters`   | Its parameters, in order: literals                                                           |
+| `aggregate`    | One of the page provider's aggregates, named as the server defines it, as a queue's facet is |
+| `bucket`       | The key of one of the aggregate's buckets                                                    |
+
+- **A home per group** is cards whose rule is `app.rules.inGroup`. A person in two groups sees
+  both groups' cards. A card with no rule is everyone's.
+- **What a KPI shows**, from the page provider's results
+  (`GET /api/v1/search/pp/<pageProvider>/execute`):
+  - with no `aggregate`, how many records it returns: `resultsCount`;
+  - with an `aggregate` and a `bucket`, how many are in that bucket: its `docCount` in
+    `aggregations`, or 0 when the server returns no such bucket, as a terms aggregate does for an
+    empty one;
+  - with an `aggregate` alone, how many records it returns, and under it each of the aggregate's
+    buckets with its count, in the server's order.
+- **Aggregates come from the search index.** A page provider that queries the repository has
+  none, and a KPI that names one says the figure is unavailable.
+- **One request per page provider and parameters**, however many cards read it, with a page of one
+  record. A hidden card asks for nothing.
+- **No record is open** on the home: a page provider's parameters are literals, as a queue's are,
+  and a rule is given literals.
+- **A figure is not a security control,** and not an audit either. It counts what the page provider
+  returns to the person signed in, and hiding a card hides the figure, not the records.
+
+### Where the app reads it
+
+The app registry, which would serve `home.json` with the rest of the app, waits on decisions B
+and E. The existing configuration service cannot serve it in the meantime. `nuxeo-agentic-core`
+answers a fixed set of addresses under `agentic-ui-config/`: `bootstrap.json`, `manifest.json`,
+`layouts.json`, the layout files it lists, and `assets/<name>` for images. Every other address is 404. Its extension point, `org.nuxeo.agentic.ui.config`, takes manifest and bootstrap fragments,
+layouts and image assets, and nothing else: an asset must be an image.
+
+So, until the registry, the app reads the home at `agentic-ui-config/home.json`, beside the
+layouts, as the package writes it, with no envelope. Only the development server answers there:
+
+```bash
+npm run config:dev -- --home path/to/home.json
+```
+
+On a server the address is 404, and the home page says that no home is configured.
+
+### What the app does with it
+
+The app's page `/home` reads the file, checks it with the validator, and draws it:
+
+- **a `structure` finding** draws no home: the page says the home could not be read, and the
+  console names the findings;
+- **an `unknown` or a `parameter` finding** leaves out the card it is in, and the console says why;
+  one of the file's own keys is ignored;
+- **the rules** are the rule registry's, evaluated with the person, their groups and no record. An
+  unregistered `app.rules.inGroup` hides its card, as the registry's security-relevant rules do;
+- **a page provider the server does not have,** or a request it refuses, shows the card's title
+  with no figure, and the console says why;
+- **links to queues** wait for phase 1's queue page. The app gives the home no queue address yet,
+  so a link alone is left out, and a KPI's link is not drawn.
+
+## 11. Checks across files
+
+Each file is checked with its package's `app.json`, `actions.json`, `assets/` and `queues/`:
 
 - a queue's row and bulk actions are the platform's, or defined in `actions.json` with `row` or
   `bulk` in `on`;
 - a module's settings are for a module `app.json` turns on;
 - a branding image in `assets/` is in the package;
+- a queue the menu or the home names is in `queues/`;
 - a file's name says what the file is: a queue's id, a workflow and a step, a language, a module;
 - inside a package, a JSON file out of place, such as `queue/open.json`, is refused rather than
   passed over. Version 1's `bootstrap.json`, `manifest.json` and `layouts.json`, and whatever is
   in `demo/` and `assets/`, are left alone.
 
-## 10. What is refused, and when
+## 12. What is refused, and when
 
 When the package is built, every finding refuses it, naming the file, the place and the problem.
 When the app loads a file, what a finding does depends on its kind and on the file:
@@ -368,22 +534,25 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 - **`unknown`:** a key, an id or a file that neither the platform nor the package has;
 - **`parameter`:** a registered id given parameters it does not take.
 
-| File            | A `structure` finding                                                 | An `unknown` or `parameter` finding                                                   |
-| --------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `app.json`      | The app is refused, and "Switch app" does not list it                 | The app is refused too: the shell runs no app it cannot read whole                    |
-| A queue         | The queue is left out                                                 | The column, facet or action it is in is left out. A key of the queue's own is ignored |
-| `actions.json`  | The action it is in is left out; all of them, if it is the file's own | The action it is in is left out. A key of the file's own is ignored                   |
-| A task form     | The step's generated form shows instead                               | The card or field it is in is left out, as in a layout                                |
-| A labels file   | The file is not applied: the platform's labels show                   | The key is ignored                                                                    |
-| Module settings | The app is refused, as for `app.json`                                 | The app is refused, as for `app.json`                                                 |
+| File              | A `structure` finding                                                 | An `unknown` or `parameter` finding                                                   |
+| ----------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `app.json`        | The app is refused, and "Switch app" does not list it                 | The app is refused too: the shell runs no app it cannot read whole                    |
+| A queue           | The queue is left out                                                 | The column, facet or action it is in is left out. A key of the queue's own is ignored |
+| `actions.json`    | The action it is in is left out; all of them, if it is the file's own | The action it is in is left out. A key of the file's own is ignored                   |
+| A task form       | The step's generated form shows instead                               | The card or field it is in is left out, as in a layout                                |
+| A labels file     | The file is not applied: the platform's labels show                   | The key is ignored                                                                    |
+| Module settings   | The app is refused, as for `app.json`                                 | The app is refused, as for `app.json`                                                 |
+| `navigation.json` | The menu is not drawn: the platform's shows                           | The entry it is in is left out. A key of the file's own is ignored                    |
+| `home.json`       | The home is not drawn, and the page says why                          | The card it is in is left out. A key of the file's own is ignored                     |
 
 - **`app.json` and module settings refuse the app** on any finding, an unknown key included. An
   app the shell cannot read whole would run half configured. A package that needs a later
   platform's keys says so in its platform range.
 - **A settings file for a module the app does not turn on** is never read, so it refuses nothing
   when the app loads.
+- **The menu's row** is what the app is to do once it draws the menu, which it does not yet.
 
-## 11. Not settled here
+## 13. Not settled here
 
 - **Decision E:** whether the registry serves each app definition only to its groups, after
   sign-in. `groups` is written and checked now.
@@ -394,12 +563,22 @@ When the app loads a file, what a finding does depends on its kind and on the fi
   start form.
 - **In labels:** placeholders and plural forms, and a check that every key an app uses has a text.
 - **Each module's settings schema**, which comes with the module.
-- **The menu and the home**, in phase 1.
+- **Serving the menu and the home.** The app registry serves them, once decisions B and E are
+  taken. Until then only the development server answers `home.json` (section 10).
+- **Drawing the menu.** `navigation.json` is checked, and the shell's menu is still the manifest's
+  `navbar` slot. Whether an app's entries replace the platform's or join them is for the shell
+  that switches apps, with the registry.
+- **The home as the first page.** The app still opens `/dashboard` after sign-in; the home is at
+  `/home`. Opening an app on its home is the shell's, with the registry.
+- **A bucket's name.** A KPI's bucket shows its key, as the server returns it. A vocabulary's
+  label for it is not looked up.
 - **The person signed in as a page provider parameter.** A page provider names them on the server
   for now.
 - **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, can name a
   rule that reads a record, such as `app.rules.isType`, or a `{ "field" }` value, and there is no
-  one record there for it to read. Rules do not yet say what they read. Phase 1 decides whether
-  they will, so that the validator can refuse these.
+  one record there for it to read. The menu and the home refuse a `{ "field" }` value already.
+  Rules do not yet say what they read, so a rule that reads a record passes there, and with no
+  record it hides what it gates. Phase 1 decides whether rules will say, so that the validator can
+  refuse these too.
 - **Related-records lists** keep the platform's row actions. Whether they also take the package's
   own is phase 1's to decide.

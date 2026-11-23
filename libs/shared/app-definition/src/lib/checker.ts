@@ -80,13 +80,22 @@ export function unreadable(content: unknown, what: string): Finding[] | null {
 export interface CheckerOptions {
   /** A task form, whose `var:` fields are the step's variables and the only ones it edits. */
   readonly task?: boolean;
+  /**
+   * `false` where no record is open: the home and the menu. A rule there reads no property, so
+   * a value it is given is a literal. True when left out.
+   */
+  readonly record?: boolean;
 }
+
+/** The name of a Material Symbols icon, such as `check`. */
+export const ICON = /^[a-z0-9_]{1,64}$/;
 
 export type Checker = ReturnType<typeof createChecker>;
 
 /** One file's findings, and the checks that add to them. */
 export function createChecker(registries: Registries, options: CheckerOptions = {}) {
   const task = options.task === true;
+  const record = options.record !== false;
   const findings: Finding[] = [];
   const add = (path: string, kind: Finding['kind'], message: string): void => {
     findings.push({ path, kind, message });
@@ -174,7 +183,13 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   const value = (item: unknown, path: string): void => {
     if (isLiteral(item)) return;
     if (isFieldReference(item)) {
-      variable(item.field, join(path, 'field'));
+      if (!record)
+        add(
+          path,
+          'parameter',
+          'no record is open here, so a rule is given literals, not a property',
+        );
+      else variable(item.field, join(path, 'field'));
       return;
     }
     if (isRecord(item) && Object.keys(item).length === 1 && 'computed' in item) {

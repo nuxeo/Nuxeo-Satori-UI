@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nuxeo-satori:app-definition:home:2",
+  "title": "An app's home, home.json, app definition version 2",
+  "description": "docs/business-apps/app-definition-v2.md, section 10. The validator in libs/shared/app-definition is what refuses a package. It also checks what a schema cannot: that card ids are unique, that each queue is one of the package's, and that a rule is given literals, since no record is open on the home.",
+  "type": "object",
+  "required": ["version", "cards"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The address of this JSON Schema, for editors. Ignored otherwise."
+    },
+    "version": {
+      "const": 2
+    },
+    "label": {
+      "type": "string",
+      "description": "The home's title."
+    },
+    "labelKey": {
+      "type": "string"
+    },
+    "cards": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/homeCard"
+      }
+    }
+  },
+  "$defs": {
+    "homeCard": {
+      "type": "object",
+      "required": ["id"],
+      "anyOf": [
+        {
+          "required": ["kpi"],
+          "anyOf": [
+            {
+              "required": ["label"]
+            },
+            {
+              "required": ["labelKey"]
+            }
+          ]
+        },
+        {
+          "required": ["queue"]
+        }
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "labelKey": {
+          "type": "string"
+        },
+        "kpi": {
+          "$ref": "#/$defs/kpi"
+        },
+        "queue": {
+          "$ref": "#/$defs/id",
+          "description": "A queue of the package, by its id: its file's name in queues/."
+        },
+        "visibleWhen": {
+          "$ref": "#/$defs/rule"
+        }
+      }
+    },
+    "kpi": {
+      "type": "object",
+      "required": ["pageProvider"],
+      "dependentRequired": {
+        "bucket": ["aggregate"]
+      },
+      "additionalProperties": false,
+      "properties": {
+        "pageProvider": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": ["string", "number", "boolean"]
+          },
+          "description": "Literals: no record is open on the home."
+        },
+        "aggregate": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$",
+          "description": "One of the page provider's aggregates, as the server defines it."
+        },
+        "bucket": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The key of one of the aggregate's buckets: the KPI counts the documents in it."
+        }
+      }
+    },
+    "rule": {
+      "description": "A registered rule (extension-reference.md, section 4), or a customer's own, registered in code.",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+            },
+            "parameters": {
+              "type": "array"
+            }
+          }
+        }
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    }
+  }
+}

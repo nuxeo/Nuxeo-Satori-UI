@@ -1,17 +1,19 @@
 /**
- * A package as a whole (docs/business-apps/app-definition-v2.md, sections 1 and 9): which file of
+ * A package as a whole (docs/business-apps/app-definition-v2.md, sections 1 and 11): which file of
  * an app definition a path is, and the checks that need more than one file. A file is always
- * checked with its package's `app.json`, `actions.json` and `assets/`:
+ * checked with its package's `app.json`, `actions.json`, `assets/` and queues:
  *
  * - a queue's row and bulk actions may be the package's own, from `actions.json`;
  * - a module's settings must be for a module `app.json` turns on;
- * - a branding image in `assets/` must be in the package.
+ * - a branding image in `assets/` must be in the package;
+ * - a queue the home or the menu names must be in `queues/`.
  *
  * Reading files is the caller's: this stays plain TypeScript, for the browser as well as Node.
  */
 import { validateActions, placementsOf } from './actions';
 import { APP_ID, assetFile, validateApp } from './app';
 import { ID, type Finding } from './checker';
+import { validateHome, validateNavigation } from './home';
 import { describeLogoSrcForm } from './image-source';
 import { validateLabels, validateModuleSettings } from './labels';
 import { LAYOUT_MODES, validateLayoutV2, validateTaskForm, type LayoutMode } from './layout-v2';
@@ -20,6 +22,8 @@ import { isRecord, PACKAGED_REGISTRIES, withRegistered, type Registries } from '
 
 export type PackageFile =
   | { readonly kind: 'app' }
+  | { readonly kind: 'navigation' }
+  | { readonly kind: 'home' }
   | { readonly kind: 'layout'; readonly type: string; readonly mode: LayoutMode }
   | { readonly kind: 'queue'; readonly id: string }
   | { readonly kind: 'actions' }
@@ -52,6 +56,8 @@ const PLACES: readonly (readonly [RegExp, (match: RegExpExecArray) => PackageFil
   [at(`modules${SEP}(${PART})\\.json`), (match) => ({ kind: 'module', module: match[2] })],
   [at(String.raw`app\.json`), () => ({ kind: 'app' })],
   [at(String.raw`actions\.json`), () => ({ kind: 'actions' })],
+  [at(String.raw`navigation\.json`), () => ({ kind: 'navigation' })],
+  [at(String.raw`home\.json`), () => ({ kind: 'home' })],
 ];
 
 /**
@@ -82,6 +88,11 @@ export interface PackageContext {
   readonly actions?: unknown;
   /** Every file under its `assets/`, as `assets/<path>`. */
   readonly assets: ReadonlySet<string>;
+  /**
+   * The ids of its queues, from the names of its `queues/<id>.json` files. Left out, the queues
+   * the home and the menu name are not checked: the app reads `home.json` without its package.
+   */
+  readonly queues?: ReadonlySet<string>;
 }
 
 export interface PackageOptions {
@@ -130,6 +141,10 @@ export function validateFile(
       ];
     case 'actions':
       return validateActions(content, { registries, operations: options.operations });
+    case 'navigation':
+      return validateNavigation(content, { registries, queues: context.queues });
+    case 'home':
+      return validateHome(content, { registries, queues: context.queues });
     case 'task':
       return [
         ...(TASK.test(file.name)
