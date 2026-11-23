@@ -236,6 +236,10 @@ describe("the review's cases of Web UI's slot registration", () => {
     );
     expect(ids(outranked)).toEqual([]);
     expect(entry(outranked.conversion, 2)?.note).toContain('has a higher priority');
+    // It shows nothing itself: with no template, it changes a contribution of Web UI's own.
+    expect(entry(outranked.conversion, 1)?.note).toContain(
+      "a contribution of Web UI's own named lockIt",
+    );
   });
 
   it('reads the custom bundle, which may disable a button of the bundle', () => {
@@ -262,6 +266,12 @@ describe("the review's cases of Web UI's slot registration", () => {
     );
     expect(ids(disabled)).toEqual([]);
     expect(entry(disabled.conversion, 1)?.note).toContain('moves it to the slots');
+    // Moved, though not disabled: the converter does not follow it to the other slot.
+    const moved = only(
+      `${button('lockIt', 'x')}<nuxeo-slot-content name="lockIt" slot="DOCUMENT_ACTIONS,RESULTS_SELECTION_ACTIONS" order="3"></nuxeo-slot-content>`,
+    );
+    expect(ids(moved)).toEqual([]);
+    expect(entry(moved.conversion, 1)?.note).toContain('moves it to the slots');
     const replaced = only(
       `${button('lockIt', 'first')}${button('lockIt', 'second').replace('slot="DOCUMENT_ACTIONS"', 'slot="DOCUMENT_ACTIONS,RESULTS_SELECTION_ACTIONS"')}`,
     );

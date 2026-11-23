@@ -716,14 +716,28 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     a required record field through the conversion unreported. Each now has its test, and the
     second sort is gone.
 
-  - **For the slot registration, 17 guards**, broken the same way, each seen turning the suite
-    red: a disabled contribution, a later one of the name replacing, a lower priority ignored, a
-    change with no order giving 0, a change moving the earlier one, a change of Web UI's own
-    reported, slots kept apart, no name never merging; for actions, only what the slot keeps owning
-    one, what it leaves out reported, and the slot's order; for the menu, a left-out entry being
-    none, the page the slot keeps, and the slot's order; check 6's order of an action and of a menu
-    entry; and a tab's order left out being 0. The first round found two no test reached, the menu's
-    page and its order, each now tested.
+  - **For the slot registration, 31 guards**, broken the same way, each seen turning the suite
+    red: in the registry, a disabled contribution, one with no template and one a change moves
+    showing nothing, a lower priority ignored, a later one of the name replacing in the earlier
+    one's place, a change moving the earlier one or taking it to another slot, the slot sorting
+    after each registration, a contribution with no template registering, each slot a contribution
+    names, no name never merging, an order left out being 0, a change of Web UI's own reported, and
+    slots kept apart; in the inventory, Polymer's numbers and the custom bundle read; for actions,
+    only what the slot keeps owning one, what it leaves out reported, the slot's order, Web UI's
+    order and its default order written; for the menu, a left-out entry being none, the page the
+    slot keeps, the slot's order and Web UI's order; check 5's left-out entry and the page it
+    keeps; and check 6's order of an action and of a menu entry, and an action's label. Two rounds
+    found four no test reached, each now tested.
+
+  - **An independent review of the slot registration** found eleven things. Fixed, each with a
+    test: a contribution with no template that comes first was not registered, so its priority did
+    not outrank a later one; the custom bundle's contributions were not read; a contribution naming
+    several slots took no part in their registration; a replacement took the place of the kept one
+    rather than the earlier one's; a fractional priority or order was not read; Web UI's default
+    order was written for a change and not for the rest; check 5's two new lines had no test; and
+    an action's label was not checked. The rest are limits, under **Not done yet**: Web UI's own
+    contributions, the order Web UI loads files in, a menu entry's page paired by the
+    contribution's name, and what the checks share with the converter.
 
   - **An independent review of M2** found twelve things. Fixed, each with a test: a guarded
     block's field moved under another block's rule passed check 5; a block given no document hid
