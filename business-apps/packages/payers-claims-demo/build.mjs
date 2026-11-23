@@ -31,6 +31,11 @@
  *     any letter case and keeps the last, so it could load a component this script never read; or
  *     one that names them only below that line, where the server does not look. A header in a
  *     later `Name:` section is that entry's attribute, ignored here as on the server;
+ *   - a manifest that Java's `java.util.jar.Manifest`, which the server reads it with, refuses
+ *     outright, leaving the bundle no headers at all: a line that is neither a header — a name of
+ *     1 to 70 letters, digits, `-` and `_`, then `: ` — nor a continuation of one; a first line
+ *     that starts with a space; or a section after a blank line that does not begin with `Name: `.
+ *     Checked on the manifest as packaged;
  *   - a component contributing configuration without
  *     `<require>org.nuxeo.agentic.ui.config.defaults</require>`, without which this package's
  *     fragments could register before Satori's own and lose to them;
@@ -778,6 +783,75 @@ function packageManifest(text) {
   }
   return Buffer.from(lines.join('\r\n') + '\r\n\r\n');
 }
+
+/**
+ * A manifest line quoted for a message, cut short, with control and invisible characters escaped
+ * so that a tab or a byte-order mark reads as what it is.
+ */
+function quoteLine(text) {
+  const characters = [...text];
+  return JSON.stringify(
+    characters.length > 60 ? `${characters.slice(0, 59).join('')}…` : text,
+  ).replace(
+    /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu,
+    (character) => `\\u${character.codePointAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
+/** A header as `java.util.jar.Attributes` reads one: its name, a colon and one space. */
+const MANIFEST_HEADER = /^[A-Za-z0-9_-]{1,70}: /;
+/** The line that begins a section after the main one, `Name` in any letter case. */
+const MANIFEST_SECTION_NAME = /^[Nn][Aa][Mm][Ee]: /;
+
+/**
+ * Why Java cannot read the manifest this script packages, or `null` when it can. The Nuxeo runtime
+ * reads a bundle's headers through `java.util.jar.Manifest`, which refuses the whole manifest at
+ * the first line it cannot read, and then the bundle has no headers: the package installs and
+ * configures nothing. JDK 21's `Manifest.read` and `Attributes.read` take every line that is not
+ * empty as one of three things, each confirmed against JDK 21 on a jar built without this check:
+ *   - a header: a name of 1 to 70 letters, digits, `-` and `_`, then a colon, one space and the
+ *     value, the colon and space on the line itself rather than on a continuation of it;
+ *   - a continuation, which starts with a space and extends the line above it, so it cannot be the
+ *     first line. Nowhere else can one lack a header above it here: the unfolding above joins a
+ *     line that starts with a space to the one before it, an empty one included;
+ *   - after an empty line, which ends a section, the `Name: ` line that begins the next, `Name`
+ *     in any letter case. The main section is the one before the first empty line.
+ * Java also refuses a line over 512 bytes, line break included, and ignores whatever follows the
+ * last line break. Neither can happen to these bytes, which is why neither is checked:
+ * `packageManifest` folds every line to at most 72 bytes and ends every line with CRLF.
+ */
+function unreadableManifest(packaged) {
+  // Every line ends with CRLF, so what follows the last one is not a line.
+  const lines = packaged.toString('utf8').split('\r\n').slice(0, -1);
+  // A line with its continuations, as Java joins them, which is how it reads in the source.
+  const quoted = (index) => {
+    let text = lines[index];
+    for (let next = index + 1; lines[next]?.startsWith(' '); next++) text += lines[next].slice(1);
+    return quoteLine(text);
+  };
+  const refused = 'Java refuses the whole manifest, and the server would read none of its headers';
+  for (const [index, line] of lines.entries()) {
+    if (line === '') continue;
+    if (line.startsWith(' ')) {
+      if (index > 0) continue;
+      return `begins with ${quoted(index)}, which starts with a space and so continues a header above it, and there is none; ${refused}`;
+    }
+    if (index > 0 && lines[index - 1] === '') {
+      if (!MANIFEST_SECTION_NAME.test(line)) {
+        return `has ${quoted(index)} after a blank line, which ends a section, and the next section must begin with "Name: "; ${refused}. Remove the blank line, or begin the section with Name:`;
+      }
+    } else if (!MANIFEST_HEADER.test(line)) {
+      return `has ${quoted(index)}, which is not a header: a name of 1 to 70 letters, digits, "-" and "_", then ": " and the value; ${refused}`;
+    }
+  }
+  return null;
+}
+
+// Whether Java can read the manifest at all, checked on what the jar holds: the unfolded text
+// refolded, not the source bytes. The checks below still run when it cannot, so every problem is
+// reported at once.
+const unreadable = unreadableManifest(packageManifest(manifest));
+if (unreadable) problem(manifestFile, unreadable);
 
 // The components the server loads, found the way it finds them. The Nuxeo runtime reads this
 // header through `java.util.jar.Manifest`, which ends a line at CR, LF or CRLF and nowhere else,

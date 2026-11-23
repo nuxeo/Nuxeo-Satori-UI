@@ -466,13 +466,52 @@ describe('showValue', () => {
       );
     });
 
-    /** The hook is the record page's: version 1's own view, given none, is in UTC as before. */
-    it("leaves version 1's own view in UTC", () => {
-      const field = describeField('k', 'L', { type: 'date' }, '2026-11-23T20:00:00.000Z', {
+    /**
+     * Two rules, one answer. The record page shows a date through its own hook, the `date`
+     * widget's; version 1's view, given none, has its own (#636). For a stored day and an instant,
+     * in a zone each side of UTC where an instant's day differs from its UTC day, they agree.
+     */
+    it.each([
+      ['+0530', '2026-11-23T20:00:00.000Z', 'November 24, 2026'],
+      ['+0530', '2026-11-23T00:00:00.000Z', 'November 23, 2026'],
+      ['-0500', '2026-11-24T00:30:00.000Z', 'November 23, 2026'],
+      ['-0500', '2026-11-24T00:00:00.000Z', 'November 24, 2026'],
+    ])("at %s, %s is %s on the record page and in version 1's view", (zone, value, day) => {
+      const page = viewText(
+        showValue(
+          { key: 'k', label: 'L', value, parameters: {}, definition: { type: 'date' } },
+          null,
+          {
+            ...context,
+            timeZone: zone,
+          },
+        ),
+        context.flagText,
+      );
+      const version1 = describeField('k', 'L', { type: 'date' }, value, {
         locale: 'en-US',
         vocabulary: (_, id) => id,
+        timeZone: zone,
       });
-      expect(field.value).toEqual({ text: 'November 23, 2026' });
+      expect(page).toBe(day);
+      expect(version1.value).toEqual({ text: day });
+    });
+
+    /** Given one, version 1's view shows a date as the hook does, at any depth. */
+    it("puts the hook before version 1's own rule", () => {
+      const field = describeField(
+        'k',
+        'L',
+        { type: 'complex', fields: { at: { type: 'date' } } },
+        { at: '2026-11-23T20:00:00.000Z' },
+        {
+          locale: 'en-US',
+          vocabulary: (_, id) => id,
+          timeZone: '+0530',
+          date: () => ({ text: 'by the hook' }),
+        },
+      );
+      expect(field.groups?.[0][0].value).toEqual({ text: 'by the hook' });
     });
   });
 });

@@ -312,23 +312,33 @@ travel with a clone. **Anything load-bearing belongs in the repo docs.**
 by default; everything is recorded at every impact so the debt is visible rather than filtered
 away. If `@axe-core/playwright` is missing it is a **failed check**, never a silent skip.
 
-Current state — **AA met on the fifteen cases scanned**, `KNOWN_VIOLATIONS` **empty** (2026-08-24):
+As measured on 2026-08-24 — **AA met on the fifteen cases scanned**, `KNOWN_VIOLATIONS` **empty**,
+with one upstream exclusion (the last row). That is a dated result: the captures of 2026-09-15 and
+2026-09-16 failed three `button-name` checks on browse, and the plan has listed WCAG 2.1 AA as in
+question since 2026-09-23 (`docs/beta-plan.md`, Phase 6 step 3). Later measurements are in
+`docs/accessibility.md`. Re-run `phase-6-a11y` before quoting any verdict as current.
 
-| Rule                          | Nodes | Now | Owner |
-| ----------------------------- | ----- | --- | ----- |
-| `label`                       | 42    | 0   | ours  |
-| `nested-interactive`          | 40    | 0   | ours  |
-| `button-name`                 | 21    | 0   | ours  |
-| `role-img-alt`                | 12    | 0   | ours  |
-| `color-contrast`              | 7     | 0   | ours  |
-| `scrollable-region-focusable` | 2     | 0   | ours  |
-| `aria-progressbar-name`       | 2     | 0   | ours  |
+| Rule                          | Nodes | Now | Owner                                             |
+| ----------------------------- | ----- | --- | ------------------------------------------------- |
+| `label`                       | 42    | 0   | ours                                              |
+| `nested-interactive`          | 40    | 0   | ours                                              |
+| `button-name`                 | 21    | 0   | ours                                              |
+| `role-img-alt`                | 12    | 0   | ours                                              |
+| `color-contrast`              | 7     | 0   | ours                                              |
+| `scrollable-region-focusable` | 2     | 0   | ours                                              |
+| `aria-progressbar-name`       | 2     | 0   | ours                                              |
+| `aria-required-children`      | 3     | 3   | upstream; excluded, and its surface since removed |
 
 The lesson is about the **baseline**, not the fixes. The previous capture scanned **three** surfaces
 and ratcheted **four** rule ids. Widening it to fifteen cases found **seven** classes and 77 nodes,
 and three of the classes lived only in view-mode and column-panel states a single visit per route
 never reaches. A ratchet over an under-sampled scan reports "no new violations" while the ones it
 cannot see accumulate — the same failure mode as a gate nobody has watched go red.
+
+The one exclusion was scoped to the step that scanned the upstream library's surface, not to
+`KNOWN_VIOLATIONS`, so the same rule failing on a surface we own still failed the capture. That
+step went when the library and its route were removed in October 2026: the three nodes left with
+them unfixed, and were never re-scanned.
 
 **Not covered:** dialogs, the upload flow, dark mode, and the pre-auth login surface. The last is a
 harness limitation — the capture signs in before its first scan, and on a guest-enabled Nuxeo an

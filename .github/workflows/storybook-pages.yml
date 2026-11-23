@@ -213,3 +213,65 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # The `storybook-satori` gate: build `satori-components-satori`'s Storybook and open every story
+  # in Chromium, failing a story whose Satori translation catalogue is not served (satori-ui 1.0.0
+  # dropped `en.json`, and this Storybook rendered raw `sat.*` keys with every gate green). It
+  # needs `@hylandsoftware/satori-ui`, which only this workflow installs without then removing it.
+  #
+  # A job of its own, not a step of `build`: this Storybook is not published, so a failure here
+  # must not stop the site from deploying — `deploy` needs `build` only — and `build` removes
+  # `@hylandsoftware` part-way through, on purpose. Locally the gate reports NOT RUN without the
+  # token or Playwright; here either one missing exits non-zero and fails the job, which is what a
+  # revoked token should do.
+  storybook-satori:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Explicit, for the same reason as `build`: this job holds the registry token.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+          registry-url: https://npm.pkg.github.com
+          scope: '@hylandsoftware'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      # From the one runtime source for the pin, as ci.yml's Storybook job reads it.
+      - name: Resolve the pinned Playwright version
+        id: playwright
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node --input-type=module -e "import { PLAYWRIGHT_TEST_VERSION } from './a11y/versions.mjs'; console.log(PLAYWRIGHT_TEST_VERSION)")"
+          test -n "$version" || { echo "could not read PLAYWRIGHT_TEST_VERSION"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "pinned @playwright/test: $version"
+
+      # `--no-save`, so the lockfile is untouched, as in ci.yml. Both token variables: the
+      # repository's `.npmrc` reads `SATORI_GH_READONLY_TOKEN`, takes precedence over setup-node's
+      # user config, and a step's `env:` does not carry over from the install step above.
+      - name: Install Playwright and Chromium
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          PLAYWRIGHT_TEST_VERSION: ${{ steps.playwright.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund "@playwright/test@${PLAYWRIGHT_TEST_VERSION}"
+          npx playwright install --with-deps chromium
+
+      - name: Satori Storybook is served its catalogues
+        run: node scripts/beta-harness/storybook-satori.mjs

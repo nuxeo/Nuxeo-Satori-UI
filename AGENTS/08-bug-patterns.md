@@ -1132,7 +1132,9 @@ Narrow correctness does not generalise; check what the values actually are.
 **A real instant is not a calendar day and must not be converted.** In one panel,
 `dc:created`/`dc:modified` are server stamps and belong in the reader's zone, while `dc:expired` is
 a picked day and belongs in UTC. Formatting them alike is a second bug wearing consistency's
-clothes.
+clothes. The layout `date` view had it until 2026-11-23, formatting every value in UTC; it now asks
+`isStoredCalendarDay` (`document-layouts/…/stored-calendar-day.ts`) and formats only a stored day
+there.
 
 Regression test pattern — and this is the part that is easy to get wrong:
 

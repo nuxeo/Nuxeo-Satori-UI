@@ -555,6 +555,140 @@ expectGreen('two components separated by whitespace alone, which the server read
   }),
 });
 
+// ---- a manifest `java.util.jar.Manifest` cannot read. It refuses the whole manifest at the first
+// line it cannot read, so the bundle has no headers and the package configures nothing. Each
+// negative here passed while its Nuxeo-Component header resolved. Each fixture was read with JDK
+// 21's `new JarFile(jar).getManifest()`: it refused every negative but the last, whose final
+// header it ignored, and read every positive with its Nuxeo-Component. ----
+
+const withManifest = (text) => ({ jar: jarFiles({ 'META-INF/MANIFEST.MF': text }) });
+const CLAUSE = String.raw`so Java refuses the whole manifest, and Nuxeo reads none of the bundle's headers\.`;
+
+expectRed(
+  'a blank line inside the main section, then a header with no Name: before it',
+  withManifest(`${manifest()}\nBundle-Description: x\n`),
+  new RegExp(String.raw`has "Bundle-Description: x" on line 6, after a blank line.*${CLAUSE}`),
+);
+
+expectRed(
+  'a section past a Name: section with no Name: of its own',
+  withManifest(`${manifest()}\nName: ${COMPONENT}\nX-Note: a\n\nX-Other: b\n`),
+  /has "X-Other: b" on line 9, after a blank line/,
+);
+
+expectRed(
+  'a Name: line without the space Java requires',
+  withManifest(`${manifest()}\nName:${COMPONENT}\n`),
+  /has "Name:OSGI-INF\/acme-config-config\.xml" on line 6, after a blank line/,
+);
+
+for (const [label, line] of [
+  ['a header name with a space in it', 'Bundle Name: acme-config'],
+  ['a header name with a character Java does not allow', 'Bundle.Name: acme-config'],
+  ["a header name of 71 characters, one over Java's limit", `${'N'.repeat(71)}: acme-config`],
+  ['a header with no space after its colon', 'Bundle-Name:acme-config'],
+  ['a header with no colon', 'Bundle-Name acme-config'],
+  ['a header with no name before its colon', ': acme-config'],
+  // Java reads the colon and its space on the header's own line, not on a continuation.
+  ['a header whose space after the colon is on a continuation', 'Bundle-Name:\n  acme-config'],
+]) {
+  expectRed(
+    label,
+    withManifest(manifest().replace('Bundle-Name: acme-config', line)),
+    new RegExp(String.raw`on line 3, which is not a header.*${CLAUSE}`),
+  );
+}
+
+// Java does not skip one: it is part of the first header's name. `build.mjs` drops it from the
+// source; a jar written another way can still carry it.
+expectRed(
+  'a byte-order mark before the first header',
+  withManifest(`\uFEFF${manifest()}`),
+  /has "\\ufeffManifest-Version: 1\.0" on line 1, which is not a header/,
+);
+
+expectRed(
+  'a first line that starts with a space, continuing no header',
+  withManifest(` ${manifest()}`),
+  new RegExp(
+    String.raw`has " Manifest-Version: 1\.0" on line 1, where a section begins.*${CLAUSE}`,
+  ),
+);
+
+// Unfolding first joined this to the blank line above it, which hid the blank line: one main
+// section, every header resolved. Java ends the section at the blank line and refuses the next.
+expectRed(
+  'a continuation after a blank line',
+  withManifest(`${manifest()}\n X-Note: a\n`),
+  /has " X-Note: a" on line 6, where a section begins/,
+);
+
+expectRed(
+  'a line over 512 bytes with its line break',
+  withManifest(`${manifest()}X-Long: ${'v'.repeat(504)}\n`),
+  /on line 5, 513 bytes with its line break\. Java reads at most 512 bytes of a line/,
+);
+
+// Bytes, not characters: 260 characters here, 513 bytes with the line break.
+expectRed(
+  'a line over 512 bytes in fewer than 512 characters',
+  withManifest(`${manifest()}X-Long: ${'é'.repeat(252)}\n`),
+  /on line 5, 513 bytes with its line break/,
+);
+
+// Java does not refuse this line itself. It takes the CR as the end of a 512-byte line and the LF
+// as an empty line, which ends the main section, and then refuses the header after it for
+// beginning a section without Name:. Last in the file, the same line would be read whole, so the
+// line break is refused here, wherever it falls.
+expectRed(
+  'a CRLF falling on bytes 512 and 513, which Java splits into a line break and an empty line',
+  withManifest(`${manifest()}X-Long: ${'v'.repeat(503)}\nX-After: a\n`.replaceAll('\n', '\r\n')),
+  /on line 5, 513 bytes with its line break/,
+);
+
+// Read, but not as written: Java ignores what follows the last line break. That is the
+// Nuxeo-Component header here, so the server loaded no component while this resolved it.
+expectRed(
+  'a Nuxeo-Component header with no line break after it, which Java ignores',
+  withManifest(manifest().replace(/\n$/, '')),
+  /ends with "Nuxeo-Component: OSGI-INF\/acme-config-config\.xml" and no line break after it/,
+);
+
+expectGreen(
+  'a line of 512 bytes with its line break, the most Java reads',
+  withManifest(`${manifest()}X-Long: ${'v'.repeat(503)}\n`),
+);
+
+expectGreen(
+  'a line of 512 bytes with its CRLF',
+  withManifest(`${manifest()}X-Long: ${'v'.repeat(502)}\n`.replaceAll('\n', '\r\n')),
+);
+
+expectGreen(
+  'a header name of 70 characters, the most Java reads',
+  withManifest(`${manifest()}${'N'.repeat(70)}: x\n`),
+);
+
+expectGreen(
+  'lines ended by CR alone, which Java reads as line breaks',
+  withManifest(manifest().replaceAll('\n', '\r')),
+);
+
+expectGreen(
+  'values Java reads as they are: empty, holding a colon, or starting with a space',
+  withManifest(`${manifest()}X-Empty: \nX-Url: http://a:b\nX-Spaced:  x\nX-Tab: \tx\n`),
+);
+
+expectGreen(
+  'sections after blank lines that begin with Name:, in any letter case',
+  withManifest(`${manifest()}\n\nName: a\nX-Note: a\n\nname: b\n\nNAME: \n`),
+);
+
+expectGreen(
+  'a Name: line continued, as Java continues one',
+  withManifest(`${manifest()}\nName: OSGI-INF/acme-config-\n config.xml\nX-Note: a\n`),
+);
+
 // ---- third review round (PR #542): attributes read whole, and contributions counted where the
 // server would actually read them ----
 

@@ -226,7 +226,11 @@ tokens and Satori's fonts, and this repository is public, so the workflow artifa
 The Satori package owners approved it (relayed 2026-10-28; record the approver or ticket here).
 Until that approval this file, the workflow and the gate all said the opposite, so do not read a
 narrowed gate as an accident. `satori-components-satori`'s own Storybook is still **not**
-published: the approval was for the themed build, and nothing asked for the other.
+published: the approval was for the themed build, and nothing asked for the other. It is built
+and checked there all the same, by a separate `storybook-satori` job that runs the gate of that
+name: every story is opened in Chromium and fails if Satori's translation catalogues are not
+served. That job does not gate `deploy`, so a failure in an unpublished Storybook cannot freeze
+the site.
 
 `scripts/storybook-publication-gate.mjs` is unchanged and still runs, but on the default build
 alone — in CI after its own build, and in `storybook-pages.yml` before the site is assembled, while
