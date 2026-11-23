@@ -1,0 +1,190 @@
+@let page = shown();
+<div
+  class="record-page"
+  [attr.data-record-type]="page.type"
+  [style.--record-page-columns]="page.columns"
+>
+  @if (page.tabs) {
+    <mat-tab-group
+      class="record-page__tabs"
+      mat-stretch-tabs="false"
+      animationDuration="0ms"
+      [aria-label]="'document-layouts.sections' | translate"
+    >
+      @for (tab of page.tabs; track tab.id) {
+        <mat-tab [label]="tab.label">
+          <ng-template matTabContent>
+            <div class="record-page__grid" [attr.data-tab-id]="tab.id">
+              <ng-container
+                [ngTemplateOutlet]="cardList"
+                [ngTemplateOutletContext]="{ $implicit: tab.cards }"
+              />
+            </div>
+          </ng-template>
+        </mat-tab>
+      }
+    </mat-tab-group>
+  } @else {
+    <div class="record-page__grid">
+      <ng-container
+        [ngTemplateOutlet]="cardList"
+        [ngTemplateOutletContext]="{ $implicit: page.cards }"
+      />
+    </div>
+  }
+</div>
+
+<ng-template #cardList let-cards>
+  @for (card of cards; track card.id) {
+    <section
+      class="record-page__card"
+      [attr.data-card-id]="card.id"
+      [attr.aria-labelledby]="card.heading ? 'record-card-' + card.id : null"
+      [style.--record-card-span]="card.span"
+    >
+      @if (card.heading) {
+        <h3 class="record-page__heading" [id]="'record-card-' + card.id">{{ card.heading }}</h3>
+      }
+      <dl class="record-page__fields">
+        @for (field of card.fields; track field.place) {
+          <div class="record-page__field" [attr.data-field]="field.key">
+            <dt class="record-page__label">{{ field.label }}</dt>
+            <dd class="record-page__value">
+              <ng-container
+                [ngTemplateOutlet]="valueView"
+                [ngTemplateOutletContext]="{ $implicit: field }"
+              />
+            </dd>
+          </div>
+        }
+      </dl>
+    </section>
+  }
+</ng-template>
+
+<ng-template #valueView let-field>
+  @switch (field.value.kind) {
+    @case ('text') {
+      {{ field.value.text }}
+    }
+    @case ('multiline') {
+      <span class="record-page__multiline">{{ field.value.text }}</span>
+    }
+    @case ('flag') {
+      {{ (field.value.flag ? 'document-layouts.yes' : 'document-layouts.no') | translate }}
+    }
+    @case ('link') {
+      <a class="record-page__link" [href]="field.value.href">{{ field.value.text }}</a>
+    }
+    @case ('badge') {
+      <lib-extension-outlet
+        class="record-page__badge"
+        [componentId]="statusTagId"
+        [componentInputs]="field.tag"
+      />
+    }
+    @case ('chips') {
+      <ul class="record-page__chips">
+        @for (chip of field.value.chips; track $index) {
+          <li class="record-page__chip">{{ chip }}</li>
+        }
+      </ul>
+    }
+    @case ('lines') {
+      <span class="record-page__lines">
+        @for (line of field.value.lines; track $index) {
+          <span class="record-page__line">{{ line }}</span>
+        }
+      </span>
+    }
+    @case ('table') {
+      <table class="record-page__table">
+        <caption class="cdk-visually-hidden">
+          {{
+            field.label
+          }}
+        </caption>
+        <thead>
+          <tr>
+            @for (heading of field.value.headings; track $index) {
+              <th scope="col">{{ heading }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of field.value.rows; track $index) {
+            <tr>
+              @for (cell of row; track $index) {
+                <td>{{ cell }}</td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+    @case ('html') {
+      <div class="record-page__rich-text" [innerHTML]="field.html"></div>
+    }
+    @case ('layout') {
+      <ng-container
+        [ngTemplateOutlet]="versionOne"
+        [ngTemplateOutletContext]="{ $implicit: field.value.field }"
+      />
+    }
+    @default {
+      <span class="record-page__empty">—</span>
+    }
+  }
+</ng-template>
+
+<!-- A field with no widget: shown as the Properties panel shows it, by its schema type. -->
+<ng-template #versionOne let-view>
+  @switch (view.kind) {
+    @case ('value') {
+      <ng-container
+        [ngTemplateOutlet]="scalar"
+        [ngTemplateOutletContext]="{ $implicit: view.value }"
+      />
+    }
+    @case ('chips') {
+      <ul class="record-page__chips">
+        @for (chip of view.chips; track $index) {
+          <li class="record-page__chip">
+            <ng-container
+              [ngTemplateOutlet]="scalar"
+              [ngTemplateOutletContext]="{ $implicit: chip }"
+            />
+          </li>
+        }
+      </ul>
+    }
+    @case ('groups') {
+      @for (group of view.groups; track $index) {
+        <dl class="record-page__nested">
+          @for (sub of group; track sub.key) {
+            <div class="record-page__field" [attr.data-subfield]="sub.key">
+              <dt class="record-page__label">{{ sub.label }}</dt>
+              <dd class="record-page__value">
+                <ng-container
+                  [ngTemplateOutlet]="versionOne"
+                  [ngTemplateOutletContext]="{ $implicit: sub }"
+                />
+              </dd>
+            </div>
+          }
+        </dl>
+      }
+    }
+    @default {
+      <span class="record-page__empty">—</span>
+    }
+  }
+</ng-template>
+
+<ng-template #scalar let-value>
+  @if (value.flag === undefined) {
+    {{ value.text }}
+  } @else {
+    {{ (value.flag ? 'document-layouts.yes' : 'document-layouts.no') | translate }}
+  }
+</ng-template>

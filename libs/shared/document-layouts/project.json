@@ -4,7 +4,7 @@
   "sourceRoot": "libs/shared/document-layouts/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": ["scope:shared", "type:ui"],
+  "tags": ["scope:shared", "scope:engine", "type:ui"],
   "targets": {
     "test": {
       "executor": "@nx/vitest:test",

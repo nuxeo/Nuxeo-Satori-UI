@@ -55,7 +55,7 @@ servers with read-only calls; everything else is a proposal, and anything not ch
 - **Configuration is loaded, not compiled, and lives outside the app bundle,** because
   configuration inside the bundle is destroyed on upgrade (verified fact,
   [AGENTS/11-beta-program.md](../../AGENTS/11-beta-program.md) section 3).
-- **Layer 1 stays additive** in the Beta, as already decided ([adf-hx-beta-plan.md](../adf-hx-beta-plan.md)).
+- **Layer 1 stays additive** in the Beta, as already decided ([beta-plan.md](../beta-plan.md)).
 - **The repository is public.** No account names and no security findings in documents; those go
   through internal channels.
 
@@ -479,8 +479,8 @@ The waves of the plan's section 14, and what each tier delivers in them.
   - an experience carries `scope:experience`, and may not use the current app's features. That is
     why `apps/nuxeo-ui` takes the tag only as its features become modules and engines.
 
-  The first engine, `libs/shared/computations` (computations, above), carries `scope:engine`, and
-  imports only shared code. No module or experience exists before phase 1, so lint has no forbidden
+  Two engines carry `scope:engine` so far, `libs/shared/computations` and the record page's
+  `libs/shared/document-layouts`, and both import only shared code. No module or experience exists before phase 1, so lint has no forbidden
   import to fail on, and `npm run beta:module-boundaries` proves the rules in CI. It lints imports
   between probe projects that carry each tag, with the real rule: 6 forbidden imports reported, 6
   allowed ones quiet.

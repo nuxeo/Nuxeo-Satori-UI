@@ -358,7 +358,15 @@ describe('DocumentDetailComponent — tab surfaces', () => {
     // calls. It did not. The project is green with it in place, so that surface is not there —
     // the component's other collaborators are all injected as mocks. The guard stays because it
     // is cheap and capable of failing, not because it found anything.
-    TestBed.inject(HttpTestingController).verify();
+    //
+    // One read is known and answered first: the View tab asks the layouts index whether the
+    // type has a record page (layout-v2.md), which a 404 says it has not, as the per-type layout
+    // tests answer it. Every other request is still verified.
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .match((request) => request.url.endsWith('/agentic-ui-config/layouts.json'))
+      .forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+    http.verify();
   });
 
   describe('tab switching', () => {

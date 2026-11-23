@@ -1266,6 +1266,173 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     );
   });
 
+  /**
+   * Phase 1's record page: a type contributed a `view` file, layout version 2, and the View tab
+   * draws it in place of the packaged viewer (docs/business-apps/layout-v2.md, section 1). Seen
+   * red on purpose by removing the `recordLayout()` branch from `#viewTabContent`.
+   */
+  describe('record page', () => {
+    const FORMAT = 'nuxeo-agentic-ui-config/1';
+    const VIEW = {
+      version: 2,
+      columns: 2,
+      cards: [
+        {
+          id: 'claim',
+          label: 'Claim',
+          fields: [
+            'claim:number',
+            { field: 'claim:billedAmount', widget: 'currency', parameters: { currency: 'USD' } },
+          ],
+        },
+      ],
+    };
+    const claim = (): NuxeoDocument =>
+      doc({ type: 'Claim', properties: { 'claim:number': 'CLM-1', 'claim:billedAmount': 2480 } });
+
+    /** The layouts index naming `entries`, and the Claim `view` file when one is given. */
+    async function answer(entries: readonly string[], view?: unknown): Promise<void> {
+      const http = TestBed.inject(HttpTestingController);
+      http
+        .match((request) => request.url.endsWith('/agentic-ui-config/layouts.json'))
+        .forEach((request) =>
+          request.flush({
+            format: FORMAT,
+            layer: 'layouts',
+            layouts: entries.map((entry) => {
+              const [type, mode] = entry.split('/');
+              return { type, mode, component: 'org.acme.config' };
+            }),
+            diagnostics: [],
+          }),
+        );
+      if (view !== undefined) {
+        http
+          .expectOne((request) =>
+            request.url.endsWith('/agentic-ui-config/layouts/Claim/view.layout.json'),
+          )
+          .flush({ format: FORMAT, layer: 'layout', type: 'Claim', mode: 'view', content: view });
+      }
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    const viewBody = (): HTMLElement =>
+      fixture.nativeElement.querySelector('.mat-mdc-tab-body-active') as HTMLElement;
+
+    it("draws the View tab from the type's view file, in place of the packaged viewer", async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await render({}, claim());
+      await answer(['Claim/view'], VIEW);
+
+      const page = viewBody().querySelector('lib-record-page');
+      expect(page?.querySelector('[data-card-id="claim"] h3')?.textContent?.trim()).toBe('Claim');
+      expect(
+        [...(page?.querySelectorAll('[data-field]') ?? [])].map((row) => [
+          row.getAttribute('data-field'),
+          row.querySelector('.record-page__value')?.textContent?.trim(),
+        ]),
+      ).toEqual([
+        ['claim:number', 'CLM-1'],
+        ['claim:billedAmount', '$2,480.00'],
+      ]);
+      expect(viewBody().querySelector('lib-document-viewer')).toBeNull();
+    });
+
+    it("keeps the packaged viewer when the type's view file is refused", async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await render({}, claim());
+      await answer(['Claim/view'], { version: 1, display: 'sections', sections: [] });
+
+      expect(viewBody().querySelector('lib-record-page')).toBeNull();
+      expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Claim/view layout from'));
+    });
+
+    it('keeps the packaged viewer for a type with no view file, asking for none', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await render({}, claim());
+      await answer(['Claim/metadata']);
+
+      TestBed.inject(HttpTestingController).expectNone((request) =>
+        request.url.includes('/layouts/Claim/view'),
+      );
+      expect(viewBody().querySelector('lib-record-page')).toBeNull();
+      expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
+    });
+
+    it("never shows one document's record page with the next one's values", async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await render({}, claim());
+      await answer(['Claim/view', 'Case/view'], VIEW);
+      expect(viewBody().querySelector('lib-record-page')).toBeTruthy();
+
+      // A Case, whose own view file has not been answered yet: the Claim's page must not stay.
+      fixture.componentInstance.doc.set(doc({ uid: 'case-1', type: 'Case', properties: {} }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(viewBody().querySelector('lib-record-page')).toBeNull();
+      TestBed.inject(HttpTestingController)
+        .match((request) => request.url.includes('/layouts/Case/view'))
+        .forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+    });
+
+    it("gives way to the record page when a documentView entry's component cannot load", async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      await render(
+        {
+          slots: {
+            documentView: [
+              {
+                id: 'acme.documentView.broken',
+                componentId: 'acme.views.broken',
+                rule: { type: IS_TYPE_RULE, parameters: ['Claim'] },
+              },
+            ],
+          },
+        },
+        claim(),
+      );
+      await answer(['Claim/view'], VIEW);
+      // Lets the failing chunk's rejection land, and the outlet mark itself unresolved.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(viewBody().querySelector('.document-view-outlet--unresolved')).toBeTruthy();
+      expect(viewBody().querySelector('lib-record-page')).toBeTruthy();
+      expect(viewBody().querySelector('lib-document-viewer')).toBeNull();
+    });
+
+    it('lets a documentView entry keep the tab: code that chose the component keeps it', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await render(
+        {
+          slots: {
+            documentView: [
+              {
+                id: 'acme.documentView.claim',
+                componentId: 'acme.views.claim',
+                rule: { type: IS_TYPE_RULE, parameters: ['Claim'] },
+              },
+            ],
+          },
+        },
+        claim(),
+      );
+      await answer(['Claim/view'], VIEW);
+
+      expect(
+        viewBody().querySelector('[data-document-view-id="acme.documentView.claim"]'),
+      ).toBeTruthy();
+      expect(viewBody().querySelector('lib-record-page')).toBeNull();
+    });
+  });
+
   describe('documentView', () => {
     const claim = (over: Partial<NuxeoDocument> = {}): NuxeoDocument =>
       doc({ uid: 'claim-1', title: 'Claim CLM-42', type: 'Claim', ...over });

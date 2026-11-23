@@ -134,8 +134,9 @@ known: by the pipeline in dev mode, by the designer, and by the migration server
 | `image`         | `blob`                         |                                                                          | An image upload                  |
 | `file-list`     | `blob[]`, `complex[]` of files |                                                                          | File uploads                     |
 
-- **Rich text** is shown through the platform's sanitiser, like every other HTML the app renders.
-  It is the only widget that renders HTML.
+- **Rich text** is shown through the platform's sanitiser, like every other HTML the app renders,
+  and keeps formatting, lists, quotes, code and links only: no image, form, style or frame. It is
+  the only widget that renders HTML.
 - **A widget's text is the property's display value.** For a vocabulary, that is its label; for a
   user, their name.
 
@@ -169,6 +170,9 @@ A parameter is one of:
 | `core.dateDiff` | Two dates (the second may be `"today"`), and `days`, `months` or `years` | The difference, in that unit                                                                     |
 | `core.choose`   | A rule, then two values                                                  | The first value while the rule passes, the second otherwise                                      |
 
+- **A computed field is text, never HTML,** so it cannot use `rich-text`: a template puts
+  property values into its text, and anyone who may edit one would otherwise write markup on the
+  page. The validator refuses it.
 - **Anything else is registered in code.** A customer's own computation is a Layer 2
   registration, reviewed and built into the app, as a customer's own rule is today.
 - **Every computation does bounded work on the record already loaded.** It makes no request and
@@ -399,12 +403,41 @@ lists what each Web UI element becomes. In version 2's terms:
 - **The schema and the validator are built**, in
   [`libs/shared/app-definition`](../../libs/shared/app-definition/README.md), with negative
   controls. Every JSON example in this document is one of its tests: a change here that the
-  validator does not follow fails them. What is still open about them:
-  - wiring them into the package pipeline, which phase 0 builds next;
-  - into the app, when phase 1 renders version 2;
-  - into the Studio migration's converter, in M1.
-- **Checking widgets against property types** needs the content model, so it comes in phase 1,
-  with the model reader.
+  validator does not follow fails them. The package pipeline runs them
+  ([package-pipeline.md](package-pipeline.md)); the Studio migration's converter will, in M1.
+- **What the app draws so far.** A `view` file draws the record page, `RecordPageComponent` in
+  `libs/shared/document-layouts`, loaded as section 8 says. Its limits, each said in the console
+  when a file meets it:
+  - **related records** are not drawn yet, so a card that lists them is left out;
+  - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, or any
+    record a facet gives the `file` or `note` schema, keeps its own View tab, its preview or its
+    editor: a record page beside a preview comes later;
+  - **a computed column** of a table is not drawn yet, nor **a table inside a table's column**:
+    that column is left out, and the rest of the table shows;
+  - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or
+    the stored id, until each has its lookup;
+  - **the three rules of section 5** are not registered yet, so a tab, card or field that one of
+    them shows is left out, rather than shown to everyone;
+  - **a rule nested more than 32 levels deep** leaves its tab, card or field out too: the rule
+    registry answers no deeper, and past that it passes any rule not declared security-relevant,
+    whatever the rule says;
+  - **`metadata`, `edit` and `create` files of version 2** are still refused, and the generated
+    layout shows.
+
+  Where this document is silent, the record page decides three things. **A template's placeholder**
+  shows its property as the first field on the page that shows it does, through that field's
+  widget and parameters, so a `user` field's id is a name there too; a property no field shows is
+  shown by its schema type. **A date with no widget**, alone, in a list or inside a complex
+  value, shows as the `date` widget shows one: a stored day as written, and an instant on the
+  reader's day ([pattern 29](../../AGENTS/08-bug-patterns.md)). Version 1's view shows every date
+  in UTC. **A computed field shown through `date` or `relative-date`** shows a result that is a
+  date as Nuxeo writes one, a day or a date and time with its zone, such as the date property a
+  `core.choose` gives; any other result is left out, and the console says why.
+
+- **Checking widgets against property types** happens wherever the content model is known. The app
+  checks each field against the type's schemas when it loads the page, and leaves out one whose
+  widget does not show its property. The pipeline, the designer and the migration server need
+  phase 1's model reader.
 - **More widgets, computations and rules** join the registries as kits need them. A map, a
   signature or a chart is a kit's request, not version 2's.
 - **Whether `metadata` mode should exist** once `view` does is phase 1's call, made once the

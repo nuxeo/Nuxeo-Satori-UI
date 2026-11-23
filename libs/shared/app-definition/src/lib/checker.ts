@@ -374,6 +374,16 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
           'a computed field is never editable, so it is never required or read-only',
         );
       }
+      // A computation's result is always text, never HTML (layout-v2.md, section 4), and
+      // `core.template` puts property values into it: shown through `rich-text`, a value anyone
+      // may edit would become markup on the page.
+      if (entry['widget'] === 'rich-text') {
+        add(
+          join(path, 'widget'),
+          'parameter',
+          'a computed field is text, never HTML, so it cannot use the widget "rich-text"',
+        );
+      }
     }
     if ('id' in entry) claim(entry['id'], join(path, 'id'));
     widget(entry, path, form);

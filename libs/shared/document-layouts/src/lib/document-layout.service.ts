@@ -1,9 +1,11 @@
 import { HttpBackend, HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
+import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';
 import {
   L10nDirectoryEntry,
   NuxeoApiBase,
+  type NuxeoDocument,
   directoryPickerLabel,
   directoryUsesL10nLabel,
   formatHierarchicalL10nLabel,
@@ -40,9 +42,17 @@ import {
   facetSchemasToRead,
   generateLayout,
   prefixOfXpath,
+  readDocumentSchemas,
   readDocumentType,
   readSchemaResponse,
 } from './resolve-layout';
+import { RecordLayoutFile, readRecordLayout } from './record-page/record-layout';
+import {
+  ResolvedRecordLayout,
+  SkippedRecordField,
+  recordFacetSchemasToRead,
+  resolveRecordLayout,
+} from './record-page/resolve-record-layout';
 
 /** As for the bootstrap and manifest reads: `HttpClient` has no timeout of its own. */
 export const LAYOUT_LOAD_TIMEOUT_MS = 10_000;
@@ -110,6 +120,42 @@ function leafOf(id: string): string {
   return id.slice(id.lastIndexOf('/') + 1);
 }
 
+/** The schemas whose records the View tab shows by their own content: a file, a note. */
+const OWN_VIEW_SCHEMAS: ReadonlySet<string> = new Set(['file', 'note']);
+
+/** The name a user or group is shown by: first and last name, or the group's label. */
+export function principalName(kind: 'user' | 'group', raw: unknown): string | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const record = raw as Record<string, unknown>;
+  if (kind === 'group') {
+    const { grouplabel, groupname } = record;
+    if (typeof grouplabel === 'string' && grouplabel.trim() !== '') return grouplabel;
+    return typeof groupname === 'string' && groupname !== '' ? groupname : null;
+  }
+  const properties = record['properties'];
+  if (typeof properties !== 'object' || properties === null) return null;
+  const { firstName, lastName } = properties as Record<string, unknown>;
+  const name = [firstName, lastName]
+    .filter((part): part is string => typeof part === 'string' && part.trim() !== '')
+    .join(' ');
+  return name === '' ? null : name;
+}
+
+/** Why the record page left a field out, as the console says it. */
+function skippedMessage(
+  type: string,
+  field: SkippedRecordField,
+  unread: ReadonlyMap<string, string>,
+): string {
+  if (field.reason === 'widget-type') {
+    return `${type}/view layout: ${field.place} left out: the widget "${field.widget}" does not show ${field.xpath}, a ${field.type} property`;
+  }
+  const schema = unread.get(prefixOfXpath(field.xpath));
+  return schema
+    ? `${type}/view layout: ${field.place} left out: ${field.xpath} is in schema ${schema}, which was not read`
+    : `${type}/view layout: ${field.place} left out: ${field.xpath} is not on the ${type} type or this document's facets`;
+}
+
 /**
  * Resolves the layout a document shows in a mode, from its type and its own schemas.
  *
@@ -136,12 +182,167 @@ export class DocumentLayoutService {
    */
   private readonly http = new HttpClient(inject(HttpBackend));
   private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
+  private readonly rules = inject(ExtensionRuleRegistry);
 
   private index$: Observable<LayoutIndex> | null = null;
   private readonly files = new Map<string, Observable<LayoutFile | null>>();
+  private readonly recordFiles = new Map<string, Observable<RecordLayoutFile | null>>();
   private readonly types = new Map<string, Observable<DocumentTypeDefinition | null>>();
   private readonly schemas = new Map<string, Observable<DocumentTypeSchema | null>>();
   private readonly entries = new Map<string, Observable<VocabularyEntry | null>>();
+  private readonly principals = new Map<string, Observable<string | null>>();
+  /** The types the console has been told keep their own view, so that it is told once each. */
+  private readonly ownView = new Set<string>();
+
+  /**
+   * The record page a document shows in its View tab: the `view` file its type was contributed,
+   * layout version 2, resolved against the type and the document's own schemas. Never errors.
+   *
+   * `null` when the type has no `view` file, when its file is refused, or when the type's schemas
+   * cannot be read. The View tab is then today's document page, as layout-v2.md, section 1, says.
+   * A type with no `view` file costs no request but the index, which is read once per session.
+   */
+  recordLayoutFor(
+    type: string,
+    documentSchemas: readonly DocumentSchemaRef[] = [],
+  ): Observable<ResolvedRecordLayout | null> {
+    return this.recordFile(type).pipe(
+      switchMap((file) =>
+        file
+          ? this.documentType(type).pipe(
+              switchMap((definition) => {
+                if (!definition) return of(null);
+                // The type's schemas and the document's own: a dynamic facet can add `file` or
+                // `note` to one record of a type that has neither, and its preview shows first too.
+                const schemas = [...definition.schemas, ...documentSchemas];
+                if (schemas.some((schema) => OWN_VIEW_SCHEMAS.has(schema.name))) {
+                  return this.ownViewFirst(type);
+                }
+                return this.resolveRecord(definition, file, documentSchemas);
+              }),
+            )
+          : of(null),
+      ),
+    );
+  }
+
+  /** {@link recordLayoutFor} for one document: its type, and the schemas its own read reports. */
+  recordLayoutOf(document: NuxeoDocument): Observable<ResolvedRecordLayout | null> {
+    return this.recordLayoutFor(
+      document.type,
+      readDocumentSchemas('schemas' in document ? document.schemas : undefined),
+    );
+  }
+
+  /**
+   * A user's or group's display name, or `null` when it cannot be read. Never errors.
+   *
+   * Read by id, once per session, and for a group without its members, which `UserService` asks
+   * for and a label does not need. A failed read is asked again by the next page that shows it.
+   */
+  principalLabel(kind: 'user' | 'group', id: string): Observable<string | null> {
+    const key = `${kind}\n${id}`;
+    let cached = this.principals.get(key);
+    if (!cached) {
+      cached = this.api.get<unknown>(`/nuxeo/api/v1/${kind}/${encodeURIComponent(id)}`).pipe(
+        timeout(LAYOUT_LOAD_TIMEOUT_MS),
+        map((raw) => principalName(kind, raw)),
+        catchError((error: unknown) => {
+          this.principals.delete(key);
+          warn(`${kind} ${id} not read: ${describe(error)}`);
+          return of(null);
+        }),
+        shareReplay({ bufferSize: 1, refCount: false }),
+      );
+      this.principals.set(key, cached);
+    }
+    return cached;
+  }
+
+  /**
+   * A file's preview and a note's editor show first (layout-v2.md, section 10), and a record
+   * page beside them comes later: until then the View tab of a record with either, through its
+   * type or through a facet, is today's, and the console says so once per type.
+   */
+  private ownViewFirst(type: string): Observable<null> {
+    if (!this.ownView.has(type)) {
+      this.ownView.add(type);
+      warn(
+        `${type}/view layout not drawn for a ${type} with a file or a note, which the View tab shows first; a record page beside it comes later`,
+      );
+    }
+    return of(null);
+  }
+
+  private resolveRecord(
+    definition: DocumentTypeDefinition,
+    file: RecordLayoutFile,
+    documentSchemas: readonly DocumentSchemaRef[],
+  ): Observable<ResolvedRecordLayout> {
+    const wanted = recordFacetSchemasToRead(definition, documentSchemas, file);
+    const reads: Observable<readonly (DocumentTypeSchema | null)[]> = wanted.length
+      ? forkJoin(wanted.map(({ name }) => this.schema(name)))
+      : of([]);
+    return reads.pipe(
+      map((read) => {
+        const facets = read.filter((schema): schema is DocumentTypeSchema => schema !== null);
+        const unread = new Map(
+          wanted.filter((_, i) => !read[i]).map((ref) => [ref.prefix, ref.name]),
+        );
+        const { layout, skipped, notes } = resolveRecordLayout(definition, file, facets);
+        for (const field of skipped) warn(skippedMessage(definition.name, field, unread));
+        for (const note of notes) warn(`${definition.name}/view layout: ${note}`);
+        return layout;
+      }),
+    );
+  }
+
+  private recordFile(type: string): Observable<RecordLayoutFile | null> {
+    let cached = this.recordFiles.get(type);
+    if (!cached) {
+      cached = this.index().pipe(
+        switchMap((index) =>
+          index.entries.some((entry) => entry.type === type && entry.mode === 'view')
+            ? this.fetchRecordFile(type)
+            : of(null),
+        ),
+        shareReplay({ bufferSize: 1, refCount: false }),
+      );
+      this.recordFiles.set(type, cached);
+    }
+    return cached;
+  }
+
+  /**
+   * A `view` file is version 2: version 1 has no `view` mode. Rules are checked against this
+   * build's registry here, once per session: the rules register before the first page shows.
+   */
+  private fetchRecordFile(type: string): Observable<RecordLayoutFile | null> {
+    const url = layoutFileUrl(this.bootstrapUrl, type, 'view');
+    return this.http.get<unknown>(url).pipe(
+      timeout(LAYOUT_LOAD_TIMEOUT_MS),
+      map((raw) => {
+        const envelope = readLayoutEnvelope(raw, type, 'view');
+        if ('invalid' in envelope) {
+          warn(`${type}/view layout from ${url} ignored: ${envelope.invalid}`);
+          return null;
+        }
+        const file = readRecordLayout(envelope.content, this.rules.registeredRuleIds());
+        if ('invalid' in file) {
+          warn(
+            `${type}/view layout from ${url} refused, showing the document page: ${file.invalid}`,
+          );
+          return null;
+        }
+        for (const problem of file.problems) warn(`${type}/view layout: ${problem}`);
+        return file;
+      }),
+      catchError((error: unknown) => {
+        warn(`${type}/view layout not loaded from ${url}: ${describe(error)}`);
+        return of(null);
+      }),
+    );
+  }
 
   /**
    * The layout to render for a document, or `null` when its type's schemas cannot be read.
