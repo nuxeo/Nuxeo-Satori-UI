@@ -453,4 +453,142 @@ describe('app-definition validate', () => {
       }
     });
   });
+
+  describe('the content model, from --model', () => {
+    /** The model of a server with a Member type, as `app-package-model.mjs` exports it. */
+    const model = {
+      doctypes: { Member: { parent: 'Document', facets: [], schemas: ['member'] } },
+      facets: [],
+      schemas: [
+        {
+          name: 'member',
+          '@prefix': 'member',
+          fields: { firstName: { type: 'string' }, birthDate: { type: 'date' } },
+        },
+      ],
+    };
+
+    it('passes a package whose layouts fit the model, and says how many it held to it', () => {
+      const root = packageWith({
+        'pkg/layouts/Member/view.layout.json': view,
+        // Not a layout, so not held to the model, and not counted.
+        'pkg/labels/en.json': { version: 2, labels: {} },
+        'model.json': model,
+      });
+      const { code, out } = run([
+        'validate',
+        join(root, 'pkg'),
+        '--model',
+        join(root, 'model.json'),
+      ]);
+      expect(out).toContain('2 files: 2 passed, 0 refused.');
+      expect(code).toBe(0);
+      expect(out).toContain(
+        `1 layout was held to the content model in ${join(root, 'model.json')}.`,
+      );
+    });
+
+    it('counts only the layouts the validator held to the model: not version 1, 3, or one with no type', () => {
+      const none = (model: string): string =>
+        `No layout was held to the content model in ${model}: none is of version 2, in a mode, for a type its path names.`;
+      const root = packageWith({
+        'pkg/layouts/Member/view.layout.json': { version: 1, sections: [{ fields: ['member:x'] }] },
+        'pkg/layouts/Member/edit.layout.json': { version: 3, cards: [] },
+        'loose/member.json': view,
+        'model.json': model,
+      });
+      const modelFile = join(root, 'model.json');
+      const versions = run(['validate', join(root, 'pkg'), '--model', modelFile]);
+      expect(versions.out).toContain('version must be 2, not 3 [structure]');
+      expect(versions.out).toContain(none(modelFile));
+      expect(versions.out).not.toMatch(/\d+ layouts? (was|were) held/);
+      // A file a forced --mode reads has no type in its path, so it is not held either.
+      const loose = run([
+        'validate',
+        join(root, 'loose/member.json'),
+        '--mode',
+        'view',
+        '--model',
+        modelFile,
+      ]);
+      expect(loose.out).toContain(none(modelFile));
+    });
+
+    it('refuses a widget that does not show its property, naming the file, the place and both types', () => {
+      const broken = structuredClone(view);
+      (broken.cards[0].fields[1] as { widget: string }).widget = 'boolean';
+      const root = packageWith({ 'layouts/Member/view.layout.json': broken, 'model.json': model });
+      const { code, out } = run([
+        'validate',
+        join(root, 'layouts'),
+        '--model',
+        join(root, 'model.json'),
+      ]);
+      expect(code).toBe(1);
+      expect(out).toContain(
+        `${join(root, 'layouts/Member/view.layout.json')}: cards[0].fields[1].widget: the widget "boolean" does not show "member:birthDate", a date property: it takes boolean [parameter]`,
+      );
+      // The same file, with no model: the model is what refuses it.
+      expect(run(['validate', join(root, 'layouts')]).code).toBe(0);
+    });
+
+    it('refuses a layout whose type a forced --mode leaves unsaid', () => {
+      const root = packageWith({ 'member.json': view, 'model.json': model });
+      const { code, out } = run([
+        'validate',
+        join(root, 'member.json'),
+        '--mode',
+        'view',
+        '--model',
+        join(root, 'model.json'),
+      ]);
+      expect(code).toBe(1);
+      expect(out).toContain(
+        'the file: a content model was given without the document type the file lays out, so no field was checked against it [unknown]',
+      );
+    });
+
+    it('exits 2 for a model it cannot read, with what is wrong', () => {
+      const root = packageWith({
+        'layouts/Member/view.layout.json': view,
+        'broken.json': { ...model, doctypes: { Member: { schemas: ['missing'] } } },
+        'text.json': 'not JSON',
+      });
+      for (const [file, message] of [
+        ['broken.json', 'doctypes.Member.schemas: the schema "missing" is not in schemas'],
+        ['text.json', 'cannot be read as JSON'],
+        ['absent.json', 'cannot be read as JSON'],
+      ]) {
+        const { code, err } = run(['validate', root, '--model', join(root, file)]);
+        expect(code).toBe(2);
+        expect(err).toContain(message);
+      }
+      expect(run(['validate', root, '--model']).code).toBe(2);
+    });
+
+    it('reads a model alone with model <file>: 0 when it is whole, 1 with every problem', () => {
+      const root = packageWith({
+        'model.json': model,
+        'broken.json': {
+          ...model,
+          doctypes: { Member: { schemas: ['one', 'two'], facets: ['three'] } },
+        },
+      });
+      const sound = run(['model', join(root, 'model.json')]);
+      expect(sound.code).toBe(0);
+      expect(sound.out).toBe(
+        `${join(root, 'model.json')}: a content model of 1 document type, 0 facets and 1 schema.\n`,
+      );
+      const broken = run(['model', join(root, 'broken.json')]);
+      expect(broken.code).toBe(1);
+      expect(broken.out).toBe(
+        `${join(root, 'broken.json')}: is not a content model:\n` +
+          '  - doctypes.Member.facets: the facet "three" is not in facets\n' +
+          '  - doctypes.Member.schemas: the schema "one" is not in schemas\n' +
+          '  - doctypes.Member.schemas: the schema "two" is not in schemas\n',
+      );
+      for (const argv of [['model'], ['model', '--x'], ['model', 'a', 'b']])
+        expect(run(argv).code).toBe(2);
+    });
+  });
 });

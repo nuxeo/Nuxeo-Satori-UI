@@ -34,6 +34,9 @@ unpublishDocument(proxyUid: string): Observable<unknown>
 republishDocument(sourceUid: string, targetSectionId: string): Observable<NuxeoDocument>
 lockDocument(uid: string): Observable<NuxeoDocument>
 unlockDocument(uid: string): Observable<NuxeoDocument>
+followTransition(uid: string, transition: string): Observable<NuxeoDocument>
+  // @op/Document.FollowLifecycleTransition with params.value; what to offer is getFullDocument's
+  // `allowedTransitions` enricher (nuxeo-agentic-core), read with allowedTransitions(doc)
 addToFavorites(uid: string): Observable<NuxeoDocument>
 removeFromFavorites(uid: string): Observable<NuxeoDocument>
 trashDocument(uid: string): Observable<NuxeoDocument>

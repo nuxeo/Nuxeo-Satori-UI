@@ -15,7 +15,7 @@ builds it. Two proposals define the files:
 - [app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md), for the others.
 
 ```bash
-npm run app-definition:validate -- <package or file>... [--mode view|metadata|edit|create] [--allow-list <file>] [--registered <file>] [--platform <version>]
+npm run app-definition:validate -- <package or file>... [--mode view|metadata|edit|create] [--allow-list <file>] [--registered <file>] [--platform <version>] [--model <file>]
 ```
 
 It is the check behind phase 0's demo step 1, which the package pipeline runs
@@ -45,6 +45,16 @@ install and no transpiler.
     toolbar's for one, which a package's own action may not take the id of. Domain modules go here
     too, until each is built.
   - **`--platform`:** its platform version, which `app.json`'s range must hold.
+  - **`--model`:** its server's content model, `{ doctypes, facets, schemas }`, as
+    `npm run app-package:model` exports it
+    ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 4). Each
+    layout is then held to the document type its path names: a field whose property is on neither
+    the type nor a facet it declares, a widget that does not show its property's type, and a table
+    column or an address part naming a subfield the property lacks are each found. A model it
+    cannot read exits 2, with every problem. Version 1 layouts are not held to it, and the run says
+    how many layouts were, or that none was.
+- **`model <file>`:** reads a content model alone, as `--model` does: exit 0 when it can be read
+  whole, 1 with every problem when it cannot. The export checks the file it writes with it.
 - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
   counted.
 - **Exit codes:**
@@ -82,7 +92,7 @@ install and no transpiler.
     queues. The app reads `home.json` alone, so it does not know them, and does not check them.
 - **The registries** hold everything a file may name, by ID (decision 4: no expression language):
   - 21 widgets, each with its parameters, which are checked, and the property types it takes,
-    which are recorded for phase 1 to check;
+    which are checked when a content model is given;
   - the 6 computations and the 2 checks, with their signatures;
   - the rules, row actions and bulk actions the platform registers, version 2's three rules
     among them;
@@ -101,6 +111,17 @@ install and no transpiler.
   - everything across files.
 - **`checker.ts`** holds what every file shares: ids, names, rules, values, computations and field
   entries.
+- **`content-model.ts`** is the model reader. `readContentModel` reads a server's document types,
+  facets and schemas, `{ doctypes, facets, schemas }`, which is `NuxeoContentModel`'s shape: each
+  property's type, whether it is a list, its subfields and, when the schema was read with
+  `fetch-schema: fields`, its directory. It refuses a model it cannot read
+  whole, since a layout held to a model read in part would be refused for what was left out.
+  `propertiesOf` gives a type's properties, its facets' included, by `<prefix>:<name>`.
+- **`layout-model.ts`** holds a layout to the model, when `validateLayoutV2` is given one and the
+  type: each finding is `unknown` or `parameter`, so the app's tolerant loading still applies. Not
+  held to it: a related list's columns, which are other records'; the properties a computation, a
+  rule or a widget parameter names; a task form's fields; a vocabulary's `directory` against the
+  property's own.
 - **`image-source.ts`** holds the rules for a branding image's address. They are version 1's own,
   copied unchanged from `libs/shared/app-config`, which cannot be imported here without Angular.
 
@@ -138,7 +159,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   fails when a message has no control. It proves that every message has a control, not that every
   guard has one: two guards that give the same message look the same to it. The mutation checks
   are for guards.
-- **Mutation checks:** taking out any one of these 97 guards made a test fail. The helper that ran
+- **Mutation checks:** taking out any one of these 122 guards made a test fail. The helper that ran
   them refuses a mutation that does not apply exactly once, and one that breaks a suite instead of
   failing it.
   - **Layouts:**
@@ -220,6 +241,25 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - passing with nothing checked;
     - ignoring `--registered`;
     - knowing queues in a package with no `queues/`.
+  - **The content model:**
+    - accepting any widget on any property type;
+    - accepting a property the type does not have;
+    - skipping a table's columns, or an address's parts;
+    - leaving a type the model does not have unsaid;
+    - dropping a list's directory, from its `itemConstraints`;
+    - leaving out the schemas of a facet the type declares;
+    - reading `integer` as other than `long`;
+    - `validateFile` not passing the model on, or the validator not running its checks;
+    - the command exiting 0 for a model it cannot read, with `--model` or with `model <file>`;
+    - counting a file that is not a layout as held to the model, or one the validator stops before
+      the model's checks: of another version, or with no type, which `heldToModel` answers;
+    - reading a prefix that is not a text, or two that disagree, as no prefix;
+    - reading an explicit `null` as absent, for a type's facets or schemas, a facet's schemas or a
+      schema's fields, or a field's type as `complex`;
+    - accepting `""`, `"[]"` or `"string[][]"` as a type;
+    - reading a `directoryResolver` that names no directory, or constraints that are not a list, as
+      no binding;
+    - putting an address part that is not a text into a message, which threw.
   - **Versions:**
     - a caret on `0.x` reaching the next minor version;
     - a prerelease ranked equal to its release;
@@ -240,8 +280,9 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 - **The app's use of it:** a `view` layout draws the record page, in `libs/shared/document-layouts`,
   which loads it with `validateLayoutV2` and `loadable`, and draws its related records. The other
   modes and queues follow in phase 1, and actions and task forms in phase 2.
-- **Checking widgets against property types**, which needs the content model: phase 1's model
-  reader.
+- **The content model in the designer and the migration server.** The pipeline holds a package to
+  a model when given one; the designer and the migration server are still to call
+  `readContentModel` and `validateLayoutV2` with it.
 - **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, may name a
   rule that reads a record (app-definition-v2.md, section 13). The menu and the home refuse a
   `{ "field" }` value in a rule, and still pass a rule that reads a record.

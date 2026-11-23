@@ -1,0 +1,298 @@
+{
+  "request": {
+    "path": "/workflowModel/SerialDocumentReview/graph"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "graph",
+    "nodes": [
+      {
+        "x": 440,
+        "y": 0,
+        "isForkNode": false,
+        "isStartNode": true,
+        "isEndNode": false,
+        "id": "Task375f",
+        "title": "Start",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": true,
+        "endNode": false
+      },
+      {
+        "x": 420,
+        "y": 100,
+        "isForkNode": false,
+        "isStartNode": false,
+        "isEndNode": false,
+        "id": "Task38e",
+        "title": "Choose Participants",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": false,
+        "endNode": false
+      },
+      {
+        "x": 620,
+        "y": 280,
+        "isForkNode": false,
+        "isStartNode": false,
+        "isEndNode": false,
+        "id": "Task542",
+        "title": "Update the Document",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": false,
+        "endNode": false
+      },
+      {
+        "x": 420,
+        "y": 620,
+        "isForkNode": false,
+        "isStartNode": false,
+        "isEndNode": true,
+        "id": "Task5c1",
+        "title": "Stop",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": false,
+        "endNode": true
+      },
+      {
+        "x": 240,
+        "y": 280,
+        "isForkNode": false,
+        "isStartNode": false,
+        "isEndNode": false,
+        "id": "Task6d8",
+        "title": "Validate the Document",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": false,
+        "endNode": false
+      }
+    ],
+    "transitions": [
+      {
+        "nodeSourceId": "Task375f",
+        "nodeTargetId": "Task38e",
+        "label": "",
+        "path": []
+      },
+      {
+        "nodeSourceId": "Task38e",
+        "nodeTargetId": "Task5c1",
+        "label": "Cancelation",
+        "path": []
+      },
+      {
+        "nodeSourceId": "Task38e",
+        "nodeTargetId": "Task6d8",
+        "label": "Review Start",
+        "path": [
+          {
+            "x": 180,
+            "y": 0
+          },
+          {
+            "x": 180,
+            "y": 24
+          },
+          {
+            "x": 0,
+            "y": 24
+          },
+          {
+            "x": 0,
+            "y": 100
+          }
+        ]
+      },
+      {
+        "nodeSourceId": "Task542",
+        "nodeTargetId": "Task5c1",
+        "label": "Cancelation",
+        "path": [
+          {
+            "x": 200,
+            "y": 0
+          },
+          {
+            "x": 200,
+            "y": 130
+          },
+          {
+            "x": 0,
+            "y": 130
+          },
+          {
+            "x": 0,
+            "y": 260
+          }
+        ]
+      },
+      {
+        "nodeSourceId": "Task542",
+        "nodeTargetId": "Task6d8",
+        "label": "Document Re-Submission",
+        "path": [
+          {
+            "x": 380,
+            "y": 80
+          },
+          {
+            "x": 380,
+            "y": 103
+          },
+          {
+            "x": 71,
+            "y": 103
+          },
+          {
+            "x": 71,
+            "y": -30
+          },
+          {
+            "x": 0,
+            "y": -30
+          },
+          {
+            "x": 0,
+            "y": 0
+          }
+        ]
+      },
+      {
+        "nodeSourceId": "Task6d8",
+        "nodeTargetId": "Task5c1",
+        "label": "End",
+        "path": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 0,
+            "y": 129.99998474121094
+          },
+          {
+            "x": 200,
+            "y": 129.99998474121094
+          },
+          {
+            "x": 200,
+            "y": 259.9999694824219
+          }
+        ]
+      },
+      {
+        "nodeSourceId": "Task6d8",
+        "nodeTargetId": "Task6d8",
+        "label": "Rejection",
+        "path": [
+          {
+            "x": 0,
+            "y": 80
+          },
+          {
+            "x": 0,
+            "y": 125
+          },
+          {
+            "x": -151,
+            "y": 125
+          },
+          {
+            "x": -151,
+            "y": -76
+          },
+          {
+            "x": 20,
+            "y": -76
+          },
+          {
+            "x": 20,
+            "y": 0
+          }
+        ]
+      },
+      {
+        "nodeSourceId": "Task6d8",
+        "nodeTargetId": "Task542",
+        "label": "Document Update Request",
+        "path": [
+          {
+            "x": 0,
+            "y": 80
+          },
+          {
+            "x": 0,
+            "y": 123
+          },
+          {
+            "x": 190,
+            "y": 123
+          },
+          {
+            "x": 190,
+            "y": -30
+          },
+          {
+            "x": 380,
+            "y": -30
+          },
+          {
+            "x": 380,
+            "y": 0
+          }
+        ]
+      },
+      {
+        "nodeSourceId": "Task6d8",
+        "nodeTargetId": "Task6d8",
+        "label": "Validation",
+        "path": [
+          {
+            "x": 20,
+            "y": 80
+          },
+          {
+            "x": 20,
+            "y": 164
+          },
+          {
+            "x": -125,
+            "y": 164
+          },
+          {
+            "x": -125,
+            "y": -30
+          },
+          {
+            "x": 0,
+            "y": -30
+          },
+          {
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    ]
+  }
+}

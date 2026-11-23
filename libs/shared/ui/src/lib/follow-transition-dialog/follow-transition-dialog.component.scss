@@ -1,0 +1,39 @@
+:host {
+  display: block;
+  max-width: 28rem;
+}
+
+.lib-follow-transition__state,
+.lib-follow-transition__question {
+  margin: 0 0 0.75rem;
+  line-height: 1.5;
+}
+
+.lib-follow-transition__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lib-follow-transition__choice {
+  width: 100%;
+  height: auto;
+  min-height: 3rem;
+  padding-block: 0.5rem;
+  justify-content: flex-start;
+  text-align: start;
+}
+
+.lib-follow-transition__name {
+  display: block;
+  font-weight: 500;
+}
+
+.lib-follow-transition__destination {
+  display: block;
+  font-size: 0.875em;
+  font-weight: 400;
+}

@@ -1,0 +1,53 @@
+{
+  "request": {
+    "path": "/path/document-route-models-root/SerialDocumentReview/Task5c1",
+    "properties": "route_node"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "document",
+    "type": "RouteNode",
+    "path": "/document-route-models-root/SerialDocumentReview/Task5c1",
+    "facets": ["SystemDocument", "NotFulltextIndexable", "HiddenInNavigation", "facet-var_Task5c1"],
+    "properties": {
+      "rnode:taskDocType": null,
+      "rnode:subRouteModelExpr": null,
+      "rnode:taskButtons": [],
+      "rnode:transitions": [],
+      "rnode:taskLayout": null,
+      "rnode:startDate": null,
+      "rnode:taskY": "620",
+      "rnode:variablesFacet": "facet-var_Task5c1",
+      "rnode:subRouteVariables": [],
+      "rnode:subRouteInstanceId": null,
+      "rnode:taskX": "420",
+      "rnode:inputChain": "",
+      "rnode:canceled": null,
+      "rnode:endDate": null,
+      "rnode:lastActor": null,
+      "rnode:fork": null,
+      "rnode:executeOnlyFirstTransition": false,
+      "rnode:taskDueDate": null,
+      "rnode:hasMultipleTasks": null,
+      "rnode:taskNotificationTemplate": null,
+      "rnode:allowTaskReassignment": true,
+      "rnode:stop": true,
+      "rnode:taskAssignees": [],
+      "rnode:taskDueDateExpr": null,
+      "rnode:hasTask": false,
+      "rnode:button": null,
+      "rnode:escalationRules": [],
+      "rnode:outputChain": "",
+      "rnode:taskDirective": null,
+      "rnode:taskDescription": null,
+      "rnode:taskAssigneesExpr": null,
+      "rnode:count": null,
+      "rnode:tasksInfo": [],
+      "rnode:nodeId": "Task5c1",
+      "rnode:merge": null,
+      "rnode:start": false,
+      "rnode:taskAssigneesPermission": null
+    }
+  },
+  "trimmed": "properties: 37 of 37 kept (rnode, docri and var_ ones); the document's other keys left out"
+}

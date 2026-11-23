@@ -32,6 +32,7 @@ enrichers-document: subtypes           → adds @subtypes for allowed child type
 enrichers-document: hasContent         → adds @hasContent boolean
 enrichers-document: collections        → adds @collections membership
 enrichers-document: firstAccessibleAncestor → adds breadcrumb parent
+enrichers-document: allowedTransitions → ours (nuxeo-agentic-core): [{ name, destinationState }], the lifecycle transitions this user may follow now
 ```
 
 ### Blobs
@@ -112,6 +113,7 @@ Automation operations use `POST /nuxeo/api/v1/automation/:operationId` with body
 | Publish document        | `Document.PublishToSection`             | `target` (section uid)                                                                                                          |
 | Lock document           | `Document.Lock`                         | —                                                                                                                               |
 | Unlock document         | `Document.Unlock`                       | —                                                                                                                               |
+| Follow a transition     | `Document.FollowLifecycleTransition`    | `value` (the transition's name, from the `allowedTransitions` enricher)                                                         |
 | Add permission          | `Document.AddPermission`                | `username`, `permission`, `notify`, `comment`, `begin`, `end`, `creator` (logged-in user — populates "Granted by")              |
 | Replace permission      | `Document.ReplacePermission`            | `id`, `username`, `permission`, `notify`, `comment`, `begin`, `end` — an unknown `id` is a 200 no-op; omitted dates are cleared |
 | Remove permission       | `Document.RemovePermission`             | `id` removes one ACE; `user` removes **every** ACE of that principal (an unknown `id` is a 200 no-op)                           |

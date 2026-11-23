@@ -103,6 +103,14 @@ describe('DocumentDetailService permissions', () => {
 
     const req = httpMock.expectOne('/nuxeo/api/v1/id/root-uid');
     expect(req.request.headers.get('fetch-acls')).toBe('username,creator,extended');
+    // The page merges this read over the document, so it carries what a permission change moves:
+    // the permissions, and the lifecycle transitions they let the user follow.
+    expect(req.request.headers.get('enrichers.document')?.split(',')).toEqual([
+      'acls',
+      'permissions',
+      'userVisiblePermissions',
+      'allowedTransitions',
+    ]);
     req.flush({
       uid: 'root-uid',
       contextParameters: {
