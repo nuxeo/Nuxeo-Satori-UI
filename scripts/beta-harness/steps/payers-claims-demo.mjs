@@ -41,7 +41,7 @@
  * yet, so the approve button is left out of the queue's rows).
  */
 import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, extname, join, relative } from 'node:path';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireStepCredentials } from '../helpers.mjs';
@@ -322,8 +322,8 @@ export default async function run(page, h) {
   for (const path of served) {
     const answer = await page.request.get(`${h.baseUrl}/agentic-ui-config/${path}`);
     const { content, source } = unwrap(answer.ok() ? await answer.json().catch(unread) : null);
-    const fromKit =
-      source === null || source === relative(REPO, join(CONFIG, path)).split('\\').join('/');
+    // config:dev records the path it was given, relative to where it ran: the repository's root.
+    const fromKit = source === null || resolve(REPO, source) === join(CONFIG, path);
     if (!sameJson(content, kitFile(path)) || !fromKit)
       differing.push(`${path} (${answer.status()}${source ? `, from ${source}` : ''})`);
   }
@@ -631,8 +631,8 @@ export default async function run(page, h) {
   h.check(
     "the Member layout the dev server serves the app is the kit's file, layouts/Member/view.layout.json",
     sameJson(servedLayout.content, JSON.parse(fileText)) &&
-      servedLayout.source ===
-        'business-apps/packages/payers-claims-demo/bundle/agentic-ui-config/layouts/Member/view.layout.json',
+      typeof servedLayout.source === 'string' &&
+      resolve(REPO, servedLayout.source) === join(CONFIG, 'layouts', 'Member', 'view.layout.json'),
     `served from ${servedLayout.source}`,
   );
   const fileFields = viewFile.cards.map((c) => ({
