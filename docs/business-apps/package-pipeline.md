@@ -5,7 +5,8 @@ validate, sign, publish to pre-production. Phase 3 completes it, with versions, 
 promotion after a person approves.
 
 Status: built on 22 November 2026, and not yet run in full. The checks run on every pull request;
-signing and publishing run only for a tag, and no tag has been pushed yet.
+signing and publishing run only for a tag, and no tag has been pushed yet. Versions were added on
+23 November 2026 (section 8); signatures and promotion after approval are a proposal (section 9).
 
 ## The short version
 
@@ -18,6 +19,9 @@ signing and publishing run only for a tag, and no tag has been pushed yet.
 - **Held to the server's content model, when it is given one.** With `--model`, a model file
   exported from a server, a layout whose widget does not show its property's type is refused, and
   so is a field whose property the type does not have. It is opt in: with no model, these pass.
+- **Its version is held to what changed.** Given the package as it was, a version that did not move
+  when the content changed is refused, and so is one that moved less than the changes need: a
+  queue removed needs a major. Each build writes what changed beside the zip (section 8).
 
 ## 1. What an app definition package is
 
@@ -51,16 +55,16 @@ one exception is a `package.xml` that is a symbolic link, whose name is not read
 The workflow, [`app-packages.yml`](../../.github/workflows/app-packages.yml), runs it on every
 package, and runs steps 7 and 8 for a tag.
 
-| Step              | What is checked or done                                                                                                                                                                                          |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed                                                    |
-| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4) |
-| 3. The version    | `app.json`'s `packageVersion` is `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`                                                                                        |
-| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                |
-| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                          |
-| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest                                                                              |
-| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                        |
-| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                      |
+| Step              | What is checked or done                                                                                                                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed                                                                  |
+| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4)               |
+| 3. The version    | `app.json`'s `packageVersion` is `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8) |
+| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                              |
+| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                        |
+| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`            |
+| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                      |
+| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                    |
 
 Steps 1 to 6 need no install and no credential, only Node 24, as `.nvmrc` pins, and the system's
 `unzip`, which step 5 reads the zip back with. The one exception is opt in: a content model read
@@ -97,7 +101,8 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 It writes `dist/payers-claims-demo-0.2.0.zip` and its `.sha256` in the package. `--out` puts them
 elsewhere. `--allow-list` and `--registered` pass the deployment's to the validator, and
 `--platform` its platform version; the workflow passes the version of `libs/platform`. `--model`
-and `--model-server` give it the server's content model (section 4).
+and `--model-server` give it the server's content model (section 4). `--previous` gives it the
+package as it was, to hold its version to (section 8).
 
 Its negative controls break a copy of the demo package in one way each, and every one must be
 refused at its own step, for its own reason, with no zip left:
@@ -163,11 +168,11 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 
 ## 5. Publishing a package
 
-1. Raise the version in `package/package.xml` and `app.json`'s `packageVersion`, together, and
-   merge.
+1. Raise the version in `package/package.xml` and `app.json`'s `packageVersion`, together, as far
+   as section 8 says the changes need, and merge. The pull request's check refuses less.
 2. Tag the merged commit `app-package/<name>/<version>`, and push the tag.
-3. The workflow checks and builds the package again at that commit, signs the zip and publishes
-   it.
+3. The workflow checks and builds the package again at that commit, held to its previous tag,
+   signs the zip and publishes it, with what changed since in the run's summary.
 4. Anyone can check the signature:
 
    ```bash
@@ -187,13 +192,13 @@ reaches only when the integration branch does, and a tag names exactly what is p
 ## 7. Not settled here
 
 - **Signing** is a proposal for the security owners: an attestation is keyless, and anyone can
-  check it. Phase 3 completes signatures, for instance by checking them when a package installs.
+  check it. Section 9 proposes how phase 3 completes it; nothing of it is built.
 - **The first publish of a new package name** may need it registered on Nuxeo Connect's staging
   environment first. Not checked.
 - **Who may publish:** anyone who can push a tag. A ruleset can restrict `app-package/*` tags, and
   none does yet.
-- **Promotion to production after a person approves, and versions:** phase 3. A GitHub
-  environment with required reviewers can hold the publishing job then.
+- **Promotion to production after a person approves:** proposed in section 9, a GitHub
+  environment with required reviewers; not built. Versions are section 8's.
 - **The allow-list** is the deployment's (decision 3). Until it exists, the workflow passes none,
   and every operation is refused.
 - **Where kits live:** under `business-apps/packages/` for now. Version 1's configuration packages
@@ -209,3 +214,184 @@ reaches only when the integration branch does, and a tag names exactly what is p
 - **Not held to the model yet:** a related list's columns, which are other records'; a queue's
   columns; the properties a computation, a rule or a widget parameter names; a task form's fields;
   and a vocabulary widget's `directory` against the one its property is bound to.
+
+## 8. Versions
+
+Phase 3 completes the pipeline with versions. A package's version is `package.xml`'s, which
+`app.json`'s `packageVersion` repeats (step 3), and it is a semantic version, read for an app
+definition this way: **a version says what someone relying on the package can still rely on**,
+another package layered on it, a link someone kept, the people it is for and the servers it runs
+on. It does not measure how much changed.
+
+| Change                                                                                                                                                                                                                                                                                              | From 1.0.0                                                    | Below 1.0.0                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------- |
+| **Breaking:** a layout, a queue, a task form, a labels language or one of its keys, an action, a module's settings, the home, the menu or an image removed; the app's `address` changed; a group losing the app; the platform range leaving out a release it admitted; a domain module newly needed | major                                                         | minor                               |
+| **Addition:** any of those added; a group given the app; the platform range admitting more                                                                                                                                                                                                          | minor                                                         | patch                               |
+| **To judge:** a change outside the app definition, such as the component that contributes it, a schema, the stand-in model, `package.xml`'s dependencies or `install.xml`                                                                                                                           | minor, and a person raises the major when it breaks something | patch, and the minor when it breaks |
+| **Change:** anything else in a file that stays: a card, a field, a column, a rule, a label's text, the branding, or the same file written another way                                                                                                                                               | patch                                                         | patch                               |
+
+- **Below 1.0.0, everything moves down one,** as npm reads `^0.y.z`, and as `app.json`'s platform
+  range is read ([app-definition-v2.md](app-definition-v2.md), section 3).
+- **Raising more is allowed.** A large redesign may be a minor. The pipeline refuses less than the
+  changes need, never more.
+- **The version is not a change.** `app.json`'s `packageVersion`, `package.xml`'s `version` and
+  the manifest's `Bundle-Version` are left out of the comparison: a version raised with nothing
+  else changed passes, and its changelog says so.
+- **An app keeps its id, and a package its name.** A changed one is another app or package, not a
+  new version, and is refused.
+- **A prerelease.** From `1.0.0-rc.1`, a later prerelease of 1.0.0, or 1.0.0 itself, may carry any
+  change, as semantic versioning allows before a release. `1.0.1-rc.1` is a raise of the patch.
+- **Content is bytes.** Every file of `bundle/` and `package/` is compared, and one whose bytes
+  differ, the version aside, is a change: a JSON file rewritten with the same meaning changes the
+  zip, so it changes the version. An image is compared by its bytes.
+- **Not weighed:** what a file says beyond the names above, so a field removed from a record page
+  is a change, since nothing outside the package can name a field; which prereleases a platform
+  range admits; and `build.mjs`, which is the generator's, byte for byte.
+
+### Holding a package to them
+
+Given the package as it was, `--previous <package directory>`, step 3 compares the two with the
+validator's `changes` command (`libs/shared/app-definition/src/lib/changes.ts`) and refuses, each
+time listing the changes:
+
+- a version that did not move when the content changed: _the content changed since 0.2.0 (1
+  change), and the version is still 0.2.0. Raise it to 0.3.0 at least, a minor version_;
+- a version that moved less than the changes need: _the changes since 0.2.0 need a minor version
+  (below 1.0.0, a breaking change raises the minor, and anything else the patch), and 0.2.1 raises
+  the patch. For one: The queue unassigned-claims is removed_;
+- a version lower than the previous one, and a changed app id or package name.
+
+A package that passes gets its changelog beside the zip, `<name>-<version>.changes.md`:
+
+```markdown
+# payers-claims-demo 0.3.0
+
+Since 0.2.0: 1 change, which needs a minor version. 0.3.0 raises the minor.
+
+## Breaking
+
+- The queue unassigned-claims is removed: a link to it, a menu entry or a home card naming it stops working.
+```
+
+By hand, against the staging branch's copy:
+
+```bash
+mkdir -p /tmp/base
+git archive origin/staging/enterprise-grade-app business-apps/packages/payers-claims-demo | tar -x -C /tmp/base
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 \
+  --previous /tmp/base/business-apps/packages/payers-claims-demo
+```
+
+**In CI,** `app-packages.yml` holds a pull request to its base, a push to the commit before it, and
+a tag to the package's previous tag, the next below it in version order, a prerelease before its
+release. A package the base does not have is new, and held to nothing. The changelog goes into the
+job's summary and the artifact. The base is fetched by its commit, at depth 1, with the checkout's
+anonymous access, which a public repository allows; a private one would need the job's token for
+that fetch.
+
+**Its controls:** `npm run app-package:selftest` breaks the demo once per rule, 12 times, each
+refused at step 3 for its own reason with no zip and no changelog left, an earlier run's changelog
+included; builds 7 sound ones with the changelog each should have; and checks that a
+`--previous` that is not there stops the run, exit 2. The library's spec holds each rule's classification and
+judgement. The workflow's step was run on a scratch clone, as a pull request that changes nothing
+(built), one that removes a queue at the same version (refused), and a tag 0.10.0, held to
+0.10.0-rc.1 rather than 0.9.0. It has not run on GitHub yet.
+
+**Not yet:** `validate_package`, in the Builder MCP server, takes no previous package, so an agent
+learns that a version must move only from the pipeline.
+
+## 9. Signatures and promotion after approval: a proposal
+
+Status: proposal, 23 November 2026, for the security owners and the user. **Nothing here is
+built**: no key, tag, secret, environment or ruleset was created, nothing was published, and the
+workflow's publishing job is as section 5 describes it.
+
+**Where it starts.** A tag `app-package/<name>/<version>` has `sign-and-publish` attest the zip,
+through GitHub's `actions/attest-build-provenance`, and publish it to Marketplace preprod. Nobody
+approves anything between the tag and preprod, nothing checks the attestation once it is made, and
+there is no production step.
+
+### 9.1 Signing
+
+Proposed: **keep keyless signing, and check the signature where it matters,** rather than add a
+key.
+
+- **The tool:** GitHub's artifact attestations, which the workflow already makes: a build
+  provenance statement, signed through Sigstore, naming the zip's SHA-256, this repository, the
+  workflow file, the commit and the tag. `gh attestation verify` checks one; `cosign
+verify-blob-attestation` does too, for someone without the GitHub CLI.
+- **Where the keys live: nowhere this team keeps one.** Each run gets a certificate that lasts
+  minutes, issued by Sigstore to the workflow's OIDC identity, and the signature is recorded in
+  Sigstore's public transparency log. There is no private key to store, rotate, leak or revoke.
+  What must be protected instead is who can make the workflow run for a tag (9.2, "Who may start
+  it").
+- **What a check holds the zip to,** beyond "this repository built it": the workflow file and the
+  tag. With the GitHub CLI's flags for them, to be confirmed on the version CI uses:
+
+  ```bash
+  gh attestation verify payers-claims-demo-0.3.0.zip --repo nuxeo/Nuxeo-Satori-UI \
+    --signer-workflow nuxeo/Nuxeo-Satori-UI/.github/workflows/app-packages.yml \
+    --source-ref refs/tags/app-package/payers-claims-demo/0.3.0
+  ```
+
+- **Where it is checked:**
+  1. in `sign-and-publish`, just after the attestation and before publishing, so a wrong one is
+     found before anything is public;
+  2. in the promotion job (9.2), before production, so the zip promoted is the one attested;
+  3. at install, by the deployment's own install script, before `nuxeoctl mp-install`. Whether
+     Nuxeo's package manager, or the app registry, could check one itself is the platform team's
+     question; not checked here.
+- **A server that cannot reach Sigstore** can be checked offline, with the attestation downloaded
+  beside the zip and Sigstore's trusted root exported once (`gh attestation download`,
+  `gh attestation trusted-root`, then `--bundle` and `--custom-trusted-root`). To be tried on the
+  CLI version in use.
+- **If a key the team holds is required:** cosign with a key in a cloud KMS, reached from the
+  workflow through OIDC federation, so no long-lived secret sits in GitHub and the key never
+  leaves the KMS. The cost: a key to rotate and revoke, a public key every verifier needs, and an
+  account in a cloud. Proposed only if a customer's policy asks for a vendor-held key.
+- **What a signature does not prove:** that the package is right, or approved. That is review
+  and promotion.
+
+### 9.2 Promotion after a person approves
+
+Proposed: **build once, publish to preprod on the tag, and promote the same bytes to production
+once a named person approves, in a GitHub environment.**
+
+```text
+tag app-package/<name>/<version>
+  check             builds and verifies the zip, its checksum and its changelog, and uploads them
+  sign-and-publish  checks the checksum, attests, checks the attestation, publishes to preprod
+  promote           environment app-packages-production: waits for an approval, then takes the
+                    same artifact, checks the checksum and the attestation, publishes to production
+```
+
+- **The approval is a GitHub environment,** say `app-packages-production`, with required
+  reviewers, a team rather than one person, and "Prevent self-review" on, so whoever pushed the
+  tag cannot approve it; and with its deployments limited to `app-package/*` tags, so no branch can
+  reach it.
+- **Its secrets are its own.** The production Marketplace credentials would be environment
+  secrets of `app-packages-production`, which a job reads only once approved. Today's
+  `CONNECT_PREPROD_*` would move to an `app-packages-preprod` environment the same way.
+- **What the approver sees,** in the run's summary: the changelog since the previous tag (section
+  8), the part the version needed and the part it raised, the zip's digest, the attestation, and
+  the preprod install to try. Approving says that these bytes, tried in preprod, go to production.
+- **The same bytes.** The promotion job never builds: it takes the artifact of the same run, as
+  `sign-and-publish` does. GitHub expires a job waiting for approval after 30 days, and the
+  artifact is kept 30 days (`retention-days`), so the two must stay aligned.
+- **The record:** GitHub keeps each deployment, who approved it and when; the tag names the
+  commit, and the attestation the run.
+- **Who may start it:** a ruleset restricting who may create `app-package/*` tags (section 7
+  notes that none does). Without one, anyone who can push starts the chain, and the approval still
+  stops it short of production.
+- **Rolling back** is publishing a higher version with the earlier content: a version is never
+  published twice. Removing what a version added is a breaking change, and section 8 asks for its
+  raise.
+
+### 9.3 What the user decides
+
+1. Keyless signing, or a key in a KMS, and the verification policy: which workflow and which refs.
+2. Whether installs check the signature, and where.
+3. The environments' names, their reviewers, and whether preprod also waits for an approval.
+4. Production's Marketplace target and credentials, which the `nos-publish` step takes as it takes
+   preprod's (the name of its production environment is not checked here).
+5. The ruleset for `app-package/*` tags.
