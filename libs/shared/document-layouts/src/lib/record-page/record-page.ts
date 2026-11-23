@@ -21,7 +21,11 @@ import {
   ExtensionRuleRegistry,
   type ExtensionRule,
 } from '@nuxeo/satori-platform/extensions';
-import { NuxeoDocument, renderTrustedHtml } from '@nuxeo/satori-platform/nuxeo-client';
+import {
+  NuxeoDocument,
+  renderTrustedHtml,
+  type TrustedHtmlConfig,
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { forkJoin, map, merge, of, startWith, switchMap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
@@ -37,18 +41,56 @@ import {
   showValue,
   viewText,
 } from './record-field-view';
+import { propertiesReadBy } from './record-layout';
 import {
   type ResolvedRecordCard,
   type ResolvedRecordField,
   type ResolvedRecordLayout,
   widgetAccepts,
 } from './resolve-record-layout';
+import { tableColumns } from './widget-support';
 
 /** Today, for computations and relative dates. A token, so that tests choose the day. */
 export const RECORD_PAGE_TODAY = new InjectionToken<() => Date>('RECORD_PAGE_TODAY', {
   providedIn: 'root',
   factory: () => () => new Date(),
 });
+
+/**
+ * What a `rich-text` value may keep: formatting, lists, quotes, code and links. Never an image,
+ * which would load from wherever the value says; a form or an input, which could ask for a
+ * password in the page's own look; a style, a frame or a script. DOMPurify also strips a
+ * `javascript:` link.
+ */
+const RICH_TEXT_HTML: TrustedHtmlConfig = {
+  ALLOWED_TAGS: [
+    'p',
+    'br',
+    'strong',
+    'b',
+    'em',
+    'i',
+    'u',
+    's',
+    'sub',
+    'sup',
+    'ul',
+    'ol',
+    'li',
+    'blockquote',
+    'code',
+    'pre',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'a',
+    'span',
+  ],
+  ALLOWED_ATTR: ['href'],
+};
 
 /** The design system's status for each of version 2's tones. */
 const TAG_STATUS: Readonly<Record<Tone, NxsTagStatus>> = {
@@ -106,6 +148,9 @@ type Labels = ReadonlyMap<string, string>;
 type LabelPair = [string, string | null];
 const NO_LABELS: Labels = new Map();
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
 function sameLookups(a: Lookups, b: Lookups): boolean {
   const key = (lookups: Lookups) =>
     JSON.stringify([
@@ -113,24 +158,6 @@ function sameLookups(a: Lookups, b: Lookups): boolean {
       lookups.principals.map((principal) => [principal.kind, principal.id]),
     ]);
   return key(a) === key(b);
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-/** The properties a computation reads: its `{ "field" }` parameters and its template's placeholders. */
-function propertiesReadBy(computation: unknown, found: Set<string>): void {
-  if (!isRecord(computation) || !Array.isArray(computation['parameters'])) return;
-  for (const parameter of computation['parameters']) {
-    if (typeof parameter === 'string' && computation['type'] === 'core.template') {
-      for (const match of parameter.matchAll(/\{([A-Za-z_][\w-]*:[A-Za-z_][\w-]*)\}/g))
-        found.add(match[1]);
-    } else if (isRecord(parameter) && typeof parameter['field'] === 'string') {
-      found.add(parameter['field']);
-    } else if (isRecord(parameter) && 'computed' in parameter) {
-      propertiesReadBy(parameter['computed'], found);
-    }
-  }
 }
 
 function sortedUnique<T>(items: readonly T[], key: (item: T) => string): T[] {
@@ -187,6 +214,20 @@ export class RecordPageComponent {
           continue;
         }
         const value = properties[field.xpath];
+        // A table's user and group columns are names to read too, row by row.
+        if (field.widget === 'table') {
+          const rows = (Array.isArray(value) ? value : []).filter(isRecord);
+          for (const column of tableColumns(field.parameters['columns'])) {
+            const kind = column.widget;
+            if (kind !== 'user' && kind !== 'group') continue;
+            for (const row of rows) {
+              const cell = row[column.subfield];
+              for (const id of Array.isArray(cell) ? cell : [cell]) {
+                if (typeof id === 'string' && id !== '') principals.push({ kind, id });
+              }
+            }
+          }
+        }
         if (field.widget === 'user' || field.widget === 'group') {
           for (const id of Array.isArray(value) ? value : [value]) {
             if (typeof id === 'string' && id !== '') principals.push({ kind: field.widget, id });
@@ -274,6 +315,7 @@ export class RecordPageComponent {
       label: (label) => this.text(label),
       flagText: (flag) =>
         this.translate.instant(flag ? 'document-layouts.yes' : 'document-layouts.no'),
+      rule: passes,
     };
     const cards = (list: readonly ResolvedRecordCard[]): RecordCardShown[] =>
       list
@@ -377,8 +419,9 @@ export class RecordPageComponent {
     const { value } = field;
     if (value.kind === 'badge')
       return { ...field, tag: { label: value.text, status: TAG_STATUS[value.tone] } };
-    if (value.kind === 'html')
-      return { ...field, html: renderTrustedHtml(this.sanitizer, value.html) };
+    if (value.kind === 'html') {
+      return { ...field, html: renderTrustedHtml(this.sanitizer, value.html, RICH_TEXT_HTML) };
+    }
     return field;
   }
 

@@ -1,20 +1,27 @@
-import { PACKAGED_WIDGETS } from '@agentic-ui/shared/app-definition';
-
 import type {
   DocumentSchemaRef,
   DocumentTypeDefinition,
   DocumentTypeSchema,
   LayoutFieldType,
 } from '../layout.model';
-import { PRESENTED_SCHEMAS, prefixOfXpath } from '../resolve-layout';
-import type {
-  RecordCardEntry,
-  RecordComputedField,
-  RecordFieldEntry,
-  RecordLayoutFile,
-  RecordPropertyField,
-  RecordTabEntry,
+import { prefixOfXpath } from '../resolve-layout';
+import {
+  propertiesReadBy,
+  type RecordCardEntry,
+  type RecordComputedField,
+  type RecordFieldEntry,
+  type RecordLayoutFile,
+  type RecordPropertyField,
+  type RecordTabEntry,
 } from './record-layout';
+import {
+  WIDGETS_SHOWN_AS_VERSION_1,
+  tableColumns,
+  widgetAccepts,
+  widgetPropertyType,
+} from './widget-support';
+
+export { widgetAccepts, widgetPropertyType } from './widget-support';
 
 /** A property field, with what its schema says the property is. */
 export interface ResolvedPropertyField extends RecordPropertyField {
@@ -54,31 +61,15 @@ export interface SkippedRecordField {
   readonly type?: string;
 }
 
-/**
- * The property type a widget's `accepts` is written in. Nuxeo reports some numeric fields as
- * `integer`, which the widgets, like the schema language, call `long`.
- */
-export function widgetPropertyType(definition: LayoutFieldType): string {
-  return definition.type.replace(/^integer(?=$|\[\]$)/, 'long');
-}
-
-/** Whether `widget` shows a property of this type (layout-v2.md, section 3). */
-export function widgetAccepts(widget: string, definition: LayoutFieldType): boolean {
-  const accepts: readonly string[] | undefined = PACKAGED_WIDGETS[widget]?.accepts;
-  return accepts?.includes(widgetPropertyType(definition)) ?? false;
-}
-
-function propertyFields(file: RecordLayoutFile): readonly RecordPropertyField[] {
+function fieldsOf(file: RecordLayoutFile): readonly RecordFieldEntry[] {
   const cards = file.tabs ? file.tabs.flatMap((tab) => tab.cards) : file.cards;
-  return cards.flatMap((card) =>
-    card.fields.filter((field): field is RecordPropertyField => field.kind === 'property'),
-  );
+  return cards.flatMap((card) => card.fields);
 }
 
 /**
- * The schemas a document's facets add that the record page needs read: those the file's fields
- * name a property of. As `facetSchemasToRead` does for version 1, a facet schema no field names
- * is not read at all.
+ * The schemas a document's facets add that the record page needs read: those whose properties a
+ * field shows or a computation reads. As `facetSchemasToRead` does for version 1, a facet schema
+ * nothing names is not read, and one a field names is read even where the panel presents it.
  */
 export function recordFacetSchemasToRead(
   type: DocumentTypeDefinition,
@@ -86,11 +77,55 @@ export function recordFacetSchemasToRead(
   file: RecordLayoutFile,
 ): readonly DocumentSchemaRef[] {
   const own = new Set(type.schemas.map((schema) => schema.name));
-  const named = new Set(propertyFields(file).map((field) => prefixOfXpath(field.xpath)));
-  return documentSchemas.filter(
-    (schema) =>
-      !own.has(schema.name) && named.has(schema.prefix) && !PRESENTED_SCHEMAS.has(schema.name),
-  );
+  const read = new Set<string>();
+  for (const field of fieldsOf(file)) {
+    if (field.kind === 'property') read.add(field.xpath);
+    else propertiesReadBy(field.computed, read);
+  }
+  const named = new Set([...read].map(prefixOfXpath));
+  return documentSchemas.filter((schema) => !own.has(schema.name) && named.has(schema.prefix));
+}
+
+/**
+ * A table field's columns, held to its property's subfields as a field is held to its type: a
+ * column naming a subfield the property does not have is left out, and the console is told of a
+ * column whose widget does not show its subfield or is shown as version 1 would. Each note is
+ * whole, as the console prints it after the layout's name.
+ */
+function resolveTableColumns(
+  field: RecordPropertyField,
+  definition: LayoutFieldType,
+): { readonly parameters: Readonly<Record<string, unknown>>; readonly notes: readonly string[] } {
+  // Checked only where the schema lists them: with no subfields read, as version 1 does, the
+  // columns are taken as written.
+  const subfields = Object.keys(definition.fields ?? {}).length > 0 ? definition.fields : null;
+  const written: readonly unknown[] = Array.isArray(field.parameters['columns'])
+    ? field.parameters['columns']
+    : [];
+  const notes: string[] = [];
+  const left = new Set<number>();
+  for (const column of tableColumns(written)) {
+    const place = `${field.place}.parameters.columns[${column.index}]`;
+    if (!subfields) continue;
+    const sub = subfields[column.subfield];
+    if (!sub) {
+      left.add(column.index);
+      notes.push(`${place} left out: ${field.xpath} has no subfield "${column.subfield}"`);
+    } else if (column.widget !== null && WIDGETS_SHOWN_AS_VERSION_1.has(column.widget)) {
+      notes.push(
+        `${place}: the widget "${column.widget}" shows the subfield's own value in this build`,
+      );
+    } else if (column.widget !== null && !widgetAccepts(column.widget, sub)) {
+      notes.push(
+        `${place}: the widget "${column.widget}" does not show "${column.subfield}", a ${widgetPropertyType(sub)} value, so the cell shows the value itself`,
+      );
+    }
+  }
+  if (left.size === 0) return { parameters: field.parameters, notes };
+  return {
+    parameters: { ...field.parameters, columns: written.filter((_, index) => !left.has(index)) },
+    notes,
+  };
 }
 
 /**
@@ -104,7 +139,12 @@ export function resolveRecordLayout(
   type: DocumentTypeDefinition,
   file: RecordLayoutFile,
   facetSchemas: readonly DocumentTypeSchema[] = [],
-): { readonly layout: ResolvedRecordLayout; readonly skipped: readonly SkippedRecordField[] } {
+): {
+  readonly layout: ResolvedRecordLayout;
+  readonly skipped: readonly SkippedRecordField[];
+  /** What the console is told about a table's columns, each note whole. */
+  readonly notes: readonly string[];
+} {
   const properties = new Map<string, LayoutFieldType>();
   for (const schema of [...type.schemas, ...facetSchemas]) {
     for (const [name, definition] of Object.entries(schema.fields)) {
@@ -112,6 +152,7 @@ export function resolveRecordLayout(
     }
   }
   const skipped: SkippedRecordField[] = [];
+  const notes: string[] = [];
 
   const field = (entry: RecordFieldEntry): ResolvedRecordField[] => {
     if (entry.kind === 'computed') return [entry];
@@ -129,6 +170,11 @@ export function resolveRecordLayout(
         type: definition.type,
       });
       return [];
+    }
+    if (entry.widget === 'table') {
+      const table = resolveTableColumns(entry, definition);
+      notes.push(...table.notes);
+      return [{ ...entry, parameters: table.parameters, definition }];
     }
     return [{ ...entry, definition }];
   };
@@ -153,5 +199,6 @@ export function resolveRecordLayout(
       properties,
     },
     skipped,
+    notes,
   };
 }

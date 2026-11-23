@@ -291,6 +291,20 @@ describe('the validator finds', () => {
     );
   });
 
+  it('a computed field shown as rich text, which would make its text markup', () => {
+    expect(
+      messages(
+        withFields({
+          id: 'n',
+          widget: 'rich-text',
+          computed: { type: 'core.template', parameters: ['{a:b}'] },
+        }),
+      ),
+    ).toEqual([
+      'cards[0].fields[0].widget: a computed field is text, never HTML, so it cannot use the widget "rich-text" [parameter]',
+    ]);
+  });
+
   it("a form's checks: one nobody registered, and one given the wrong parameters", () => {
     expect(
       messages(

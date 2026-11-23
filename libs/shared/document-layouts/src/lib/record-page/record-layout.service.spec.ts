@@ -196,6 +196,59 @@ describe('DocumentLayoutService: record pages', () => {
     http.expectNone(CLAIM_TYPE);
   });
 
+  it("keeps a file record's own view, and says so once however many of its documents open", async () => {
+    const withFile = {
+      ...CLAIM,
+      schemas: [...CLAIM.schemas, { name: 'file', '@prefix': 'file', fields: { content: 'blob' } }],
+    };
+    const first = recordLayout();
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(envelope(VIEW));
+    http.expectOne(CLAIM_TYPE).flush(withFile);
+    expect(await first).toBeNull();
+    expect(await recordLayout()).toBeNull();
+    expect(warnings).toEqual([
+      '[agentic-ui-layouts] Claim/view layout not drawn: a Claim has a file or a note, which the View tab shows first; a record page beside it comes later',
+    ]);
+  });
+
+  it("tells the console what it left out of a table's columns", async () => {
+    const layout = recordLayout();
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(
+      envelope({
+        version: 2,
+        cards: [
+          {
+            id: 'lines',
+            fields: [
+              {
+                field: 'claim:lines',
+                widget: 'table',
+                parameters: { columns: ['line:code', 'line:cod'] },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    http.expectOne(CLAIM_TYPE).flush({
+      ...CLAIM,
+      schemas: [
+        ...CLAIM.schemas,
+        {
+          name: 'claimLines',
+          '@prefix': 'claim',
+          fields: { lines: { type: 'complex[]', fields: { code: 'string' } } },
+        },
+      ],
+    });
+    expect((await layout)?.cards[0].fields[0].parameters['columns']).toEqual(['line:code']);
+    expect(warnings).toEqual([
+      '[agentic-ui-layouts] Claim/view layout: cards[0].fields[0].parameters.columns[1] left out: claim:lines has no subfield "cod"',
+    ]);
+  });
+
   describe('principalLabel', () => {
     it('names a user by first and last name, and a group by its label', async () => {
       const user = firstValueFrom(service.principalLabel('user', 'jdoe'));

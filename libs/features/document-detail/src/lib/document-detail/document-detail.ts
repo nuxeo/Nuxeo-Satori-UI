@@ -494,8 +494,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private readonly typeTraits = computed(() => documentTypeTraits(this.doc()?.type));
 
   /**
-   * The packaged View tab body for the focused document's type: what renders when no
-   * `documentView` entry takes the tab, and when the entry that did fails to load.
+   * The packaged View tab body for the focused document's type: what renders when neither a
+   * `documentView` entry nor the type's record page takes the tab. An entry that fails to load
+   * gives way to the record page first, then to this.
    */
   readonly packagedDocumentView = computed<PackagedDocumentView>(() => this.typeTraits().view);
 

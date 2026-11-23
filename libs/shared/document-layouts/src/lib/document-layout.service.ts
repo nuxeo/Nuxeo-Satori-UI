@@ -120,6 +120,9 @@ function leafOf(id: string): string {
   return id.slice(id.lastIndexOf('/') + 1);
 }
 
+/** The schemas whose records the View tab shows by their own content: a file, a note. */
+const OWN_VIEW_SCHEMAS: ReadonlySet<string> = new Set(['file', 'note']);
+
 /** The name a user or group is shown by: first and last name, or the group's label. */
 export function principalName(kind: 'user' | 'group', raw: unknown): string | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -188,6 +191,8 @@ export class DocumentLayoutService {
   private readonly schemas = new Map<string, Observable<DocumentTypeSchema | null>>();
   private readonly entries = new Map<string, Observable<VocabularyEntry | null>>();
   private readonly principals = new Map<string, Observable<string | null>>();
+  /** The types the console has been told keep their own view, so that it is told once each. */
+  private readonly ownView = new Set<string>();
 
   /**
    * The record page a document shows in its View tab: the `view` file its type was contributed,
@@ -205,9 +210,13 @@ export class DocumentLayoutService {
       switchMap((file) =>
         file
           ? this.documentType(type).pipe(
-              switchMap((definition) =>
-                definition ? this.resolveRecord(definition, file, documentSchemas) : of(null),
-              ),
+              switchMap((definition) => {
+                if (!definition) return of(null);
+                if (definition.schemas.some((schema) => OWN_VIEW_SCHEMAS.has(schema.name))) {
+                  return this.ownViewFirst(type);
+                }
+                return this.resolveRecord(definition, file, documentSchemas);
+              }),
             )
           : of(null),
       ),
@@ -247,6 +256,21 @@ export class DocumentLayoutService {
     return cached;
   }
 
+  /**
+   * A file's preview and a note's editor show first (layout-v2.md, section 10), and a record
+   * page beside them comes later: until then such a type's View tab is today's, and the console
+   * says so once per type.
+   */
+  private ownViewFirst(type: string): Observable<null> {
+    if (!this.ownView.has(type)) {
+      this.ownView.add(type);
+      warn(
+        `${type}/view layout not drawn: a ${type} has a file or a note, which the View tab shows first; a record page beside it comes later`,
+      );
+    }
+    return of(null);
+  }
+
   private resolveRecord(
     definition: DocumentTypeDefinition,
     file: RecordLayoutFile,
@@ -262,8 +286,9 @@ export class DocumentLayoutService {
         const unread = new Map(
           wanted.filter((_, i) => !read[i]).map((ref) => [ref.prefix, ref.name]),
         );
-        const { layout, skipped } = resolveRecordLayout(definition, file, facets);
+        const { layout, skipped, notes } = resolveRecordLayout(definition, file, facets);
         for (const field of skipped) warn(skippedMessage(definition.name, field, unread));
+        for (const note of notes) warn(`${definition.name}/view layout: ${note}`);
         return layout;
       }),
     );

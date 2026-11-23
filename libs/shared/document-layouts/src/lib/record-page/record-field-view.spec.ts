@@ -27,6 +27,7 @@ const context: RecordValueContext = {
   property: (xpath) => ({ 'claim:currency': 'EUR', 'claim:badCurrency': 'eur' })[xpath],
   label: (label) => label.literal ?? label.fallback,
   flagText: (flag) => (flag ? 'Yes' : 'No'),
+  rule: (rule) => rule !== 'test.rules.hidden',
 };
 
 function show(
@@ -200,6 +201,7 @@ describe('showValue', () => {
       'a&body=x@example.com',
       'a%0Abcc:x@example.com',
       'jane@localhost',
+      'help@acme.example?bcc=x%40evil.example&subject=Reset',
     ])('anything else in an email field is text, never a link: %s', (value) => {
       expect(show('email', value)).toEqual({ kind: 'text', text: value });
     });
@@ -322,6 +324,19 @@ describe('showValue', () => {
         ['A1', '$10.00', 'Yes'],
         ['B2', '$2.50', 'No'],
       ],
+    });
+  });
+
+  it('leaves out a column whose rule does not pass, heading and cells', () => {
+    const definition: LayoutFieldType = {
+      type: 'complex[]',
+      fields: { code: { type: 'string' }, ssn: { type: 'string' } },
+    };
+    const columns = ['line:code', { field: 'line:ssn', visibleWhen: 'test.rules.hidden' }];
+    expect(show('table', [{ code: 'A1', ssn: '000-11-2222' }], { columns }, definition)).toEqual({
+      kind: 'table',
+      headings: ['Code'],
+      rows: [['A1']],
     });
   });
 

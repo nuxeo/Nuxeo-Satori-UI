@@ -55,7 +55,7 @@ servers with read-only calls; everything else is a proposal, and anything not ch
 - **Configuration is loaded, not compiled, and lives outside the app bundle,** because
   configuration inside the bundle is destroyed on upgrade (verified fact,
   [AGENTS/11-beta-program.md](../../AGENTS/11-beta-program.md) section 3).
-- **Layer 1 stays additive** in the Beta, as already decided ([adf-hx-beta-plan.md](../beta-plan.md)).
+- **Layer 1 stays additive** in the Beta, as already decided ([beta-plan.md](../beta-plan.md)).
 - **The repository is public.** No account names and no security findings in documents; those go
   through internal channels.
 

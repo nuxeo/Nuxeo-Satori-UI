@@ -116,7 +116,7 @@ describe('readRecordLayout', () => {
       });
     });
 
-    it('cards and tabs together, counting the others', () => {
+    it('a file with two structural errors, naming the first and counting the rest', () => {
       // Two cards with no id: two structural findings, of which the first is named.
       const refused = readRecordLayout(
         { version: 2, cards: [{ fields: ['dc:title'] }, { fields: ['dc:title'] }] },
@@ -286,6 +286,65 @@ describe('readRecordLayout', () => {
       expect(file.cards[0].fields).toHaveLength(1);
       expect(file.problems).toEqual([
         'cards[0].fields[1] names the rule "app.rules.inGroup", which this build does not register; left out',
+      ]);
+    });
+
+    /** A column a rule hides would otherwise show to everyone: the whole table is left out. */
+    it('a table whose column is shown by a rule this build does not register', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              'dc:title',
+              {
+                field: 'member:lines',
+                widget: 'table',
+                parameters: {
+                  columns: [
+                    'line:code',
+                    {
+                      field: 'line:ssn',
+                      visibleWhen: { type: 'app.rules.inGroup', parameters: ['g'] },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      expect(file.cards[0].fields.map((field) => field.place)).toEqual(['cards[0].fields[0]']);
+      expect(file.problems).toEqual([
+        'cards[0].fields[1].parameters.columns[1] names the rule "app.rules.inGroup", which this build does not register; cards[0].fields[1] left out',
+      ]);
+    });
+
+    it('a computed column, which this build does not draw yet: that column only', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                field: 'member:lines',
+                widget: 'table',
+                parameters: {
+                  columns: [
+                    'line:code',
+                    { id: 'n', computed: { type: 'core.count', parameters: [{ field: 'x:y' }] } },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      expect(file.cards[0].fields).toHaveLength(1);
+      expect(file.problems).toEqual([
+        'cards[0].fields[0].parameters.columns[1] is a computed column, which this build does not draw yet; that column left out',
       ]);
     });
 

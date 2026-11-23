@@ -278,9 +278,17 @@
               [componentInputs]="documentViewInputs()"
             />
             @if (documentViewOutlet.unresolved()) {
-              <ng-container [ngTemplateOutlet]="packagedViewContent" />
+              <ng-container [ngTemplateOutlet]="recordOrPackagedView" />
             }
-          } @else if (recordLayout(); as recordPage) {
+          } @else {
+            <ng-container [ngTemplateOutlet]="recordOrPackagedView" />
+          }
+        </ng-template>
+
+        <!-- When no documentView entry takes the tab, or its component cannot load: the type's
+             record page, else the packaged view. -->
+        <ng-template #recordOrPackagedView>
+          @if (recordLayout(); as recordPage) {
             <lib-record-page [document]="doc()!" [layout]="recordPage" />
           } @else {
             <ng-container [ngTemplateOutlet]="packagedViewContent" />

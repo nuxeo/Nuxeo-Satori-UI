@@ -21,6 +21,11 @@ const MEMBER: DocumentTypeDefinition = {
         birthDate: { type: 'date' },
         visits: { type: 'integer' },
         tags: { type: 'string[]' },
+        lines: {
+          type: 'complex[]',
+          fields: { code: { type: 'string' }, amount: { type: 'double' }, scan: { type: 'blob' } },
+        },
+        bag: { type: 'complex[]' },
       },
     },
   ],
@@ -157,6 +162,43 @@ describe('resolveRecordLayout', () => {
   });
 });
 
+describe("a table's columns", () => {
+  const table = (columns: unknown[], xpath = 'member:lines') =>
+    resolveRecordLayout(
+      MEMBER,
+      file([{ id: 'a', fields: [{ field: xpath, widget: 'table', parameters: { columns } }] }]),
+    );
+
+  it('leaves out a column naming a subfield its property does not have, and says so', () => {
+    const { layout, notes } = table(['line:code', 'line:cod']);
+    expect(layout.cards[0].fields[0].parameters['columns']).toEqual(['line:code']);
+    expect(notes).toEqual([
+      'cards[0].fields[0].parameters.columns[1] left out: member:lines has no subfield "cod"',
+    ]);
+  });
+
+  it("says when a column's widget does not show its subfield, and keeps the column", () => {
+    const { layout, notes } = table([{ field: 'line:code', widget: 'date' }]);
+    expect(layout.cards[0].fields[0].parameters['columns']).toHaveLength(1);
+    expect(notes).toEqual([
+      'cards[0].fields[0].parameters.columns[0]: the widget "date" does not show "code", a string value, so the cell shows the value itself',
+    ]);
+  });
+
+  it('says when a column widget is one this build shows as version 1 would', () => {
+    const { notes } = table([{ field: 'line:scan', widget: 'image' }]);
+    expect(notes).toEqual([
+      'cards[0].fields[0].parameters.columns[0]: the widget "image" shows the subfield\'s own value in this build',
+    ]);
+  });
+
+  it('takes the columns as written when the schema lists no subfields, as version 1 does', () => {
+    const { layout, notes } = table(['bag:anything'], 'member:bag');
+    expect(layout.cards[0].fields[0].parameters['columns']).toEqual(['bag:anything']);
+    expect(notes).toEqual([]);
+  });
+});
+
 describe('recordFacetSchemasToRead', () => {
   const schemas = [
     { name: 'dublincore', prefix: 'dc' },
@@ -172,6 +214,25 @@ describe('recordFacetSchemasToRead', () => {
         file([{ id: 'a', fields: ['aud:reviewer', 'dc:title'] }]),
       ),
     ).toEqual([{ name: 'audit', prefix: 'aud' }]);
+  });
+
+  it('reads a schema the panel presents when a field names it, as version 1 does', () => {
+    const tagged = [...schemas, { name: 'facetedTag', prefix: 'nxtag' }];
+    expect(
+      recordFacetSchemasToRead(MEMBER, tagged, file([{ id: 'a', fields: ['nxtag:tags'] }])),
+    ).toEqual([{ name: 'facetedTag', prefix: 'nxtag' }]);
+  });
+
+  it('reads a schema whose property only a computation names', () => {
+    const page = file([
+      {
+        id: 'a',
+        fields: [{ id: 'n', computed: { type: 'core.template', parameters: ['{aud:reviewer}'] } }],
+      },
+    ]);
+    expect(recordFacetSchemasToRead(MEMBER, schemas, page)).toEqual([
+      { name: 'audit', prefix: 'aud' },
+    ]);
   });
 
   it('reads none when no field names one', () => {

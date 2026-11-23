@@ -25,6 +25,10 @@ const MEMBER_TYPE: DocumentTypeDefinition = {
         ssn: { type: 'string' },
         notes: { type: 'string' },
         caseManager: { type: 'string' },
+        visits: {
+          type: 'complex[]',
+          fields: { adjuster: { type: 'string' }, note: { type: 'string' } },
+        },
         address: {
           type: 'complex',
           fields: { street: { type: 'string' }, city: { type: 'string' }, zip: { type: 'string' } },
@@ -50,10 +54,29 @@ const member = (overrides: Record<string, unknown> = {}): NuxeoDocument =>
       'member:ssn': '000-00-0000',
       'member:notes': '<p>Prefers <b>email</b><script>alert(1)</script></p>',
       'member:caseManager': 'jdoe',
+      'member:visits': [{ adjuster: 'jdoe', note: 'Called back' }],
       'member:address': { street: '1 Main St', city: 'Springfield', zip: '12345' },
       ...overrides,
     },
   }) as NuxeoDocument;
+
+/** A computed field that names `rich-text`, which a computation's text may never be shown as. */
+const GREETING_PAGE = {
+  version: 2,
+  cards: [
+    {
+      id: 'a',
+      fields: [
+        'member:phone',
+        {
+          id: 'greeting',
+          widget: 'rich-text',
+          computed: { type: 'core.template', parameters: ['<b>Hello</b> {member:firstName}'] },
+        },
+      ],
+    },
+  ],
+};
 
 /** The Member page of layout-v2.md, section 9, without the related lists this build does not draw. */
 const MEMBER_PAGE = {
@@ -272,10 +295,76 @@ describe('RecordPageComponent', () => {
     const root = await render(member(), page);
     expect(root.querySelector('[data-field="age"]')).toBeNull();
     expect(root.querySelector('[data-field="member:phone"]')).not.toBeNull();
+    // A new document object, as a refetch gives: the page recomputes, and must not say it again.
+    fixture.componentRef.setInput('document', member());
     fixture.detectChanges();
     expect(
       warnings.filter((warning) => warning.includes('cards[0].fields[1] left out')),
     ).toHaveLength(1);
+  });
+
+  it('leaves out a computed field shown as rich text: a computation is text, never HTML', async () => {
+    const root = await render(
+      member({ 'member:firstName': '<img src="https://tracker.example/p.gif">Jane' }),
+      GREETING_PAGE,
+    );
+    expect(root.querySelector('[data-field="greeting"]')).toBeNull();
+    expect(root.querySelector('img, b')).toBeNull();
+    // The reader, which the service logs from, says why.
+    const read = readRecordLayout(
+      GREETING_PAGE,
+      TestBed.inject(ExtensionRuleRegistry).registeredRuleIds(),
+    );
+    expect('problems' in read && read.problems).toEqual([
+      'cards[0].fields[1].widget: a computed field is text, never HTML, so it cannot use the widget "rich-text"; cards[0].fields[1] left out',
+    ]);
+  });
+
+  it('keeps formatting and links in rich text, and nothing that loads, submits or restyles', async () => {
+    const root = await render(
+      member({
+        'member:notes':
+          '<p><b>Call</b> <a href="https://help.example">help</a><img src="https://tracker.example/p.gif">' +
+          '<form action="https://evil.example"><input type="password"></form><style>p{color:red}</style></p>',
+      }),
+    );
+    const notes = root.querySelector('[data-field="member:notes"] .record-page__rich-text');
+    expect(notes?.querySelector('b')?.textContent).toBe('Call');
+    expect(notes?.querySelector('a')?.getAttribute('href')).toBe('https://help.example');
+    expect(notes?.querySelector('img, form, input, style')).toBeNull();
+  });
+
+  it("shows a table's user column by name", async () => {
+    const root = await render(member(), {
+      version: 2,
+      cards: [
+        {
+          id: 'a',
+          fields: [
+            {
+              field: 'member:visits',
+              widget: 'table',
+              parameters: { columns: [{ field: 'visit:adjuster', widget: 'user' }, 'visit:note'] },
+            },
+          ],
+        },
+      ],
+    });
+    const cells = [...root.querySelectorAll('[data-field="member:visits"] td')].map(
+      (cell) => cell.textContent,
+    );
+    expect(cells).toEqual(['Jane Doe', 'Called back']);
+    expect(root.querySelector('[data-field="member:visits"] caption')?.textContent?.trim()).toBe(
+      'Visits',
+    );
+  });
+
+  it("names each card's region by its own heading, not a second copy of it", async () => {
+    const root = await render();
+    const card = root.querySelector<HTMLElement>('[data-card-id="member"]');
+    const heading = card?.querySelector('h3');
+    expect(card?.getAttribute('aria-labelledby')).toBe(heading?.id);
+    expect(card?.hasAttribute('aria-label')).toBe(false);
   });
 
   it('shows an empty value as a dash', async () => {

@@ -1379,6 +1379,35 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         .forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
     });
 
+    it("gives way to the record page when a documentView entry's component cannot load", async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      await render(
+        {
+          slots: {
+            documentView: [
+              {
+                id: 'acme.documentView.broken',
+                componentId: 'acme.views.broken',
+                rule: { type: IS_TYPE_RULE, parameters: ['Claim'] },
+              },
+            ],
+          },
+        },
+        claim(),
+      );
+      await answer(['Claim/view'], VIEW);
+      // Lets the failing chunk's rejection land, and the outlet mark itself unresolved.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(viewBody().querySelector('.document-view-outlet--unresolved')).toBeTruthy();
+      expect(viewBody().querySelector('lib-record-page')).toBeTruthy();
+      expect(viewBody().querySelector('lib-document-viewer')).toBeNull();
+    });
+
     it('lets a documentView entry keep the tab: code that chose the component keeps it', async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       await render(

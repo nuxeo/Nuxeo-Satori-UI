@@ -161,6 +161,33 @@ function unknownRuleInComputation(
   return null;
 }
 
+/** A table widget's columns, as written in its `columns` parameter; empty for any other field. */
+function tableColumnEntries(entry: Json): readonly unknown[] {
+  const parameters = entry['parameters'];
+  return entry['widget'] === 'table' && isRecord(parameters) && Array.isArray(parameters['columns'])
+    ? parameters['columns']
+    : [];
+}
+
+/**
+ * The properties a computation reads, added to `found`: its `{ "field" }` parameters, at any depth,
+ * and its template's `{<prefix>:<name>}` placeholders.
+ */
+export function propertiesReadBy(computation: unknown, found: Set<string>): void {
+  if (!isRecord(computation) || !Array.isArray(computation['parameters'])) return;
+  for (const parameter of computation['parameters']) {
+    if (typeof parameter === 'string' && computation['type'] === 'core.template') {
+      for (const match of parameter.matchAll(/\{([A-Za-z_][\w-]*:[A-Za-z_][\w-]*)\}/g)) {
+        found.add(match[1]);
+      }
+    } else if (isRecord(parameter) && typeof parameter['field'] === 'string') {
+      found.add(parameter['field']);
+    } else if (isRecord(parameter) && 'computed' in parameter) {
+      propertiesReadBy(parameter['computed'], found);
+    }
+  }
+}
+
 function describe(finding: Finding): string {
   return finding.path ? `${finding.path}: ${finding.message}` : finding.message;
 }
@@ -210,6 +237,17 @@ export function readRecordLayout(
       );
       return false;
     }
+    // A table's columns may each have a rule too, and one this build lacks would show its column
+    // to everyone: the whole table is left out rather than drawn without it.
+    for (const [index, column] of tableColumnEntries(entry).entries()) {
+      const inColumn = isRecord(column) ? unknownRuleIn(column['visibleWhen'], isRuleKnown) : null;
+      if (inColumn) {
+        problems.push(
+          `${place}.parameters.columns[${index}] names the rule "${inColumn}", which this build does not register; ${place} left out`,
+        );
+        return false;
+      }
+    }
     return true;
   };
 
@@ -232,6 +270,13 @@ export function readRecordLayout(
       ];
     }
     if (!isRecord(entry)) return [];
+    for (const [index, column] of tableColumnEntries(entry).entries()) {
+      if (isRecord(column) && 'computed' in column) {
+        problems.push(
+          `${place}.parameters.columns[${index}] is a computed column, which this build does not draw yet; that column left out`,
+        );
+      }
+    }
     const common = {
       place,
       widget: text(entry['widget']) ?? null,

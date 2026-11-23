@@ -3,7 +3,9 @@ import { formatDate, formatNumber, formatPercent } from '@angular/common';
 import { describeField, type FieldView } from '../document-layout/field-view';
 import type { LayoutFieldType, LayoutLabel } from '../layout.model';
 import { humanize } from '../resolve-layout';
-import { widgetAccepts } from './resolve-record-layout';
+import { WIDGETS_SHOWN_AS_VERSION_1, tableColumns, widgetAccepts } from './widget-support';
+
+export { WIDGETS_SHOWN_AS_VERSION_1 } from './widget-support';
 
 /**
  * How the record page shows one value through a registered widget (layout-v2.md, section 3).
@@ -55,18 +57,9 @@ export interface RecordValueContext {
   readonly label: (label: LayoutLabel) => string | null;
   /** A boolean's translated yes or no, for a table's cell. */
   readonly flagText: (flag: boolean) => string;
+  /** Whether a rule passes for the record and the user: a table column's `visibleWhen`. */
+  readonly rule: (rule: unknown) => boolean;
 }
-
-/**
- * The widgets this build shows as version 1 would, until each has its own lookup: `image` and
- * `file-list` need the file fetched through the blob service, and `document-link` the linked
- * record's title. Shown by name or stored id meanwhile, and said so in the console once per page.
- */
-export const WIDGETS_SHOWN_AS_VERSION_1: ReadonlySet<string> = new Set([
-  'image',
-  'file-list',
-  'document-link',
-]);
 
 type Json = Record<string, unknown>;
 
@@ -212,39 +205,6 @@ export function viewText(view: RecordValueView, flagText: (flag: boolean) => str
   }
 }
 
-/** A column of a `table` widget, read from its `columns` parameter: a field entry over a subfield. */
-interface TableColumn {
-  /** The subfield each row holds it under: the `<name>` of `<prefix>:<name>`. */
-  readonly subfield: string;
-  readonly label: LayoutLabel;
-  readonly widget: string | null;
-  readonly parameters: Json;
-}
-
-function tableColumns(parameter: unknown): TableColumn[] {
-  return (Array.isArray(parameter) ? parameter : []).flatMap((entry: unknown) => {
-    const field = typeof entry === 'string' ? entry : isRecord(entry) ? entry['field'] : undefined;
-    if (typeof field !== 'string' || !field.includes(':')) return [];
-    const subfield = field.slice(field.indexOf(':') + 1);
-    const literal =
-      isRecord(entry) && typeof entry['label'] === 'string' ? entry['label'] : undefined;
-    const labelKey =
-      isRecord(entry) && typeof entry['labelKey'] === 'string' ? entry['labelKey'] : undefined;
-    return [
-      {
-        subfield,
-        label: {
-          ...(literal ? { literal } : {}),
-          keys: labelKey ? [labelKey] : [],
-          fallback: humanize(subfield),
-        },
-        widget: isRecord(entry) && typeof entry['widget'] === 'string' ? entry['widget'] : null,
-        parameters: isRecord(entry) && isRecord(entry['parameters']) ? entry['parameters'] : {},
-      },
-    ];
-  });
-}
-
 /** What a widget is given: the value, its parameters, and what its schema says the property is. */
 export interface WidgetInput {
   readonly key: string;
@@ -348,7 +308,11 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
     };
   },
   table: ({ value, parameters, definition }, context) => {
-    const columns = tableColumns(parameters['columns']);
+    // A column shows only while its rule passes, as a field does: a column of numbers a group
+    // may not see is not drawn for anyone outside it.
+    const columns = tableColumns(parameters['columns']).filter(
+      (column) => column.visibleWhen === null || context.rule(column.visibleWhen),
+    );
     const items = (Array.isArray(value) ? value : []).filter(isRecord);
     if (items.length === 0 || columns.length === 0) return EMPTY;
     return {

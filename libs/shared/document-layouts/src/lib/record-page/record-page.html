@@ -39,11 +39,11 @@
     <section
       class="record-page__card"
       [attr.data-card-id]="card.id"
-      [attr.aria-label]="card.heading"
+      [attr.aria-labelledby]="card.heading ? 'record-card-' + card.id : null"
       [style.--record-card-span]="card.span"
     >
       @if (card.heading) {
-        <h3 class="record-page__heading">{{ card.heading }}</h3>
+        <h3 class="record-page__heading" [id]="'record-card-' + card.id">{{ card.heading }}</h3>
       }
       <dl class="record-page__fields">
         @for (field of card.fields; track field.key) {
@@ -99,6 +99,11 @@
     }
     @case ('table') {
       <table class="record-page__table">
+        <caption class="cdk-visually-hidden">
+          {{
+            field.label
+          }}
+        </caption>
         <thead>
           <tr>
             @for (heading of field.value.headings; track $index) {

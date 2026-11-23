@@ -134,8 +134,9 @@ known: by the pipeline in dev mode, by the designer, and by the migration server
 | `image`         | `blob`                         |                                                                          | An image upload                  |
 | `file-list`     | `blob[]`, `complex[]` of files |                                                                          | File uploads                     |
 
-- **Rich text** is shown through the platform's sanitiser, like every other HTML the app renders.
-  It is the only widget that renders HTML.
+- **Rich text** is shown through the platform's sanitiser, like every other HTML the app renders,
+  and keeps formatting, lists, quotes, code and links only: no image, form, style or frame. It is
+  the only widget that renders HTML.
 - **A widget's text is the property's display value.** For a vocabulary, that is its label; for a
   user, their name.
 
@@ -169,6 +170,9 @@ A parameter is one of:
 | `core.dateDiff` | Two dates (the second may be `"today"`), and `days`, `months` or `years` | The difference, in that unit                                                                     |
 | `core.choose`   | A rule, then two values                                                  | The first value while the rule passes, the second otherwise                                      |
 
+- **A computed field is text, never HTML,** so it cannot use `rich-text`: a template puts
+  property values into its text, and anyone who may edit one would otherwise write markup on the
+  page. The validator refuses it.
 - **Anything else is registered in code.** A customer's own computation is a Layer 2
   registration, reviewed and built into the app, as a customer's own rule is today.
 - **Every computation does bounded work on the record already loaded.** It makes no request and
@@ -405,6 +409,9 @@ lists what each Web UI element becomes. In version 2's terms:
   `libs/shared/document-layouts`, loaded as section 8 says. Its limits, each said in the console
   when a file meets it:
   - **related records** are not drawn yet, so a card that lists them is left out;
+  - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, keeps its
+    own View tab, its preview or its editor: a record page beside a preview comes later;
+  - **a computed column** of a table is not drawn yet;
   - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or
     the stored id, until each has its lookup;
   - **the three rules of section 5** are not registered yet, so a tab, card or field that one of
