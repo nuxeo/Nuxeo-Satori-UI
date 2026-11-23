@@ -412,7 +412,8 @@ lists what each Web UI element becomes. In version 2's terms:
   - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, or any
     record a facet gives the `file` or `note` schema, keeps its own View tab, its preview or its
     editor: a record page beside a preview comes later;
-  - **a computed column** of a table is not drawn yet;
+  - **a computed column** of a table is not drawn yet, nor **a table inside a table's column**:
+    that column is left out, and the rest of the table shows;
   - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or
     the stored id, until each has its lookup;
   - **the three rules of section 5** are not registered yet, so a tab, card or field that one of
@@ -426,9 +427,10 @@ lists what each Web UI element becomes. In version 2's terms:
   Where this document is silent, the record page decides two things. **A template's placeholder**
   shows its property as the first field on the page that shows it does, through that field's
   widget and parameters, so a `user` field's id is a name there too; a property no field shows is
-  shown by its schema type. **A date with no widget** shows as the `date` widget shows one: a
-  stored day as written, and an instant on the reader's day
-  ([pattern 29](../../AGENTS/08-bug-patterns.md)). Version 1's view shows every date in UTC.
+  shown by its schema type. **A date with no widget**, alone, in a list or inside a complex
+  value, shows as the `date` widget shows one: a stored day as written, and an instant on the
+  reader's day ([pattern 29](../../AGENTS/08-bug-patterns.md)). Version 1's view shows every date
+  in UTC.
 
 - **Checking widgets against property types** happens wherever the content model is known. The app
   checks each field against the type's schemas when it loads the page, and leaves out one whose

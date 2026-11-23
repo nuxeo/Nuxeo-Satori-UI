@@ -20,7 +20,7 @@ export { WIDGETS_SHOWN_AS_VERSION_1 } from './widget-support';
  *
  * Functions from a value to a view, so every widget is tested without drawing a page, as version
  * 1's `describeField` is. A field with no widget is shown by version 1's own function, so the two
- * versions show an unannotated property the same way, except a date: see {@link showValue}.
+ * versions show an unannotated property the same way, except a date: see {@link asVersion1}.
  */
 
 /**
@@ -88,8 +88,9 @@ export type RecordValueView =
   | { readonly kind: 'multiline'; readonly text: string }
   | { readonly kind: 'flag'; readonly flag: boolean }
   /**
-   * `phone` and `email`: `href` is `tel:` and digits, or `mailto:` and a plain address, so a value
-   * chooses neither the scheme nor any of the link's parameters.
+   * `phone` and `email`: `href` is `tel:` and the digits of a number written with nothing but
+   * digits and separators, or `mailto:` and a plain address, so a value chooses neither the scheme
+   * nor any of the link's parameters, nor dials a number it does not show.
    */
   | { readonly kind: 'link'; readonly text: string; readonly href: string }
   | { readonly kind: 'badge'; readonly text: string; readonly tone: Tone }
@@ -171,9 +172,14 @@ function asVersion1(
   value: unknown,
   context: RecordValueContext,
 ): RecordValueView {
+  // A date, at any depth of a complex value or in a list, as the `date` widget shows it, not in
+  // UTC as version 1 shows every date. UTC is right for a stored day and wrong for an instant
+  // such as `dc:created`, which belongs in the reader's zone (AGENTS/08-bug-patterns.md, pattern
+  // 29). So a field, a table's cell and a template's placeholder show a date on the same day.
   const field = describeField(key, label, definition, value, {
     locale: context.locale,
     vocabulary: context.vocabulary,
+    date: (date) => ({ text: dateText(date, context) }),
   });
   return field.kind === 'empty' ? EMPTY : { kind: 'layout', field };
 }
@@ -220,9 +226,18 @@ export function relativeDateText(date: Date, today: Date, locale: string): strin
 /** An address a `mailto:` link may carry: it chooses no header, and names no other scheme. */
 const PLAIN_EMAIL = /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
-/** The digits a `tel:` link dials: the value without its spaces, dots, dashes and brackets. */
-function dialable(value: string): string {
-  return value.replace(/[^\d+]/g, '');
+/**
+ * A number as it is written to be dialled: digits, an optional `+` first, and the spaces, dots,
+ * dashes, slashes and brackets that group them. Anything else, such as `ext. 42` or a letter, is
+ * not linked: taking it out would dial another number, as `ext. 42` would add its digits to it.
+ */
+const DIALABLE = /^\+?[\d\s()./-]+$/;
+
+/** The digits a `tel:` link dials, or `null` for a value that is not written to be dialled. */
+function dialable(value: string): string | null {
+  const written = value.trim();
+  if (!DIALABLE.test(written) || !/\d/.test(written)) return null;
+  return written.replace(/[^\d+]/g, '');
 }
 
 /** One scalar of a list widget: a vocabulary entry's label, a user's or group's name, or the text. */
@@ -260,15 +275,36 @@ export function viewText(view: RecordValueView, flagText: (flag: boolean) => str
     case 'html':
       // Never markup in a cell: the words the field would show.
       return richTextWords(view.html);
-    case 'layout': {
-      const { field } = view;
-      const one = (value: { readonly text: string } | { readonly flag: boolean }): string =>
-        'text' in value ? value.text : flagText(value.flag);
-      if (field.value) return one(field.value);
-      if (field.chips) return field.chips.map(one).join(', ');
-      return '';
-    }
+    case 'layout':
+      return fieldText(view.field, flagText);
   }
+}
+
+/**
+ * Version 1's view of a value as one line. A complex value is its sub-fields, each written
+ * `Label: value` as the field lists them, and one value after another; a complex sub-field is
+ * bracketed, so that its own values do not read as the outer one's. Empty sub-fields are left
+ * out, as the field shows them as a dash. The depth is version 1's own, which writes a value
+ * nested deeper as text.
+ */
+function fieldText(field: FieldView, flagText: (flag: boolean) => string): string {
+  const one = (value: { readonly text: string } | { readonly flag: boolean }): string =>
+    'text' in value ? value.text : flagText(value.flag);
+  if (field.value) return one(field.value);
+  if (field.chips) return field.chips.map(one).join(', ');
+  if (!field.groups) return '';
+  return field.groups
+    .map((group) =>
+      group
+        .filter((sub) => sub.kind !== 'empty')
+        .map((sub) => {
+          const text = fieldText(sub, flagText);
+          return `${sub.label}: ${sub.kind === 'groups' ? `(${text})` : text}`;
+        })
+        .join(', '),
+    )
+    .filter((text) => text !== '')
+    .join('; ');
 }
 
 /** What a widget is given: the value, its parameters, and what its schema says the property is. */
@@ -330,7 +366,7 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
   phone: ({ value }) => {
     const shown = textOf(value);
     const digits = dialable(shown);
-    return digits === '' ? text(shown) : { kind: 'link', text: shown, href: `tel:${digits}` };
+    return digits === null ? text(shown) : { kind: 'link', text: shown, href: `tel:${digits}` };
   },
   email: ({ value }) => {
     const shown = textOf(value).trim();
@@ -430,12 +466,8 @@ function dateText(value: unknown, context: RecordValueContext): string {
 }
 
 /**
- * Show a value through `widget`, or as version 1 would when there is none.
- *
- * Except a date, or a list of them, with no widget: that is shown as the `date` widget shows it.
- * Version 1's view formats every date in UTC, which is right for a stored day and wrong for an
- * instant such as `dc:created`, which belongs in the reader's zone (AGENTS/08-bug-patterns.md,
- * pattern 29). So a field, a table's cell and a template's placeholder show a date on the same day.
+ * Show a value through `widget`, or as version 1 would when there is none, its dates excepted
+ * (see `asVersion1`).
  */
 export function showValue(
   input: WidgetInput,
@@ -443,15 +475,6 @@ export function showValue(
   context: RecordValueContext,
 ): RecordValueView {
   if (isEmpty(input.value)) return EMPTY;
-  if (widget === null && input.definition.type === 'date') {
-    return text(dateText(input.value, context));
-  }
-  if (widget === null && input.definition.type === 'date[]' && Array.isArray(input.value)) {
-    const chips = input.value
-      .filter((item) => !isEmpty(item))
-      .map((item) => dateText(item, context));
-    return chips.length === 0 ? EMPTY : { kind: 'chips', chips };
-  }
   const view =
     widget !== null && !WIDGETS_SHOWN_AS_VERSION_1.has(widget) ? WIDGET_VIEWS[widget] : undefined;
   return view
