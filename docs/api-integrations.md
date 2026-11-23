@@ -2064,7 +2064,7 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
   refusal.
 - **The list after a command.** A page provider the search index serves may still hold the records
   a command changed when it completes, so the page reads the list again at the end and once more
-  three seconds later. Measured over 42 records on `document_content`, the list read at the end
+  three seconds later, and offers no count until the second read has answered. Measured over 42 records on `document_content`, the list read at the end
   was already empty; the larger runs were not checked for it.
 - **Counts.** A page provider counts its results, so `resultsCount` is a real total for
   `payers_unassigned_claims`, `member_claims` and `default_search`. One that answers `-2` cannot

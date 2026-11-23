@@ -232,7 +232,8 @@ provider, for the development server.
     done with some records failed, stopped, refused by the server, an answer the page could not
     read, or no longer followed, in the last two cases saying it may still be running. An action that
     changes records reads the list again when it ends, and once more a few seconds later, since a
-    list the search index serves may still hold the records changed.
+    list the search index serves may still hold the records changed; until that second read, it
+    names no count.
   - **Not while a bucket is chosen.** The server builds the command from the page provider's query
     and leaves out the buckets chosen, so it would reach records the list does not show. The page
     says to clear the filters instead.

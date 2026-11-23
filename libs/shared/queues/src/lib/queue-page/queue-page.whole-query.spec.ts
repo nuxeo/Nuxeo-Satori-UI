@@ -343,15 +343,35 @@ describe('QueuePageComponent, over the whole query', () => {
     );
     // The list is read again: the records have changed. Until it answers, there is no count.
     expect(execute.mock.calls.length).toBe(asked + 1);
-    // And once more a little later, for a list the search index serves.
+    await press('.queue-whole-query__dismiss');
+    // The first read answers, maybe from an index that has not caught up: its count is not named.
+    await answer(120);
+    await selectRow();
+    expect(notice()).toBe('');
+    // And once more a little later, for a list the search index serves: that count is named.
     await new Promise((resolve) => setTimeout(resolve, 60));
     await settle();
     expect(execute.mock.calls.length).toBe(asked + 2);
-    await press('.queue-whole-query__dismiss');
+    await answer(80);
     await selectRow();
-    expect(notice()).toBe('');
-    await answer(0);
-    expect(notice()).toBe('');
+    expect(notice()).toBe('This queue has 80 results.');
+  });
+
+  it("does not read another queue's list for a run on the last one", async () => {
+    files['other'] = { kind: 'file', content: { ...QUEUE, label: 'Other' } };
+    create();
+    await open();
+    await answer(120);
+    await selectRow();
+    await press('.queue-whole-query__select-all');
+    await press('.queue-whole-query__run');
+    await respond(at('COMPLETED', 120, 120));
+    fixture.componentRef.setInput('id', 'other');
+    await settle();
+    const asked = execute.mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await settle();
+    expect(execute.mock.calls.length).toBe(asked);
   });
 
   it('stops the command when the server finds more records than were agreed to', async () => {
@@ -413,6 +433,24 @@ describe('QueuePageComponent, over the whole query', () => {
         'bulkActions "app.bulkActions.delete" is not offered over the whole query: the handler that runs it on a selection does not declare',
       ),
     );
+  });
+
+  it('lets go of every result when the count goes, so it does not come back over rows selected', async () => {
+    create();
+    await open();
+    await answer(120);
+    await selectRow();
+    await press('.queue-whole-query__select-all');
+    TestBed.inject(DocumentChangesService).notify();
+    await settle();
+    await answer(120, { totalSize: -1, resultsCount: -2 });
+    await selectRow();
+    TestBed.inject(DocumentChangesService).notify();
+    await settle();
+    await answer(120);
+    // The count is back: the rows selected meanwhile stay, and every result is only offered.
+    expect(list().selectable()).toBe(true);
+    expect(notice()).toBe('This queue has 120 results.');
   });
 
   it('lets rows be selected again when every result was selected and the count is gone', async () => {

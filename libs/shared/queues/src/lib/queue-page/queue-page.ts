@@ -408,6 +408,10 @@ export class QueuePageComponent {
 
   private following: Subscription | null = null;
   private stops = new Subject<void>();
+  /** The list's second read after a command, for the search index: the run's own, not the page's. */
+  private reindexing: Subscription | null = null;
+  /** While the second read is still to come: the count the first read brings is not named. */
+  private awaitingReindex = false;
 
   /**
    * Whether every result is selected and can still be acted on: while an action can run over the
@@ -506,15 +510,29 @@ export class QueuePageComponent {
       this.selection.offeredBulkActions.set(null);
       // Following the command stops with the page; the command goes on on the server.
       this.following?.unsubscribe();
+      this.reindexing?.unsubscribe();
     });
 
-    // Another queue: its command, if one runs, is no longer this page's to follow.
+    // Another queue: its command, if one runs, is no longer this page's to follow, nor its list's
+    // second read this page's to ask for.
     toObservable(this.queue)
       .pipe(takeUntilDestroyed())
       .subscribe(() => {
         this.following?.unsubscribe();
         this.following = null;
+        this.reindexing?.unsubscribe();
+        this.reindexing = null;
+        this.awaitingReindex = false;
       });
+
+    // Every result selected, and no action can run over them any more, such as when the list no
+    // longer gives a count: the selection goes, rather than coming back on its own once the count
+    // does, over rows selected meanwhile.
+    effect(() => {
+      if (this.allResults() && this.wholeQueryActions().length === 0) {
+        untracked(() => this.allResults.set(false));
+      }
+    });
   }
 
   protected onLoaded(results: PageProviderResults): void {
@@ -524,7 +542,8 @@ export class QueuePageComponent {
       (count): count is number => typeof count === 'number' && count >= 0,
     );
     const total = counts.length > 0 ? Math.max(...counts) : -1;
-    this.total.set(total);
+    // After a command, the first read may still come from an index that has not caught up.
+    this.total.set(this.awaitingReindex ? -1 : total);
     if (total < 0 && this.queue()?.bulkActions.some((id) => wholeQueryBulkAction(id) !== null)) {
       this.tell(
         'every result cannot be selected: the page provider does not say how many records it holds, and a confirmation must name the number',
@@ -611,15 +630,22 @@ export class QueuePageComponent {
 
   /**
    * Reads the list again, now and once more a little later: a list the search index serves may
-   * still hold the records the action changed when the command completes. Until it answers, there
-   * is no count, so no stale one is named.
+   * still hold the records the action changed when the command completes. Until the second read
+   * answers, there is no count, so a stale one from the first is never named. The second read is
+   * the run's: another queue opened meanwhile does not get it.
    */
   private refresh(): void {
+    this.reindexing?.unsubscribe();
     this.total.set(-1);
+    this.awaitingReindex = true;
     this.documentChanges.notify();
-    timer(this.timing.reindexMs)
+    this.reindexing = timer(this.timing.reindexMs)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.documentChanges.notify());
+      .subscribe(() => {
+        this.awaitingReindex = false;
+        this.reindexing = null;
+        this.documentChanges.notify();
+      });
   }
 
   private stop(): void {
