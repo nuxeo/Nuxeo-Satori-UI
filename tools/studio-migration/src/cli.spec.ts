@@ -199,7 +199,7 @@ describe('studio-migration convert, check and mutate', () => {
     expect(converted.code).toBe(0);
     expect(converted.out).toMatch(/^Converted Acme-Claims 1\.0\.0 into /);
     expect(converted.out).toContain(
-      'app/: 9 files: app.json, 3 layouts, 2 queues, actions.json, 2 labels files',
+      'app/: 11 files: app.json, 3 layouts, 2 queues, home.json, navigation.json, actions.json, 2 labels files',
     );
     expect(converted.out).toContain('labels: en (3), fr (3)');
     expect(converted.out).toContain('themes: acme (2 tokens, 1 file)');

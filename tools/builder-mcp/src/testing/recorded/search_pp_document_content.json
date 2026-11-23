@@ -1,0 +1,91 @@
+{
+  "request": {
+    "path": "/search/pp/document_content"
+  },
+  "status": 200,
+  "body": {
+    "name": "document_content",
+    "enabled": true,
+    "properties": {},
+    "queryParameters": [],
+    "pageSize": 20,
+    "pageSizeBinding": null,
+    "maxPageSize": null,
+    "pageSizeOptions": [5, 10, 20, 30, 40, 50],
+    "sortable": true,
+    "sortInfos": [
+      {
+        "sortColumn": "dc:title",
+        "sortAscending": true
+      }
+    ],
+    "sortInfosBinding": null,
+    "pattern": null,
+    "quotePatternParameters": true,
+    "escapePatternParameters": true,
+    "whereClause": {
+      "escaperClass": null,
+      "predicates": [
+        {
+          "parameter": "ecm:fulltext",
+          "type": "atomic",
+          "operator": "FULLTEXT",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "fulltext_all",
+              "schema": "advanced_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "dc:title",
+          "type": "atomic",
+          "operator": "FULLTEXT",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "title",
+              "schema": "advanced_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "dc:modified",
+          "type": "atomic",
+          "operator": "BETWEEN",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "modified_min",
+              "schema": "advanced_search",
+              "xpath": null
+            },
+            {
+              "name": "modified_max",
+              "schema": "advanced_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        }
+      ],
+      "fixedPart": "ecm:parentId = ? AND ecm:isVersion = 0 AND ecm:mixinType != 'HiddenInNavigation' AND ecm:isTrashed = 0",
+      "selectStatement": null,
+      "quoteFixedPartParameters": true,
+      "escapeFixedPartParameters": true
+    },
+    "searchDocumentType": "AdvancedSearch",
+    "quickFilters": [],
+    "aggregates": [],
+    "id": "document_content",
+    "usageTrackingEnabled": false
+  }
+}

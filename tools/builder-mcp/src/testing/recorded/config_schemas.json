@@ -1,0 +1,346 @@
+{
+  "request": {
+    "path": "/config/schemas"
+  },
+  "status": 200,
+  "body": [
+    {
+      "name": "document_route_model",
+      "@prefix": "docrm",
+      "fields": {}
+    },
+    {
+      "name": "publishing",
+      "@prefix": "publish",
+      "fields": {
+        "sections": "string[]"
+      }
+    },
+    {
+      "name": "var_Task38e",
+      "@prefix": "var_Task38e",
+      "fields": {
+        "comment": "string"
+      }
+    },
+    {
+      "name": "dublincore",
+      "@prefix": "dc",
+      "fields": {
+        "description": "string",
+        "language": "string",
+        "coverage": "string",
+        "valid": "date",
+        "creator": "string",
+        "modified": "date",
+        "lastContributor": "string",
+        "rights": "string",
+        "expired": "date",
+        "format": "string",
+        "created": "date",
+        "title": "string",
+        "issued": "date",
+        "nature": "string",
+        "subjects": "string[]",
+        "contributors": "string[]",
+        "source": "string",
+        "publisher": "string"
+      }
+    },
+    {
+      "name": "var_ParallelDocumentReview",
+      "@prefix": "var_ParallelDocumentReview",
+      "fields": {
+        "end_date": "date",
+        "initiatorComment": "string",
+        "participants": "string[]",
+        "review_result": "string",
+        "review_result_file": "blob",
+        "validationOrReview": "string"
+      }
+    },
+    {
+      "name": "domain",
+      "@prefix": "",
+      "fields": {
+        "display_type": "boolean",
+        "content_roots": "string[]"
+      }
+    },
+    {
+      "name": "var_Task2225",
+      "@prefix": "var_Task2225",
+      "fields": {}
+    },
+    {
+      "name": "var_Task542",
+      "@prefix": "var_Task542",
+      "fields": {}
+    },
+    {
+      "name": "var_Task232e",
+      "@prefix": "var_Task232e",
+      "fields": {}
+    },
+    {
+      "name": "var_Task21a0",
+      "@prefix": "var_Task21a0",
+      "fields": {}
+    },
+    {
+      "name": "uid",
+      "@prefix": "",
+      "fields": {
+        "uid": "string",
+        "major_version": "long",
+        "minor_version": "long"
+      }
+    },
+    {
+      "name": "file",
+      "@prefix": "",
+      "fields": {
+        "content": "blob"
+      }
+    },
+    {
+      "name": "route_node",
+      "@prefix": "rnode",
+      "fields": {
+        "taskDocType": "string",
+        "subRouteModelExpr": "string",
+        "taskButtons": {
+          "fields": {
+            "filter": "string",
+            "name": "string",
+            "label": "string",
+            "validate": "boolean"
+          },
+          "type": "complex[]"
+        },
+        "transitions": {
+          "fields": {
+            "result": "boolean",
+            "path": {
+              "fields": {
+                "x": "double",
+                "y": "double"
+              },
+              "type": "complex[]"
+            },
+            "condition": "string",
+            "chain": "string",
+            "targetId": "string",
+            "name": "string",
+            "description": "string",
+            "label": "string"
+          },
+          "type": "complex[]"
+        },
+        "taskLayout": "string",
+        "startDate": "date",
+        "taskY": "string",
+        "variablesFacet": "string",
+        "subRouteVariables": {
+          "fields": {
+            "value": "string",
+            "key": "string"
+          },
+          "type": "complex[]"
+        },
+        "subRouteInstanceId": "string",
+        "taskX": "string",
+        "inputChain": "string",
+        "canceled": "long",
+        "endDate": "date",
+        "lastActor": "string",
+        "fork": "boolean",
+        "executeOnlyFirstTransition": "boolean",
+        "taskDueDate": "date",
+        "hasMultipleTasks": "boolean",
+        "taskNotificationTemplate": "string",
+        "allowTaskReassignment": "boolean",
+        "stop": "boolean",
+        "taskAssignees": "string[]",
+        "taskDueDateExpr": "string",
+        "hasTask": "boolean",
+        "button": "string",
+        "escalationRules": {
+          "fields": {
+            "condition": "string",
+            "chain": "string",
+            "name": "string",
+            "executionDate": "date",
+            "executed": "boolean",
+            "label": "string",
+            "multipleExecution": "boolean"
+          },
+          "type": "complex[]"
+        },
+        "outputChain": "string",
+        "taskDirective": "string",
+        "taskDescription": "string",
+        "taskAssigneesExpr": "string",
+        "count": "long",
+        "tasksInfo": {
+          "fields": {
+            "actor": "string",
+            "taskDocId": "string",
+            "ended": "boolean",
+            "comment": "string",
+            "status": "string"
+          },
+          "type": "complex[]"
+        },
+        "nodeId": "string",
+        "merge": "string",
+        "start": "boolean",
+        "taskAssigneesPermission": "string"
+      }
+    },
+    {
+      "name": "var_SerialDocumentReview",
+      "@prefix": "var_SerialDocumentReview",
+      "fields": {
+        "participants": "string[]",
+        "validationOrReview": "string",
+        "initiatorComment": "string",
+        "index": "long"
+      }
+    },
+    {
+      "name": "var_Task22b4",
+      "@prefix": "var_Task22b4",
+      "fields": {}
+    },
+    {
+      "name": "var_Task2169",
+      "@prefix": "var_Task2169",
+      "fields": {
+        "assignees": "string[]",
+        "comment": "string"
+      }
+    },
+    {
+      "name": "var_Task375f",
+      "@prefix": "var_Task375f",
+      "fields": {}
+    },
+    {
+      "name": "var_Task5c1",
+      "@prefix": "var_Task5c1",
+      "fields": {}
+    },
+    {
+      "name": "var_Task2556",
+      "@prefix": "var_Task2556",
+      "fields": {
+        "comment": "string",
+        "assignees": "string[]"
+      }
+    },
+    {
+      "name": "document_route_instance",
+      "@prefix": "docri",
+      "fields": {
+        "variablesFacet": "string",
+        "availabilityFilter": "string",
+        "initiator": "string",
+        "parentRouteInstanceId": "string",
+        "modelId": "string",
+        "participatingDocuments": "string[]",
+        "parentRouteNodeId": "string"
+      }
+    },
+    {
+      "name": "files",
+      "@prefix": "",
+      "fields": {
+        "files": {
+          "fields": {
+            "file": "blob"
+          },
+          "type": "complex[]"
+        }
+      }
+    },
+    {
+      "name": "relatedtext",
+      "@prefix": "",
+      "fields": {
+        "relatedtextresources": {
+          "fields": {
+            "relatedtextid": "string",
+            "relatedtext": "string"
+          },
+          "type": "complex[]"
+        }
+      }
+    },
+    {
+      "name": "note",
+      "@prefix": "",
+      "fields": {
+        "note": "string",
+        "mime_type": "string"
+      }
+    },
+    {
+      "name": "webcontainer",
+      "@prefix": "webc",
+      "fields": {
+        "themePerspective": "string",
+        "useCaptcha": "boolean",
+        "isWebContainer": "boolean",
+        "template": "string",
+        "themePage": "string",
+        "logo": "blob",
+        "name": "string",
+        "email": "string",
+        "welcomeMedia": "blob",
+        "url": "string",
+        "baseline": "string",
+        "theme": "string",
+        "moderationType": "string",
+        "welcomeText": "string"
+      }
+    },
+    {
+      "name": "common",
+      "@prefix": "",
+      "fields": {
+        "icon-expanded": "string",
+        "icon": "string"
+      }
+    },
+    {
+      "name": "facetedTag",
+      "@prefix": "nxtag",
+      "fields": {
+        "tags": {
+          "fields": {
+            "label": "string",
+            "username": "string"
+          },
+          "type": "complex[]"
+        }
+      }
+    },
+    {
+      "name": "var_Task328d",
+      "@prefix": "var_Task328d",
+      "fields": {
+        "assignees": "string[]",
+        "comment": "string"
+      }
+    },
+    {
+      "name": "var_Task6d8",
+      "@prefix": "var_Task6d8",
+      "fields": {
+        "comment": "string"
+      }
+    }
+  ],
+  "trimmed": "28 of 103 kept: those the kept types and workflows use"
+}

@@ -38,6 +38,7 @@ describe('ExtensionRuleRegistry', () => {
     expect(registry.registeredRuleIds()).toEqual(
       expect.arrayContaining([
         'app.rules.canAddChildren',
+        'app.rules.canFollowTransition',
         'app.rules.canManagePermissions',
         'app.rules.canPublish',
         'app.rules.canRemove',
@@ -57,6 +58,42 @@ describe('ExtensionRuleRegistry', () => {
       registry.evaluate('app.rules.canPublish', publishable(['WriteVersion'], { isProxy: true })),
     ).toBe(false);
     expect(registry.evaluate('app.rules.canPublish', EMPTY_EXTENSION_RULE_CONTEXT)).toBe(false);
+  });
+
+  it('answers canFollowTransition from the allowedTransitions enricher alone', () => {
+    const withTransitions = (transitions: unknown, permissions = ['Read']) =>
+      context({
+        document: {
+          ...doc(permissions),
+          contextParameters: { permissions, allowedTransitions: transitions },
+        },
+      });
+
+    expect(
+      registry.evaluate(
+        'app.rules.canFollowTransition',
+        withTransitions([{ name: 'approve', destinationState: 'approved' }]),
+      ),
+    ).toBe(true);
+    // The server already left out what this user may not follow: an empty list is "none", even
+    // for a user whose `permissions` would let them write.
+    expect(
+      registry.evaluate('app.rules.canFollowTransition', withTransitions([], ['Everything'])),
+    ).toBe(false);
+    // Fetched without the enricher, or from a server without the bundle: nothing is offered,
+    // rather than a button whose every click the server refuses.
+    expect(
+      registry.evaluate(
+        'app.rules.canFollowTransition',
+        context({ document: doc(['Everything']) }),
+      ),
+    ).toBe(false);
+    expect(registry.evaluate('app.rules.canFollowTransition', withTransitions('approve'))).toBe(
+      false,
+    );
+    expect(registry.evaluate('app.rules.canFollowTransition', EMPTY_EXTENSION_RULE_CONTEXT)).toBe(
+      false,
+    );
   });
 
   it('delegates to the existing permission predicate rather than reimplementing it', () => {

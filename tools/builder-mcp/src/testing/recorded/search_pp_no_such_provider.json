@@ -1,0 +1,7 @@
+{
+  "request": {
+    "path": "/search/pp/no_such_provider"
+  },
+  "status": 200,
+  "body": null
+}

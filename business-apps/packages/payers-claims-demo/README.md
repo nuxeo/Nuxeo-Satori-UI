@@ -33,6 +33,7 @@ fictional. Phase 0's demo runs on it, and the pipeline's controls
 | `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`   | The seed script, its fictional records and its controls. Not packaged |
 | `package/package.xml`                                        | The Marketplace package: name, version, and what it depends on        |
 | `build.mjs`                                                  | Version 1's builder: the generator's, byte for byte                   |
+| `content-model.json`                                         | The stand-in model as the server answers it, for `--model`            |
 
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
 - **No operation button.** Decision 3 is open, so the pipeline refuses every operation.
@@ -83,6 +84,16 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 ```
 
 It writes `dist/payers-claims-demo-0.2.0.zip`.
+
+Held to its content model ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md),
+section 4): `content-model.json` is the stand-in model as a local Nuxeo with this package installed
+answers it. It was exported with `npm run app-package:model` and cut down to the kit's five types,
+their facets and their schemas. Export it again when the stand-in model changes.
+
+```bash
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 \
+  --model business-apps/packages/payers-claims-demo/content-model.json
+```
 
 ## Installing it on a local Nuxeo
 

@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "$comment": "Node 24 runs the sources as they are, stripping the types (README, 'Running it'), so the code is held to what Node can strip: erasable syntax only, explicit `import type`, and relative imports that name the `.ts` file. allowJs is for the identity guard, which is plain ESM with JSDoc types.",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["ES2024"],
+    "strict": true,
+    "noImplicitOverride": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

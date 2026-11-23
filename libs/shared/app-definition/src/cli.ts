@@ -1,6 +1,7 @@
 /**
  * npm run app-definition:validate -- <file or directory>... [--mode <mode>] [--allow-list <file>]
- *   [--registered <file>] [--platform <version>]
+ *   [--registered <file>] [--platform <version>] [--model <file>]
+ * node libs/shared/app-definition/src/bin.mjs model <file>
  *
  * The check behind phase 0's demo step 1, which the package pipeline is to run first. A layout file
  * that names a widget the platform does not have is refused, and the message names the widget.
@@ -21,6 +22,12 @@
  * - **What the deployment registers in code**, a customer's own rules, actions and pages, and the
  *   domain modules it has, come from `--registered`.
  * - **`app.json`'s platform range** is held to `--platform`, when it is given.
+ * - **The server's content model**, from `--model`, holds each version 2 layout to the document
+ *   type its path names: its properties, and the property types its widgets show. The file is
+ *   `{ doctypes, facets, schemas }`, as `scripts/app-package-model.mjs` exports it from a server.
+ *   The run says how many layouts it held to the model, and says so when there were none.
+ * - **`model <file>`** reads a content model alone, as `--model` does, and exits 0 when the whole
+ *   of it can be read, 1 with every problem when it cannot: the export checks its file with it.
  * - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
  *   counted.
  *
@@ -31,7 +38,8 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { LAYOUT_MODES, type LayoutMode } from './lib/layout-v2';
+import { readContentModel, type ContentModel } from './lib/content-model';
+import { heldToModel, LAYOUT_MODES, type LayoutMode } from './lib/layout-v2';
 import { placeFile, validateFile, type PackageContext, type PlacedFile } from './lib/package';
 import { isRecord, PACKAGED_REGISTRIES, withRegistered, type Registries } from './lib/registries';
 import { parseVersion } from './lib/semver';
@@ -43,7 +51,8 @@ export interface CliIo {
 
 const USAGE =
   'usage: app-definition validate <file or directory>... [--mode view|metadata|edit|create]' +
-  ' [--allow-list <file>] [--registered <file>] [--platform <version>]\n';
+  ' [--allow-list <file>] [--registered <file>] [--platform <version>] [--model <file>]\n' +
+  '       app-definition model <file>\n';
 const CANNOT_TELL =
   'cannot tell which file of an app definition it is; name it as a package places it,' +
   ' such as layouts/<Type>/<mode>.layout.json or queues/<id>.json, or pass --mode for a layout';
@@ -52,11 +61,13 @@ const VERSION_ONE_FILES = ['bootstrap.json', 'manifest.json', 'layouts.json'];
 
 export function main(argv: readonly string[], io: CliIo): number {
   const [command, ...rest] = argv;
+  if (command === 'model') return checkModel(rest, io);
   const paths: string[] = [];
   let mode: LayoutMode | undefined;
   let allowList: string | undefined;
   let registeredFile: string | undefined;
   let platformVersion: string | undefined;
+  let modelFile: string | undefined;
   for (let index = 0; index < rest.length; index++) {
     const arg = rest[index];
     if (arg === '--mode') {
@@ -70,6 +81,8 @@ export function main(argv: readonly string[], io: CliIo): number {
       allowList = rest[++index];
     } else if (arg === '--registered' && rest[index + 1] !== undefined) {
       registeredFile = rest[++index];
+    } else if (arg === '--model' && rest[index + 1] !== undefined) {
+      modelFile = rest[++index];
     } else if (arg === '--platform') {
       const value = rest[++index];
       if (value === undefined || !parseVersion(value)) {
@@ -104,6 +117,15 @@ export function main(argv: readonly string[], io: CliIo): number {
     }
     registries = read;
   }
+  let model: ContentModel | undefined;
+  if (modelFile !== undefined) {
+    const read = readModel(modelFile);
+    if (typeof read === 'string') {
+      io.err(`${modelFile}: ${read}\n${USAGE}`);
+      return 2;
+    }
+    model = read;
+  }
 
   const apps = new Map<string, boolean>();
   const hasApp = (root: string): boolean => {
@@ -129,6 +151,7 @@ export function main(argv: readonly string[], io: CliIo): number {
   let refused = 0;
   let passed = 0;
   let versionOne = 0;
+  let held = 0;
   let operationRefused = false;
   const checked = new Set<string>();
   for (const { path, root, named } of found) {
@@ -165,11 +188,18 @@ export function main(argv: readonly string[], io: CliIo): number {
       versionOne++;
       continue;
     }
+    // Counted as the validator holds them: one it stops before the model's checks is not.
+    if (
+      model &&
+      placed.file.kind === 'layout' &&
+      heldToModel(content, { mode: mode ?? placed.file.mode, type: placed.file.type })
+    )
+      held++;
     const findings = validateFile(
       placed.file,
       content,
       contextOf(placed.root, contexts, problems),
-      { registries, operations, platformVersion, mode },
+      { registries, operations, platformVersion, mode, model },
     );
     if (findings.length === 0) {
       passed++;
@@ -191,6 +221,12 @@ export function main(argv: readonly string[], io: CliIo): number {
   for (const [path, problem] of unread) io.out(`${path}: ${problem}\n`);
   if (operationRefused && allowList === undefined)
     io.out('No --allow-list was given, so every operation is refused.\n');
+  if (model)
+    io.out(
+      held > 0
+        ? `${held} ${held === 1 ? 'layout was' : 'layouts were'} held to the content model in ${modelFile}.\n`
+        : `No layout was held to the content model in ${modelFile}: none is of version 2, in a mode, for a type its path names.\n`,
+    );
   const total = checked.size;
   io.out(
     `${total} ${total === 1 ? 'file' : 'files'}: ${passed} passed, ${refused} refused` +
@@ -254,6 +290,42 @@ function readAllowList(path: string): ReadonlySet<string> | string {
   )
     return 'an allow-list is { "operations": [<operation or chain ID>, ...] }';
   return new Set(operations as string[]);
+}
+
+/**
+ * A server's content model, `{ doctypes, facets, schemas }`, or what is wrong with the file: every
+ * problem, since a model read in part would refuse a layout for what it left out.
+ */
+function readModel(path: string): ContentModel | string {
+  let content: unknown;
+  try {
+    content = readJson(path);
+  } catch (error) {
+    return `cannot be read as JSON: ${(error as Error).message}`;
+  }
+  const reading = readContentModel(content);
+  if (reading.model) return reading.model;
+  return `is not a content model:\n${reading.problems.map((problem) => `  - ${problem}`).join('\n')}`;
+}
+
+/** `model <file>`: whether the whole of a content model can be read, and every problem if not. */
+function checkModel(rest: readonly string[], io: CliIo): number {
+  const [path, ...more] = rest;
+  if (path === undefined || path.startsWith('--') || more.length > 0) {
+    io.err(USAGE);
+    return 2;
+  }
+  const read = readModel(path);
+  if (typeof read === 'string') {
+    io.out(`${path}: ${read}\n`);
+    return 1;
+  }
+  const count = (size: number, noun: string): string => `${size} ${noun}${size === 1 ? '' : 's'}`;
+  io.out(
+    `${path}: a content model of ${count(read.types.size, 'document type')}, ` +
+      `${count(read.facets.size, 'facet')} and ${count(read.schemas.size, 'schema')}.\n`,
+  );
+  return 0;
 }
 
 const REGISTERED_KEYS = [

@@ -1,0 +1,92 @@
+{
+  "request": {
+    "path": "/directory/country",
+    "query": {
+      "pageSize": "5",
+      "currentPageIndex": "1"
+    }
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "directoryEntries",
+    "isPaginable": true,
+    "resultsCount": 244,
+    "pageSize": 5,
+    "maxPageSize": 1000,
+    "resultsCountLimit": 0,
+    "currentPageSize": 5,
+    "currentPageIndex": 1,
+    "currentPageOffset": 5,
+    "numberOfPages": 49,
+    "isPreviousPageAvailable": true,
+    "isNextPageAvailable": true,
+    "isLastPageAvailable": true,
+    "isSortable": true,
+    "hasError": false,
+    "errorMessage": null,
+    "pageIndex": 1,
+    "pageCount": 49,
+    "entries": [
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "country",
+        "id": "Andorra",
+        "properties": {
+          "parent": "europe",
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "Andorra",
+          "label": "label.directories.country.Andorra"
+        }
+      },
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "country",
+        "id": "Angola",
+        "properties": {
+          "parent": "africa",
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "Angola",
+          "label": "label.directories.country.Angola"
+        }
+      },
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "country",
+        "id": "Anguilla",
+        "properties": {
+          "parent": "north-america",
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "Anguilla",
+          "label": "label.directories.country.Anguilla"
+        }
+      },
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "country",
+        "id": "Antarctica_the_territory_South_of_60_deg_S",
+        "properties": {
+          "parent": "antarctica",
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "Antarctica_the_territory_South_of_60_deg_S",
+          "label": "label.directories.country.Antarctica_the_territory_South_of_60_deg_S"
+        }
+      },
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "country",
+        "id": "Antigua_and_Barbuda",
+        "properties": {
+          "parent": "north-america",
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "Antigua_and_Barbuda",
+          "label": "label.directories.country.Antigua_and_Barbuda"
+        }
+      }
+    ]
+  }
+}

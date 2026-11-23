@@ -351,7 +351,7 @@ carry packaged entries.
 | `bulk-actions`     | Actions over a multi-document selection            | **Populated** — packaged entries in section 5      |
 | `sidebar`          | Drawer content behind a navbar entry               | Resolves; **no packaged entries** — see section 6  |
 | `routes`           | Application routes                                 | Resolves; **no packaged entries** — see section 11 |
-| `toolbar`          | Document-detail toolbar and overflow menu          | **Populated** — 16 packaged actions, section 8     |
+| `toolbar`          | Document-detail toolbar and overflow menu          | **Populated** — 17 packaged actions, section 8     |
 | `contextMenu`      | The browse "More actions" menu                     | **Populated** — 4 packaged actions, section 10     |
 | `rowActions`       | Each row's menu, in browse and in related records  | **Populated** — 5 packaged actions, section 10a    |
 | `tabs`             | Document-detail tab children                       | **Populated** — 6 packaged tabs, section 9         |
@@ -746,6 +746,7 @@ Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicate
 | `app.rules.canAddChildren`       | The user has `AddChildren`                                                           |
 | `app.rules.canManagePermissions` | The user has `WriteSecurity` or `Everything`                                         |
 | `app.rules.canPublish`           | Web UI's `isPublishable`: see below                                                  |
+| `app.rules.canFollowTransition`  | The server lists a lifecycle transition the user may follow now: see below           |
 | `app.rules.hasDocument`          | A document is in focus                                                               |
 | `app.rules.isType`               | The focused document's type is one of the `parameters`                               |
 | `app.rules.hasFacet`             | The focused document carries at least one facet in `parameters`                      |
@@ -760,6 +761,12 @@ Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicate
 record or in the trash, carries the `Publishable` facet, and the user has `WriteVersion`. It is
 true on a version — Web UI publishes a version as it is — and needs no version to exist, because
 publishing a live document creates one.
+
+`app.rules.canFollowTransition` reads the focused document's `allowedTransitions` enricher, which
+`nuxeo-agentic-core` adds (section 8, note ³): true when it lists at least one transition. The
+server has already left out every transition this user may not follow, so the rule asks nothing of
+`permissions`. A document fetched without the enricher, or from a server without the bundle, has
+none, and the rule is false. It takes no parameters.
 
 `app.rules.isType` and `app.rules.hasFacet` take the type or facet names as `parameters`, matched
 exactly — Nuxeo names are case-sensitive. With no string parameters — or `parameters` that is not
@@ -1306,6 +1313,7 @@ so `slots.toolbar` can move a packaged action between the two.
 | `app.toolbar.removeFromClipboard` | Remove from Clipboard | `content_paste_off`    | 90    | yes      | not trashed and in the clipboard       |
 | `app.toolbar.export`              | Export                | `download`             | 100   | yes      | always                                 |
 | `app.toolbar.startProcess`        | Start Process         | `play_circle`          | 110   | yes      | not trashed                            |
+| `app.toolbar.followTransition`    | Change state          | `steps`                | 120   | yes      | not trashed, a transition to follow ³  |
 
 ¹ For Edit and Edit properties, writable also means **not `Immutable`** — the rule is
 `app.rules.canWrite` and `core.not` over `app.rules.hasFacet` with `["Immutable"]`. Nuxeo
@@ -1328,6 +1336,44 @@ The server decides either way — this rule only decides what the interface offe
 Moved to the overflow menu with `"overflow": true`, Unlock keeps its tooltip on hover, but a
 reader's disabled entry there cannot take keyboard focus — Material menus skip disabled items —
 so the owner and date are then reachable by pointer only. Keep it inline where that matters.
+
+³ **Change state** is the lifecycle button. Its rule is `app.rules.isNotTrashed` and
+`app.rules.canFollowTransition` (section 4), so it shows only when the server lists at least one
+transition this user may follow on this document now. It opens a dialog with a button for each
+transition, in the lifecycle's order, each naming the state it leads to; choosing one asks for
+confirmation ("“Claim 7” moves from Project to Approved."), then runs
+`Document.FollowLifecycleTransition` with the transition as its `value`, says what state the
+document is in, and reloads the page. With one transition the dialog opens on the confirmation.
+While the request runs the entry is disabled (`app.rules.isNotBusy` `["transition"]`). A refusal
+is reported and the page reloads too, since the usual reason is that the document moved on
+meanwhile.
+
+The transitions come from the `allowedTransitions` document enricher in `nuxeo-agentic-core`,
+which the page asks for with every document. It lists what the document's lifecycle allows from
+its current state, filtered by the checks `Document.FollowLifecycleTransition` makes on Nuxeo 2025:
+`WriteLifeCycle`; `WriteProperties` as well on a checked-in live document, which following a
+transition checks out first; and `ReadLifeCycle`, without which the transitions cannot be listed.
+A transition a state lists but the lifecycle does not declare is left out too: the server fails
+on its missing destination.
+Every permission is asked of the server's security service and its policies, so a document someone
+else has locked offers none: Nuxeo's default lock policy takes away everything `Write` includes,
+`WriteLifeCycle` among them. An administrator is offered what the server lets an administrator do. A server without the bundle ignores the enricher's name, and the entry is then
+never shown. The server checks everything again when the transition is followed: the dialog
+decides what is offered, not what is allowed.
+
+The buttons read `lifecycle.transition.<name>` and the states `lifecycle.state.<name>`. The
+packaged catalogues label Nuxeo's default lifecycle (`approve`, `obsolete`, `backToProject`;
+`project`, `approved`, `obsolete`); any other name is written out, `sendBack` as "Send back". A
+manifest labels yours through `labels` (section 2, "Relabelling"):
+
+```json
+{
+  "labels": {
+    "lifecycle.transition.determine": "Determine the claim",
+    "lifecycle.state.determined": "Determined"
+  }
+}
+```
 
 `app.toolbar.export` is the one entry with no `rule`, deliberately: it was
 outside the trashed-document guard in the markup this replaced, and exporting a

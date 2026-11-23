@@ -10,9 +10,10 @@
  *   out the card or field an `unknown` or `parameter` finding is in, so that a file written for a
  *   later platform still shows what this one knows.
  *
- * It checks the file against itself and the registries. It does not check a property against the
- * content model, which only phase 1's model reader can do: a field naming a property the type
- * lacks passes here and is skipped when the record page renders.
+ * It checks the file against itself and the registries, and, given the content model and the
+ * document type the file lays out, against the type's properties too (`layout-model.ts`). Without
+ * a model, a field naming a property the type lacks passes here, and is left out when the record
+ * page renders.
  */
 import {
   CHECK_KEYS,
@@ -23,6 +24,8 @@ import {
   type Checker,
   type Finding,
 } from './checker';
+import type { ContentModel } from './content-model';
+import { againstModel } from './layout-model';
 import { isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
 
 export type { Finding } from './checker';
@@ -33,6 +36,13 @@ export const LAYOUT_MODES: readonly LayoutMode[] = ['view', 'metadata', 'edit', 
 export interface ValidationOptions {
   readonly mode: LayoutMode;
   readonly registries?: Registries;
+  /**
+   * The server's content model, from `readContentModel`. Given one, each field is held to the
+   * properties of `type` and its facets, and each widget to its property's type.
+   */
+  readonly model?: ContentModel;
+  /** The document type the file lays out, as its path names it: `layouts/<Type>/<mode>.layout.json`. */
+  readonly type?: string;
 }
 
 const FILE_KEYS = ['$schema', 'version', 'columns', 'cards', 'tabs'];
@@ -51,7 +61,9 @@ export const LAYOUT_V2_KEYS = {
 } as const;
 
 export function validateLayoutV2(content: unknown, options: ValidationOptions): Finding[] {
-  return layout(content, options.mode, options.registries ?? PACKAGED_REGISTRIES, false);
+  const registries = options.registries ?? PACKAGED_REGISTRIES;
+  const model = options.model ? { model: options.model, type: options.type } : null;
+  return layout(content, options.mode, registries, false, model);
 }
 
 /**
@@ -62,7 +74,7 @@ export function validateTaskForm(
   content: unknown,
   options: { readonly registries?: Registries } = {},
 ): Finding[] {
-  return layout(content, 'edit', options.registries ?? PACKAGED_REGISTRIES, true);
+  return layout(content, 'edit', options.registries ?? PACKAGED_REGISTRIES, true, null);
 }
 
 function layout(
@@ -70,6 +82,7 @@ function layout(
   mode: LayoutMode,
   registries: Registries,
   task: boolean,
+  model: { readonly model: ContentModel; readonly type: string | undefined } | null,
 ): Finding[] {
   const stop = unreadable(content, task ? 'a task form' : 'a layout file');
   if (stop) return stop;
@@ -169,6 +182,7 @@ function layout(
         cards(tab['cards'], join(path, 'cards'), columns);
       });
   }
+  if (model) c.findings.push(...againstModel(file, model.type, model.model, registries));
   return c.findings;
 }
 
@@ -180,6 +194,23 @@ function related(c: Checker, item: unknown, path: string): void {
   }
   c.unknownKeys(item, RELATED_KEYS, path);
   c.list(item, path, { openRecord: true });
+}
+
+/**
+ * Whether `validateLayoutV2`, given a model, holds this file to it: a file of version 2, in a mode,
+ * for a named type. Any other stops before the model's checks, and is not one a caller may count
+ * as checked against the model. A type the model lacks is held to it, and refused.
+ */
+export function heldToModel(
+  content: unknown,
+  options: { readonly mode: LayoutMode; readonly type?: string },
+): boolean {
+  return (
+    unreadable(content, 'a layout file') === null &&
+    LAYOUT_MODES.includes(options.mode) &&
+    typeof options.type === 'string' &&
+    options.type !== ''
+  );
 }
 
 /** True when the pipeline may publish the file: no finding at all. */
