@@ -784,6 +784,14 @@ package on every pull request — so a version bump that adds or drops a languag
 `guardrails` gate with the difference rather than silently reinstating the 404 or leaving a new
 language unrequested.
 
+The Satori-backed Storybook does not use that loader: it calls upstream's
+`provideAndConfigureSatoriTranslations`, which requests
+`i18n/@hylandsoftware/satori-ui/<lang>.json` for its configured languages.
+`checkStorybookSatoriCatalogues` compares every `fallbackLang` and `TranslateService.use()` value
+in a Storybook's config and stories with the folder `staticDirs` serves there. It was added after
+the Satori 1.0.0 bump, when that Storybook still asked for the removed `en.json` and rendered raw
+`sat.*` keys while every gate stayed green.
+
 The loader does **not** read `availableLanguages`, which is what makes the two independent:
 adding a language needs no change there. It is requested if the vendor ships it and skipped if
 not, and `app-translate-loader.spec.ts` asserts that by iterating the configured list rather than
