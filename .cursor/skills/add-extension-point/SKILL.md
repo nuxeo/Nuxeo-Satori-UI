@@ -11,8 +11,7 @@ address.
 
 Context: `AGENTS/11-beta-program.md` sections 2 and 7, `.cursor/rules/beta-program.mdc`.
 Framework: our own, in `libs/shared/extensions`. It follows ACA's extension model and
-reproduces `@alfresco/adf-extensions` 9.0.0's merge and ordering semantics without
-importing it, so this work needs no privileged registry access.
+has no third-party extension dependency, so this work needs no privileged registry access.
 
 ## 1. Decide the layer
 
@@ -44,7 +43,7 @@ from templates. Registering them by name turns them into manifest-referenceable
 evaluators with no logic change.
 
 Components, evaluators and guards are registered by ID at bootstrap. Actions
-should follow the upstream `*-action.service` pattern that adf-hx already uses,
+should follow the existing `*-action.service` pattern in `libs/shared/extensions`
 rather than a new invention.
 
 ## 4. Convert the consumer

@@ -42,7 +42,6 @@ import { fileURLToPath } from 'node:url';
 import {
   attribute,
   attributesOf,
-  componentHeadersOf,
   componentPathsOf,
   componentXmlOf,
   TAG,
@@ -206,20 +205,12 @@ function layoutContributions(directory) {
   const manifest = join(bundle, 'META-INF', 'MANIFEST.MF');
   // A bundle with no manifest, or a component it cannot find, is the builder's to refuse.
   if (!existsSync(manifest)) return null;
-  const text = readFileSync(manifest, 'utf8');
-  // The components this stage checks must be the ones the server loads, so the manifest names them
-  // in one header, spelt as the builder reads it (see componentHeadersOf).
-  const headers = componentHeadersOf(text);
-  if (headers.length > 1)
-    return (
-      `META-INF/MANIFEST.MF names components in ${headers.length} Nuxeo-Component headers. The ` +
-      'builder reads the first and the server the last, so name every component in one header.'
-    );
-  if (headers.length === 1 && !headers[0].startsWith('Nuxeo-Component:'))
-    return (
-      `META-INF/MANIFEST.MF spells its header ${JSON.stringify(headers[0].slice(0, headers[0].indexOf(':')))}. ` +
-      'The builder reads only Nuxeo-Component, and the server any spelling of it, so write it so.'
-    );
+  // The components this stage checks must be the ones the server loads, so they are found as
+  // build.mjs finds them: its TextDecoder drops a byte-order mark, and componentPathsOf reads the
+  // rest as the server's manifest reader does. Every header's components are checked, a superset
+  // of what the server loads; a manifest with more than one header, or the header spelt another
+  // way, is the builder's to refuse, at step 4.
+  const text = readFileSync(manifest, 'utf8').replace(/^\uFEFF/, '');
   for (const component of componentPathsOf(text)) {
     const file = join(bundle, component);
     if (!existsSync(file)) continue;

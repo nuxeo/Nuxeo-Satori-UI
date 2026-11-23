@@ -10,7 +10,6 @@ audience: engineering
 # Skills, Agents and Generators — what the AI tooling actually is
 
 > **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
 > Before that, last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
 > Only §5's generator list and the summary's generator count were verified at that commit, against
 > `tools/satori-generators/generators.json` and the package `beta:publishable` builds. The link to
@@ -115,8 +114,6 @@ which to read.
 | `verify-gate/SKILL.md`            | Getting to green without churning                                                                    |
 | `capture-phase-evidence/SKILL.md` | Producing evidence that proves something                                                             |
 | `audit-evidence/SKILL.md`         | Auditing evidence adversarially                                                                      |
-| `implement-api-port/SKILL.md`     | **Retired, kept as a record** — the adf-hx API ports were removed (NXSAT-635, NXSAT-637)             |
-| `adopt-adf-hx-component/SKILL.md` | **Retired, kept as a record** — adf-hx was removed (NXSAT-635, NXSAT-637)                            |
 | `add-extension-point/SKILL.md`    | Making something manifest-addressable                                                                |
 | `fix-bug/SKILL.md`                | Bug workflow                                                                                         |
 | `kd-local-setup/SKILL.md`         | Knowledge Discovery local setup                                                                      |
@@ -151,9 +148,9 @@ Two features of it are worth copying elsewhere:
 - **A step is not well-formed unless you can state its assertion before writing the code.**
   If you cannot, the step is too vague — split it.
 - **Hard stops.** The skill enumerates changes an agent must escalate rather than attempt a
-  fourth time: weakening a test, widening the public API, exposing an adf-hx type,
+  fourth time: weakening a test, widening the public API, exposing a vendor component type,
   changing `install.xml` or marketplace packaging, contradicting a verified fact, or pinning
-  an adf-hx dist-tag instead of an exact version.
+  a dist-tag instead of an exact version.
 
 ---
 

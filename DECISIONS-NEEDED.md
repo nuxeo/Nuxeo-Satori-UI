@@ -10,9 +10,7 @@ before implementation can continue.
 > The injection guard no longer depends on `?q=` and is no longer blocked on this
 > decision. `apps/nuxeo-ui-e2e/src/search.spec.ts` drives `/#/search` through the search
 > drawer's full-text input and asserts every search request Enter sends — the results request
-> and the drawer's baseline-count search are identical on the wire. Until NXSAT-308
-> it drove `/#/search-adf-hx`, the one production call site of `escapeHxqlLiteral`; that
-> route is deleted with adf-hx, so the specs moved first. `/#/search` sends the term to the
+> and the drawer's baseline-count search are identical on the wire. `/#/search` sends the term to the
 > `default_search` page provider as the `ecm_fulltext` named parameter and Nuxeo binds it
 > server-side, so the specs assert that the term arrives as that bound value verbatim and in
 > no other parameter, that Nuxeo answers 200, and that the query-shaped payload matches 0
@@ -23,7 +21,7 @@ before implementation can continue.
 >
 > What follows is therefore **only** the product question — should `/#/search?q=` be a
 > shareable URL? Nothing in the test suite is waiting on the answer. Task 2.3 is
-> unblocked and delivered; see `docs/integration-test-stage-2-status.md`.
+> unblocked and delivered.
 
 **Original context (from audit §9.2, Task 2.3), kept for the record:**
 
@@ -65,9 +63,8 @@ make the guard functional.
 **Decision needed from:** Product/Feature lead
 
 **Blocked tasks:** none. Task 2.3 (make the injection-guard specs exercise the real
-path) is delivered, by neither option — the specs moved to `/#/search-adf-hx`, which
-is where `escapeHxqlLiteral` is actually called, and then to `/#/search` through the
-drawer input when NXSAT-308 scheduled that route for deletion.
+path) is delivered, by neither option — the specs drive `/#/search` through the
+drawer input.
 
 ---
 

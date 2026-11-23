@@ -88,8 +88,7 @@ treated as a first-class user of the product.
 ### 4. One package, one monorepo — simpler than planned
 
 The RFC proposed 5+ npm packages and 3 repositories. Reality: **one** package with 4 entry
-points, in **one** monorepo. Fewer things to version, fewer to support, and the adf-hx bridge is
-deliberately _not_ published — which is what keeps third-party types out of our public API.
+points, in **one** monorepo. Fewer things to version, fewer to support.
 
 ---
 
@@ -100,19 +99,18 @@ deliberately _not_ published — which is what keeps third-party types out of ou
 | Configuration survives upgrade **by construction** | Removes the single largest historical customisation complaint   |
 | Customisation addressed **by ID, not class name**  | We can refactor internals without breaking customers            |
 | Layer boundaries **machine-enforced**              | Prevents the architecture eroding under delivery pressure       |
-| adf-hx components shared with Alfresco             | Component investment is shared, not duplicated                  |
+| Components owned in one `nxs-` library             | One place to restyle, test and version the UI building blocks   |
 | Verification apparatus                             | The credible answer to "how do you ship AI-written code safely" |
 
 ## What is architecturally thin
 
-| Weakness                                     | Consequence                                                   |
-| -------------------------------------------- | ------------------------------------------------------------- |
-| **No production observability**              | We could not diagnose a customer incident                     |
-| **4 of 8 extension slots reserved**          | Narrower addressable surface than advertised                  |
-| **Eager adf-core** — +1.15 MB initial bundle | Slower first load for every user; the real fix is deferred    |
-| **No client-side caching layer**             | Every action hits Nuxeo                                       |
-| **No multi-tenancy in the UI**               | Tenancy is Nuxeo's; the UI has no notion of it                |
-| **AI backend is an external dependency**     | Every AI feature is gated on something we do not control here |
+| Weakness                                 | Consequence                                                   |
+| ---------------------------------------- | ------------------------------------------------------------- |
+| **No production observability**          | We could not diagnose a customer incident                     |
+| **4 of 8 extension slots reserved**      | Narrower addressable surface than advertised                  |
+| **No client-side caching layer**         | Every action hits Nuxeo                                       |
+| **No multi-tenancy in the UI**           | Tenancy is Nuxeo's; the UI has no notion of it                |
+| **AI backend is an external dependency** | Every AI feature is gated on something we do not control here |
 
 ---
 

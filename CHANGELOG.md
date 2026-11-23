@@ -29,6 +29,27 @@ the fragments named `defaults`. `level` was already one of `error` / `warning` /
 is an open string, so neither is a schema change — but a consumer that matched on `replaced` or
 `removed` to notice this case should match the new codes instead.
 
+### Fixed (generators) — a configuration package's components are the ones the server loads
+
+A generated package's `build.mjs` read `bundle/META-INF/MANIFEST.MF`'s components from the first
+header spelt exactly `Nuxeo-Component`, anywhere in the file, split at commas. The server reads that
+header through `java.util.jar.Manifest` — from the main section alone, above the first blank line;
+the name in any letter case; the last of a repeated header; a line ended only at CR or LF — and its
+runtime splits the value at commas and whitespace. Everything under `bundle/` is packaged whatever
+the build read, so a second `Nuxeo-Component` header, one spelt `nuxeo-component`, a lookalike after
+a U+2028 inside another header's value, or a path with a space in it each built a jar whose server
+loaded a component the build had never checked.
+
+`build.mjs` now finds the header as the server does, splits it as the server does, refuses a
+manifest with more than one such header in its main section or another spelling, and checks the
+components of every one it found there. A header in a later `Name:` section is an entry attribute
+the server ignores, so it is ignored here too; a manifest that names its components only below its
+first blank line, which used to build a package that configured nothing, is refused.
+`scripts/verify-package-zip.mjs` applies the same rules to the packaged jar. The scaffold's
+manifest, and any that lists comma-separated paths without spaces in one header spelt
+`Nuxeo-Component`, reads as before. Every copy of `build.mjs` made before this change keeps the old
+reading until it is replaced with the template's.
+
 ### Fixed (generators) — the documented `npx nx g ./tools/satori-generators:…` command runs
 
 Every generator that writes templates — `config-package`, `extension-library`,
@@ -51,24 +72,24 @@ Windows 11; Explorer and `cmd` then cannot open or delete it. The refusal is unc
 
 ### Changed — BREAKING (registered IDs) — one Browse entry again
 
-The adf-hx proof of concept is removed, with its two routes and its navigation entry.
+The earlier parallel-browse proof of concept is removed, with its two routes and its navigation entry.
 
-- **`app.navbar.browseAdfHx` is retired.** An `overrides` key naming it now addresses nothing. A
+- **The proof-of-concept navbar entry's registered ID is retired.** An `overrides` key naming it now addresses nothing. A
   `navbar` slot entry naming it no longer patches a packaged entry, so it becomes an entry of its
   own — with no path or label unless it gives them, which renders a blank item: delete it. Its
-  label key, `nav.item.browse-adf-hx`, is on no entry any more: move a `labels` entry for it to
+  label key is on no entry any more: move a `labels` entry for it to
   `nav.item.browse`.
-- **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the adf-hx entry read
+- **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the proof-of-concept entry read
   "Browse". A manifest that restated it with `"disabled": false` to get both entries can drop that;
   it is now redundant, not harmful.
-- **Old links redirect.** `/#/browse-adf-hx` and `/#/search-adf-hx` go to `/browse` and `/search`
+- **Old links redirect.** The two retired proof-of-concept routes go to `/browse` and `/search`
   with their query string intact, and a `?path=` folder opens in `/browse`.
 
-### Removed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`) — the adf-hx browse URL helpers
+### Removed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`) — the proof-of-concept browse URL helpers
 
-They built, recognised and parsed `/browse-adf-hx` URLs, and chose between that route and
+They built, recognised and parsed the proof-of-concept browse URLs, and chose between that route and
 `/browse` for document detail's way back. With the route retired, all seven go:
-`toAdfHxBrowseRouterUrl`, `isAdfHxBrowseRouterUrl`, `parseAdfHxBrowsePathFromRouterUrl`,
+three proof-of-concept URL functions (build, recognise, parse),
 `toBrowseRouterUrlForReturnMode`, `parseBrowseReturnMode`, `BrowseReturnMode` and
 `BROWSE_RETURN_MODE_PARAM`. Use `toBrowseRouterUrl`, `isBrowseRouterUrl` and
 `parseBrowseNuxeoPathFromRouterUrl`. Document detail no longer reads `?browseReturn=`; an old link
@@ -124,9 +145,8 @@ carrying it opens normally, with breadcrumbs into `/browse`.
 
 ### Removed (`@nuxeo-satori/platform`) — a peer dependency
 
-- **`@alfresco/adf-extensions` is no longer a peer dependency.** The extension engine used three of
-  its functions — `filterEnabled`, `sortByOrder` and `mergeObjects` — and now has its own, pinned
-  case by case to the output 9.0.0 produced (`extension-element.spec.ts` and
+- **The third-party extensions package is no longer a peer dependency.** The extension engine
+  now has its own `filterEnabled`, `sortByOrder` and `mergeObjects` (`extension-element.spec.ts` and
   `extension-merge.spec.ts` in `libs/shared/extensions`). No export changes. A consumer no longer
   has to install the package, and can remove it unless its own code imports it.
 
@@ -239,5 +259,5 @@ private readonly locale = inject(LOCALE_ID);
   already in use by `share-saved-search-dialog` — so this is the fourth copy of that shape
   selection rather than the first consumer of a dormant path. That dialog keeps its own copy
   deliberately: it re-parses its own label, so its dates must stay unformatted.
-- The Clipboard navigation item's accessible name and the `hxp-document-cards` selection
+- The Clipboard navigation item's accessible name and the document cards selection
   checkbox label are translated rather than concatenated (INFO-144).

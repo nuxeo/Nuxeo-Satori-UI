@@ -10,8 +10,7 @@ audience: all
 # Documentation Governance
 
 > **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
-> Only the repository links were re-verified at that commit: made relative rather than pinned to
-> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
+> Only the repository links were re-verified at that commit: made relative, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
 
 ## The rule
 
@@ -102,14 +101,14 @@ publish. Change the Markdown.
 
 Documentation gates that exist today — worth knowing, because they are unusual:
 
-| Gate                                            | Asserts                                                                                                             |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `npm run beta:reference`                        | Every documented extension ID is registered **and** every registered ID is documented. Fails in **both** directions |
-| `npm run beta:api`                              | The published API matches its 2,221-line snapshot                                                                   |
-| `staleness-check.yml`                           | `AGENTS/01-services.md` still matches the code                                                                      |
-| `review:guardrails` → `checkDocsNumbering`      | No duplicate section numbers in `docs/`                                                                             |
-| `npm run beta:state`                            | No phase claims more than its evidence supports                                                                     |
-| `npm run beta:audit`                            | No evidence assertion is incapable of failing                                                                       |
+| Gate                                       | Asserts                                                                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `npm run beta:reference`                   | Every documented extension ID is registered **and** every registered ID is documented. Fails in **both** directions |
+| `npm run beta:api`                         | The published API matches its 2,221-line snapshot                                                                   |
+| `staleness-check.yml`                      | `AGENTS/01-services.md` still matches the code                                                                      |
+| `review:guardrails` → `checkDocsNumbering` | No duplicate section numbers in `docs/`                                                                             |
+| `npm run beta:state`                       | No phase claims more than its evidence supports                                                                     |
+| `npm run beta:audit`                       | No evidence assertion is incapable of failing                                                                       |
 
 **The gap:** 12 of the 13 `AGENTS/` files have no staleness check, and none of these
 `documentation/` pages has one. Extending the `staleness-check.yml` pattern is the obvious next
