@@ -19,9 +19,10 @@
  *      `libs/shared/app-definition` finds nothing in it, given the deployment's allow-list, what
  *      it registers and its platform version, and, when one is given, the server's content model.
  *      The layouts the component contributes are the files the validator read, in the modes it
- *      read them in: none inline, none from elsewhere. A component path that leaves `bundle/` or
- *      names a folder or a hard link is refused before it is read (a missing one is the builder's
- *      to refuse, at step 4);
+ *      read them in: none inline, none from elsewhere. The package contributes its app to the app
+ *      registry once, from its `app.json`, naming every file of the app definition the registry
+ *      serves and nothing else. A component path that leaves `bundle/` or names a folder or a hard
+ *      link is refused before it is read (a missing one is the builder's to refuse, at step 4);
  *   3. `app.json`'s `packageVersion` is `package.xml`'s version, and a tag, when given, is
  *      `app-package/<name>/<version>` for this package;
  *   4. `build.mjs` writes the zip, refusing what the server would;
@@ -92,6 +93,19 @@ const USAGE =
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 /** `build.mjs`'s rule for a package name or version: a single file name, nothing above it. */
 const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/**
+ * The files of an app definition the app registry serves besides `app.json`, each at its place:
+ * `ConfigSnapshot.APP_FILES` in nuxeo-agentic-core, with the names the validator gives each one.
+ */
+const REGISTRY_FILES = [
+  /^home\.json$/,
+  /^navigation\.json$/,
+  /^actions\.json$/,
+  /^queues\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json$/,
+  /^labels\/[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*\.json$/,
+  /^tasks\/[A-Za-z][A-Za-z0-9_-]{0,127}\.[A-Za-z][A-Za-z0-9_-]{0,127}\.layout\.json$/,
+];
 
 const VALUED = [
   '--out',
@@ -266,7 +280,7 @@ function run({
   process.stderr.write(validation.stderr ?? '');
   if (validation.status === 2) return 2;
   if (validation.status !== 0) return refuse(2, 'the app definition has findings, listed above.');
-  const contributed = layoutContributions(directory);
+  const contributed = layoutContributions(directory) ?? appContributions(directory, root);
   if (contributed) return refuse(2, contributed);
 
   // 3. One version, written in three places, `package.xml` read as the builder reads it.
@@ -421,5 +435,82 @@ function layoutContributions(directory) {
         );
     }
   }
+  return null;
+}
+
+
+/** Every file under `directory`, as a path relative to it with `/` between its parts. */
+function filesUnder(directory, prefix = '') {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory()
+      ? filesUnder(join(directory, entry.name), `${prefix}${entry.name}/`)
+      : [`${prefix}${entry.name}`],
+  );
+}
+
+/**
+ * What is wrong with the app the package contributes to the app registry, or `null`. The server
+ * serves an app only as a component's `<app>` names it: its `app.json`, from `src`, and each file a
+ * `<file path>` names, below the directory that holds it. So the package contributes its app once,
+ * from `agentic-ui-config/app.json`, which the validator read, under the id that file gives, and
+ * names exactly the files of the app definition the registry serves. A file it holds and does not
+ * name would never be served; one it names and does not hold would be missing on the server. A
+ * disabled entry contributes nothing and is skipped. Called after `layoutContributions`, which has
+ * refused any component path that leaves `bundle/`.
+ */
+function appContributions(directory, root) {
+  const bundle = join(directory, 'bundle');
+  const manifest = join(bundle, 'META-INF', 'MANIFEST.MF');
+  if (!existsSync(manifest)) return null;
+  const text = readFileSync(manifest, 'utf8').replace(/^\uFEFF/, '');
+  const apps = [];
+  for (const component of componentPathsOf(text)) {
+    const file = componentFileOf(resolve(bundle), component);
+    if (typeof file !== 'string' || file === '') continue;
+    const xml = componentXmlOf(readFileSync(file, 'utf8'));
+    for (const match of xml.matchAll(new RegExp(`<app${TAG}`, 'g'))) {
+      const attributes = attributesOf(match[1]);
+      if (attributes.enabled !== undefined && attributes.enabled.toLowerCase() !== 'true') continue;
+      const start = match.index + match[0].length;
+      const end = match[1].trimEnd().endsWith('/') ? start : xml.indexOf('</app', start);
+      const body = xml.slice(start, end === -1 ? xml.length : end);
+      const files = [...body.matchAll(new RegExp(`<file${TAG}`, 'g'))].map(
+        ([, tag]) => attributesOf(tag).path ?? '',
+      );
+      apps.push({ component, ...attributes, files });
+    }
+  }
+  const app = JSON.parse(readFileSync(join(root, 'app.json'), 'utf8').replace(/^\uFEFF/, ''));
+  const element = `<app id="${app.id}" src="agentic-ui-config/app.json">`;
+  if (apps.length === 0)
+    return (
+      `no component contributes the app, so the app registry would not serve it. Add ${element} ` +
+      'to the component, with a <file path="..."> for each file of the app definition.'
+    );
+  if (apps.length > 1)
+    return `${apps.map((each) => each.component).join(', ')} contribute ${apps.length} apps; a package is one app.`;
+  const [{ component, id, src, files }] = apps;
+  if (id !== app.id)
+    return `${component} contributes the app "${id ?? ''}", and app.json's id is "${app.id}". Contribute it as ${element}.`;
+  if (src === undefined || posix.normalize(src) !== 'agentic-ui-config/app.json')
+    return `${component} contributes the app ${id} from ${src ?? 'no src'}. Contribute it from agentic-ui-config/app.json, which the validator read.`;
+  const held = new Set(
+    filesUnder(root).filter((path) => REGISTRY_FILES.some((place) => place.test(path))),
+  );
+  const named = new Set();
+  for (const path of files) {
+    if (!REGISTRY_FILES.some((place) => place.test(path)))
+      return `${component} names the file "${path}" of the app ${id}, which is not a file the app registry serves: home.json, navigation.json, actions.json, queues/<id>.json, labels/<language>.json or tasks/<workflow>.<step>.layout.json.`;
+    if (named.has(path)) return `${component} names the file ${path} of the app ${id} twice.`;
+    if (!held.has(path))
+      return `${component} names the file ${path} of the app ${id}, and bundle/agentic-ui-config/ has no such file.`;
+    named.add(path);
+  }
+  const unnamed = [...held].filter((path) => !named.has(path)).sort();
+  if (unnamed.length > 0)
+    return (
+      `${component} does not name ${unnamed.join(', ')} in the app ${id}, so the app registry would ` +
+      `not serve ${unnamed.length === 1 ? 'it' : 'them'}. Add a <file path="..."> for each.`
+    );
   return null;
 }

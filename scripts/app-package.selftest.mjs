@@ -263,6 +263,66 @@ expectRefused(
   'contributes the Claim/edit layout from agentic-ui-config/layouts/Claim/view.layout.json',
 );
 
+// The app registry serves the app as the component names it, so the component names it once, from
+// the app.json the validator read, with exactly the package's files.
+const APP_ELEMENT = '<app id="payers-claims" src="agentic-ui-config/app.json">';
+const QUEUE_FILE = '<file path="queues/unassigned-claims.json" />';
+expectRefused(
+  'an app the component does not contribute, which the registry would never serve',
+  ({ edit }) => edit(COMPONENT, APP_ELEMENT, '<app id="payers-claims" src="agentic-ui-config/app.json" enabled="false">'),
+  2,
+  'no component contributes the app, so the app registry would not serve it',
+);
+expectRefused(
+  "an app contributed under an id that is not app.json's",
+  ({ edit }) => edit(COMPONENT, APP_ELEMENT, '<app id="payers-claim" src="agentic-ui-config/app.json">'),
+  2,
+  `contributes the app "payers-claim", and app.json's id is "payers-claims"`,
+);
+expectRefused(
+  'an app contributed from an app.json the validator did not read',
+  ({ edit }) => edit(COMPONENT, APP_ELEMENT, '<app id="payers-claims" src="other/app.json">'),
+  2,
+  'contributes the app payers-claims from other/app.json',
+);
+expectRefused(
+  'a file of the app the component does not name, which the registry would not serve',
+  ({ edit }) => edit(COMPONENT, QUEUE_FILE, ''),
+  2,
+  'does not name queues/unassigned-claims.json in the app payers-claims',
+);
+expectRefused(
+  'a file the component names and the package does not hold',
+  ({ edit }) => edit(COMPONENT, QUEUE_FILE, `${QUEUE_FILE}\n      <file path="queues/gone.json" />`),
+  2,
+  'names the file queues/gone.json of the app payers-claims, and bundle/agentic-ui-config/ has no such file',
+);
+expectRefused(
+  'a file the component names at no place the registry serves',
+  ({ edit }) =>
+    edit(COMPONENT, QUEUE_FILE, `${QUEUE_FILE}\n      <file path="layouts/Claim/view.layout.json" />`),
+  2,
+  'names the file "layouts/Claim/view.layout.json" of the app payers-claims, which is not a file the app registry serves',
+);
+expectRefused(
+  'a second app in the same package',
+  ({ edit }) =>
+    edit(
+      COMPONENT,
+      APP_ELEMENT,
+      `<app id="other" src="agentic-ui-config/app.json" />\n    ${APP_ELEMENT}`,
+    ),
+  2,
+  'contribute 2 apps; a package is one app',
+);
+expectBuilt('an app whose files the component names in another order', ({ directory }) => {
+  const path = join(directory, COMPONENT);
+  const text = readFileSync(path, 'utf8');
+  const files = [...text.matchAll(/^ *<file path="[^"]+" \/>\n/gm)].map(([line]) => line);
+  if (files.length < 2) throw new Error('the demo names fewer than two files');
+  writeFileSync(path, text.replace(files.join(''), [...files].reverse().join('')));
+});
+
 // Every layout the package holds is checked, whatever its directory is called.
 expectRefused(
   'a contributed layout of the type node_modules, which a walk that passed over dependencies missed',
