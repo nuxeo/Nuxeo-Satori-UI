@@ -15,7 +15,7 @@ import { DocumentLayoutService } from '../document-layout.service';
 import { readLayoutFile } from '../layout-file';
 import { DocumentTypeDefinition, LayoutSection, ResolvedLayout } from '../layout.model';
 import { applyLayoutFile, readDocumentType } from '../resolve-layout';
-import { DocumentLayoutComponent } from './document-layout';
+import { DOCUMENT_LAYOUT_TIME_ZONE, DocumentLayoutComponent } from './document-layout';
 
 const claimDocument = (overrides: Record<string, unknown> = {}): NuxeoDocument =>
   ({
@@ -130,6 +130,9 @@ describe('DocumentLayoutComponent', () => {
       providers: [
         { provide: DocumentLayoutService, useValue: { layoutFor, vocabularyLabel } },
         { provide: AppExtensionsService, useValue: { resolve } },
+        // A named offset rather than the host's zone, for every case that renders a date: a
+        // midday instant is the next day at +13, Auckland in summer (pattern 29).
+        { provide: DOCUMENT_LAYOUT_TIME_ZONE, useValue: '+0530' },
       ],
     });
   });
@@ -169,6 +172,25 @@ describe('DocumentLayoutComponent', () => {
       ),
     ).toEqual(['R51.9', 'G44.209']);
     expect(vocabularyLabel.mock.calls).toEqual([['claim_status', 'pending']]);
+  });
+
+  describe('the zone a date is shown in', () => {
+    it('is the reader’s own unless a test chooses one', () => {
+      // Without this suite's provider, as the panel runs.
+      TestBed.resetTestingModule();
+      expect(TestBed.inject(DOCUMENT_LAYOUT_TIME_ZONE)).toBeUndefined();
+    });
+
+    it.each<[string, string, string]>([
+      // The zone, the value, and the day shown. Each value's other reading is the other day.
+      ['+0530', '2026-11-23T20:00:00.000Z', 'November 24, 2026'],
+      ['-0500', '2026-11-24T03:00:00.000Z', 'November 23, 2026'],
+      ['-0500', '2026-11-24T00:00:00.000Z', 'November 24, 2026'],
+    ])('at %s shows %s on %s', async (zone, serviceDate, expected) => {
+      TestBed.overrideProvider(DOCUMENT_LAYOUT_TIME_ZONE, { useValue: zone });
+      await render(claimDocument({ 'claim:serviceDate': serviceDate }));
+      expect(value('claim:serviceDate')).toBe(expected);
+    });
   });
 
   it('translates a boolean false as No and an unset value as a dash', async () => {
