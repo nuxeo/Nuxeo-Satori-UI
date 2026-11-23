@@ -15,6 +15,8 @@ import type { NuxeoAllowedTransition } from '@nuxeo/satori-platform/nuxeo-client
 
 import { lifecycleLabel } from './lifecycle-labels';
 
+let nextQuestionId = 0;
+
 /** What the dialog offers. */
 export interface FollowTransitionDialogData {
   /** The document's title, which the confirmation names. */
@@ -71,27 +73,23 @@ export class FollowTransitionDialogComponent {
     return lifecycleLabel('state', name, (key) => this.translate.instant(key));
   }
 
-  /** "“Claim 7” moves from Submitted to Approved." */
+  /** The question's id, which the confirm button is described by. */
+  protected readonly questionId = `lib-follow-transition-question-${nextQuestionId++}`;
+
+  /** "“Claim 7” moves from Submitted to Approved.", or "moves to" when the document has no state. */
   protected confirmation(transition: NuxeoAllowedTransition): string {
-    const from = this.data.state ? this.stateLabel(this.data.state) : '';
     const title = this.data.documentTitle;
-    if (transition.destinationState && from) {
-      return this.translate.instant('shared-ui.follow-transition-dialog.confirm-message', {
-        title,
-        from,
-        to: this.stateLabel(transition.destinationState),
-      });
-    }
-    if (transition.destinationState) {
-      return this.translate.instant('shared-ui.follow-transition-dialog.confirm-message-to', {
-        title,
-        to: this.stateLabel(transition.destinationState),
-      });
-    }
-    return this.translate.instant('shared-ui.follow-transition-dialog.confirm-message-unknown', {
-      title,
-      transition: this.transitionLabel(transition.name),
-    });
+    const to = this.stateLabel(transition.destinationState);
+    return this.data.state
+      ? this.translate.instant('shared-ui.follow-transition-dialog.confirm-message', {
+          title,
+          from: this.stateLabel(this.data.state),
+          to,
+        })
+      : this.translate.instant('shared-ui.follow-transition-dialog.confirm-message-to', {
+          title,
+          to,
+        });
   }
 
   /**

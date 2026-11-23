@@ -33,8 +33,10 @@ import org.nuxeo.ecm.core.lifecycle.LifeCycleTransition;
  * <p>{@link #followTransition} is the server's own decision, transcribed from the bytecode of
  * {@code AbstractSession.followTransition} and {@code LifeCycleServiceImpl.followTransition} in
  * {@code nuxeo-core-2025.10.18.jar}: {@code WriteLifeCycle}, then {@code WriteProperties} for the
- * check-out of a checked-in live document, then a transition the policy allows from the current
- * state. {@code checkPermission} lets an administrator through before it asks for a permission.
+ * check-out of a checked-in live document, then a lifecycle for the document's type, a transition
+ * it allows from the current state, and that transition's destination, which the service reads with
+ * no null check. {@code checkPermission} lets an administrator through before it asks for a
+ * permission.
  * {@link #getAllowedStateTransitions} needs {@code ReadLifeCycle}, and throws without it, as the
  * server does.
  */
@@ -57,6 +59,9 @@ final class FakeRepository {
 
     boolean checkedOut = true;
 
+    String type = "Claim";
+
+    /** The lifecycle the service maps {@link #type} to, or {@code null} for none. */
     String policy = "claim";
 
     String state = "submitted";
@@ -77,6 +82,8 @@ final class FakeRepository {
         allowedFrom.put("submitted", List.of("approve", "deny"));
         allowedFrom.put("approved", List.of("reopen"));
         allowedFrom.put("denied", List.of("reopen"));
+        // A state may list a transition the policy never declares.
+        allowedFrom.put("review", List.of("approve", "escalate"));
     }
 
     FakeRepository grant(String... permissions) {
@@ -111,15 +118,15 @@ final class FakeRepository {
         case "isVersion" -> version;
         case "isProxy" -> proxy;
         case "isCheckedOut" -> checkedOut;
-        case "getLifeCyclePolicy" -> policy;
+        case "getType" -> type;
         case "getCoreSession" -> session();
         default -> null;
         });
     }
 
-    /** The lifecycle policies the server knows, by name: only this document's. */
-    LifeCycle lifeCycle(String name) {
-        if (!name.equals(policy)) {
+    /** The lifecycle the service applies to a document type: this document's, for its type only. */
+    LifeCycle lifeCycleOfType(String documentType) {
+        if (policy == null || !type.equals(documentType)) {
             return null;
         }
         return fake(LifeCycle.class, (method, args) -> switch (method) {
@@ -146,12 +153,16 @@ final class FakeRepository {
                 checkPermission(WRITE_PROPERTIES);
             }
             // LifeCycleServiceImpl.followTransition
-            if (!allowedFrom.getOrDefault(state, List.of()).contains(transition)) {
+            if (policy == null || !allowedFrom.getOrDefault(state, List.of()).contains(transition)) {
                 throw new LifeCycleException("Not allowed to follow transition <" + transition + "> from state <"
                         + state + ">");
             }
+            // getTransitionByName(transition).getDestinationStateName(), with no null check.
+            if (transitions.get(transition) == null) {
+                throw new NullPointerException("no transition " + transition + " in " + policy);
+            }
             return true;
-        } catch (DocumentSecurityException | LifeCycleException refused) {
+        } catch (DocumentSecurityException | LifeCycleException | NullPointerException refused) {
             return false;
         }
     }
@@ -213,6 +224,6 @@ final class FakeRepository {
     private static boolean answersNull(Class<?> type, String method) {
         return (type == LifeCycle.class && method.equals("getTransitionByName"))
                 || (type == LifeCycleTransition.class && method.equals("getDestinationStateName"))
-                || (type == DocumentModel.class && (method.equals("getLifeCyclePolicy") || method.equals("getRef")));
+                || (type == DocumentModel.class && method.equals("getRef"));
     }
 }

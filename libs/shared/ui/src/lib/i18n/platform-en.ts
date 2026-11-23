@@ -929,7 +929,6 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "shared-ui.follow-transition-dialog.cancel": "Cancel",
   "shared-ui.follow-transition-dialog.confirm-message": "“{{ title }}” moves from {{ from }} to {{ to }}.",
   "shared-ui.follow-transition-dialog.confirm-message-to": "“{{ title }}” moves to {{ to }}.",
-  "shared-ui.follow-transition-dialog.confirm-message-unknown": "“{{ title }}” follows “{{ transition }}”.",
   "shared-ui.follow-transition-dialog.current-state": "Current state: {{ state }}",
   "shared-ui.follow-transition-dialog.leads-to": "Moves to {{ state }}",
   "shared-ui.follow-transition-dialog.title": "Change state",

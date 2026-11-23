@@ -9,7 +9,7 @@ package org.nuxeo.agentic.lifecycle;
  * @param name the transition's name in the lifecycle policy, which is what
  *            {@code Document.FollowLifecycleTransition} takes as its {@code value}
  * @param destinationState the state the document is in once it has followed the transition, as the
- *            policy declares it, or {@code null} when the policy no longer describes the transition
+ *            policy declares it. Never {@code null}: a transition with no destination is not listed
  */
 public record AllowedTransition(String name, String destinationState) {
 }

@@ -1313,6 +1313,8 @@ which the page asks for with every document. It lists what the document's lifecy
 its current state, filtered by the checks `Document.FollowLifecycleTransition` makes on Nuxeo 2025:
 `WriteLifeCycle`; `WriteProperties` as well on a checked-in live document, which following a
 transition checks out first; and `ReadLifeCycle`, without which the transitions cannot be listed.
+A transition a state lists but the lifecycle does not declare is left out too: the server fails
+on its missing destination.
 Every permission is asked of the server's security service and its policies, so a document someone
 else has locked offers none: Nuxeo's default lock policy takes away everything `Write` includes,
 `WriteLifeCycle` among them. An administrator is offered what the server lets an administrator do. A server without the bundle ignores the enricher's name, and the entry is then

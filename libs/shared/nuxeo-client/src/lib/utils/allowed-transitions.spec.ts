@@ -76,21 +76,27 @@ describe('allowedTransitions', () => {
     ]);
   });
 
-  it('reads a missing, null, empty or non-text destination as unknown', () => {
+  it('skips an entry with no destination, which the server could not follow', () => {
     const document = documentWith({
       allowedTransitions: [
         { name: 'a' },
         { name: 'b', destinationState: null },
         { name: 'c', destinationState: '' },
         { name: 'd', destinationState: 7 },
+        { name: 'e', destinationState: 'approved' },
       ],
     });
 
-    expect(allowedTransitions(document).map((transition) => transition.destinationState)).toEqual([
-      null,
-      null,
-      null,
-      null,
+    expect(allowedTransitions(document)).toEqual([{ name: 'e', destinationState: 'approved' }]);
+  });
+
+  it('keeps the first of a repeated name only once it has a destination', () => {
+    const document = documentWith({
+      allowedTransitions: [{ name: 'approve' }, { name: 'approve', destinationState: 'approved' }],
+    });
+
+    expect(allowedTransitions(document)).toEqual([
+      { name: 'approve', destinationState: 'approved' },
     ]);
   });
 });

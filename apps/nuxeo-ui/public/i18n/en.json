@@ -1413,7 +1413,6 @@
       "summary-generation-failed": "Summary generation failed",
       "tag-suggestion-failed": "Tag suggestion failed",
       "transition-followed": "The document is now {{ state }}.",
-      "transition-followed-unknown-state": "The document's state has changed.",
       "transition-not-allowed": "You may not change this document's state.",
       "uploaded-image-has-no-display-url-yet": "Uploaded image has no display URL yet",
       "workflow-abandoned": "Workflow abandoned.",
@@ -2993,7 +2992,6 @@
       "cancel": "Cancel",
       "confirm-message": "“{{ title }}” moves from {{ from }} to {{ to }}.",
       "confirm-message-to": "“{{ title }}” moves to {{ to }}.",
-      "confirm-message-unknown": "“{{ title }}” follows “{{ transition }}”.",
       "current-state": "Current state: {{ state }}",
       "leads-to": "Moves to {{ state }}",
       "title": "Change state"

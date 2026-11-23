@@ -4606,7 +4606,7 @@ interface NuxeoAcl {
 }
 interface NuxeoAllowedTransition {
     readonly name: string;
-    readonly destinationState: string | null;
+    readonly destinationState: string;
     }
 }
 class NuxeoApiBase {
@@ -5755,6 +5755,7 @@ class FollowTransitionDialogComponent {
     protected readonly chosen: import("@angular/core").WritableSignal<NuxeoAllowedTransition | null>;
     protected transitionLabel(name: string): string;
     protected stateLabel(name: string): string;
+    protected readonly questionId: string;
     protected confirmation(transition: NuxeoAllowedTransition): string;
     protected choose(transition: NuxeoAllowedTransition): void;
     protected back(): void;

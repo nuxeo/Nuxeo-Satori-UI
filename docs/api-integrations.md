@@ -1033,7 +1033,9 @@ toolbar's Publish (`app.rules.canPublish`).
 in the lifecycle's order: what the document's lifecycle allows from its current state, kept only
 when the operation would succeed for this user. Nuxeo 2025's `followTransition` checks
 `WriteLifeCycle` and, on a checked-in live document, `WriteProperties` for the check-out it does
-first; listing the transitions needs `ReadLifeCycle`. The enricher asks each of the session, so
+first; listing the transitions needs `ReadLifeCycle`. A transition a state lists but the policy
+does not declare is left out, as the server fails on its missing destination, and the lifecycle
+is the one the service maps the document's type to. The enricher asks each of the session, so
 security policies such as the lock policy answer as they do for the operation, and lets an
 administrator through as `checkPermission` does. A server without the bundle ignores the name, and
 `allowedTransitions(doc)` then reads none. Nuxeo has no operation or enricher of its own that lists

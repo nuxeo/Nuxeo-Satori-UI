@@ -43,7 +43,7 @@ class AllowedTransitionsJsonEnricherTest {
 
     private static AllowedTransitionsJsonEnricher enricher(FakeRepository repository, String requested)
             throws Exception {
-        AllowedTransitionsJsonEnricher enricher = new AllowedTransitionsJsonEnricher(repository::lifeCycle);
+        AllowedTransitionsJsonEnricher enricher = new AllowedTransitionsJsonEnricher(repository::lifeCycleOfType);
         RenderingContext ctx = RenderingContext.CtxBuilder.param(AbstractJsonEnricher.ENTITY_ENRICHER_NAME, requested)
                                                           .get();
         // The registry injects `ctx`; there is no registry here.
@@ -84,16 +84,15 @@ class AllowedTransitionsJsonEnricherTest {
         assertEquals(JSON.readTree("{ \"allowedTransitions\": [] }"), written);
     }
 
+    /** Every entry carries both keys as text: a transition with no destination is not written. */
     @Test
-    void writesANullDestinationRatherThanLeavingTheKeyOut() throws Exception {
+    void writesNoTransitionThePolicyDoesNotDeclare() throws Exception {
         FakeRepository repository = new FakeRepository().grantEverythingNeeded();
-        repository.transitions.remove("deny");
+        repository.state = "review";
 
-        JsonNode deny = written(repository).at("/allowedTransitions/1");
-
-        assertEquals("deny", deny.get("name").asText());
-        assertTrue(deny.has("destinationState"));
-        assertTrue(deny.get("destinationState").isNull());
+        assertEquals(JSON.readTree("""
+                { "allowedTransitions": [ { "name": "approve", "destinationState": "approved" } ] }
+                """), written(repository));
     }
 
     /** The registry runs an enricher only for the name the request asked for. */
@@ -123,6 +122,8 @@ class AllowedTransitionsJsonEnricherTest {
                                            .findFirst()
                                            .orElseThrow();
         assertTrue(Modifier.isPublic(constructor.getModifiers()));
+        // As the registry does. The runtime lookup it installs is only reached when it is applied.
+        assertTrue(constructor.newInstance() instanceof AbstractJsonEnricher<?>);
     }
 
     /**

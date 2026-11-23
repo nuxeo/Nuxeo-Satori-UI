@@ -32,7 +32,10 @@ import org.nuxeo.ecm.core.lifecycle.LifeCycleTransition;
  * <li>on a live document that is checked in, {@code WriteProperties} too, because following a
  * transition checks the document out first and {@code checkOut} asks for it;
  * <li>the transition is one {@code getAllowedStateTransitions} lists, which itself needs
- * {@code ReadLifeCycle}. The lifecycle service refuses any other.
+ * {@code ReadLifeCycle}. The lifecycle service refuses any other;
+ * <li>the lifecycle declares the transition, with a destination. A state may list a transition
+ * the policy does not declare, and {@code LifeCycleServiceImpl.followTransition} then fails on its
+ * missing destination. The lifecycle is found as the service finds it, by the document's type.
  * </ol>
  *
  * <p>Each permission is asked of the session, so the security policies answer as they do for the
@@ -53,12 +56,13 @@ public final class AllowedTransitions {
      * The transitions {@code session}'s user may follow on {@code document}, in the order the
      * lifecycle lists them from the current state.
      *
-     * @param lifeCycles finds a lifecycle policy by name, for each transition's destination state
+     * @param lifeCycleOfType finds the lifecycle the lifecycle service applies to a document type,
+     *            or {@code null}
      * @return an empty list when the document does not exist in the session, has no lifecycle, or
      *         the user may follow none of its transitions
      */
     public static List<AllowedTransition> of(CoreSession session, DocumentModel document,
-            Function<String, LifeCycle> lifeCycles) {
+            Function<String, LifeCycle> lifeCycleOfType) {
         DocumentRef ref = document.getRef();
         if (ref == null || !session.exists(ref)) {
             return List.of();
@@ -73,12 +77,16 @@ public final class AllowedTransitions {
         if (names == null || names.isEmpty()) {
             return List.of();
         }
-        String policy = document.getLifeCyclePolicy();
-        LifeCycle lifeCycle = policy == null ? null : lifeCycles.apply(policy);
+        LifeCycle lifeCycle = lifeCycleOfType.apply(document.getType());
+        if (lifeCycle == null) {
+            // The service refuses every transition on a document whose type has no lifecycle.
+            return List.of();
+        }
         List<AllowedTransition> transitions = new ArrayList<>();
         for (String name : new LinkedHashSet<>(names)) {
-            if (name != null && !name.isEmpty()) {
-                transitions.add(new AllowedTransition(name, destinationOf(lifeCycle, name)));
+            String destination = name == null || name.isEmpty() ? null : destinationOf(lifeCycle, name);
+            if (destination != null) {
+                transitions.add(new AllowedTransition(name, destination));
             }
         }
         return List.copyOf(transitions);
@@ -104,11 +112,10 @@ public final class AllowedTransitions {
         return session.hasPermission(ref, permission);
     }
 
+    /** The transition's destination, or {@code null} when the policy cannot say where it leads. */
     private static String destinationOf(LifeCycle lifeCycle, String name) {
-        if (lifeCycle == null) {
-            return null;
-        }
         LifeCycleTransition transition = lifeCycle.getTransitionByName(name);
-        return transition == null ? null : transition.getDestinationStateName();
+        String destination = transition == null ? null : transition.getDestinationStateName();
+        return destination == null || destination.isEmpty() ? null : destination;
     }
 }

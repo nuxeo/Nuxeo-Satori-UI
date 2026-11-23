@@ -20,7 +20,7 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 class AllowedTransitionsTest {
 
     private static List<AllowedTransition> listed(FakeRepository repository) {
-        return AllowedTransitions.of(repository.session(), repository.document(), repository::lifeCycle);
+        return AllowedTransitions.of(repository.session(), repository.document(), repository::lifeCycleOfType);
     }
 
     private static List<String> names(FakeRepository repository) {
@@ -135,22 +135,49 @@ class AllowedTransitionsTest {
         assertEquals(List.of(), repository.permissionsAsked);
     }
 
+    /**
+     * A state that lists a transition the policy never declares: the service looks its destination
+     * up with no null check and fails, so it is not offered.
+     */
     @Test
-    void aTransitionThePolicyNoLongerDescribesIsListedWithNoDestination() {
+    void aTransitionThePolicyDoesNotDeclareIsNotListed() {
         FakeRepository repository = new FakeRepository().grantEverythingNeeded();
-        repository.transitions.remove("deny");
+        repository.state = "review";
 
-        assertEquals(List.of(new AllowedTransition("approve", "approved"), new AllowedTransition("deny", null)),
-                listed(repository));
+        assertEquals(List.of(new AllowedTransition("approve", "approved")), listed(repository));
+        assertFalse(repository.followTransition("escalate"), "the server fails on it");
     }
 
     @Test
-    void aDocumentWithNoLifecyclePolicyHasNoDestinationsToLookUp() {
+    void aTransitionWhosePolicyNamesNoDestinationIsNotListed() {
         FakeRepository repository = new FakeRepository().grantEverythingNeeded();
-        repository.allowedFrom.clear();
+        repository.transitions.put("deny", "");
+
+        assertEquals(List.of("approve"), names(repository));
+    }
+
+    /** The service finds a document's lifecycle by its type; with none it refuses every transition. */
+    @Test
+    void aDocumentWhoseTypeHasNoLifecycleHasNoTransitions() {
+        FakeRepository repository = new FakeRepository().grantEverythingNeeded();
         repository.policy = null;
 
         assertEquals(List.of(), listed(repository));
+        assertFalse(repository.followTransition("approve"));
+    }
+
+    /** The lifecycle is the one the service applies to the document's type. */
+    @Test
+    void theLifecycleIsLookedUpByTheDocumentsType() {
+        FakeRepository repository = new FakeRepository().grantEverythingNeeded();
+        List<String> asked = new ArrayList<>();
+
+        AllowedTransitions.of(repository.session(), repository.document(), type -> {
+            asked.add(type);
+            return repository.lifeCycleOfType(type);
+        });
+
+        assertEquals(List.of("Claim"), asked);
     }
 
     @Test
@@ -174,7 +201,7 @@ class AllowedTransitionsTest {
         for (int mask = 0; mask < 1 << permissions.size(); mask++) {
             for (boolean administrator : new boolean[] { false, true }) {
                 for (String kind : List.of("checked-out", "checked-in", "version", "proxy")) {
-                    for (String state : List.of("submitted", "approved", "paid")) {
+                    for (String state : List.of("submitted", "approved", "review", "paid")) {
                         FakeRepository repository = new FakeRepository();
                         for (int bit = 0; bit < permissions.size(); bit++) {
                             if ((mask & 1 << bit) != 0) {
@@ -188,7 +215,9 @@ class AllowedTransitionsTest {
                         repository.state = state;
 
                         List<String> listed = names(repository);
-                        for (String transition : repository.transitions.keySet()) {
+                        List<String> every = new ArrayList<>(repository.transitions.keySet());
+                        every.add("escalate");
+                        for (String transition : every) {
                             String where = repository.granted + (administrator ? " as administrator" : "") + ", "
                                     + kind + ", in " + state + ": " + transition;
                             boolean readable = administrator || repository.granted.contains(READ_LIFE_CYCLE);
@@ -206,6 +235,6 @@ class AllowedTransitionsTest {
                 }
             }
         }
-        assertEquals(8 * 2 * 4 * 3, combinations);
+        assertEquals(8 * 2 * 4 * 4, combinations);
     }
 }

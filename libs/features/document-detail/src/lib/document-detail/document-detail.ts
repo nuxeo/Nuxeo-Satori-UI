@@ -2920,13 +2920,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (updated) => {
           if (!settled()) return;
+          // The response's state: a listener may have moved the document on from the destination.
           const state = updated?.state || transition.destinationState;
           this.toast.show(
-            state
-              ? this.translate.instant('document-detail.message.transition-followed', {
-                  state: lifecycleLabel('state', state, (key) => this.translate.instant(key)),
-                })
-              : this.translate.instant('document-detail.message.transition-followed-unknown-state'),
+            this.translate.instant('document-detail.message.transition-followed', {
+              state: lifecycleLabel('state', state, (key) => this.translate.instant(key)),
+            }),
           );
           this.loadDocument(uid);
         },

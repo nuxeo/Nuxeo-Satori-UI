@@ -524,17 +524,6 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(toast.show).toHaveBeenCalledWith('The document is now Obsolete.');
     });
 
-    it('says only that the state changed when neither the server nor the policy names it', async () => {
-      const unplaced = { name: 'archive', destinationState: null };
-      await build(withTransitions([unplaced]));
-      confirmInDialog(unplaced);
-      mockDetailService.followTransition.mockReturnValue(of(doc({ state: undefined })));
-
-      component.runToolbarAction(offered('app.toolbar.followTransition'));
-
-      expect(toast.show).toHaveBeenCalledWith("The document's state has changed.");
-    });
-
     it('follows nothing when the dialog is closed without a choice', async () => {
       await build(withTransitions([APPROVE]));
       mockDetailService.getFullDocument.mockClear();
@@ -609,6 +598,32 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(toast.show).not.toHaveBeenCalled();
       expect(mockDetailService.getFullDocument).not.toHaveBeenCalled();
       expect(component.actionInProgress()).toBe('lock');
+    });
+  });
+
+  describe('lifecycle transitions across documents', () => {
+    const APPROVE = { name: 'approve', destinationState: 'approved' };
+
+    it("lets an older document's response leave a newer transition's busy flag alone", async () => {
+      await build(
+        doc({ contextParameters: { permissions: ['Read'], allowedTransitions: [APPROVE] } }),
+      );
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(APPROVE) }));
+      const first = new Subject<NuxeoDocument>();
+      mockDetailService.followTransition.mockReturnValueOnce(first).mockReturnValueOnce(NEVER);
+      component.openFollowTransition();
+
+      // Navigation to another document, which allows a transition too, and one started there.
+      component.actionInProgress.set(null);
+      component['docUid'] = 'doc-2';
+      component.openFollowTransition();
+      expect(mockDetailService.followTransition).toHaveBeenLastCalledWith('doc-2', 'approve');
+      expect(component.actionInProgress()).toBe('transition');
+
+      first.next(doc({ state: 'approved' }));
+
+      expect(component.actionInProgress()).toBe('transition');
+      expect(toast.show).not.toHaveBeenCalled();
     });
   });
 

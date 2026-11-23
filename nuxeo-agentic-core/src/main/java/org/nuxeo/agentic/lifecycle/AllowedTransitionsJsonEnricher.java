@@ -42,34 +42,37 @@ public class AllowedTransitionsJsonEnricher extends AbstractJsonEnricher<Documen
 
     public static final String NAME = "allowedTransitions";
 
-    private final Function<String, LifeCycle> lifeCycles;
+    private final Function<String, LifeCycle> lifeCycleOfType;
 
     /** The constructor the marshaller registry calls: it needs a public one with no parameters. */
     public AllowedTransitionsJsonEnricher() {
-        this(name -> Framework.getService(LifeCycleService.class).getLifeCycleByName(name));
+        this(AllowedTransitionsJsonEnricher::lifeCycleOfType);
     }
 
     /** For tests, which have no runtime to look a lifecycle policy up in. */
-    AllowedTransitionsJsonEnricher(Function<String, LifeCycle> lifeCycles) {
+    AllowedTransitionsJsonEnricher(Function<String, LifeCycle> lifeCycleOfType) {
         super(NAME);
-        this.lifeCycles = lifeCycles;
+        this.lifeCycleOfType = lifeCycleOfType;
+    }
+
+    /** As {@code LifeCycleServiceImpl.getLifeCycleFor} finds a document's lifecycle: by its type. */
+    private static LifeCycle lifeCycleOfType(String type) {
+        LifeCycleService service = Framework.getService(LifeCycleService.class);
+        String name = type == null ? null : service.getLifeCycleNameFor(type);
+        return name == null ? null : service.getLifeCycleByName(name);
     }
 
     @Override
     public void write(JsonGenerator jg, DocumentModel document) throws IOException {
         List<AllowedTransition> transitions;
         try (SessionWrapper wrapper = ctx.getSession(document)) {
-            transitions = AllowedTransitions.of(wrapper.getSession(), document, lifeCycles);
+            transitions = AllowedTransitions.of(wrapper.getSession(), document, lifeCycleOfType);
         }
         jg.writeArrayFieldStart(NAME);
         for (AllowedTransition transition : transitions) {
             jg.writeStartObject();
             jg.writeStringField("name", transition.name());
-            if (transition.destinationState() == null) {
-                jg.writeNullField("destinationState");
-            } else {
-                jg.writeStringField("destinationState", transition.destinationState());
-            }
+            jg.writeStringField("destinationState", transition.destinationState());
             jg.writeEndObject();
         }
         jg.writeEndArray();

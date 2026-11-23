@@ -146,14 +146,15 @@ describe('FollowTransitionDialogComponent', () => {
   it('cancels with nothing, from either step', async () => {
     const host = await open();
 
-    // `mat-dialog-close` with no value closes with undefined; the stub records the call.
     button(host, 'Cancel').click();
-    expect(dialogRef.close.mock.calls.every(([result]) => result === undefined)).toBe(true);
+    expect(dialogRef.close).toHaveBeenCalledTimes(1);
+    expect(dialogRef.close).toHaveBeenLastCalledWith(undefined);
 
     choices(host)[0].click();
     await settle();
     button(host, 'Cancel').click();
-    expect(dialogRef.close.mock.calls.every(([result]) => result === undefined)).toBe(true);
+    expect(dialogRef.close).toHaveBeenCalledTimes(2);
+    expect(dialogRef.close).toHaveBeenLastCalledWith(undefined);
   });
 
   it('labels a transition and states the catalogue does not know by their names, written out', async () => {
@@ -168,30 +169,24 @@ describe('FollowTransitionDialogComponent', () => {
     );
   });
 
-  it('says what it can when the server named no destination, or the document has no state', async () => {
-    const noDestination = await open({
-      transitions: [{ name: 'approve', destinationState: null }],
-    });
-    expect(text(noDestination.querySelector('.lib-follow-transition__question'))).toBe(
-      '“Claim 7” follows “Approve”.',
-    );
-    TestBed.resetTestingModule();
+  it('says where the document goes when it has no state to leave', async () => {
+    const host = await open({ state: null, transitions: [APPROVE, OBSOLETE] });
 
-    const noState = await open({ state: null, transitions: [APPROVE, OBSOLETE] });
-    expect(noState.querySelector('.lib-follow-transition__state')).toBeNull();
-    choices(noState)[0].click();
+    expect(host.querySelector('.lib-follow-transition__state')).toBeNull();
+    choices(host)[0].click();
     await settle();
-    expect(text(noState.querySelector('.lib-follow-transition__question'))).toBe(
+    expect(text(host.querySelector('.lib-follow-transition__question'))).toBe(
       '“Claim 7” moves to Approved.',
     );
   });
 
-  it('draws no destination line for a transition the server could not place', async () => {
-    const host = await open({
-      transitions: [APPROVE, { name: 'archive', destinationState: null }],
-    });
+  it('describes the confirm button by the question, so a screen reader reads both', async () => {
+    const host = await open({ transitions: [APPROVE] });
 
-    expect(choices(host).map(text)).toEqual(['Approve Moves to Approved', 'Archive']);
+    const question = host.querySelector('.lib-follow-transition__question');
+    const confirm = button(host, 'Approve');
+    expect(question?.id).toBeTruthy();
+    expect(confirm.getAttribute('aria-describedby')).toBe(question?.id);
   });
 
   it('shows a document title as text, never as markup', async () => {
