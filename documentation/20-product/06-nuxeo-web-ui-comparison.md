@@ -132,9 +132,9 @@ Stated plainly, because a comparison that finds no weaknesses is not credible.
    control, whose accessible name does not contain the initials it shows. On 2026-08-24 it met the
    bar on the fifteen cases scanned, excluding three nodes in an upstream component library that
    has since been removed. The Web UI's position is **Not verified**. Fixing that control would
-   clear this capture, not establish conformance: `docs/accessibility.md` records further failures
-   in states the capture does not reach. The honest form of the claim also names its scope:
-   dialogs, the upload flow, dark mode and the pre-auth login surface are not covered.
+   clear this capture's axe checks, not establish conformance: `docs/accessibility.md` records
+   further failures in states the capture does not reach. The honest form of the claim also names
+   its scope: dialogs, the upload flow, dark mode and the pre-auth login surface are not covered.
 4. **Studio integration.** Nuxeo Studio's relationship to Satori is **Not verified in
    repository** — no Studio integration exists here. For a customer whose configuration lives
    in Studio, this is a material open question.

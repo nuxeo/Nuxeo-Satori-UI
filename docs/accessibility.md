@@ -336,7 +336,8 @@ speech-input user who says what they see therefore does not name the control. Th
 `aria-hidden`, which hides it from a screen reader but not from sight, and 2.5.3 concerns what
 is visible.
 
-**What fixing it would show.** It would clear this capture's axe checks, and nothing more.
+**What fixing it would show.** It would clear this capture's axe checks, and nothing more: the
+Health 404 would still fail the run.
 [Storybook observations](#storybook-observations--triaged-2026-10-15) above records failures
 under the same tags in states the capture does not reach, among them the viewer placeholder for
 a File without a main file. [What nothing covers](#what-nothing-covers) lists what no layer
