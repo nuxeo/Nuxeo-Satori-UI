@@ -13,7 +13,7 @@ import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-i
 import { MatTabsModule } from '@angular/material/tabs';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { compute } from '@agentic-ui/shared/computations';
+import { compute, type ComputationContext } from '@agentic-ui/shared/computations';
 import { NXS_PRIMITIVE_IDS, type NxsTagStatus } from '@nuxeo/satori-platform/components';
 import {
   ExtensionOutletComponent,
@@ -21,11 +21,7 @@ import {
   ExtensionRuleRegistry,
   type ExtensionRule,
 } from '@nuxeo/satori-platform/extensions';
-import {
-  NuxeoDocument,
-  renderTrustedHtml,
-  type TrustedHtmlConfig,
-} from '@nuxeo/satori-platform/nuxeo-client';
+import { NuxeoDocument, renderTrustedHtml } from '@nuxeo/satori-platform/nuxeo-client';
 import { forkJoin, map, merge, of, startWith, switchMap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
@@ -33,16 +29,20 @@ import { type VocabularyValue, vocabularyValues } from '../document-layout/field
 import { layoutLabelText } from '../layout-label';
 import type { LayoutFieldType, LayoutLabel } from '../layout.model';
 import {
+  RICH_TEXT_HTML,
   type RecordValueContext,
   type RecordValueView,
   type Tone,
   WIDGETS_SHOWN_AS_VERSION_1,
+  columnWidget,
   computedDefinition,
   showValue,
+  subfieldDefinition,
   viewText,
 } from './record-field-view';
 import { propertiesReadBy } from './record-layout';
 import {
+  type ResolvedPropertyField,
   type ResolvedRecordCard,
   type ResolvedRecordField,
   type ResolvedRecordLayout,
@@ -57,40 +57,15 @@ export const RECORD_PAGE_TODAY = new InjectionToken<() => Date>('RECORD_PAGE_TOD
 });
 
 /**
- * What a `rich-text` value may keep: formatting, lists, quotes, code and links. Never an image,
- * which would load from wherever the value says; a form or an input, which could ask for a
- * password in the page's own look; a style, a frame or a script. DOMPurify also strips a
- * `javascript:` link.
+ * The zone an instant is shown in: `undefined`, the reader's own. A token, so that a test chooses
+ * an offset such as `+0530`. In whatever zone the suite happens to run, UTC on CI, an instant read
+ * in the wrong zone can still show the right day, and the test would prove nothing
+ * (AGENTS/08-bug-patterns.md, pattern 29).
  */
-const RICH_TEXT_HTML: TrustedHtmlConfig = {
-  ALLOWED_TAGS: [
-    'p',
-    'br',
-    'strong',
-    'b',
-    'em',
-    'i',
-    'u',
-    's',
-    'sub',
-    'sup',
-    'ul',
-    'ol',
-    'li',
-    'blockquote',
-    'code',
-    'pre',
-    'h1',
-    'h2',
-    'h3',
-    'h4',
-    'h5',
-    'h6',
-    'a',
-    'span',
-  ],
-  ALLOWED_ATTR: ['href'],
-};
+export const RECORD_PAGE_TIME_ZONE = new InjectionToken<string | undefined>(
+  'RECORD_PAGE_TIME_ZONE',
+  { providedIn: 'root', factory: () => undefined },
+);
 
 /** The design system's status for each of version 2's tones. */
 const TAG_STATUS: Readonly<Record<Tone, NxsTagStatus>> = {
@@ -166,6 +141,22 @@ function sortedUnique<T>(items: readonly T[], key: (item: T) => string): T[] {
   );
 }
 
+/** Every field of the page, in reading order: the tabs' cards, or the page's own. */
+function fieldsOf(layout: ResolvedRecordLayout): ResolvedRecordField[] {
+  const cards = layout.tabs ? layout.tabs.flatMap((tab) => tab.cards) : layout.cards;
+  return cards.flatMap((card) => card.fields);
+}
+
+/** The first field on the page that shows the property, or `undefined` when none does. */
+function fieldShowing(
+  layout: ResolvedRecordLayout,
+  xpath: string,
+): ResolvedPropertyField | undefined {
+  return fieldsOf(layout).find(
+    (field): field is ResolvedPropertyField => field.kind === 'property' && field.xpath === xpath,
+  );
+}
+
 /**
  * The record page: a document's main area drawn from its type's layout file, version 2, in
  * `view` mode (docs/business-apps/layout-v2.md). Cards fill one to three columns, or tabs hold
@@ -196,61 +187,87 @@ export class RecordPageComponent {
   private readonly ruleContext = inject(ExtensionRuleContextService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly today = inject(RECORD_PAGE_TODAY);
+  private readonly timeZone = inject(RECORD_PAGE_TIME_ZONE);
 
   /** What the console has been told, so that a page re-rendered for a label does not repeat it. */
   private readonly told = new Set<string>();
 
-  /** The vocabulary entries and the users and groups the page's values name: only those are read. */
+  /**
+   * The vocabulary entries and the users and groups the page's values name: only those are read.
+   * Each value is read through the widget that shows it: a field's, a table column's, or, for a
+   * template's placeholder, that of the field showing the property.
+   */
   private readonly lookups = computed<Lookups>(
     () => {
       const layout = this.layout();
-      const properties = this.document().properties;
+      const document = this.document();
+      const properties = document.properties;
       const vocabulary: VocabularyValue[] = [];
       const principals: Principal[] = [];
+      /** What a value shown through `widget` names. */
+      const named = (
+        widget: string | null,
+        parameters: Readonly<Record<string, unknown>>,
+        definition: LayoutFieldType,
+        value: unknown,
+      ): void => {
+        if (widget === 'user' || widget === 'group') {
+          for (const id of Array.isArray(value) ? value : [value]) {
+            if (typeof id === 'string' && id !== '') principals.push({ kind: widget, id });
+          }
+          return;
+        }
+        const directory =
+          widget === 'vocabulary' && typeof parameters['directory'] === 'string'
+            ? parameters['directory']
+            : definition.directory;
+        vocabulary.push(
+          ...vocabularyValues([
+            { definition: directory ? { ...definition, directory } : definition, value },
+          ]),
+        );
+      };
+      // A computation is worked out here with no labels, so the labels never wait on themselves.
+      // An id it gives a `user`, `group` or `vocabulary` widget is a stored value or a literal it
+      // chose, which no label changes. A template's text can change with its placeholders' labels;
+      // it is a name already, not an id, and only its unlabelled text is asked for, to no effect.
+      const unlabelled = this.valueContext(document, NO_LABELS);
       const read = new Set<string>();
-      for (const field of this.fieldsOf(layout)) {
+      for (const field of fieldsOf(layout)) {
         if (field.kind === 'computed') {
           propertiesReadBy(field.computed, read);
+          if (
+            field.widget === 'user' ||
+            field.widget === 'group' ||
+            field.widget === 'vocabulary'
+          ) {
+            const result = compute(
+              field.computed,
+              this.computationContext(layout, document, unlabelled),
+            );
+            if (result.ok)
+              named(field.widget, field.parameters, computedDefinition(result.value), result.value);
+          }
           continue;
         }
         const value = properties[field.xpath];
-        // A table's user and group columns are names to read too, row by row.
-        if (field.widget === 'table') {
-          const rows = (Array.isArray(value) ? value : []).filter(isRecord);
-          for (const column of tableColumns(field.parameters['columns'])) {
-            const kind = column.widget;
-            if (kind !== 'user' && kind !== 'group') continue;
-            for (const row of rows) {
-              const cell = row[column.subfield];
-              for (const id of Array.isArray(cell) ? cell : [cell]) {
-                if (typeof id === 'string' && id !== '') principals.push({ kind, id });
-              }
-            }
-          }
-        }
-        if (field.widget === 'user' || field.widget === 'group') {
-          for (const id of Array.isArray(value) ? value : [value]) {
-            if (typeof id === 'string' && id !== '') principals.push({ kind: field.widget, id });
-          }
+        if (field.widget !== 'table') {
+          named(field.widget, field.parameters, field.definition, value);
           continue;
         }
-        const directory =
-          field.widget === 'vocabulary' && typeof field.parameters['directory'] === 'string'
-            ? field.parameters['directory']
-            : field.definition.directory;
-        vocabulary.push(
-          ...vocabularyValues([
-            {
-              definition: directory ? { ...field.definition, directory } : field.definition,
-              value,
-            },
-          ]),
-        );
+        // A table's cells, row by row, each through the widget its column shows it with.
+        const rows = (Array.isArray(value) ? value : []).filter(isRecord);
+        for (const column of tableColumns(field.parameters['columns'])) {
+          const sub = subfieldDefinition(field.definition, column);
+          const widget = columnWidget(column, sub);
+          for (const row of rows) named(widget, column.parameters, sub, row[column.subfield]);
+        }
       }
+      // A placeholder whose property a field shows is read with that field, above.
       for (const xpath of read) {
         const definition = layout.properties.get(xpath);
-        if (definition)
-          vocabulary.push(...vocabularyValues([{ definition, value: properties[xpath] }]));
+        if (definition && !fieldShowing(layout, xpath))
+          named(null, {}, definition, properties[xpath]);
       }
       return {
         vocabulary: sortedUnique(vocabulary, (value) => `${value.directory}\n${value.id}`),
@@ -302,21 +319,8 @@ export class RecordPageComponent {
     this.translations();
     const layout = this.layout();
     const document = this.document();
-    const labels = this.labels();
-    const ruleContext = { ...this.ruleContext.context(), document };
-    const passes = (rule: unknown): boolean =>
-      rule === null || this.rules.evaluate(rule as ExtensionRule, ruleContext);
-    const context: RecordValueContext = {
-      locale: this.locale,
-      today: this.today(),
-      vocabulary: (directory, id) => labels.get(`v\n${directory}\n${id}`) ?? id,
-      principal: (kind, id) => labels.get(`${kind}\n${id}`) ?? id,
-      property: (xpath) => document.properties[xpath],
-      label: (label) => this.text(label),
-      flagText: (flag) =>
-        this.translate.instant(flag ? 'document-layouts.yes' : 'document-layouts.no'),
-      rule: passes,
-    };
+    const context = this.valueContext(document, this.labels());
+    const passes = context.rule;
     const cards = (list: readonly ResolvedRecordCard[]): RecordCardShown[] =>
       list
         .filter((card) => passes(card.visibleWhen))
@@ -326,7 +330,7 @@ export class RecordPageComponent {
           span: Math.min(card.span, layout.columns),
           fields: card.fields
             .filter((field) => passes(field.visibleWhen))
-            .flatMap((field) => this.showField(field, layout, document, context, passes)),
+            .flatMap((field) => this.showField(field, layout, document, context)),
         }))
         .filter((card) => card.fields.length > 0);
     if (layout.tabs) {
@@ -343,12 +347,42 @@ export class RecordPageComponent {
     return { type: layout.type, columns: layout.columns, tabs: null, cards: cards(layout.cards) };
   });
 
+  /** What a widget reads besides its value, with the labels read so far. */
+  private valueContext(document: NuxeoDocument, labels: Labels): RecordValueContext {
+    const ruleContext = { ...this.ruleContext.context(), document };
+    return {
+      locale: this.locale,
+      today: this.today(),
+      timeZone: this.timeZone,
+      vocabulary: (directory, id) => labels.get(`v\n${directory}\n${id}`) ?? id,
+      principal: (kind, id) => labels.get(`${kind}\n${id}`) ?? id,
+      property: (xpath) => document.properties[xpath],
+      label: (label) => this.text(label),
+      flagText: (flag) =>
+        this.translate.instant(flag ? 'document-layouts.yes' : 'document-layouts.no'),
+      rule: (rule) => rule === null || this.rules.evaluate(rule as ExtensionRule, ruleContext),
+    };
+  }
+
+  /** What a computation reads of the record: its values, their display, its rules and today. */
+  private computationContext(
+    layout: ResolvedRecordLayout,
+    document: NuxeoDocument,
+    context: RecordValueContext,
+  ): ComputationContext {
+    return {
+      value: (xpath) => document.properties[xpath],
+      display: (xpath) => this.displayText(xpath, layout, document, context),
+      rule: (rule) => context.rule(rule),
+      today: context.today,
+    };
+  }
+
   private showField(
     field: ResolvedRecordField,
     layout: ResolvedRecordLayout,
     document: NuxeoDocument,
     context: RecordValueContext,
-    passes: (rule: unknown) => boolean,
   ): RecordFieldShown[] {
     const label = this.text(field.label) ?? '';
     if (field.widget !== null && WIDGETS_SHOWN_AS_VERSION_1.has(field.widget)) {
@@ -370,12 +404,7 @@ export class RecordPageComponent {
       );
       return [this.withExtras({ key: field.xpath, label, value })];
     }
-    const result = compute(field.computed, {
-      value: (xpath) => document.properties[xpath],
-      display: (xpath) => this.displayText(xpath, layout, document, context),
-      rule: (rule) => passes(rule),
-      today: context.today,
-    });
+    const result = compute(field.computed, this.computationContext(layout, document, context));
     if (!result.ok) {
       this.tell(`${layout.type}/view layout: ${field.place} left out: ${result.reason}`);
       return [];
@@ -399,17 +428,29 @@ export class RecordPageComponent {
     return [this.withExtras({ key: field.id, label, value })];
   }
 
-  /** A property's display value, for a computation's placeholder: what its field would show. */
+  /**
+   * A property's display value, for a computation's placeholder: what its field shows. That is the
+   * first field on the page showing the property, through its widget and parameters, whether its
+   * rule passes or not; a property no field shows is shown by its schema type. So
+   * `{member:caseManager}` is the name a `user` field shows, and a date is the day a field shows.
+   */
   private displayText(
     xpath: string,
     layout: ResolvedRecordLayout,
     document: NuxeoDocument,
     context: RecordValueContext,
   ): string {
-    const definition = layout.properties.get(xpath) ?? { type: 'string' };
+    const field = fieldShowing(layout, xpath);
+    const definition = field?.definition ?? layout.properties.get(xpath) ?? { type: 'string' };
     const value = showValue(
-      { key: xpath, label: xpath, value: document.properties[xpath], parameters: {}, definition },
-      null,
+      {
+        key: xpath,
+        label: xpath,
+        value: document.properties[xpath],
+        parameters: field?.parameters ?? {},
+        definition,
+      },
+      field?.widget ?? null,
       context,
     );
     return viewText(value, context.flagText);
@@ -423,11 +464,6 @@ export class RecordPageComponent {
       return { ...field, html: renderTrustedHtml(this.sanitizer, value.html, RICH_TEXT_HTML) };
     }
     return field;
-  }
-
-  private fieldsOf(layout: ResolvedRecordLayout): ResolvedRecordField[] {
-    const cards = layout.tabs ? layout.tabs.flatMap((tab) => tab.cards) : layout.cards;
-    return cards.flatMap((card) => card.fields);
   }
 
   private text(label: LayoutLabel): string | null {

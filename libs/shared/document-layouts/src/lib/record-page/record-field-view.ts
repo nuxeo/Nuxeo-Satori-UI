@@ -1,20 +1,83 @@
 import { formatDate, formatNumber, formatPercent } from '@angular/common';
 import { isStoredCalendarDay } from '@agentic-ui/shared/computations';
+import type { TrustedHtmlConfig } from '@nuxeo/satori-platform/nuxeo-client';
+import DOMPurify from 'dompurify';
 
 import { describeField, type FieldView } from '../document-layout/field-view';
 import type { LayoutFieldType, LayoutLabel } from '../layout.model';
 import { humanize } from '../resolve-layout';
-import { WIDGETS_SHOWN_AS_VERSION_1, tableColumns, widgetAccepts } from './widget-support';
+import {
+  type TableColumn,
+  WIDGETS_SHOWN_AS_VERSION_1,
+  tableColumns,
+  widgetAccepts,
+} from './widget-support';
 
 export { WIDGETS_SHOWN_AS_VERSION_1 } from './widget-support';
 
 /**
  * How the record page shows one value through a registered widget (layout-v2.md, section 3).
  *
- * Pure functions from a value to a view, so every widget is tested without a browser, as
- * version 1's `describeField` is. A field with no widget is shown by version 1's own function, so
- * the two versions show an unannotated property the same way.
+ * Functions from a value to a view, so every widget is tested without drawing a page, as version
+ * 1's `describeField` is. A field with no widget is shown by version 1's own function, so the two
+ * versions show an unannotated property the same way, except a date: see {@link showValue}.
  */
+
+/**
+ * What a `rich-text` value may keep: formatting, lists, quotes, code and links. Never an image,
+ * which would load from wherever the value says; a form or an input, which could ask for a
+ * password in the page's own look; a style, a frame or a script. DOMPurify also strips a
+ * `javascript:` link. The page renders a field through it, and a table's cell is its text.
+ */
+export const RICH_TEXT_HTML: TrustedHtmlConfig = {
+  ALLOWED_TAGS: [
+    'p',
+    'br',
+    'strong',
+    'b',
+    'em',
+    'i',
+    'u',
+    's',
+    'sub',
+    'sup',
+    'ul',
+    'ol',
+    'li',
+    'blockquote',
+    'code',
+    'pre',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'a',
+    'span',
+  ],
+  ALLOWED_ATTR: ['href'],
+};
+
+/** The elements of rich text that part the words either side of them, as a block or a break does. */
+const PARTING = 'p, br, li, blockquote, pre, h1, h2, h3, h4, h5, h6';
+
+/**
+ * The words a `rich-text` value shows, as one line: what {@link RICH_TEXT_HTML} keeps of it, with
+ * each entity read as the character it stands for, so `&lt;10` is `<10` and `R&amp;D` is `R&D`.
+ * A paragraph, a list item, a heading or a line break parts the words either side; inline
+ * formatting does not, so `<b>R</b>&amp;D` stays one word. Text, never markup: the page binds it
+ * as text.
+ */
+export function richTextWords(html: string): string {
+  // Parsed into an inert document, which runs no script and loads nothing, and never attached.
+  const kept = DOMPurify.sanitize(html, { ...RICH_TEXT_HTML, RETURN_DOM_FRAGMENT: true });
+  for (const element of kept.querySelectorAll(PARTING)) {
+    element.before(' ');
+    element.after(' ');
+  }
+  return (kept.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
 
 export type Tone = 'positive' | 'warning' | 'negative' | 'info' | 'neutral';
 
@@ -61,8 +124,9 @@ export interface RecordValueContext {
   /** Whether a rule passes for the record and the user: a table column's `visibleWhen`. */
   readonly rule: (rule: unknown) => boolean;
   /**
-   * The zone an instant is shown in: absent, the reader's own, as the page leaves it; an offset
-   * such as `+0530` in a test, so that the views are deterministic in any zone.
+   * The zone an instant is shown in: absent, the reader's own, as the page leaves it unless a test
+   * provides `RECORD_PAGE_TIME_ZONE`; an offset such as `+0530`, so that a view is the same in any
+   * zone the suite runs in.
    */
   readonly timeZone?: string;
 }
@@ -194,12 +258,8 @@ export function viewText(view: RecordValueView, flagText: (flag: boolean) => str
     case 'table':
       return view.rows.map((row) => row.join(' ')).join('; ');
     case 'html':
-      // Never markup in a cell: the text the HTML holds, with its tags and entities gone.
-      return view.html
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/&[a-z#0-9]+;/gi, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      // Never markup in a cell: the words the field would show.
+      return richTextWords(view.html);
     case 'layout': {
       const { field } = view;
       const one = (value: { readonly text: string } | { readonly flag: boolean }): string =>
@@ -328,11 +388,7 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
       headings: columns.map((column) => context.label(column.label) ?? humanize(column.subfield)),
       rows: items.map((item) =>
         columns.map((column) => {
-          const sub = definition.fields?.[column.subfield] ?? { type: 'string' };
-          // A column's widget is held to its subfield's type, as a field's is to its property's;
-          // one that does not show it leaves the cell to the subfield's own view.
-          const widget =
-            column.widget !== null && widgetAccepts(column.widget, sub) ? column.widget : null;
+          const sub = subfieldDefinition(definition, column);
           return viewText(
             showValue(
               {
@@ -342,7 +398,7 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
                 parameters: column.parameters,
                 definition: sub,
               },
-              widget,
+              columnWidget(column, sub),
               context,
             ),
             context.flagText,
@@ -353,13 +409,49 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
   },
 };
 
-/** Show a value through `widget`, or as version 1 would when there is none. */
+/** What a table's column holds: its subfield's type in the list's schema, or text when it has none. */
+export function subfieldDefinition(list: LayoutFieldType, column: TableColumn): LayoutFieldType {
+  return list.fields?.[column.subfield] ?? { type: 'string' };
+}
+
+/**
+ * The widget a table's cell is shown through. A column's widget is held to its subfield's type, as
+ * a field's is to its property's; one that does not show it leaves the cell to the subfield's own
+ * view. The page reads a cell's labels through the same choice, so it reads the ones it shows.
+ */
+export function columnWidget(column: TableColumn, sub: LayoutFieldType): string | null {
+  return column.widget !== null && widgetAccepts(column.widget, sub) ? column.widget : null;
+}
+
+/** A date as the `date` widget shows it, with no parameters: one rule for every date on the page. */
+function dateText(value: unknown, context: RecordValueContext): string {
+  const input = { key: '', label: '', value, parameters: {}, definition: { type: 'date' } };
+  return viewText(WIDGET_VIEWS['date'](input, context), context.flagText);
+}
+
+/**
+ * Show a value through `widget`, or as version 1 would when there is none.
+ *
+ * Except a date, or a list of them, with no widget: that is shown as the `date` widget shows it.
+ * Version 1's view formats every date in UTC, which is right for a stored day and wrong for an
+ * instant such as `dc:created`, which belongs in the reader's zone (AGENTS/08-bug-patterns.md,
+ * pattern 29). So a field, a table's cell and a template's placeholder show a date on the same day.
+ */
 export function showValue(
   input: WidgetInput,
   widget: string | null,
   context: RecordValueContext,
 ): RecordValueView {
   if (isEmpty(input.value)) return EMPTY;
+  if (widget === null && input.definition.type === 'date') {
+    return text(dateText(input.value, context));
+  }
+  if (widget === null && input.definition.type === 'date[]' && Array.isArray(input.value)) {
+    const chips = input.value
+      .filter((item) => !isEmpty(item))
+      .map((item) => dateText(item, context));
+    return chips.length === 0 ? EMPTY : { kind: 'chips', chips };
+  }
   const view =
     widget !== null && !WIDGETS_SHOWN_AS_VERSION_1.has(widget) ? WIDGET_VIEWS[widget] : undefined;
   return view
