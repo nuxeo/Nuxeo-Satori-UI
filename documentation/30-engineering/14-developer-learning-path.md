@@ -503,8 +503,8 @@ Configuration facts worth knowing before you write a spec:
   (NXSAT-643). `storageState` does not work
   because the app uses `sessionStorage`, not `localStorage`.
 
-Accessibility: `@axe-core/playwright` (also untracked), scanning 15 cases across 8 routes against
-WCAG 2.1 A/AA. Separately, `npm run a11y` runs 11 `@angular-eslint/template` a11y rules over 89
+Accessibility: `@axe-core/playwright` (also untracked), scanning against WCAG 2.1 A/AA. The
+2026-11-23 capture made 14 axe scans across 9 routes; quote the counts of the run you cite. Separately, `npm run a11y` runs 11 `@angular-eslint/template` a11y rules over 89
 templates and compares against `tools/a11y/baseline.json` — the verdict is "no _new_ violations",
 not "zero violations".
 

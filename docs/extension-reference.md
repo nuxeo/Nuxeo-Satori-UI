@@ -317,7 +317,8 @@ the destination prompt when the deployment is Docker and hardcodes
   not stat-ed and not reached, whatever is in it — asserted on the response bytes by
   `AgenticUiConfigDevOverrideTest`, and by the `checkDevConfigOverrideIsNotProductionReachable`
   guardrail on anything this repository ships — and, for the configuration packages in
-  nuxeo/Nuxeo-Satori-Config, by `scripts/check-deployable.mjs` there.
+  nuxeo/Nuxeo-Satori-Config, by that repository's
+  [deployability check](https://github.com/nuxeo/Nuxeo-Satori-Config/blob/main/scripts/check-deployable.mjs).
 - **Never set it in production.** It makes configuration editable by anyone who can write to the
   server's filesystem, which is exactly the privilege separation a regulated customer is relying
   on. It belongs on a development box or a demo box, nowhere else.
@@ -1587,8 +1588,10 @@ modes:
   default (`@emptyWithDefault`) when the document is created. A complex field is sent whole once
   any of its sub-fields is filled in, so its untouched sub-fields go empty — `false` for a
   checkbox — rather than to their server defaults. The dialog keeps what is not a property field:
-  the location, the main file of a File, Picture, Audio or Video, and a Note's format. The import
-  wizard's properties step is not this form.
+  the location, the main file of a File, Picture, Audio or Video, and a Note's format. A type that
+  extends File, Picture, Audio or Video, or carries the `file` schema itself, gets the same
+  main-file field, and Import offers it for files; the dialog reads the type's ancestry from
+  Nuxeo's content model (`/config/types`). The import wizard's properties step is not this form.
 
 To replace the whole Properties section or form with a component of your own rather than a list
 of fields, use the `documentMetadata`, `documentEdit` and `documentCreate` slots, section 9c.
@@ -1680,11 +1683,21 @@ How each value is shown is decided by its schema type — there is no widget nam
 | `string`                       | text                                                                                                                                                                                                      |
 | `string` bound to a vocabulary | the entry's label, read for the entries the document holds only, so a vocabulary of any size costs a read per value; `Parent/Child` for an `l10n…` vocabulary, in English as the panel's own Subjects row |
 | `string[]` and other lists     | one chip per item (vocabulary items labelled)                                                                                                                                                             |
-| `date`                         | a long date, in UTC, so a calendar date is the same day everywhere                                                                                                                                        |
+| `date`                         | a long date: a stored day in UTC, so it is the same day everywhere; any other instant, such as `dc:created`, on the reader's own day                                                                      |
 | `long`, `double`               | a number in the user's locale                                                                                                                                                                             |
 | `boolean`                      | Yes or No, translated                                                                                                                                                                                     |
 | `blob`                         | the file name                                                                                                                                                                                             |
 | `complex`, `complex[]`         | its sub-fields, one group per item                                                                                                                                                                        |
+
+**A `date` value is shown by what it holds.** A stored day — `2024-03-06`, or an instant at exactly
+midnight UTC written with `Z` or `+00:00` and a fraction of zeros or none, which is what Nuxeo
+stores for a day-only write — is formatted in UTC, the zone it is anchored in, so 6 March is 6 March
+to every reader. Any other instant is a moment, not a day, and is formatted in the reader's own
+zone: a `dc:created` of `2026-11-23T20:00:00Z` is 23 November in New York and 24 November in
+Kolkata. One kind of value is misread, and nothing in it can say so: an instant that falls at exactly
+midnight UTC, such as a `dc:created` stamped at `00:00:00.000Z`, is taken for a stored day, so west
+of UTC it shows a day later than the reader's own. Until 2026-11-23 every `date` value was formatted
+in UTC, which put an instant on the reader's wrong day wherever their day and UTC's differed.
 
 In an `edit` or `create` form, the schema type picks the control:
 
@@ -1705,19 +1718,23 @@ In an `edit` or `create` form, the schema type picks the control:
 **A `date` field edits a calendar day, and that day is anchored in UTC.** A day picked or typed is
 sent as that day at UTC midnight — 6 March 2024 is always `2024-03-06T00:00:00.000Z`, whatever zone
 the user is in — and a stored value is read back as the day it names in UTC, so the form opens on
-the day that was saved everywhere. This is the same anchoring the view uses (`date` renders in UTC,
-above) and the same one Nuxeo itself applies to a day-only write, so one picked day is one stored
+the day that was saved everywhere. This is the same anchoring the view uses for a stored day
+(above) and the same one Nuxeo itself applies to a day-only write, so one picked day is one stored
 value and every surface showing it agrees.
 
 Two consequences worth designing around:
 
 - A `date` property that carries a meaningful time of day is **not** a calendar day, and the form
-  does not treat it as one beyond its day: it is shown and edited by day, and written back
-  unchanged — time of day included — as long as the day is not altered. Alter the day and the time
-  is replaced by UTC midnight.
-- A value written by another client at midnight in a local zone (Nuxeo Web UI does this) names the
-  previous UTC day when that zone is ahead of UTC, and will be shown and edited as that previous
-  day. Nothing records the zone it was written in, so it cannot be recovered.
+  does not treat it as one beyond its day: it is edited by day, and written back unchanged — time
+  of day included — as long as the day is not altered. Alter the day and the time is replaced by
+  UTC midnight. The form opens such a value on its UTC day while the view shows it on the reader's
+  day, so where those differ the two name different days: at +05:30, `2026-11-23T20:00:00Z` is
+  shown as 24 November and opens in the form as 23 November.
+- A value written by another client at midnight in a local zone (Nuxeo Web UI does this) is not at
+  midnight UTC, so it is shown as an instant: on the day that was picked to a reader in the
+  writer's zone, and, when that zone is ahead of UTC, on the previous day to a reader in UTC or
+  west of it. The form opens it on its UTC day, which for a zone ahead of UTC is the previous day.
+  Nothing records the zone it was written in, so it cannot be recovered.
 
 **Validation before saving.** Save checks the schema's constraints in the browser first: a
 required field (`NotNullConstraint`, or `"required": true` in the file), a `PatternConstraint`

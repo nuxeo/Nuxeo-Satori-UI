@@ -312,11 +312,24 @@ travel with a clone. **Anything load-bearing belongs in the repo docs.**
 by default; everything is recorded at every impact so the debt is visible rather than filtered
 away. If `@axe-core/playwright` is missing it is a **failed check**, never a silent skip.
 
-As measured on 2026-08-24 — **AA met on the fifteen cases scanned**, `KNOWN_VIOLATIONS` **empty**,
-with one upstream exclusion (the last row). That is a dated result: the captures of 2026-09-15 and
-2026-09-16 failed three `button-name` checks on browse, and the plan has listed WCAG 2.1 AA as in
-question since 2026-09-23 (`docs/beta-plan.md`, Phase 6 step 3). Later measurements are in
-`docs/accessibility.md`. Re-run `phase-6-a11y` before quoting any verdict as current.
+**As of 2026-11-23, AA is not met.** `phase-6-a11y/2026-11-23T08-09-11`, captured on `main` at
+e27deeaa0, fails 15 of 35 checks. Fourteen are `label-content-name-mismatch` (2.5.3 Label in
+Name, Level A) on the navigation's user-profile control, which is in the shell and so fails on
+every surface. With the rail collapsed it shows only the avatar initials NXSAT-673 added on
+2026-10-26, and they are not a word of its accessible name. The fifteenth is a Health 404 on an
+optional configuration file the local server does not serve, which is an environment condition.
+
+The rule only now counts because the engine changed. The capture's `--no-save` install pins no
+version, and resolved axe-core 4.14.1; the 35/35 of 2026-10-22 ran on 4.13.0, which tags the
+rule `experimental` and so does not run it under the WCAG tags. A full capture with 4.13.0 on the
+same commit passes every axe check. The diagnosis and both control runs are in
+[the accessibility standard](../../docs/accessibility.md#the-2026-11-23-measurement). Record the
+axe-core version with any later verdict.
+
+The table below is the 2026-08-24 measurement: **AA met on the fifteen cases scanned**,
+`KNOWN_VIOLATIONS` **empty**, with one upstream exclusion (the last row). The captures of
+2026-09-15 and 2026-09-16 failed three `button-name` checks on browse, which do not reproduce on
+2026-11-23.
 
 | Rule                          | Nodes | Now | Owner                                             |
 | ----------------------------- | ----- | --- | ------------------------------------------------- |
