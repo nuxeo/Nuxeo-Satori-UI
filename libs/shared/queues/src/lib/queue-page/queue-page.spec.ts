@@ -85,6 +85,14 @@ const AGGREGATIONS = {
 
 /** A Layer 2 bulk action with no handler: offered, it would do nothing. */
 const GHOST = { id: 'acme.bulkActions.ghost', label: 'Ghost', icon: 'help', order: 5 };
+/** A Layer 2 bulk action shown only for several rows: its `rule`, not its `enabledRule`. */
+const MERGE = {
+  id: 'acme.bulkActions.merge',
+  label: 'Merge',
+  icon: 'merge',
+  order: 6,
+  rule: 'app.rules.hasMultipleSelection',
+};
 
 describe('QueuePageComponent', () => {
   let fixture: ComponentFixture<QueuePageComponent>;
@@ -103,7 +111,7 @@ describe('QueuePageComponent', () => {
         { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
         provideSatoriExtensions({
           slots: {
-            [EXTENSION_SLOTS['bulk-actions']]: [...PACKAGED_BULK_ACTIONS, GHOST],
+            [EXTENSION_SLOTS['bulk-actions']]: [...PACKAGED_BULK_ACTIONS, GHOST, MERGE],
           },
           rules: DOCUMENT_RULE_EVALUATORS,
         }),
@@ -336,6 +344,83 @@ describe('QueuePageComponent', () => {
     await answer([claim(1)]);
     expect(list()?.selectable()).toBe(false);
     expect(TestBed.inject(SelectionService).offeredBulkActions()).toEqual([]);
+  });
+
+  it("draws a column only for the people its rule is for, as the record page's lists do", async () => {
+    const supervisorsOnly = { type: 'app.rules.inGroup', parameters: ['claims-supervisors'] };
+    files['ruled'] = {
+      kind: 'file',
+      content: {
+        ...UNASSIGNED,
+        columns: [
+          'claim:number',
+          { field: 'claim:received', widget: 'relative-date', visibleWhen: supervisorsOnly },
+        ],
+      },
+    };
+    create(['claims-adjusters']);
+    await open('ruled');
+    await answer([claim(1)]);
+    expect(
+      list()
+        ?.columns()
+        .map((column) => column.key),
+    ).toEqual(['claim:number']);
+    // Not left out for want of an answer: the page answered it.
+    expect(
+      warnings.some((w) => w.includes('has a rule the list was not given an answer for')),
+    ).toBe(false);
+  });
+
+  it('draws the column for those its rule is for', async () => {
+    const adjusters = { type: 'app.rules.inGroup', parameters: ['claims-adjusters'] };
+    files['ruled'] = {
+      kind: 'file',
+      content: {
+        ...UNASSIGNED,
+        columns: ['claim:number', { field: 'claim:received', visibleWhen: adjusters }],
+      },
+    };
+    create(['claims-adjusters']);
+    await open('ruled');
+    await answer([claim(1)]);
+    expect(
+      list()
+        ?.columns()
+        .map((column) => column.key),
+    ).toEqual(['claim:number', 'claim:received']);
+  });
+
+  it('is hidden from someone none of its columns is for, and asks for nothing', async () => {
+    const supervisorsOnly = { type: 'app.rules.inGroup', parameters: ['claims-supervisors'] };
+    files['ruled'] = {
+      kind: 'file',
+      content: {
+        ...UNASSIGNED,
+        columns: [{ field: 'claim:number', visibleWhen: supervisorsOnly }],
+      },
+    };
+    create(['claims-adjusters']);
+    await open('ruled');
+    expect(text('.queue-page__message')).toBe('This queue is not shown to you.');
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('lets rows be selected for a bulk action that is offered for several rows only', async () => {
+    files['several'] = {
+      kind: 'file',
+      content: { ...UNASSIGNED, bulkActions: ['acme.bulkActions.merge'] },
+    };
+    create();
+    TestBed.inject(ExtensionActionRegistry).register({
+      'acme.bulkActions.merge': { execute: () => undefined },
+    });
+    await open('several');
+    await answer([claim(1), claim(2)]);
+    expect(list()?.selectable()).toBe(true);
+    expect(TestBed.inject(SelectionService).offeredBulkActions()).toEqual([
+      'acme.bulkActions.merge',
+    ]);
   });
 
   it('is hidden while its rule does not pass, and asks the page provider for nothing', async () => {

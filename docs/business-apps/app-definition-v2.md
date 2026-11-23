@@ -196,7 +196,11 @@ provider, for the development server.
   that could not be read.
 - **The list** is the record page's (layout-v2.md, section 7): the page provider's records page by
   page, the columns through their widgets, the order sorted on the server from a header, a row
-  opening its record, and the row actions that have a handler on the page.
+  opening its record, and the row actions that have a handler on the page. A column with a rule
+  shows to the people it passes for, answered as the queue's own rule is; a queue none of whose
+  columns is for the person signed in is hidden from them.
+- **An empty parameter** refuses the queue, as a related list is not asked with one: a page
+  provider asked with an empty value matches what its author did not mean, or nothing.
 - **A facet** is drawn from the page provider's `aggregations` in the results, a bucket per value
   with its count, and choosing one sends it back as the search page sends its filters: a parameter
   named after the aggregate, its chosen keys a JSON array, such as

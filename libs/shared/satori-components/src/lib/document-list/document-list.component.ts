@@ -16,11 +16,12 @@ import {
   output,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatCheckboxModule, type MatCheckboxChange } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSortModule, type Sort } from '@angular/material/sort';
+import { MatSort, MatSortModule, type Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { merge } from 'rxjs';
@@ -151,6 +152,12 @@ export class NxsDocumentListComponent {
   readonly label = input.required<string>();
   /** The order the page is in, or `null` for the source's own order. */
   readonly sort = input<NxsDocumentListSort | null>(null);
+  /**
+   * The source's own order, by its first key, where it has one a column can show: its header shows
+   * it while `sort` is `null`, and turns it round rather than clearing it, since clearing would
+   * leave the rows as they are. `null`, the default, where the source's order is no column's.
+   */
+  readonly defaultSort = input<NxsDocumentListSort | null>(null);
   /** The selected documents' ids, on every page. Two-way: `[(selectedIds)]`. */
   readonly selectedIds = model<readonly string[]>([]);
   /** Shows the selection checkboxes. Accepts a bare attribute. */
@@ -282,8 +289,11 @@ export class NxsDocumentListComponent {
     const total = this.totalSize();
     return total >= 0 ? total + 1 : -1;
   });
-  protected readonly matSortActive = computed(() => this.sort()?.key ?? '');
-  protected readonly matSortDirection = computed(() => this.sort()?.direction ?? '');
+  private readonly matSort = viewChild(MatSort);
+  /** The order the header shows: the one chosen, or the source's own. */
+  private readonly shownSort = computed(() => this.sort() ?? this.defaultSort());
+  protected readonly matSortActive = computed(() => this.shownSort()?.key ?? '');
+  protected readonly matSortDirection = computed(() => this.shownSort()?.direction ?? '');
 
   constructor() {
     // A new page starts at its first row, so the Tab stop is never left past the end of a shorter
@@ -394,6 +404,17 @@ export class NxsDocumentListComponent {
       sort.direction === 'asc' || sort.direction === 'desc'
         ? { key: sort.active, direction: sort.direction }
         : null;
+    const own = this.defaultSort();
+    if (!next && own) {
+      // Cleared, the rows go back to the source's own order, and its header shows it. `MatSort`
+      // has just cleared its own direction, and the bound one may not change, as from another
+      // column's descending to the source's descending: so it is written here.
+      const matSort = this.matSort();
+      if (matSort) {
+        matSort.active = own.key;
+        matSort.direction = own.direction;
+      }
+    }
     this.sortChange.emit(next);
     const column = this.columns().find((candidate) => candidate.key === sort.active)?.label ?? '';
     const key = !next

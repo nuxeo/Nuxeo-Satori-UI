@@ -399,9 +399,10 @@ thumbnail batch, which drops the previews to `null` and degrades the popup to it
 does **not** clear the selection. Callers as of this writing: `search`, `trash`, `assets`, `browse`.
 
 **`offeredBulkActions`** is a signal of the bulk action ids the page holding the selection offers, or
-`null` for every one the `bulk-actions` slot resolves. A queue's page sets its file's `bulkActions`
-while it is shown and puts `null` back when it goes; the shell's selection topbar reads it, and then
-offers only those of them that have a handler. It is not a security control.
+`null` for every one the `bulk-actions` slot resolves. A queue's page sets those of its file's
+`bulkActions` that have a handler, `[]` while it shows no queue, and puts `null` back when it goes;
+the shell's selection topbar reads it, and offers those of them the slot resolves for the rows
+selected. It is not a security control.
 
 That is deliberately the conservative half. The complete fix is for this service to own preview
 lifetime — hold the blobs, or refetch on demand — so a selection keeps its thumbnails across a

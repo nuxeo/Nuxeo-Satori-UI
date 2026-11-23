@@ -8,6 +8,8 @@
  *   ignored;
  * - a column this build does not draw in a list is left out, as in a related-records card, and a
  *   queue with no column left is refused;
+ * - an empty parameter refuses it too, as a related list is not asked with one: an empty value
+ *   matches what its author did not mean, or nothing;
  * - a facet whose aggregate a request cannot filter on is left out: see `isAggregateParameter`;
  * - a rule this build cannot answer hides the queue from everyone. That is a finding in
  *   `visibleWhen`, a rule this build does not register, or one nested deeper than the rule
@@ -124,6 +126,14 @@ export function readQueue(content: unknown, registered: QueueRegistered): ReadQu
   const isRuleKnown = (id: string): boolean => rules.has(id);
   const list = readRecordList(file, '', 'the queue', { leftOut, isRuleKnown, problems });
   if (list === null) return { refused: problems };
+  const empty = list.parameters.findIndex((parameter) => parameter === '');
+  if (empty >= 0) {
+    return {
+      refused: [
+        `parameters[${empty}] is empty: a page provider asked with an empty parameter matches what its author did not mean, or nothing`,
+      ],
+    };
+  }
 
   const refused = alwaysHidden ? null : refusedRule(file['visibleWhen'], isRuleKnown);
   if (refused) {
