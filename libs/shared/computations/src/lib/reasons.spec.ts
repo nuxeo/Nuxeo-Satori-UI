@@ -4,8 +4,10 @@ import ts from 'typescript';
 
 // Every reason a computation can be refused with must be asserted by a spec, so that a refusal added
 // without a negative control fails here. The reasons are read from the source: the argument of each
-// `refuse(...)` call. And `refuse` is the only place a refusal is built, which the third test holds,
-// so that a reason cannot get past the first by being written some other way.
+// `refuse(...)` call, and one written with no literal text to look for, a variable for one, is
+// reported rather than passed, which the third test holds. And `refuse` is the only place a refusal
+// is built, which the fourth test holds, so that a reason cannot get past the first by being
+// written some other way.
 //
 // A reason is compared by its literal text, the parts between its placeholders, and all of its parts
 // must be in one expectation: the strings in one matcher's arguments, `expect(…).toEqual({ ok: false,
@@ -40,7 +42,11 @@ const literals = (node: ts.Node): string[] =>
       ? [node.head.text, ...node.templateSpans.map((span) => span.literal.text)]
       : [];
 
-function reasonsIn(file: string): string[][] {
+/**
+ * The literal parts of each `refuse(...)` argument in `source`. An argument that is not a string or
+ * a template, such as a variable, a `+` or a `?:`, has none, and `uncovered` reports it.
+ */
+function reasonsIn(source: string): string[][] {
   const found: string[][] = [];
   const visit = (node: ts.Node): void => {
     if (
@@ -51,7 +57,7 @@ function reasonsIn(file: string): string[][] {
       found.push(literals(node.arguments[0]));
     ts.forEachChild(node, visit);
   };
-  visit(parse(file));
+  visit(ts.createSourceFile('source.ts', source, ts.ScriptTarget.Latest, true));
   return found;
 }
 
@@ -125,7 +131,11 @@ function expectationsIn(source: string): string[] {
   return found;
 }
 
-/** Each reason no one expectation asserts all the parts of, with its parts of four characters or more. */
+/**
+ * Each reason no one expectation asserts all the parts of, with its parts of four characters or
+ * more. A reason with no such part, written as a variable or as placeholders alone, is reported
+ * too: there is nothing to look for, so no expectation can be shown to assert it.
+ */
 function uncovered(reasons: readonly Reason[], expectations: readonly string[]): string[] {
   return reasons
     .map(({ file, parts }) => ({
@@ -134,10 +144,14 @@ function uncovered(reasons: readonly Reason[], expectations: readonly string[]):
     }))
     .filter(
       ({ parts }) =>
-        parts.length > 0 &&
+        parts.length === 0 ||
         !expectations.some((text) => parts.every((part) => text.includes(part))),
     )
-    .map(({ file, parts }) => `${file}: ${parts.join(' … ')}`);
+    .map(({ file, parts }) =>
+      parts.length === 0
+        ? `${file}: a reason with no text of four characters or more to look for`
+        : `${file}: ${parts.join(' … ')}`,
+    );
 }
 
 describe('the negative controls', () => {
@@ -145,7 +159,9 @@ describe('the negative controls', () => {
     expect(sources).toEqual(
       expect.arrayContaining(['compute.ts', 'dates.ts', 'evaluators.ts', 'types.ts']),
     );
-    const all = sources.flatMap((file) => reasonsIn(file).map((parts) => ({ file, parts })));
+    const all = sources.flatMap((file) =>
+      reasonsIn(readFileSync(join(LIB, file), 'utf8')).map((parts) => ({ file, parts })),
+    );
     expect(all.length).toBeGreaterThanOrEqual(20);
     expect(uncovered(all, specs.flatMap(expectationsIn))).toEqual([]);
   });
@@ -171,6 +187,20 @@ describe('the negative controls', () => {
       expect(uncovered(reason, expectationsIn(source)), source).toEqual([
         'x.ts: the computation … is not registered',
       ]);
+  });
+
+  it('count a reason with no text to look for as not covered', () => {
+    const unreadable = reasonsIn(
+      'refuse(reason); refuse(prefix + suffix); refuse(passes ? "it passes" : "it fails"); refuse(`${a}: ${b}`);',
+    ).map((parts) => ({ file: 'x.ts', parts }));
+    expect(unreadable).toHaveLength(4);
+    // An expectation holding every literal the four are written with.
+    const everything = expectationsIn(
+      "expect(r).toEqual({ ok: false, reason: 'reason prefix suffix it passes it fails : ' });",
+    );
+    expect(uncovered(unreadable, everything)).toEqual(
+      new Array(4).fill('x.ts: a reason with no text of four characters or more to look for'),
+    );
   });
 
   it('can be found: a refusal is built by refuse() alone', () => {
