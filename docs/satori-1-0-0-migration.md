@@ -127,7 +127,9 @@ bump, kept for its reasoning; each part says how it turned out.
   with the old `en` values (`…/satori-ui/en.json answered 404`, both stories), and with
   `staticDirs` mounted elsewhere (`en-US.json` and its `en.json` fallback both 404). Green on the
   current configuration. It needs the GitHub Packages token and Playwright, so it reports NOT RUN
-  without them and is not in PR CI.
+  without them. Not in PR CI (the PR Storybook job removes `@hylandsoftware` to prove the
+  token-free build); it runs in `storybook-pages.yml` on every push to `main`, as a separate
+  `storybook-satori` job that does not gate deployment.
 - **A stale engineering doc, corrected:** `documentation/30-engineering/07-extensibility-contract.md`
   said satori-ui ships fifteen catalogues, bare names included. It now gives 1.0.0's eight
   regional files and the `aliases` mapping.
