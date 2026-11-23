@@ -13,7 +13,7 @@
 import { homeQueueId, iconOf, labelOf, placed, queuePath, searchQueueId, slug } from './app-files';
 import { own, slotEntry, type Catalogue } from './catalogue';
 import { cardGuard, queueOwners, searchOfForm } from './convert-lists';
-import { menuGuard } from './guards';
+import { menuGuard, type Guard } from './guards';
 import type { Inventory, SlotContribution } from './inventory';
 
 /** A card of `home.json`, from a dashboard card whose list is a queue. */
@@ -34,6 +34,8 @@ export interface MenuEntry {
   readonly id: string;
   readonly queue: string;
   readonly entry: Readonly<Record<string, unknown>>;
+  /** The conditions it and its page sit in, whose rule is its `visibleWhen`. */
+  readonly guard: Guard;
 }
 
 /** The queue id of a path written as `queues/<id>.json`. */
@@ -154,6 +156,7 @@ export function menuDecisions(
         queue,
         ...(guard.rule !== 'core.true' ? { visibleWhen: guard.rule } : {}),
       },
+      guard,
     });
   }
   return { entries, skipped };

@@ -128,6 +128,8 @@ export interface ConvertContext {
   readonly files: Record<string, unknown>;
   /** The theme `app.json` names, once a contribution to `THEMES` sets it. */
   theme: string | null;
+  /** Where each condition's rule was written, by `<file>#<index>`: what the report says it became. */
+  readonly carried: Map<string, string[]>;
   readonly decide: (id: string, decision: Decision) => void;
 }
 
@@ -183,6 +185,7 @@ export function convert(
     allowList,
     files,
     theme: null,
+    carried: new Map(),
     decide: (id, decision) => decided.set(id, decision),
   };
 
@@ -293,7 +296,7 @@ export function convert(
     file: construct.file,
     label: construct.label,
     ...(construct.property ? { property: construct.property } : {}),
-    ...(decided.get(construct.id) ?? decide(construct, inventory, catalogue)),
+    ...(decided.get(construct.id) ?? decide(construct, inventory, catalogue, context.carried)),
   }));
 
   const manifest = readManifest(
@@ -320,7 +323,12 @@ export function convert(
 }
 
 /** The outcome of a construct no part of the conversion decided. */
-function decide(construct: Construct, inventory: Inventory, catalogue: Catalogue): Decision {
+function decide(
+  construct: Construct,
+  inventory: Inventory,
+  catalogue: Catalogue,
+  carried: ReadonlyMap<string, readonly string[]>,
+): Decision {
   const key = Number(construct.id.slice(construct.id.lastIndexOf('#') + 1));
   switch (construct.kind) {
     case 'file': {
@@ -351,11 +359,19 @@ function decide(construct: Construct, inventory: Inventory, catalogue: Catalogue
       if (decision.kind === 'reported') return { outcome: 'reported', note: decision.note };
       if (decision.kind === 'proposed')
         return { outcome: 'proposed', note: decision.note, rule: decision.rule };
-      return {
-        outcome: 'converted',
-        to: 'the visibleWhen of what it holds, where that can carry a rule',
-        rule: decision.rule,
-      };
+      // Converted only where a rule was written: what it guards says why it was not otherwise.
+      const where = carried.get(`${condition.path}#${condition.index}`) ?? [];
+      return where.length > 0
+        ? {
+            outcome: 'converted',
+            to: `the visibleWhen of ${where.join(', ')}`,
+            rule: decision.rule,
+          }
+        : {
+            outcome: 'pending',
+            note: 'Its rule is decided, but nothing it guards carries one yet: each says why',
+            rule: decision.rule,
+          };
     }
     default:
       // Each part decides its own constructs; reaching here means one skipped a construct.

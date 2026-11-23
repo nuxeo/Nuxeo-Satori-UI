@@ -3,7 +3,7 @@ import { versionOne } from './check-package';
 import { readable } from './check-seen';
 import { convert, type Conversion } from './convert';
 import { runHarness, type HarnessInput } from './harness';
-import { MUTATIONS } from './mutations';
+import { MUTATIONS, ruleHolders } from './mutations';
 import { inventory } from './inventory';
 import { readStudioPackage } from './studio-package';
 import {
@@ -1253,7 +1253,12 @@ describe('M2: conditions become rules, held by truth tables', () => {
   it('writes nested conditions as one core.every, and holds it to both', () => {
     const input = prepare({
       bundle: {
+        // A view that declares the user its group filter reads.
         [view]: files[view]
+          .replace(
+            'document: { type: Object }',
+            'document: { type: Object }, user: { type: Object }',
+          )
           .replace(
             '<nuxeo-filter document="[[document]]" type="Claim">\n      <template>',
             '<nuxeo-filter document="[[document]]" user="[[user]]" group="adjusters"><template><nuxeo-filter document="[[document]]" type="Claim">\n      <template>',
@@ -1316,10 +1321,16 @@ describe('M2: conditions become rules, held by truth tables', () => {
   it('carries a group condition to the home and the menu, and reports one that reads a document there', () => {
     const groups = prepare({
       bundle: {
-        [home]: files[home].replace(
-          '<nuxeo-card heading="My tasks">',
-          '<nuxeo-filter user="[[user]]" group="supervisors"><template><nuxeo-card heading="Supervised"><nuxeo-page-provider provider="claims"></nuxeo-page-provider><nuxeo-data-table><nuxeo-data-table-column name="Title"><template>[[item.title]]</template></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card></template></nuxeo-filter><nuxeo-card heading="My tasks">',
-        ),
+        // A home of the customer's own, which declares the user its filter reads.
+        [home]: files[home]
+          .replace(
+            '</template>\n</dom-module>',
+            "</template>\n  <script>Polymer({ is: 'nuxeo-home', properties: { user: { type: Object } } });</script>\n</dom-module>",
+          )
+          .replace(
+            '<nuxeo-card heading="My tasks">',
+            '<nuxeo-filter user="[[user]]" group="supervisors"><template><nuxeo-card heading="Supervised"><nuxeo-page-provider provider="claims"></nuxeo-page-provider><nuxeo-data-table><nuxeo-data-table-column name="Title"><template>[[item.title]]</template></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card></template></nuxeo-filter><nuxeo-card heading="My tasks">',
+          ),
         [bundle]: files[bundle].replace(
           '<template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template>',
           '<template><nuxeo-filter user="[[user]]" group="adjusters"><template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template></nuxeo-filter></template>',
@@ -1340,6 +1351,38 @@ describe('M2: conditions become rules, held by truth tables', () => {
       entries: [{ id: 'claimssearch', visibleWhen: rule('adjusters') }],
     });
     for (const number of [2, 5, 6, 7, 10]) expect(run(groups, number)?.findings).toEqual([]);
+    // Every rule the package carries, dropped or inverted on its own, fails check 5 in its file.
+    expect(ruleHolders(groups.conversion).map((found) => `${found.path} ${found.at}`)).toEqual(
+      expect.arrayContaining([
+        'home.json cards.1.visibleWhen',
+        'navigation.json entries.0.visibleWhen',
+        'queues/home-3-claims.json visibleWhen',
+      ]),
+    );
+    for (const change of ['drop', 'invert'] as const)
+      for (const found of ruleHolders(groups.conversion)) {
+        if (change === 'drop') delete found.holder['visibleWhen'];
+        else
+          found.holder['visibleWhen'] = {
+            type: 'core.not',
+            parameters: [found.holder['visibleWhen']],
+          };
+        const findings = run(
+          {
+            ...groups,
+            conversion: {
+              ...groups.conversion,
+              app: { ...groups.conversion.app, [found.path]: found.file },
+            },
+          },
+          5,
+        )?.findings;
+        expect([
+          change,
+          found.path,
+          findings?.some((f) => f.startsWith(`${found.path}: `)),
+        ]).toEqual([change, found.path, true]);
+      }
     const typed = prepare({
       bundle: {
         [bundle]: files[bundle].replace(

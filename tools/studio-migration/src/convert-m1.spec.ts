@@ -109,20 +109,48 @@ describe('M1 converts document layouts', () => {
     });
   });
 
-  it('converts a condition, and leaves a version 1 field under it pending, as version 1 has no rules', () => {
+  it('leaves a version 1 field under a condition pending, as version 1 has no rules', () => {
     const path = `${UI}/document/claim/nuxeo-claim-metadata-layout.html`;
     expect(outcome(conversion, `layout-field:${path}#3`)).toMatchObject({
       outcome: 'pending',
       property: 'cl:reserve',
       note: expect.stringMatching(/condition 1 of its file passes, and version 1 has no rules/),
     });
+    // Its group test is given [[user]], which a document layout does not hold: it never passes.
     expect(outcome(conversion, `condition:${path}#1`)).toMatchObject({
-      outcome: 'converted',
-      rule: { type: 'app.rules.inGroup', parameters: ['adjusters'] },
+      outcome: 'reported',
+      note: expect.stringMatching(/given \[\[user\]\], which its file does not hold/),
     });
     expect(outcome(conversion, `layout-field:${path}#1`)).toMatchObject({
       outcome: 'converted',
       to: expect.stringMatching(/Properties panel's own row for dc:title/),
+    });
+  });
+
+  it('converts a condition only where its rule is written, and leaves one nothing carries pending', () => {
+    const edit = `${UI}/document/claim/nuxeo-claim-edit-layout.html`;
+    const typed = converted({
+      bundle: {
+        [edit]: syntheticBundleFiles()
+          [edit].replace(
+            '<nuxeo-user-suggestion role="widget"',
+            '<nuxeo-filter document="[[document]]" type="Claim"><template><nuxeo-user-suggestion role="widget"',
+          )
+          .replace(
+            '</nuxeo-user-suggestion>',
+            '</nuxeo-user-suggestion></template></nuxeo-filter>',
+          ),
+      },
+    });
+    // Its one field is in version 1, which has no rules: the rule is decided, and written nowhere.
+    expect(outcome(typed, `condition:${edit}#1`)).toMatchObject({
+      outcome: 'pending',
+      note: expect.stringMatching(/nothing it guards carries one yet/),
+    });
+    const view = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
+    expect(outcome(typed, `condition:${view}#1`)).toMatchObject({
+      outcome: 'converted',
+      to: 'the visibleWhen of layouts/Claim/view.layout.json cl:reserve',
     });
   });
 

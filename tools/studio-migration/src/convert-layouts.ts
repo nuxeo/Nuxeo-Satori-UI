@@ -14,7 +14,7 @@
 import type { ConvertContext } from './convert';
 import type { DocumentLayout, LayoutField } from './inventory';
 import { LAYOUT_VERSION, labelOf, layoutPath } from './app-files';
-import { guardAt, type Guard } from './guards';
+import { carry, guardOfSet, type Guard } from './guards';
 import { VERSION_ONE_WIDGETS, fieldWidget } from './widgets';
 
 /** The document types a layout path may name: as the configuration service accepts them. */
@@ -43,6 +43,8 @@ export type FieldPlan =
       readonly required: boolean;
       /** Set when it is written but cannot show as Web UI does: it is then reported, with this. */
       readonly reported?: string;
+      /** The conditions it is written under, whose rule is its `visibleWhen`. */
+      readonly guard?: Guard;
     }
   | { readonly kind: 'panel'; readonly binding: string }
   | { readonly kind: 'preview' }
@@ -68,7 +70,7 @@ export function planFields(
     layout.fields
       .filter(
         (field) =>
-          field.condition === null &&
+          field.conditions.length === 0 &&
           field.binding !== null &&
           fieldWidget(context.catalogue, field.element, field.attributes) !== null,
       )
@@ -103,7 +105,8 @@ export function planFields(
           outcome: 'pending',
           note: `It shows only while condition ${field.condition + 1} of its file passes, and version 1 has no rules: it waits for the app to draw version 2 in ${mode} mode`,
         };
-      guard = guardAt(context.inventory, layout.path, field.condition);
+      // Every condition it sits in or holds: a wrapper's own, and any around its binding.
+      guard = guardOfSet(context.inventory, layout.path, field.conditions);
       if (guard.kind !== 'rule') return { kind: 'skip', outcome: guard.kind, note: guard.note };
     }
     const choice = fieldWidget(context.catalogue, field.element, field.attributes);
@@ -137,6 +140,7 @@ export function planFields(
       widget: version === 2 ? choice.widget : null,
       required,
       ...(reported ? { reported } : {}),
+      ...(guard?.kind === 'rule' ? { guard } : {}),
     };
   });
 }
@@ -212,6 +216,7 @@ export function convertLayouts(context: ConvertContext): void {
         });
       } else if (plan.kind === 'write') {
         fields.push(plan.entry);
+        if (plan.guard) carry(context.carried, plan.guard, `${path} ${plan.binding}`);
         context.decide(
           id,
           plan.reported

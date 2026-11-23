@@ -220,8 +220,9 @@ gives the same conversion. A conversion directory holds:
 - **Reported:** a queue has no search form. The form and its fields are reported, because the
   queue lists what the page provider returns with the predicates left empty, as Web UI does before
   anyone searches. A grid or justified-grid view is reported too: a queue is a table.
-- **Pending:** a column under a condition, which the queue leaves out, and a list whose table sits
-  in one, which gets no queue: M2 converts the condition, as for a layout's field.
+- **Reported, too:** a column under a condition, which the queue leaves out, and a list whose
+  table sits in one, which gets no queue. M2 converts no condition there, so a person decides
+  each, and neither is shown to everyone meanwhile.
 
 **The dashboard.** A card's list becomes a queue: its page provider, its query parameters, its page
 size when it is one a queue takes (1 to 100; the card's note says when it is not) and its columns.
@@ -270,20 +271,35 @@ does ([`conditions.ts`](src/conditions.ts)).
 WriteProperties` becomes `canWrite`, `Remove` becomes `canRemove`, `AddChildren` becomes
     `canAddChildren`, and `WriteSecurity, Everything` becomes `canManagePermissions`.
 - **Reported, never guessed:**
-  - `path`, `schema` and `expression`;
+  - `path` and `schema`, which no registered rule tests;
   - a single permission no rule matches exactly, such as `Write`, which `canWrite` would widen to
     `WriteProperties`;
   - a filter given another document than the open record;
-  - a group test given no user, which never passes in Web UI.
-- **JavaScript in a known pattern is proposed.** That is a `dom-if`'s `if` calling a filter
-  function on `document` or `user`, or `document.facets.indexOf(…)`, with `!`, `&&` or `||`. Its rule
-  is in the report for a person to accept, and what it guards is written only once they do. Any
-  other JavaScript is reported.
+  - a test of spacing alone, which never passes in Web UI;
+  - a group test given no user, or given a user its file does not hold, which never passes either.
+    A bundle holds one, and so does a file whose script declares `user`; a document layout and
+    Web UI's stock home declare none.
+- **JavaScript in a known pattern is proposed**, with its rule in the report for a person to
+  accept. What it guards is written only once they do. JavaScript sits in two places:
+  - a `dom-if`'s `if`, which Polymer binds as one path or one call. One call of a filter function
+    on `document` or `user`, such as `[[!hasFacet(document, 'Folderish')]]`, is a known pattern.
+    `&&`, `||` or a method of a value is no binding: Polymer leaves the text, which is always
+    true, so Web UI always shows what the `dom-if` holds, and that is reported. So is a path, such
+    as `[[document.isFolderish]]`;
+  - a filter's `expression`, which runs with `this` the filter: `this.` calls of its functions, or
+    `document.facets.indexOf('X') !== -1`, with `!`, joined by `&&` or by `||` but not both. A
+    call without `this.` throws, so the filter never passes, and that is reported.
+
+  `hasPermission` is a known pattern only for a permission one rule holds alone: `Remove` or
+  `AddChildren`. Any other JavaScript is reported.
+
 - **Where a rule travels:**
   - the `visibleWhen` of a view field, an action, a home card and its queue, and a menu entry;
   - on the home and the menu, no record is open, so only a rule on the user travels;
   - not to a version 1 field, which waits for the app to draw version 2 forms;
   - not to a list's column or a search screen's table, which are reported.
+- **A condition is `converted` only where its rule was written**, and the report says where.
+  Otherwise it is pending, and each thing it guards says why.
 
 **The theme.** M0's tokens and files, and its name in `app.json`'s `branding.theme`.
 
@@ -364,7 +380,8 @@ check that did not run does.
     - So an inverted rule, a widened one, a rule on the wrong field and a free JavaScript one
       slipped in all fail. A rule written differently that decides the same passes.
     - Each condition's own rule is held to the same table.
-    - Nothing Web UI shows under a condition is shown to everyone.
+    - Nothing Web UI shows under a condition is shown to everyone: no field, action, home card,
+      queue or menu entry loses its rule.
     - The tables prove the mapping against the two sources as written. Evaluating each original
       in Web UI itself, on the migration server, has not run. A package with no condition passes,
       because there is nothing for a table to decide.
@@ -421,8 +438,10 @@ and say so: `widen-to-everyone` and `widen-column-to-everyone`,
 because the sample has no condition, and `bind-other-operation`, because its one button runs no
 operation. The tests apply all three to the made-up package, which has them.
 
-Section 7's "invert a rule" is `invert-rule`. The sample has no condition, so it and `drop-rule`
-have nothing to break there; the tests apply both to the made-up package.
+Section 7's "invert a rule" is `invert-rule`. It and `drop-rule` take the first rule the
+conversion carries, on a layout field, an action, a home card, a menu entry or a queue. The sample
+has no condition, so both have nothing to break there. The tests apply both to the made-up
+package, and also drop and invert each of its rules in turn: check 5 fails for every one.
 
 ## Tests
 

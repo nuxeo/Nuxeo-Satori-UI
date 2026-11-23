@@ -61,6 +61,11 @@ export interface LayoutField {
   readonly attributes: Readonly<Record<string, string>>;
   /** The condition it sits in, by its place among its file's conditions, from 0; `null` for none. */
   readonly condition: number | null;
+  /**
+   * Every condition it sits in or holds: the ones around it, and any inside it, around the element
+   * it may take its binding from. What it shows passes them all.
+   */
+  readonly conditions: readonly number[];
 }
 
 /**
@@ -76,6 +81,13 @@ export interface Condition {
   readonly attributes: Readonly<Record<string, string>>;
   /** The condition it sits in, by its place among its file's conditions; `null` for none. */
   readonly parent: number | null;
+  /**
+   * True when a `[[user]]` binding in its file reaches the signed-in user. Web UI stamps a slot
+   * contribution with a model that holds the user; a document layout is given `{ document }` alone
+   * (`nuxeo-document-layout`), so there `user` is the host's own property, which Studio's template
+   * does not declare.
+   */
+  readonly userInScope: boolean;
 }
 
 /** A column of a list of results, or of a dashboard card's list. */
@@ -325,7 +337,12 @@ export function inventory(pkg: StudioPackage): Inventory {
   const webUi = (path: string): { document: Document; text: string } => {
     const text = read(path);
     const document = parseHtml(text);
-    conditions.push(...conditionsOf(path, document, within));
+    conditions.push(
+      ...conditionsOf(path, document, within).map((condition) => ({
+        ...condition,
+        userInScope: path.endsWith('-bundle.html') || /\buser\s*:\s*\{/.test(text),
+      })),
+    );
     let index = 0;
     for (const element of elementsOf(document)) {
       if (isCustomElement(element) && !WRAPPERS.has(element.localName)) {
@@ -588,6 +605,13 @@ function fieldsOf(document: Document, within: ReadonlyMap<Element, number>): Lay
       required: element.hasAttribute('required'),
       attributes: attributesOf(element),
       condition: conditionOfField(element, within),
+      conditions: [
+        ...new Set(
+          [element, ...elementsOf(element)]
+            .map((inner) => within.get(inner))
+            .filter((index): index is number => index !== undefined),
+        ),
+      ],
     }));
 }
 
@@ -623,8 +647,12 @@ function isCondition(element: Element): boolean {
  * in `within`. Walked by hand rather than by climbing from each element, because what a template
  * holds is in its content, which does not lead back to the template.
  */
-function conditionsOf(path: string, document: Document, within: Map<Element, number>): Condition[] {
-  const found: Condition[] = [];
+function conditionsOf(
+  path: string,
+  document: Document,
+  within: Map<Element, number>,
+): Omit<Condition, 'userInScope'>[] {
+  const found: Omit<Condition, 'userInScope'>[] = [];
   const visit = (node: ParentNode, current: number | null): void => {
     for (const child of Array.from(node.children)) {
       let inner = current;

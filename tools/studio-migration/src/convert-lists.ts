@@ -25,7 +25,7 @@ import {
   searchQueueId,
 } from './app-files';
 import { homeCards } from './convert-home';
-import { guardOfSet, type Guard } from './guards';
+import { carry, guardOfSet, type Guard } from './guards';
 import { columnWidget } from './widgets';
 
 /** A column, as a queue writes it: the property alone, or with its heading and widget. */
@@ -411,6 +411,14 @@ export function convertDashboard(context: ConvertContext): void {
         : {}),
     });
   });
-  if (cards.length > 0)
+  if (cards.length > 0) {
     context.files['home.json'] = { version: 2, cards: cards.map((c) => c.entry) };
+    for (const card of cards) {
+      const source = dashboard.cards[card.index];
+      if (!source.conditional) continue;
+      const guard = cardGuard(context.inventory, source);
+      carry(context.carried, guard, `home.json ${card.id}`);
+      carry(context.carried, guard, `queues/${card.queue}.json`);
+    }
+  }
 }

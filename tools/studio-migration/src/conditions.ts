@@ -78,32 +78,62 @@ function every(rules: readonly Rule[]): Rule {
   return rules.length === 1 ? rules[0] : { type: 'core.every', parameters: rules };
 }
 
+/**
+ * A Polymer binding of `dom-if`'s `if`: a property path, or one computed call, either negated
+ * with `!` (Polymer's `property-effects.js`). `&&`, `||` and method calls on a value are no
+ * binding: Polymer leaves the text as it is, a string that is always true, and Web UI always shows
+ * what the `dom-if` holds.
+ */
+const POLYMER_CALL = /^\s*\[\[\s*(!?)\s*(\w+)\(([^()]*)\)\s*\]\]\s*$/;
+const POLYMER_PATH = /^\s*\[\[\s*!?\s*[\w.]+\s*\]\]\s*$/;
+
 /** What a condition of a package becomes. */
 export function decideCondition(condition: Condition): ConditionDecision {
   if (condition.element !== 'nuxeo-filter') {
-    const test = own(condition.attributes, 'if');
-    const expression = test === undefined ? undefined : /^\s*\[\[([\s\S]*)\]\]\s*$/.exec(test)?.[1];
-    if (expression === undefined)
-      return { kind: 'reported', note: 'Its `if` is not a binding a pattern can read' };
-    const parsed = parseExpression(expression);
-    return 'problem' in parsed
-      ? {
-          kind: 'reported',
-          note: `Its \`if\`, ${test}, is free JavaScript in no known pattern: ${parsed.problem}`,
-        }
-      : {
-          kind: 'proposed',
-          rule: parsed.rule,
-          document: parsed.document,
-          note: `Its \`if\`, ${test}, is free JavaScript in a known pattern: the rule ${JSON.stringify(parsed.rule)} is proposed, for a person to accept (section 3)`,
-        };
+    const test = own(condition.attributes, 'if') ?? '';
+    const call = POLYMER_CALL.exec(test);
+    if (!call) {
+      return POLYMER_PATH.test(test)
+        ? {
+            kind: 'reported',
+            note: `Its \`if\`, ${test}, reads a property of the page, which a person maps`,
+          }
+        : {
+            kind: 'reported',
+            note: `Its \`if\`, ${test}, is no Polymer binding, so Web UI always shows what it holds: a mistake to fix, not to copy`,
+          };
+    }
+    const parsed = parseExpression(`${call[1]}${call[2]}(${call[3]})`, { bare: true });
+    if ('problem' in parsed)
+      return {
+        kind: 'reported',
+        note: `Its \`if\`, ${test}, is free JavaScript in no known pattern: ${parsed.problem}`,
+      };
+    if (parsed.user && !condition.userInScope)
+      return {
+        kind: 'reported',
+        note: `Its \`if\`, ${test}, reads a user its file is not given, so it never passes in Web UI: a mistake to fix, not to copy`,
+      };
+    return {
+      kind: 'proposed',
+      rule: parsed.rule,
+      document: parsed.document,
+      note: `Its \`if\`, ${test}, calls a filter function of the layout's host: the rule ${JSON.stringify(parsed.rule)} is proposed, for a person to accept, once they have seen the host has the function (section 3)`,
+    };
   }
   const attributes = condition.attributes;
   const rules: Rule[] = [];
   let document = false;
   let user = false;
+  let proposed: string | null = null;
   for (const [name, value] of Object.entries(attributes)) {
-    if (name === 'document' || name === 'user' || value.trim() === '') continue;
+    if (name === 'document' || name === 'user' || value === '') continue;
+    // Web UI tests a value of spacing alone, as the empty name, which nothing has.
+    if (value.trim() === '' && name !== 'expression')
+      return {
+        kind: 'reported',
+        note: `Its ${name} test is blank, so it never passes in Web UI: a mistake to fix, not to copy`,
+      };
     const list = values(value);
     switch (name) {
       case 'type':
@@ -136,11 +166,20 @@ export function decideCondition(condition: Condition): ConditionDecision {
         document = true;
         break;
       }
-      case 'expression':
-        return {
-          kind: 'reported',
-          note: `Its expression, ${value}, is free JavaScript beside structured tests: a person decides it`,
-        };
+      case 'expression': {
+        // Run as \`return <expression>\` with \`this\` the filter: its functions are \`this.\`'s.
+        const parsed = parseExpression(value, { bare: false });
+        if ('problem' in parsed)
+          return {
+            kind: 'reported',
+            note: `Its expression, ${value}, is free JavaScript in no known pattern: ${parsed.problem}`,
+          };
+        rules.push(parsed.rule);
+        document ||= parsed.document;
+        user ||= parsed.user;
+        proposed = `Its expression, ${value}, is free JavaScript in a known pattern`;
+        break;
+      }
       default:
         return {
           kind: 'reported',
@@ -148,7 +187,7 @@ export function decideCondition(condition: Condition): ConditionDecision {
         };
     }
   }
-  // Web UI reads the filter's own `document` and `user`; a rule reads the open record and the
+  // Web UI reads the filter's own \`document\` and \`user\`; a rule reads the open record and the
   // signed-in user. They agree only when the filter is given those.
   const documentBinding = BOUND.exec(own(attributes, 'document') ?? '')?.[1];
   if (document && documentBinding !== 'document')
@@ -157,13 +196,23 @@ export function decideCondition(condition: Condition): ConditionDecision {
       note: `It tests ${own(attributes, 'document') ? `the document ${own(attributes, 'document')}` : 'a document it is not given'}, where a rule reads the open record`,
     };
   const userBinding = BOUND.exec(own(attributes, 'user') ?? '')?.[1];
-  if (user && userBinding !== 'user')
+  if (user && (userBinding !== 'user' || !condition.userInScope))
     return {
       kind: 'reported',
-      note: 'Its group test is given no user, so it never passes in Web UI: a mistake to fix, not to copy',
+      note:
+        userBinding === 'user'
+          ? 'Its group test is given [[user]], which its file does not hold, so it never passes in Web UI: a mistake to fix, not to copy'
+          : 'Its group test is given no user, so it never passes in Web UI: a mistake to fix, not to copy',
     };
-  if (rules.length === 0) return { kind: 'rule', rule: 'core.true', document: false };
-  return { kind: 'rule', rule: every(rules), document };
+  const rule: Rule = rules.length === 0 ? 'core.true' : every(rules);
+  if (proposed !== null)
+    return {
+      kind: 'proposed',
+      rule,
+      document,
+      note: `${proposed}: the rule ${JSON.stringify(rule)} is proposed, for a person to accept (section 3)`,
+    };
+  return { kind: 'rule', rule, document };
 }
 
 /** The filter functions a known pattern may call, with what each becomes. */
@@ -193,35 +242,49 @@ const CALLS: Readonly<
 };
 
 const TERM =
-  /^(!?)\s*(?:this\.)?(hasType|hasFacet|hasState|isMember|hasPermission)\(\s*(document|user)\s*,\s*(['"])([^'"]+)\4\s*\)$/;
+  /^(!?)\s*(this\.)?(hasType|hasFacet|hasState|isMember|hasPermission)\(\s*(document|user)\s*,\s*(['"])([^'"]+)\5\s*\)$/;
 const FACETS =
   /^(!?)\s*document\.facets\.(?:indexOf\(\s*(['"])([^'"]+)\2\s*\)\s*(!==\s*-1|>=\s*0|>\s*-1)|includes\(\s*(['"])([^'"]+)\5\s*\))$/;
 
-/** A known pattern's rule, or why it is none. */
+/**
+ * A known pattern's rule, or why it is none. `bare` is a Polymer binding's call, of the host's
+ * method by its name, alone; otherwise it is a filter's `expression`, run as JavaScript with `this`
+ * the filter, so a filter function is `this.`'s and terms may be joined by `&&` or `||`.
+ */
 export function parseExpression(
   source: string,
-): { rule: Rule; document: boolean } | { problem: string } {
+  options: { readonly bare: boolean },
+): { rule: Rule; document: boolean; user: boolean } | { problem: string } {
   const text = source.trim();
   const and = text.includes('&&');
   const or = text.includes('||');
+  if (options.bare && (and || or)) return { problem: 'a binding holds one call' };
   // Each part must be one known term whole, so grouping in parentheses is none.
   if (and && or) return { problem: 'it mixes && and ||' };
   const parts = text.split(and ? '&&' : '||').map((part) => part.trim());
   const rules: Rule[] = [];
   let document = false;
+  let user = false;
   for (const part of parts) {
     const call = TERM.exec(part);
-    const facets = call ? null : FACETS.exec(part);
+    const facets = call || options.bare ? null : FACETS.exec(part);
     let rule: Rule | null = null;
     let negated = false;
     if (call) {
-      const known = CALLS[call[2]];
-      if (known.on !== call[3]) return { problem: `${call[2]} is called on ${call[3]}` };
-      rule = known.rule(call[5]);
+      if (options.bare && call[2])
+        return { problem: "a binding calls the host's method by its name" };
+      if (!options.bare && !call[2])
+        return {
+          problem: `${call[3]} is called without this., which throws, so it never passes in Web UI`,
+        };
+      const known = CALLS[call[3]];
+      if (known.on !== call[4]) return { problem: `${call[3]} is called on ${call[4]}` };
+      rule = known.rule(call[6]);
       if (rule === null)
-        return { problem: `no registered rule tests the permission ${call[5]} alone` };
+        return { problem: `no registered rule tests the permission ${call[6]} alone` };
       negated = call[1] === '!';
       document ||= known.on === 'document';
+      user ||= known.on === 'user';
     } else if (facets) {
       rule = { type: 'app.rules.hasFacet', parameters: [facets[3] ?? facets[6]] };
       negated = facets[1] === '!';
@@ -229,8 +292,8 @@ export function parseExpression(
     } else return { problem: `"${part}" is none` };
     rules.push(negated ? { type: 'core.not', parameters: [rule] } : rule);
   }
-  if (rules.length === 1) return { rule: rules[0], document };
-  return { rule: { type: or ? 'core.some' : 'core.every', parameters: rules }, document };
+  if (rules.length === 1) return { rule: rules[0], document, user };
+  return { rule: { type: or ? 'core.some' : 'core.every', parameters: rules }, document, user };
 }
 
 /** One row of a truth table: what the document and the user are. */
@@ -245,12 +308,16 @@ export interface Situation {
 /** Web UI's reading of a condition: `nuxeo-filter`'s `check`, and the filter functions. */
 export function webUiPasses(condition: Condition, situation: Situation): boolean | null {
   if (condition.element !== 'nuxeo-filter') {
-    const expression = /^\s*\[\[([\s\S]*)\]\]\s*$/.exec(own(condition.attributes, 'if') ?? '')?.[1];
-    return expression === undefined ? null : webUiExpression(expression, situation);
+    const test = own(condition.attributes, 'if') ?? '';
+    const call = POLYMER_CALL.exec(test);
+    // Not a binding at all: Polymer leaves the text, which is always true.
+    if (!call) return POLYMER_PATH.test(test) ? null : true;
+    return webUiExpression(`${call[1]}${call[2]}(${call[3]})`, situation, true);
   }
   for (const [name, value] of Object.entries(condition.attributes)) {
     if (name === 'document' || name === 'user' || !value) continue;
-    const list = values(value);
+    // `expression` is one value; every other test takes comma-separated ones.
+    const list = name === 'expression' ? [value] : values(value);
     const test = (one: string): boolean | null => {
       switch (name) {
         case 'type':
@@ -263,6 +330,8 @@ export function webUiPasses(condition: Condition, situation: Situation): boolean
           return situation.permissions.includes(one);
         case 'group':
           return situation.groups.includes(one);
+        case 'expression':
+          return webUiExpression(value, situation, false);
         default:
           return null;
       }
@@ -281,27 +350,29 @@ export function webUiPasses(condition: Condition, situation: Situation): boolean
   return true;
 }
 
-function webUiExpression(source: string, situation: Situation): boolean | null {
+function webUiExpression(source: string, situation: Situation, bare: boolean): boolean | null {
   const text = source.trim();
   const or = text.includes('||');
   const parts = text.split(or ? '||' : '&&').map((part) => part.trim());
   const results = parts.map((part): boolean | null => {
     const call = TERM.exec(part);
     if (call) {
-      const value = call[5];
+      // A filter's expression without `this.` throws, and the filter does not pass.
+      if (!bare && !call[2]) return false;
+      const value = call[6];
       const result =
-        call[2] === 'hasType'
+        call[3] === 'hasType'
           ? situation.type === value
-          : call[2] === 'hasFacet'
+          : call[3] === 'hasFacet'
             ? situation.facets.includes(value)
-            : call[2] === 'hasState'
+            : call[3] === 'hasState'
               ? situation.state === value
-              : call[2] === 'isMember'
+              : call[3] === 'isMember'
                 ? situation.groups.includes(value)
                 : situation.permissions.includes(value);
       return call[1] === '!' ? !result : result;
     }
-    const facets = FACETS.exec(part);
+    const facets = bare ? null : FACETS.exec(part);
     if (facets) {
       const result = situation.facets.includes(facets[3] ?? facets[6]);
       return facets[1] === '!' ? !result : result;
@@ -368,15 +439,22 @@ export function rulePasses(rule: unknown, situation: Situation): boolean | null 
 
 const OTHER = '~other';
 
+/** The most rows a truth table runs; past it the table is not run, and says so. */
+export const MAX_ROWS = 200_000;
+
 /**
- * Every situation that tells a condition's tests apart. For each dimension it tests: each value it
- * names and one it does not, or every subset of the facets, permissions or groups it names, with
- * the permissions of every rule a permission may become. A dimension it does not test is held to
- * one value, which keeps the table small enough to run in full.
+ * Every situation that tells a condition's tests apart, and the rule's: for each dimension either
+ * tests, each value named and one that is not, or every subset of the facets, permissions and
+ * groups named, with the permissions of every permission rule the rule or the condition names. A
+ * dimension neither tests is held to one value. Nothing is left out to fit: a table too large to
+ * run in full is `null`, and the check says it could not be read.
  */
-export function situations(condition: Condition, extra: RuleValues = NO_VALUES): Situation[] {
+export function situations(
+  condition: Condition,
+  extra: RuleValues = NO_VALUES,
+): Situation[] | null {
   const named = (attribute: string): string[] => values(own(condition.attributes, attribute) ?? '');
-  const expression = own(condition.attributes, 'if') ?? '';
+  const expression = `${own(condition.attributes, 'if') ?? ''} ${own(condition.attributes, 'expression') ?? ''}`;
   const called = (name: string): string[] =>
     [...expression.matchAll(new RegExp(`${name}\\(\\s*\\w+\\s*,\\s*(['"])([^'"]+)\\1`, 'g'))].map(
       (match) => match[2],
@@ -387,34 +465,26 @@ export function situations(condition: Condition, extra: RuleValues = NO_VALUES):
       (m) => m[2],
     ),
   ];
-  // The rule's own values too, so that a rule naming more than the condition is seen passing
-  // where Web UI does not.
-  const tested = (attribute: string, literals: readonly string[]): string[] =>
-    [...new Set([...named(attribute), ...literals])].slice(0, 4);
-  // The rule's own values too, each in its dimension, so that a rule naming more than the
-  // condition is seen passing where Web UI does not.
-  const types = [...new Set([...tested('type', called('hasType')), ...extra.types]), OTHER];
-  const states = [...new Set([...tested('state', called('hasState')), ...extra.states]), OTHER];
-  const facetPool = [...new Set([...tested('facet', facetLiterals), ...extra.facets])].slice(0, 5);
-  const groupPool = [...new Set([...tested('group', called('isMember')), ...extra.groups])].slice(
-    0,
-    5,
+  const pool = (...lists: (readonly string[])[]): string[] => [...new Set(lists.flat())];
+  const types = [...pool(named('type'), called('hasType'), extra.types), OTHER];
+  const states = [...pool(named('state'), called('hasState'), extra.states), OTHER];
+  const facetPool = pool(named('facet'), facetLiterals, extra.facets);
+  const groupPool = pool(named('group'), called('isMember'), extra.groups);
+  const asked = pool(named('permission'), called('hasPermission'), extra.permissions);
+  const permissionPool = pool(
+    asked,
+    PERMISSION_RULES.filter(([permissions]) => permissions.some((p) => asked.includes(p))).flatMap(
+      ([permissions]) => permissions,
+    ),
   );
-  const asked = [...new Set([...named('permission'), ...called('hasPermission')])].slice(0, 4);
-  const permissionPool =
-    asked.length === 0
-      ? []
-      : [
-          ...new Set([
-            ...asked,
-            ...PERMISSION_RULES.filter(([permissions]) =>
-              permissions.some((p) => asked.includes(p)),
-            ).flatMap(([permissions]) => permissions),
-          ]),
-        ].slice(0, 6);
-  const subsets = (pool: readonly string[]): string[][] =>
-    Array.from({ length: 2 ** pool.length }, (_, mask) =>
-      pool.filter((_, bit) => mask & (1 << bit)),
+  const size =
+    types.length *
+    states.length *
+    2 ** (facetPool.length + groupPool.length + permissionPool.length);
+  if (size > MAX_ROWS) return null;
+  const subsets = (list: readonly string[]): string[][] =>
+    Array.from({ length: 2 ** list.length }, (_, mask) =>
+      list.filter((_, bit) => mask & (1 << bit)),
     );
   const rows: Situation[] = [];
   for (const type of types)
@@ -436,6 +506,7 @@ export function truthTable(
   readonly unreadable: boolean;
 } {
   const rows = situations(condition, literalsOf(rule));
+  if (rows === null) return { rows: 0, disagree: [], unreadable: true };
   const disagree: Situation[] = [];
   for (const situation of rows) {
     const web = webUiPasses(condition, situation);
@@ -464,9 +535,17 @@ export function chainTable(
     for (const [name, value] of Object.entries(condition.attributes))
       merged[name] = merged[name] ? `${merged[name]}, ${value}` : value;
   const rows = situations(
-    { path: '', index: -1, element: 'nuxeo-filter', attributes: merged, parent: null },
+    {
+      path: '',
+      index: -1,
+      element: 'nuxeo-filter',
+      attributes: merged,
+      parent: null,
+      userInScope: true,
+    },
     literalsOf(rule),
   );
+  if (rows === null) return { rows: 0, disagree: [], unreadable: true };
   const disagree: Situation[] = [];
   for (const situation of rows) {
     const results = conditions.map((condition) => webUiPasses(condition, situation));
@@ -484,9 +563,11 @@ interface RuleValues {
   readonly facets: readonly string[];
   readonly states: readonly string[];
   readonly groups: readonly string[];
+  /** The permissions of the permission rules it names. */
+  readonly permissions: readonly string[];
 }
 
-const NO_VALUES: RuleValues = { types: [], facets: [], states: [], groups: [] };
+const NO_VALUES: RuleValues = { types: [], facets: [], states: [], groups: [], permissions: [] };
 
 /** The values a rule names, at any depth, each in the dimension its rule tests. */
 function literalsOf(rule: unknown): RuleValues {
@@ -495,8 +576,15 @@ function literalsOf(rule: unknown): RuleValues {
     facets: [] as string[],
     states: [] as string[],
     groups: [] as string[],
+    permissions: [] as string[],
   };
   const visit = (value: unknown): void => {
+    // A permission rule, by its id: its permissions are rows of the table too.
+    if (typeof value === 'string') {
+      for (const [permissions, id] of PERMISSION_RULES)
+        if (id === value) found.permissions.push(...permissions);
+      return;
+    }
     if (typeof value !== 'object' || value === null) return;
     const { type, parameters } = value as { type?: unknown; parameters?: unknown };
     const list = Array.isArray(parameters) ? parameters : [];

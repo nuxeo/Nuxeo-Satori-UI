@@ -133,3 +133,12 @@ export function menuGuard(
     conditions: [...first.conditions, ...second.conditions],
   };
 }
+
+/** Records that a guard's rule was written at `where`, for each of its conditions. */
+export function carry(carried: Map<string, string[]>, guard: Guard, where: string): void {
+  if (guard.kind !== 'rule' || guard.rule === 'core.true') return;
+  for (const condition of guard.conditions) {
+    const key = `${condition.path}#${condition.index}`;
+    carried.set(key, [...(carried.get(key) ?? []), where]);
+  }
+}

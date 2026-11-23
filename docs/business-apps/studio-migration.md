@@ -358,10 +358,15 @@ These sit inside the [development plan](development-plan.md):
 **Where M2 stands, 23 November 2026:**
 
 - **Built: conditions.** A `nuxeo-filter`'s structured tests become the registered rules that
-  decide exactly as they do, read from both sides' code. A known JavaScript pattern is proposed.
-  Anything else is reported. The rule travels as the `visibleWhen` of a view field, an action, a
-  home card, its queue, or a menu entry. Check 5 holds every rule to its condition's truth table,
-  without a server.
+  decide exactly as they do, read from both sides' code. A known JavaScript pattern is proposed:
+  one call of a filter function in a `dom-if`, which is all a Polymer binding holds, or `this.`
+  calls and `document.facets.indexOf(…)` in a filter's `expression`. Anything else is reported.
+  The rule travels as the `visibleWhen` of a view field, an action, a home card, its queue, or a
+  menu entry. Check 5 holds every rule to its condition's truth table, without a server.
+- **Reported, against the table above:** a `path` test, which no registered rule makes, and
+  `hasPermission` for a permission no rule holds alone, such as `Write`. A group test whose file
+  holds no user is reported too: a document layout and the stock home have none, so it never
+  passes in Web UI.
 - **Not yet:**
   - task forms, tabs and layout blocks;
   - conditions on version 1 fields, list columns and search tables;

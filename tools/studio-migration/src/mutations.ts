@@ -121,35 +121,62 @@ const PLATFORM_PREFIXES = ['dc', 'common', 'uid', 'file', 'files', 'note', 'pict
  * The first `visibleWhen` a converted file carries, in a layout's fields or an action, with a copy
  * of its file and the object holding it in that copy.
  */
-function findRule(
-  conversion: Conversion,
-): { path: string; file: Json; holder: Json; at: string } | null {
+/** A rule the conversion carries: the file, the object holding it and where it sits. */
+export interface RuleHolder {
+  readonly path: string;
+  readonly file: Json;
+  readonly holder: Json;
+  readonly at: string;
+}
+
+/**
+ * Every rule the conversion carries, each in its own copy of its file: on a layout field, an
+ * action, a home card, a menu entry or a queue.
+ */
+export function ruleHolders(conversion: Conversion): RuleHolder[] {
+  const found: RuleHolder[] = [];
+  const listed = (path: string, key: string) => {
+    const entries = (conversion.app[path] as Json | undefined)?.[key];
+    if (!Array.isArray(entries)) return;
+    entries.forEach((entry, index) => {
+      if (!isRecord(entry) || !('visibleWhen' in entry)) return;
+      const file = clone(conversion.app[path]) as Json;
+      found.push({
+        path,
+        file,
+        holder: (file[key] as Json[])[index],
+        at: `${key}.${index}.visibleWhen`,
+      });
+    });
+  };
   for (const path of Object.keys(conversion.app).sort()) {
-    const file = clone(conversion.app[path]) as Json;
     if (path.startsWith('layouts/')) {
-      for (const shown of layoutFields(file)) {
-        const parts = shown.at.split('.');
-        const card = (file[parts[0]] as Json[])[Number(parts[1])];
-        const entry = (card['fields'] as unknown[])[Number(parts[3])];
-        if (isRecord(entry) && 'visibleWhen' in entry)
-          return { path, file, holder: entry, at: `${shown.at}.visibleWhen` };
+      for (const shown of layoutFields(conversion.app[path] as Json)) {
+        if (!isRecord(shown.entry) || !('visibleWhen' in shown.entry)) continue;
+        const file = clone(conversion.app[path]) as Json;
+        // The same entry in the copy, by its place: `cards.0.fields.3`, `tabs.1.cards.0.fields.2`.
+        const entry = shown.at
+          .split('.')
+          .reduce<unknown>(
+            (at, key) => (isRecord(at) || Array.isArray(at) ? (at as Json)[key] : undefined),
+            file,
+          );
+        if (isRecord(entry))
+          found.push({ path, file, holder: entry, at: `${shown.at}.visibleWhen` });
       }
     }
-    if (path === 'actions.json' && Array.isArray(file['actions'])) {
-      const index = (file['actions'] as unknown[]).findIndex(
-        (action) => isRecord(action) && 'visibleWhen' in action,
-      );
-      if (index !== -1)
-        return {
-          path,
-          file,
-          holder: (file['actions'] as Json[])[index],
-          at: `actions.${index}.visibleWhen`,
-        };
+    if (path === 'actions.json') listed(path, 'actions');
+    if (path === 'home.json') listed(path, 'cards');
+    if (path === 'navigation.json') listed(path, 'entries');
+    if (path.startsWith('queues/') && isRecord(conversion.app[path])) {
+      const file = clone(conversion.app[path]) as Json;
+      if ('visibleWhen' in file) found.push({ path, file, holder: file, at: 'visibleWhen' });
     }
   }
-  return null;
+  return found;
 }
+
+const findRule = (conversion: Conversion): RuleHolder | null => ruleHolders(conversion)[0] ?? null;
 
 /** The entry as an object, so that a key can be set on it. */
 const asObject = (entry: unknown): Json =>

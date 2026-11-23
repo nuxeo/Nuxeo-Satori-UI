@@ -32,10 +32,11 @@ import {
 } from './app-files';
 import { fieldOf, layoutFields, listColumns, rulesIn } from './app-walk';
 import { chainTable, decideCondition, describeSituation } from './conditions';
-import { guardAt, guardOfSet, menuGuard, type Guard } from './guards';
+import { guardOfSet, menuGuard, type Guard } from './guards';
 import { recordedAllowList } from './convert';
 import { homeCards, menuEntries, menuEntryId } from './convert-home';
-import { isConditionalTable, queueOwners } from './convert-lists';
+import { planFields } from './convert-layouts';
+import { cardGuard, isConditionalTable, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
 
@@ -86,7 +87,7 @@ export function checkConditions({
     compared.add(path);
     const shown = layoutFields(conversion.app[path]);
     const always = new Set(
-      layout.fields.filter((field) => field.condition === null).map((field) => field.binding),
+      layout.fields.filter((field) => field.conditions.length === 0).map((field) => field.binding),
     );
     for (const field of layout.fields) {
       if (field.condition === null || field.binding === null || always.has(field.binding)) continue;
@@ -107,7 +108,11 @@ export function checkConditions({
   const owners = actionOwners(inventory, catalogue, appId, recordedAllowList(conversion));
   for (const { contribution, overall } of placed(inventory.slotContributions)) {
     const id = actionIdOf(appId, contribution.name, overall);
-    if (contribution.conditions.length === 0 || owners.has(id)) continue;
+    if (contribution.conditions.length === 0) continue;
+    const owner = owners.get(id);
+    // Another contribution, in no condition, owns the id: the action is that one's.
+    if (owner && owner.contribution !== contribution) continue;
+    if (owner && owner.rule === null) continue;
     const action = list.find((candidate) => isRecord(candidate) && candidate['id'] === id);
     if (action && !('visibleWhen' in (action as Record<string, unknown>)))
       findings.push(
@@ -120,7 +125,11 @@ export function checkConditions({
   const lists = queueOwners(inventory);
   inventory.dashboard?.cards.forEach((card, index) => {
     const path = queuePath(homeQueueId(card, index));
-    if (card.conditional && !lists.has(path) && conversion.app[path] !== undefined)
+    const queue = conversion.app[path];
+    if (!card.conditional || queue === undefined) return;
+    const owner = lists.get(path);
+    if (owner && (owner.kind !== 'card' || owner.card !== card)) return;
+    if (!isRecord(queue) || !('visibleWhen' in queue))
       findings.push(
         `${path}: it lists card ${index + 1}'s records for everyone, though Web UI shows the card only while a condition passes`,
       );
@@ -153,18 +162,18 @@ export function checkConditions({
 
   // The home and the menu: a card or an entry for a dashboard card or a menu entry under a
   // condition, which owns no queue and so is no card or entry of its own, shows to everyone.
-  const homeIds = new Set(homeCards(inventory).map((card) => card.id));
   const homeFile = conversion.app['home.json'];
   const homeList = isRecord(homeFile) && Array.isArray(homeFile['cards']) ? homeFile['cards'] : [];
   inventory.dashboard?.cards.forEach((card, index) => {
     const id = `card-${index + 1}`;
     const written = homeList.find((item) => isRecord(item) && item['id'] === id);
-    if (card.conditional && !homeIds.has(id) && isRecord(written) && !('visibleWhen' in written))
+    const guard = card.conditional ? cardGuard(inventory, card) : null;
+    if (guard?.kind === 'rule' && guard.rule === 'core.true') return;
+    if (card.conditional && isRecord(written) && !('visibleWhen' in written))
       findings.push(
         `home.json: ${id} shows card ${index + 1} to everyone, though Web UI shows it only while a condition passes`,
       );
   });
-  const menuIds = new Set(menuEntries(inventory, catalogue).map((entry) => entry.id));
   const menuFile = conversion.app['navigation.json'];
   const menuList =
     isRecord(menuFile) && Array.isArray(menuFile['entries']) ? menuFile['entries'] : [];
@@ -176,8 +185,10 @@ export function checkConditions({
     );
     if (item.conditions.length === 0 && (page?.conditions.length ?? 0) === 0) continue;
     const id = menuEntryId(item);
+    const guard = menuGuard(inventory, item, page);
+    if (guard.kind === 'rule' && guard.rule === 'core.true') continue;
     const written = menuList.find((entry) => isRecord(entry) && entry['id'] === id);
-    if (!menuIds.has(id) && isRecord(written) && !('visibleWhen' in written))
+    if (isRecord(written) && !('visibleWhen' in written))
       findings.push(
         `navigation.json: ${id} shows to everyone, though Web UI shows the menu entry "${item.name}" only while a condition passes`,
       );
@@ -229,11 +240,14 @@ function guardFor(
     const source = inventory.layouts.find(
       (candidate) => candidate.docType === layout[1] && candidate.mode === layout[2],
     );
-    const field = source?.fields.find(
-      (candidate) => candidate.binding === binding && candidate.condition !== null,
-    );
-    return source && field && field.condition !== null
-      ? guardAt(inventory, source.path, field.condition)
+    if (!source) return null;
+    // The field of the layout the converter plans to write for the property: its conditions are
+    // the rule's, not those of another field binding the same property.
+    const plans = planFields({ catalogue, inventory }, source);
+    const index = plans.findIndex((plan) => plan.kind === 'write' && plan.binding === binding);
+    const field = index === -1 ? undefined : source.fields[index];
+    return field && field.conditions.length > 0
+      ? guardOfSet(inventory, source.path, field.conditions)
       : null;
   }
   const id = (list: string): unknown => {

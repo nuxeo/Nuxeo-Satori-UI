@@ -15,7 +15,7 @@
 import { own, slotEntry, type Catalogue } from './catalogue';
 import type { Rule } from './conditions';
 import { menuDecisions } from './convert-home';
-import { guardOfSet } from './guards';
+import { carry, guardOfSet, type Guard } from './guards';
 import type { ConvertContext } from './convert';
 import type { Inventory, SlotContribution } from './inventory';
 import { actionIdOf, iconOf, isBound, labelOf, placed } from './app-files';
@@ -108,7 +108,7 @@ export function actionGuard(
   contribution: SlotContribution,
   slot: 'toolbar' | 'bulk-actions',
 ):
-  | { readonly rule: Rule | null }
+  | { readonly rule: Rule | null; readonly guard?: Guard }
   | { readonly outcome: 'pending' | 'proposed' | 'reported'; readonly note: string } {
   if (contribution.conditions.length === 0) return { rule: null };
   const guard = guardOfSet(inventory, contribution.path, contribution.conditions);
@@ -118,7 +118,7 @@ export function actionGuard(
       outcome: 'reported',
       note: 'Its condition reads the open record, and an action over a selection has none',
     };
-  return { rule: guard.rule === 'core.true' ? null : guard.rule };
+  return { rule: guard.rule === 'core.true' ? null : guard.rule, guard };
 }
 
 /**
@@ -226,6 +226,7 @@ export function convertSlots(context: ConvertContext): void {
         operation: action.operation,
         ...(action.parameters !== null ? { parameters: action.parameters } : {}),
       });
+      if (guard.guard) carry(context.carried, guard.guard, `actions.json ${actionId}`);
       context.decide(id, { outcome: 'converted', to: `actions.json ${actionId}` });
       continue;
     }
@@ -287,6 +288,8 @@ export function convertSlots(context: ConvertContext): void {
     });
   }
   if (actions.length > 0) context.files['actions.json'] = { version: 2, actions };
-  if (entries.length > 0)
+  if (entries.length > 0) {
     context.files['navigation.json'] = { version: 2, entries: entries.map((e) => e.entry) };
+    for (const menu of entries) carry(context.carried, menu.guard, `navigation.json ${menu.id}`);
+  }
 }
