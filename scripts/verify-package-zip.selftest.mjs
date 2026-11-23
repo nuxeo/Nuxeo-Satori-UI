@@ -515,6 +515,27 @@ expectRed(
   /names Nuxeo-Component OSGI-INF\/missing\.xml, which is not in the jar/,
 );
 
+// Java reads the header from the main section alone, the lines before the first empty one. In a
+// later `Name:` section it is that entry's attribute, and names nothing the server loads.
+expectGreen('a second header in a later Name: section, which the server does not read', {
+  jar: jarFiles({
+    'META-INF/MANIFEST.MF': `${manifest()}\nName: OSGI-INF/missing.xml\nNuxeo-Component: OSGI-INF/missing.xml\n`,
+  }),
+});
+
+expectRed(
+  'components named only in a later Name: section',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': manifest().replace(
+        `Nuxeo-Component: ${COMPONENT}`,
+        `\nName: ${COMPONENT}\nNuxeo-Component: ${COMPONENT}`,
+      ),
+    }),
+  },
+  /names components only after its first blank line, where the server does not read them/,
+);
+
 // One entry to a split at commas; two paths to the server, and the jar holds neither.
 expectRed(
   'a component path with a space in it, which the server splits in two',

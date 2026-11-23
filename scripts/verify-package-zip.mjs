@@ -235,23 +235,35 @@ function attribute(xml, name, attributeName) {
   return tag ? (attributesOf(tag[1])[attributeName] ?? null) : null;
 }
 
+const isComponentHeader = (line) => /^nuxeo-component:/i.test(line);
+
 /**
- * Every header of a jar manifest named `Nuxeo-Component` in any letter case, unfolded — found as
- * the server finds it. Headers wrap at 72 bytes with a leading space on the continuation, and a
- * long component path is exactly where that happens.
+ * A jar manifest's logical lines, divided where Java ends its main section. Continuations are
+ * unfolded — headers wrap at 72 bytes with a leading space on the continuation, and a long
+ * component path is exactly where that happens — and a line ends at CR, LF or CRLF and nowhere
+ * else. The main section is the lines before the first empty one; the rest are entry sections.
+ */
+function manifestSectionsOf(manifest) {
+  const lines = manifest.replace(/(?:\r\n|\r|\n) /g, '').split(/\r\n|\r|\n/);
+  const end = lines.indexOf('');
+  return end < 0
+    ? { main: lines, rest: [] }
+    : { main: lines.slice(0, end), rest: lines.slice(end) };
+}
+
+/**
+ * Every header of a jar manifest named `Nuxeo-Component` in any letter case, found as the server
+ * finds it. The Nuxeo runtime reads it through `java.util.jar.Manifest`, which matches a header's
+ * name in any letter case, keeps the last of a repeated one, and looks in the main section alone:
+ * a header in a later `Name:` section is that entry's attribute and names nothing the server loads.
  *
- * The Nuxeo runtime reads this header through `java.util.jar.Manifest`, which ends a line at CR,
- * LF or CRLF and nowhere else, matches a header's name in any letter case, and keeps the last of a
- * repeated one. The multiline pattern this used to be read with took the first header spelt
- * exactly `Nuxeo-Component`, and its `^` also matched after a U+2028 inside another header's
- * value, which Java reads as part of that value. Each was a way for the jar to load a component
- * this script never resolved.
+ * The multiline pattern this used to be read with took the first header spelt exactly
+ * `Nuxeo-Component`, in any section, and its `^` also matched after a U+2028 inside another
+ * header's value, which Java reads as part of that value. Each was a way for the jar to load a
+ * component this script never resolved, or for this script to resolve one the server never loads.
  */
 function componentHeadersOf(manifest) {
-  return manifest
-    .replace(/(?:\r\n|\r|\n) /g, '')
-    .split(/\r\n|\r|\n/)
-    .filter((line) => /^nuxeo-component:/i.test(line));
+  return manifestSectionsOf(manifest).main.filter(isComponentHeader);
 }
 
 /**
@@ -454,7 +466,12 @@ export function verifyPackageZip(archive) {
     }
     const componentPaths = componentPathsOf(manifestText);
     if (componentPaths.length === 0) {
-      problem(`${manifest} has no Nuxeo-Component header, so the bundle contributes nothing.`);
+      problem(
+        manifestSectionsOf(manifestText).rest.some(isComponentHeader)
+          ? `${manifest} names components only after its first blank line, where the server ` +
+              'does not read them, so the bundle contributes nothing.'
+          : `${manifest} has no Nuxeo-Component header, so the bundle contributes nothing.`,
+      );
       return problems;
     }
 
